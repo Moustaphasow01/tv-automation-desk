@@ -1,0 +1,100 @@
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "job_type": {
+      "type": "string",
+      "enum": [
+        "MASTER_ANALYSIS",
+        "HOURLY_MONITOR",
+        "REPLAN",
+        "FEATURE_ENGINE",
+        "BACKTEST_RUN",
+        "BACKTEST_STEP",
+        "SIMULATE_TRADE",
+        "AUDIT_CHECK"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "PREPARING_DATA",
+        "READY_FOR_GPT",
+        "RUNNING_GPT",
+        "SAVING_RESULT",
+        "DONE",
+        "FAILED",
+        "CANCELLED",
+        "REQUIRES_MANUAL_RUN"
+      ],
+      "default": "QUEUED"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "session": {
+      "type": "string",
+      "enum": [
+        "asia_open",
+        "london_session",
+        "ny_open",
+        "work_forward"
+      ],
+      "default": "asia_open"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "live",
+        "paper",
+        "replay",
+        "backtest"
+      ],
+      "default": "live"
+    },
+    "pack_id": {
+      "type": "string"
+    },
+    "bundle_id": {
+      "type": "string"
+    },
+    "contract_name": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "contract_hash": {
+      "type": "string"
+    },
+    "result_ref": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "error": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "job_type"
+  ],
+  "additionalProperties": true
+}

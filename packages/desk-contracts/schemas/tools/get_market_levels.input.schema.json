@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "pack_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "instrument": {
+      "type": "string",
+      "enum": [
+        "MNQ",
+        "MES",
+        "NQ",
+        "ES"
+      ]
+    }
+  },
+  "required": [
+    "pack_id",
+    "instrument"
+  ],
+  "additionalProperties": false
+}

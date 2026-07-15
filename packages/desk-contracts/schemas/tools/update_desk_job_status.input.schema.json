@@ -1,0 +1,48 @@
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "PREPARING_DATA",
+        "READY_FOR_GPT",
+        "RUNNING_GPT",
+        "SAVING_RESULT",
+        "DONE",
+        "FAILED",
+        "CANCELLED",
+        "REQUIRES_MANUAL_RUN"
+      ]
+    },
+    "result_ref": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "error": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "job_id",
+    "status"
+  ],
+  "additionalProperties": true
+}

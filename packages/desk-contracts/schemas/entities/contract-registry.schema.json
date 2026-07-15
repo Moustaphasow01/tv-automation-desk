@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/contract-registry.schema.json",
+  "title": "DeskContractRegistry",
+  "version": "1.0.0",
+  "description": "Package-level registry for active runtime contracts and V2 entity contract lifecycle. Runtime MCP contract-management tools may expose a smaller subset until their own gate authorizes changes.",
+  "type": "object",
+  "properties": {
+    "registry_version": {
+      "type": "string",
+      "const": "2.0.0"
+    },
+    "active_contracts": {
+      "type": "object",
+      "properties": {
+        "master_contract": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "monitor_contract": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "front_projection_contract": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "master_contract",
+        "monitor_contract",
+        "front_projection_contract"
+      ],
+      "additionalProperties": true
+    },
+    "entity_contracts": {
+      "type": "object",
+      "properties": {
+        "decision_audit_contract": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "simulation_run_contract": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "simulation_step_contract": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "worker_mission_contract": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "dashboard_state_contract": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "front_projection_contract": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "decision_audit_contract",
+        "simulation_run_contract",
+        "simulation_step_contract",
+        "worker_mission_contract",
+        "dashboard_state_contract",
+        "front_projection_contract"
+      ],
+      "additionalProperties": true
+    },
+    "lifecycle_policy": {
+      "type": "object",
+      "properties": {
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active",
+              "archived"
+            ]
+          }
+        },
+        "runtime_exposed": {
+          "type": "string",
+          "enum": [
+            "master_monitor_only",
+            "entity_contracts_planned",
+            "all_active_contracts"
+          ]
+        },
+        "breaking_change_rule": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "statuses",
+        "runtime_exposed",
+        "breaking_change_rule"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "registry_version",
+    "active_contracts",
+    "entity_contracts",
+    "lifecycle_policy"
+  ],
+  "additionalProperties": false
+}

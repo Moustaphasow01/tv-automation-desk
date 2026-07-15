@@ -1,0 +1,146 @@
+//@version=6
+indicator("TVAutomation Market Feed Batch H4", overlay=false, precision=6)
+
+// Exporteur statique conservé pour les alertes TradingView multi-symboles.
+// Add this indicator to a chart on the matching timeframe and create
+// one TradingView alert with "Any alert() function call".
+
+TF = "240"
+CANONICAL_TF = "4H"
+BATCH_NAME = "TVA_BATCH_H4"
+RSI_LEN = 14
+ATR_LEN = 14
+
+f_num(x) =>
+    na(x) ? "null" : str.tostring(x)
+
+f_time(x) =>
+    str.format_time(x, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+f_candle(string asset, string symbol, string ticker, t, o, h, l, c, v, r, a) =>
+    string item = "{"
+    item := item + '"source":"tradingview_webhook",'
+    item := item + '"type":"market_feed_batch_item",'
+    item := item + '"alert_id":"' + symbol + "_" + CANONICAL_TF + "_" + str.tostring(t) + '",'
+    item := item + '"asset":"' + asset + '",'
+    item := item + '"symbol":"' + symbol + '",'
+    item := item + '"ticker":"' + ticker + '",'
+    item := item + '"timeframe":"' + CANONICAL_TF + '",'
+    item := item + '"timestamp_utc":"' + f_time(t) + '",'
+    item := item + '"bar_status":"closed",'
+    item := item + '"confirmed":true,'
+    item := item + '"time":' + str.tostring(t) + ','
+    item := item + '"open":' + f_num(o) + ','
+    item := item + '"high":' + f_num(h) + ','
+    item := item + '"low":' + f_num(l) + ','
+    item := item + '"close":' + f_num(c) + ','
+    item := item + '"volume":' + f_num(v) + ','
+    item := item + '"price":{'
+    item := item + '"open":' + f_num(o) + ','
+    item := item + '"high":' + f_num(h) + ','
+    item := item + '"low":' + f_num(l) + ','
+    item := item + '"close":' + f_num(c) + ','
+    item := item + '"volume":' + f_num(v)
+    item := item + '},'
+    item := item + '"studies":{'
+    item := item + '"rsi_14":' + f_num(r) + ','
+    item := item + '"atr_10":' + f_num(a) + ','
+    item := item + '"atr_14":' + f_num(a)
+    item := item + '}'
+    item := item + "}"
+    item
+
+[s1t, s1o, s1h, s1l, s1c, s1v, s1r, s1a] = request.security("CME_MINI:MNQ1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c1 = f_candle("MNQ", "MNQ1!", "CME_MINI:MNQ1!", s1t, s1o, s1h, s1l, s1c, s1v, s1r, s1a)
+
+[s2t, s2o, s2h, s2l, s2c, s2v, s2r, s2a] = request.security("CME_MINI:MES1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c2 = f_candle("MES", "MES1!", "CME_MINI:MES1!", s2t, s2o, s2h, s2l, s2c, s2v, s2r, s2a)
+
+[s3t, s3o, s3h, s3l, s3c, s3v, s3r, s3a] = request.security("CME_MINI:NQ1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c3 = f_candle("NQ", "NQ1!", "CME_MINI:NQ1!", s3t, s3o, s3h, s3l, s3c, s3v, s3r, s3a)
+
+[s4t, s4o, s4h, s4l, s4c, s4v, s4r, s4a] = request.security("CME_MINI:ES1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c4 = f_candle("ES", "ES1!", "CME_MINI:ES1!", s4t, s4o, s4h, s4l, s4c, s4v, s4r, s4a)
+
+[s5t, s5o, s5h, s5l, s5c, s5v, s5r, s5a] = request.security("TVC:US10Y", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c5 = f_candle("US10Y", "US10Y", "TVC:US10Y", s5t, s5o, s5h, s5l, s5c, s5v, s5r, s5a)
+
+[s6t, s6o, s6h, s6l, s6c, s6v, s6r, s6a] = request.security("TVC:US02Y", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c6 = f_candle("US02Y", "US02Y", "TVC:US02Y", s6t, s6o, s6h, s6l, s6c, s6v, s6r, s6a)
+
+[s7t, s7o, s7h, s7l, s7c, s7v, s7r, s7a] = request.security("TVC:DXY", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c7 = f_candle("DXY", "DXY", "TVC:DXY", s7t, s7o, s7h, s7l, s7c, s7v, s7r, s7a)
+
+[s8t, s8o, s8h, s8l, s8c, s8v, s8r, s8a] = request.security("NYMEX:CL1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c8 = f_candle("CL", "CL1!", "NYMEX:CL1!", s8t, s8o, s8h, s8l, s8c, s8v, s8r, s8a)
+
+[s9t, s9o, s9h, s9l, s9c, s9v, s9r, s9a] = request.security("COMEX:GC1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c9 = f_candle("GC", "GC1!", "COMEX:GC1!", s9t, s9o, s9h, s9l, s9c, s9v, s9r, s9a)
+
+[s10t, s10o, s10h, s10l, s10c, s10v, s10r, s10a] = request.security("CBOE:VIX", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c10 = f_candle("VIX", "VIX", "CBOE:VIX", s10t, s10o, s10h, s10l, s10c, s10v, s10r, s10a)
+
+[s11t, s11o, s11h, s11l, s11c, s11v, s11r, s11a] = request.security("TVC:NI225", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c11 = f_candle("NIKKEI", "NI225", "TVC:NI225", s11t, s11o, s11h, s11l, s11c, s11v, s11r, s11a)
+
+[s12t, s12o, s12h, s12l, s12c, s12v, s12r, s12a] = request.security("TVC:HSI", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c12 = f_candle("HANG_SENG", "HSI", "TVC:HSI", s12t, s12o, s12h, s12l, s12c, s12v, s12r, s12a)
+
+[s13t, s13o, s13h, s13l, s13c, s13v, s13r, s13a] = request.security("XETR:DAX", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c13 = f_candle("DAX", "DAX", "XETR:DAX", s13t, s13o, s13h, s13l, s13c, s13v, s13r, s13a)
+
+[s14t, s14o, s14h, s14l, s14c, s14v, s14r, s14a] = request.security("TVC:SX5E", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c14 = f_candle("EURO_STOXX", "SX5E", "TVC:SX5E", s14t, s14o, s14h, s14l, s14c, s14v, s14r, s14a)
+
+[s15t, s15o, s15h, s15l, s15c, s15v, s15r, s15a] = request.security("NASDAQ:NVDA", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c15 = f_candle("NVDA", "NVDA", "NASDAQ:NVDA", s15t, s15o, s15h, s15l, s15c, s15v, s15r, s15a)
+
+[s16t, s16o, s16h, s16l, s16c, s16v, s16r, s16a] = request.security("NASDAQ:AAPL", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c16 = f_candle("AAPL", "AAPL", "NASDAQ:AAPL", s16t, s16o, s16h, s16l, s16c, s16v, s16r, s16a)
+
+[s17t, s17o, s17h, s17l, s17c, s17v, s17r, s17a] = request.security("NASDAQ:MSFT", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c17 = f_candle("MSFT", "MSFT", "NASDAQ:MSFT", s17t, s17o, s17h, s17l, s17c, s17v, s17r, s17a)
+
+[s18t, s18o, s18h, s18l, s18c, s18v, s18r, s18a] = request.security("NASDAQ:TSLA", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c18 = f_candle("TSLA", "TSLA", "NASDAQ:TSLA", s18t, s18o, s18h, s18l, s18c, s18v, s18r, s18a)
+
+[s19t, s19o, s19h, s19l, s19c, s19v, s19r, s19a] = request.security("NASDAQ:SMH", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c19 = f_candle("SMH", "SMH", "NASDAQ:SMH", s19t, s19o, s19h, s19l, s19c, s19v, s19r, s19a)
+
+[s20t, s20o, s20h, s20l, s20c, s20v, s20r, s20a] = request.security("NASDAQ:SOXX", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c20 = f_candle("SOXX", "SOXX", "NASDAQ:SOXX", s20t, s20o, s20h, s20l, s20c, s20v, s20r, s20a)
+
+payload = "{"
+payload := payload + '"source":"tradingview_webhook",'
+payload := payload + '"type":"market_feed_batch",'
+payload := payload + '"batch_id":"' + BATCH_NAME + "_" + str.tostring(time) + '",'
+payload := payload + '"timeframe":"' + CANONICAL_TF + '",'
+payload := payload + '"bar_status":"closed",'
+payload := payload + '"candles":['
+payload := payload + "" + c1
+payload := payload + "," + c2
+payload := payload + "," + c3
+payload := payload + "," + c4
+payload := payload + "," + c5
+payload := payload + "," + c6
+payload := payload + "," + c7
+payload := payload + "," + c8
+payload := payload + "," + c9
+payload := payload + "," + c10
+payload := payload + "," + c11
+payload := payload + "," + c12
+payload := payload + "," + c13
+payload := payload + "," + c14
+payload := payload + "," + c15
+payload := payload + "," + c16
+payload := payload + "," + c17
+payload := payload + "," + c18
+payload := payload + "," + c19
+payload := payload + "," + c20
+payload := payload + ']'
+payload := payload + "}"
+
+plot(str.length(payload), title="payload_length", display=display.none)
+
+if barstate.isconfirmed
+    alert(payload, alert.freq_once_per_bar_close)

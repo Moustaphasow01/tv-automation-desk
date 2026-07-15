@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "properties": {
+    "pack_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "analysis_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "decision_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "status": {
+      "type": "string",
+      "default": "any"
+    },
+    "primary_only": {
+      "type": "boolean",
+      "default": false
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 500,
+      "default": 50
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/contract.schema.json",
+  "title": "DeskContract",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "contract_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "contract_name": {
+      "type": "string",
+      "enum": [
+        "DeskMasterAnalysisContract",
+        "DeskHourlyThesisMonitorContract",
+        "DeskFrontProjectionContract"
+      ]
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "active"
+    },
+    "content_markdown": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_json": {
+      "type": "object",
+      "additionalProperties": true,
+      "default": {}
+    },
+    "hash": {
+      "type": "string"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": false
+    },
+    "replaced_by": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "force": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "contract_name",
+    "schema_version",
+    "content_markdown"
+  ],
+  "additionalProperties": true
+}

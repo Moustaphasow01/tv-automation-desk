@@ -1,0 +1,17 @@
+{
+  "name": "@tv-automation/desk-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Versioned JSON Schemas and generated types for the TV Automation desk domain.",
+  "exports": {
+    ".": "./index.js",
+    "./collections": "./collections.js",
+    "./generated/ts": "./generated/ts/index.ts"
+  },
+  "scripts": {
+    "generate": "node codegen/generate.mjs",
+    "check:generated": "node codegen/generate.mjs && git diff --exit-code -- generated/ts generated/runtime-data.js"
+  },
+  "dependencies": {}
+}

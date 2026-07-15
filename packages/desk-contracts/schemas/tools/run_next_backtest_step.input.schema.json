@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "properties": {
+    "backtest_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "write_result": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "backtest_id"
+  ],
+  "additionalProperties": false
+}

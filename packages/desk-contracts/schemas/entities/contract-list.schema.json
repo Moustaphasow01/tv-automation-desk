@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/contract-list.schema.json",
+  "title": "DeskContractList",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "contract_name": {
+      "type": "string",
+      "enum": [
+        "DeskMasterAnalysisContract",
+        "DeskHourlyThesisMonitorContract",
+        "DeskFrontProjectionContract"
+      ]
+    }
+  },
+  "required": [
+    "contract_name"
+  ],
+  "additionalProperties": false
+}

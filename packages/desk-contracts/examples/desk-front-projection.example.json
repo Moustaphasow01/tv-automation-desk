@@ -1,0 +1,78 @@
+{
+  "contractName": "DeskFrontProjectionContract",
+  "schemaVersion": "1.0.0",
+  "source": {
+    "sourceType": "MONITOR",
+    "sourceId": "monitor_asia_2026_07_14_0815",
+    "masterId": "master_asia_2026_07_14",
+    "monitorId": "monitor_asia_2026_07_14_0815",
+    "thesisId": "thesis_asia_2026_07_14_MNQ",
+    "strategyId": "asia_open",
+    "session": "asia_open",
+    "mode": "live",
+    "tradingDate": "2026-07-14",
+    "runId": "front_live_2026-07-14_asia_open",
+    "timestampParis": "2026-07-14T08:15:00+02:00",
+    "asOfUtc": "2026-07-14T06:15:00.000Z",
+    "sequence": 4,
+    "revision": 4
+  },
+  "status": {
+    "deskStatus": "THESIS_ACTIVE",
+    "decision": "MAINTAIN",
+    "actionCode": "WATCH",
+    "alertLevel": "watch",
+    "thesisStatus": "THESIS_ACTIVE",
+    "setupStatus": "ARMED",
+    "positionStatus": "NO_POSITION",
+    "confidencePct": 68,
+    "healthScore": 72,
+    "riskPct": 0.5
+  },
+  "briefs": {
+    "headline": "Thèse maintenue, déclenchement non confirmé",
+    "oneLiner": "Le prix tient la zone mais le signal GO reste incomplet.",
+    "marketBrief": "MNQ consolide au-dessus du support intraday.",
+    "thesisBrief": "Le scénario haussier reste valide tant que le support tient.",
+    "deltaBrief": "Le momentum progresse sans confirmation volume.",
+    "whyNow": "Le prochain test de résistance déterminera l'armement.",
+    "actionNow": "Surveiller, ne pas exécuter.",
+    "nextFocus": "Cassure puis retest de la résistance M15."
+  },
+  "latestChange": {
+    "stateTransition": { "from": "WATCH", "to": "WATCH" },
+    "scoreTransition": { "from": 69, "to": 72, "delta": 3 },
+    "validatedElements": ["Support intraday tenu"],
+    "weakenedElements": ["Volume encore faible"],
+    "invalidatedElements": []
+  },
+  "expectedVsRealized": [
+    {
+      "label": "Tenue du support",
+      "expected": "Clôture M15 au-dessus du support",
+      "realized": "Support tenu sur deux clôtures",
+      "verdict": "confirm",
+      "impact": "Thèse maintenue"
+    }
+  ],
+  "conditions": {
+    "go": [{ "label": "Cassure résistance", "status": "not_triggered" }],
+    "invalidations": [{ "label": "Clôture sous support", "status": "not_triggered" }]
+  },
+  "setup": { "setup_id": "setup_asia_2026_07_14_A", "status": "ARMED" },
+  "position": { "status": "NO_POSITION" },
+  "marketContext": { "instrument": "MNQ", "cutoff": "2026-07-14T08:15:00+02:00" },
+  "timelineEvent": {
+    "type": "MONITOR",
+    "title": "Monitor M15",
+    "summary": "Thèse maintenue, attente de confirmation.",
+    "severity": "watch"
+  },
+  "drilldownRefs": {
+    "masterId": "master_asia_2026_07_14",
+    "monitorId": "monitor_asia_2026_07_14_0815",
+    "thesisId": "thesis_asia_2026_07_14_MNQ",
+    "setupId": "setup_asia_2026_07_14_A",
+    "positionId": null
+  }
+}

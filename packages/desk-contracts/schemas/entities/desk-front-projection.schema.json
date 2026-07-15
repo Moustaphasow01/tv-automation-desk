@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/desk-front-projection.schema.json",
+  "title": "DeskFrontProjectionContract",
+  "version": "1.0.0",
+  "description": "Versioned presentation projection emitted by a canonical Master or Monitor. It never replaces the canonical analysis, thesis, setup or position documents.",
+  "type": "object",
+  "properties": {
+    "contractName": {
+      "type": "string",
+      "const": "DeskFrontProjectionContract"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "sourceType": { "type": "string", "enum": ["MASTER", "MONITOR"] },
+        "sourceId": { "type": "string", "minLength": 3 },
+        "masterId": { "type": "string", "minLength": 3 },
+        "monitorId": {
+          "oneOf": [
+            { "type": "string", "minLength": 3 },
+            { "type": "null" }
+          ]
+        },
+        "thesisId": { "type": "string", "minLength": 3 },
+        "strategyId": { "type": "string", "enum": ["asia_open", "ny_open_1530"] },
+        "session": { "type": "string", "enum": ["asia_open", "ny_open"] },
+        "mode": { "type": "string", "enum": ["live", "paper"] },
+        "tradingDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "runId": { "type": "string", "minLength": 3 },
+        "timestampParis": { "type": "string", "minLength": 1 },
+        "asOfUtc": { "type": "string", "format": "date-time" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "revision": { "type": "integer", "minimum": 1 }
+      },
+      "required": [
+        "sourceType",
+        "sourceId",
+        "masterId",
+        "monitorId",
+        "thesisId",
+        "strategyId",
+        "session",
+        "mode",
+        "tradingDate",
+        "runId",
+        "timestampParis",
+        "asOfUtc",
+        "sequence",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "object",
+      "properties": {
+        "deskStatus": { "type": "string", "minLength": 1 },
+        "decision": { "type": "string", "minLength": 1 },
+        "actionCode": { "type": "string", "minLength": 1 },
+        "alertLevel": {
+          "type": "string",
+          "enum": ["info", "watch", "warning", "action", "critical", "positive"]
+        },
+        "thesisStatus": { "type": "string", "minLength": 1 },
+        "setupStatus": { "type": "string", "minLength": 1 },
+        "positionStatus": { "type": "string", "minLength": 1 },
+        "confidencePct": { "type": "number", "minimum": 0, "maximum": 100 },
+        "healthScore": { "type": "number", "minimum": 0, "maximum": 100 },
+        "riskPct": { "type": "number", "minimum": 0, "maximum": 100 }
+      },
+      "required": [
+        "deskStatus",
+        "decision",
+        "actionCode",
+        "alertLevel",
+        "thesisStatus",
+        "setupStatus",
+        "positionStatus",
+        "confidencePct",
+        "healthScore",
+        "riskPct"
+      ],
+      "additionalProperties": false
+    },
+    "briefs": {
+      "type": "object",
+      "properties": {
+        "headline": { "type": "string" },
+        "oneLiner": { "type": "string" },
+        "marketBrief": { "type": "string" },
+        "thesisBrief": { "type": "string" },
+        "deltaBrief": { "type": "string" },
+        "whyNow": { "type": "string" },
+        "actionNow": { "type": "string" },
+        "nextFocus": { "type": "string" }
+      },
+      "required": [
+        "headline",
+        "oneLiner",
+        "marketBrief",
+        "thesisBrief",
+        "deltaBrief",
+        "whyNow",
+        "actionNow",
+        "nextFocus"
+      ],
+      "additionalProperties": false
+    },
+    "latestChange": {
+      "type": "object",
+      "properties": {
+        "stateTransition": {
+          "type": "object",
+          "properties": {
+            "from": { "type": "string" },
+            "to": { "type": "string" }
+          },
+          "required": ["from", "to"],
+          "additionalProperties": false
+        },
+        "scoreTransition": {
+          "type": "object",
+          "properties": {
+            "from": { "type": "number", "minimum": 0, "maximum": 100 },
+            "to": { "type": "number", "minimum": 0, "maximum": 100 },
+            "delta": { "type": "number", "minimum": -100, "maximum": 100 }
+          },
+          "required": ["from", "to", "delta"],
+          "additionalProperties": false
+        },
+        "validatedElements": { "type": "array", "items": { "type": "string" } },
+        "weakenedElements": { "type": "array", "items": { "type": "string" } },
+        "invalidatedElements": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": [
+        "stateTransition",
+        "scoreTransition",
+        "validatedElements",
+        "weakenedElements",
+        "invalidatedElements"
+      ],
+      "additionalProperties": false
+    },
+    "expectedVsRealized": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "expected": { "type": "string" },
+          "realized": { "type": "string" },
+          "verdict": { "type": "string" },
+          "impact": { "type": "string" }
+        },
+        "required": ["label", "expected", "realized", "verdict", "impact"],
+        "additionalProperties": false
+      }
+    },
+    "conditions": {
+      "type": "object",
+      "properties": {
+        "go": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "invalidations": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "required": ["go", "invalidations"],
+      "additionalProperties": false
+    },
+    "setup": { "type": "object", "additionalProperties": true },
+    "position": { "type": "object", "additionalProperties": true },
+    "marketContext": { "type": "object", "additionalProperties": true },
+    "timelineEvent": { "type": "object", "additionalProperties": true },
+    "drilldownRefs": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "null" }
+        ]
+      }
+    }
+  },
+  "required": [
+    "contractName",
+    "schemaVersion",
+    "source",
+    "status",
+    "briefs",
+    "latestChange",
+    "expectedVsRealized",
+    "conditions",
+    "setup",
+    "position",
+    "marketContext",
+    "timelineEvent",
+    "drilldownRefs"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@tv-automation/desk-domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure deterministic Desk V2 core rules: gates, audit, risk, setup and thesis state.",
+  "types": "./index.d.ts",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "exports": {
+    ".": "./index.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "coverage:gate": "node ../../scripts/check_desk_domain_coverage.mjs"
+  },
+  "dependencies": {}
+}

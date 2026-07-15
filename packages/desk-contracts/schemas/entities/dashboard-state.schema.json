@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/dashboard-state.schema.json",
+  "title": "DeskDashboardState",
+  "version": "1.0.0",
+  "description": "Read-only dashboard state contract for future BFF responses. This schema does not implement dashboard runtime.",
+  "type": "object",
+  "properties": {
+    "contract_name": {
+      "type": "string",
+      "const": "DeskDashboardState",
+      "default": "DeskDashboardState"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "default": "1.0.0"
+    },
+    "state_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "screen_id": {
+      "type": "string",
+      "enum": [
+        "live_desk",
+        "session_matrix",
+        "master_analysis",
+        "setup_validation",
+        "management_console",
+        "decision_journal",
+        "simulation_lab",
+        "paper_trading",
+        "mission_control",
+        "review_center",
+        "system_health",
+        "settings",
+        "audit_view"
+      ]
+    },
+    "as_of_paris": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_modules": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "required_data_status": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "missing",
+              "stale",
+              "blocked",
+              "error"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "empty_state": {
+      "type": "string"
+    },
+    "error_state": {
+      "type": "string"
+    },
+    "blocked_state": {
+      "type": "string"
+    },
+    "audit_requirement": {
+      "type": "string",
+      "enum": [
+        "none",
+        "optional",
+        "required",
+        "blocking"
+      ]
+    },
+    "refresh_rule": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "default": {}
+    }
+  },
+  "required": [
+    "state_id",
+    "screen_id",
+    "as_of_paris",
+    "source_modules",
+    "required_data_status",
+    "audit_requirement",
+    "refresh_rule"
+  ],
+  "additionalProperties": false
+}

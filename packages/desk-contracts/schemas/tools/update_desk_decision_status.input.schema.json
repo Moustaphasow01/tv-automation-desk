@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "properties": {
+    "decision_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "triggered",
+        "cancelled",
+        "tp1_hit",
+        "tp2_hit",
+        "tp3_hit",
+        "stopped",
+        "expired",
+        "archived"
+      ]
+    },
+    "note": {
+      "type": "string"
+    },
+    "updated_by": {
+      "type": "string",
+      "default": "user"
+    }
+  },
+  "required": [
+    "decision_id",
+    "status"
+  ],
+  "additionalProperties": false
+}

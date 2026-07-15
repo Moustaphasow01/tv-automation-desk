@@ -1,0 +1,1221 @@
+//@version=6
+
+indicator("TVAutomation Volume Profile Exporter", "TVA VP", overlay = true, max_boxes_count = 500, max_bars_back = 5000)
+
+// TVAutomation exporter settings
+sendEveryClosedBar = input.bool(true, "Envoyer un webhook a chaque cloture de bougie", group="TVAutomation")
+webhookSecret      = input.string("", "Secret webhook local", group="TVAutomation")
+requireWebhookSecret = input.bool(false, "Bloquer l'alerte si le secret est vide", group="TVAutomation")
+deskSymbolInput    = input.string("AUTO", "Symbole envoye au desk", options=["AUTO", "MES1!", "MCL1!"], group="TVAutomation")
+showExportVisuals  = input.bool(true, "Afficher POC/VAH/VAL/VWAP/EMA export", group="TVAutomation")
+
+atrLen = input.int(14, "ATR Length", minval=1, group="TVAutomation - Helpers")
+ema20Len = input.int(20, "EMA 20 Length", minval=1, group="TVAutomation - Helpers")
+ema50Len = input.int(50, "EMA 50 Length", minval=1, group="TVAutomation - Helpers")
+ema200Len = input.int(200, "EMA 200 Length", minval=1, group="TVAutomation - Helpers")
+setupExpiryBars = input.int(6, "Expiration setup en bougies", minval=1, maxval=50, group="TVAutomation - Setup Engine")
+setupInvalidationAtrBuffer = input.float(0.10, "Buffer invalidation ATR", minval=0, maxval=1, step=0.05, group="TVAutomation - Setup Engine")
+setupMinStopTicks = input.int(15, "Stop minimum setup en ticks", minval=1, maxval=200, group="TVAutomation - Setup Engine")
+
+f_num(x) =>
+    na(x) ? "null" : str.tostring(x)
+
+f_int(x) =>
+    na(x) ? "null" : str.tostring(x)
+
+f_bool(x) =>
+    x ? "true" : "false"
+
+f_auto_symbol() =>
+    tickerText = str.upper(syminfo.ticker)
+    tickerIdText = str.upper(syminfo.tickerid)
+    isMcl = str.contains(tickerText, "MCL") or str.contains(tickerIdText, "MCL")
+    isMes = str.contains(tickerText, "MES") or str.contains(tickerIdText, "MES")
+    isMcl ? "MCL1!" : isMes ? "MES1!" : syminfo.ticker
+
+f_rel(price, level) =>
+    na(price) or na(level) ? "unknown" : math.abs(price - level) <= syminfo.mintick * 0.5 ? "at" : price > level ? "above" : "below"
+
+f_ticks(distance) =>
+    na(distance) or syminfo.mintick == 0 ? na : distance / syminfo.mintick
+
+f_row_price(_profileLow, _row, _step) =>
+    _profileLow + (_row + .5) * _step
+
+f_cross_up(level) =>
+    not na(level) and close > level and close[1] <= level
+
+f_cross_down(level) =>
+    not na(level) and close < level and close[1] >= level
+
+f_reject_long(level) =>
+    not na(level) and low <= level and close > level and close > open
+
+f_reject_short(level) =>
+    not na(level) and high >= level and close < level and close < open
+
+f_inside_value_area(_vah, _val) =>
+    not na(_vah) and not na(_val) and close <= _vah and close >= _val
+
+f_risk_ticks(_trigger, _invalidation) =>
+    na(_trigger) or na(_invalidation) ? na : f_ticks(math.abs(_trigger - _invalidation))
+
+f_reward_ticks(_side, _trigger, _target) =>
+    na(_trigger) or na(_target) ? na : _side == "long" ? f_ticks(_target - _trigger) : f_ticks(_trigger - _target)
+
+f_rr(_riskTicks, _rewardTicks) =>
+    na(_riskTicks) or na(_rewardTicks) or _riskTicks <= 0 ? na : _rewardTicks / _riskTicks
+
+f_profile_from_arrays(_highs, _lows, _volumes, _polarities, _rows, _valueAreaThreshold) =>
+    sampleCount = array.size(_volumes)
+    bool ready = false
+    float profileHigh = na
+    float profileLow = na
+    float priceStepLocal = na
+    float totalVolumeLocal = na
+    float valueAreaVolumeLocal = na
+    int pocLevelLocal = na
+    int vahLevelLocal = na
+    int valLevelLocal = na
+    float pocPriceLocal = na
+    float vahPriceLocal = na
+    float valPriceLocal = na
+    float pocVolumeLocal = na
+    float pocBullishVolumeLocal = na
+    float pocBearishVolumeLocal = na
+    float pocDeltaVolumeLocal = na
+
+    if sampleCount > 0
+        profileHigh := array.get(_highs, 0)
+        profileLow := array.get(_lows, 0)
+        for sampleIndex = 0 to sampleCount - 1
+            profileHigh := math.max(profileHigh, array.get(_highs, sampleIndex))
+            profileLow := math.min(profileLow, array.get(_lows, sampleIndex))
+
+        if profileHigh > profileLow
+            priceStepLocal := (profileHigh - profileLow) / _rows
+            totals = array.new_float(_rows, 0.)
+            bulls = array.new_float(_rows, 0.)
+
+            for sampleIndex = 0 to sampleCount - 1
+                levelHigh = array.get(_highs, sampleIndex)
+                levelLow = array.get(_lows, sampleIndex)
+                levelVolume = array.get(_volumes, sampleIndex)
+                levelBullish = array.get(_polarities, sampleIndex)
+                int startSlotIndex = int(math.max(math.floor((levelLow - profileLow) / priceStepLocal), 0))
+                int endSlotIndex = int(math.min(math.floor((levelHigh - profileLow) / priceStepLocal), _rows - 1))
+
+                for priceLevelIndex = startSlotIndex to endSlotIndex
+                    float priceLevel = profileLow + priceLevelIndex * priceStepLocal
+                    volumeProportion = 1.
+                    if levelHigh != levelLow
+                        volumeProportion := switch
+                            levelLow >= priceLevel and levelHigh > priceLevel + priceStepLocal => (priceLevel + priceStepLocal - levelLow) / (levelHigh - levelLow)
+                            levelHigh <= priceLevel + priceStepLocal and levelLow < priceLevel => (levelHigh - priceLevel) / (levelHigh - levelLow)
+                            levelLow >= priceLevel and levelHigh <= priceLevel + priceStepLocal => 1
+                            => priceStepLocal / (levelHigh - levelLow)
+
+                    array.set(totals, priceLevelIndex, array.get(totals, priceLevelIndex) + levelVolume * volumeProportion)
+                    if levelBullish
+                        array.set(bulls, priceLevelIndex, array.get(bulls, priceLevelIndex) + levelVolume * volumeProportion)
+
+            totalVolumeLocal := array.sum(totals)
+            if totalVolumeLocal > 0
+                ready := true
+                pocLevelLocal := array.indexof(totals, array.max(totals))
+                pocVolumeLocal := array.get(totals, pocLevelLocal)
+                pocBullishVolumeLocal := array.get(bulls, pocLevelLocal)
+                pocBearishVolumeLocal := math.max(pocVolumeLocal - pocBullishVolumeLocal, 0)
+                pocDeltaVolumeLocal := pocBullishVolumeLocal - pocBearishVolumeLocal
+                valueAreaTarget = totalVolumeLocal * _valueAreaThreshold
+                valueAreaVolumeLocal := pocVolumeLocal
+                vahLevelLocal := pocLevelLocal
+                valLevelLocal := pocLevelLocal
+
+                while valueAreaVolumeLocal < valueAreaTarget
+                    if valLevelLocal == 0 and vahLevelLocal == _rows - 1
+                        break
+
+                    volumeAbovePoc = 0.
+                    if vahLevelLocal < _rows - 1
+                        volumeAbovePoc := array.get(totals, vahLevelLocal + 1)
+
+                    volumeBelowPoc = 0.
+                    if valLevelLocal > 0
+                        volumeBelowPoc := array.get(totals, valLevelLocal - 1)
+
+                    if volumeBelowPoc == 0 and volumeAbovePoc == 0
+                        break
+
+                    if volumeAbovePoc >= volumeBelowPoc
+                        valueAreaVolumeLocal += volumeAbovePoc
+                        vahLevelLocal += 1
+                    else
+                        valueAreaVolumeLocal += volumeBelowPoc
+                        valLevelLocal -= 1
+
+                vahPriceLocal := profileLow + (vahLevelLocal + 1.) * priceStepLocal
+                pocPriceLocal := profileLow + (pocLevelLocal + .5) * priceStepLocal
+                valPriceLocal := profileLow + (valLevelLocal + .0) * priceStepLocal
+
+    [ready, profileHigh, profileLow, priceStepLocal, totalVolumeLocal, valueAreaVolumeLocal, pocLevelLocal, vahLevelLocal, valLevelLocal, pocPriceLocal, vahPriceLocal, valPriceLocal, pocVolumeLocal, pocBullishVolumeLocal, pocBearishVolumeLocal, pocDeltaVolumeLocal]
+
+deskSymbol = deskSymbolInput == "AUTO" ? f_auto_symbol() : deskSymbolInput
+
+//---------------------------------------------------------------------------------------------------------------------
+// Settings
+//---------------------------------------------------------------------------------------------------------------------{
+
+displayMode = display.all - display.status_line
+
+vn_volumeNodesGroup = 'Volume Nodes'
+
+vn_peakTTip = 'A volume peak node is recognized when the volume profile nodes for the N preceding and N succeeding nodes are lower than that of the evaluated one, where N is determined by the \'Node Detection Percent %\' option'
+vn_peaksShow = input.string('Peaks', 'Volume Peaks', options = ['Peaks', 'Clusters', 'None'], inline = 'vnP', tooltip = vn_peakTTip, group = vn_volumeNodesGroup, display = displayMode)
+vn_peakVolumeColor = input.color(color.new(color.blue, 50), '', inline = 'vnP', group = vn_volumeNodesGroup)
+vn_peaksNumberOfNodes = input.int(9, '  Node Detection Percent %', minval = 0, maxval = 100, group = vn_volumeNodesGroup, display = displayMode) / 100
+vn_peaksShow := vn_peaksNumberOfNodes == 0 ? 'None' : vn_peaksShow
+
+vn_troughsTTip  = 'A volume trough node is recognized when the volume profile nodes for the N preceding and N succeeding nodes exceed that of the evaluated one, where N is determined by the \'Node Detection Percent %\' option'
+vn_troughsShow = input.string('None', 'Volume Troughs', options = ['Troughs', 'Clusters', 'None'], inline = 'vnT', tooltip = vn_troughsTTip, group = vn_volumeNodesGroup, display = displayMode)
+vn_troughVolumeColor = input.color(color.new(color.gray, 50), '', inline = 'vnT', group = vn_volumeNodesGroup)
+vn_troughsNumberOfNodes = input.int(7, '  Node Detection Percent %', minval = 0, maxval = 100, group = vn_volumeNodesGroup, display = displayMode) / 100
+vn_troughsShow := vn_troughsNumberOfNodes == 0 ? 'None' : vn_troughsShow
+
+vn_thresholdTTip = 'A threshold value specified as a percentage is utilized to detect peak/trough volume nodes. If a value is set, the detection will disregard volume node values lower than the specified threshold.'
+vn_VolumeNodeThreshold = input.int(1, 'Volume Node Threshold %', minval = 0, maxval = 100, tooltip = vn_thresholdTTip, group = vn_volumeNodesGroup, display = displayMode) / 100
+
+vn_highestNVolumeNodes = input.int(0, 'Highest Volume Nodes', minval = 0, maxval = 31, inline = 'vnL', group = vn_volumeNodesGroup, display = displayMode)
+vn_highestVolumeColor = input.color(color.new(color.orange, 25), '', inline = 'vnL', group = vn_volumeNodesGroup)
+
+vn_lowestNVolumeNodes = input.int(0, 'Lowest Volume Nodes', minval = 0, maxval = 31, inline = 'vnH', group = vn_volumeNodesGroup, display = displayMode)
+vn_lowestVolumeColor = input.color(color.new(color.navy, 25), '', inline = 'vnH', group = vn_volumeNodesGroup)
+
+vp_componentsGroup = 'Volume Profile - Components'
+
+vp_profileShow = input.bool(true, 'Volume Profile', inline = 'vp', group = vp_componentsGroup)
+vp_profileGradientColors = input.string('Gradient Colors', '', options = ['Gradient Colors', 'Classic Colors' ], inline = 'vp', group = vp_componentsGroup)
+vp_valueAreaUpColor = input.color(color.new(#2962ff, 30), '  Value Area Up / Down', inline = 'VA', group = vp_componentsGroup)
+vp_valueAreaDwonColor = input.color(color.new(#fbc02d, 30), '/', inline = 'VA', group = vp_componentsGroup)
+vp_profileUpVolumeColor = input.color(color.new(#5d606b, 50), '  Profile Up / Down Volume', inline = 'VP', group = vp_componentsGroup)
+vp_profileDownVolumeColor = input.color(color.new(#d1d4dc, 50), '/', inline = 'VP', group = vp_componentsGroup)
+
+vp_pocShow = input.string('None', 'Point of Control', options = ['Developing', 'Regular', 'None'], inline = 'poc', group = vp_componentsGroup, display = displayMode)
+vp_pocColor = input.color(#fbc02d, '', inline = 'poc', group = vp_componentsGroup)
+vp_pocWidth = input.int(2, 'Width', inline = 'poc', group = vp_componentsGroup, display = displayMode)
+
+vp_vahShow = input.bool(false, 'Value Area High (VAH)', inline = 'vah', group = vp_componentsGroup)
+vp_vahColor = input.color(#2962ff, '', inline = 'vah', group = vp_componentsGroup)
+
+vp_valShow = input.bool(false, 'Value Area Low (VAL)', inline = 'val', group = vp_componentsGroup)
+vp_valColor = input.color(#2962ff, '', inline = 'val', group = vp_componentsGroup)
+
+vp_profileLevels = input.string('Small', "Profile Price Labels", options=['Tiny', 'Small', 'Normal', 'None'], group = vp_componentsGroup, display = displayMode)
+
+vp_displayGroup = 'Volume Profile - Display Settings'
+
+vp_profileLength = input.int(360, 'Profile Lookback Length', minval = 10, maxval = 5000, step = 10, group = vp_displayGroup, display = displayMode)
+vp_profileLength:= last_bar_index < vp_profileLength ? last_bar_index : vp_profileLength - 1
+
+vp_valueAreaThreshold = input.float(70, 'Value Area (%)', minval = 0, maxval = 100, group = vp_displayGroup, display = displayMode) / 100
+
+vp_profilePlracment = input.string('Right', 'Profile Placement', options = ['Right', 'Left'], group = vp_displayGroup, display = displayMode), profilePlacementRight = vp_profilePlracment == 'Right'
+vp_profileNumberOfRows = input.int(100, 'Profile Number of Rows' , minval = 30, maxval = 130 , step = 10, group = vp_displayGroup, display = displayMode)
+vp_profileWidth = input.float(31, 'Profile Width', minval = 0, maxval = 250, group = vp_displayGroup, display = displayMode) / 100
+vp_profileHorizontalOffset = input.int(13, 'Profile Horizontal Offset', maxval = 50, group = vp_displayGroup, display = displayMode)
+
+vp_valueAreaBackground = input.bool(false, 'Value Area Background  ', inline = 'vBG', group = vp_displayGroup)
+vp_valueAreaBackgroundColor = input.color(color.new(#2962ff, 89), '', inline = 'vBG', group = vp_displayGroup)
+
+vp_profileBackground = input.bool(false, 'Profile Range Background ', inline = 'pBG', group = vp_displayGroup)
+vp_profileBackgroundColor  = input.color(color.new(#2962ff, 95), '', inline = 'pBG', group = vp_displayGroup)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// User Defined Types
+//---------------------------------------------------------------------------------------------------------------------{
+
+type BAR
+    float open   = open
+    float high   = high
+    float low    = low
+    float close  = close
+    float volume = volume
+    int   index  = bar_index
+
+type barData
+    array<float> barHigh
+    array<float> barLow
+    array<float> barVolume
+    array<bool>  barPolarity
+    array<int>   barCount
+
+type volumeData
+    array<float> totalVolume
+    array<float> bullishVolume
+    array<float> bearishVolume
+    array<int>   endProfileIndex
+    array<bool>  peakVolume
+    array<bool>  troughVolume
+
+type volumeProfile
+    array<box>         boxes
+    array<chart.point> pocPoints
+    polyline           pocPolyline
+    int                pocLevel
+    int                vahLevel
+    int                valLevel
+    int                startIndex
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Variables
+//---------------------------------------------------------------------------------------------------------------------{
+
+BAR bar = BAR.new()
+array<BAR> ltfBarData = array.new<BAR>(1, BAR.new())
+
+var currentSessionHighArray = array.new_float(0)
+var currentSessionLowArray = array.new_float(0)
+var currentSessionVolumeArray = array.new_float(0)
+var currentSessionPolarityArray = array.new_bool(0)
+var previousSessionHighArray = array.new_float(0)
+var previousSessionLowArray = array.new_float(0)
+var previousSessionVolumeArray = array.new_float(0)
+var previousSessionPolarityArray = array.new_bool(0)
+var bool trackedSetupActive = false
+var string trackedSetupId = ""
+var string trackedSetupType = "none"
+var string trackedSetupSide = "none"
+var string trackedSetupSource = "none"
+var string trackedSetupStatus = "none"
+var string trackedSetupReason = ""
+var float trackedSetupTriggerLevel = na
+var float trackedSetupInvalidationLevel = na
+var float trackedSetupTarget1 = na
+var float trackedSetupTarget2 = na
+var int trackedSetupCreatedBarIndex = na
+var int trackedSetupCreatedTime = na
+
+var barData barDataArray = barData.new(
+     array.new_float(0),
+     array.new_float(0),
+     array.new_float(0),
+     array.new_bool(0),
+     array.new_int(0)
+ )
+
+volumeData volumeDataArray = volumeData.new(
+     array.new_float(vp_profileNumberOfRows, 0.),
+     array.new_float(vp_profileNumberOfRows, 0.),
+     array.new_float(vp_profileNumberOfRows, 0.),
+     array.new_int(vp_profileNumberOfRows, 0),
+     array.new_bool(vp_profileNumberOfRows, false),
+     array.new_bool(vp_profileNumberOfRows, false)
+ )
+
+var volumeProfile VP = volumeProfile.new(
+     array.new<box>(0),
+     array.new<chart.point>(0),
+     na, na, na, na, na
+ )
+
+var float highestPrice = na
+var float lowestPrice = na
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Functions / Methods
+//---------------------------------------------------------------------------------------------------------------------{
+
+renderLine(_x1, _y1, _x2, _y2, _xloc, _extend, _color, _style, _width) =>
+    var id = line.new(_x1, _y1, _x2, _y2, _xloc, _extend, _color, _style, _width)
+    line.set_xy1(id, _x1, _y1)
+    line.set_xy2(id, _x2, _y2)
+    line.set_color(id, _color)
+
+renderLabel(_x, _y, _text, _color, _style, _textcolor, _size, _tooltip) =>
+    var lb = label.new(_x, _y, _text, xloc.bar_index, yloc.price, _color, _style, _textcolor, _size, text.align_left, _tooltip)
+    lb.set_xy(_x, _y)
+    lb.set_text(_text)
+    lb.set_tooltip(_tooltip)
+    lb.set_textcolor(_textcolor)
+
+requestBarData(_lowerTimeframe) => request.security_lower_tf(syminfo.tickerid, _lowerTimeframe, BAR.new(), ignore_invalid_timeframe = true)
+
+calculateTimeframe(_depth) => 
+    int tfInMs = timeframe.in_seconds(timeframe.period)
+    int  mInMS = 60
+
+    if _depth == 2
+        switch
+            tfInMs <                 30  =>  '1S'
+            tfInMs <          1 * mInMS  =>  '5S'
+
+            tfInMs <=        15 * mInMS  =>   '1'
+            tfInMs <=        60 * mInMS  =>   '5'
+            tfInMs <=       240 * mInMS  =>  '15'
+            tfInMs <=      1440 * mInMS  =>  '60'
+            => 'D'
+
+    else if _depth == 1
+        switch
+            tfInMs <                 15  =>  '1S'
+            tfInMs <                 30  =>  '5S'
+            tfInMs <          1 * mInMS  => '15S'
+
+            tfInMs <=         5 * mInMS  =>   '1'
+            tfInMs <=        15 * mInMS  =>   '5'
+            tfInMs <=        60 * mInMS  =>  '15'
+            tfInMs <=       240 * mInMS  =>  '60'
+            tfInMs <=      1440 * mInMS  => '240'
+            => 'D'
+
+getTextSize(_text) =>
+    if _text != 'None'
+        switch _text
+            'Tiny'   => size.tiny
+            'Small'  => size.small 
+            'Normal' => size.normal
+            => size.auto
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Calculations - Volume Profile
+//---------------------------------------------------------------------------------------------------------------------{
+
+profileLevesSize  = getTextSize(vp_profileLevels)
+lowerTimeframeUsed = vp_profileLength <= 700 ? calculateTimeframe(2) : timeframe.period
+
+if bar.index == last_bar_index - vp_profileLength
+    VP.startIndex := bar.index
+    lowestPrice := bar.low 
+    highestPrice := bar.high
+else if bar.index > last_bar_index - vp_profileLength
+    lowestPrice := math.min(bar.low, lowestPrice)
+    highestPrice := math.max(bar.high, highestPrice)
+
+//if vp_profileLength <= 200
+//    ltfBarData := requestBarData(calculateTimeframe(2))
+//else
+if vp_profileLength <= 700
+    ltfBarData := requestBarData(calculateTimeframe(2))
+else
+    ltfBarData := array.new<BAR>(1, BAR.new(bar.open, bar.high, bar.low, bar.close, bar.volume))
+
+if barstate.ishistory and (bar.index >= last_bar_index - vp_profileLength) and bar.index < last_bar_index and ltfBarData.size() > 0
+
+    if ltfBarData.size() > 0 and not na(nz(ltfBarData.get(0).volume))
+        for currentLtfBar = 0 to ltfBarData.size() - 1
+            barDataArray.barHigh.push(ltfBarData.get(currentLtfBar).high)
+            barDataArray.barLow.push(ltfBarData.get(currentLtfBar).low)
+            barDataArray.barVolume.push(ltfBarData.get(currentLtfBar).volume)
+            barDataArray.barPolarity.push(ltfBarData.get(currentLtfBar).close > ltfBarData.get(currentLtfBar).open)
+
+        barDataArray.barCount.push(ltfBarData.size())
+
+priceStep = (highestPrice - lowestPrice) / vp_profileNumberOfRows
+
+var float exportPocPrice = na
+var float exportVahPrice = na
+var float exportValPrice = na
+
+barRange = high - low
+bodySize = math.abs(close - open)
+upperWick = high - math.max(open, close)
+lowerWick = math.min(open, close) - low
+barDirection = close > open ? "bullish" : close < open ? "bearish" : "neutral"
+
+vwapSrcExport = hlc3
+isNewVwapSession = timeframe.change("D")
+if na(vwapSrcExport[1])
+    isNewVwapSession := true
+
+var float sessionOpen = na
+var float sessionHigh = na
+var float sessionLow = na
+var float previousSessionOpen = na
+var float previousSessionHigh = na
+var float previousSessionLow = na
+var float previousSessionClose = na
+
+if isNewVwapSession or na(sessionOpen)
+    previousSessionOpen := sessionOpen
+    previousSessionHigh := sessionHigh
+    previousSessionLow := sessionLow
+    previousSessionClose := close[1]
+    sessionOpen := open
+    sessionHigh := high
+    sessionLow := low
+else
+    sessionHigh := math.max(sessionHigh, high)
+    sessionLow := math.min(sessionLow, low)
+
+if isNewVwapSession and barstate.isconfirmed
+    previousSessionHighArray := array.copy(currentSessionHighArray)
+    previousSessionLowArray := array.copy(currentSessionLowArray)
+    previousSessionVolumeArray := array.copy(currentSessionVolumeArray)
+    previousSessionPolarityArray := array.copy(currentSessionPolarityArray)
+    array.clear(currentSessionHighArray)
+    array.clear(currentSessionLowArray)
+    array.clear(currentSessionVolumeArray)
+    array.clear(currentSessionPolarityArray)
+
+if barstate.isconfirmed and ltfBarData.size() > 0 and not na(nz(ltfBarData.get(0).volume))
+    for currentLtfBar = 0 to ltfBarData.size() - 1
+        currentSessionHighArray.push(ltfBarData.get(currentLtfBar).high)
+        currentSessionLowArray.push(ltfBarData.get(currentLtfBar).low)
+        currentSessionVolumeArray.push(ltfBarData.get(currentLtfBar).volume)
+        currentSessionPolarityArray.push(ltfBarData.get(currentLtfBar).close > ltfBarData.get(currentLtfBar).open)
+
+float vwapValue = na
+float vwapUpper1 = na
+float vwapLower1 = na
+[_vwap, _vwapStdevUpper, _vwapUnused] = ta.vwap(vwapSrcExport, isNewVwapSession, 1)
+vwapValue := _vwap
+vwapBandBasis = _vwapStdevUpper - _vwap
+vwapUpper1 := _vwap + vwapBandBasis
+vwapLower1 := _vwap - vwapBandBasis
+closeVsVwap = f_rel(close, vwapValue)
+distanceToVwap = na(vwapValue) ? na : math.abs(close - vwapValue)
+distanceToVwapTicks = f_ticks(distanceToVwap)
+
+atrValue = ta.atr(atrLen)
+atrPercentOfPrice = na(atrValue) or close == 0 ? na : atrValue / close * 100
+rangeAtrRatio = na(atrValue) or atrValue == 0 ? na : barRange / atrValue
+
+ema20 = ta.ema(close, ema20Len)
+ema50 = ta.ema(close, ema50Len)
+ema200 = ta.ema(close, ema200Len)
+emaAlignment = ema20 > ema50 and ema50 > ema200 ? "bullish" : ema20 < ema50 and ema50 < ema200 ? "bearish" : "mixed"
+closeVsEma200 = f_rel(close, ema200)
+
+if barstate.islast and ltfBarData.size() > 0 //  barDataArray.barVolume.size() > 0 //
+
+    if VP.boxes.size() > 0
+        for boxIndex = 0 to VP.boxes.size() - 1
+            box.delete(VP.boxes.shift())
+
+    if barDataArray.barCount.size() > vp_profileLength
+        barCount = barDataArray.barCount.shift()
+        for barCountIndex = 0 to barCount - 1
+            barDataArray.barHigh.shift()
+            barDataArray.barLow.shift()
+            barDataArray.barVolume.shift()
+            barDataArray.barPolarity.shift()
+
+    VP.pocPoints.clear()
+    if not na(VP.pocPolyline)
+        VP.pocPolyline.delete()
+
+    if ltfBarData.size() > 0 and not na(nz(ltfBarData.get(0).volume))
+        for currentLtfBar = 0 to ltfBarData.size() - 1
+            barDataArray.barHigh.push(ltfBarData.get(currentLtfBar).high)
+            barDataArray.barLow.push(ltfBarData.get(currentLtfBar).low)
+            barDataArray.barVolume.push(ltfBarData.get(currentLtfBar).volume)
+            barDataArray.barPolarity.push(ltfBarData.get(currentLtfBar).close > ltfBarData.get(currentLtfBar).open)
+
+        barDataArray.barCount.push(ltfBarData.size())
+
+    barIndex = vp_profileLength
+    numberOfBars = 0
+    arraySize = barDataArray.barVolume.size()
+
+    for arrayIndex = 0 to arraySize - 1
+
+        levelHigh = barDataArray.barHigh.get(arrayIndex)
+        levelLow = barDataArray.barLow.get(arrayIndex)
+        levelVolume = barDataArray.barVolume.get(arrayIndex)
+
+        // Shoutout to @tkarolak for contributing to the code's optimization! Much appreciated.
+
+        int startSlotIndex = math.max(math.floor((levelLow - lowestPrice) / priceStep), 0)
+        int endSlotIndex = math.min(math.floor((levelHigh - lowestPrice) / priceStep), vp_profileNumberOfRows - 1)
+
+        for priceLevelIndex = startSlotIndex to endSlotIndex
+
+            float priceLevel = lowestPrice + priceLevelIndex * priceStep
+
+            volumeProportion = switch
+                levelLow >= priceLevel and levelHigh > priceLevel + priceStep => (priceLevel + priceStep - levelLow) / (levelHigh - levelLow)
+                levelHigh <= priceLevel + priceStep and levelLow < priceLevel => (levelHigh - priceLevel) / (levelHigh - levelLow)
+                levelLow >= priceLevel and levelHigh <= priceLevel + priceStep => 1
+                => priceStep / (levelHigh - levelLow)
+
+            volumeDataArray.totalVolume.set(priceLevelIndex, volumeDataArray.totalVolume.get(priceLevelIndex) + levelVolume * volumeProportion)
+
+            if barDataArray.barPolarity.get(arrayIndex)
+                volumeDataArray.bullishVolume.set(priceLevelIndex, volumeDataArray.bullishVolume.get(priceLevelIndex) + levelVolume * volumeProportion)
+
+//        priceLevelIndex = 0
+//        for priceLevel = lowestPrice to highestPrice - priceStep by priceStep
+//
+//            if levelHigh >= priceLevel and levelLow < priceLevel + priceStep
+//
+//                volumeProportion = if levelLow >= priceLevel and levelHigh > priceLevel + priceStep
+//                    (priceLevel + priceStep - levelLow) / (levelHigh - levelLow)
+//                else if levelHigh <= priceLevel + priceStep and levelLow < priceLevel
+//                    (levelHigh - priceLevel) / (levelHigh - levelLow)
+//                else if levelLow >= priceLevel and levelHigh <= priceLevel + priceStep
+//                    1
+//                else
+//                    priceStep / (levelHigh - levelLow)
+//
+//                volumeDataArray.totalVolume.set(priceLevelIndex, volumeDataArray.totalVolume.get(priceLevelIndex) + levelVolume * volumeProportion)
+//
+//                if barDataArray.barPolarity.get(arrayIndex)
+//                    volumeDataArray.bullishVolume.set(priceLevelIndex, volumeDataArray.bullishVolume.get(priceLevelIndex) + levelVolume * volumeProportion)
+//            priceLevelIndex += 1
+
+        if vp_pocShow == 'Developing'
+            if arrayIndex == barDataArray.barCount.get(vp_profileLength - barIndex)
+                VP.pocPoints.push(chart.point.from_index((bar[barIndex]).index, math.avg((bar[barIndex]).high, (bar[barIndex]).low)))
+                VP.pocPoints.push(chart.point.from_index((bar[barIndex]).index + 1, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max()) + .5) * priceStep))
+                numberOfBars += barDataArray.barCount.get(vp_profileLength - barIndex)
+                barIndex  -= 1
+            else if arrayIndex == (numberOfBars + barDataArray.barCount.get(vp_profileLength - barIndex)) and numberOfBars != 0
+                VP.pocPoints.push(chart.point.from_index((bar[barIndex]).index + 1, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max()) + .5) * priceStep))
+                numberOfBars += barDataArray.barCount.get(vp_profileLength - barIndex)
+                barIndex  -= 1
+            else if barIndex == 0
+                VP.pocPoints.push(chart.point.from_index((bar[barIndex]).index + 1, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max()) + .5) * priceStep))
+                numberOfBars += barDataArray.barCount.get(vp_profileLength - barIndex)
+
+    if vp_pocShow == 'Developing' and VP.pocPoints.size() > 1
+        VP.pocPolyline := polyline.new(VP.pocPoints, false, false, xloc.bar_index, vp_pocColor, color(na), line.style_solid, vp_pocWidth)
+    else
+        VP.pocPolyline := na
+
+    for volumeIndex = 0 to vp_profileNumberOfRows - 1
+        bearishVolume = 2 * volumeDataArray.bullishVolume.get(volumeIndex) - volumeDataArray.totalVolume.get(volumeIndex)
+        volumeDataArray.bearishVolume.set(volumeIndex, volumeDataArray.bearishVolume.get(volumeIndex) + bearishVolume * (bearishVolume > 0 ? 1 : -1) )
+
+    VP.pocLevel := volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max())
+    totalTradedVolume = volumeDataArray.totalVolume.sum() * vp_valueAreaThreshold
+    valueAreaVolume = VP.pocLevel != -1 ? volumeDataArray.totalVolume.get(VP.pocLevel) : 0
+    VP.vahLevel := VP.pocLevel
+    VP.valLevel := VP.pocLevel
+    
+    while valueAreaVolume < totalTradedVolume
+        if VP.valLevel == 0 and VP.vahLevel == vp_profileNumberOfRows - 1
+            break
+
+        volumeAbovePOC = 0.
+        if VP.vahLevel < vp_profileNumberOfRows - 1 
+            volumeAbovePOC := volumeDataArray.totalVolume.get(VP.vahLevel + 1)
+
+        volumeBelowPOC = 0.
+        if VP.valLevel > 0
+            volumeBelowPOC := volumeDataArray.totalVolume.get(VP.valLevel - 1)
+        
+        if volumeBelowPOC == 0 and volumeAbovePOC == 0
+            break
+
+        if volumeAbovePOC >= volumeBelowPOC
+            valueAreaVolume  += volumeAbovePOC
+            VP.vahLevel += 1
+        else
+            valueAreaVolume  += volumeBelowPOC
+            VP.valLevel -= 1
+
+    vahPrice = lowestPrice + (VP.vahLevel + 1.) * priceStep
+    pocPrice = lowestPrice + (VP.pocLevel + .5) * priceStep
+    valPrice = lowestPrice + (VP.valLevel + .0) * priceStep
+    exportPocPrice := pocPrice
+    exportVahPrice := vahPrice
+    exportValPrice := valPrice
+
+    profilePlottingLength = vp_profileLength > 360 ? 360 : vp_profileLength
+
+    profileTotalVolumeExport = volumeDataArray.totalVolume.sum()
+    profileMaxVolumeExport = volumeDataArray.totalVolume.max()
+    profileAvgVolumeExport = profileTotalVolumeExport / vp_profileNumberOfRows
+    pocVolume = VP.pocLevel != -1 ? volumeDataArray.totalVolume.get(VP.pocLevel) : na
+    valueAreaWidth = vahPrice - valPrice
+    closeLocation = close > vahPrice ? "above_vah" : close < valPrice ? "below_val" : "inside_value_area"
+    closeVsPoc = f_rel(close, pocPrice)
+    distanceToPoc = math.abs(close - pocPrice)
+    distanceToVah = math.abs(close - vahPrice)
+    distanceToVal = math.abs(close - valPrice)
+    distanceToPocTicks = f_ticks(distanceToPoc)
+    distanceToVahTicks = f_ticks(distanceToVah)
+    distanceToValTicks = f_ticks(distanceToVal)
+    distancePocAtr = na(atrValue) or atrValue == 0 ? na : distanceToPoc / atrValue
+    distanceVwapAtr = na(atrValue) or atrValue == 0 ? na : distanceToVwap / atrValue
+    pocPositionRatio = highestPrice == lowestPrice ? na : (pocPrice - lowestPrice) / (highestPrice - lowestPrice)
+    pocPositionInRange = na(pocPositionRatio) ? "unknown" : pocPositionRatio >= 0.66 ? "upper" : pocPositionRatio <= 0.33 ? "lower" : "middle"
+
+    closeRow = int(math.max(math.min(math.floor((close - lowestPrice) / priceStep), vp_profileNumberOfRows - 1), 0))
+    closeRowVolume = volumeDataArray.totalVolume.get(closeRow)
+    pocBullishVolume = VP.pocLevel != -1 ? volumeDataArray.bullishVolume.get(VP.pocLevel) : na
+    pocBearishVolume = na(pocBullishVolume) or na(pocVolume) ? na : math.max(pocVolume - pocBullishVolume, 0)
+    pocDeltaVolume = na(pocBullishVolume) or na(pocBearishVolume) ? na : pocBullishVolume - pocBearishVolume
+    closeRowBullishVolume = volumeDataArray.bullishVolume.get(closeRow)
+    closeRowBearishVolume = math.max(closeRowVolume - closeRowBullishVolume, 0)
+    closeRowDeltaVolume = closeRowBullishVolume - closeRowBearishVolume
+    closeRowVolumeRank = 1
+    emptyRowsCount = 0
+    for exportRow = 0 to vp_profileNumberOfRows - 1
+        rowVolume = volumeDataArray.totalVolume.get(exportRow)
+        if rowVolume == 0
+            emptyRowsCount += 1
+        if rowVolume > closeRowVolume
+            closeRowVolumeRank += 1
+
+    profileQuality = profileTotalVolumeExport <= 0 or VP.pocLevel == -1 ? "not_ready" : emptyRowsCount > vp_profileNumberOfRows * 0.35 ? "thin" : "good"
+    volumeValid = profileTotalVolumeExport > 0
+
+    [currentSessionProfileReady, currentSessionProfileHigh, currentSessionProfileLow, currentSessionPriceStep, currentSessionTotalVolume, currentSessionValueAreaVolume, currentSessionPocLevel, currentSessionVahLevel, currentSessionValLevel, currentSessionPocPrice, currentSessionVahPrice, currentSessionValPrice, currentSessionPocVolume, currentSessionPocBullishVolume, currentSessionPocBearishVolume, currentSessionPocDeltaVolume] = f_profile_from_arrays(currentSessionHighArray, currentSessionLowArray, currentSessionVolumeArray, currentSessionPolarityArray, vp_profileNumberOfRows, vp_valueAreaThreshold)
+    [previousSessionProfileReady, previousSessionProfileHigh, previousSessionProfileLow, previousSessionPriceStep, previousSessionTotalVolume, previousSessionValueAreaVolume, previousSessionPocLevel, previousSessionVahLevel, previousSessionValLevel, previousSessionPocPrice, previousSessionVahPrice, previousSessionValPrice, previousSessionPocVolume, previousSessionPocBullishVolume, previousSessionPocBearishVolume, previousSessionPocDeltaVolume] = f_profile_from_arrays(previousSessionHighArray, previousSessionLowArray, previousSessionVolumeArray, previousSessionPolarityArray, vp_profileNumberOfRows, vp_valueAreaThreshold)
+    currentSessionCloseLocation = currentSessionProfileReady ? close > currentSessionVahPrice ? "above_vah" : close < currentSessionValPrice ? "below_val" : "inside_value_area" : "unknown"
+    previousSessionCloseLocation = previousSessionProfileReady ? close > previousSessionVahPrice ? "above_vah" : close < previousSessionValPrice ? "below_val" : "inside_value_area" : "unknown"
+    currentSessionValueAreaWidth = currentSessionVahPrice - currentSessionValPrice
+    previousSessionValueAreaWidth = previousSessionVahPrice - previousSessionValPrice
+    currentSessionCloseVsPoc = f_rel(close, currentSessionPocPrice)
+    previousSessionCloseVsPoc = f_rel(close, previousSessionPocPrice)
+    currentSessionDistanceToPocTicks = f_ticks(math.abs(close - currentSessionPocPrice))
+    previousSessionDistanceToPocTicks = f_ticks(math.abs(close - previousSessionPocPrice))
+    currentSessionSamplesLoaded = array.size(currentSessionVolumeArray)
+    previousSessionSamplesLoaded = array.size(previousSessionVolumeArray)
+
+    float nearestHvnAbove = na
+    float nearestHvnBelow = na
+    float nearestLvnAbove = na
+    float nearestLvnBelow = na
+    float nearestHvnAboveVolume = na
+    float nearestHvnBelowVolume = na
+    float nearestLvnAboveVolume = na
+    float nearestLvnBelowVolume = na
+    float topHvn1Price = na
+    float topHvn1Volume = na
+    float topHvn2Price = na
+    float topHvn2Volume = na
+    float topHvn3Price = na
+    float topHvn3Volume = na
+    float topLvn1Price = na
+    float topLvn1Volume = na
+    float topLvn2Price = na
+    float topLvn2Volume = na
+    float topLvn3Price = na
+    float topLvn3Volume = na
+
+    peakWindowRaw = int(math.round(vp_profileNumberOfRows * vn_peaksNumberOfNodes))
+    troughWindowRaw = int(math.round(vp_profileNumberOfRows * vn_troughsNumberOfNodes))
+    peakWindow = vn_peaksNumberOfNodes == 0 ? 0 : int(math.max(1, math.min(vp_profileNumberOfRows - 1, peakWindowRaw)))
+    troughWindow = vn_troughsNumberOfNodes == 0 ? 0 : int(math.max(1, math.min(vp_profileNumberOfRows - 1, troughWindowRaw)))
+    thresholdVolume = profileMaxVolumeExport * vn_VolumeNodeThreshold
+
+    if peakWindow > 0 and vp_profileNumberOfRows > peakWindow * 2 + 1
+        for exportRow = peakWindow to vp_profileNumberOfRows - peakWindow - 1
+            rowVolume = volumeDataArray.totalVolume.get(exportRow)
+            isPeak = rowVolume >= thresholdVolume
+            for neighbor = 1 to peakWindow
+                isPeak := isPeak and rowVolume > volumeDataArray.totalVolume.get(exportRow - neighbor) and rowVolume > volumeDataArray.totalVolume.get(exportRow + neighbor)
+            if isPeak
+                nodePrice = f_row_price(lowestPrice, exportRow, priceStep)
+                if nodePrice > close and (na(nearestHvnAbove) or nodePrice < nearestHvnAbove)
+                    nearestHvnAbove := nodePrice
+                    nearestHvnAboveVolume := rowVolume
+                if nodePrice < close and (na(nearestHvnBelow) or nodePrice > nearestHvnBelow)
+                    nearestHvnBelow := nodePrice
+                    nearestHvnBelowVolume := rowVolume
+                if na(topHvn1Volume) or rowVolume > topHvn1Volume
+                    topHvn3Price := topHvn2Price
+                    topHvn3Volume := topHvn2Volume
+                    topHvn2Price := topHvn1Price
+                    topHvn2Volume := topHvn1Volume
+                    topHvn1Price := nodePrice
+                    topHvn1Volume := rowVolume
+                else if na(topHvn2Volume) or rowVolume > topHvn2Volume
+                    topHvn3Price := topHvn2Price
+                    topHvn3Volume := topHvn2Volume
+                    topHvn2Price := nodePrice
+                    topHvn2Volume := rowVolume
+                else if na(topHvn3Volume) or rowVolume > topHvn3Volume
+                    topHvn3Price := nodePrice
+                    topHvn3Volume := rowVolume
+
+    if troughWindow > 0 and vp_profileNumberOfRows > troughWindow * 2 + 1
+        for exportRow = troughWindow to vp_profileNumberOfRows - troughWindow - 1
+            rowVolume = volumeDataArray.totalVolume.get(exportRow)
+            isTrough = rowVolume >= thresholdVolume
+            for neighbor = 1 to troughWindow
+                isTrough := isTrough and rowVolume < volumeDataArray.totalVolume.get(exportRow - neighbor) and rowVolume < volumeDataArray.totalVolume.get(exportRow + neighbor)
+            if isTrough
+                nodePrice = f_row_price(lowestPrice, exportRow, priceStep)
+                if nodePrice > close and (na(nearestLvnAbove) or nodePrice < nearestLvnAbove)
+                    nearestLvnAbove := nodePrice
+                    nearestLvnAboveVolume := rowVolume
+                if nodePrice < close and (na(nearestLvnBelow) or nodePrice > nearestLvnBelow)
+                    nearestLvnBelow := nodePrice
+                    nearestLvnBelowVolume := rowVolume
+                if na(topLvn1Volume) or rowVolume < topLvn1Volume
+                    topLvn3Price := topLvn2Price
+                    topLvn3Volume := topLvn2Volume
+                    topLvn2Price := topLvn1Price
+                    topLvn2Volume := topLvn1Volume
+                    topLvn1Price := nodePrice
+                    topLvn1Volume := rowVolume
+                else if na(topLvn2Volume) or rowVolume < topLvn2Volume
+                    topLvn3Price := topLvn2Price
+                    topLvn3Volume := topLvn2Volume
+                    topLvn2Price := nodePrice
+                    topLvn2Volume := rowVolume
+                else if na(topLvn3Volume) or rowVolume < topLvn3Volume
+                    topLvn3Price := nodePrice
+                    topLvn3Volume := rowVolume
+
+    nearestHvnAboveDistanceTicks = f_ticks(math.abs(nearestHvnAbove - close))
+    nearestHvnBelowDistanceTicks = f_ticks(math.abs(close - nearestHvnBelow))
+    nearestLvnAboveDistanceTicks = f_ticks(math.abs(nearestLvnAbove - close))
+    nearestLvnBelowDistanceTicks = f_ticks(math.abs(close - nearestLvnBelow))
+    crossedPoc = not na(pocPrice) and ((close > pocPrice and close[1] <= pocPrice) or (close < pocPrice and close[1] >= pocPrice))
+    crossedVah = not na(vahPrice) and ((close > vahPrice and close[1] <= vahPrice) or (close < vahPrice and close[1] >= vahPrice))
+    crossedVal = not na(valPrice) and ((close > valPrice and close[1] <= valPrice) or (close < valPrice and close[1] >= valPrice))
+    wasInsideValueArea = not na(vahPrice) and not na(valPrice) and close[1] <= vahPrice and close[1] >= valPrice
+    isInsideValueArea = not na(vahPrice) and not na(valPrice) and close <= vahPrice and close >= valPrice
+    reenteredValueArea = isInsideValueArea and not wasInsideValueArea
+    leftValueArea = not isInsideValueArea and wasInsideValueArea
+
+    setupBuffer = math.max(syminfo.mintick * setupMinStopTicks, math.max(syminfo.mintick * 2, na(atrValue) ? syminfo.mintick * 4 : atrValue * setupInvalidationAtrBuffer))
+    setupDefaultMove = na(atrValue) ? syminfo.mintick * 20 : atrValue
+
+    currentVaReentryLong = currentSessionProfileReady and close[1] < currentSessionValPrice and close >= currentSessionValPrice and close <= currentSessionVahPrice
+    currentVaReentryShort = currentSessionProfileReady and close[1] > currentSessionVahPrice and close <= currentSessionVahPrice and close >= currentSessionValPrice
+    previousVaReentryLong = previousSessionProfileReady and close[1] < previousSessionValPrice and close >= previousSessionValPrice and close <= previousSessionVahPrice
+    previousVaReentryShort = previousSessionProfileReady and close[1] > previousSessionVahPrice and close <= previousSessionVahPrice and close >= previousSessionValPrice
+    rollingVaReentryLong = close[1] < valPrice and close >= valPrice and close <= vahPrice
+    rollingVaReentryShort = close[1] > vahPrice and close <= vahPrice and close >= valPrice
+
+    currentPocReclaimLong = currentSessionProfileReady and f_cross_up(currentSessionPocPrice)
+    currentPocReclaimShort = currentSessionProfileReady and f_cross_down(currentSessionPocPrice)
+    previousPocReclaimLong = previousSessionProfileReady and f_cross_up(previousSessionPocPrice)
+    previousPocReclaimShort = previousSessionProfileReady and f_cross_down(previousSessionPocPrice)
+    rollingPocReclaimLong = f_cross_up(pocPrice)
+    rollingPocReclaimShort = f_cross_down(pocPrice)
+
+    currentPocRejectLong = currentSessionProfileReady and f_reject_long(currentSessionPocPrice) and close[1] >= currentSessionPocPrice
+    currentPocRejectShort = currentSessionProfileReady and f_reject_short(currentSessionPocPrice) and close[1] <= currentSessionPocPrice
+    previousPocRejectLong = previousSessionProfileReady and f_reject_long(previousSessionPocPrice) and close[1] >= previousSessionPocPrice
+    previousPocRejectShort = previousSessionProfileReady and f_reject_short(previousSessionPocPrice) and close[1] <= previousSessionPocPrice
+    rollingPocRejectLong = f_reject_long(pocPrice) and close[1] >= pocPrice
+    rollingPocRejectShort = f_reject_short(pocPrice) and close[1] <= pocPrice
+
+    currentVaBreakoutLong = currentSessionProfileReady and close > currentSessionVahPrice and close[1] > currentSessionVahPrice and low > currentSessionVahPrice
+    currentVaBreakoutShort = currentSessionProfileReady and close < currentSessionValPrice and close[1] < currentSessionValPrice and high < currentSessionValPrice
+    previousVaBreakoutLong = previousSessionProfileReady and close > previousSessionVahPrice and close[1] > previousSessionVahPrice and low > previousSessionVahPrice
+    previousVaBreakoutShort = previousSessionProfileReady and close < previousSessionValPrice and close[1] < previousSessionValPrice and high < previousSessionValPrice
+    rollingVaBreakoutLong = close > vahPrice and close[1] > vahPrice and low > vahPrice
+    rollingVaBreakoutShort = close < valPrice and close[1] < valPrice and high < valPrice
+
+    lvnBreakoutLong = not na(nearestLvnAbove) and f_cross_up(nearestLvnAbove)
+    lvnBreakoutShort = not na(nearestLvnBelow) and f_cross_down(nearestLvnBelow)
+    hvnRejectionLong = not na(nearestHvnBelow) and f_reject_long(nearestHvnBelow)
+    hvnRejectionShort = not na(nearestHvnAbove) and f_reject_short(nearestHvnAbove)
+
+    bool setupCandidateActive = false
+    string setupCandidateType = "none"
+    string setupCandidateSide = "none"
+    string setupCandidateSource = "none"
+    string setupCandidateReason = ""
+    float setupCandidateTrigger = na
+    float setupCandidateInvalidation = na
+    float setupCandidateTarget1 = na
+    float setupCandidateTarget2 = na
+    int setupCandidateBaseScore = 0
+
+    if currentVaReentryLong
+        setupCandidateActive := true
+        setupCandidateType := "value_area_reentry"
+        setupCandidateSide := "long"
+        setupCandidateSource := "current_session"
+        setupCandidateReason := "Current session VAL reclaimed back inside value area"
+        setupCandidateTrigger := currentSessionValPrice
+        setupCandidateInvalidation := currentSessionValPrice - setupBuffer
+        setupCandidateTarget1 := currentSessionPocPrice
+        setupCandidateTarget2 := currentSessionVahPrice
+        setupCandidateBaseScore := 90
+    else if currentVaReentryShort
+        setupCandidateActive := true
+        setupCandidateType := "value_area_reentry"
+        setupCandidateSide := "short"
+        setupCandidateSource := "current_session"
+        setupCandidateReason := "Current session VAH rejected back inside value area"
+        setupCandidateTrigger := currentSessionVahPrice
+        setupCandidateInvalidation := currentSessionVahPrice + setupBuffer
+        setupCandidateTarget1 := currentSessionPocPrice
+        setupCandidateTarget2 := currentSessionValPrice
+        setupCandidateBaseScore := 90
+    else if previousVaReentryLong
+        setupCandidateActive := true
+        setupCandidateType := "value_area_reentry"
+        setupCandidateSide := "long"
+        setupCandidateSource := "previous_session"
+        setupCandidateReason := "Previous session VAL reclaimed back inside value area"
+        setupCandidateTrigger := previousSessionValPrice
+        setupCandidateInvalidation := previousSessionValPrice - setupBuffer
+        setupCandidateTarget1 := previousSessionPocPrice
+        setupCandidateTarget2 := previousSessionVahPrice
+        setupCandidateBaseScore := 88
+    else if previousVaReentryShort
+        setupCandidateActive := true
+        setupCandidateType := "value_area_reentry"
+        setupCandidateSide := "short"
+        setupCandidateSource := "previous_session"
+        setupCandidateReason := "Previous session VAH rejected back inside value area"
+        setupCandidateTrigger := previousSessionVahPrice
+        setupCandidateInvalidation := previousSessionVahPrice + setupBuffer
+        setupCandidateTarget1 := previousSessionPocPrice
+        setupCandidateTarget2 := previousSessionValPrice
+        setupCandidateBaseScore := 88
+    else if rollingVaReentryLong
+        setupCandidateActive := true
+        setupCandidateType := "value_area_reentry"
+        setupCandidateSide := "long"
+        setupCandidateSource := "rolling_profile"
+        setupCandidateReason := "Rolling profile VAL reclaimed back inside value area"
+        setupCandidateTrigger := valPrice
+        setupCandidateInvalidation := valPrice - setupBuffer
+        setupCandidateTarget1 := pocPrice
+        setupCandidateTarget2 := vahPrice
+        setupCandidateBaseScore := 82
+    else if rollingVaReentryShort
+        setupCandidateActive := true
+        setupCandidateType := "value_area_reentry"
+        setupCandidateSide := "short"
+        setupCandidateSource := "rolling_profile"
+        setupCandidateReason := "Rolling profile VAH rejected back inside value area"
+        setupCandidateTrigger := vahPrice
+        setupCandidateInvalidation := vahPrice + setupBuffer
+        setupCandidateTarget1 := pocPrice
+        setupCandidateTarget2 := valPrice
+        setupCandidateBaseScore := 82
+    else if currentPocReclaimLong
+        setupCandidateActive := true
+        setupCandidateType := "poc_reclaim"
+        setupCandidateSide := "long"
+        setupCandidateSource := "current_session"
+        setupCandidateReason := "Current session POC reclaimed"
+        setupCandidateTrigger := currentSessionPocPrice
+        setupCandidateInvalidation := currentSessionPocPrice - setupBuffer
+        setupCandidateTarget1 := currentSessionVahPrice
+        setupCandidateTarget2 := not na(nearestHvnAbove) and nearestHvnAbove > currentSessionPocPrice ? nearestHvnAbove : currentSessionVahPrice + currentSessionValueAreaWidth
+        setupCandidateBaseScore := 78
+    else if currentPocReclaimShort
+        setupCandidateActive := true
+        setupCandidateType := "poc_reclaim"
+        setupCandidateSide := "short"
+        setupCandidateSource := "current_session"
+        setupCandidateReason := "Current session POC lost"
+        setupCandidateTrigger := currentSessionPocPrice
+        setupCandidateInvalidation := currentSessionPocPrice + setupBuffer
+        setupCandidateTarget1 := currentSessionValPrice
+        setupCandidateTarget2 := not na(nearestHvnBelow) and nearestHvnBelow < currentSessionPocPrice ? nearestHvnBelow : currentSessionValPrice - currentSessionValueAreaWidth
+        setupCandidateBaseScore := 78
+    else if previousPocReclaimLong
+        setupCandidateActive := true
+        setupCandidateType := "poc_reclaim"
+        setupCandidateSide := "long"
+        setupCandidateSource := "previous_session"
+        setupCandidateReason := "Previous session POC reclaimed"
+        setupCandidateTrigger := previousSessionPocPrice
+        setupCandidateInvalidation := previousSessionPocPrice - setupBuffer
+        setupCandidateTarget1 := previousSessionVahPrice
+        setupCandidateTarget2 := not na(nearestHvnAbove) and nearestHvnAbove > previousSessionPocPrice ? nearestHvnAbove : previousSessionVahPrice + previousSessionValueAreaWidth
+        setupCandidateBaseScore := 76
+    else if previousPocReclaimShort
+        setupCandidateActive := true
+        setupCandidateType := "poc_reclaim"
+        setupCandidateSide := "short"
+        setupCandidateSource := "previous_session"
+        setupCandidateReason := "Previous session POC lost"
+        setupCandidateTrigger := previousSessionPocPrice
+        setupCandidateInvalidation := previousSessionPocPrice + setupBuffer
+        setupCandidateTarget1 := previousSessionValPrice
+        setupCandidateTarget2 := not na(nearestHvnBelow) and nearestHvnBelow < previousSessionPocPrice ? nearestHvnBelow : previousSessionValPrice - previousSessionValueAreaWidth
+        setupCandidateBaseScore := 76
+    else if rollingPocReclaimLong
+        setupCandidateActive := true
+        setupCandidateType := "poc_reclaim"
+        setupCandidateSide := "long"
+        setupCandidateSource := "rolling_profile"
+        setupCandidateReason := "Rolling profile POC reclaimed"
+        setupCandidateTrigger := pocPrice
+        setupCandidateInvalidation := pocPrice - setupBuffer
+        setupCandidateTarget1 := vahPrice
+        setupCandidateTarget2 := not na(nearestHvnAbove) and nearestHvnAbove > pocPrice ? nearestHvnAbove : vahPrice + valueAreaWidth
+        setupCandidateBaseScore := 72
+    else if rollingPocReclaimShort
+        setupCandidateActive := true
+        setupCandidateType := "poc_reclaim"
+        setupCandidateSide := "short"
+        setupCandidateSource := "rolling_profile"
+        setupCandidateReason := "Rolling profile POC lost"
+        setupCandidateTrigger := pocPrice
+        setupCandidateInvalidation := pocPrice + setupBuffer
+        setupCandidateTarget1 := valPrice
+        setupCandidateTarget2 := not na(nearestHvnBelow) and nearestHvnBelow < pocPrice ? nearestHvnBelow : valPrice - valueAreaWidth
+        setupCandidateBaseScore := 72
+    else if lvnBreakoutLong
+        setupCandidateActive := true
+        setupCandidateType := "lvn_breakout"
+        setupCandidateSide := "long"
+        setupCandidateSource := "rolling_profile"
+        setupCandidateReason := "Price crossed above nearest LVN"
+        setupCandidateTrigger := nearestLvnAbove
+        setupCandidateInvalidation := nearestLvnAbove - setupBuffer
+        setupCandidateTarget1 := not na(nearestHvnAbove) and nearestHvnAbove > nearestLvnAbove ? nearestHvnAbove : nearestLvnAbove + setupDefaultMove
+        setupCandidateTarget2 := setupCandidateTarget1 + setupDefaultMove
+        setupCandidateBaseScore := 70
+    else if lvnBreakoutShort
+        setupCandidateActive := true
+        setupCandidateType := "lvn_breakout"
+        setupCandidateSide := "short"
+        setupCandidateSource := "rolling_profile"
+        setupCandidateReason := "Price crossed below nearest LVN"
+        setupCandidateTrigger := nearestLvnBelow
+        setupCandidateInvalidation := nearestLvnBelow + setupBuffer
+        setupCandidateTarget1 := not na(nearestHvnBelow) and nearestHvnBelow < nearestLvnBelow ? nearestHvnBelow : nearestLvnBelow - setupDefaultMove
+        setupCandidateTarget2 := setupCandidateTarget1 - setupDefaultMove
+        setupCandidateBaseScore := 70
+    else if currentPocRejectLong or previousPocRejectLong or rollingPocRejectLong
+        setupCandidateActive := true
+        setupCandidateType := "poc_rejection"
+        setupCandidateSide := "long"
+        setupCandidateSource := currentPocRejectLong ? "current_session" : previousPocRejectLong ? "previous_session" : "rolling_profile"
+        setupCandidateReason := "POC tested and rejected as support"
+        setupCandidateTrigger := currentPocRejectLong ? currentSessionPocPrice : previousPocRejectLong ? previousSessionPocPrice : pocPrice
+        setupCandidateInvalidation := setupCandidateTrigger - setupBuffer
+        setupCandidateTarget1 := currentPocRejectLong ? currentSessionVahPrice : previousPocRejectLong ? previousSessionVahPrice : vahPrice
+        setupCandidateTarget2 := not na(nearestHvnAbove) and nearestHvnAbove > setupCandidateTrigger ? nearestHvnAbove : setupCandidateTarget1 + setupDefaultMove
+        setupCandidateBaseScore := currentPocRejectLong ? 74 : previousPocRejectLong ? 72 : 68
+    else if currentPocRejectShort or previousPocRejectShort or rollingPocRejectShort
+        setupCandidateActive := true
+        setupCandidateType := "poc_rejection"
+        setupCandidateSide := "short"
+        setupCandidateSource := currentPocRejectShort ? "current_session" : previousPocRejectShort ? "previous_session" : "rolling_profile"
+        setupCandidateReason := "POC tested and rejected as resistance"
+        setupCandidateTrigger := currentPocRejectShort ? currentSessionPocPrice : previousPocRejectShort ? previousSessionPocPrice : pocPrice
+        setupCandidateInvalidation := setupCandidateTrigger + setupBuffer
+        setupCandidateTarget1 := currentPocRejectShort ? currentSessionValPrice : previousPocRejectShort ? previousSessionValPrice : valPrice
+        setupCandidateTarget2 := not na(nearestHvnBelow) and nearestHvnBelow < setupCandidateTrigger ? nearestHvnBelow : setupCandidateTarget1 - setupDefaultMove
+        setupCandidateBaseScore := currentPocRejectShort ? 74 : previousPocRejectShort ? 72 : 68
+    else if currentVaBreakoutLong or previousVaBreakoutLong or rollingVaBreakoutLong
+        setupCandidateActive := true
+        setupCandidateType := "value_area_breakout_acceptance"
+        setupCandidateSide := "long"
+        setupCandidateSource := currentVaBreakoutLong ? "current_session" : previousVaBreakoutLong ? "previous_session" : "rolling_profile"
+        setupCandidateReason := "Value area breakout accepted above VAH"
+        setupCandidateTrigger := currentVaBreakoutLong ? currentSessionVahPrice : previousVaBreakoutLong ? previousSessionVahPrice : vahPrice
+        setupCandidateInvalidation := setupCandidateTrigger - setupBuffer
+        setupCandidateTarget1 := not na(nearestHvnAbove) and nearestHvnAbove > setupCandidateTrigger ? nearestHvnAbove : setupCandidateTrigger + setupDefaultMove
+        setupCandidateTarget2 := setupCandidateTarget1 + setupDefaultMove
+        setupCandidateBaseScore := currentVaBreakoutLong ? 70 : previousVaBreakoutLong ? 68 : 64
+    else if currentVaBreakoutShort or previousVaBreakoutShort or rollingVaBreakoutShort
+        setupCandidateActive := true
+        setupCandidateType := "value_area_breakout_acceptance"
+        setupCandidateSide := "short"
+        setupCandidateSource := currentVaBreakoutShort ? "current_session" : previousVaBreakoutShort ? "previous_session" : "rolling_profile"
+        setupCandidateReason := "Value area breakout accepted below VAL"
+        setupCandidateTrigger := currentVaBreakoutShort ? currentSessionValPrice : previousVaBreakoutShort ? previousSessionValPrice : valPrice
+        setupCandidateInvalidation := setupCandidateTrigger + setupBuffer
+        setupCandidateTarget1 := not na(nearestHvnBelow) and nearestHvnBelow < setupCandidateTrigger ? nearestHvnBelow : setupCandidateTrigger - setupDefaultMove
+        setupCandidateTarget2 := setupCandidateTarget1 - setupDefaultMove
+        setupCandidateBaseScore := currentVaBreakoutShort ? 70 : previousVaBreakoutShort ? 68 : 64
+    else if hvnRejectionLong
+        setupCandidateActive := true
+        setupCandidateType := "hvn_rejection"
+        setupCandidateSide := "long"
+        setupCandidateSource := "rolling_profile"
+        setupCandidateReason := "Nearest HVN below rejected as support"
+        setupCandidateTrigger := nearestHvnBelow
+        setupCandidateInvalidation := nearestHvnBelow - setupBuffer
+        setupCandidateTarget1 := pocPrice > nearestHvnBelow ? pocPrice : nearestHvnBelow + setupDefaultMove
+        setupCandidateTarget2 := not na(nearestHvnAbove) and nearestHvnAbove > setupCandidateTarget1 ? nearestHvnAbove : setupCandidateTarget1 + setupDefaultMove
+        setupCandidateBaseScore := 66
+    else if hvnRejectionShort
+        setupCandidateActive := true
+        setupCandidateType := "hvn_rejection"
+        setupCandidateSide := "short"
+        setupCandidateSource := "rolling_profile"
+        setupCandidateReason := "Nearest HVN above rejected as resistance"
+        setupCandidateTrigger := nearestHvnAbove
+        setupCandidateInvalidation := nearestHvnAbove + setupBuffer
+        setupCandidateTarget1 := pocPrice < nearestHvnAbove ? pocPrice : nearestHvnAbove - setupDefaultMove
+        setupCandidateTarget2 := not na(nearestHvnBelow) and nearestHvnBelow < setupCandidateTarget1 ? nearestHvnBelow : setupCandidateTarget1 - setupDefaultMove
+        setupCandidateBaseScore := 66
+
+    setupCandidateRiskTicks = f_risk_ticks(setupCandidateTrigger, setupCandidateInvalidation)
+    setupCandidateReward1Ticks = f_reward_ticks(setupCandidateSide, setupCandidateTrigger, setupCandidateTarget1)
+    setupCandidateReward2Ticks = f_reward_ticks(setupCandidateSide, setupCandidateTrigger, setupCandidateTarget2)
+    setupCandidateRewardRisk = f_rr(setupCandidateRiskTicks, setupCandidateReward1Ticks)
+    setupCandidateDistanceToTriggerTicks = f_ticks(math.abs(close - setupCandidateTrigger))
+    setupTrendBonus = setupCandidateSide == "long" and emaAlignment == "bullish" ? 5 : setupCandidateSide == "short" and emaAlignment == "bearish" ? 5 : emaAlignment == "mixed" ? 0 : -8
+    setupProfileBonus = profileQuality == "good" ? 5 : -8
+    setupRewardBonus = not na(setupCandidateRewardRisk) and setupCandidateRewardRisk >= 1 ? 5 : -5
+    setupCandidateQualityScore = setupCandidateActive ? int(math.max(0, math.min(100, setupCandidateBaseScore + setupTrendBonus + setupProfileBonus + setupRewardBonus))) : 0
+    setupCandidateId = setupCandidateActive ? deskSymbol + "_" + timeframe.period + "_" + setupCandidateSource + "_" + setupCandidateType + "_" + setupCandidateSide + "_" + str.tostring(time) : ""
+
+    int trackedSetupAgeBars = trackedSetupActive and not na(trackedSetupCreatedBarIndex) ? bar_index - trackedSetupCreatedBarIndex : na
+    trackedSetupInvalidated = trackedSetupActive and not na(trackedSetupInvalidationLevel) and ((trackedSetupSide == "long" and low <= trackedSetupInvalidationLevel) or (trackedSetupSide == "short" and high >= trackedSetupInvalidationLevel))
+    trackedSetupTarget1Hit = trackedSetupActive and not na(trackedSetupTarget1) and ((trackedSetupSide == "long" and high >= trackedSetupTarget1) or (trackedSetupSide == "short" and low <= trackedSetupTarget1))
+    trackedSetupExpired = trackedSetupActive and not na(trackedSetupAgeBars) and trackedSetupAgeBars > setupExpiryBars
+
+    if trackedSetupActive
+        trackedSetupStatus := "active"
+        if trackedSetupInvalidated
+            trackedSetupStatus := "invalidated"
+            trackedSetupActive := false
+        else if trackedSetupTarget1Hit
+            trackedSetupStatus := "target_1_hit"
+            trackedSetupActive := false
+        else if trackedSetupExpired
+            trackedSetupStatus := "expired"
+            trackedSetupActive := false
+
+    if setupCandidateActive and not trackedSetupActive and not (trackedSetupInvalidated or trackedSetupTarget1Hit or trackedSetupExpired)
+        trackedSetupActive := true
+        trackedSetupId := setupCandidateId
+        trackedSetupType := setupCandidateType
+        trackedSetupSide := setupCandidateSide
+        trackedSetupSource := setupCandidateSource
+        trackedSetupStatus := "new"
+        trackedSetupReason := setupCandidateReason
+        trackedSetupTriggerLevel := setupCandidateTrigger
+        trackedSetupInvalidationLevel := setupCandidateInvalidation
+        trackedSetupTarget1 := setupCandidateTarget1
+        trackedSetupTarget2 := setupCandidateTarget2
+        trackedSetupCreatedBarIndex := bar_index
+        trackedSetupCreatedTime := time
+        trackedSetupAgeBars := 0
+
+    string timestampUtc = str.format_time(time, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+    string deskTimeframe = timeframe.period
+    string alertId = deskSymbol + "_" + deskTimeframe + "_" + str.tostring(time)
+    string setupCode = setupCandidateActive ? setupCandidateSource + ":" + setupCandidateType + ":" + setupCandidateSide : "none"
+    string trackedCode = trackedSetupSource + ":" + trackedSetupType + ":" + trackedSetupSide
+    string payload = "{"
+
+    payload := payload + '"v":"vp4c",'
+    payload := payload + '"sec":"' + webhookSecret + '",'
+    payload := payload + '"id":"' + alertId + '",'
+    payload := payload + '"sym":"' + deskSymbol + '",'
+    payload := payload + '"tf":"' + deskTimeframe + '",'
+    payload := payload + '"ts":"' + timestampUtc + '",'
+    payload := payload + '"t":' + str.tostring(time) + ','
+    payload := payload + '"bi":' + str.tostring(bar_index) + ','
+
+    payload := payload + '"px":{'
+    payload := payload + '"o":' + f_num(open) + ','
+    payload := payload + '"h":' + f_num(high) + ','
+    payload := payload + '"l":' + f_num(low) + ','
+    payload := payload + '"c":' + f_num(close) + ','
+    payload := payload + '"v":' + f_num(volume)
+    payload := payload + '},'
+
+    payload := payload + '"ctx":{'
+    payload := payload + '"so":' + f_num(sessionOpen) + ','
+    payload := payload + '"sh":' + f_num(sessionHigh) + ','
+    payload := payload + '"sl":' + f_num(sessionLow) + ','
+    payload := payload + '"ph":' + f_num(previousSessionHigh) + ','
+    payload := payload + '"pl":' + f_num(previousSessionLow) + ','
+    payload := payload + '"pc":' + f_num(previousSessionClose) + ','
+    payload := payload + '"dir":"' + barDirection + '",'
+    payload := payload + '"rng":' + f_num(barRange) + ','
+    payload := payload + '"atr":' + f_num(atrValue) + ','
+    payload := payload + '"vw":' + f_num(vwapValue) + ','
+    payload := payload + '"e20":' + f_num(ema20) + ','
+    payload := payload + '"e50":' + f_num(ema50) + ','
+    payload := payload + '"e200":' + f_num(ema200) + ','
+    payload := payload + '"tr":"' + emaAlignment + '"'
+    payload := payload + '},'
+
+    payload := payload + '"cs":{'
+    payload := payload + '"r":' + f_bool(currentSessionProfileReady) + ','
+    payload := payload + '"hi":' + f_num(currentSessionProfileHigh) + ','
+    payload := payload + '"lo":' + f_num(currentSessionProfileLow) + ','
+    payload := payload + '"poc":' + f_num(currentSessionPocPrice) + ','
+    payload := payload + '"vah":' + f_num(currentSessionVahPrice) + ','
+    payload := payload + '"val":' + f_num(currentSessionValPrice) + ','
+    payload := payload + '"vol":' + f_num(currentSessionTotalVolume) + ','
+    payload := payload + '"pd":' + f_num(currentSessionPocDeltaVolume) + ','
+    payload := payload + '"loc":"' + currentSessionCloseLocation + '"'
+    payload := payload + '},'
+
+    payload := payload + '"ps":{'
+    payload := payload + '"r":' + f_bool(previousSessionProfileReady) + ','
+    payload := payload + '"hi":' + f_num(previousSessionProfileHigh) + ','
+    payload := payload + '"lo":' + f_num(previousSessionProfileLow) + ','
+    payload := payload + '"poc":' + f_num(previousSessionPocPrice) + ','
+    payload := payload + '"vah":' + f_num(previousSessionVahPrice) + ','
+    payload := payload + '"val":' + f_num(previousSessionValPrice) + ','
+    payload := payload + '"vol":' + f_num(previousSessionTotalVolume) + ','
+    payload := payload + '"pd":' + f_num(previousSessionPocDeltaVolume) + ','
+    payload := payload + '"loc":"' + previousSessionCloseLocation + '"'
+    payload := payload + '},'
+
+    payload := payload + '"rp":{'
+    payload := payload + '"q":"' + profileQuality + '",'
+    payload := payload + '"hi":' + f_num(highestPrice) + ','
+    payload := payload + '"lo":' + f_num(lowestPrice) + ','
+    payload := payload + '"poc":' + f_num(pocPrice) + ','
+    payload := payload + '"vah":' + f_num(vahPrice) + ','
+    payload := payload + '"val":' + f_num(valPrice) + ','
+    payload := payload + '"vol":' + f_num(profileTotalVolumeExport) + ','
+    payload := payload + '"pd":' + f_num(pocDeltaVolume) + ','
+    payload := payload + '"loc":"' + closeLocation + '",'
+    payload := payload + '"nhu":' + f_num(nearestHvnAbove) + ','
+    payload := payload + '"nhd":' + f_num(nearestHvnBelow) + ','
+    payload := payload + '"nlu":' + f_num(nearestLvnAbove) + ','
+    payload := payload + '"nld":' + f_num(nearestLvnBelow) + ','
+    payload := payload + '"th1":' + f_num(topHvn1Price) + ','
+    payload := payload + '"th2":' + f_num(topHvn2Price) + ','
+    payload := payload + '"th3":' + f_num(topHvn3Price) + ','
+    payload := payload + '"tl1":' + f_num(topLvn1Price) + ','
+    payload := payload + '"tl2":' + f_num(topLvn2Price) + ','
+    payload := payload + '"tl3":' + f_num(topLvn3Price)
+    payload := payload + '},'
+
+    payload := payload + '"ev":{'
+    payload := payload + '"poc":' + f_bool(crossedPoc) + ','
+    payload := payload + '"vah":' + f_bool(crossedVah) + ','
+    payload := payload + '"val":' + f_bool(crossedVal) + ','
+    payload := payload + '"rin":' + f_bool(reenteredValueArea) + ','
+    payload := payload + '"out":' + f_bool(leftValueArea)
+    payload := payload + '},'
+
+    payload := payload + '"sc":{'
+    payload := payload + '"a":' + f_bool(setupCandidateActive) + ','
+    payload := payload + '"cd":"' + setupCode + '",'
+    payload := payload + '"tr":' + f_num(setupCandidateTrigger) + ','
+    payload := payload + '"inv":' + f_num(setupCandidateInvalidation) + ','
+    payload := payload + '"t1":' + f_num(setupCandidateTarget1) + ','
+    payload := payload + '"t2":' + f_num(setupCandidateTarget2) + ','
+    payload := payload + '"risk":' + f_num(setupCandidateRiskTicks) + ','
+    payload := payload + '"rr":' + f_num(setupCandidateRewardRisk) + ','
+    payload := payload + '"q":' + f_int(setupCandidateQualityScore)
+    payload := payload + '},'
+
+    payload := payload + '"tsu":{'
+    payload := payload + '"a":' + f_bool(trackedSetupActive) + ','
+    payload := payload + '"st":"' + trackedSetupStatus + '",'
+    payload := payload + '"cd":"' + trackedCode + '",'
+    payload := payload + '"age":' + f_int(trackedSetupAgeBars) + ','
+    payload := payload + '"tr":' + f_num(trackedSetupTriggerLevel) + ','
+    payload := payload + '"inv":' + f_num(trackedSetupInvalidationLevel) + ','
+    payload := payload + '"t1":' + f_num(trackedSetupTarget1) + ','
+    payload := payload + '"t2":' + f_num(trackedSetupTarget2) + ','
+    payload := payload + '"bad":' + f_bool(trackedSetupInvalidated) + ','
+    payload := payload + '"hit":' + f_bool(trackedSetupTarget1Hit) + ','
+    payload := payload + '"exp":' + f_bool(trackedSetupExpired)
+    payload := payload + '}'
+
+    payload := payload + "}"
+
+
+    if sendEveryClosedBar and (not requireWebhookSecret or webhookSecret != "") and barstate.isconfirmed
+        alert(payload, alert.freq_once_per_bar_close)
+
+plot(showExportVisuals ? exportPocPrice : na, title="TVA VP POC", color=color.new(color.orange, 0), linewidth=2)
+plot(showExportVisuals ? exportVahPrice : na, title="TVA VP VAH", color=color.new(color.blue, 0))
+plot(showExportVisuals ? exportValPrice : na, title="TVA VP VAL", color=color.new(color.blue, 0))
+plot(showExportVisuals ? vwapValue : na, title="TVA VWAP", color=color.new(color.teal, 0))
+plot(showExportVisuals ? ema20 : na, title="TVA EMA 20", color=color.new(color.green, 15))
+plot(showExportVisuals ? ema50 : na, title="TVA EMA 50", color=color.new(color.yellow, 15))
+plot(showExportVisuals ? ema200 : na, title="TVA EMA 200", color=color.new(color.red, 10))

@@ -1,0 +1,8 @@
+{
+  "backtest_id": "replay_2026_07_14_from_0000_to_2000_autopilot_v2",
+  "trading_date": "2026-07-14",
+  "session": "asia_open",
+  "worker_id": "codex-replay-orchestrator",
+  "max_transitions": 6,
+  "enabled": true
+}

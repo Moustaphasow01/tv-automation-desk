@@ -1,0 +1,106 @@
+{
+  "registry_version": "2.0.0",
+  "active_contracts": {
+    "master_contract": {
+      "contract_id": "DeskMasterAnalysisContract_v4_0_0",
+      "contract_name": "DeskMasterAnalysisContract",
+      "schema_version": "4.0.0",
+      "hash": "702f9fe325f61fdb53e913592da268b5a4aa2bafe5dd879ece915adc64d1c8e8",
+      "markdown_path": "contracts/DeskMasterAnalysisContract_v4_0_0.md",
+      "schema_path": "schemas/entities/master-analysis.schema.json",
+      "status": "active",
+      "runtime_exposed": true
+    },
+    "monitor_contract": {
+      "contract_id": "DeskHourlyThesisMonitorContract_v1_0_0",
+      "contract_name": "DeskHourlyThesisMonitorContract",
+      "schema_version": "1.0.0",
+      "hash": "be807ab3cb0450d0c84817d882a4b6dea70ea3ccae377d07da545798d80a6bd0",
+      "markdown_path": "contracts/DeskHourlyThesisMonitorContract_v1_0_0.md",
+      "schema_path": "schemas/entities/hourly-monitor.schema.json",
+      "status": "active",
+      "runtime_exposed": true
+    },
+    "front_projection_contract": {
+      "contract_id": "DeskFrontProjectionContract_v1_0_0",
+      "contract_name": "DeskFrontProjectionContract",
+      "schema_version": "1.0.0",
+      "hash": "f1109aa76401e53da560d682ff03fedeef12bc12717c47e67ce2b107ccd399d6",
+      "markdown_path": "contracts/DeskFrontProjectionContract_v1_0_0.md",
+      "schema_path": "schemas/entities/desk-front-projection.schema.json",
+      "status": "active",
+      "runtime_exposed": true
+    }
+  },
+  "entity_contracts": {
+    "decision_audit_contract": {
+      "contract_id": "DeskDecisionAuditContract_v1_0_0",
+      "contract_name": "DeskDecisionAuditContract",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/decision-audit.schema.json",
+      "example_path": "examples/decision-audit.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "M7.2 Contracts foundation"
+    },
+    "simulation_run_contract": {
+      "contract_id": "DeskSimulationRun_v1_0_0",
+      "contract_name": "DeskSimulationRun",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/simulation-run.schema.json",
+      "example_path": "examples/simulation-run.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "M7.2 Contracts foundation"
+    },
+    "simulation_step_contract": {
+      "contract_id": "DeskSimulationStep_v1_0_0",
+      "contract_name": "DeskSimulationStep",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/simulation-step.schema.json",
+      "example_path": "examples/simulation-step.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "M7.2 Contracts foundation"
+    },
+    "worker_mission_contract": {
+      "contract_id": "DeskWorkerMission_v1_0_0",
+      "contract_name": "DeskWorkerMission",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/worker-mission.schema.json",
+      "example_path": "examples/worker-mission.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "M11 Simulation/paper/worker"
+    },
+    "dashboard_state_contract": {
+      "contract_id": "DeskDashboardState_v1_0_0",
+      "contract_name": "DeskDashboardState",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/dashboard-state.schema.json",
+      "example_path": "examples/dashboard-state.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "M9 Read-only dashboard"
+    },
+    "front_projection_contract": {
+      "contract_id": "DeskFrontProjectionContract_v1_0_0",
+      "contract_name": "DeskFrontProjectionContract",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/desk-front-projection.schema.json",
+      "example_path": "examples/desk-front-projection.example.json",
+      "status": "active",
+      "runtime_exposed": true,
+      "owner_milestone": "New React front Lot 1"
+    }
+  },
+  "lifecycle_policy": {
+    "statuses": [
+      "draft",
+      "active",
+      "archived"
+    ],
+    "runtime_exposed": "all_active_contracts",
+    "breaking_change_rule": "Any incompatible schema change must create a new schema_version and keep the previous schema available."
+  }
+}

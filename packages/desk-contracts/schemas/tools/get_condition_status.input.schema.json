@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "thesis_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "timestamp_paris": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "thesis_id"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/monitor-alert.schema.json",
+  "title": "DeskMonitorAlert",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "alert_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "timestamp_paris": {
+      "type": "string"
+    },
+    "alert_level": {
+      "type": "string",
+      "enum": [
+        "info",
+        "watch",
+        "warning",
+        "action",
+        "critical"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "linked_monitor_id": {
+      "type": "string"
+    },
+    "linked_thesis_id": {
+      "type": "string"
+    },
+    "action_required": {
+      "type": "string"
+    },
+    "send_to_telegram": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "alert_level",
+    "title",
+    "message"
+  ],
+  "additionalProperties": true
+}

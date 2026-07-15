@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/common/target-level.schema.json",
+  "title": "TargetLevel",
+  "version": "1.0.0",
+  "oneOf": [
+    {
+      "type": "number"
+    },
+    {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://tv-automation.local/contracts/common/level-range.schema.json",
+      "title": "LevelRange",
+      "version": "1.0.0",
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "number"
+        },
+        "to": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

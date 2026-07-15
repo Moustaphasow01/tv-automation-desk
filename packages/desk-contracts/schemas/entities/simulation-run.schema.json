@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/simulation-run.schema.json",
+  "title": "DeskSimulationRun",
+  "version": "1.0.0",
+  "description": "Run-level envelope for replaying one session or trading day with strict cutoffs and attached audit trail. This is a contract only; it does not implement simulation runtime.",
+  "type": "object",
+  "properties": {
+    "contract_name": {
+      "type": "string",
+      "const": "DeskSimulationRun",
+      "default": "DeskSimulationRun"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "default": "1.0.0"
+    },
+    "simulation_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "session": {
+      "type": "string",
+      "enum": [
+        "asia_open",
+        "asia_to_london",
+        "ny_open",
+        "custom"
+      ]
+    },
+    "timezone": {
+      "type": "string",
+      "const": "Europe/Paris",
+      "default": "Europe/Paris"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "backtest",
+        "replay",
+        "simulation",
+        "paper"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "running",
+        "paused",
+        "completed",
+        "failed",
+        "archived"
+      ]
+    },
+    "source_pack_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "initial_cutoff_paris": {
+      "type": "string",
+      "minLength": 1
+    },
+    "current_cutoff_paris": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at_paris": {
+      "type": "string",
+      "minLength": 1
+    },
+    "completed_at_paris": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "step_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "decision_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "audit_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "outcome_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "review_id": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "simulation_id",
+    "date",
+    "session",
+    "timezone",
+    "mode",
+    "status",
+    "source_pack_id",
+    "initial_cutoff_paris",
+    "current_cutoff_paris",
+    "created_at_paris",
+    "step_ids",
+    "decision_ids",
+    "audit_ids"
+  ],
+  "additionalProperties": false
+}

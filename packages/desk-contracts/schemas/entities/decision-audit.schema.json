@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/decision-audit.schema.json",
+  "title": "DeskDecisionAuditContract",
+  "version": "1.0.0",
+  "description": "Anti-lookahead audit envelope attached to every desk decision (mission section 7). Records what data was visible at decision time, the enforced cutoff, and whether any future data leaked. Invariant: the AntiLookaheadGuard (T12) MUST reject any decision whose future_data_used is true. The boolean is kept in the schema so a violation can still be RECORDED and shown in the dashboard audit view (EX-2).",
+  "type": "object",
+  "properties": {
+    "contract_name": {
+      "type": "string",
+      "const": "DeskDecisionAuditContract",
+      "default": "DeskDecisionAuditContract"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "default": "1.0.0"
+    },
+    "timezone": {
+      "type": "string",
+      "const": "Europe/Paris",
+      "default": "Europe/Paris"
+    },
+    "decision_timestamp_paris": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Paris-time ISO 8601 instant at which the decision was produced."
+    },
+    "data_cutoff_paris": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Paris-time cutoff. No market/macro data after this instant may inform the decision."
+    },
+    "available_data_until": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Timestamp of the latest data point actually consumed. Must be <= data_cutoff_paris."
+    },
+    "future_data_used": {
+      "type": "boolean",
+      "description": "True records an anti-lookahead violation. A valid, guard-approved decision is always false."
+    },
+    "entry_sl_tp_frozen": {
+      "type": "boolean",
+      "description": "Section 7 rule: entry / stop-loss / take-profit were frozen BEFORE any outcome replay. False means the decision is not replay-safe."
+    },
+    "datasets_used": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Identifiers of datasets consumed (values from the DATASETS enum where applicable, plus market_feeds ids).",
+      "minItems": 1
+    },
+    "macro_actuals_visible": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "minLength": 1
+          },
+          "importance": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "scheduled_at_paris": {
+            "type": "string"
+          },
+          "published_at_paris": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event"
+        ],
+        "additionalProperties": false
+      },
+      "default": [],
+      "description": "Macro events whose actuals were legitimately visible (published_at_paris <= data_cutoff_paris)."
+    },
+    "macro_actuals_blocked": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "minLength": 1
+          },
+          "importance": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "scheduled_at_paris": {
+            "type": "string"
+          },
+          "published_at_paris": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event"
+        ],
+        "additionalProperties": false
+      },
+      "default": [],
+      "description": "Macro events blocked because not yet published at the cutoff. Their actuals must NOT influence the decision."
+    },
+    "source_pack_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pack that seeded the decision context."
+    },
+    "simulation_id": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Set only when the decision was produced inside a simulation run; null in live."
+    },
+    "mission_id": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Set only when the decision was produced under a bounded worker mission; null otherwise."
+    },
+    "decision_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "thesis_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision_timestamp_utc": {
+      "type": "string",
+      "description": "Optional UTC mirror (forward-compat with T05 time normalization)."
+    },
+    "data_cutoff_utc": {
+      "type": "string",
+      "description": "Optional UTC mirror of data_cutoff_paris (forward-compat with T05)."
+    },
+    "available_data_until_utc": {
+      "type": "string",
+      "description": "Optional UTC mirror of available_data_until (forward-compat with T05)."
+    },
+    "entry_sl_tp_frozen_at_paris": {
+      "type": "string",
+      "description": "Optional Paris-time instant at which entry/SL/TP were frozen."
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "decision_timestamp_paris",
+    "data_cutoff_paris",
+    "available_data_until",
+    "future_data_used",
+    "entry_sl_tp_frozen",
+    "datasets_used",
+    "macro_actuals_visible",
+    "macro_actuals_blocked",
+    "source_pack_id"
+  ],
+  "additionalProperties": false
+}

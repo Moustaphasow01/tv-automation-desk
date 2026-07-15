@@ -1,0 +1,142 @@
+//@version=6
+indicator("TVAutomation Market Feed Webhook Exporter", overlay=false, precision=6)
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SETTINGS
+// No chart input is required. Authentication is carried by the webhook URL.
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+rsiLen = 14
+atrLen = 14
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HELPERS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+f_num(float x) =>
+    na(x) ? "null" : str.tostring(x)
+
+f_tf() =>
+    string tf = timeframe.period
+    tf == "60" ? "1H" :
+     tf == "240" ? "4H" :
+     tf
+
+f_contains(string haystack, string needle) =>
+    str.contains(str.upper(haystack), needle)
+
+f_auto_symbol() =>
+    string tickerText = str.upper(syminfo.ticker)
+    string tickerIdText = str.upper(syminfo.tickerid)
+    string haystack = tickerText + "|" + tickerIdText
+
+     f_contains(haystack, "MNQ") ? "MNQ1!" :
+     f_contains(haystack, "MES") ? "MES1!" :
+     f_contains(haystack, "NQ") ? "NQ1!" :
+     f_contains(haystack, "SX5E") or f_contains(haystack, "FESX") ? "SX5E" :
+     f_contains(haystack, "ES") ? "ES1!" :
+     f_contains(haystack, "US10Y") ? "US10Y" :
+     f_contains(haystack, "US02Y") ? "US02Y" :
+     f_contains(haystack, "DXY") ? "DXY" :
+     f_contains(haystack, "CL1") or f_contains(haystack, "NYMEX:CL") ? "CL1!" :
+     f_contains(haystack, "GC1") or f_contains(haystack, "COMEX:GC") ? "GC1!" :
+     f_contains(haystack, "VIX") ? "VIX" :
+     f_contains(haystack, "NI225") or f_contains(haystack, "NIKKEI") or f_contains(haystack, "NK225") or f_contains(haystack, "NKY") ? "NI225" :
+     f_contains(haystack, "HSI") or f_contains(haystack, "HANG") ? "HSI" :
+     f_contains(haystack, "DAX") or f_contains(haystack, "DEU40") or f_contains(haystack, "FDAX") ? "DAX" :
+     f_contains(haystack, "NVDA") ? "NVDA" :
+     f_contains(haystack, "AAPL") ? "AAPL" :
+     f_contains(haystack, "MSFT") ? "MSFT" :
+     f_contains(haystack, "TSLA") ? "TSLA" :
+     f_contains(haystack, "SMH") ? "SMH" :
+     f_contains(haystack, "SOXX") ? "SOXX" :
+     syminfo.ticker
+
+f_auto_asset(string symbol) =>
+    symbol == "MNQ1!" ? "MNQ" :
+     symbol == "MES1!" ? "MES" :
+     symbol == "NQ1!" ? "NQ" :
+     symbol == "ES1!" ? "ES" :
+     symbol == "CL1!" ? "CL" :
+     symbol == "GC1!" ? "GC" :
+     symbol == "NI225" ? "NIKKEI" :
+     symbol == "HSI" ? "HANG_SENG" :
+     symbol == "SX5E" ? "EURO_STOXX" :
+     symbol
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// VALUES
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+deskSymbol = f_auto_symbol()
+assetKey = f_auto_asset(deskSymbol)
+deskTimeframe = f_tf()
+
+safeVolume = na(volume) ? 0.0 : volume
+rsiValue = ta.rsi(close, rsiLen)
+atrValue = ta.atr(atrLen)
+
+plot(rsiValue, title="export_rsi_14", display=display.none)
+plot(atrValue, title="export_atr_14", display=display.none)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// JSON PAYLOAD
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+timestampUtc = str.format_time(time, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+alertId = deskSymbol + "_" + deskTimeframe + "_" + str.tostring(time)
+
+payload = "{"
+payload := payload + '"source":"tradingview_webhook",'
+payload := payload + '"type":"market_feed_snapshot",'
+payload := payload + '"alert_id":"' + alertId + '",'
+payload := payload + '"asset":"' + assetKey + '",'
+payload := payload + '"symbol":"' + deskSymbol + '",'
+payload := payload + '"ticker":"' + syminfo.tickerid + '",'
+payload := payload + '"exchange":"' + syminfo.prefix + '",'
+payload := payload + '"timeframe":"' + deskTimeframe + '",'
+payload := payload + '"timestamp_utc":"' + timestampUtc + '",'
+payload := payload + '"bar_status":"closed",'
+payload := payload + '"confirmed":true,'
+payload := payload + '"time":' + str.tostring(time) + ','
+payload := payload + '"bar_index":' + str.tostring(bar_index) + ','
+payload := payload + '"open":' + f_num(open) + ','
+payload := payload + '"high":' + f_num(high) + ','
+payload := payload + '"low":' + f_num(low) + ','
+payload := payload + '"close":' + f_num(close) + ','
+payload := payload + '"volume":' + f_num(safeVolume) + ','
+payload := payload + '"price":{'
+payload := payload + '"open":' + f_num(open) + ','
+payload := payload + '"high":' + f_num(high) + ','
+payload := payload + '"low":' + f_num(low) + ','
+payload := payload + '"close":' + f_num(close) + ','
+payload := payload + '"volume":' + f_num(safeVolume)
+payload := payload + '},'
+payload := payload + '"studies":{'
+payload := payload + '"rsi_14":' + f_num(rsiValue) + ','
+payload := payload + '"atr_10":' + f_num(atrValue) + ','
+payload := payload + '"atr_14":' + f_num(atrValue)
+payload := payload + '},'
+payload := payload + '"rsi":{'
+payload := payload + '"value":' + f_num(rsiValue) + ','
+payload := payload + '"length":' + str.tostring(rsiLen)
+payload := payload + '},'
+payload := payload + '"atr":{'
+payload := payload + '"value":' + f_num(atrValue) + ','
+payload := payload + '"length":' + str.tostring(atrLen) + ','
+payload := payload + '"smoothing":"RMA"'
+payload := payload + '}'
+payload := payload + "}"
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ALERT
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+canSend = barstate.isconfirmed
+
+if canSend
+    alert(payload, alert.freq_once_per_bar_close)

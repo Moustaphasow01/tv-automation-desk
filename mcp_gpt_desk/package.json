@@ -1,0 +1,25 @@
+{
+  "name": "tv-automation-gpt-desk-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "live:checkpoint-cycle": "node scripts/run_live_checkpoint_cycle.mjs",
+    "replay:autopilot-codex": "node scripts/replay_autopilot_codex_agent.mjs",
+    "seed:contracts": "node scripts/seed_contracts.mjs",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@tv-automation/desk-contracts": "file:../packages/desk-contracts",
+    "@tv-automation/desk-domain": "file:../packages/desk-domain",
+    "@tv-automation/desk-replay-engine": "file:../packages/desk-replay-engine",
+    "@tv-automation/desk-time": "file:../packages/desk-time",
+    "pg": "^8.16.3",
+    "zod": "^3.25.76"
+  }
+}

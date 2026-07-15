@@ -1,0 +1,54 @@
+{
+  "type": "object",
+  "properties": {
+    "pack_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "dataset": {
+      "type": "string",
+      "enum": [
+        "MNQ_M5",
+        "MES_M5",
+        "NQ_M15",
+        "NQ_H1",
+        "ES_M15",
+        "ES_H1",
+        "MNQ_H4",
+        "MES_H4",
+        "NQ_H4",
+        "ES_H4",
+        "US10Y_US02Y",
+        "US10Y_US02Y_H4",
+        "DXY_CL_GC_VIX",
+        "DXY_CL_GC_VIX_H4",
+        "indices_asie_europe",
+        "indices_asie_europe_H4",
+        "ny_close_mega_caps",
+        "mega_caps_premarket",
+        "mega_caps_premarket_H4",
+        "macro_calendar",
+        "news_digest"
+      ]
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "json",
+        "csv"
+      ],
+      "default": "json"
+    },
+    "max_rows": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5000,
+      "default": 1000
+    }
+  },
+  "required": [
+    "pack_id",
+    "dataset"
+  ],
+  "additionalProperties": false
+}

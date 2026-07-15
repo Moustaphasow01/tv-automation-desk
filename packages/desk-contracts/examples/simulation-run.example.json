@@ -1,0 +1,21 @@
+{
+  "contract_name": "DeskSimulationRun",
+  "schema_version": "1.0.0",
+  "simulation_id": "sim_2026-07-02_asia_open_01",
+  "date": "2026-07-02",
+  "session": "asia_open",
+  "timezone": "Europe/Paris",
+  "mode": "simulation",
+  "status": "running",
+  "source_pack_id": "2026-07-02_asia_open",
+  "initial_cutoff_paris": "2026-07-02T00:00:00+02:00",
+  "current_cutoff_paris": "2026-07-02T10:15:00+02:00",
+  "created_at_paris": "2026-07-02T00:00:00+02:00",
+  "completed_at_paris": null,
+  "step_ids": ["step_2026-07-02_001"],
+  "decision_ids": ["decision_2026-07-02_asia_open"],
+  "audit_ids": ["audit_2026-07-02_asia_open_001"],
+  "outcome_ids": [],
+  "review_id": null,
+  "notes": "Replay session with strict cutoffs."
+}

@@ -1,0 +1,151 @@
+import { z } from "zod";
+
+const DECISION_SESSIONS = ["asia_open", "asia_to_london", "ny_open"];
+const ANALYSIS_TYPES = [
+  "asia_open",
+  "london_session",
+  "ny_open",
+  "work_forward",
+  "live_position",
+  "post_event_replan",
+  "position_monitor",
+  "weekly_brief",
+  "daily_brief",
+];
+
+const levelRangeSchema = z.object({
+  from: z.number(),
+  to: z.number(),
+});
+
+const targetLevelSchema = z.union([z.number(), levelRangeSchema]);
+
+const setupTypeSchema = z.enum([
+  "buy_limit_pullback",
+  "sell_limit_pullback",
+  "buy_stop_breakout",
+  "sell_stop_breakdown",
+  "sell_stop_breakdown_retest",
+  "buy_stop_breakout_retest",
+  "wait",
+  "wait_only",
+  "no_trade",
+  "management_only",
+]);
+
+export const legacySetupSchema = z.object({
+  setup_id: z.string().min(1),
+  label: z.string().min(1),
+  instrument: z.enum(["MNQ", "NQ", "MES", "ES", "WAIT"]),
+  decision: z.enum(["prendre", "ne_pas_prendre", "wait", "gestion_seule"]).default("prendre"),
+  direction: z.enum(["long", "short", "neutral", "wait"]),
+  setup_type: setupTypeSchema,
+  entry_zone: levelRangeSchema.optional(),
+  stop_loss: z.number().optional(),
+  take_profits: z.array(z.object({
+    name: z.string().min(1),
+    target: targetLevelSchema,
+    condition: z.string().optional(),
+    action: z.string().optional(),
+  })).default([]),
+  invalidation: z.union([z.string().min(1), z.record(z.any())]),
+  risk_pct: z.number().min(0).max(10),
+  confidence_pct: z.number().min(0).max(100),
+  rr_minimum: z.number().min(0).optional(),
+  reason: z.string().min(1),
+  conditions: z.array(z.string()).default([]),
+  management_rules: z.array(z.string()).default([]),
+  executable: z.boolean().default(false),
+}).passthrough();
+
+export const legacyDecisionSchema = z.object({
+  session: z.enum(DECISION_SESSIONS),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  timezone: z.literal("Europe/Paris").default("Europe/Paris"),
+  instrument: z.enum(["MNQ", "NQ", "MES", "ES", "WAIT"]),
+  asset_class: z.literal("futures").default("futures"),
+  decision: z.enum(["prendre", "ne_pas_prendre", "wait", "gestion_seule"]),
+  direction: z.enum(["long", "short", "neutral", "wait"]),
+  setup_type: setupTypeSchema,
+  confidence_pct: z.number().min(0).max(100),
+  risk_pct: z.number().min(0).max(10),
+  rr_minimum: z.number().min(0),
+  entry_zone: levelRangeSchema.optional(),
+  stop_loss: z.number().optional(),
+  take_profits: z.object({
+    tp1: targetLevelSchema.optional(),
+    tp2: targetLevelSchema.optional(),
+    tp3: targetLevelSchema.optional(),
+  }).optional(),
+  invalidation: z.string().min(1),
+  management_rules: z.array(z.string()).default([]),
+  time_rules: z.object({
+    earliest_entry_time: z.string().optional(),
+    latest_entry_time: z.string().optional(),
+    reduce_before: z.string().optional(),
+    flatten_before: z.string().optional(),
+  }).default({}),
+  macro_bias: z.string().default("unknown"),
+  technical_bias: z.string().default("unknown"),
+  cross_asset_bias: z.string().default("unknown"),
+  reason_summary: z.string().min(1),
+  status: z.enum([
+    "draft",
+    "active",
+    "triggered",
+    "cancelled",
+    "tp1_hit",
+    "tp2_hit",
+    "tp3_hit",
+    "stopped",
+    "expired",
+    "archived",
+  ]).default("draft"),
+}).passthrough();
+
+export const legacyAnalysisSchema = z.object({
+  schema_version: z.enum(["1.0.0", "1.1.0"]),
+  contract_name: z.literal("DeskFuturesAnalysisContract"),
+  analysis_id: z.string().min(3),
+  created_at_paris: z.string().min(1),
+  mode: z.enum(["live", "backtest", "replay", "paper"]).default("live"),
+  analysis_type: z.enum(ANALYSIS_TYPES),
+  pack_id: z.string().min(3),
+  session: z.enum(DECISION_SESSIONS),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  timezone: z.literal("Europe/Paris").default("Europe/Paris"),
+  title: z.string().min(3),
+  status: z.enum(["draft", "generated", "ready", "sent", "archived"]).default("ready"),
+  scope: z.record(z.any()),
+  source_pack: z.record(z.any()),
+  executive_summary: z.object({
+    summary: z.string().min(1),
+    final_decision: z.enum(["prendre", "ne_pas_prendre", "wait", "gestion_seule"]),
+    final_instrument: z.enum(["MNQ", "NQ", "MES", "ES", "WAIT"]),
+    final_direction: z.enum(["long", "short", "neutral", "wait"]),
+    primary_setup_id: z.string().min(1).optional(),
+  }).passthrough(),
+  context: z.record(z.any()),
+  market_funnel: z.record(z.any()),
+  levels: z.record(z.any()),
+  strategic_brief: z.record(z.any()),
+  decision_gates: z.record(z.any()),
+  setups: z.array(legacySetupSchema).min(1),
+  executable_decision: legacyDecisionSchema,
+  session_matrix: z.array(z.record(z.any())).min(1),
+  authorized_windows_summary: z.array(z.record(z.any())).min(1),
+  update_agenda: z.array(z.record(z.any())).min(1),
+  risk_management: z.record(z.any()),
+  monitoring_rules: z.record(z.any()),
+  final_sections: z.object({
+    decision_executable: z.string().min(1),
+    regle_finale: z.string().min(1),
+  }).passthrough(),
+}).passthrough().transform((analysis) => ({
+  ...analysis,
+  summary: analysis.summary || analysis.executive_summary.summary,
+  primary_setup_id: analysis.primary_setup_id || analysis.executive_summary.primary_setup_id,
+  final_decision: analysis.final_decision || analysis.executive_summary.final_decision,
+  final_instrument: analysis.final_instrument || analysis.executive_summary.final_instrument,
+  final_direction: analysis.final_direction || analysis.executive_summary.final_direction,
+}));

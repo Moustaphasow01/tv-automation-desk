@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/worker-mission.schema.json",
+  "title": "DeskWorkerMission",
+  "version": "1.0.0",
+  "description": "Bounded worker mission contract. This schema defines limits and required audit references only; worker runtime remains blocked by later gates.",
+  "type": "object",
+  "properties": {
+    "contract_name": {
+      "type": "string",
+      "const": "DeskWorkerMission",
+      "default": "DeskWorkerMission"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "default": "1.0.0"
+    },
+    "mission_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "allowed_window": {
+      "type": "object",
+      "properties": {
+        "start_paris": {
+          "type": "string",
+          "minLength": 1
+        },
+        "end_paris": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timezone": {
+          "type": "string",
+          "const": "Europe/Paris",
+          "default": "Europe/Paris"
+        }
+      },
+      "required": [
+        "start_paris",
+        "end_paris",
+        "timezone"
+      ],
+      "additionalProperties": false
+    },
+    "required_gates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "dod": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "risk_rules": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "escalation_rules": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "expires_at_paris": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "waiting",
+        "completed",
+        "expired",
+        "cancelled",
+        "escalated",
+        "failed"
+      ]
+    },
+    "result_schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "audit_id": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "mission_id",
+    "objective",
+    "allowed_window",
+    "required_gates",
+    "dod",
+    "forbidden_actions",
+    "risk_rules",
+    "escalation_rules",
+    "expires_at_paris",
+    "status"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "properties": {
+    "thesis_id": {
+      "type": "string"
+    },
+    "session": {
+      "type": "string",
+      "enum": [
+        "asia_open",
+        "london_session",
+        "ny_open",
+        "work_forward"
+      ],
+      "default": "asia_open"
+    },
+    "timestamp_paris": {
+      "type": "string"
+    },
+    "timezone": {
+      "type": "string",
+      "const": "Europe/Paris",
+      "default": "Europe/Paris"
+    },
+    "include_raw_refs": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

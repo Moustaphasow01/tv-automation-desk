@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "properties": {
+    "contract_name": {
+      "type": "string",
+      "enum": [
+        "DeskMasterAnalysisContract",
+        "DeskHourlyThesisMonitorContract",
+        "DeskFrontProjectionContract"
+      ]
+    }
+  },
+  "required": [
+    "contract_name"
+  ],
+  "additionalProperties": false
+}

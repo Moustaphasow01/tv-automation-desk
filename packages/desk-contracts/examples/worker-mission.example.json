@@ -1,0 +1,20 @@
+{
+  "contract_name": "DeskWorkerMission",
+  "schema_version": "1.0.0",
+  "mission_id": "mission_2026-07-02_monitor_mnq_01",
+  "objective": "Observe MNQ wait-to-go conditions during the authorized window and escalate if invalidation appears.",
+  "allowed_window": {
+    "start_paris": "2026-07-02T10:00:00+02:00",
+    "end_paris": "2026-07-02T11:30:00+02:00",
+    "timezone": "Europe/Paris"
+  },
+  "required_gates": ["session_window_open", "decision_audit_valid", "risk_within_limits"],
+  "dod": ["structured_result", "audit_reference", "no_forbidden_action"],
+  "forbidden_actions": ["place_order", "increase_risk", "ignore_cutoff", "create_unscoped_setup"],
+  "risk_rules": ["risk_pct_must_not_increase", "macro_event_cutoff_required"],
+  "escalation_rules": ["contradictory_data", "partial_invalidation", "mission_ambiguity"],
+  "expires_at_paris": "2026-07-02T11:30:00+02:00",
+  "status": "draft",
+  "result_schema_version": "1.0.0",
+  "audit_id": null
+}

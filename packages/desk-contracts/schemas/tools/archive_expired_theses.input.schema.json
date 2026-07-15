@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "session": {
+      "type": "string",
+      "enum": [
+        "asia_open",
+        "london_session",
+        "ny_open",
+        "work_forward"
+      ]
+    },
+    "dry_run": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

@@ -1,0 +1,119 @@
+{
+  "type": "object",
+  "properties": {
+    "thesis_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "linked_master_analysis_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "NO_ACTIVE_THESIS",
+        "THESIS_ACTIVE",
+        "THESIS_CONDITIONAL",
+        "WAIT_MONITORED",
+        "THESIS_WEAKENED",
+        "THESIS_AT_RISK",
+        "THESIS_INVALIDATED",
+        "SETUP_ARMED",
+        "SETUP_TRIGGERED",
+        "REPLAN_REQUIRED",
+        "EXPIRED"
+      ]
+    },
+    "instrument": {
+      "type": "string",
+      "enum": [
+        "MNQ",
+        "NQ",
+        "MES",
+        "ES",
+        "WAIT"
+      ]
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "long",
+        "short",
+        "neutral",
+        "wait"
+      ]
+    },
+    "dominant_scenario": {
+      "type": "string",
+      "minLength": 1
+    },
+    "secondary_scenario": {
+      "type": "string"
+    },
+    "confidence_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "health_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "valid_from": {
+      "type": "string"
+    },
+    "valid_until": {
+      "type": "string"
+    },
+    "setup_expiry_time": {
+      "type": "string"
+    },
+    "requires_replan_after": {
+      "type": "string"
+    },
+    "key_levels": {
+      "type": "array",
+      "items": {}
+    },
+    "wait_to_go_conditions": {
+      "type": "array",
+      "items": {}
+    },
+    "invalidation_conditions": {
+      "type": "array",
+      "items": {}
+    },
+    "expected_path": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "failure_path": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "scenario_transformation_map": {
+      "type": "array",
+      "items": {}
+    },
+    "monitoring_playbook": {
+      "type": "array",
+      "items": {}
+    },
+    "last_monitor_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "linked_master_analysis_id",
+    "status",
+    "instrument",
+    "direction",
+    "dominant_scenario",
+    "confidence_pct",
+    "health_score",
+    "valid_from"
+  ],
+  "additionalProperties": true
+}

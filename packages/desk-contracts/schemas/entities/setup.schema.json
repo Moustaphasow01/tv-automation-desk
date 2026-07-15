@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/setup.schema.json",
+  "title": "DeskSetup",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "setup_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rank": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "instrument": {
+      "type": "string",
+      "enum": [
+        "MNQ",
+        "NQ",
+        "MES",
+        "ES",
+        "WAIT"
+      ]
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "prendre",
+        "ne_pas_prendre",
+        "wait",
+        "gestion_seule"
+      ],
+      "default": "prendre"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "long",
+        "short",
+        "neutral",
+        "wait"
+      ]
+    },
+    "setup_type": {
+      "type": "string",
+      "enum": [
+        "buy_limit_pullback",
+        "sell_limit_pullback",
+        "buy_stop_breakout",
+        "sell_stop_breakdown",
+        "sell_stop_breakdown_retest",
+        "buy_stop_breakout_retest",
+        "wait",
+        "wait_only",
+        "no_trade",
+        "management_only"
+      ]
+    },
+    "order_type": {
+      "type": "string",
+      "enum": [
+        "buy_limit",
+        "sell_limit",
+        "buy_stop",
+        "sell_stop",
+        "sell_stop_or_retest",
+        "buy_stop_or_retest",
+        "market",
+        "conditional",
+        "wait",
+        "cancel"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "secondary",
+        "inactive",
+        "cancelled",
+        "wait",
+        "management_only"
+      ]
+    },
+    "entry_zone": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "number"
+        },
+        "to": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "entry_trigger": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": true
+        }
+      ]
+    },
+    "stop_loss": {
+      "type": "number"
+    },
+    "take_profits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "number"
+                  },
+                  "to": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "condition": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "extension_target": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "number"
+            },
+            "to": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "invalidation": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "additionalProperties": true
+        }
+      ]
+    },
+    "risk_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10
+    },
+    "confidence_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "rr_minimum": {
+      "type": "number",
+      "minimum": 0
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "management_rules": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "management": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "executable": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "setup_id",
+    "label",
+    "instrument",
+    "direction",
+    "setup_type",
+    "invalidation",
+    "risk_pct",
+    "confidence_pct",
+    "reason"
+  ],
+  "additionalProperties": true
+}

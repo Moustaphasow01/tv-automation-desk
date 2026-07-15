@@ -1,0 +1,48 @@
+# Secrets and local connector config
+.env
+.env.*
+!.env.example
+!.env.preprod.example
+!**/.env.template
+.mcp.json
+.mcp.json.backup-*
+.claude/
+.tmp/
+.tmp_*/
+.local/
+
+# Runtime state
+logs/
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+status.json
+command_queue.json
+
+# Generated datasets and exports
+tmp/
+screenshots/
+signals/
+
+# Frontend/build/runtime artifacts
+node_modules/
+.next/
+*.tsbuildinfo
+dist/
+build/
+.playwright-cli/
+output/playwright/
+
+# GPT desk MCP local runtime writes
+mcp_gpt_desk/local_data/desk_decisions/
+mcp_gpt_desk/local_data/desk_reports/
+mcp_gpt_desk/local_data/desk_runs/
+mcp_gpt_desk/local_data/desk_tool_logs/
+mcp_gpt_desk/local_data/datasets/
+mcp_gpt_desk/local_data/package_staging/
+mcp_gpt_desk/local_data/packages/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

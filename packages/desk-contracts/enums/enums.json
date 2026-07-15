@@ -1,0 +1,80 @@
+{
+  "SESSION_VALUES": [
+    "asia_open",
+    "asia_to_london",
+    "ny_open",
+    "custom"
+  ],
+  "VNEXT_SESSIONS": [
+    "asia_open",
+    "london_session",
+    "ny_open",
+    "work_forward",
+    "post_event_replan"
+  ],
+  "DECISION_SESSIONS": [
+    "asia_open",
+    "asia_to_london",
+    "ny_open"
+  ],
+  "DESK_INSTRUMENTS": [
+    "MNQ",
+    "NQ",
+    "MES",
+    "ES",
+    "WAIT"
+  ],
+  "TRADE_INSTRUMENTS": [
+    "MNQ",
+    "NQ",
+    "MES",
+    "ES"
+  ],
+  "THESIS_STATUSES": [
+    "NO_ACTIVE_THESIS",
+    "THESIS_ACTIVE",
+    "THESIS_CONDITIONAL",
+    "WAIT_MONITORED",
+    "THESIS_WEAKENED",
+    "THESIS_AT_RISK",
+    "THESIS_INVALIDATED",
+    "SETUP_ARMED",
+    "SETUP_TRIGGERED",
+    "REPLAN_REQUIRED",
+    "EXPIRED"
+  ],
+  "ANALYSIS_TYPES": [
+    "asia_open",
+    "london_session",
+    "ny_open",
+    "work_forward",
+    "live_position",
+    "post_event_replan",
+    "position_monitor",
+    "weekly_brief",
+    "daily_brief"
+  ],
+  "DATASETS": [
+    "MNQ_M5",
+    "MES_M5",
+    "NQ_M15",
+    "NQ_H1",
+    "ES_M15",
+    "ES_H1",
+    "MNQ_H4",
+    "MES_H4",
+    "NQ_H4",
+    "ES_H4",
+    "US10Y_US02Y",
+    "US10Y_US02Y_H4",
+    "DXY_CL_GC_VIX",
+    "DXY_CL_GC_VIX_H4",
+    "indices_asie_europe",
+    "indices_asie_europe_H4",
+    "ny_close_mega_caps",
+    "mega_caps_premarket",
+    "mega_caps_premarket_H4",
+    "macro_calendar",
+    "news_digest"
+  ]
+}

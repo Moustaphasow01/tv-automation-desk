@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "minLength": 3
+    }
+  },
+  "required": [
+    "job_id"
+  ],
+  "additionalProperties": false
+}

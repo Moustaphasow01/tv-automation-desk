@@ -1,0 +1,29 @@
+{
+  "contract_name": "DeskDashboardState",
+  "schema_version": "1.0.0",
+  "state_id": "state_audit_view_decision_2026-07-02",
+  "screen_id": "audit_view",
+  "as_of_paris": "2026-07-02T10:15:00+02:00",
+  "source_modules": ["decision_audit", "decision_journal", "market_data_core"],
+  "required_data_status": [
+    {
+      "name": "decision_audit",
+      "status": "available",
+      "source": "DeskDecisionAuditContract"
+    },
+    {
+      "name": "source_pack",
+      "status": "available",
+      "source": "desk_pack"
+    }
+  ],
+  "empty_state": "No audit selected.",
+  "error_state": "Audit data could not be loaded.",
+  "blocked_state": "Decision cannot be validated without audit.",
+  "audit_requirement": "blocking",
+  "refresh_rule": "manual_or_source_update",
+  "payload": {
+    "audit_id": "audit_2026-07-02_asia_open_001",
+    "future_data_flag": false
+  }
+}

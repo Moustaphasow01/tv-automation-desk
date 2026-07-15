@@ -1,0 +1,74 @@
+//@version=6
+indicator("TVAutomation Market Feed Batch M15", overlay=false, precision=6)
+
+// Exporteur statique conservé pour les alertes TradingView multi-symboles.
+// Add this indicator to a chart on the matching timeframe and create
+// one TradingView alert with "Any alert() function call".
+
+TF = "15"
+CANONICAL_TF = "15"
+BATCH_NAME = "TVA_BATCH_M15"
+RSI_LEN = 14
+ATR_LEN = 14
+
+f_num(x) =>
+    na(x) ? "null" : str.tostring(x)
+
+f_time(x) =>
+    str.format_time(x, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+f_candle(string asset, string symbol, string ticker, t, o, h, l, c, v, r, a) =>
+    string item = "{"
+    item := item + '"source":"tradingview_webhook",'
+    item := item + '"type":"market_feed_batch_item",'
+    item := item + '"alert_id":"' + symbol + "_" + CANONICAL_TF + "_" + str.tostring(t) + '",'
+    item := item + '"asset":"' + asset + '",'
+    item := item + '"symbol":"' + symbol + '",'
+    item := item + '"ticker":"' + ticker + '",'
+    item := item + '"timeframe":"' + CANONICAL_TF + '",'
+    item := item + '"timestamp_utc":"' + f_time(t) + '",'
+    item := item + '"bar_status":"closed",'
+    item := item + '"confirmed":true,'
+    item := item + '"time":' + str.tostring(t) + ','
+    item := item + '"open":' + f_num(o) + ','
+    item := item + '"high":' + f_num(h) + ','
+    item := item + '"low":' + f_num(l) + ','
+    item := item + '"close":' + f_num(c) + ','
+    item := item + '"volume":' + f_num(v) + ','
+    item := item + '"price":{'
+    item := item + '"open":' + f_num(o) + ','
+    item := item + '"high":' + f_num(h) + ','
+    item := item + '"low":' + f_num(l) + ','
+    item := item + '"close":' + f_num(c) + ','
+    item := item + '"volume":' + f_num(v)
+    item := item + '},'
+    item := item + '"studies":{'
+    item := item + '"rsi_14":' + f_num(r) + ','
+    item := item + '"atr_10":' + f_num(a) + ','
+    item := item + '"atr_14":' + f_num(a)
+    item := item + '}'
+    item := item + "}"
+    item
+
+[s1t, s1o, s1h, s1l, s1c, s1v, s1r, s1a] = request.security("CME_MINI:NQ1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c1 = f_candle("NQ", "NQ1!", "CME_MINI:NQ1!", s1t, s1o, s1h, s1l, s1c, s1v, s1r, s1a)
+
+[s2t, s2o, s2h, s2l, s2c, s2v, s2r, s2a] = request.security("CME_MINI:ES1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c2 = f_candle("ES", "ES1!", "CME_MINI:ES1!", s2t, s2o, s2h, s2l, s2c, s2v, s2r, s2a)
+
+payload = "{"
+payload := payload + '"source":"tradingview_webhook",'
+payload := payload + '"type":"market_feed_batch",'
+payload := payload + '"batch_id":"' + BATCH_NAME + "_" + str.tostring(time) + '",'
+payload := payload + '"timeframe":"' + CANONICAL_TF + '",'
+payload := payload + '"bar_status":"closed",'
+payload := payload + '"candles":['
+payload := payload + "" + c1
+payload := payload + "," + c2
+payload := payload + ']'
+payload := payload + "}"
+
+plot(str.length(payload), title="payload_length", display=display.none)
+
+if barstate.isconfirmed
+    alert(payload, alert.freq_once_per_bar_close)

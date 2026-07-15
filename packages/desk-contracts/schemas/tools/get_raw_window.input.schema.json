@@ -1,0 +1,48 @@
+{
+  "type": "object",
+  "properties": {
+    "instrument": {
+      "type": "string",
+      "enum": [
+        "MNQ",
+        "MES",
+        "NQ",
+        "ES",
+        "DXY",
+        "VIX",
+        "US10Y",
+        "US02Y",
+        "GC",
+        "CL"
+      ]
+    },
+    "timeframe": {
+      "type": "string",
+      "enum": [
+        "M5",
+        "M15",
+        "H1",
+        "H4"
+      ]
+    },
+    "from": {
+      "type": "string"
+    },
+    "to": {
+      "type": "string"
+    },
+    "max_rows": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 500,
+      "default": 500
+    }
+  },
+  "required": [
+    "instrument",
+    "timeframe",
+    "from",
+    "to"
+  ],
+  "additionalProperties": false
+}

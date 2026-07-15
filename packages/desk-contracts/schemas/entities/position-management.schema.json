@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/position-management.schema.json",
+  "title": "DeskPositionManagement",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "position_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "instrument": {
+      "type": "string",
+      "enum": [
+        "MNQ",
+        "NQ",
+        "MES",
+        "ES"
+      ]
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "long",
+        "short"
+      ]
+    },
+    "entry_price": {
+      "type": "number"
+    },
+    "stop_loss": {
+      "type": "number"
+    },
+    "take_profits": {
+      "type": "array",
+      "items": {}
+    },
+    "risk_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "protected",
+        "partial_taken",
+        "closed",
+        "cancelled"
+      ]
+    },
+    "linked_thesis_id": {
+      "type": "string"
+    },
+    "linked_decision_id": {
+      "type": "string"
+    },
+    "management_action": {
+      "type": "string",
+      "enum": [
+        "create",
+        "update",
+        "break_even",
+        "partial",
+        "reduce",
+        "exit",
+        "cancel"
+      ],
+      "default": "update"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "additionalProperties": true
+}

@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "properties": {
+    "thesis_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "NO_ACTIVE_THESIS",
+        "THESIS_ACTIVE",
+        "THESIS_CONDITIONAL",
+        "WAIT_MONITORED",
+        "THESIS_WEAKENED",
+        "THESIS_AT_RISK",
+        "THESIS_INVALIDATED",
+        "SETUP_ARMED",
+        "SETUP_TRIGGERED",
+        "REPLAN_REQUIRED",
+        "EXPIRED"
+      ]
+    },
+    "health_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "confidence_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "last_monitor_id": {
+      "type": "string"
+    },
+    "dominant_scenario": {
+      "type": "string"
+    },
+    "secondary_scenario": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "thesis_id"
+  ],
+  "additionalProperties": true
+}

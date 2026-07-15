@@ -1,0 +1,9 @@
+{
+  "name": "Desk Futures",
+  "short_name": "Desk",
+  "start_url": "/live",
+  "display": "standalone",
+  "background_color": "#080b10",
+  "theme_color": "#080b10",
+  "icons": [{ "src": "/desk-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

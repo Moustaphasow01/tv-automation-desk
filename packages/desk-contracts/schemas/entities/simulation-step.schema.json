@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/simulation-step.schema.json",
+  "title": "DeskSimulationStep",
+  "version": "1.0.0",
+  "description": "One deterministic simulation advance with explicit cutoff, visible datasets, blocked datasets, and audit reference. This contract does not execute replay logic.",
+  "type": "object",
+  "properties": {
+    "contract_name": {
+      "type": "string",
+      "const": "DeskSimulationStep",
+      "default": "DeskSimulationStep"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "default": "1.0.0"
+    },
+    "step_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "simulation_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "step_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "step_type": {
+      "type": "string",
+      "enum": [
+        "next_5m",
+        "next_15m",
+        "next_hour",
+        "next_event",
+        "end_session"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "applied",
+        "blocked",
+        "failed"
+      ]
+    },
+    "started_at_paris": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ended_at_paris": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data_cutoff_paris": {
+      "type": "string",
+      "minLength": 1
+    },
+    "available_data_until": {
+      "type": "string",
+      "minLength": 1
+    },
+    "visible_dataset_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "available_until_paris": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "blocked_dataset_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "blocked_reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "dataset_id",
+          "source",
+          "blocked_reason"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "decision_id": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "audit_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outcome_id": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "action": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "generate_master",
+            "generate_monitor",
+            "validate_setup",
+            "wait",
+            "replay_outcome",
+            "review",
+            "none"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "step_id",
+    "simulation_id",
+    "step_index",
+    "step_type",
+    "status",
+    "started_at_paris",
+    "ended_at_paris",
+    "data_cutoff_paris",
+    "available_data_until",
+    "visible_dataset_refs",
+    "blocked_dataset_refs",
+    "audit_id",
+    "action"
+  ],
+  "additionalProperties": false
+}

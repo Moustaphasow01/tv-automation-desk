@@ -1,0 +1,29 @@
+name: Local preproduction CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test:react
+      - run: npm --prefix packages/desk-contracts run check:generated
+      - run: node scripts/check_contracts_finalization.mjs
+      - run: npm --prefix packages/desk-domain run coverage:gate
+      - run: npm --prefix packages/desk-replay-engine test
+      - run: npm --prefix packages/desk-audit test
+      - run: npm --prefix packages/desk-time test
+      - run: npm --prefix mcp_gpt_desk ci
+      - run: npm --prefix mcp_gpt_desk test
+      - run: docker compose config --quiet

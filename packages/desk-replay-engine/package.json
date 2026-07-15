@@ -1,0 +1,17 @@
+{
+  "name": "@tv-automation/desk-replay-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unified immutable replay outcome engine for TV Automation V2.",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "exports": {
+    ".": "./index.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {}
+}

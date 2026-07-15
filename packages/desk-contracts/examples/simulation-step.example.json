@@ -1,0 +1,40 @@
+{
+  "contract_name": "DeskSimulationStep",
+  "schema_version": "1.0.0",
+  "step_id": "step_2026-07-02_001",
+  "simulation_id": "sim_2026-07-02_asia_open_01",
+  "step_index": 1,
+  "step_type": "next_15m",
+  "status": "applied",
+  "started_at_paris": "2026-07-02T10:00:00+02:00",
+  "ended_at_paris": "2026-07-02T10:15:00+02:00",
+  "data_cutoff_paris": "2026-07-02T10:15:00+02:00",
+  "available_data_until": "2026-07-02T10:15:00+02:00",
+  "visible_dataset_refs": [
+    {
+      "dataset_id": "MNQ_M5",
+      "source": "pack_dataset",
+      "available_until_paris": "2026-07-02T10:15:00+02:00"
+    },
+    {
+      "dataset_id": "market_feeds/prod__tradingview__MNQ1!__5/candles",
+      "source": "postgres_market_feeds_v2",
+      "available_until_paris": "2026-07-02T10:15:00+02:00"
+    }
+  ],
+  "blocked_dataset_refs": [
+    {
+      "dataset_id": "US_ISM_SERVICES_ACTUAL",
+      "source": "macro_calendar",
+      "blocked_reason": "actual_not_published_at_cutoff"
+    }
+  ],
+  "decision_id": "decision_2026-07-02_asia_open",
+  "audit_id": "audit_2026-07-02_asia_open_001",
+  "outcome_id": null,
+  "action": {
+    "type": "generate_monitor",
+    "summary": "Advance monitor with no post-cutoff data."
+  },
+  "notes": "Visible datasets must be <= data_cutoff_paris."
+}

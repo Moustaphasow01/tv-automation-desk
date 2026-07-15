@@ -1,0 +1,97 @@
+{
+  "type": "object",
+  "properties": {
+    "monitor_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "contract_name": {
+      "type": "string",
+      "const": "DeskHourlyThesisMonitorContract",
+      "default": "DeskHourlyThesisMonitorContract"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "default": "1.0.0"
+    },
+    "contract_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp_paris": {
+      "type": "string"
+    },
+    "linked_master_analysis_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "linked_active_thesis_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "linked_previous_monitor_id": {
+      "type": "string"
+    },
+    "monitor_decision": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "thesis_health_score": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "expected_vs_realized": {
+      "type": "array",
+      "items": {}
+    },
+    "macro_update": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "cross_asset_delta": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "technical_delta": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "wait_to_go_check": {
+      "type": "array",
+      "items": {}
+    },
+    "invalidation_check": {
+      "type": "array",
+      "items": {}
+    },
+    "weak_signals": {
+      "type": "array",
+      "items": {}
+    },
+    "monitor_context_transmission": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "front_projection": {
+      "type": "object",
+      "description": "DeskFrontProjectionContract v1.0.0; validated by the runtime against the canonical contract and source scope.",
+      "properties": {
+        "contractName": { "type": "string", "const": "DeskFrontProjectionContract" },
+        "schemaVersion": { "type": "string", "const": "1.0.0" },
+        "source": { "type": "object" }
+      },
+      "required": ["contractName", "schemaVersion", "source"],
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "contract_hash",
+    "timestamp_paris",
+    "linked_master_analysis_id",
+    "linked_active_thesis_id",
+    "monitor_decision",
+    "thesis_health_score"
+  ],
+  "additionalProperties": true
+}

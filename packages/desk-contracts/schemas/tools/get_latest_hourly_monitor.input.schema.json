@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "thesis_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 1
+    }
+  },
+  "required": [
+    "thesis_id"
+  ],
+  "additionalProperties": false
+}

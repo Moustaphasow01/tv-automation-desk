@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "pack_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "include_draft": {
+      "type": "boolean",
+      "default": false,
+      "description": "False only allows ready packs. True is dev-only."
+    }
+  },
+  "required": [
+    "pack_id"
+  ],
+  "additionalProperties": false
+}
