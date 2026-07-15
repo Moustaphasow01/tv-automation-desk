@@ -19,6 +19,8 @@ TradingView
 
 API/MCP
   -> PersistentDeskStore
+     -> DeskContractService
+        -> contrats embarqués ou persistance documentaire
      -> PostgresDeskPersistence
         -> desk_documents (JSONB)
 ```
@@ -37,6 +39,8 @@ La table `desk_documents` conserve le modèle documentaire du Desk pendant la tr
 Les opérations sensibles — claims, leases, révisions, idempotence et mutations de projection — utilisent des transactions PostgreSQL avec verrou consultatif par ressource.
 
 Le runtime et les tests exercent désormais la même classe `PersistentDeskStore`. En test, un port `InMemoryDeskPersistence` remplace PostgreSQL sans modifier la logique métier : il charge au besoin les fixtures historiques en lecture, mais toutes les écritures restent en mémoire. L'ancien `LocalDeskStore` et son chemin d'exécution fichier ont été supprimés.
+
+La modularisation du store est progressive. Le registre de contrats est le premier domaine extrait : `DeskContractService` possède le chargement des contrats embarqués, leur versionnement, leur activation, leur archivage et leur audit. `PersistentDeskStore` conserve une façade compatible pour les outils MCP.
 
 ## Sécurité locale
 

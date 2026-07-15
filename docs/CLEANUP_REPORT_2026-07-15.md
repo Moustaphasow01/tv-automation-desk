@@ -46,6 +46,15 @@ Cette passe retire plus de 3 400 lignes historiques ou inaccessibles, dont envir
 
 Au total, les passes de nettoyage retirent désormais plus de 6 000 lignes historiques, dupliquées ou inaccessibles de cette copie de préproduction.
 
+## Modularisation progressive
+
+- création du commit Git de référence `3365f20` avant tout refactoring structurel ;
+- isolation des changements sur la branche `codex/store-modularization` ;
+- extraction du registre de contrats dans `DeskContractService` et des identifiants déterministes dans `desk-ids.js` ;
+- conservation de `PersistentDeskStore` comme façade compatible avec les outils MCP ;
+- correction du fallback des contrats actifs après activation d'une version non embarquée ;
+- ajout de tests dédiés au chargement embarqué, à l'immutabilité des versions, à l'audit forcé, à l'activation et à l'archivage.
+
 ## Runtime conservé
 
 - frontend React actuel ;
@@ -66,7 +75,7 @@ Au total, les passes de nettoyage retirent désormais plus de 6 000 lignes histo
 ## État de validation
 
 - configuration Docker Compose : valide ;
-- MCP/API : 212 tests sur 212 validés après suppression de `LocalDeskStore`, incluant store persistant, transactions, projections et webhook ;
+- MCP/API : 214 tests sur 214 validés après la première extraction de service, incluant store persistant, contrats, transactions, projections et webhook ;
 - packages métier : 66 tests domaine, 8 tests replay, 8 tests audit et 6 tests temps validés ;
 - frontend : 13 tests sur 13 validés, avec typecheck sans émission d'artefacts et build de production ;
 - bundle frontend Docker : 282,82 Ko de JavaScript avant compression, sans marqueur du mode mock ;

@@ -1,5 +1,4 @@
 import { createHash, randomInt, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseCsv, trimCsv } from "./csv.js";
@@ -89,11 +88,18 @@ import {
   recommendReplayCadenceMinutes,
   selectActiveReplaySetups,
 } from "./replay-continuity.js";
+import {
+  DeskContractService,
+  compactContract,
+  contractContext,
+  contractHandshake,
+  contractHash,
+  contractSavePayload,
+} from "./desk-contract-service.js";
+import { stableVNextId } from "./desk-ids.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const PACKAGE_ROOT = resolve(__dirname, "..");
-const CONTRACTS_ROOT = join(PACKAGE_ROOT, "contracts");
-const ACTIVE_CONTRACTS_ID = "active_contracts";
 const COLLECTIONS = DESK_COLLECTIONS;
 const LIVE_CURSOR_COLLECTION = "desk_live_run_cursor";
 const LIVE_DEAD_LETTER_COLLECTION = "desk_agent_work_dead_letter";
@@ -128,6 +134,7 @@ export class PersistentDeskStore {
     this.clock = clock;
     if (!persistence) throw new Error("document_persistence_required");
     this.persistence = persistence;
+    this.contracts = new DeskContractService({ persistence, clock });
     this.livePackPublishingEnabled = false;
   }
 
@@ -449,80 +456,27 @@ export class PersistentDeskStore {
   }
 
   async getActiveContracts() {
-    const registry = await this.#getDocument(COLLECTIONS.deskContractRegistry, ACTIVE_CONTRACTS_ID)
-      .catch(() => null);
-    if (!registry) {
-      return bundledActiveContracts();
-    }
-    const bundledFront = await bundledContract("DeskFrontProjectionContract", "1.0.0");
-    return {
-      ok: true,
-      master_contract: await this.#getDocument(COLLECTIONS.deskContracts, registry.master_contract.contract_id),
-      monitor_contract: await this.#getDocument(COLLECTIONS.deskContracts, registry.monitor_contract.contract_id),
-      front_projection_contract: registry.front_projection_contract?.contract_id
-        ? await this.#getDocument(COLLECTIONS.deskContracts, registry.front_projection_contract.contract_id).catch(() => bundledFront)
-        : bundledFront,
-    };
+    return this.contracts.getActiveContracts();
   }
 
   async getContract({ contract_name, schema_version }) {
-    return this.#getDocument(COLLECTIONS.deskContracts, contractDocumentId(contract_name, schema_version))
-      .catch(async () => {
-        const bundled = await bundledContract(contract_name, schema_version);
-        if (!bundled) {
-          throw new Error(`contract_not_found:${contract_name}:${schema_version}`);
-        }
-        return bundled;
-      });
+    return this.contracts.getContract({ contract_name, schema_version });
   }
 
   async listContractVersions({ contract_name }) {
-    const docs = await this.#listDocuments(COLLECTIONS.deskContracts, 200).catch(() => []);
-    const bundled = await bundledContracts();
-    const merged = [...docs, ...bundled]
-      .filter((contract) => contract.contract_name === contract_name)
-      .filter((contract, index, all) => all.findIndex((item) => item.contract_id === contract.contract_id) === index)
-      .sort((left, right) => String(right.schema_version).localeCompare(String(left.schema_version)));
-    return { ok: true, contract_name, versions: merged.map(compactContract) };
+    return this.contracts.listContractVersions({ contract_name });
   }
 
   async saveContract(contract) {
-    const doc = normalizeContract(contract);
-    const existing = await this.#getDocument(COLLECTIONS.deskContracts, doc.contract_id).catch(() => null);
-    const contentChanged = contractContentChanged(existing, doc);
-    if (existing && contentChanged && contract.force !== true) {
-      throw new Error(`contract_version_immutable:${doc.contract_id}:use_force_true_or_new_version`);
-    }
-    await this.#setDocument(COLLECTIONS.deskContracts, doc.contract_id, preserveContractCreation(doc, existing));
-    if (existing && contentChanged && contract.force === true) {
-      const audit = contractUpdateAuditDoc({ existing, next: doc, tick: this.clock.now() });
-      await this.#setDocument(COLLECTIONS.deskContractUpdateAudit, audit.audit_id, audit);
-    }
-    return { ok: true, contract_id: doc.contract_id, hash: doc.hash, unchanged_content: Boolean(existing && !contentChanged), forced: contract.force === true };
+    return this.contracts.saveContract(contract);
   }
 
   async activateContractVersion({ contract_name, schema_version }) {
-    const contract = await this.getContract({ contract_name, schema_version });
-    await this.saveContract({ ...contract, status: "active", is_active: true });
-    const current = await this.getActiveContracts().catch(() => bundledActiveContracts());
-    const registry = buildContractRegistry({
-      master_contract: contract_name === "DeskMasterAnalysisContract" ? contract : current.master_contract,
-      monitor_contract: contract_name === "DeskHourlyThesisMonitorContract" ? contract : current.monitor_contract,
-      front_projection_contract: contract_name === "DeskFrontProjectionContract" ? contract : current.front_projection_contract,
-    });
-    await this.#setDocument(COLLECTIONS.deskContractRegistry, ACTIVE_CONTRACTS_ID, registry);
-    return { ok: true, contract_name, schema_version, contract_id: contract.contract_id };
+    return this.contracts.activateContractVersion({ contract_name, schema_version });
   }
 
   async archiveContractVersion({ contract_name, schema_version }) {
-    const _t = this.clock.now();
-    const contract = await this.getContract({ contract_name, schema_version });
-    await this.#setDocument(COLLECTIONS.deskContracts, contract.contract_id, {
-      status: "archived",
-      is_active: false,
-      updated_at: _t.utc,
-    }, { merge: true });
-    return { ok: true, contract_id: contract.contract_id, status: "archived" };
+    return this.contracts.archiveContractVersion({ contract_name, schema_version });
   }
 
   async saveMasterAnalysis(masterAnalysis) {
@@ -2943,204 +2897,6 @@ function isBlockingIntegrityError(error) {
     "LOOKAHEAD_DETECTED",
     "TIMEZONE_INVALID",
   ].includes(error?.code);
-}
-
-async function bundledActiveContracts() {
-  const [master, monitor, frontProjection] = await Promise.all([
-    bundledContract("DeskMasterAnalysisContract", "4.0.0"),
-    bundledContract("DeskHourlyThesisMonitorContract", "1.0.0"),
-    bundledContract("DeskFrontProjectionContract", "1.0.0"),
-  ]);
-  return {
-    ok: true,
-    master_contract: master,
-    monitor_contract: monitor,
-    front_projection_contract: frontProjection,
-    registry: buildContractRegistry({ master_contract: master, monitor_contract: monitor, front_projection_contract: frontProjection }),
-    source: "bundled_contracts",
-  };
-}
-
-async function bundledContracts() {
-  return [
-    await bundledContract("DeskMasterAnalysisContract", "4.0.0"),
-    await bundledContract("DeskHourlyThesisMonitorContract", "1.0.0"),
-    await bundledContract("DeskFrontProjectionContract", "1.0.0"),
-  ].filter(Boolean);
-}
-
-async function bundledContract(contractName, schemaVersion) {
-  const contract_id = contractDocumentId(contractName, schemaVersion);
-  const fileName = `${contract_id}.md`;
-  try {
-    const content_markdown = await readFile(join(CONTRACTS_ROOT, fileName), "utf8");
-    return normalizeContract({
-      contract_id,
-      contract_name: contractName,
-      schema_version: schemaVersion,
-      status: "active",
-      content_markdown,
-      schema_json: {},
-      is_active: true,
-      source: "bundled_contracts",
-    });
-  } catch {
-    return null;
-  }
-}
-
-function contractDocumentId(contractName, schemaVersion) {
-  return `${contractName}_v${String(schemaVersion).replaceAll(".", "_")}`;
-}
-
-function normalizeContract(contract, clock = new SystemClock()) {
-  const _t = clock.now();
-  const { force, ...persisted } = contract;
-  const contract_id = contract.contract_id || contractDocumentId(contract.contract_name, contract.schema_version);
-  const content_markdown = contract.content_markdown || "";
-  const hash = contract.hash || createHash("sha256").update(content_markdown).digest("hex");
-  return {
-    ...persisted,
-    contract_id,
-    content_markdown,
-    schema_json: contract.schema_json || {},
-    status: contract.status || "active",
-    hash,
-    is_active: Boolean(contract.is_active),
-    replaced_by: contract.replaced_by ?? null,
-    created_at: contract.created_at ?? _t.utc,
-    created_at_utc: contract.created_at_utc ?? _t.utc,
-    created_at_paris: contract.created_at_paris ?? _t.paris,
-    updated_at: _t.utc,
-    updated_at_utc: _t.utc,
-    updated_at_paris: _t.paris,
-  };
-}
-
-function contractContentChanged(existing, next) {
-  if (!existing) {
-    return false;
-  }
-  return String(existing.hash || "") !== String(next.hash || "") ||
-    String(existing.content_markdown || "") !== String(next.content_markdown || "");
-}
-
-function preserveContractCreation(next, existing) {
-  if (!existing) {
-    return next;
-  }
-  return {
-    ...next,
-    created_at: existing.created_at ?? next.created_at,
-    created_at_utc: existing.created_at_utc ?? next.created_at_utc,
-    created_at_paris: existing.created_at_paris ?? next.created_at_paris,
-  };
-}
-
-function contractUpdateAuditDoc({ existing, next, tick }) {
-  const audit_id = stableVNextId("contract_update", next.contract_id, tick.utc);
-  return {
-    audit_id,
-    event_type: "contract_update",
-    contract_id: next.contract_id,
-    contract_name: next.contract_name,
-    schema_version: next.schema_version,
-    previous_hash: existing?.hash || null,
-    next_hash: next.hash || null,
-    force: true,
-    created_at: tick.utc,
-    created_at_utc: tick.utc,
-    created_at_paris: tick.paris,
-  };
-}
-
-function compactContract(contract) {
-  if (!contract) return null;
-  return {
-    contract_name: contract.contract_name,
-    schema_version: contract.schema_version,
-    contract_id: contract.contract_id,
-    status: contract.status,
-    hash: contract.hash,
-    is_active: Boolean(contract.is_active),
-    updated_at: contract.updated_at || null,
-  };
-}
-
-function contractHash(contract) {
-  return contract?.contract_hash || contract?.hash || null;
-}
-
-function contractRef(contract, { backtestId } = {}) {
-  if (!contract) {
-    return null;
-  }
-  const ref = {
-    collection: COLLECTIONS.deskContracts,
-    document_id: contract.contract_id || contractDocumentId(contract.contract_name, contract.schema_version),
-  };
-  if (backtestId) {
-    ref.backtest_id = backtestId;
-  }
-  return ref;
-}
-
-function contractContext(contracts, kind, { tick, pinnedForReplay = false, backtestId = null } = {}) {
-  const loadedAt = tick?.paris || new SystemClock().now().paris;
-  const contract = kind === "master" ? contracts?.master_contract : contracts?.monitor_contract;
-  return {
-    contract_name: contract?.contract_name || null,
-    schema_version: contract?.schema_version || null,
-    contract_hash: contractHash(contract),
-    contract_snapshot_ref: contractRef(contract, { backtestId: pinnedForReplay ? backtestId : null }),
-    loaded_at_paris: loadedAt,
-    is_active_at_bundle_build: Boolean(contract?.is_active || contract?.status === "active"),
-    pinned_for_replay: Boolean(pinnedForReplay),
-  };
-}
-
-function contractSavePayload(context) {
-  return {
-    contract_name: context?.contract_name || null,
-    schema_version: context?.schema_version || null,
-    contract_hash: context?.contract_hash || null,
-  };
-}
-
-function contractHandshake(workflow, context, { saveTool, backtestId = null } = {}) {
-  return {
-    workflow,
-    required_first_tool: "get_active_contracts",
-    expected_contract: contractSavePayload(context),
-    save_tool: saveTool,
-    save_must_include: ["contract_name", "schema_version", "contract_hash"],
-    replay_backtest_id: backtestId,
-    pinned_for_replay: Boolean(context?.pinned_for_replay),
-    mismatch_action: "stop_and_refresh_bundle_before_saving",
-    direct_mcp_save_required: true,
-    operator_json_handoff_allowed: false,
-    missing_mcp_action: "stop_with_mcp_required",
-  };
-}
-
-function buildContractRegistry({ master_contract, monitor_contract, front_projection_contract }, clock = new SystemClock()) {
-  const _t = clock.now();
-  return {
-    master_contract: compactContract(master_contract),
-    monitor_contract: compactContract(monitor_contract),
-    front_projection_contract: compactContract(front_projection_contract),
-    updated_at: _t.utc,
-    updated_at_utc: _t.utc,
-    updated_at_paris: _t.paris,
-  };
-}
-
-function stableVNextId(prefix, left, right) {
-  const clean = (value) => String(value || "")
-    .replace(/[^A-Za-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 80) || "item";
-  return `${prefix}_${clean(left)}_${clean(right)}`;
 }
 
 function masterAnalysisVNextId(masterAnalysis) {
