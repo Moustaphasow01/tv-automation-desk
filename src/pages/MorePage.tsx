@@ -2,6 +2,11 @@ import { useNavigate } from "react-router-dom";
 import { Card, Icon, type IconName, SectionTitle } from "@/components/common";
 
 const links: Array<{to:string; label:string; text:string; icon:IconName}> = [
+  {to:"/operations",label:"Cockpit opérations",text:"Tous les workflows automatisés",icon:"monitor"},
+  {to:"/replay",label:"Replay Lab",text:"Backtests, journées et processus GPT",icon:"layers"},
+  {to:"/performance/analysis",label:"Analyse performance",text:"Comparaisons et ventilations",icon:"chart"},
+  {to:"/history",label:"Historique",text:"Sessions et décisions passées",icon:"database"},
+  {to:"/strategies",label:"Stratégies",text:"Configurations et versions",icon:"settings"},
   {to:"/sessions",label:"Sessions",text:"Changer de workspace",icon:"layers"},
   {to:"/thesis",label:"Thèse",text:"État vivant du plan",icon:"brain"},
   {to:"/setup",label:"Setup & Position",text:"Exécution et gestion",icon:"position"},

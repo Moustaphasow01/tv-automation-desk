@@ -854,6 +854,12 @@ export class DeskReplayService {
   async setAutomation(args = {}) {
     const tick = this.clock.now();
     const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
+    if (args.expected_revision !== undefined && Number(run.revision || 0) !== Number(args.expected_revision)) {
+      throw deskError("REVISION_CONFLICT", "Replay revision changed before the automation command.", {
+        expected_revision: args.expected_revision,
+        actual_revision: Number(run.revision || 0),
+      });
+    }
     const enabled = args.enabled === true;
     const items = await this.persistence.queryCollectionDocuments({
       collection: COLLECTIONS.deskAgentWorkItems,
@@ -864,10 +870,51 @@ export class DeskReplayService {
       const updated = enabled ? resumeReplayWorkItem(item, tick) : pauseReplayWorkItem(item, tick, args.reason);
       if (updated !== item) await this.persistence.setDocument(COLLECTIONS.deskAgentWorkItems, updated.work_item_id, updated);
     }
-    const updatedRun = patchReplayRun(run, { automation_enabled: enabled, automation_status: enabled ? "running" : "paused" }, tick);
+    const updatedRun = patchReplayRun(run, {
+      automation_enabled: enabled,
+      automation_status: enabled ? "running" : "paused",
+      revision: Number(run.revision || 0) + 1,
+    }, tick);
     await this.persistence.setDocument(COLLECTIONS.deskReplayRuns, run.backtest_id, updatedRun, { merge: true });
     const automation = enabled ? await this.host.driveReplayAutomation({ backtest_id: run.backtest_id }) : null;
     return { ok: true, backtest_id: run.backtest_id, automation_enabled: enabled, automation };
+  }
+
+  async retryAutomationWork(args = {}) {
+    const tick = this.clock.now();
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
+    if (Number(run.revision || 0) !== Number(args.expected_revision)) {
+      throw deskError("REVISION_CONFLICT", "Replay revision changed before retry.", {
+        expected_revision: args.expected_revision,
+        actual_revision: Number(run.revision || 0),
+      });
+    }
+    const items = await this.persistence.queryCollectionDocuments({
+      collection: COLLECTIONS.deskAgentWorkItems,
+      filters: [{ field: "backtest_id", operator: "==", value: run.backtest_id }],
+      orderBy: [{ field: "updated_at_utc", direction: "desc" }],
+      limit: 100,
+    }).catch(() => []);
+    const failed = items.find((item) => item.status === "FAILED" && isRecoverableReplayAutopilotFailure(item));
+    if (!failed) throw deskError("WORK_FAILED_REQUIRES_OPERATOR", "No bounded recoverable GPT work item is available for this replay.");
+    const recovered = recoverReplayAutopilotWorkItem(failed, tick, args.requested_by || "front-operator");
+    await this.persistence.setDocument(COLLECTIONS.deskAgentWorkItems, recovered.work_item_id, recovered, { merge: true });
+    await this.writeWorkEvent(replayWorkEvent(recovered, "RECOVERED", tick, {
+      worker_id: args.requested_by || "front-operator",
+      reason: args.reason || "Operator retry from Operations cockpit.",
+      recovered_error: failed.last_error || null,
+    }));
+    const waitingStatus = recovered.workflow === "REPLAY_MASTER" ? "WAITING_GPT_MASTER" : "WAITING_GPT_MONITOR";
+    const updatedRun = patchReplayRun(run, {
+      status: waitingStatus,
+      automation_enabled: true,
+      automation_status: "waiting_gpt",
+      current_work_item_id: recovered.work_item_id,
+      last_automation_error: null,
+      revision: Number(run.revision || 0) + 1,
+    }, tick);
+    await this.persistence.setDocument(COLLECTIONS.deskReplayRuns, run.backtest_id, updatedRun);
+    return { ok: true, status: "RECOVERED", backtest_id: run.backtest_id, revision: updatedRun.revision, work_item: deskWorkSummary(recovered) };
   }
 
   async resolveAutopilotConfig(args = {}) {

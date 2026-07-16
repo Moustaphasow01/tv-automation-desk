@@ -840,6 +840,7 @@ export const setReplayAutomationSchema = z.object({
   backtest_id: z.string().min(3),
   enabled: z.boolean(),
   reason: z.string().max(500).optional(),
+  expected_revision: z.number().int().min(0).optional(),
 }).strict();
 
 export const driveReplayAutomationSchema = z.object({

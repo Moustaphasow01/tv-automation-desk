@@ -43,6 +43,30 @@ const getOperation = ({ operationId, summary, schemaRef, parameters = scopeParam
   },
 });
 
+const operationsGet = (operationId, summary, parameters = []) => getOperation({
+  operationId,
+  summary,
+  schemaRef: "#/components/schemas/OperationsEnvelope",
+  parameters,
+  cache: false,
+});
+
+const operationsPost = (operationId, summary, parameters = []) => ({
+  operationId,
+  summary,
+  tags: ["Desk Operations"],
+  parameters,
+  security: [{ BearerAuth: [] }, { DeskApiKey: [] }],
+  requestBody: { required: true, content: jsonContent({ $ref: "#/components/schemas/OperationsCommandInput" }) },
+  responses: {
+    "200": { description: "Mutation appliquée ou rejouée idempotemment", content: jsonContent({ $ref: "#/components/schemas/OperationsEnvelope" }) },
+    "400": errorResponses["400"], "401": errorResponses["401"], "403": errorResponses["403"],
+    "404": errorResponses["404"],
+    "409": { description: "Revision, capability or idempotency conflict", content: jsonContent({ $ref: "#/components/schemas/Error" }) },
+    "500": errorResponses["500"],
+  },
+});
+
 const resourceSchema = (contract, properties, required = Object.keys(properties)) => ({
   type: "object",
   additionalProperties: false,
@@ -65,13 +89,14 @@ export function frontApiOpenApiDocument() {
     openapi: "3.1.0",
     info: {
       title: "Desk Futures Front BFF",
-      version: "1.1.0",
+      version: "1.2.0",
       description: "Presentation API for the React Desk Futures front. Reads prioritize canonical backend state; authenticated operator writes are confirmed, revisioned, idempotent and audited.",
     },
     servers: [{ url: "/api/v1" }],
     tags: [
       { name: "Desk Front", description: "Scoped read models for the new React front" },
       { name: "Desk Operator", description: "Authenticated, audited Desk-state commands; never broker order execution" },
+      { name: "Desk Operations", description: "Global workflows, replays, GPT processes, incidents, history and strategy versions" },
     ],
     security: [{ BearerAuth: [] }, { DeskApiKey: [] }, {}],
     paths: {
@@ -185,6 +210,39 @@ export function frontApiOpenApiDocument() {
           },
         },
       },
+      "/operations/summary": { get: operationsGet("getOperationsSummary", "Get the global workflow cockpit summary") },
+      "/workflows": { get: operationsGet("listOperationsWorkflows", "List normalized automated workflows") },
+      "/workflows/{workflowId}": { get: operationsGet("getOperationsWorkflow", "Get workflow state, steps and events", [{ $ref: "#/components/parameters/WorkflowId" }]) },
+      "/workflows/{workflowId}/steps": { get: operationsGet("getOperationsWorkflowSteps", "List workflow steps", [{ $ref: "#/components/parameters/WorkflowId" }]) },
+      "/workflows/{workflowId}/events": { get: operationsGet("getOperationsWorkflowEvents", "List workflow events", [{ $ref: "#/components/parameters/WorkflowId" }]) },
+      "/workflows/{workflowId}/actions": { post: operationsPost("executeOperationsWorkflowAction", "Retry, resume, pause or cancel a workflow", [{ $ref: "#/components/parameters/WorkflowId" }]) },
+      "/replays": {
+        get: operationsGet("listOperationsReplays", "List replay days and executions"),
+        post: {
+          operationId: "createOperationsReplay",
+          summary: "Create and start a canonical orchestrated replay day",
+          tags: ["Desk Operations"],
+          security: [{ BearerAuth: [] }, { DeskApiKey: [] }],
+          requestBody: { required: true, content: jsonContent({ $ref: "#/components/schemas/ReplayCreateInput" }) },
+          responses: { "200": { description: "Replay created", content: jsonContent({ $ref: "#/components/schemas/OperationsEnvelope" }) }, ...errorResponses },
+        },
+      },
+      "/replays/{runId}": { get: operationsGet("getOperationsReplay", "Get a replay run with GPT and timeline projections", [{ $ref: "#/components/parameters/RunId" }]) },
+      "/replays/{runId}/days": { get: operationsGet("getOperationsReplayDays", "List the days related to a replay", [{ $ref: "#/components/parameters/RunId" }]) },
+      "/replays/{runId}/days/{date}": { get: operationsGet("getOperationsReplayDay", "Get all session executions, variants and attempts for a day", [{ $ref: "#/components/parameters/RunId" }, { $ref: "#/components/parameters/DatePath" }]) },
+      "/replays/{runId}/sessions/{sessionExecutionId}": { get: operationsGet("getOperationsReplaySession", "Get one materialized replay session execution", [{ $ref: "#/components/parameters/RunId" }, { $ref: "#/components/parameters/SessionExecutionId" }]) },
+      "/replays/{runId}/timeline": { get: operationsGet("getOperationsReplayTimeline", "Get synchronized replay decision layers", [{ $ref: "#/components/parameters/RunId" }]) },
+      "/replays/{runId}/price-series": { get: operationsGet("getOperationsReplayPriceSeries", "Get replay OHLC price series", [{ $ref: "#/components/parameters/RunId" }]) },
+      "/gpt-processes": { get: operationsGet("listOperationsGptProcesses", "List GPT work processes") },
+      "/gpt-processes/{processId}": { get: operationsGet("getOperationsGptProcess", "Inspect a GPT process, bundle and conclusion", [{ $ref: "#/components/parameters/ProcessId" }]) },
+      "/performance/overview": { get: operationsGet("getOperationsPerformance", "Get performance totals and breakdowns") },
+      "/replays/compare": { get: operationsGet("compareOperationsReplays", "Compare replay executions") },
+      "/incidents": { get: operationsGet("listOperationsIncidents", "List alert, error and data-quality incidents") },
+      "/incidents/{incidentId}/actions": { post: operationsPost("executeOperationsIncidentAction", "Acknowledge, snooze, resolve or reopen an incident", [{ name: "incidentId", in: "path", required: true, schema: { type: "string" } }]) },
+      "/history/sessions": { get: operationsGet("getOperationsHistory", "Get consolidated session history") },
+      "/strategies": { get: operationsGet("listOperationsStrategies", "List strategy configuration and version state") },
+      "/strategies/{strategyId}/versions/compare": { get: operationsGet("compareOperationsStrategyVersions", "Compare two strategy versions") },
+      "/events": { get: { operationId: "streamOperationsEvents", summary: "Stream operations snapshot changes", tags: ["Desk Operations"], responses: { "200": { description: "Server-sent events stream", content: { "text/event-stream": { schema: { type: "string" } } } }, ...errorResponses } } },
     },
     components: {
       securitySchemes: {
@@ -206,6 +264,10 @@ export function frontApiOpenApiDocument() {
         MonitorId: { name: "monitorId", in: "path", required: true, schema: { $ref: "#/components/schemas/EntityId" } },
         ThesisId: { name: "thesisId", in: "path", required: true, schema: { $ref: "#/components/schemas/EntityId" } },
         SetupId: { name: "setupId", in: "path", required: true, schema: { $ref: "#/components/schemas/EntityId" } },
+        WorkflowId: { name: "workflowId", in: "path", required: true, schema: { type: "string", minLength: 1, maxLength: 300 } },
+        RunId: { name: "runId", in: "path", required: true, schema: { type: "string", minLength: 1, maxLength: 300 } },
+        SessionExecutionId: { name: "sessionExecutionId", in: "path", required: true, schema: { type: "string", minLength: 1, maxLength: 300 } },
+        ProcessId: { name: "processId", in: "path", required: true, schema: { type: "string", minLength: 1, maxLength: 300 } },
       },
       schemas: frontOpenApiSchemas(),
     },
@@ -220,6 +282,31 @@ function frontOpenApiSchemas() {
   return {
     OpenApiDocument: { type: "object", required: ["openapi", "info", "paths"], additionalProperties: true },
     Error: { type: "object", required: ["ok", "error"], properties: { ok: { const: false }, error: { type: "string" }, code: { type: "string" } }, additionalProperties: false },
+    OperationsEnvelope: { type: "object", required: ["contract", "schemaVersion"], properties: { contract: { type: "string" }, schemaVersion: { const: "1.0.0" } }, additionalProperties: true },
+    OperationsCommandInput: {
+      type: "object", additionalProperties: false,
+      required: ["action", "expectedRevision", "idempotencyKey", "confirmationPhrase", "reason"],
+      properties: {
+        action: { type: "string", enum: ["retry", "resume", "pause", "cancel", "acknowledge", "snooze", "resolve", "reopen"] },
+        expectedRevision: { type: "integer", minimum: 0 },
+        idempotencyKey: { type: "string", minLength: 8, maxLength: 200 },
+        confirmationPhrase: { type: "string", pattern: "^CONFIRM_[A-Z_]+$" },
+        reason: { type: "string", minLength: 3, maxLength: 500 },
+        snoozedUntilUtc: { type: "string", format: "date-time" },
+      },
+    },
+    ReplayCreateInput: {
+      type: "object", additionalProperties: false,
+      required: ["backtest_id", "strategy_id", "trading_date", "session", "pack_id", "pack_build_id", "start_time", "end_time", "idempotency_key"],
+      properties: {
+        backtest_id: { type: "string", minLength: 3 }, strategy_id: { type: "string", minLength: 2 },
+        trading_date: { type: "string", format: "date" }, date: { type: "string", format: "date" },
+        session: { type: "string", enum: ["asia_open", "ny_open"] }, pack_id: { type: "string" }, pack_build_id: { type: "string" },
+        start_time: { type: "string" }, end_time: { type: "string" }, cutoff_paris: { type: "string" },
+        cadence: { type: "string", enum: ["15m", "30m", "60m"] }, automation_enabled: { type: "boolean" },
+        idempotency_key: { type: "string", minLength: 8, maxLength: 200 },
+      },
+    },
     EntityId: { type: "string", minLength: 1, maxLength: 200, pattern: "^[A-Za-z0-9_.:-]+$" },
     ResourceScope: {
       type: "object", additionalProperties: false, required: ["strategyId", "session", "tradingDate", "mode"],

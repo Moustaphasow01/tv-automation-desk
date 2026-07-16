@@ -255,6 +255,7 @@ export function normalizeDeskJob(job, tick) {
   return {
     ...job,
     job_id,
+    revision: Number(job.revision || 0),
     status: job.status || "QUEUED",
     session: job.session || "asia_open",
     mode: job.mode || "live",
@@ -274,6 +275,7 @@ export function patchDeskJob(existing, update, tick) {
   return {
     ...existing,
     ...update,
+    revision: Number(existing.revision || 0) + 1,
     metadata: {
       ...(existing.metadata || {}),
       ...(update.metadata || {}),

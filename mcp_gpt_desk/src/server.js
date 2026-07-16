@@ -38,6 +38,13 @@ import {
   loadFrontApiResource,
 } from "./front-api-resources.js";
 import { loadFrontDeskSession, normalizeFrontApiScope, sessionSummary } from "./front-session-projection.js";
+import {
+  FRONT_OPERATIONS_EVENTS_PATH,
+  handleFrontOperations,
+  isFrontOperationsMethodAllowed,
+  isFrontOperationsPath,
+  isFrontOperationsWriteRequest,
+} from "./front-operations-api.js";
 import { createDeskStoreFromEnv } from "./store.js";
 import { callDeskTool, createDeskToolRegistry, getToolRequiredScopes, listDeskTools } from "./tools.js";
 
@@ -164,6 +171,10 @@ const httpServer = createHttpServer(async (req, res) => {
           front_details: "/api/v1/masters/:masterId, /api/v1/monitors/:monitorId, /api/v1/theses/:thesisId, /api/v1/setups/:setupId",
           front_operator_state: FRONT_OPERATOR_STATE_PATH,
           front_operator_commands: FRONT_OPERATOR_COMMANDS_PATH,
+          front_operations: "/api/v1/operations/summary, /api/v1/workflows/:workflowId",
+          front_replays: "/api/v1/replays/:runId",
+          front_gpt_processes: "/api/v1/gpt-processes/:processId",
+          front_events: FRONT_OPERATIONS_EVENTS_PATH,
           front_openapi: FRONT_OPENAPI_PATH,
         } : {}),
         health: "/status",
@@ -399,9 +410,11 @@ async function handleFrontApiRequest(req, res, url, baseUrl) {
     return;
   }
 
-  const operatorWrite = url.pathname === FRONT_OPERATOR_COMMANDS_PATH;
-  const expectedMethod = operatorWrite ? "POST" : "GET";
-  if (req.method !== expectedMethod) {
+  const operatorWrite = url.pathname === FRONT_OPERATOR_COMMANDS_PATH || isFrontOperationsWriteRequest(url.pathname, req.method);
+  const methodAllowed = isFrontOperationsPath(url.pathname)
+    ? isFrontOperationsMethodAllowed(url.pathname, req.method)
+    : req.method === (operatorWrite ? "POST" : "GET");
+  if (!methodAllowed) {
     sendJson(res, 405, { ok: false, error: "method_not_allowed" }, corsHeaders);
     return;
   }
@@ -422,6 +435,29 @@ async function handleFrontApiRequest(req, res, url, baseUrl) {
 
   const input = Object.fromEntries(url.searchParams.entries());
   try {
+    if (url.pathname === FRONT_OPERATIONS_EVENTS_PATH) {
+      await handleFrontOperationsEvents(req, res, input, corsHeaders);
+      return;
+    }
+
+    if (isFrontOperationsPath(url.pathname)) {
+      const body = operatorWrite ? await readJsonBody(req) : undefined;
+      const payload = await handleFrontOperations(store, {
+        pathname: url.pathname,
+        method: req.method,
+        query: input,
+        body: body || {},
+        actor: {
+          kind: auth.kind,
+          email: auth.email || null,
+          uid: auth.uid || null,
+          clientIp: clientIpFromRequest(req),
+        },
+      });
+      sendJson(res, 200, payload, { ...corsHeaders, "cache-control": operatorWrite ? "no-store" : "private, max-age=2" });
+      return;
+    }
+
     if (url.pathname === FRONT_OPERATOR_STATE_PATH) {
       const payload = await loadFrontOperatorState(store, input);
       sendJson(res, 200, payload, { ...corsHeaders, "cache-control": "no-store" });
@@ -702,13 +738,48 @@ function isFrontApiPath(pathname) {
     pathname === FRONT_OPERATOR_COMMANDS_PATH ||
     pathname === FRONT_OPENAPI_PATH ||
     FRONT_RESOURCE_PATHS.has(pathname) ||
-    isFrontDetailPath(pathname);
+    isFrontDetailPath(pathname) ||
+    isFrontOperationsPath(pathname);
 }
 
 function frontOperatorErrorStatus(code) {
-  if (["IDEMPOTENCY_CONFLICT", "REVISION_CONFLICT", "TARGET_CONFLICT", "COMMAND_NOT_ALLOWED"].includes(code)) return 409;
-  if (code === "INVALID_OPERATOR_COMMAND") return 400;
+  if (["IDEMPOTENCY_CONFLICT", "REVISION_CONFLICT", "TARGET_CONFLICT", "COMMAND_NOT_ALLOWED", "COMMAND_INCOMPLETE"].includes(code)) return 409;
+  if (["INVALID_OPERATOR_COMMAND", "INVALID_OPERATIONS_COMMAND", "INVALID_INCIDENT_ACTION", "INVALID_REPLAY_CREATE_INPUT", "CONFIRMATION_REQUIRED"].includes(code)) return 400;
+  if (["WORKFLOW_NOT_FOUND", "REPLAY_NOT_FOUND", "REPLAY_DAY_NOT_FOUND", "GPT_PROCESS_NOT_FOUND", "INCIDENT_NOT_FOUND", "STRATEGY_NOT_FOUND", "NOT_FOUND"].includes(code)) return 404;
+  if (code === "WORK_FAILED_REQUIRES_OPERATOR") return 409;
   return 0;
+}
+
+async function handleFrontOperationsEvents(req, res, input, corsHeaders) {
+  res.writeHead(200, {
+    ...corsHeaders,
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+  let lastPayload = "";
+  let closed = false;
+  const emit = async () => {
+    if (closed || res.writableEnded) return;
+    try {
+      const payload = JSON.stringify(await store.getOperationsSummary(input));
+      if (payload !== lastPayload) {
+        lastPayload = payload;
+        res.write(`event: operations\ndata: ${payload}\n\n`);
+      } else {
+        res.write(`event: heartbeat\ndata: {"at":"${new Date().toISOString()}"}\n\n`);
+      }
+    } catch (error) {
+      res.write(`event: error\ndata: ${JSON.stringify({ error: error.message || String(error) })}\n\n`);
+    }
+  };
+  await emit();
+  const interval = setInterval(emit, 10_000);
+  req.on("close", () => {
+    closed = true;
+    clearInterval(interval);
+  });
 }
 
 function clientIpFromRequest(req) {

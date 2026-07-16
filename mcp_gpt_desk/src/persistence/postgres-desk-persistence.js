@@ -60,7 +60,20 @@ export class PostgresDeskPersistence {
   }
 
   async queryCollectionDocuments({ collection, filters = [], orderBy = [], limit = 50 }) {
-    const documents = await this.listDocuments(collection);
+    await this.initialized;
+    const sqlFilters = filters.filter(canPushDownFilter);
+    let documents;
+    if (sqlFilters.length) {
+      const values = [collection];
+      const clauses = sqlFilters.map((filter) => pushDownFilterClause(filter, values));
+      const result = await this.pool.query(
+        `SELECT data FROM desk_documents WHERE collection = $1 AND ${clauses.join(" AND ")}`,
+        values,
+      );
+      documents = result.rows.map((row) => row.data);
+    } else {
+      documents = await this.listDocuments(collection);
+    }
     const filtered = documents.filter((document) => filters.every((filter) => matchesFilter(document, filter)));
     filtered.sort((left, right) => compareDocuments(left, right, orderBy));
     return filtered.slice(0, boundedLimit(limit));
@@ -276,6 +289,14 @@ export class PostgresDeskPersistence {
         ON desk_documents (collection, updated_at DESC);
       CREATE INDEX IF NOT EXISTS desk_documents_data_gin_idx
         ON desk_documents USING gin (data);
+      CREATE INDEX IF NOT EXISTS desk_documents_collection_backtest_idx
+        ON desk_documents (collection, ((data ->> 'backtest_id')));
+      CREATE INDEX IF NOT EXISTS desk_documents_collection_status_idx
+        ON desk_documents (collection, ((data ->> 'status')));
+      CREATE INDEX IF NOT EXISTS desk_documents_collection_trading_date_idx
+        ON desk_documents (collection, ((data ->> 'trading_date')));
+      CREATE INDEX IF NOT EXISTS desk_documents_collection_work_item_idx
+        ON desk_documents (collection, ((data ->> 'work_item_id')));
     `);
   }
 
@@ -295,6 +316,28 @@ export class PostgresDeskPersistence {
       client.release();
     }
   }
+}
+
+function canPushDownFilter(filter = {}) {
+  return ["==", "in"].includes(filter.operator || "==")
+    && String(filter.field || "").split(".").every((part) => /^[A-Za-z0-9_]+$/.test(part))
+    && (filter.operator !== "in" || Array.isArray(filter.value));
+}
+
+function pushDownFilterClause(filter, values) {
+  values.push(String(filter.field).split("."));
+  const pathIndex = values.length;
+  if ((filter.operator || "==") === "in") {
+    const candidates = filter.value || [];
+    if (!candidates.length) return "FALSE";
+    const placeholders = candidates.map((value) => {
+      values.push(JSON.stringify(value));
+      return `$${values.length}::jsonb`;
+    });
+    return `(data #> $${pathIndex}::text[]) IN (${placeholders.join(", ")})`;
+  }
+  values.push(JSON.stringify(filter.value));
+  return `(data #> $${pathIndex}::text[]) = $${values.length}::jsonb`;
 }
 
 async function getDocument(client, collection, documentId) {

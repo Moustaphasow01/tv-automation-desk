@@ -153,6 +153,13 @@ test("OpenAPI publishes every current BFF route with resolvable component refere
     "/setups/{setupId}", "/positions/current", "/market/snapshot", "/macro/calendar", "/news/headlines",
     "/news/digest", "/desk/activity", "/alerts", "/audit", "/performance/calendar", "/performance/day",
     "/operator/state", "/operator/commands", "/openapi.json",
+    "/operations/summary", "/workflows", "/workflows/{workflowId}", "/workflows/{workflowId}/steps",
+    "/workflows/{workflowId}/events", "/workflows/{workflowId}/actions", "/replays", "/replays/compare",
+    "/replays/{runId}", "/replays/{runId}/days", "/replays/{runId}/days/{date}",
+    "/replays/{runId}/sessions/{sessionExecutionId}", "/replays/{runId}/timeline", "/replays/{runId}/price-series",
+    "/gpt-processes", "/gpt-processes/{processId}", "/performance/overview", "/incidents",
+    "/incidents/{incidentId}/actions", "/history/sessions", "/strategies",
+    "/strategies/{strategyId}/versions/compare", "/events",
   ];
 
   assert.equal(document.openapi, "3.1.0");

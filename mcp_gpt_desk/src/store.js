@@ -20,6 +20,7 @@ import { DeskPackService } from "./desk-pack-service.js";
 import { deskError } from "./desk-errors.js";
 import { DeskLiveService } from "./desk-live-service.js";
 import { DeskFrontService } from "./desk-front-service.js";
+import { FrontOperationsService } from "./front-operations-service.js";
 import { DeskMarketFeatureService } from "./desk-market-feature-service.js";
 import {
   assertReplayRunMatchesQuery,
@@ -145,12 +146,34 @@ export class PersistentDeskStore {
     this.market = new DeskMarketFeatureService({ persistence, clock, host: this });
     this.strategy = new DeskStrategyAuditService({ persistence, clock, host: this, market: this.market });
     this.replay = new DeskReplayService({ persistence, clock, host: this });
+    this.operations = new FrontOperationsService({ persistence, clock, host: this });
     this.livePackPublishingEnabled = false;
   }
 
   async health() {
     return this.persistence.health();
   }
+
+  async getOperationsSummary(args = {}) { return this.operations.getOperationsSummary(args); }
+  async listOperationsWorkflows(args = {}) { return this.operations.listWorkflows(args); }
+  async getOperationsWorkflow({ workflow_id }) { return this.operations.getWorkflow(workflow_id); }
+  async executeOperationsWorkflowAction({ workflow_id, input, actor }) { return this.operations.executeWorkflowAction(workflow_id, input, actor); }
+  async listOperationsReplays(args = {}) { return this.operations.listReplays(args); }
+  async getOperationsReplay({ run_id }) { return this.operations.getReplayRun(run_id); }
+  async getOperationsReplayDays({ run_id }) { return this.operations.getReplayDays(run_id); }
+  async getOperationsReplayDay({ run_id, date }) { return this.operations.getReplayDay(run_id, date); }
+  async getOperationsReplaySession({ run_id, session_execution_id }) { return this.operations.getReplaySession(run_id, session_execution_id); }
+  async getOperationsReplayTimeline({ run_id }) { return this.operations.getReplayTimeline(run_id); }
+  async getOperationsReplayPriceSeries({ run_id }) { return this.operations.getReplayPriceSeries(run_id); }
+  async listOperationsGptProcesses(args = {}) { return this.operations.listGptProcesses(args); }
+  async getOperationsGptProcess({ process_id }) { return this.operations.getGptProcess(process_id); }
+  async getOperationsPerformance(args = {}) { return this.operations.getPerformanceOverview(args); }
+  async compareOperationsReplays({ ids }) { return this.operations.compareReplays(ids); }
+  async listOperationsIncidents(args = {}) { return this.operations.listIncidents(args); }
+  async executeOperationsIncidentAction({ incident_id, input, actor }) { return this.operations.executeIncidentAction(incident_id, input, actor); }
+  async getOperationsHistory(args = {}) { return this.operations.getHistory(args); }
+  async listOperationsStrategies() { return this.operations.listStrategies(); }
+  async compareOperationsStrategyVersions({ strategy_id, left, right }) { return this.operations.compareStrategyVersions(strategy_id, left, right); }
 
   async ingestTradingViewWebhook(input) {
     return ingestTradingViewWebhook({ persistence: this.persistence, ...input });
@@ -877,6 +900,10 @@ export class PersistentDeskStore {
     return this.replay.setAutomation(args);
   }
 
+  async retryReplayAutomationWork(args = {}) {
+    return this.replay.retryAutomationWork(args);
+  }
+
   async driveReplayAutomation(args = {}) {
     return this.replay.driveAutomation(args);
   }
@@ -1048,7 +1075,7 @@ export class PersistentDeskStore {
       return { ok: true, backtest_id, status: "CANCELLED" };
     }
     const run = await this.#getDocument(COLLECTIONS.deskBacktests, backtest_id);
-    const cancelled = { ...run, status: "CANCELLED", cancel_reason: reason || null, updated_at: _t.utc, updated_at_utc: _t.utc, updated_at_paris: _t.paris };
+    const cancelled = { ...run, status: "CANCELLED", revision: Number(run.revision || 0) + 1, cancel_reason: reason || null, updated_at: _t.utc, updated_at_utc: _t.utc, updated_at_paris: _t.paris };
     await this.#setDocument(COLLECTIONS.deskBacktests, backtest_id, cancelled, { merge: true });
     return { ok: true, backtest_id, status: "CANCELLED" };
   }

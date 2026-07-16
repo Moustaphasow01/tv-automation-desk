@@ -24,6 +24,16 @@ docker compose --env-file .env.preprod run --rm api npm run seed:contracts
 
 Le Desk est ensuite disponible sur `http://localhost:8080`, l'API sur `http://localhost:8787/status` et le MCP sur `http://localhost:8787/mcp`.
 
+Espaces ajoutés :
+
+- `http://localhost:8080/#/operations` : cockpit de tous les workflows automatisés ;
+- `http://localhost:8080/#/replay` : Replay Lab, journées, sessions, variantes, timeline et GPT ;
+- `http://localhost:8080/#/performance/analysis` : performance et ventilations ;
+- `http://localhost:8080/#/history` : historique navigable ;
+- `http://localhost:8080/#/strategies` : configurations et versions.
+
+L'architecture et les endpoints M0 à M11 sont détaillés dans [docs/OPERATIONS_REPLAY_LAB_ARCHITECTURE.md](docs/OPERATIONS_REPLAY_LAB_ARCHITECTURE.md).
+
 Webhook TradingView local :
 
 ```text
@@ -39,3 +49,19 @@ docker compose --env-file .env.preprod down
 ```
 
 Ajouter `--volumes` supprime aussi les données PostgreSQL locales ; ne l'utiliser que pour repartir volontairement de zéro.
+
+## Validation
+
+```bash
+npm run typecheck
+npm run test:react
+cd mcp_gpt_desk && npm test
+```
+
+Pour l'acceptation complète contre les conteneurs réels Nginx, API et PostgreSQL :
+
+```bash
+npm run test:stack
+```
+
+Ce test utilise uniquement des fixtures PostgreSQL temporaires et les supprime automatiquement. Il ne remplace jamais l'API par un mock.

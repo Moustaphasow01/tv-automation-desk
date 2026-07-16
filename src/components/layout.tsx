@@ -5,14 +5,19 @@ import { useDeskSession } from "@/hooks/useDesk";
 
 const bottom: Array<{ to: string; label: string; icon: IconName }> = [
   { to: "/live", label: "Live", icon: "live" },
-  { to: "/master", label: "Master", icon: "master" },
-  { to: "/monitors", label: "Monitors", icon: "monitor" },
-  { to: "/timeline", label: "Journal", icon: "timeline" },
+  { to: "/operations", label: "Ops", icon: "monitor" },
+  { to: "/replay", label: "Replay", icon: "layers" },
+  { to: "/performance/analysis", label: "Analyse", icon: "chart" },
   { to: "/more", label: "Plus", icon: "menu" }
 ];
 
 const menu: Array<{ to: string; label: string; icon: IconName }> = [
   { to: "/live", label: "Live Desk", icon: "live" },
+  { to: "/operations", label: "Cockpit opérations", icon: "monitor" },
+  { to: "/replay", label: "Replay Lab", icon: "layers" },
+  { to: "/performance/analysis", label: "Analyse performance", icon: "chart" },
+  { to: "/history", label: "Historique", icon: "database" },
+  { to: "/strategies", label: "Stratégies & versions", icon: "settings" },
   { to: "/sessions", label: "Sessions", icon: "layers" },
   { to: "/master", label: "Master", icon: "master" },
   { to: "/monitors", label: "Monitors", icon: "monitor" },
