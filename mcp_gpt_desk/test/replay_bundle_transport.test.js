@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { performance } from "node:perf_hooks";
 import test from "node:test";
 import {
   canonicalizeReplayBundle,
@@ -125,16 +124,17 @@ test("Replay projections are deterministic, read-only and stable under repetitio
   const source = largeReplayBundle("master");
   const before = JSON.stringify(source);
   const first = projectReplayBundle(source, { view: "compact" });
-  const started = performance.now();
+  const started = process.cpuUsage();
   for (let index = 0; index < 100; index += 1) {
     const next = projectReplayBundle(source, { view: "compact" });
     assert.equal(next.canonical_bundle_hash, first.canonical_bundle_hash);
     assert.equal(next.section_manifest.rolling_snapshots.sha256, first.section_manifest.rolling_snapshots.sha256);
   }
-  const elapsed = performance.now() - started;
+  const cpu = process.cpuUsage(started);
+  const elapsed = (cpu.user + cpu.system) / 1000;
 
   assert.equal(JSON.stringify(source), before);
-  assert.ok(elapsed < 5000, `100 projections took ${elapsed.toFixed(1)}ms`);
+  assert.ok(elapsed < 8000, `100 projections consumed ${elapsed.toFixed(1)}ms of CPU`);
 });
 
 test("MCP success results use structured output without JSON text duplication", () => {

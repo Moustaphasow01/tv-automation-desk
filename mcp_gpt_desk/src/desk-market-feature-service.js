@@ -2,38 +2,39 @@ import { DESK_COLLECTIONS } from "@tv-automation/desk-contracts/collections";
 import { DATASETS } from "./schemas.js";
 import { datasetRef } from "./desk-pack-service.js";
 import { normalizeUtcIso } from "./desk-time-utils.js";
+import { MARKET_FEATURE_ALGORITHMS } from "./desk-market-feature-algorithms.js";
 
 const COLLECTIONS = DESK_COLLECTIONS;
 
 export class DeskMarketFeatureService {
-  constructor({ persistence, clock, host, port }) {
+  constructor({ persistence, clock, host }) {
     this.persistence = persistence;
     this.clock = clock;
     this.host = host;
-    this.port = port;
+    this.algorithms = MARKET_FEATURE_ALGORITHMS;
   }
 
   async getLevelMap({ date, session = "asia_open", instrument }) {
     const docs = await this.persistence.listDocuments(COLLECTIONS.deskLevelMaps, 200).catch(() => []);
-    return this.port.selectLevelMap(docs, { date, session, instrument });
+    return this.algorithms.selectLevelMap(docs, { date, session, instrument });
   }
 
   async getTechnicalEvents({ date, session = "asia_open", instrument, from, to, event_type }) {
     const docs = await this.persistence.listDocuments(COLLECTIONS.deskTechnicalEvents, 500).catch(() => []);
-    return this.port.selectTechnicalEvents(docs, { date, session, instrument, from, to, event_type });
+    return this.algorithms.selectTechnicalEvents(docs, { date, session, instrument, from, to, event_type });
   }
 
   async getCrossAssetDelta({ timestamp_paris, window = "1h" }) {
     const docs = await this.persistence.listDocuments(COLLECTIONS.deskCrossAssetDeltas, 200).catch(() => []);
-    return this.port.selectCrossAssetDelta(docs, { timestamp_paris, window });
+    return this.algorithms.selectCrossAssetDelta(docs, { timestamp_paris, window });
   }
 
   async ensureCrossAssetDelta({ timestamp_paris, window = "1h", save = true, raw_scope } = {}) {
     const tick = this.clock.now();
     const checkpoint = timestamp_paris || tick.paris;
     const existing = await this.getCrossAssetDelta({ timestamp_paris: checkpoint, window }).catch(() => null);
-    if (this.port.crossAssetDeltaReady(existing)) return existing;
-    const fresh = await this.port.buildFreshCrossAssetDelta(this.host, {
+    if (this.algorithms.crossAssetDeltaReady(existing)) return existing;
+    const fresh = await this.algorithms.buildFreshCrossAssetDelta(this.host, {
       timestamp_paris: checkpoint,
       window,
       computed_at: tick.utc,
@@ -49,29 +50,29 @@ export class DeskMarketFeatureService {
 
   async getConditionStatus({ thesis_id, timestamp_paris }) {
     const docs = await this.persistence.listDocuments(COLLECTIONS.deskConditionStatus, 200).catch(() => []);
-    return this.port.selectConditionStatus(docs, { thesis_id, timestamp_paris });
+    return this.algorithms.selectConditionStatus(docs, { thesis_id, timestamp_paris });
   }
 
   async getRawWindow(args) {
-    const query = this.port.normalizeOperationalQuery(args);
+    const query = this.algorithms.normalizeOperationalQuery(args);
     const run = query.replay
       ? await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, query.backtest_id).catch(() => null)
       : null;
-    if (query.replay) this.port.assertReplayRunMatchesQuery(run, query);
-    this.port.assertRawWindowQuery(args, query, run);
-    return this.port.buildScopedPackRawWindow(this.host, args, query, run);
+    if (query.replay) this.algorithms.assertReplayRunMatchesQuery(run, query);
+    this.algorithms.assertRawWindowQuery(args, query, run);
+    return this.algorithms.buildScopedPackRawWindow(this.host, args, query, run);
   }
 
   async getSessionSnapshot({ date, session = "asia_open", instrument }) {
     const docs = await this.persistence.listDocuments(COLLECTIONS.deskSessionSnapshots, 200).catch(() => []);
-    return this.port.selectSessionSnapshot(docs, { date, session, instrument });
+    return this.algorithms.selectSessionSnapshot(docs, { date, session, instrument });
   }
 
   async runFeatureEngine(args = {}) {
     const tick = this.clock.now();
-    const run = this.port.featureRunStarted(args, tick);
+    const run = this.algorithms.featureRunStarted(args, tick);
     try {
-      const pack = await this.port.resolvePackForState(this.host, {
+      const pack = await this.algorithms.resolvePackForState(this.host, {
         date: args.date,
         session: args.session || "asia_open",
         timezone: args.timezone || "Europe/Paris",
@@ -89,11 +90,11 @@ export class DeskMarketFeatureService {
         condition_status: null,
       };
       const featureComputedAt = normalizeUtcIso(result.cutoff_paris);
-      const activeThesis = await this.port.resolveFeatureEngineActiveThesis(this.host, args);
+      const activeThesis = await this.algorithms.resolveFeatureEngineActiveThesis(this.host, args);
       const firstInstrumentRows = {};
       for (const instrument of args.instruments || ["MNQ", "MES"]) {
         const candlesByTimeframe = await this.loadFeatureCandles(pack, instrument, result.cutoff_paris);
-        const features = this.port.buildDeterministicFeatureSet({
+        const features = this.algorithms.buildDeterministicFeatureSet({
           date: result.date,
           session: result.session,
           instrument,
@@ -109,24 +110,24 @@ export class DeskMarketFeatureService {
           }
         }
         if (!Object.keys(firstInstrumentRows).length) Object.assign(firstInstrumentRows, candlesByTimeframe);
-        result.instruments[instrument] = this.port.summarizeFeatureOutput(features, candlesByTimeframe);
+        result.instruments[instrument] = this.algorithms.summarizeFeatureOutput(features, candlesByTimeframe);
       }
       const rowsByAsset = await this.loadCrossAssetRows(pack, result.cutoff_paris);
-      for (const delta of this.port.buildCrossAssetDeltaDocs({
+      for (const delta of this.algorithms.buildCrossAssetDeltaDocs({
         timestamp_paris: result.cutoff_paris,
         rowsByAsset,
         computed_at: featureComputedAt,
       })) {
-        result.cross_asset_deltas[delta.window] = this.port.summarizeCrossAssetDelta(delta);
+        result.cross_asset_deltas[delta.window] = this.algorithms.summarizeCrossAssetDelta(delta);
         if (args.save !== false) {
           await this.persistence.setDocument(COLLECTIONS.deskCrossAssetDeltas, delta.delta_id, delta, { merge: true });
         }
       }
       if (activeThesis) {
-        const conditionStatus = this.port.buildConditionStatusDoc({
+        const conditionStatus = this.algorithms.buildConditionStatusDoc({
           thesis: activeThesis,
           timestamp_paris: result.cutoff_paris,
-          latest_price: this.port.latestClose(firstInstrumentRows["5"] || firstInstrumentRows.M5 || []),
+          latest_price: this.algorithms.latestClose(firstInstrumentRows["5"] || firstInstrumentRows.M5 || []),
           computed_at: featureComputedAt,
         });
         result.condition_status = {
@@ -138,16 +139,16 @@ export class DeskMarketFeatureService {
           await this.persistence.setDocument(COLLECTIONS.deskConditionStatus, conditionStatus.condition_status_id, conditionStatus, { merge: true });
         }
       }
-      const completed = this.port.featureRunCompleted(run, result, tick);
+      const completed = this.algorithms.featureRunCompleted(run, result, tick);
       if (args.save !== false) {
         await this.persistence.setDocument(COLLECTIONS.deskFeatureRuns, run.run_id, completed, { merge: true });
       }
       return result;
     } catch (error) {
-      const failed = this.port.featureRunFailed(run, error, tick);
+      const failed = this.algorithms.featureRunFailed(run, error, tick);
       await this.persistence.setDocument(COLLECTIONS.deskFeatureRuns, run.run_id, failed, { merge: true });
       await this.persistence.setDocument(COLLECTIONS.deskErrors, failed.error_id, failed.error, { merge: true });
-      return { ok: false, run_id: run.run_id, error: this.port.publicReplayError(error) };
+      return { ok: false, run_id: run.run_id, error: this.algorithms.publicReplayError(error) };
     }
   }
 
@@ -173,11 +174,11 @@ export class DeskMarketFeatureService {
   }
 
   async replaySetup(setup, args) {
-    const timeframe = this.port.canonicalTimeframe(args.timeframe || "M5");
-    const window = this.port.replayWindowForSetup(setup, args);
+    const timeframe = this.algorithms.canonicalTimeframe(args.timeframe || "M5");
+    const window = this.algorithms.replayWindowForSetup(setup, args);
     let rows = [];
     let rawRef = null;
-    for (const feedId of this.port.marketFeedCandidates(setup.instrument, timeframe)) {
+    for (const feedId of this.algorithms.marketFeedCandidates(setup.instrument, timeframe)) {
       rawRef = `${COLLECTIONS.marketFeeds}/${feedId}/${COLLECTIONS.marketFeedCandles}`;
       rows = await this.persistence.queryDocuments({
         parentPath: `${COLLECTIONS.marketFeeds}/${feedId}`,
@@ -189,7 +190,7 @@ export class DeskMarketFeatureService {
       }).catch(() => []);
       if (rows.length) break;
     }
-    return this.port.replaySetupOnCandles(setup, rows, {
+    return this.algorithms.replaySetupOnCandles(setup, rows, {
       source: "postgres_market_feeds_v2",
       raw_ref: rawRef,
       replay_id: args.replay_id || null,
@@ -200,8 +201,8 @@ export class DeskMarketFeatureService {
 
   async loadFeatureCandles(pack, instrument, cutoffParis) {
     const output = {};
-    for (const timeframe of Object.keys(this.port.featureDatasetCandidates(instrument))) {
-      const candidates = this.port.rawWindowDatasetCandidates(instrument, timeframe);
+    for (const timeframe of Object.keys(this.algorithms.featureDatasetCandidates(instrument))) {
+      const candidates = this.algorithms.rawWindowDatasetCandidates(instrument, timeframe);
       const dataset = candidates.find((candidate) => DATASETS.includes(candidate) && datasetRef(pack, candidate));
       if (!dataset) {
         output[timeframe] = [];
@@ -216,17 +217,17 @@ export class DeskMarketFeatureService {
         mode: "live",
         max_rows: 5000,
       });
-      const normalized = this.port.normalizeFeatureRows(
-        (response.rows || []).filter((row) => this.port.rowMatchesInstrument(row, instrument, dataset)),
+      const normalized = this.algorithms.normalizeFeatureRows(
+        (response.rows || []).filter((row) => this.algorithms.rowMatchesInstrument(row, instrument, dataset)),
         {
           instrument,
-          timeframe: this.port.datasetTimeframe(dataset, timeframe),
+          timeframe: this.algorithms.datasetTimeframe(dataset, timeframe),
           rawRef: ref.object_path || ref.storage_path || null,
         },
       );
-      const direct = normalized.filter((row) => this.port.canonicalTimeframe(row.timeframe) === timeframe);
-      const baseRows = direct.length ? direct : normalized.filter((row) => this.port.canonicalTimeframe(row.timeframe) === "5");
-      output[timeframe] = direct.length || timeframe === "5" ? baseRows : this.port.resampleRows(baseRows, timeframe);
+      const direct = normalized.filter((row) => this.algorithms.canonicalTimeframe(row.timeframe) === timeframe);
+      const baseRows = direct.length ? direct : normalized.filter((row) => this.algorithms.canonicalTimeframe(row.timeframe) === "5");
+      output[timeframe] = direct.length || timeframe === "5" ? baseRows : this.algorithms.resampleRows(baseRows, timeframe);
     }
     return output;
   }
@@ -234,7 +235,7 @@ export class DeskMarketFeatureService {
   async loadCrossAssetRows(pack, cutoffParis) {
     const output = {};
     for (const asset of ["DXY", "VIX", "US10Y", "US02Y", "GC", "CL"]) {
-      const dataset = this.port.rawWindowDatasetCandidates(asset, "5")
+      const dataset = this.algorithms.rawWindowDatasetCandidates(asset, "5")
         .find((candidate) => DATASETS.includes(candidate) && datasetRef(pack, candidate));
       if (!dataset) {
         output[asset] = [];
@@ -249,8 +250,8 @@ export class DeskMarketFeatureService {
         mode: "live",
         max_rows: 5000,
       });
-      output[asset] = this.port.normalizeFeatureRows(
-        (response.rows || []).filter((row) => this.port.rowMatchesInstrument(row, asset, dataset)),
+      output[asset] = this.algorithms.normalizeFeatureRows(
+        (response.rows || []).filter((row) => this.algorithms.rowMatchesInstrument(row, asset, dataset)),
         {
           instrument: asset,
           timeframe: "5",

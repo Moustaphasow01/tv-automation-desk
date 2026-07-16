@@ -6,7 +6,6 @@ import { SystemClock, toParisIso } from "@tv-automation/desk-time";
 import { DESK_COLLECTIONS } from "@tv-automation/desk-contracts/collections";
 import { PostgresDeskPersistence } from "./persistence/postgres-desk-persistence.js";
 import { ingestTradingViewWebhook } from "./tradingview-webhook.js";
-import { replaySetupOutcome } from "@tv-automation/desk-replay-engine";
 import {
   DECISION_MODEL_VERSION,
   DECISION_SCHEMA_VERSION,
@@ -14,7 +13,6 @@ import {
   createDeskExecutionScope,
   normalizeDecision,
   planThesisSetupPositionSplit,
-  strategyDefinition,
 } from "@tv-automation/desk-domain";
 import {
   canonicalizeReplayBundle,
@@ -24,7 +22,6 @@ import {
 import {
   prepareLiveReplanMasterAfterMonitor,
 } from "./live-orchestration.js";
-import { floorParisCheckpoint, isLiveMonitorCheckpointInWindow } from "./live-scope.js";
 import {
   buildReplayContinuityState,
   buildReplayEventCheckpoints,
@@ -47,7 +44,6 @@ import { stableVNextId } from "./desk-ids.js";
 import {
   DeskPackService,
   compactPack,
-  datasetRef,
   replaySourceCoverage,
 } from "./desk-pack-service.js";
 import { deskError } from "./desk-errors.js";
@@ -56,16 +52,47 @@ import { DeskLiveService } from "./desk-live-service.js";
 import { DeskFrontService } from "./desk-front-service.js";
 import { DeskMarketFeatureService } from "./desk-market-feature-service.js";
 import {
-  DeskStrategyAuditService,
-  NY_OPEN_CUTOFF_TIME,
-  NY_OPEN_DEFAULT_PRICING_MODE,
-  NY_OPEN_PRICING_MODES,
-  NY_OPEN_SESSION,
+  assertReplayRunMatchesQuery,
+  assertReplaySourceCoverage,
+  assertRunPackScope,
+  canonicalTimeframe,
+  compactTimestamp,
+  dedupeBy,
+  filterRawWindowRows,
+  marketFeedCandidates,
+  maxBy,
+  normalizeOperationalQuery,
+  numeric,
+  offsetIso,
+  operationalQueryScope,
+  parisOffsetForDate,
+  publicReplayError,
+  rawWindowQuality,
+  resolvePackForState,
+  roundNumber,
+  safeRead,
+} from "./desk-market-feature-algorithms.js";
+import { DeskStrategyAuditService } from "./desk-strategy-audit-service.js";
+import {
+  activeThesisVNextId,
+  compactMasterAnalysis,
+  compactPackHeaderForFront,
+  contractSummary,
+  crossAssetWindowForSession,
+  datasetReadinessStatus,
+  deriveActiveThesisFromMaster,
+  featureInstrument,
+  firstArray,
+  getLatestOperationalMonitor,
+  hasReplayGeometry,
+  masterCutoffBundleId,
+  missingMasterCutoffBundle,
   NY_OPEN_STRATEGY_ID,
-  NY_OPEN_STRATEGY_NAME,
-  NY_OPEN_STRICT_END_TIME,
-  NY_OPEN_STRICT_ENTRY_TIME,
-} from "./desk-strategy-audit-service.js";
+  operationalSelectorArgs,
+  readFeatureContext,
+  resolveOperationalReadScope,
+  stripUndefined,
+} from "./desk-strategy-audit-algorithms.js";
 import {
   compareDeskWorkItems,
   DeskReplayService,
@@ -131,79 +158,7 @@ function replayOrchestrationPort() {
   };
 }
 
-function marketFeaturePort() {
-  return {
-    assertRawWindowQuery,
-    assertReplayRunMatchesQuery,
-    buildConditionStatusDoc,
-    buildCrossAssetDeltaDocs,
-    buildDeterministicFeatureSet,
-    buildFreshCrossAssetDelta,
-    buildScopedPackRawWindow,
-    canonicalTimeframe,
-    crossAssetDeltaReady,
-    datasetTimeframe,
-    featureDatasetCandidates,
-    featureRunCompleted,
-    featureRunFailed,
-    featureRunStarted,
-    latestClose,
-    marketFeedCandidates,
-    normalizeFeatureRows,
-    normalizeOperationalQuery,
-    publicReplayError,
-    rawWindowDatasetCandidates,
-    replaySetupOnCandles,
-    replayWindowForSetup,
-    resampleRows,
-    resolveFeatureEngineActiveThesis,
-    resolvePackForState,
-    rowMatchesInstrument,
-    selectConditionStatus,
-    selectCrossAssetDelta,
-    selectLevelMap,
-    selectSessionSnapshot,
-    selectTechnicalEvents,
-    summarizeCrossAssetDelta,
-    summarizeFeatureOutput,
-  };
-}
 
-function strategyAuditPort() {
-  return {
-    buildAuditState,
-    buildLiveTimelineEventDetail,
-    buildNyOpenStrategyState,
-    buildStrategyCalendar,
-    buildStrategyDayDetail,
-    buildStrategyPerformance,
-    filterStrategySetups,
-    filterStrategyTrades,
-    normalizeNyOpenAction,
-    normalizeNyOpenBundlePrep,
-    nyOpenCutoffParis,
-    nyOpenOperationalScope,
-    nyOpenStrictPricingModes,
-    nyOpenStrictReplayId,
-    nyOpenStrictReplayWindow,
-    nyOpenStrictSetupPatch,
-    nyOpenStrictTradeFromReplay,
-    publicReplayError,
-    recomputeStrategyPerformanceDocs,
-    requireStrategyId,
-    resolveStrategySelection,
-    selectedStrictModeResult,
-    selectNyOpenStrictSetup,
-    selectStrategyDocuments,
-    setupDocumentId,
-    strategyActionPatch,
-    strategyAuditLog,
-    strategyDocMatches,
-    strictReplaySetupFilters,
-    strictSetupForReplay,
-    summarizeNyOpenStrictReplay,
-  };
-}
 
 export class PersistentDeskStore {
   constructor(clock = new SystemClock(), persistence = null) {
@@ -214,8 +169,8 @@ export class PersistentDeskStore {
     this.packs = new DeskPackService({ persistence, clock });
     this.live = new DeskLiveService({ persistence, clock, host: this });
     this.front = new DeskFrontService({ persistence, clock, marketFeedCandidates, canonicalTimeframe });
-    this.market = new DeskMarketFeatureService({ persistence, clock, host: this, port: marketFeaturePort() });
-    this.strategy = new DeskStrategyAuditService({ persistence, clock, host: this, market: this.market, port: strategyAuditPort() });
+    this.market = new DeskMarketFeatureService({ persistence, clock, host: this });
+    this.strategy = new DeskStrategyAuditService({ persistence, clock, host: this, market: this.market });
     this.replay = new DeskReplayService({ persistence, clock, host: this, orchestration: replayOrchestrationPort() });
     this.livePackPublishingEnabled = false;
   }
@@ -1416,9 +1371,6 @@ function masterAnalysisVNextId(masterAnalysis) {
   return stableVNextId("master", masterAnalysis.trading_date || masterAnalysis.date, session);
 }
 
-function activeThesisVNextId(thesis) {
-  return stableVNextId("thesis", thesis.linked_master_analysis_id || thesis.valid_from, thesis.instrument);
-}
 
 function hourlyMonitorVNextId(monitor) {
   return stableVNextId("monitor", monitor.linked_active_thesis_id, monitor.slot_paris || monitor.timestamp_paris);
@@ -1486,73 +1438,8 @@ function isDocumentAtOrBefore(doc, asOfUtc) {
   return Number.isFinite(documentMs) && Number.isFinite(asOfMs) && documentMs <= asOfMs;
 }
 
-function normalizeOperationalQuery(args = {}, { requireMaster = false, requireThesis = false } = {}) {
-  const required = ["strategy_id", "session", "mode", "trading_date", "run_id", "as_of_utc"];
-  if (requireMaster) required.push("master_id");
-  if (requireThesis) required.push("thesis_id");
-  const missing = required.filter((field) => args[field] === undefined || args[field] === null || String(args[field]).trim() === "");
-  if (missing.length) throw deskError("SCOPE_REQUIRED", "Operational getter scope is incomplete.", { missing });
-  const definition = strategyDefinition(args.strategy_id);
-  if (definition.session !== args.session) {
-    throw deskError("STRATEGY_SESSION_MISMATCH", "Strategy and session do not match.", {
-      strategy_id: args.strategy_id,
-      expected_session: definition.session,
-      actual_session: args.session,
-    });
-  }
-  if (!["live", "paper", "replay", "backtest"].includes(args.mode)) {
-    throw deskError("INVALID_SCOPE", "Unsupported operational mode.", { mode: args.mode });
-  }
-  const replay = ["replay", "backtest"].includes(args.mode);
-  if (replay && !args.backtest_id) throw deskError("SCOPE_REQUIRED", "backtest_id is required for replay/backtest getters.", { field: "backtest_id" });
-  if (!replay && args.backtest_id) throw deskError("INVALID_SCOPE", "backtest_id is forbidden for live/paper getters.", { backtest_id: args.backtest_id });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.trading_date)) {
-    throw deskError("INVALID_SCOPE", "trading_date must be an ISO date.", { trading_date: args.trading_date });
-  }
-  const asOfMs = Date.parse(args.as_of_utc);
-  if (!Number.isFinite(asOfMs)) throw deskError("INVALID_SCOPE", "as_of_utc must be a valid instant.", { as_of_utc: args.as_of_utc });
-  return {
-    ...args,
-    as_of_utc: new Date(asOfMs).toISOString(),
-    backtest_id: args.backtest_id || undefined,
-    replay,
-  };
-}
 
-function assertReplayRunMatchesQuery(run, query) {
-  if (!run) throw deskError("RUN_NOT_FOUND", "Replay run was not found.", { backtest_id: query.backtest_id });
-  const mismatches = [];
-  for (const [field, expected, actual] of [
-    ["backtest_id", query.backtest_id, run.backtest_id],
-    ["strategy_id", query.strategy_id, run.strategy_id],
-    ["session", query.session, run.session],
-    ["trading_date", query.trading_date, run.trading_date || run.date],
-    ["run_id", query.run_id, run.run_id || run.replay_run_id || run.backtest_id],
-  ]) {
-    if (expected !== actual) mismatches.push({ field, expected, actual: actual ?? null });
-  }
-  if (mismatches.length) throw deskError("RUN_SCOPE_MISMATCH", "Replay run does not match the requested scope.", { mismatches });
-  if (["INVALIDATED", "QUARANTINED"].includes(run.status)) {
-    throw deskError("RUN_SCOPE_MISMATCH", "Replay run is not operationally readable.", { status: run.status });
-  }
-  return true;
-}
 
-function operationalQueryScope(query, run = null) {
-  if (run) return { ...(run.resolved_scope || {}), run_id: query.run_id, as_of_utc: query.as_of_utc };
-  const asOfMs = Date.parse(query.as_of_utc);
-  const scope = createDeskExecutionScope({
-    strategy_id: query.strategy_id,
-    session: query.session,
-    mode: query.mode,
-    trading_date: query.trading_date,
-    timezone: "Europe/Paris",
-    cutoff_paris: toParisIso(asOfMs),
-    cutoff_utc: query.as_of_utc,
-    run_id: query.run_id,
-  }, { requireRun: true });
-  return { ...scope, as_of_utc: query.as_of_utc };
-}
 
 function assertDocumentMatchesOperationalQuery(document, query, { masterId = null, thesisId = null, code = "CROSS_SCOPE_REFERENCE" } = {}) {
   const mismatches = [];
@@ -1648,835 +1535,54 @@ function selectLatestHourlyMonitors(docs, { thesis_id, strategy_id, session, mod
   return { ok: true, count: monitors.length, monitors, latest_monitor: monitors[0] || null };
 }
 
-function selectLevelMap(docs, { date, session = "asia_open", instrument }) {
-  const maps = docs
-    .filter((doc) => !date || doc.date === date)
-    .filter((doc) => !session || doc.session === session)
-    .filter((doc) => !instrument || doc.instrument === instrument)
-    .sort((left, right) => String(right.computed_at || right.updated_at || "").localeCompare(String(left.computed_at || left.updated_at || "")));
-  return {
-    ok: true,
-    count: maps.length,
-    level_map: maps[0] || null,
-    warning: maps.length ? null : "level_map_not_available_until_feature_engine_runs",
-  };
-}
 
-function selectTechnicalEvents(docs, { date, session = "asia_open", instrument, from, to, event_type }) {
-  const events = docs
-    .filter((doc) => !date || String(doc.time_paris || doc.timestamp_paris || "").startsWith(date) || doc.date === date)
-    .filter((doc) => !session || doc.session === session || doc.session == null)
-    .filter((doc) => !instrument || doc.instrument === instrument)
-    .filter((doc) => !event_type || doc.event_type === event_type)
-    .filter((doc) => !from || String(doc.time_paris || doc.timestamp_paris || "") >= from)
-    .filter((doc) => !to || String(doc.time_paris || doc.timestamp_paris || "") <= to)
-    .sort((left, right) => String(right.time_paris || right.timestamp_paris || "").localeCompare(String(left.time_paris || left.timestamp_paris || "")));
-  return {
-    ok: true,
-    count: events.length,
-    events,
-    warning: events.length ? null : "technical_events_not_available_until_feature_engine_runs",
-  };
-}
 
-function selectCrossAssetDelta(docs, { timestamp_paris, window = "1h" }) {
-  const deltas = docs
-    .filter((doc) => !window || doc.window === window)
-    .filter((doc) => !timestamp_paris || String(doc.timestamp_paris || "") <= timestamp_paris)
-    .sort((left, right) => String(right.timestamp_paris || right.computed_at || "").localeCompare(String(left.timestamp_paris || left.computed_at || "")));
-  const selected = deltas[0] || null;
-  return crossAssetDeltaResult(selected, { timestamp_paris, window, count: deltas.length, source: "desk_cross_asset_deltas" });
-}
 
-function crossAssetDeltaReady(result) {
-  return Boolean(result?.delta && result?.stale_check?.is_stale !== true);
-}
 
-async function buildFreshCrossAssetDelta(store, { timestamp_paris, window = "1h", computed_at, raw_scope }) {
-  const rowsByAsset = await loadCrossAssetRowsFromRawWindows(store, timestamp_paris, raw_scope);
-  const deltas = buildCrossAssetDeltaDocs({
-    timestamp_paris,
-    rowsByAsset,
-    computed_at,
-  });
-  const selected = deltas.find((delta) => delta.window === window) || null;
-  return {
-    deltas,
-    result: crossAssetDeltaResult(selected, {
-      timestamp_paris,
-      window,
-      count: selected ? 1 : 0,
-      source: "computed_from_raw_market_feeds",
-    }),
-  };
-}
 
-async function loadCrossAssetRowsFromRawWindows(store, cutoffParis, rawScope) {
-  const output = {};
-  if (!rawScope) return output;
-  for (const asset of ["DXY", "VIX", "US10Y", "US02Y", "GC", "CL"]) {
-    const raw = await safeRead(store.getRawWindow({
-      ...rawScope,
-      instrument: asset,
-      timeframe: "M5",
-      from: offsetIso(cutoffParis, -96 * 60 * 60 * 1000),
-      to: cutoffParis,
-      max_rows: 2000,
-    }), { rows: [] });
-    output[asset] = normalizeFeatureRows(raw.rows || [], { instrument: asset, timeframe: "5", rawRef: null });
-  }
-  return output;
-}
 
-function crossAssetDeltaResult(delta, { timestamp_paris, window = "1h", count = 0, source = null } = {}) {
-  const stale_check = crossAssetStaleCheck(delta, { timestamp_paris, window });
-  const isStale = stale_check.status === "stale" || stale_check.status === "missing";
-  if (isStale) {
-    return {
-      ok: true,
-      count,
-      delta: null,
-      stale_check,
-      status: stale_check.status,
-      warning: stale_check.reason,
-      source,
-    };
-  }
-  const missingAssets = crossAssetDeltaMissingAssets(delta);
-  if (delta && missingAssets.length) {
-    return {
-      ok: true,
-      count,
-      delta: null,
-      stale_check: {
-        ...stale_check,
-        status: "missing",
-        is_stale: true,
-        execution_allowed: false,
-        reason: `cross_asset_delta_critical_assets_missing:${missingAssets.join(",")}`,
-        missing_assets: missingAssets,
-      },
-      status: "missing",
-      warning: `cross_asset_delta_critical_assets_missing:${missingAssets.join(",")}`,
-      source,
-    };
-  }
-  const optionalMissingAssets = crossAssetDeltaOptionalMissingAssets(delta);
-  if (delta && optionalMissingAssets.length) {
-    const warning = `cross_asset_delta_partial_missing_assets:${optionalMissingAssets.join(",")}`;
-    return {
-      ok: true,
-      count,
-      delta: {
-        ...delta,
-        quality: {
-          ...(delta.quality || {}),
-          status: "partial",
-          execution_allowed: true,
-          missing_assets: optionalMissingAssets,
-          warning,
-        },
-      },
-      stale_check: {
-        ...stale_check,
-        status: "partial",
-        is_stale: false,
-        execution_allowed: true,
-        reason: warning,
-        missing_assets: optionalMissingAssets,
-      },
-      status: "partial",
-      warning,
-      source,
-    };
-  }
-  return {
-    ok: true,
-    count,
-    delta,
-    stale_check,
-    status: "ready",
-    warning: null,
-    source,
-  };
-}
 
-function crossAssetDeltaMissingAssets(delta) {
-  if (!delta) {
-    return [];
-  }
-  const assets = delta.assets || {};
-  return ["DXY"].filter((asset) => !assets[asset]?.row_count);
-}
 
-function crossAssetDeltaOptionalMissingAssets(delta) {
-  if (!delta) {
-    return [];
-  }
-  const assets = delta.assets || {};
-  return ["VIX", "US10Y", "US02Y"].filter((asset) => !assets[asset]?.row_count);
-}
 
-function crossAssetStaleCheck(delta, { timestamp_paris, window }) {
-  const maxLagMinutes = { "15m": 15, "1h": 60, "4h": 240, session: 1440 }[window] || 60;
-  const requestedMs = timestamp_paris ? Date.parse(timestamp_paris) : NaN;
-  const deltaMs = Date.parse(delta?.timestamp_paris || delta?.computed_with_cutoff || delta?.computed_at || "");
-  if (!delta) {
-    return {
-      status: "missing",
-      is_stale: true,
-      requested_timestamp_paris: timestamp_paris || null,
-      delta_timestamp_paris: null,
-      returned_timestamp_paris: null,
-      max_lag_minutes: maxLagMinutes,
-      max_allowed_lag_minutes: maxLagMinutes,
-      age_minutes: null,
-      execution_allowed: false,
-      reason: "cross_asset_delta_not_available_until_feature_engine_runs",
-    };
-  }
-  if (!timestamp_paris || !Number.isFinite(requestedMs) || !Number.isFinite(deltaMs)) {
-    return {
-      status: "ready",
-      is_stale: false,
-      requested_timestamp_paris: timestamp_paris || null,
-      delta_timestamp_paris: delta.timestamp_paris || null,
-      returned_timestamp_paris: delta.timestamp_paris || delta.computed_with_cutoff || null,
-      max_lag_minutes: maxLagMinutes,
-      max_allowed_lag_minutes: maxLagMinutes,
-      age_minutes: null,
-      execution_allowed: true,
-      reason: null,
-    };
-  }
-  const ageMinutes = (requestedMs - deltaMs) / 60000;
-  const stale = ageMinutes < 0 || ageMinutes > maxLagMinutes;
-  return {
-    status: stale ? "stale" : "ready",
-    is_stale: stale,
-    requested_timestamp_paris: timestamp_paris,
-    delta_timestamp_paris: delta.timestamp_paris || null,
-    returned_timestamp_paris: delta.timestamp_paris || delta.computed_with_cutoff || null,
-    max_lag_minutes: maxLagMinutes,
-    max_allowed_lag_minutes: maxLagMinutes,
-    age_minutes: roundNumber(ageMinutes, 2),
-    execution_allowed: !stale,
-    reason: stale ? "cross_asset_delta_stale_for_requested_timestamp" : null,
-  };
-}
 
-function selectConditionStatus(docs, { thesis_id, timestamp_paris }) {
-  const statuses = docs
-    .filter((doc) => !thesis_id || doc.linked_thesis_id === thesis_id)
-    .filter((doc) => !timestamp_paris || String(doc.timestamp_paris || "") <= timestamp_paris)
-    .sort((left, right) => String(right.timestamp_paris || right.computed_at || "").localeCompare(String(left.timestamp_paris || left.computed_at || "")));
-  return {
-    ok: true,
-    count: statuses.length,
-    condition_status: statuses[0] || null,
-    warning: statuses.length ? null : "condition_status_not_available_until_condition_engine_runs",
-  };
-}
 
-function selectSessionSnapshot(docs, { date, session = "asia_open", instrument }) {
-  const snapshots = (docs || [])
-    .filter((doc) => !date || doc.date === date)
-    .filter((doc) => !session || doc.session === session)
-    .filter((doc) => !instrument || doc.instrument === instrument)
-    .sort((left, right) => String(right.timestamp_paris || right.computed_at || "").localeCompare(String(left.timestamp_paris || left.computed_at || "")));
-  return {
-    ok: true,
-    count: snapshots.length,
-    session_snapshot: snapshots[0] || null,
-    warning: snapshots.length ? null : "session_snapshot_not_available_until_feature_engine_runs",
-  };
-}
 
-function featureRunStarted(args, tick) {
-  const run_id = stableVNextId("feature_run", args.date, `${args.session || "asia_open"}_${args.cutoff_paris || tick.paris}`);
-  return {
-    run_id,
-    date: args.date,
-    session: args.session || "asia_open",
-    cutoff_paris: args.cutoff_paris || tick.paris,
-    status: "RUNNING",
-    instruments: args.instruments || ["MNQ", "MES"],
-    save: args.save !== false,
-    created_at: tick.utc,
-    created_at_utc: tick.utc,
-    created_at_paris: tick.paris,
-    updated_at: tick.utc,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  };
-}
 
-function featureRunCompleted(run, result, tick) {
-  return {
-    ...run,
-    status: "DONE",
-    summary: {
-      instruments: Object.fromEntries(Object.entries(result.instruments || {}).map(([instrument, item]) => [instrument, {
-        level_count: item.level_count,
-        technical_event_count: item.technical_event_count,
-        rows: item.rows,
-      }])),
-      cross_asset_windows: Object.keys(result.cross_asset_deltas || {}),
-      condition_status_id: result.condition_status?.condition_status_id || null,
-    },
-    updated_at: tick.utc,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  };
-}
 
-function featureRunFailed(run, error, tick) {
-  const error_id = stableVNextId("feature_error", run.run_id, tick.utc);
-  return {
-    ...run,
-    status: "FAILED",
-    error_id,
-    error: {
-      error_id,
-      source: "run_feature_engine",
-      message: publicReplayError(error),
-      date: run.date,
-      session: run.session,
-      created_at: tick.utc,
-      created_at_utc: tick.utc,
-      created_at_paris: tick.paris,
-    },
-    updated_at: tick.utc,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  };
-}
 
-function featureDatasetCandidates(instrument) {
-  return {
-    "5": [`${instrument}_M5`, `${instrument}_5`, `${instrument}_5m`, `${instrument}_m5`],
-    "15": [`${instrument}_M15`, `${instrument}_15`, `${instrument}_15m`, `${instrument}_m15`],
-    "1H": [`${instrument}_H1`, `${instrument}_1H`, `${instrument}_60`, `${instrument}_h1`],
-    "4H": [`${instrument}_H4`, `${instrument}_4H`, `${instrument}_240`, `${instrument}_h4`],
-  };
-}
 
-function normalizeFeatureRows(rows, { instrument, timeframe, rawRef }) {
-  return (Array.isArray(rows) ? rows : [])
-    .map((row) => {
-      const timestamp_utc = normalizeUtcIso(row.timestamp_utc || row.timestamp_paris || row.timestamp || row.time || row.date);
-      const epochMs = Date.parse(timestamp_utc);
-      return {
-        ...row,
-        instrument,
-        timeframe: canonicalTimeframe(row.timeframe || timeframe),
-        timestamp_utc,
-        timestamp_paris: Number.isFinite(epochMs) ? toParisIso(epochMs) : row.timestamp_paris || null,
-        open: numeric(row.open),
-        high: numeric(row.high),
-        low: numeric(row.low),
-        close: numeric(row.close),
-        volume: numeric(row.volume),
-        raw_ref: row.raw_ref || rawRef || null,
-      };
-    })
-    .filter((row) => row.timestamp_utc && Number.isFinite(row.open) && Number.isFinite(row.high) && Number.isFinite(row.low) && Number.isFinite(row.close))
-    .sort((left, right) => String(left.timestamp_utc).localeCompare(String(right.timestamp_utc)));
-}
 
-function buildDeterministicFeatureSet({ date, session, instrument, candlesByTimeframe, cutoff_paris, computed_at }) {
-  const mainRows = candlesByTimeframe["5"] || candlesByTimeframe.M5 || candlesByTimeframe["15"] || [];
-  const session_snapshot = buildSessionSnapshotDoc({ date, session, instrument, rows: mainRows, cutoff_paris, computed_at });
-  const level_map = buildLevelMapDoc({ date, session, instrument, candlesByTimeframe, cutoff_paris, computed_at });
-  const technical_events = buildTechnicalEventDocs({ date, session, instrument, rows: mainRows, levels: level_map.levels, cutoff_paris, computed_at });
-  return { session_snapshot, level_map, technical_events };
-}
 
-function buildSessionSnapshotDoc({ date, session, instrument, rows, cutoff_paris, computed_at }) {
-  const latest = rows.at(-1) || {};
-  const sessionRows = rows.filter((row) => String(row.timestamp_paris || "").startsWith(date));
-  return {
-    snapshot_id: `${date}_${session}_${instrument}_snapshot`,
-    date,
-    session,
-    timestamp_paris: cutoff_paris,
-    instrument,
-    instruments: {
-      [instrument]: {
-        latest_close: latest.close ?? null,
-        latest_timestamp_paris: latest.timestamp_paris || null,
-      },
-    },
-    session_high_low: highLowBlock(sessionRows.length ? sessionRows : rows),
-    asia_high_low: highLowBlock(rowsBetweenParis(sessionRows, "00:00", "08:00")),
-    overnight_high_low: highLowBlock(rowsBetweenParis(sessionRows, "00:00", "09:30")),
-    previous_ny_high_low: highLowBlock(rowsBetweenParis(rows, "15:30", "22:00", { beforeDate: date })),
-    vwap: vwapValue(sessionRows.length ? sessionRows : rows),
-    poc_vah_val: {},
-    range_state: rangeState(sessionRows.length ? sessionRows : rows),
-    volatility_state: volatilityState(sessionRows.length ? sessionRows : rows),
-    computed_with_cutoff: cutoff_paris,
-    anti_lookahead_compliant: true,
-    computed_at,
-  };
-}
 
-function buildLevelMapDoc({ date, session, instrument, candlesByTimeframe, cutoff_paris, computed_at }) {
-  const candidates = [];
-  for (const [timeframe, rows] of Object.entries(candlesByTimeframe || {})) {
-    candidates.push(...levelCandidatesFromRows(rows, timeframe, date));
-  }
-  const baseRows = candlesByTimeframe["5"] || candlesByTimeframe.M5 || candlesByTimeframe["15"] || [];
-  const atr = recentAverageRange(baseRows) || 1;
-  const tolerance = Math.max(atr * 0.35, ["MNQ", "NQ", "MES", "ES"].includes(instrument) ? 2 : 0.1);
-  const clusters = clusterFeatureCandidates(candidates, tolerance);
-  const levels = clusters.map((cluster, index) => scoreFeatureCluster({
-    cluster,
-    rows: baseRows,
-    tolerance,
-    index: index + 1,
-    computed_at,
-  })).sort((left, right) => Number(right.technical_weight_raw) - Number(left.technical_weight_raw));
-  levels.forEach((level, index) => {
-    level.rank = index + 1;
-  });
-  return {
-    level_map_id: `${date}_${session}_${instrument}_levels`,
-    date,
-    session,
-    instrument,
-    method: {
-      name: "mcp_pivot_cluster_v1",
-      cluster_tolerance_points: roundNumber(tolerance),
-    },
-    levels,
-    quality: {
-      status: levels.length ? "ready" : "missing",
-      level_count: levels.length,
-    },
-    computed_with_cutoff: cutoff_paris,
-    anti_lookahead_compliant: true,
-    computed_at,
-  };
-}
 
-function levelCandidatesFromRows(rows, timeframe, date) {
-  const sorted = normalizeFeatureRows(rows || [], { instrument: null, timeframe, rawRef: null });
-  const out = [];
-  for (let i = 2; i < sorted.length - 2; i += 1) {
-    const center = sorted[i];
-    const window = sorted.slice(i - 2, i + 3);
-    if (center.high >= Math.max(...window.map((row) => row.high))) {
-      out.push(featureCandidate(center.high, "resistance", timeframe, "swing_high", center));
-    }
-    if (center.low <= Math.min(...window.map((row) => row.low))) {
-      out.push(featureCandidate(center.low, "support", timeframe, "swing_low", center));
-    }
-  }
-  const sessionRows = sorted.filter((row) => String(row.timestamp_paris || "").startsWith(date));
-  const scoped = sessionRows.length ? sessionRows : sorted;
-  if (scoped.length) {
-    const high = maxBy(scoped, (row) => row.high);
-    const low = maxBy(scoped, (row) => -row.low);
-    out.push(featureCandidate(high.high, "resistance", timeframe, "session_high", high));
-    out.push(featureCandidate(low.low, "support", timeframe, "session_low", low));
-  }
-  const latest = sorted.at(-1);
-  for (const field of ["vwap", "poc", "vah", "val"]) {
-    const price = numeric(latest?.[field] ?? latest?.studies?.[field], NaN);
-    if (Number.isFinite(price)) {
-      out.push(featureCandidate(price, "mixed", timeframe, field.toUpperCase(), latest));
-    }
-  }
-  return out;
-}
 
-function featureCandidate(price, role, timeframe, source, row) {
-  return {
-    price,
-    role,
-    timeframe: canonicalTimeframe(timeframe),
-    source,
-    raw_ref: {
-      timestamp_utc: row.timestamp_utc || null,
-      timestamp_paris: row.timestamp_paris || null,
-      timeframe: canonicalTimeframe(timeframe),
-      price,
-      raw_ref: row.raw_ref || null,
-    },
-  };
-}
 
-function clusterFeatureCandidates(candidates, tolerance) {
-  const clusters = [];
-  for (const candidate of [...candidates].sort((left, right) => left.price - right.price)) {
-    const last = clusters.at(-1);
-    const lastMid = last ? average(last.map((item) => item.price)) : null;
-    if (!last || Math.abs(lastMid - candidate.price) > tolerance) {
-      clusters.push([candidate]);
-    } else {
-      last.push(candidate);
-    }
-  }
-  return clusters;
-}
 
-function scoreFeatureCluster({ cluster, rows, tolerance, index, computed_at }) {
-  const prices = cluster.map((item) => item.price);
-  const level_from = Math.min(...prices) - tolerance / 2;
-  const level_to = Math.max(...prices) + tolerance / 2;
-  const mid = average(prices);
-  const roleVotes = {
-    support: cluster.filter((item) => item.role === "support").length,
-    resistance: cluster.filter((item) => item.role === "resistance").length,
-    mixed: cluster.filter((item) => item.role === "mixed").length,
-  };
-  const type = roleVotes.support > roleVotes.resistance ? "support" : roleVotes.resistance > roleVotes.support ? "resistance" : "mixed";
-  const touches = (rows || []).filter((row) => row.low <= level_to && row.high >= level_from);
-  const reaction_stats = {
-    sample_size: touches.length,
-    avg_reaction_points: roundNumber(average(touches.slice(-8).map((row) => Math.max(Math.abs(row.high - mid), Math.abs(row.low - mid)))) || 0),
-    breach_rate: 0,
-    reaction_hit_rate: touches.length ? 1 : 0,
-  };
-  const mtf = new Set(cluster.map((item) => item.timeframe));
-  const weight = cluster.length + touches.length * 0.4 + mtf.size * 1.2;
-  return {
-    level_id: `level_${String(index).padStart(3, "0")}_${type}_${roundNumber(mid)}`,
-    level_from: roundNumber(level_from),
-    level_to: roundNumber(level_to),
-    mid: roundNumber(mid),
-    type,
-    timeframe: [...mtf].sort().join(","),
-    source: [...new Set(cluster.map((item) => item.source))].sort().join(","),
-    touch_count: touches.length,
-    reaction_stats,
-    last_test: touches.at(-1) ? rawRefForRow(touches.at(-1)) : {},
-    technical_weight_raw: roundNumber(weight),
-    actionability: type === "mixed" ? "reference" : touches.length >= 2 ? "actionable" : "watch",
-    evidence: {
-      candidate_count: cluster.length,
-      cluster_prices: prices.map(roundNumber),
-      multi_timeframe_count: mtf.size,
-      role_votes: roleVotes,
-    },
-    raw_data_refs: {
-      candidate_refs: cluster.slice(0, 20).map((item) => item.raw_ref),
-    },
-    computed_at,
-    anti_lookahead_compliant: true,
-  };
-}
 
-function buildTechnicalEventDocs({ date, session, instrument, rows, levels, cutoff_paris, computed_at }) {
-  const events = [];
-  const sorted = rows || [];
-  for (const level of (levels || []).slice(0, 12)) {
-    let previousClose = null;
-    for (const row of sorted) {
-      if (previousClose == null) {
-        previousClose = row.close;
-        continue;
-      }
-      const event_type = technicalEventType({ row, previousClose, level });
-      if (event_type) {
-        const accepted = ["breakout", "breakdown", "reclaim", "acceptance"].includes(event_type);
-        events.push({
-          event_id: `${date}_${instrument}_${event_type}_${level.level_id}_${compactTimestamp(row.timestamp_paris || row.timestamp_utc)}`,
-          date,
-          session,
-          time_paris: row.timestamp_paris,
-          timestamp_paris: row.timestamp_paris,
-          instrument,
-          event_type,
-          level_id: level.level_id,
-          timeframe: row.timeframe || "5",
-          evidence: {
-            open: row.open,
-            high: row.high,
-            low: row.low,
-            close: row.close,
-            previous_close: previousClose,
-            level_from: level.level_from,
-            level_to: level.level_to,
-          },
-          raw_data_refs: rawRefForRow(row),
-          accepted,
-          rejected: !accepted,
-          follow_through_points: 0,
-          retest_done: event_type === "retest",
-          computed_with_cutoff: cutoff_paris,
-          anti_lookahead_compliant: true,
-          computed_at,
-        });
-      }
-      previousClose = row.close;
-    }
-  }
-  return dedupeBy(events, (event) => event.event_id).slice(-200);
-}
 
-function technicalEventType({ row, previousClose, level }) {
-  if (previousClose <= level.level_to && row.close > level.level_to) return "breakout";
-  if (previousClose >= level.level_from && row.close < level.level_from) return "breakdown";
-  if (row.high > level.level_to && row.close < level.mid) return "sweep";
-  if (row.low < level.level_from && row.close > level.mid) return "reclaim";
-  if (row.low <= level.level_to && row.high >= level.level_from) return "retest";
-  return null;
-}
 
-function buildCrossAssetDeltaDocs({ timestamp_paris, rowsByAsset, computed_at }) {
-  return ["15m", "1h", "4h", "session"].map((window) => {
-    const sinceMs = Date.parse(timestamp_paris) - ({ "15m": 0.25, "1h": 1, "4h": 4, session: 96 }[window] * 60 * 60 * 1000);
-    const assets = {};
-    for (const [asset, rows] of Object.entries(rowsByAsset || {})) {
-      const scoped = (rows || []).filter((row) => Date.parse(row.timestamp_paris || row.timestamp_utc) >= sinceMs);
-      assets[asset] = deltaBlock(scoped);
-    }
-    return {
-      delta_id: `${compactTimestamp(timestamp_paris)}_${window}`,
-      timestamp_paris,
-      window,
-      assets,
-      ...assets,
-      summary: summarizeAssetDeltas(assets),
-      computed_with_cutoff: timestamp_paris,
-      anti_lookahead_compliant: true,
-      computed_at,
-    };
-  });
-}
 
-function buildConditionStatusDoc({ thesis, timestamp_paris, latest_price, computed_at }) {
-  const conditions_go = (thesis.wait_to_go_conditions || []).map((condition, index) => evaluateConditionItem(condition, { latest_price, index, kind: "go" }));
-  const invalidations = (thesis.invalidation_conditions || []).map((condition, index) => evaluateConditionItem(condition, { latest_price, index, kind: "invalidation" }));
-  return {
-    condition_status_id: `${thesis.thesis_id || "thesis"}_${compactTimestamp(timestamp_paris)}`,
-    linked_thesis_id: thesis.thesis_id || null,
-    timestamp_paris,
-    conditions_go,
-    wait_to_go: conditions_go,
-    invalidations,
-    summary: {
-      go_validated: conditions_go.filter((item) => item.status === "validated").length,
-      go_total: conditions_go.length,
-      invalidations_triggered: invalidations.filter((item) => item.status === "triggered").length,
-      invalidations_total: invalidations.length,
-    },
-    computed_with_cutoff: timestamp_paris,
-    anti_lookahead_compliant: true,
-    computed_at,
-  };
-}
 
-function evaluateConditionItem(condition, { latest_price, index, kind }) {
-  const text = typeof condition === "string" ? condition : condition?.condition || condition?.label || condition?.description || JSON.stringify(condition);
-  const target = numeric(condition?.price ?? condition?.level ?? condition?.target ?? condition?.from ?? condition?.to, NaN);
-  const operator = condition?.operator || condition?.comparison || null;
-  let status = "unknown";
-  if (Number.isFinite(latest_price) && Number.isFinite(target) && operator) {
-    const ok = compareNumber(latest_price, operator, target);
-    status = kind === "invalidation" ? ok ? "triggered" : "not_triggered" : ok ? "validated" : "not_validated";
-  }
-  return {
-    condition_id: condition?.condition_id || `${kind}_${index + 1}`,
-    label: text,
-    status,
-    latest_price: Number.isFinite(latest_price) ? latest_price : null,
-    target: Number.isFinite(target) ? target : null,
-    operator,
-    evidence: {
-      source: "deterministic_condition_engine_v1",
-      raw_condition: condition,
-    },
-    raw_refs: [],
-  };
-}
 
-function compareNumber(left, operator, right) {
-  return {
-    ">": left > right,
-    ">=": left >= right,
-    "<": left < right,
-    "<=": left <= right,
-    "==": left === right,
-  }[String(operator)] ?? false;
-}
 
-function summarizeFeatureOutput(features, candlesByTimeframe) {
-  return {
-    ok: true,
-    rows: Object.fromEntries(Object.entries(candlesByTimeframe || {}).map(([timeframe, rows]) => [timeframe, rows.length])),
-    snapshot_id: features.session_snapshot.snapshot_id,
-    level_map_id: features.level_map.level_map_id,
-    level_count: features.level_map.levels.length,
-    level_quality: features.level_map.quality,
-    technical_event_count: features.technical_events.length,
-    top_levels: features.level_map.levels.slice(0, 5),
-  };
-}
 
-function summarizeCrossAssetDelta(delta) {
-  return {
-    delta_id: delta.delta_id,
-    window: delta.window,
-    assets: Object.keys(delta.assets || {}).sort(),
-    rows: Object.fromEntries(Object.entries(delta.assets || {}).map(([asset, item]) => [asset, item.row_count || 0])),
-  };
-}
 
-function numeric(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
-function roundNumber(value, digits = 4) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-  const factor = 10 ** digits;
-  return Math.round(parsed * factor) / factor;
-}
 
-function highLowBlock(rows) {
-  if (!rows?.length) {
-    return {};
-  }
-  const high = maxBy(rows, (row) => row.high);
-  const low = maxBy(rows, (row) => -row.low);
-  return {
-    high: high.high,
-    high_time_paris: high.timestamp_paris || null,
-    low: low.low,
-    low_time_paris: low.timestamp_paris || null,
-    range_points: roundNumber(high.high - low.low),
-  };
-}
 
-function rowsBetweenParis(rows, startHm, endHm, { beforeDate } = {}) {
-  return (rows || []).filter((row) => {
-    const ts = String(row.timestamp_paris || "");
-    if (beforeDate && ts.slice(0, 10) >= beforeDate) {
-      return false;
-    }
-    const hm = ts.slice(11, 16);
-    return hm >= startHm && hm <= endHm;
-  });
-}
 
-function vwapValue(rows) {
-  let weighted = 0;
-  let volume = 0;
-  for (const row of rows || []) {
-    const vol = numeric(row.volume, 0);
-    const typical = (row.high + row.low + row.close) / 3;
-    weighted += typical * vol;
-    volume += vol;
-  }
-  return volume ? roundNumber(weighted / volume) : null;
-}
 
-function rangeState(rows) {
-  const block = highLowBlock(rows);
-  const atr = recentAverageRange(rows);
-  return {
-    range_points: block.range_points || 0,
-    atr_14: atr,
-    range_vs_atr: atr ? roundNumber((block.range_points || 0) / atr) : null,
-  };
-}
 
-function volatilityState(rows) {
-  const avgRange = recentAverageRange(rows, 20);
-  const atr = recentAverageRange(rows, 14);
-  const ratio = atr ? avgRange / atr : 0;
-  return {
-    atr_14: atr,
-    avg_recent_range: avgRange,
-    regime: ratio > 1.2 ? "expanded" : ratio < 0.7 ? "compressed" : rows?.length ? "normal" : "unknown",
-  };
-}
 
-function recentAverageRange(rows, count = 14) {
-  const ranges = (rows || []).slice(-count).map((row) => numeric(row.high, 0) - numeric(row.low, 0)).filter((value) => value > 0);
-  return ranges.length ? roundNumber(average(ranges)) : 0;
-}
 
-function average(values) {
-  const valid = (values || []).filter((value) => Number.isFinite(value));
-  return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
-}
 
-function maxBy(values, score) {
-  return [...(values || [])].sort((left, right) => score(right) - score(left))[0] || {};
-}
 
-function rawRefForRow(row) {
-  return {
-    timestamp_utc: row?.timestamp_utc || null,
-    timestamp_paris: row?.timestamp_paris || null,
-    timeframe: row?.timeframe || null,
-    raw_ref: row?.raw_ref || null,
-  };
-}
 
-function dedupeBy(values, keyFn) {
-  const seen = new Set();
-  const out = [];
-  for (const value of values || []) {
-    const key = keyFn(value);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(value);
-  }
-  return out;
-}
 
-function compactTimestamp(value) {
-  return String(value || "")
-    .replace(/[^A-Za-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 64) || "time";
-}
 
-function deltaBlock(rows) {
-  const first = (rows || [])[0];
-  const last = (rows || []).at(-1);
-  if (!first || !last) {
-    return { row_count: 0, first_close: null, last_close: null, delta_points: null, delta_pct: null };
-  }
-  const delta = numeric(last.close, 0) - numeric(first.close, 0);
-  return {
-    row_count: rows.length,
-    first_close: first.close,
-    last_close: last.close,
-    first_timestamp_paris: first.timestamp_paris || null,
-    last_timestamp_paris: last.timestamp_paris || null,
-    delta_points: roundNumber(delta),
-    delta_pct: first.close ? roundNumber((delta / first.close) * 100) : null,
-  };
-}
 
-function summarizeAssetDeltas(assets) {
-  const parts = Object.entries(assets || {})
-    .filter(([, item]) => item.row_count)
-    .map(([asset, item]) => `${asset}:${item.delta_points ?? "n/a"}`);
-  return parts.length ? parts.join(" ") : "cross_asset_data_missing";
-}
 
-function latestClose(rows) {
-  const latest = (rows || []).at(-1);
-  return latest ? latest.close : null;
-}
 
-function offsetIso(value, offsetMs) {
-  const base = Date.parse(value);
-  if (!Number.isFinite(base)) {
-    return value;
-  }
-  return toParisIso(base + offsetMs);
-}
 
 function isThesisExpired(thesis, now = new SystemClock().now()) {
   const validUntil = thesis?.valid_until || thesis?.setup_expiry_time || thesis?.requires_replan_after || null;
@@ -2573,98 +1679,15 @@ function selectActivePosition(docs, { thesis_id } = {}) {
   return { ok: true, position: positions[0] || null };
 }
 
-async function safeRead(promise, fallback) {
-  try {
-    return await promise;
-  } catch (error) {
-    return typeof fallback === "function" ? fallback(error) : fallback;
-  }
-}
 
 
-async function resolveFeatureEngineActiveThesis(store, args) {
-  const required = ["strategy_id", "session", "mode", "trading_date", "run_id", "as_of_utc", "master_id"];
-  if (required.some((field) => args[field] === undefined || args[field] === null || String(args[field]).trim() === "")) {
-    return null;
-  }
-  const thesis = await store.getActiveThesis({
-    strategy_id: args.strategy_id,
-    session: args.session,
-    mode: args.mode,
-    trading_date: args.trading_date,
-    run_id: args.run_id,
-    as_of_utc: args.as_of_utc,
-    master_id: args.master_id,
-    status: "active",
-  }).then((result) => result.active_thesis);
-  if (args.thesis_id && thesis?.thesis_id !== args.thesis_id) {
-    throw deskError("THESIS_SCOPE_MISMATCH", "The feature engine did not resolve the requested active thesis.", {
-      expected_thesis_id: args.thesis_id,
-      actual_thesis_id: thesis?.thesis_id || null,
-      master_id: args.master_id,
-    });
-  }
-  return thesis;
-}
 
-function dateForState(args, tick) {
-  return args.trading_date || args.date || String(tick.paris || tick.utc).slice(0, 10);
-}
 
-async function resolvePackForState(store, { date, session, timezone }) {
-  if (session === "asia_open") {
-    return safeRead(
-      store.getLatestAsiaOpenPack({ date, timezone }).then((summary) => store.getDeskPack({ pack_id: summary.pack_id })),
-      null,
-    );
-  }
-  return safeRead(store.getDeskPack({ pack_id: `${date}_${session}` }), null);
-}
 
-function contractSummary(contracts) {
-  return {
-    master: contracts?.master_contract ? compactContract(contracts.master_contract) : null,
-    monitor: contracts?.monitor_contract ? compactContract(contracts.monitor_contract) : null,
-  };
-}
 
-function featureInstrument(activeThesis, latestMaster) {
-  const value = activeThesis?.instrument ||
-    latestMaster?.full_analysis?.executive_summary?.final_instrument ||
-    latestMaster?.instrument ||
-    "MNQ";
-  return ["MNQ", "MES", "NQ", "ES"].includes(value) ? value : "MNQ";
-}
 
-async function readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris }) {
-  const instrument = featureInstrument(activeThesis, latestMaster);
-  const crossReader = typeof store.ensureCrossAssetDelta === "function" ? store.ensureCrossAssetDelta.bind(store) : store.getCrossAssetDelta.bind(store);
-  const [level, technical, cross, snapshot, condition] = await Promise.all([
-    safeRead(store.getLevelMap({ date, session, instrument }), { ok: true, count: 0, level_map: null, warning: "level_map_not_available_until_feature_engine_runs" }),
-    safeRead(store.getTechnicalEvents({ date, session, instrument }), { ok: true, count: 0, events: [], warning: "technical_events_not_available_until_feature_engine_runs" }),
-    safeRead(crossReader({ timestamp_paris, window: crossAssetWindowForSession(session, timestamp_paris) }), { ok: true, count: 0, delta: null, stale_check: { is_stale: true, reason: "cross_asset_delta_not_available_until_feature_engine_runs" }, warning: "cross_asset_delta_not_available_until_feature_engine_runs" }),
-    safeRead(store.getSessionSnapshot({ date, session, instrument }), { ok: true, count: 0, session_snapshot: null, warning: "session_snapshot_not_available_until_feature_engine_runs" }),
-    activeThesis?.thesis_id
-      ? safeRead(store.getConditionStatus({ thesis_id: activeThesis.thesis_id, timestamp_paris }), { ok: true, count: 0, condition_status: null, warning: "condition_status_not_available_until_condition_engine_runs" })
-      : Promise.resolve({ ok: true, count: 0, condition_status: null, warning: "active_thesis_not_found" }),
-  ]);
-  return { instrument, level, technical, cross, snapshot, condition };
-}
 
-function crossAssetWindowForSession(session, timestampParis) {
-  if (session !== "asia_open") {
-    return "1h";
-  }
-  return parisDateWeekday(timestampParis) === 1 ? "session" : "4h";
-}
 
-function parisDateWeekday(timestampParis) {
-  const [year, month, day] = String(timestampParis || "").slice(0, 10).split("-").map(Number);
-  if (!year || !month || !day) {
-    return null;
-  }
-  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-}
 
 function dataReadiness({ pack, level, technical, cross, condition, rawWindow }) {
   return {
@@ -2677,59 +1700,10 @@ function dataReadiness({ pack, level, technical, cross, condition, rawWindow }) 
   };
 }
 
-function datasetReadinessStatus(ref) {
-  if (!ref) {
-    return "missing";
-  }
-  return ref.status === "not_configured" || ref.empty_ok === true ? "not_configured" : "ready";
-}
 
-function compactMasterAnalysis(analysis) {
-  if (!analysis) {
-    return null;
-  }
-  const full = analysis.full_analysis || {};
-  const executive = full.executive_summary || analysis.executive_summary || {};
-  const thesis = full.active_thesis || analysis.active_thesis || {};
-  const setup = preferredSetupFromMasterFull(full);
-  return {
-    analysis_id: analysis.analysis_id || null,
-    pack_id: analysis.pack_id || null,
-    created_at_paris: analysis.created_at_paris || analysis.created_at || null,
-    decision: firstNonEmpty(executive.final_decision, full.final_decision, analysis.final_decision, setup?.decision, setup ? "setup_candidate" : null),
-    instrument: firstNonEmpty(executive.final_instrument, analysis.final_instrument, thesis.instrument, setup?.instrument),
-    direction: firstNonEmpty(executive.final_direction, analysis.final_direction, thesis.direction, setup?.direction),
-    confidence_pct: firstNumber(executive.confidence_pct, analysis.confidence_pct, thesis.confidence_pct, setup?.confidence_pct),
-    health_score: firstNumber(thesis.health_score, analysis.health_score, executive.health_score),
-    summary: firstNonEmpty(executive.summary, analysis.summary, thesis.dominant_scenario, thesis.summary, setup?.label, setup?.setup_id),
-  };
-}
 
-function preferredSetupFromMasterFull(full = {}) {
-  const setups = firstArray(full.setups, full.candidate_setups, full.setup_candidates, full.active_thesis?.setups);
-  if (!setups.length) return null;
-  const primaryId = full.primary_setup_id || full.executive_summary?.primary_setup_id || full.final_setup_id || null;
-  return setups.find((setup) => primaryId && setup?.setup_id === primaryId) ||
-    setups.find((setup) => setup?.is_primary === true) ||
-    setups.find(isStrictReplayCandidateSetup) ||
-    setups[0] ||
-    null;
-}
 
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    if (value !== undefined && value !== null && value !== "") return value;
-  }
-  return null;
-}
 
-function firstNumber(...values) {
-  for (const value of values) {
-    const number = Number(value);
-    if (Number.isFinite(number)) return number;
-  }
-  return null;
-}
 
 function compactMonitor(monitor) {
   if (!monitor) {
@@ -2745,33 +1719,6 @@ function compactMonitor(monitor) {
   };
 }
 
-async function getLatestOperationalMonitor(store, args = {}) {
-  const limit = Math.max(1, Math.min(Number(args.limit) || 1, 50));
-  const hourlyResult = await store.getLatestHourlyMonitor({ ...args, limit });
-  if (["replay", "backtest"].includes(args.mode)) {
-    return hourlyResult;
-  }
-  const manualResult = await store.getLatestManualMonitor({ ...args, limit });
-  const candidates = [
-    ...(manualResult.monitors || []).map((monitor) => ({ monitor, priority: 1 })),
-    ...(hourlyResult.monitors || []).map((monitor) => ({ monitor, priority: 0 })),
-  ].sort((left, right) => {
-    const byTimestamp = String(right.monitor.timestamp_paris || right.monitor.saved_at || right.monitor.created_at || "")
-      .localeCompare(String(left.monitor.timestamp_paris || left.monitor.saved_at || left.monitor.created_at || ""));
-    return byTimestamp || right.priority - left.priority;
-  });
-  const seen = new Set();
-  const monitors = [];
-  for (const candidate of candidates) {
-    const monitor = candidate.monitor;
-    const identity = monitor.monitor_id || `${monitor.bundle_id || "monitor"}:${monitor.timestamp_paris || monitor.created_at || monitors.length}`;
-    if (seen.has(identity)) continue;
-    seen.add(identity);
-    monitors.push(monitor);
-    if (monitors.length >= limit) break;
-  }
-  return { ok: true, count: monitors.length, monitors, latest_monitor: monitors[0] || null };
-}
 
 function conditionList(activeThesis, conditionStatus, monitor, key) {
   const fromCondition = conditionStatus?.condition_status?.[key];
@@ -3089,1526 +2036,81 @@ async function buildFrontMonitorState(store, args = {}, clock = new SystemClock(
   };
 }
 
-async function buildAuditState(store, args = {}, featureDocs = {}, clock = new SystemClock()) {
-  const tick = clock.now();
-  const date = dateForState(args, tick);
-  const session = args.session || "asia_open";
-  const [contracts, pack, activeThesis, latestMaster, jobs] = await Promise.all([
-    safeRead(store.getActiveContracts(), {}),
-    resolvePackForState(store, { date, session, timezone: args.timezone || "Europe/Paris" }),
-    safeRead(store.getActiveThesis({ session, status: "active" }).then((result) => result.active_thesis), null),
-    safeRead(store.getLatestMasterAnalysis({ session, before_date: date }).then((result) => result.analysis), null),
-    safeRead(store.listDeskJobs({ date, session, limit: 100 }).then((result) => result.jobs), []),
-  ]);
-  const features = await readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris: tick.paris });
-  return {
-    ok: true,
-    contracts: contractSummary(contracts),
-    data_quality: {
-      datasets: Object.keys(pack?.datasets || {}),
-      missing: pack ? [] : ["desk_pack"],
-      warnings: pack?.quality?.warnings || [],
-      pack_quality: pack?.quality || null,
-    },
-    feature_engine: {
-      level_map: features.level,
-      technical_events: features.technical,
-      cross_asset_delta: features.cross,
-      session_snapshot: features.snapshot,
-      condition_status: features.condition,
-      feature_runs: featureDocs.feature_runs || [],
-    },
-    jobs,
-    raw_refs: Object.entries(pack?.datasets || {}).map(([dataset, ref]) => ({
-      dataset,
-      storage_path: ref.storage_path || null,
-      row_count: ref.row_count ?? null,
-      from_time: ref.from_time || null,
-      to_time: ref.to_time || null,
-    })),
-    anti_lookahead: {
-      pack_cutoff_ok: Boolean(pack?.data_cutoff),
-      features_cutoff_ok: Boolean(features.level?.level_map?.computed_with_cutoff || features.condition?.condition_status?.computed_with_cutoff),
-      no_actual_j_jplus1: true,
-      no_post_cutoff_candles: true,
-    },
-    errors: featureDocs.errors || [],
-  };
-}
-
-async function buildNyOpenStrategyState(store, args = {}, clock = new SystemClock()) {
-  const tick = clock.now();
-  const date = dateForState(args, tick);
-  const strategy_id = args.strategy_id || NY_OPEN_STRATEGY_ID;
-  const session = NY_OPEN_SESSION;
-  const timezone = args.timezone || "Europe/Paris";
-  const pricing_mode = normalizeNyOpenPricingMode(args.pricing_mode);
-  const cutoff_paris = args.cutoff_paris || nyOpenCutoffParis(date);
-  const bundleScope = nyOpenOperationalScope(date, cutoff_paris);
-  const stateScope = nyOpenOperationalScope(date, nyOpenStateAsOfParis(date, tick));
-  const contracts = await safeRead(store.getActiveContracts(), {});
-  const pack = await resolvePackForState(store, { date, session, timezone });
-  const bundle = await safeRead(
-    store.getMasterCutoffBundle({ ...bundleScope, cutoff_paris }),
-    missingMasterCutoffBundle({ ...bundleScope, date, cutoff_paris }),
-  );
-  const stateSelector = operationalSelectorArgs(resolveOperationalReadScope(stateScope));
-  const latestMasterCandidate = await safeRead(store.getLatestMasterAnalysis(stateSelector).then((result) => result.analysis), null);
-  const latestMaster = (latestMasterCandidate?.trading_date || latestMasterCandidate?.date) === date && strategyDocMatches(latestMasterCandidate, strategy_id)
-    ? latestMasterCandidate
-    : null;
-  const activeResult = latestMaster?.analysis_id
-    ? await safeRead(store.getActiveThesis({ ...stateSelector, master_id: latestMaster.analysis_id, status: "any" }), { active_thesis: null, theses: [] })
-    : { active_thesis: null, theses: [] };
-  const activeThesis = (activeResult.theses || []).find((thesis) => strategyDocMatches(thesis, strategy_id)) || activeResult.active_thesis || null;
-  const latestMonitor = activeThesis?.thesis_id
-    ? await safeRead(getLatestOperationalMonitor(store, {
-        ...stateSelector,
-        master_id: latestMaster.analysis_id,
-        thesis_id: activeThesis.thesis_id,
-        limit: 1,
-      }).then((result) => result.latest_monitor), null)
-    : null;
-  const day = await safeRead(store.getStrategyDayDetail({ strategy_id, date, pricing_mode }), {
-    ok: true,
-    strategy_id,
-    date,
-    master: latestMaster ? compactStrategyMaster(latestMaster) : null,
-    thesis: activeThesis ? compactStrategyThesis(activeThesis) : null,
-    setups: [],
-    monitors: latestMonitor ? [compactStrategyMonitor(latestMonitor)] : [],
-    trades: [],
-    performance: emptyStrategyPerformance(strategy_id, { from_date: date, to_date: date, pricing_mode }),
-    timeline: [],
-  });
-  const performance = await safeRead(store.getStrategyPerformance({ strategy_id, to_date: date, pricing_mode }), emptyStrategyPerformance(strategy_id, { to_date: date, pricing_mode }));
-  const activeTrade = (day.trades || []).find((trade) => isActiveTradeStatus(trade.status)) || null;
-  const currentSetup = (day.setups || []).find((setup) => setup.status && setup.status !== "cancelled") || (day.setups || [])[0] || null;
-  const features = await readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris: cutoff_paris });
-  const jobs = await safeRead(store.listDeskJobs({ date, session, limit: 20 }).then((result) => result.jobs), []);
-  const alerts = await safeRead(store.listAlerts({ date, thesis_id: activeThesis?.thesis_id, limit: 20 }).then((result) => result.alerts), []);
-  const master_status = latestMaster ? "saved" : "not_launched";
-  const strategy_status = deriveNyOpenStrategyStatus({ master: latestMaster, setup: currentSetup, trade: activeTrade, activeThesis });
-  const prompt = buildNyOpenMasterPrompt({
-    strategy_id,
-    date,
-    cutoff_paris,
-    bundle,
-    contract_context: bundle?.contract_context || contractContext(contracts, "master", { tick, pinnedForReplay: false }),
-  });
-  return {
-    ok: true,
-    strategy_id,
-    strategy_name: NY_OPEN_STRATEGY_NAME,
-    pricing_mode,
-    pricing_modes: NY_OPEN_PRICING_MODES,
-    date,
-    session,
-    timezone,
-    cutoff_paris,
-    status: strategy_status,
-    master_status,
-    next_action: nyOpenNextAction({ pack, bundle, master: latestMaster, setup: currentSetup, trade: activeTrade }),
-    blockers: nyOpenBlockers({ pack, bundle }),
-    warnings: nyOpenWarnings({ pack, bundle, master: latestMaster }),
-    contracts: {
-      master: contracts?.master_contract ? compactContract(contracts.master_contract) : null,
-      monitor: contracts?.monitor_contract ? compactContract(contracts.monitor_contract) : null,
-    },
-    contract_context: prompt.contract_context,
-    pack: pack ? compactPackHeaderForFront(pack) : null,
-    latest_master_cutoff_bundle: compactMasterCutoffBundleForFront(bundle),
-    master: latestMaster ? compactStrategyMaster(latestMaster) : null,
-    active_thesis: activeThesis || day.thesis || null,
-    setup: currentSetup,
-    active_position: activeTrade,
-    latest_monitor: latestMonitor ? compactStrategyMonitor(latestMonitor) : (day.monitors || [])[0] || null,
-    performance_summary: performance.summary,
-    day_performance: day.performance?.summary || null,
-    setups: day.setups || [],
-    trades: day.trades || [],
-    jobs,
-    alerts,
-    data_readiness: {
-      pack: pack ? pack.status || "ready" : "missing",
-      master_bundle: bundle?.data_quality?.status || (bundle?.ok ? "ready" : "missing"),
-      level_map: features.level?.level_map ? "ready" : "missing",
-      technical_events: features.technical?.events?.length ? "ready" : "missing",
-      cross_asset_delta: features.cross?.delta ? "ready" : "missing",
-      macro_calendar: pack?.datasets?.macro_calendar ? "ready" : "missing",
-      news_digest: pack ? datasetReadinessStatus(pack.datasets?.news_digest || { status: "not_configured", empty_ok: true }) : "missing",
-      anti_lookahead: bundle?.anti_lookahead_policy?.compliant === false ? "failed" : "ok",
-    },
-    prompt,
-    tabs: {
-      live: "/desk/ny-open-strategy/live",
-      masters: "/desk/ny-open-strategy/masters",
-      performance: "/desk/ny-open-strategy/performance",
-      calendar: "/desk/ny-open-strategy/calendar",
-      day: `/desk/ny-open-strategy/day/${date}`,
-    },
-  };
-}
-
-function nyOpenCutoffParis(date) {
-  return `${date}T${NY_OPEN_CUTOFF_TIME}${parisOffsetForDate(date)}`;
-}
-
-function nyOpenOperationalScope(date, asOfParis = nyOpenCutoffParis(date)) {
-  const asOfMs = Date.parse(asOfParis);
-  if (!Number.isFinite(asOfMs)) throw new Error(`ny_open_as_of_invalid:${asOfParis}`);
-  return {
-    strategy_id: NY_OPEN_STRATEGY_ID,
-    session: NY_OPEN_SESSION,
-    mode: "live",
-    trading_date: date,
-    run_id: `front_live_${date}_${NY_OPEN_SESSION}`,
-    as_of_utc: new Date(asOfMs).toISOString(),
-    timezone: "Europe/Paris",
-  };
-}
-
-function nyOpenStateAsOfParis(date, tick) {
-  const currentDate = String(tick.paris || tick.utc).slice(0, 10);
-  if (date === currentDate) return tick.paris;
-  if (date < currentDate) return `${date}T23:59:59${parisOffsetForDate(date)}`;
-  return nyOpenCutoffParis(date);
-}
-
-function normalizeNyOpenBundlePrep(result, { date, cutoff_paris }) {
-  const bundle = result?.bundle || null;
-  const data_quality = bundle?.data_quality || {};
-  const pack = bundle?.pack_or_source_context?.pack || bundle?.pack || null;
-  const ready_for_master = Boolean(pack) && data_quality.execution_allowed !== false && data_quality.status !== "failed";
-  const blockers = data_quality.blockers || data_quality.missing || [];
-  return {
-    ok: result?.ok !== false,
-    strategy_id: NY_OPEN_STRATEGY_ID,
-    strategy_name: NY_OPEN_STRATEGY_NAME,
-    date,
-    session: NY_OPEN_SESSION,
-    cutoff_paris,
-    status: result?.status || bundle?.status || (ready_for_master ? "READY" : "DEGRADED"),
-    job_id: result?.job_id || null,
-    bundle_id: result?.bundle_id || bundle?.bundle_id || null,
-    pack_id: pack?.pack_id || null,
-    pack_status: pack?.status || (pack ? "ready" : "missing"),
-    data_quality,
-    contract_context: bundle?.contract_context || null,
-    contract_handshake: bundle?.contract_handshake || null,
-    save_target: bundle?.save_target || null,
-    ready_for_master,
-    reason_if_not_ready: ready_for_master ? null : (blockers.length ? blockers.join(", ") : result?.error?.message || result?.error || "ny_open_master_bundle_not_ready"),
-    source_hash: bundle?.source_hash || null,
-  };
-}
-
-function compactMasterCutoffBundleForFront(bundle) {
-  if (!bundle) return null;
-  const data_quality = bundle.data_quality || {};
-  const pack = bundle.pack_or_source_context?.pack || bundle.pack || null;
-  return {
-    ok: bundle.ok !== false,
-    status: bundle.status || data_quality.status || "unknown",
-    bundle_id: bundle.bundle_id || null,
-    bundle_type: bundle.bundle_type || "master_cutoff",
-    date: bundle.date || null,
-    session: bundle.session || null,
-    cutoff_paris: bundle.cutoff_paris || bundle.timestamp_paris || null,
-    mode: bundle.mode || "live",
-    contract_context: bundle.contract_context || null,
-    pack: pack ? compactPackHeaderForFront(pack) : null,
-    data_quality: {
-      status: data_quality.status || null,
-      execution_allowed: data_quality.execution_allowed ?? null,
-      blockers: data_quality.blockers || [],
-      missing: data_quality.missing || [],
-      stale: data_quality.stale || [],
-      warnings: data_quality.warnings || [],
-      anti_lookahead_compliant: data_quality.anti_lookahead_compliant ?? bundle.anti_lookahead_policy?.compliant ?? null,
-      raw_refs_available: data_quality.raw_refs_available ?? null,
-    },
-    source_hash: bundle.source_hash || null,
-    created_at_paris: bundle.created_at_paris || null,
-  };
-}
-
-function compactPackHeaderForFront(pack) {
-  if (!pack) return null;
-  return {
-    pack_id: pack.pack_id || null,
-    pack_build_id: pack.pack_build_id || pack.active_build_id || null,
-    status: pack.status || null,
-    date: pack.date || null,
-    trading_date: pack.trading_date || pack.date || null,
-    strategy_id: pack.strategy_id || pack.resolved_scope?.strategy_id || null,
-    session: pack.session || null,
-    timezone: pack.timezone || null,
-    resolved_scope: pack.resolved_scope || null,
-    scope_hash: pack.scope_hash || pack.resolved_scope?.scope_hash || null,
-    source_manifest_hash: pack.source_manifest_hash || pack.manifest?.source_manifest_hash || null,
-    data_cutoff: pack.data_cutoff || null,
-    quality: {
-      status: pack.quality?.status || null,
-      row_count_total: pack.quality?.row_count_total ?? null,
-      missing_datasets: pack.quality?.missing_datasets || [],
-      warnings: pack.quality?.warnings || [],
-      source: pack.quality?.source || null,
-    },
-    datasets: Object.fromEntries(Object.entries(pack.datasets || {}).map(([name, ref]) => [name, {
-      row_count: ref?.row_count ?? null,
-      status: ref?.status || null,
-      source: ref?.source || null,
-      from_time: ref?.from_time || ref?.from_time_utc || null,
-      to_time: ref?.to_time || ref?.to_time_utc || null,
-      empty_ok: ref?.empty_ok === true || undefined,
-    }])),
-  };
-}
-
-function selectStrategyDocuments({
-  strategy_id,
-  masters = [],
-  theses = [],
-  setups = [],
-  monitors = [],
-  trades = [],
-  tradeExits = [],
-  daily = [],
-  equity = [],
-  stats = [],
-  reviews = [],
-  packs = [],
-  bundles = [],
-  liveCursors = [],
-  workEvents = [],
-} = {}) {
-  const selectedCursors = liveCursors.filter((doc) => strategyDocMatches(doc, strategy_id));
-  const cursorIds = new Set(selectedCursors.map((doc) => doc.cursor_id));
-  return {
-    strategy_id,
-    masters: sortStrategyDocs(masters.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    theses: sortStrategyDocs(theses.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    setups: sortStrategyDocs(setups.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    monitors: sortStrategyDocs(monitors.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    trades: sortStrategyDocs(trades.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    tradeExits: sortStrategyDocs(tradeExits.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    daily: sortStrategyDocs(daily.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    equity: sortStrategyDocs(equity.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    stats: sortStrategyDocs(stats.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    reviews: sortStrategyDocs(reviews.filter((doc) => strategyDocMatches(doc, strategy_id))),
-    packs: sortStrategyDocs(packs.filter((doc) => strategySessionMatches(doc, NY_OPEN_SESSION))),
-    bundles: sortStrategyDocs(bundles.filter((doc) => strategySessionMatches(doc, NY_OPEN_SESSION))),
-    liveCursors: sortStrategyDocs(selectedCursors),
-    workItems: [],
-    workEvents: sortStrategyDocs(workEvents.filter((doc) => doc.scope === "live" && cursorIds.has(doc.cursor_id))),
-  };
-}
-
-function strategyDocMatches(doc, strategy_id = NY_OPEN_STRATEGY_ID) {
-  if (!doc) return false;
-  const docStrategy = doc.strategy_id || doc.strategy?.strategy_id || doc.linked_strategy_id || doc.strategy;
-  if (docStrategy === strategy_id) return true;
-  if (docStrategy && docStrategy !== strategy_id) return false;
-  return strategy_id === NY_OPEN_STRATEGY_ID && strategySessionMatches(doc, NY_OPEN_SESSION);
-}
-
-function requireStrategyId(args = {}) {
-  const strategyId = String(args.strategy_id || "").trim();
-  if (!strategyId) throw deskError("SCOPE_REQUIRED", "strategy_id is required.", { field: "strategy_id" });
-  return strategyId;
-}
-
-function resolveStrategySelection(args = {}) {
-  if (args.aggregate_across_strategies === true) return "all";
-  return requireStrategyId(args);
-}
-
-function strategySessionMatches(doc, session) {
-  return doc?.session === session || doc?.desk_session === session || doc?.strategy_session === session;
-}
-
-function sortStrategyDocs(docs) {
-  return [...(docs || [])].sort((left, right) => String(strategyTimestampFromDoc(right)).localeCompare(String(strategyTimestampFromDoc(left))));
-}
-
-function setupDocumentId(setup) {
-  return setup?.setup_record_id || setup?.setup_id || setup?.id || stableVNextId("setup", setup?.date || strategyDateFromDoc(setup), setup?.instrument || "setup");
-}
-
-function filterStrategyTrades(trades, args = {}, strategy_id = NY_OPEN_STRATEGY_ID) {
-  const pricing_mode = normalizeNyOpenPricingMode(args.pricing_mode);
-  return (trades || [])
-    .filter((trade) => !strategy_id || strategyDocMatches(trade, strategy_id))
-    .filter((trade) => withinStrategyDateRange(trade, args))
-    .filter((trade) => args.instrument === "all" || !args.instrument || trade.instrument === args.instrument)
-    .filter((trade) => args.direction === "all" || !args.direction || trade.direction === args.direction)
-    .filter((trade) => !isNyOpenStrictTrade(trade) || tradePricingMode(trade) === pricing_mode)
-    .filter((trade) => !args.only_closed_trades || isClosedTrade(trade))
-    .sort((left, right) => String(strategyTimestampFromDoc(left)).localeCompare(String(strategyTimestampFromDoc(right))));
-}
-
-function filterStrategySetups(setups, args = {}, strategy_id = NY_OPEN_STRATEGY_ID) {
-  return (setups || [])
-    .filter((setup) => !strategy_id || strategyDocMatches(setup, strategy_id))
-    .filter((setup) => withinStrategyDateRange(setup, args))
-    .filter((setup) => args.instrument === "all" || !args.instrument || setup.instrument === args.instrument)
-    .filter((setup) => args.direction === "all" || !args.direction || setup.direction === args.direction)
-    .filter((setup) => !args.setup_type || setup.setup_type === args.setup_type)
-    .filter((setup) => !args.only_triggered_setups || isTriggeredSetupForPricingMode(setup, args.pricing_mode))
-    .sort((left, right) => String(strategyTimestampFromDoc(left)).localeCompare(String(strategyTimestampFromDoc(right))));
-}
-
-function withinStrategyDateRange(doc, { from_date, to_date, date } = {}) {
-  const docDate = strategyDateFromDoc(doc);
-  if (!docDate) return true;
-  if (date && docDate !== date) return false;
-  if (from_date && docDate < from_date) return false;
-  if (to_date && docDate > to_date) return false;
-  return true;
-}
-
-function strategyDateFromDoc(doc) {
-  return doc?.date || doc?.trade_date || String(strategyTimestampFromDoc(doc) || "").slice(0, 10) || null;
-}
-
-function strategyTimestampFromDoc(doc) {
-  return doc?.closed_at_paris ||
-    doc?.exit_at_paris ||
-    doc?.executed_at_paris ||
-    doc?.triggered_at_paris ||
-    doc?.timestamp_paris ||
-    doc?.created_at_paris ||
-    doc?.updated_at_paris ||
-    doc?.saved_at_paris ||
-    doc?.created_at ||
-    doc?.updated_at ||
-    doc?.date ||
-    "";
-}
-
-function isTriggeredSetup(setup) {
-  const status = String(setup?.status || setup?.lifecycle_status || "").toLowerCase();
-  return status.includes("trigger") || status.includes("tp") || status.includes("stop") || Boolean(setup?.triggered_at_paris);
-}
-
-function isTriggeredSetupForPricingMode(setup, pricing_mode = NY_OPEN_DEFAULT_PRICING_MODE) {
-  const mode = normalizeNyOpenPricingMode(pricing_mode);
-  const replay = setup?.strict_replays?.[mode] || (mode === NY_OPEN_DEFAULT_PRICING_MODE ? setup?.strict_replay_result || setup?.replay_result : null);
-  if (replay) {
-    const status = String(replay.replay_status || "").toLowerCase();
-    return Boolean(replay.entry) || ["win", "loss", "open_or_expired"].includes(status);
-  }
-  return isTriggeredSetup(setup);
-}
-
-function isNyOpenStrictTrade(trade) {
-  return trade?.strict_mode === true || trade?.source === "nyopen_strict_replay" || String(trade?.trade_id || "").includes("nyopen_strict_v1");
-}
-
-function tradePricingMode(trade) {
-  return normalizeNyOpenPricingMode(trade?.pricing_mode || trade?.strict_pricing_mode);
-}
-
-function isActiveTradeStatus(status) {
-  return ["open", "active", "partial", "partial_taken", "tp1_taken", "tp2_taken"].includes(String(status || "").toLowerCase());
-}
-
-function isExecutedTrade(trade) {
-  return Boolean(trade?.executed_at_paris || trade?.entry_price || trade?.entry || trade?.trade_id || isActiveTradeStatus(trade?.status) || isClosedTrade(trade));
-}
-
-function isClosedTrade(trade) {
-  const status = String(trade?.status || trade?.lifecycle_status || "").toLowerCase();
-  return Boolean(
-    trade?.closed_at_paris ||
-      trade?.exit_at_paris ||
-      trade?.exit_price != null ||
-      trade?.result_R != null ||
-      trade?.result_r != null ||
-      trade?.r_result != null ||
-      ["closed", "stopped", "stop", "stopped_out", "tp3_taken", "expired", "completed", "flat", "cancelled"].includes(status),
-  );
-}
-
-function tradeResultR(trade, exits = []) {
-  for (const key of ["result_R", "result_r", "r_result", "realized_R", "realized_r", "pnl_R", "pnl_r", "total_R", "total_r"]) {
-    const value = numeric(trade?.[key], NaN);
-    if (Number.isFinite(value)) return roundNumber(value, 4);
-  }
-  const exitValues = (exits || [])
-    .filter((exit) => exit.trade_id === trade?.trade_id || exit.linked_trade_id === trade?.trade_id)
-    .map((exit) => numeric(exit.result_R ?? exit.result_r ?? exit.r_result, NaN))
-    .filter(Number.isFinite);
-  if (exitValues.length) {
-    return roundNumber(exitValues.reduce((sum, value) => sum + value, 0), 4);
-  }
-  return tradeResultRFromGeometry(trade);
-}
-
-function tradeResultRFromGeometry(trade) {
-  const entry = numeric(trade?.entry_price ?? trade?.entry, NaN);
-  const stop = numeric(trade?.stop_initial ?? trade?.stop_loss ?? trade?.stop, NaN);
-  const exit = numeric(trade?.exit_price ?? trade?.close_price ?? trade?.last_price, NaN);
-  if (!Number.isFinite(entry) || !Number.isFinite(stop) || !Number.isFinite(exit)) return null;
-  const direction = String(trade?.direction || "").toLowerCase();
-  const risk = direction === "short" ? stop - entry : entry - stop;
-  if (!Number.isFinite(risk) || risk <= 0) return null;
-  const points = direction === "short" ? entry - exit : exit - entry;
-  return roundNumber(points / risk, 4);
-}
-
-function emptyStrategyPerformance(strategy_id, args = {}) {
-  return buildStrategyPerformance({ strategy_id, trades: [], setups: [], args });
-}
-
-function buildStrategyPerformance({ strategy_id, trades = [], setups = [], tradeExits = [], args = {} } = {}) {
-  const pricing_mode = normalizeNyOpenPricingMode(args.pricing_mode);
-  const executedTrades = (trades || []).filter(isExecutedTrade);
-  const closedTrades = executedTrades.filter(isClosedTrade);
-  const results = closedTrades
-    .map((trade) => ({ trade, result_R: tradeResultR(trade, tradeExits) }))
-    .filter((item) => Number.isFinite(item.result_R));
-  const rValues = results.map((item) => item.result_R);
-  const total_R = roundNumber(rValues.reduce((sum, value) => sum + value, 0), 4) || 0;
-  const wins = rValues.filter((value) => value > 0).length;
-  const losses = rValues.filter((value) => value < 0).length;
-  const flats = rValues.filter((value) => value === 0).length;
-  const gross_profit_R = roundNumber(rValues.filter((value) => value > 0).reduce((sum, value) => sum + value, 0), 4) || 0;
-  const gross_loss_R = Math.abs(roundNumber(rValues.filter((value) => value < 0).reduce((sum, value) => sum + value, 0), 4) || 0);
-  const equity_curve = equityCurveFromTrades(results, strategy_id, pricing_mode);
-  const drawdown = maxDrawdownFromCurve(equity_curve);
-  const daily = dailyPerformanceFromResults(results, strategy_id, pricing_mode);
-  const summary = {
-    strategy_id,
-    strategy_name: strategy_id === NY_OPEN_STRATEGY_ID ? NY_OPEN_STRATEGY_NAME : strategy_id,
-    pricing_mode,
-    from_date: args.from_date || null,
-    to_date: args.to_date || null,
-    setup_count: setups.length,
-    triggered_setups: setups.filter((setup) => isTriggeredSetupForPricingMode(setup, pricing_mode)).length,
-    executed_trades: executedTrades.length,
-    closed_trades: closedTrades.length,
-    open_trades: executedTrades.filter((trade) => !isClosedTrade(trade)).length,
-    wins,
-    losses,
-    flats,
-    win_rate: rValues.length ? roundNumber(wins / rValues.length, 4) : null,
-    total_R,
-    gross_profit_R,
-    gross_loss_R,
-    profit_factor: gross_loss_R > 0 ? roundNumber(gross_profit_R / gross_loss_R, 4) : gross_profit_R > 0 ? null : 0,
-    expectancy_R: rValues.length ? roundNumber(total_R / rValues.length, 4) : 0,
-    avg_win_R: wins ? roundNumber(gross_profit_R / wins, 4) : 0,
-    avg_loss_R: losses ? roundNumber(-gross_loss_R / losses, 4) : 0,
-    max_drawdown_R: drawdown.max_drawdown_R,
-    current_drawdown_R: drawdown.current_drawdown_R,
-    last_trade_at_paris: closedTrades.at(-1) ? strategyTimestampFromDoc(closedTrades.at(-1)) : null,
-  };
-  return {
-    ok: true,
-    strategy_id,
-    filters: {
-      from_date: args.from_date || null,
-      to_date: args.to_date || null,
-      instrument: args.instrument || "all",
-      direction: args.direction || "all",
-      setup_type: args.setup_type || null,
-      pricing_mode,
-    },
-    summary,
-    equity_curve,
-    daily,
-    trades: closedTrades.map((trade) => compactStrategyTrade({ ...trade, result_R: tradeResultR(trade, tradeExits) })),
-    setups: setups.map((setup) => compactStrategySetup(setup, { pricing_mode })),
-  };
-}
-
-function equityCurveFromTrades(results, strategy_id, pricing_mode = NY_OPEN_DEFAULT_PRICING_MODE) {
-  const mode = normalizeNyOpenPricingMode(pricing_mode);
-  let cumulative = 0;
-  let peak = 0;
-  return results
-    .slice()
-    .sort((left, right) => String(strategyTimestampFromDoc(left.trade)).localeCompare(String(strategyTimestampFromDoc(right.trade))))
-    .map((item, index) => {
-      cumulative = roundNumber(cumulative + item.result_R, 4) || 0;
-      peak = Math.max(peak, cumulative);
-      const sequence = String(index + 1).padStart(4, "0");
-      return {
-        point_id: mode === NY_OPEN_DEFAULT_PRICING_MODE
-          ? stableVNextId("strategy_equity", `${strategy_id}_${sequence}`, item.trade.trade_id || strategyTimestampFromDoc(item.trade))
-          : stableVNextId("strategy_equity", `${strategy_id}_${mode}_${sequence}`, item.trade.trade_id || strategyTimestampFromDoc(item.trade)),
-        strategy_id,
-        pricing_mode: mode,
-        sequence: index + 1,
-        date: strategyDateFromDoc(item.trade),
-        timestamp_paris: strategyTimestampFromDoc(item.trade),
-        trade_id: item.trade.trade_id || null,
-        result_R: item.result_R,
-        cumulative_R: cumulative,
-        drawdown_R: roundNumber(cumulative - peak, 4) || 0,
-      };
-    });
-}
-
-function maxDrawdownFromCurve(curve) {
-  const values = (curve || []).map((point) => numeric(point.drawdown_R, 0));
-  const max_drawdown_R = values.length ? Math.min(...values) : 0;
-  return {
-    max_drawdown_R: roundNumber(max_drawdown_R, 4) || 0,
-    current_drawdown_R: curve?.length ? roundNumber(curve.at(-1).drawdown_R, 4) || 0 : 0,
-  };
-}
-
-function dailyPerformanceFromResults(results, strategy_id, pricing_mode = NY_OPEN_DEFAULT_PRICING_MODE) {
-  const mode = normalizeNyOpenPricingMode(pricing_mode);
-  const grouped = new Map();
-  for (const item of results || []) {
-    const date = strategyDateFromDoc(item.trade) || "unknown";
-    const bucket = grouped.get(date) || [];
-    bucket.push(item);
-    grouped.set(date, bucket);
-  }
-  return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([date, items]) => {
-    const values = items.map((item) => item.result_R).filter(Number.isFinite);
-    const total_R = roundNumber(values.reduce((sum, value) => sum + value, 0), 4) || 0;
-    return {
-      perf_day_id: mode === NY_OPEN_DEFAULT_PRICING_MODE
-        ? stableVNextId("strategy_day", strategy_id, date)
-        : stableVNextId("strategy_day", strategy_id, mode, date),
-      strategy_id,
-      pricing_mode: mode,
-      date,
-      closed_trades: values.length,
-      wins: values.filter((value) => value > 0).length,
-      losses: values.filter((value) => value < 0).length,
-      total_R,
-      avg_R: values.length ? roundNumber(total_R / values.length, 4) : 0,
-      trade_ids: items.map((item) => item.trade.trade_id).filter(Boolean),
-    };
-  });
-}
-
-function recomputeStrategyPerformanceDocs(docs, args = {}, tick = new SystemClock().now()) {
-  const pricing_mode = normalizeNyOpenPricingMode(args.pricing_mode);
-  const trades = filterStrategyTrades(docs.trades, { ...args, only_closed_trades: false }, args.strategy_id);
-  const setups = filterStrategySetups(docs.setups, args, args.strategy_id);
-  const performance = buildStrategyPerformance({ strategy_id: args.strategy_id, trades, setups, tradeExits: docs.tradeExits, args });
-  const daily_performance = performance.daily.map((day) => ({
-    ...day,
-    source: "recompute_strategy_performance",
-    updated_at: tick.utc,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  }));
-  const equity_curve = performance.equity_curve.map((point) => ({
-    ...point,
-    source: "recompute_strategy_performance",
-    updated_at: tick.utc,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  }));
-  const stats = {
-    ...performance.summary,
-    stats_id: pricing_mode === NY_OPEN_DEFAULT_PRICING_MODE ? args.strategy_id : `${args.strategy_id}_${pricing_mode}`,
-    strategy_id: args.strategy_id,
-    pricing_mode,
-    source: "recompute_strategy_performance",
-    updated_at: tick.utc,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  };
-  const audit = strategyAuditLog({
-    strategy_id: args.strategy_id,
-    action: "recompute_strategy_performance",
-    document_type: "strategy_stats",
-    document_id: stats.stats_id,
-    previous_value: null,
-    new_value: "recomputed",
-    performed_by: args.performed_by || "dashboard_operator",
-    tick,
-  });
-  return {
-    summary: performance.summary,
-    daily_performance,
-    equity_curve,
-    stats,
-    audit,
-  };
-}
-
-function buildStrategyCalendar(docs, args = {}, clock = new SystemClock()) {
-  const tick = clock.now();
-  const strategy_id = args.strategy_id || docs.strategy_id || NY_OPEN_STRATEGY_ID;
-  const today = String(tick.paris || tick.utc).slice(0, 10);
-  const year = Number(args.year || today.slice(0, 4));
-  const month = Number(args.month || today.slice(5, 7));
-  const from_date = `${year}-${String(month).padStart(2, "0")}-01`;
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const to_date = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
-  const pricing_mode = normalizeNyOpenPricingMode(args.pricing_mode);
-  const perf = buildStrategyPerformance({
-    strategy_id,
-    trades: filterStrategyTrades(docs.trades, { from_date, to_date, pricing_mode }, strategy_id),
-    setups: filterStrategySetups(docs.setups, { from_date, to_date }, strategy_id),
-    tradeExits: docs.tradeExits,
-    args: { from_date, to_date, pricing_mode },
-  });
-  const dailyMap = new Map((perf.daily || []).map((day) => [day.date, day]));
-  const mastersByDate = groupByDate(docs.masters);
-  const setupsByDate = groupByDate(docs.setups);
-  const tradesByDate = groupByDate(filterStrategyTrades(docs.trades, { from_date, to_date, pricing_mode }, strategy_id));
-  const packsByDate = groupByDate(docs.packs);
-  const days = Array.from({ length: daysInMonth }, (_, index) => {
-    const date = `${year}-${String(month).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`;
-    const dayPerf = dailyMap.get(date) || null;
-    const dayTrades = tradesByDate.get(date) || [];
-    const daySetups = setupsByDate.get(date) || [];
-    const dayMaster = (mastersByDate.get(date) || [])[0] || null;
-    const dayPack = (packsByDate.get(date) || [])[0] || null;
-    return {
-      date,
-      status: strategyDailyStatus({ dayPerf, trades: dayTrades, master: dayMaster, pack: dayPack }),
-      total_R: dayPerf?.total_R ?? 0,
-      closed_trades: dayPerf?.closed_trades ?? 0,
-      setup_count: daySetups.length,
-      has_master: Boolean(dayMaster),
-      has_trade: dayTrades.length > 0,
-      has_open_position: dayTrades.some((trade) => isActiveTradeStatus(trade.status)),
-      pack_status: dayPack?.status || null,
-      master_decision: dayMaster ? compactStrategyMaster(dayMaster).decision : null,
-      setup_status: daySetups[0]?.status || daySetups[0]?.lifecycle_status || null,
-    };
-  });
-  return {
-    ok: true,
-    strategy_id,
-    pricing_mode,
-    year,
-    month,
-    from_date,
-    to_date,
-    summary: perf.summary,
-    days,
-  };
-}
-
-function buildStrategyDayDetail(docs, args = {}) {
-  const strategy_id = args.strategy_id || docs.strategy_id || NY_OPEN_STRATEGY_ID;
-  const date = args.date;
-  const pricing_mode = normalizeNyOpenPricingMode(args.pricing_mode);
-  const masters = filterStrategyDate(docs.masters, date);
-  const theses = filterStrategyDate(docs.theses, date);
-  const setups = filterStrategySetups(docs.setups, { date }, strategy_id);
-  const monitors = filterStrategyDate(docs.monitors, date);
-  const trades = filterStrategyTrades(docs.trades, { date, pricing_mode }, strategy_id);
-  const reviews = filterStrategyDate(docs.reviews, date);
-  const performance = buildStrategyPerformance({
-    strategy_id,
-    trades,
-    setups,
-    tradeExits: docs.tradeExits,
-    args: { from_date: date, to_date: date, pricing_mode },
-  });
-  const master = masters[0] || null;
-  return {
-    ok: true,
-    strategy_id,
-    pricing_mode,
-    date,
-    master: master ? compactStrategyMaster(master) : null,
-    thesis: theses[0] ? compactStrategyThesis(theses[0]) : deriveActiveThesisFromMaster(master),
-    setups: setups.map((setup) => compactStrategySetup(setup, { pricing_mode })),
-    monitors: monitors.map(compactStrategyMonitor),
-    trades: trades.map((trade) => compactStrategyTrade({ ...trade, result_R: tradeResultR(trade, docs.tradeExits) })),
-    performance,
-    timeline: buildStrategyTimeline({ masters, theses, setups, monitors, trades }),
-    timeline_events: buildLiveSessionTimelineEvents(docs, args),
-    continuity: buildLiveContinuitySummary(docs, args),
-    authorized_windows: master?.full_analysis?.authorized_windows || master?.full_analysis?.authorized_windows_summary || [],
-    update_agenda: master?.full_analysis?.update_agenda || [],
-    review: reviews[0] || null,
-  };
-}
-
-function buildLiveTimelineEventDetail(docs, args = {}) {
-  const events = buildLiveSessionTimelineEvents(docs, args);
-  const event = events.find((item) => item.event_id === args.event_id) || null;
-  if (!event) {
-    throw deskError("TIMELINE_EVENT_NOT_FOUND", "The requested live timeline event was not found.", { event_id: args.event_id });
-  }
-  const entityType = event.entity_type;
-  const entityId = event.entity_id;
-  let detail;
-  if (entityType === "monitor") {
-    const monitor = docs.monitors.find((item) => (item.monitor_id || item.id) === entityId) || null;
-    const monitorTimestamp = strategyTimestampFromDoc(monitor);
-    const previous = docs.monitors
-      .filter((item) => monitorTimestamp && strategyDateFromDoc(item) === args.date && strategyTimestampFromDoc(item) < monitorTimestamp)
-      .sort((left, right) => strategyTimestampFromDoc(right).localeCompare(strategyTimestampFromDoc(left)))[0] || null;
-    detail = projectMonitorTimelineDetail(monitor, previous, event);
-  } else if (entityType === "work" || entityType === "work_event") {
-    const workItemId = event.work_item_id || entityId;
-    const workItem = docs.workItems.find((item) => item.work_item_id === workItemId) || null;
-    const workEvent = docs.workEvents.find((item) => item.event_id === entityId) || null;
-    detail = projectWorkTimelineDetail(workItem, workEvent, event);
-  } else if (entityType === "gap") {
-    detail = projectGapTimelineDetail(event);
-  } else {
-    detail = projectGenericTimelineDetail(docs, event);
-  }
-  return { ok: true, strategy_id: args.strategy_id, date: args.date, ...detail };
-}
-
-function filterStrategyDate(docs, date) {
-  return sortStrategyDocs((docs || []).filter((doc) => !date || strategyDateFromDoc(doc) === date));
-}
-
-function groupByDate(docs) {
-  const map = new Map();
-  for (const doc of docs || []) {
-    const date = strategyDateFromDoc(doc);
-    if (!date) continue;
-    const bucket = map.get(date) || [];
-    bucket.push(doc);
-    map.set(date, bucket);
-  }
-  return map;
-}
-
-function strategyDailyStatus({ dayPerf, trades, master, pack }) {
-  if ((trades || []).some((trade) => isActiveTradeStatus(trade.status))) return "open_position";
-  if (dayPerf?.total_R > 0) return "win";
-  if (dayPerf?.total_R < 0) return "loss";
-  if (dayPerf?.closed_trades > 0) return "flat";
-  if (pack && pack.status && pack.status !== "ready") return "data_degraded";
-  if (!master) return "master_missing";
-  return "no_trade";
-}
-
-function buildStrategyTimeline({ masters, theses, setups, monitors, trades }) {
-  const events = [
-    ...(masters || []).map((doc) => ({ time: strategyTimestampFromDoc(doc), type: "Master", title: compactStrategyMaster(doc).decision || "Master sauvegarde", status: doc.status || "saved" })),
-    ...(theses || []).map((doc) => ({ time: strategyTimestampFromDoc(doc), type: "These", title: doc.status || "These active", status: doc.status || "active" })),
-    ...(setups || []).map((doc) => ({ time: strategyTimestampFromDoc(doc), type: "Setup", title: doc.label || doc.setup_id || "Setup", status: doc.status || doc.lifecycle_status || "candidate" })),
-    ...(monitors || []).map((doc) => ({ time: strategyTimestampFromDoc(doc), type: "Monitor", title: doc.monitor_decision?.action || doc.monitor_decision?.decision || "Monitor", status: doc.status || "saved" })),
-    ...(trades || []).map((doc) => ({ time: strategyTimestampFromDoc(doc), type: "Trade", title: doc.trade_id || doc.status || "Trade", status: doc.status || "executed", result_R: tradeResultR(doc) })),
-  ];
-  return events
-    .filter((event) => event.time)
-    .sort((left, right) => String(left.time).localeCompare(String(right.time)));
-}
-
-function buildLiveSessionTimelineEvents(docs, args = {}) {
-  const date = args.date;
-  const masters = filterStrategyDate(docs.masters, date);
-  const theses = filterStrategyDate(docs.theses, date);
-  const setups = filterStrategyDate(docs.setups, date);
-  const monitors = filterStrategyDate(docs.monitors, date);
-  const trades = filterStrategyDate(docs.trades, date);
-  const liveCursors = (docs.liveCursors || []).filter((cursor) => !date || cursor.trading_date === date);
-  const cursorIds = new Set(liveCursors.map((cursor) => cursor.cursor_id));
-  const workEvents = (docs.workEvents || []).filter((item) => item.scope === "live" && cursorIds.has(item.cursor_id));
-  const events = [
-    ...masters.map((doc) => liveTimelineEvent("master", doc.analysis_id || doc.master_id, strategyTimestampFromDoc(doc), {
-      headline: "Plan Master",
-      summary: compactStrategyMaster(doc).summary,
-      status: doc.status || compactStrategyMaster(doc).decision || "saved",
-      details_available: true,
-    })),
-    ...theses.map((doc) => liveTimelineEvent("thesis", doc.thesis_id, strategyTimestampFromDoc(doc), {
-      headline: "Thèse",
-      summary: doc.dominant_scenario || doc.bias_summary || doc.summary,
-      status: doc.status || doc.thesis_status || "active",
-      health_score: doc.health_score ?? null,
-      details_available: true,
-    })),
-    ...monitors.map((doc) => liveTimelineEvent("monitor", doc.monitor_id || doc.id, strategyTimestampFromDoc(doc), {
-      headline: `Monitor ${String(doc.timestamp_paris || "").slice(11, 16)}`,
-      summary: doc.monitor_decision?.reason_summary || doc.monitor_decision?.summary || doc.summary,
-      status: doc.monitor_decision?.action || doc.monitor_decision?.decision || doc.status || "saved",
-      action: doc.monitor_decision?.action || doc.monitor_decision?.decision || null,
-      health_score: doc.thesis_health_score?.current_score ?? doc.thesis_health_score?.score ?? doc.thesis_update?.health_score ?? doc.health_score ?? null,
-      previous_health_score: doc.thesis_health_score?.previous_score ?? null,
-      details_available: true,
-    })),
-    ...setups.map((doc) => liveTimelineEvent("setup", doc.setup_record_id || doc.setup_id, strategyTimestampFromDoc(doc), {
-      headline: doc.label || "Setup",
-      summary: doc.setup_type || doc.direction || null,
-      status: doc.status || doc.lifecycle_status || "candidate",
-      details_available: true,
-    })),
-    ...trades.map((doc) => liveTimelineEvent("trade", doc.trade_id, strategyTimestampFromDoc(doc), {
-      headline: `${doc.instrument || "Trade"} ${doc.direction || ""}`.trim(),
-      summary: Number.isFinite(tradeResultR(doc)) ? `${tradeResultR(doc)}R` : doc.close_reason || null,
-      status: doc.status || "executed",
-      details_available: true,
-    })),
-    ...workEvents
-      .filter((doc) => ["CURSOR_RETRY_SCHEDULED", "CURSOR_DEAD_LETTER", "CURSOR_DEGRADED", "CURSOR_LIVENESS_ALERT", "CURSOR_CLOSED"].includes(doc.event_type))
-      .map((doc) => liveTimelineEvent("work_event", doc.event_id, doc.at_utc || doc.created_at_utc, {
-        headline: doc.event_type === "CURSOR_RETRY_SCHEDULED" ? "Nouvel essai planifié" : doc.event_type === "CURSOR_CLOSED" ? "Session fermée" : "Incident worker",
-        summary: doc.details?.error_message || doc.details?.error_code || doc.event_type,
-        status: doc.event_type,
-        details_available: true,
-      })),
-  ].filter((event) => event.timestamp_paris);
-
-  events.push(...buildMissingMonitorEvents(monitors, { ...args, master: masters[0] || null }));
-  const unique = new Map();
-  for (const event of events) unique.set(event.event_id, event);
-  const sorted = [...unique.values()].sort((left, right) => String(left.timestamp_paris).localeCompare(String(right.timestamp_paris)));
-  return sorted.map((event, index) => ({
-    ...event,
-    previous_event_id: sorted[index - 1]?.event_id || null,
-    next_event_id: sorted[index + 1]?.event_id || null,
-  }));
-}
-
-function liveTimelineEvent(entityType, entityId, timestampParis, fields = {}) {
-  const status = String(fields.status || "unknown");
-  return {
-    event_id: `${entityType}:${entityId || timestampParis}`,
-    entity_type: entityType,
-    entity_id: entityId || null,
-    timestamp_paris: timestampParis || null,
-    headline: fields.headline || entityType,
-    summary: fields.summary || null,
-    status,
-    action: fields.action || null,
-    tone: timelineEventTone(status),
-    health_score: fields.health_score ?? null,
-    previous_health_score: fields.previous_health_score ?? null,
-    work_item_id: fields.work_item_id || null,
-    details_available: fields.details_available === true,
-  };
-}
-
-function buildMissingMonitorEvents(monitors, args = {}) {
-  const session = args.strategy_id === NY_OPEN_STRATEGY_ID
-    ? NY_OPEN_SESSION
-    : monitors[0]?.session || args.master?.session || "asia_open";
-  const checkpoints = monitors
-    .map((monitor) => Date.parse(monitor.timestamp_paris || monitor.created_at_paris || ""))
-    .filter(Number.isFinite)
-    .sort((left, right) => left - right);
-  const gaps = [];
-  for (let index = 1; index < checkpoints.length; index += 1) {
-    for (let cursor = checkpoints[index - 1] + 15 * 60 * 1000; cursor < checkpoints[index]; cursor += 15 * 60 * 1000) {
-      const timestamp = toParisIso(cursor).replace(/\.\d{3}/, "");
-      if (!isLiveMonitorCheckpointInWindow(session, timestamp)) continue;
-      gaps.push(liveTimelineEvent("gap", timestamp, timestamp, {
-        headline: `Checkpoint ${timestamp.slice(11, 16)}`,
-        summary: "Aucun Monitor n'a été matérialisé pour ce checkpoint.",
-        status: "MISSING_MONITOR",
-        details_available: true,
-      }));
-    }
-  }
-
-  const date = args.date;
-  const asOfParis = args.as_of_paris || new SystemClock().now().paris;
-  const asOfDate = String(asOfParis).slice(0, 10);
-  if (!date || date > asOfDate) return gaps;
-  const anchorMs = checkpoints.at(-1) ?? Date.parse(args.master?.cutoff_paris || args.master?.created_at_paris || "");
-  if (!Number.isFinite(anchorMs)) return gaps;
-  const upperBoundMs = date < asOfDate
-    ? Number.POSITIVE_INFINITY
-    : Date.parse(floorParisCheckpoint(Date.parse(asOfParis) - 2 * 60 * 1000, 15));
-  for (let cursor = anchorMs + 15 * 60 * 1000, count = 0; count < 96; cursor += 15 * 60 * 1000, count += 1) {
-    const timestamp = toParisIso(cursor).replace(/\.\d{3}/, "");
-    if (timestamp.slice(0, 10) !== date || cursor > upperBoundMs) break;
-    if (!isLiveMonitorCheckpointInWindow(session, timestamp)) break;
-    gaps.push(liveTimelineEvent("gap", timestamp, timestamp, {
-      headline: `Checkpoint ${timestamp.slice(11, 16)}`,
-      summary: "Aucun Monitor n'a été matérialisé pour ce checkpoint.",
-      status: "MISSING_MONITOR",
-      details_available: true,
-    }));
-  }
-  return gaps;
-}
-
-function buildLiveContinuitySummary(docs, args = {}) {
-  const date = args.date;
-  const cursor = (docs.liveCursors || [])
-    .filter((item) => !date || item.trading_date === date)
-    .sort((left, right) => String(right.updated_at_utc || "").localeCompare(String(left.updated_at_utc || "")))[0] || null;
-  const master = filterStrategyDate(docs.masters, date)[0] || null;
-  const thesis = filterStrategyDate(docs.theses, date)[0] || null;
-  const monitor = filterStrategyDate(docs.monitors, date)[0] || null;
-  const thesisStatus = String(thesis?.status || thesis?.thesis_status || "").toUpperCase();
-  const masterTimestamp = Date.parse(strategyTimestampFromDoc(master));
-  const monitorTimestamp = Date.parse(strategyTimestampFromDoc(monitor));
-  const monitorRequestsReplan = Number.isFinite(monitorTimestamp)
-    && (!Number.isFinite(masterTimestamp) || monitorTimestamp > masterTimestamp)
-    && /(REPLAN|NEW_MASTER|INVALIDATE|EXPIRE)/.test(String(monitor?.monitor_decision?.action || monitor?.monitor_decision?.decision || "").toUpperCase());
-  const recoveryNeeded = Boolean(master) && (!thesis || /(EXPIRED|INVALID|REPLAN)/.test(thesisStatus) || monitorRequestsReplan);
-  const gaps = buildMissingMonitorEvents(filterStrategyDate(docs.monitors, date), { ...args, master });
-  const status = cursor?.cursor_status === "LEASED" && cursor?.attempt?.workflow === "LIVE_MASTER"
-    ? "RECOVERING"
-    : recoveryNeeded
-      ? "RECOVERY_REQUIRED"
-      : ["RETRY", "BLOCKED", "DEGRADED"].includes(cursor?.cursor_status) || gaps.length
-        ? "DEGRADED"
-        : "HEALTHY";
-  return {
-    status,
-    recovery_mode: status !== "HEALTHY",
-    cursor_id: cursor?.cursor_id || null,
-    cursor_status: cursor?.cursor_status || null,
-    workflow: cursor?.attempt?.workflow || null,
-    target_checkpoint: cursor?.target_checkpoint || null,
-    last_completed_checkpoint: cursor?.last_completed_checkpoint || null,
-    pending_work_item: null,
-    failed_work_item: null,
-    missing_checkpoint_count: gaps.length,
-    latest_missing_checkpoint_paris: gaps.at(-1)?.timestamp_paris || null,
-    last_error: cursor?.attempt?.last_error || null,
-    next_action: status === "RECOVERING"
-      ? "complete_live_master_then_roll_forward"
-      : status === "RECOVERY_REQUIRED"
-        ? "rearm_live_master"
-        : status === "DEGRADED"
-          ? "reconcile_missing_live_checkpoint"
-          : "continue_normal_m15_cadence",
-  };
-}
-
-function projectMonitorTimelineDetail(monitor, previous, event) {
-  if (!monitor) return projectGapTimelineDetail(event);
-  const raw = monitor.raw_chatgpt_output && typeof monitor.raw_chatgpt_output === "object" ? monitor.raw_chatgpt_output : {};
-  const source = { ...raw, ...monitor };
-  const decision = source.monitor_decision || {};
-  const update = source.active_thesis_update || source.thesis_update || {};
-  const health = source.thesis_health_score || {};
-  const transmission = source.monitor_context_transmission || source.context_transmission || {};
-  const previousScore = firstNumber(health.previous_score, previous?.thesis_health_score?.current_score, previous?.thesis_health_score?.score, previous?.thesis_update?.health_score);
-  const currentScore = firstNumber(health.current_score, health.score, update.health_score, event.health_score);
-  const sections = [
-    timelineDetailSection("before", "Situation avant", firstNarrative(source.previous_monitor_summary, source.active_thesis_before, source.master_context_summary, previous?.monitor_decision), [
-      detailItem("Santé précédente", previousScore != null ? `${previousScore}/100` : null),
-      detailItem("Thèse précédente", firstNarrative(source.active_thesis_before, transmission.previous_thesis_status, previous?.thesis_update)),
-      ...detailItemsFromValue("Plan en cours", source.active_thesis_before?.monitoring_playbook || source.master_context_summary, 5),
-    ]),
-    timelineDetailSection("observed", "Ce qui s'est passé", firstNarrative(decision.reason_summary, decision.summary, source.session_context_summary), [
-      ...detailItemsFromValue("Attendu / réalisé", source.expected_vs_realized, 8),
-      ...detailItemsFromValue("Snapshots marché", source.rolling_1h_snapshot_summary || source.rolling_4h_snapshot_summary, 6),
-    ]),
-    timelineDetailSection("market", "Marché, macro et cross-asset", firstNarrative(source.macro_update, source.cross_asset_delta, source.technical_delta), [
-      ...detailItemsFromValue("Macro", source.macro_update || source.macro_horizon, 5),
-      ...detailItemsFromValue("Cross-asset", source.cross_asset_delta, 6),
-      ...detailItemsFromValue("Technique", source.technical_delta, 6),
-      ...detailItemsFromValue("Causalité", source.macro_technical_causality, 4),
-    ]),
-    timelineDetailSection("deduction", "Déduction", firstNarrative(decision.detailed_reason, decision.reason_summary), [
-      detailItem("Santé", currentScore != null ? `${previousScore ?? "--"} → ${currentScore}/100` : null),
-      ...detailItemsFromValue("Facteurs positifs", health.score_drivers_positive, 5, "success"),
-      ...detailItemsFromValue("Facteurs négatifs", health.score_drivers_negative, 5, "critical"),
-      ...detailItemsFromValue("Invalidations", source.invalidation_check, 5, "critical"),
-      ...detailItemsFromValue("Signaux faibles", source.weak_signals, 4, "warning"),
-    ]),
-    timelineDetailSection("decision", "Décision", firstNarrative(decision.reason_summary, decision.detailed_reason), [
-      detailItem("Action", decision.action || decision.decision, timelineEventTone(decision.action || decision.decision)),
-      detailItem("Thèse après", decision.thesis_status_after || update.status || update.thesis_status),
-      detailItem("Alerte", decision.alert_level || source.alert?.severity),
-      detailItem("Action immédiate", decision.next_action || decision.action_now),
-    ]),
-    timelineDetailSection("next", "Suite attendue", firstNarrative(decision.next_monitoring_focus, update.next_focus, transmission.next_monitor_focus), [
-      ...detailItemsFromValue("Points de surveillance", decision.next_monitoring_focus || update.next_focus || transmission.next_monitor_focus, 8),
-      detailItem("Prochaine revalidation", decision.next_revalidation_time || update.next_revalidation_time),
-      ...detailItemsFromValue("Conditions", update.wait_to_go_conditions || source.wait_to_go_check, 5),
-    ]),
-  ].filter((section) => section.summary || section.items.length);
-  return {
-    event,
-    headline: event.headline,
-    summary: event.summary,
-    timestamp_paris: event.timestamp_paris,
-    status: event.status,
-    tone: event.tone,
-    sections,
-    data_quality: source.data_quality || null,
-  };
-}
-
-function projectWorkTimelineDetail(workItem, workEvent, event) {
-  const error = workItem?.last_error || workEvent?.details || {};
-  return {
-    event,
-    headline: event.headline,
-    summary: event.summary || error.message || "Événement d'orchestration du desk.",
-    timestamp_paris: event.timestamp_paris,
-    status: event.status,
-    tone: event.tone,
-    sections: [
-      timelineDetailSection("incident", "Incident et portée", error.message || event.summary, [
-        detailItem("Workflow", workItem?.workflow || workEvent?.workflow),
-        detailItem("Code", error.code || error.error_code),
-        detailItem("Tentative", workItem?.attempt_count ?? workEvent?.attempt_count),
-        detailItem("Échecs", workItem?.failure_count),
-      ]),
-      timelineDetailSection("recovery", "Résilience", continuityWorkSummary(workItem), [
-        detailItem("État", workItem?.status || workEvent?.status),
-        detailItem("Prochain essai", workItem?.retry_after_utc),
-        detailItem("Mode", "borné"),
-        detailItem("Action suivante", "Reprendre le prochain step replay séquentiel"),
-      ]),
-    ],
-  };
-}
-
-function projectGapTimelineDetail(event) {
-  return {
-    event,
-    headline: event.headline,
-    summary: event.summary,
-    timestamp_paris: event.timestamp_paris,
-    status: event.status,
-    tone: "critical",
-    sections: [timelineDetailSection("gap", "Checkpoint non matérialisé", event.summary, [
-      detailItem("Conséquence", "Ce point ne doit pas être confondu avec une décision NO_ACTION."),
-      detailItem("Continuité", "Le prochain Master ou Monitor valide doit couvrir cette période dans son analyse de rattrapage."),
-    ])],
-  };
-}
-
-function projectGenericTimelineDetail(docs, event) {
-  const collections = { master: docs.masters, thesis: docs.theses, setup: docs.setups, trade: docs.trades };
-  const source = (collections[event.entity_type] || []).find((item) => [item.analysis_id, item.master_id, item.thesis_id, item.setup_record_id, item.setup_id, item.trade_id].includes(event.entity_id)) || {};
-  return {
-    event,
-    headline: event.headline,
-    summary: event.summary,
-    timestamp_paris: event.timestamp_paris,
-    status: event.status,
-    tone: event.tone,
-    sections: [timelineDetailSection("summary", "Synthèse", event.summary, detailItemsFromValue("Détails", source.full_analysis || source, 12))],
-  };
-}
-
-function timelineDetailSection(key, title, summary, items = []) {
-  return { key, title, summary: summary || null, items: items.filter((item) => item?.value) };
-}
-
-function detailItem(label, value, tone = "neutral") {
-  const readable = readableTimelineValue(value);
-  return readable ? { label, value: readable, tone } : null;
-}
-
-function detailItemsFromValue(label, value, limit = 6, tone = "neutral") {
-  if (value == null) return [];
-  if (Array.isArray(value)) {
-    return value.slice(0, limit).map((item, index) => detailItem(`${label} ${index + 1}`, item, tone)).filter(Boolean);
-  }
-  if (typeof value === "object") {
-    return Object.entries(value).slice(0, limit).map(([key, item]) => detailItem(humanTimelineLabel(key), item, tone)).filter(Boolean);
-  }
-  return [detailItem(label, value, tone)].filter(Boolean);
-}
-
-function readableTimelineValue(value) {
-  if (value == null || value === "") return null;
-  if (["string", "number", "boolean"].includes(typeof value)) return String(value);
-  if (Array.isArray(value)) return value.map(readableTimelineValue).filter(Boolean).slice(0, 5).join(" · ") || null;
-  if (typeof value === "object") {
-    const direct = firstNonEmpty(value.summary, value.reason_summary, value.detailed_reason, value.condition, value.label, value.message, value.action, value.decision, value.value);
-    if (direct != null && typeof direct !== "object") return String(direct);
-    return Object.entries(value)
-      .filter(([, item]) => item != null && typeof item !== "object")
-      .slice(0, 4)
-      .map(([key, item]) => `${humanTimelineLabel(key)} : ${item}`)
-      .join(" · ") || null;
-  }
-  return null;
-}
-
-function firstNarrative(...values) {
-  for (const value of values) {
-    const readable = readableTimelineValue(value);
-    if (readable) return readable;
-  }
-  return null;
-}
-
-function humanTimelineLabel(value) {
-  const labels = {
-    previous_score: "Santé précédente",
-    current_score: "Santé actuelle",
-    expected: "Attendu",
-    realized: "Réalisé",
-    next_action: "Action suivante",
-    next_revalidation_time: "Prochaine revalidation",
-    dominant_scenario: "Scénario dominant",
-    validated_elements: "Éléments validés",
-    weakened_elements: "Éléments affaiblis",
-    invalidated_elements: "Éléments invalidés",
-  };
-  return labels[value] || String(value || "Détail").replaceAll("_", " ").replace(/^./, (char) => char.toUpperCase());
-}
-
-function timelineEventTone(value) {
-  const status = String(value || "").toUpperCase();
-  if (/(FAILED|MISSING|INVALID|EXPIRE|REPLAN|CANCEL|CRITICAL)/.test(status)) return "critical";
-  if (/(RISK|WEAK|WAIT|RETRY|WARNING|READY)/.test(status)) return "warning";
-  if (/(TRIGGER|ACTIVE|COMPLETED|HEALTHY|SUCCESS)/.test(status)) return "success";
-  return "info";
-}
-
-
-function continuityWorkSummary(item) {
-  if (!item) return "Aucun travail d'orchestration associé.";
-  if (item.status === "CLAIMED") return "Le worker traite actuellement ce travail.";
-  if (item.status === "READY") return "Le travail est prêt pour le prochain réveil du worker.";
-  if (item.status === "FAILED") return "Le travail requiert un réarmement avant reprise.";
-  return `État du travail : ${item.status || "inconnu"}.`;
-}
-
-function compactStrategyMaster(master) {
-  const compact = compactMasterAnalysis(master) || {};
-  const full = master?.full_analysis || {};
-  const executive = full.executive_summary || {};
-  const thesis = full.active_thesis || master?.active_thesis || {};
-  const setup = preferredSetupFromMasterFull(full);
-  return {
-    ...compact,
-    analysis_id: compact.analysis_id || master?.analysis_id || null,
-    status: master?.status || "saved",
-    decision: firstNonEmpty(compact.decision, executive.final_decision, master?.final_decision, setup ? "setup_candidate" : null),
-    setup_decision: firstNonEmpty(full.setup_decision, master?.setup_decision, setup ? "setup_candidate" : null),
-    position_decision: firstNonEmpty(full.position_decision, master?.position_decision, "no_position"),
-    instrument: firstNonEmpty(compact.instrument, thesis.instrument, setup?.instrument),
-    direction: firstNonEmpty(compact.direction, thesis.direction, setup?.direction),
-    confidence_pct: firstNumber(compact.confidence_pct, thesis.confidence_pct, setup?.confidence_pct),
-    summary: firstNonEmpty(compact.summary, executive.summary, master?.summary, thesis.dominant_scenario, thesis.summary, setup?.label, setup?.setup_id),
-    scenarios: full.scenarios || full.scenario_transformation_map || [],
-  };
-}
-
-function compactStrategyThesis(thesis) {
-  if (!thesis) return null;
-  return {
-    thesis_id: thesis.thesis_id || null,
-    status: thesis.status || null,
-    instrument: thesis.instrument || null,
-    direction: thesis.direction || null,
-    dominant_scenario: thesis.dominant_scenario || thesis.summary || null,
-    confidence_pct: thesis.confidence_pct ?? null,
-    health_score: thesis.health_score ?? null,
-    valid_from: thesis.valid_from || thesis.created_at_paris || null,
-    valid_until: thesis.valid_until || thesis.requires_replan_after || null,
-  };
-}
-
-function compactStrategySetup(setup, args = {}) {
-  if (!setup) return null;
-  const pricing_mode = normalizeNyOpenPricingMode(args.pricing_mode);
-  const takeProfits = setup.take_profits || setup.targets || setup.take_profit || setup.tp || [];
-  const targetMap = setupTakeProfitMap(takeProfits);
-  const selectedReplay = setup.strict_replays?.[pricing_mode] || (pricing_mode === NY_OPEN_DEFAULT_PRICING_MODE ? setup.strict_replay_result || setup.replay_result : null);
-  const selectedTradeId = setup.strict_trade_ids?.[pricing_mode] || (pricing_mode === NY_OPEN_DEFAULT_PRICING_MODE ? setup.strict_trade_id : null);
-  const selectedResultR = setup.strict_results_R?.[pricing_mode] ?? selectedReplay?.r_result ?? (pricing_mode === NY_OPEN_DEFAULT_PRICING_MODE ? setup.strict_replay_result?.r_result ?? setup.replay_result?.r_result : null);
-  return {
-    setup_id: setup.setup_id || setup.setup_record_id || null,
-    setup_record_id: setup.setup_record_id || null,
-    label: setup.label || setup.name || setup.setup_id || null,
-    status: setup.status || setup.lifecycle_status || null,
-    instrument: setup.instrument || null,
-    direction: setup.direction || null,
-    setup_type: setup.setup_type || null,
-    entry_zone: setup.entry_zone || setup.entry || null,
-    entry: setup.entry ?? setup.entry_price ?? null,
-    stop_loss: setup.stop_loss ?? setup.stop ?? null,
-    take_profits: takeProfits,
-    tp1: targetMap.tp1 ?? null,
-    tp2: targetMap.tp2 ?? null,
-    tp3: targetMap.tp3 ?? null,
-    confidence_pct: setup.confidence_pct ?? null,
-    risk_pct: setup.risk_pct ?? null,
-    rr_minimum: setup.rr_minimum ?? setup.rr ?? null,
-    triggered_at_paris: setup.triggered_at_paris || null,
-    strict_mode: setup.strict_mode === true,
-    pricing_mode,
-    strict_pricing_mode: pricing_mode,
-    strict_replay_status: selectedReplay?.replay_status || (pricing_mode === NY_OPEN_DEFAULT_PRICING_MODE ? setup.strict_replay_status || setup.replay_status : null),
-    strict_trade_id: selectedTradeId || null,
-    strict_result_R: selectedResultR ?? null,
-    strict_replays: setup.strict_replays || null,
-    strict_results_R: setup.strict_results_R || null,
-  };
-}
-
-function setupTakeProfitMap(value) {
-  const output = {};
-  const items = Array.isArray(value)
-    ? value.map((item, index) => [String(item?.name || `tp${index + 1}`).toLowerCase(), item?.target ?? item?.price ?? item?.level ?? item])
-    : value && typeof value === "object"
-      ? Object.entries(value).map(([key, item]) => [String(key).toLowerCase(), item?.target ?? item?.price ?? item?.level ?? item])
-      : value != null ? [["tp1", value]] : [];
-  for (const [key, item] of items) {
-    if (key.includes("1")) output.tp1 = item;
-    else if (key.includes("2")) output.tp2 = item;
-    else if (key.includes("3")) output.tp3 = item;
-  }
-  return output;
-}
-
-function compactStrategyMonitor(monitor) {
-  if (!monitor) return null;
-  return {
-    monitor_id: monitor.monitor_id || monitor.id || null,
-    timestamp_paris: monitor.timestamp_paris || monitor.created_at_paris || null,
-    status: monitor.status || "saved",
-    action: monitor.monitor_decision?.action || monitor.monitor_decision?.decision || monitor.action || null,
-    summary: monitor.monitor_decision?.summary || monitor.monitor_decision?.reason_summary || monitor.summary || null,
-    health_score: monitor.thesis_health_score?.score ?? monitor.thesis_health_score?.current_score ?? monitor.thesis_update?.health_score ?? monitor.health_score ?? null,
-  };
-}
-
-function compactStrategyTrade(trade) {
-  if (!trade) return null;
-  return {
-    trade_id: trade.trade_id || null,
-    setup_id: trade.setup_id || trade.setup_record_id || null,
-    date: strategyDateFromDoc(trade),
-    instrument: trade.instrument || null,
-    direction: trade.direction || null,
-    status: trade.status || null,
-    entry_price: trade.entry_price ?? trade.entry ?? null,
-    exit_price: trade.exit_price ?? null,
-    stop_loss: trade.stop_loss ?? trade.stop_initial ?? null,
-    result_R: trade.result_R ?? trade.result_r ?? trade.r_result ?? null,
-    close_reason: trade.close_reason || null,
-    strict_mode: trade.strict_mode === true,
-    pricing_mode: tradePricingMode(trade),
-    replay_id: trade.replay_id || null,
-    opened_at_paris: trade.opened_at_paris || trade.executed_at_paris || null,
-    closed_at_paris: trade.closed_at_paris || trade.exit_at_paris || null,
-  };
-}
-
-function deriveNyOpenStrategyStatus({ master, setup, trade, activeThesis }) {
-  if (trade && isActiveTradeStatus(trade.status)) return "POSITION_ACTIVE";
-  if (trade && isClosedTrade(trade)) return "TRADE_CLOSED";
-  if (setup && isTriggeredSetup(setup)) return "SETUP_TRIGGERED";
-  if (setup) return "SETUP_CANDIDATE";
-  if (activeThesis) return activeThesis.status || "WAIT_MONITORED";
-  if (master) return "MASTER_SAVED";
-  return "MASTER_NOT_LAUNCHED";
-}
-
-function nyOpenNextAction({ pack, bundle, master, setup, trade }) {
-  if (!pack) return "generate_ny_open_pack";
-  if (!bundle || bundle?.data_quality?.execution_allowed === false) return "prepare_nyopen_master_bundle";
-  if (!master) return "copy_prompt_to_chatgpt_and_run_master";
-  if (trade && isActiveTradeStatus(trade.status)) return "manage_active_position";
-  if (setup && isTriggeredSetup(setup)) return "track_trade_or_mark_result";
-  if (setup) return "wait_for_trigger_or_mark_setup_triggered";
-  return "wait_for_setup_or_run_monitor";
-}
-
-function nyOpenBlockers({ pack, bundle }) {
-  const blockers = [];
-  if (!pack) blockers.push("ny_open_pack_missing");
-  if (bundle?.data_quality?.execution_allowed === false) blockers.push(...(bundle.data_quality.blockers || bundle.data_quality.missing || ["master_bundle_degraded"]));
-  return dedupeBy(blockers, (item) => item);
-}
-
-function nyOpenWarnings({ pack, bundle, master }) {
-  const warnings = [];
-  if (pack?.status && pack.status !== "ready") warnings.push(`pack_${pack.status}`);
-  warnings.push(...(bundle?.data_quality?.warnings || []));
-  if (!master) warnings.push("master_non_lance");
-  return dedupeBy(warnings, (item) => item);
-}
-
-function normalizeNyOpenAction(args = {}) {
-  const action = args.action || "mark_setup_triggered";
-  const allowed = new Set(["mark_setup_triggered", "mark_tp1", "mark_tp2", "mark_tp3", "mark_stopped", "mark_expired", "mark_cancelled", "replay_strict_setup", "recompute_strategy_performance"]);
-  if (!allowed.has(action)) {
-    throw new Error(`unsupported_strategy_action:${action}`);
-  }
-  return action;
-}
-
-function strategyActionPatch(action, tick) {
-  const common = {
-    updated_at: tick.utc,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  };
-  if (action === "mark_setup_triggered") {
-    return {
-      ...common,
-      status: "SETUP_TRIGGERED",
-      lifecycle_status: "SETUP_TRIGGERED",
-      triggered_at: tick.utc,
-      triggered_at_utc: tick.utc,
-      triggered_at_paris: tick.paris,
-    };
-  }
-  if (action === "mark_tp1") return { ...common, status: "TP1_TAKEN", tp1_at_paris: tick.paris };
-  if (action === "mark_tp2") return { ...common, status: "TP2_TAKEN", tp2_at_paris: tick.paris };
-  if (action === "mark_tp3") return { ...common, status: "CLOSED", close_reason: "TP3", tp3_at_paris: tick.paris, closed_at_paris: tick.paris };
-  if (action === "mark_stopped") return { ...common, status: "STOPPED", close_reason: "STOP", stopped_at_paris: tick.paris, closed_at_paris: tick.paris };
-  if (action === "mark_expired") return { ...common, status: "EXPIRED", expired_at_paris: tick.paris };
-  if (action === "mark_cancelled") return { ...common, status: "CANCELLED", cancelled_at_paris: tick.paris };
-  return common;
-}
-
-function strategyAuditLog({ strategy_id, action, document_type, document_id, previous_value, new_value, performed_by, reason, tick }) {
-  return {
-    audit_id: stableVNextId("strategy_audit", `${strategy_id}_${action}`, `${document_id || "strategy"}_${tick.utc}`),
-    strategy_id,
-    event_type: action,
-    document_type,
-    document_id,
-    previous_value,
-    new_value,
-    reason: reason || null,
-    performed_by: performed_by || "dashboard_operator",
-    created_at: tick.utc,
-    created_at_utc: tick.utc,
-    created_at_paris: tick.paris,
-  };
-}
-
-function buildNyOpenMasterPrompt({ strategy_id, date, cutoff_paris, bundle, contract_context }) {
-  const context = contract_context || bundle?.contract_context || null;
-  const scope = bundle?.resolved_scope || nyOpenOperationalScope(date, cutoff_paris);
-  const savePayload = bundle?.save_target?.suggested_payload || contractSavePayload(context);
-  const payload = {
-    workflow: "NY_OPEN_STRATEGY_MASTER_1530",
-    strategy_id,
-    strategy_name: NY_OPEN_STRATEGY_NAME,
-    date,
-    session: NY_OPEN_SESSION,
-    cutoff_paris,
-    required_first_tool: "get_active_contracts",
-    required_data_tool: "get_master_cutoff_bundle avec le scope exact; prepare_nyopen_master_bundle uniquement si le bundle est absent ou degrade",
-    save_tool: "save_master_analysis",
-    save_must_include: {
-      ...savePayload,
-      strategy_id,
-      session: NY_OPEN_SESSION,
-      date,
-      trading_date: date,
-      run_id: scope.run_id,
-      as_of_utc: scope.as_of_utc,
-    },
-    bundle_read_scope: {
-      strategy_id,
-      session: NY_OPEN_SESSION,
-      mode: "live",
-      trading_date: date,
-      run_id: scope.run_id,
-      as_of_utc: scope.as_of_utc,
-      timezone: "Europe/Paris",
-      cutoff_paris,
-    },
-    backend_bundle: {
-      bundle_id: bundle?.bundle_id || null,
-      status: bundle?.data_quality?.status || bundle?.status || "missing",
-      execution_allowed: bundle?.data_quality?.execution_allowed ?? false,
-      missing: bundle?.data_quality?.missing || [],
-      blockers: bundle?.data_quality?.blockers || [],
-      source_hash: bundle?.source_hash || null,
-      pack_build_id: bundle?.pack_build_id || null,
-      source_coverage: bundle?.pack_or_source_context?.pack?.source_coverage || null,
-      market_availability: bundle?.market_availability || null,
-    },
-    rules: [
-      "Appeler get_active_contracts au debut du run et verifier le contrat Master actif.",
-      "Utiliser uniquement les donnees visibles au cutoff_paris. Aucun lookahead.",
-      "Verifier que le pack immuable couvre as_of_utc; ne jamais reutiliser un ancien pack de cutoff pour un replan ulterieur.",
-      "Seul missing_unexpected est une panne. stale_market_closed et not_yet_open sont des etats normaux de session.",
-      "Utiliser last_known/H4 comme contexte seulement, jamais comme confirmation fraiche ou trigger.",
-      "Un gap technologique est non applicable avant la premiere cotation de session; un VIX cash ferme ne bloque pas seul l'analyse.",
-      "Produire un Master NY Open 15:30 avec these, setup et position separes.",
-      "Ne pas inventer de trade execute. Les performances viennent uniquement des trades executes sauvegardes.",
-      "Chaque save doit inclure contract_name, schema_version et contract_hash.",
-    ],
-  };
-  return {
-    contract_context: context,
-    title: `NY Open Master ${date} 15:30`,
-    text: [
-      "Tu es ChatGPT dans un nouveau chat sans contexte prealable.",
-      "Objectif: lancer le workflow Master de la strategie NY Open 15:30.",
-      "Etapes obligatoires:",
-      "1. Appelle get_active_contracts.",
-      "2. Appelle get_nyopen_strategy_state avec la date ci-dessous.",
-      "3. Si le bundle Master n'est pas ready, appelle prepare_nyopen_master_bundle.",
-      "4. Appelle get_master_cutoff_bundle avec bundle_read_scope exactement, puis verifie market_availability et la couverture du pack.",
-      "5. Realise l'analyse Master en respectant le contrat actif et le cutoff.",
-      "6. Pars de save_target.suggested_payload et sauvegarde avec save_master_analysis sans modifier le scope ni le pack_build_id.",
-      "",
-      promptJson(payload),
-    ].join("\n"),
-    payload,
-  };
-}
-
-function promptJson(value) {
-  return JSON.stringify(value, null, 2);
-}
-
-function assertRunPackScope(run, pack) {
-  const mismatches = [];
-  const expectedDate = run.trading_date || run.date;
-  const actualDate = pack.trading_date || pack.date || pack.resolved_scope?.trading_date;
-  for (const [field, expected, actual] of [
-    ["pack_id", run.pack_id, pack.pack_id],
-    ["pack_build_id", run.pack_build_id, pack.pack_build_id],
-    ["strategy_id", run.strategy_id, pack.strategy_id || pack.resolved_scope?.strategy_id],
-    ["session", run.session, pack.session || pack.resolved_scope?.session],
-    ["trading_date", expectedDate, actualDate],
-  ]) {
-    if (expected !== actual) mismatches.push({ field, expected, actual: actual ?? null });
-  }
-  if (mismatches.length) {
-    throw deskError("PACK_BUILD_MISMATCH", "Pinned pack build does not match the replay scope.", { mismatches });
-  }
-  if (!pack.source_manifest_hash && !pack.manifest?.source_manifest_hash) {
-    throw deskError("DATASET_SCHEMA_MISMATCH", "Pinned pack build has no source_manifest_hash.", {
-      pack_id: run.pack_id,
-      pack_build_id: run.pack_build_id,
-    });
-  }
-  assertReplaySourceCoverage(run, pack, run.end_time || run.current_replay_time || run.cutoff_utc);
-  return true;
-}
-
-function assertReplaySourceCoverage(run, pack, requiredCutoff) {
-  const coverage = replaySourceCoverage(pack);
-  const requiredMs = Date.parse(requiredCutoff || "");
-  const coverageMs = Date.parse(coverage.end_utc || "");
-  const coreToleranceMs = 10 * 60 * 1000;
-  const requiredDatasets = new Set((run.instruments || ["MNQ", "MES"]).map((instrument) => ({
-    MNQ: "MNQ_M5",
-    MES: "MES_M5",
-    NQ: "NQ_M15",
-    ES: "ES_M15",
-  })[instrument]).filter(Boolean));
-  const coreFailures = Object.entries(coverage.core_market_max_utc)
-    .filter(([dataset]) => requiredDatasets.has(dataset))
-    .filter(([, value]) => !Number.isFinite(Date.parse(value || "")) || (Number.isFinite(requiredMs) && Date.parse(value) < requiredMs - coreToleranceMs))
-    .map(([dataset, value]) => ({ dataset, max_timestamp_utc: value || null }));
-  if (!Number.isFinite(coverageMs) || (Number.isFinite(requiredMs) && coverageMs < requiredMs) || coreFailures.length) {
-    throw deskError("REPLAY_SOURCE_COVERAGE_INSUFFICIENT", "Pinned source pack does not cover the requested replay range.", {
-      backtest_id: run.backtest_id || null,
-      pack_id: pack.pack_id || null,
-      pack_build_id: pack.pack_build_id || null,
-      pack_purpose: coverage.pack_purpose,
-      requested_until_utc: Number.isFinite(requiredMs) ? new Date(requiredMs).toISOString() : requiredCutoff || null,
-      source_coverage_end_utc: coverage.end_utc,
-      core_market_failures: coreFailures,
-      next_action: "build_and_pin_full_replay_source_pack",
-    });
-  }
-  return coverage;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function pinReplaySources(run, pack, contracts, creationHash, tick) {
   if (!contracts?.master_contract || !contracts?.monitor_contract) {
@@ -6318,298 +3820,19 @@ function summarizeReplayState(backtest, trades, results) {
 }
 
 
-function rawWindowQuality(rows, { reason, attempted_raw_refs = [] } = {}) {
-  const rowCount = rows?.length || 0;
-  return {
-    status: rowCount ? "ready" : "missing",
-    execution_allowed: rowCount > 0,
-    row_count: rowCount,
-    missing_reason: rowCount ? null : reason,
-    attempted_raw_refs,
-    raw_refs_available: rowCount > 0,
-  };
-}
 
-function assertRawWindowQuery(args, query, run = null) {
-  const fromMs = Date.parse(args.from);
-  const toMs = Date.parse(args.to);
-  const asOfMs = Date.parse(query.as_of_utc);
-  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || fromMs > toMs) {
-    throw deskError("INVALID_SCOPE", "Raw-window bounds must be valid and ordered.", { from: args.from, to: args.to });
-  }
-  if (toMs > asOfMs) {
-    throw deskError("LOOKAHEAD_DETECTED", "Raw-window end exceeds as_of_utc.", { to: args.to, as_of_utc: query.as_of_utc });
-  }
-  if (run) {
-    const runClockMs = Date.parse(run.current_replay_time || run.cutoff_utc);
-    if (Number.isFinite(runClockMs) && toMs > runClockMs) {
-      throw deskError("CLOCK_LIMIT_EXCEEDED", "Raw-window end exceeds the replay clock.", {
-        to: args.to,
-        current_replay_time: run.current_replay_time || null,
-      });
-    }
-    if (args.pack_id !== run.pack_id || args.pack_build_id !== run.pack_build_id) {
-      throw deskError("PACK_BUILD_MISMATCH", "Raw-window pack does not match the replay-pinned build.", {
-        expected_pack_id: run.pack_id,
-        actual_pack_id: args.pack_id || null,
-        expected_pack_build_id: run.pack_build_id,
-        actual_pack_build_id: args.pack_build_id || null,
-      });
-    }
-  }
-  return true;
-}
 
-async function buildScopedPackRawWindow(store, args, query, run = null) {
-  const pack = await store.getDeskPack({
-    pack_id: args.pack_id,
-    pack_build_id: args.pack_build_id,
-    mode: query.mode,
-  });
-  if (!pack.pack_build_id) {
-    throw deskError("PACK_BUILD_NOT_READY", "Operational raw windows require an immutable V2 pack build.", { pack_id: args.pack_id });
-  }
-  if (run) assertRunPackScope(run, pack);
-  const timeframe = canonicalTimeframe(args.timeframe);
-  const candidates = rawWindowDatasetCandidates(args.instrument, timeframe);
-  const selectedDataset = candidates.find((dataset) => DATASETS.includes(dataset) && datasetRef(pack, dataset));
-  if (!selectedDataset) {
-    throw deskError("DATASET_NOT_FOUND", "No immutable dataset can satisfy this raw-window request.", {
-      pack_id: pack.pack_id,
-      pack_build_id: pack.pack_build_id,
-      instrument: args.instrument,
-      timeframe,
-      attempted_datasets: candidates,
-    });
-  }
-  const dataset = await store.getDataset({
-    pack_id: pack.pack_id,
-    pack_build_id: pack.pack_build_id,
-    dataset: selectedDataset,
-    as_of_utc: query.as_of_utc,
-    mode: query.mode,
-    format: "json",
-    max_rows: Number.MAX_SAFE_INTEGER,
-  });
-  const ref = datasetRef(pack, selectedDataset);
-  const sourceRows = (dataset.rows || []).filter((row) => rowMatchesInstrument(row, args.instrument, selectedDataset));
-  const normalized = normalizeFeatureRows(sourceRows, {
-    instrument: args.instrument,
-    timeframe: datasetTimeframe(selectedDataset, timeframe),
-    rawRef: ref.object_path || ref.storage_path || null,
-  });
-  const direct = normalized.filter((row) => canonicalTimeframe(row.timeframe) === timeframe);
-  const baseRows = direct.length ? direct : normalized.filter((row) => canonicalTimeframe(row.timeframe) === "5");
-  const derived = direct.length || timeframe === "5" ? baseRows : resampleRows(baseRows, timeframe);
-  const rows = filterRawWindowRows(derived, args).slice(0, Math.max(1, Math.min(Number(args.max_rows) || 500, 5000)));
-  const objectRef = {
-    dataset: selectedDataset,
-    object_path: ref.object_path || ref.storage_path || null,
-    gcs_generation: ref.gcs_generation || null,
-    sha256: ref.sha256 || null,
-  };
-  const resolved_scope = run
-    ? { ...(run.resolved_scope || {}), run_id: query.run_id, as_of_utc: query.as_of_utc }
-    : operationalQueryScope(query);
-  return {
-    ok: rows.length > 0,
-    status: rows.length ? "ready" : "missing",
-    source: direct.length || timeframe === "5" ? "immutable_pack_dataset" : `derived_from_${datasetTimeframe(selectedDataset, "5")}`,
-    strategy_id: query.strategy_id,
-    session: query.session,
-    mode: query.mode,
-    trading_date: query.trading_date,
-    run_id: query.run_id,
-    backtest_id: query.backtest_id || null,
-    pack_id: pack.pack_id,
-    pack_build_id: pack.pack_build_id,
-    source_manifest_hash: pack.source_manifest_hash || pack.manifest?.source_manifest_hash || null,
-    resolved_scope,
-    scope_hash: run?.scope_hash || resolved_scope.scope_hash || null,
-    as_of_utc: query.as_of_utc,
-    instrument: args.instrument,
-    symbol: marketFeedSymbol(args.instrument),
-    timeframe,
-    from: args.from,
-    to: args.to,
-    row_count: rows.length,
-    rows,
-    integrity: dataset.integrity,
-    raw_ref: objectRef,
-    raw_refs: [objectRef],
-    attempted_raw_refs: candidates,
-    missing_reason: rows.length ? null : "immutable_pack_dataset_has_no_rows_in_window",
-    data_quality: rawWindowQuality(rows, {
-      reason: "immutable_pack_dataset_has_no_rows_in_window",
-      attempted_raw_refs: candidates,
-    }),
-    anti_lookahead_compliant: true,
-    computed_with_cutoff: query.as_of_utc,
-  };
-}
 
-function rawWindowDatasetCandidates(instrument, timeframe) {
-  const exact = featureDatasetCandidates(instrument)[timeframe] || [];
-  const m5 = featureDatasetCandidates(instrument)["5"] || [];
-  const combined = [];
-  if (["DXY", "VIX", "GC", "CL"].includes(instrument)) {
-    combined.push(timeframe === "4H" ? "DXY_CL_GC_VIX_H4" : "DXY_CL_GC_VIX");
-  }
-  if (["US10Y", "US02Y"].includes(instrument)) {
-    combined.push(timeframe === "4H" ? "US10Y_US02Y_H4" : "US10Y_US02Y");
-  }
-  return dedupeBy([...exact, ...combined, ...m5], (item) => item);
-}
 
-function rowMatchesInstrument(row, instrument, dataset) {
-  const actual = String(row.asset || row.instrument || row.symbol || "").toUpperCase().replace("1!", "");
-  const expected = String(instrument || "").toUpperCase().replace("1!", "");
-  if (!actual) return String(dataset).startsWith(expected);
-  return actual === expected;
-}
 
-function datasetTimeframe(dataset, fallback) {
-  const match = String(dataset || "").toUpperCase().match(/_(M5|M15|H1|H4)$/);
-  return match ? canonicalTimeframe(match[1]) : canonicalTimeframe(fallback);
-}
 
-function filterRawWindowRows(rows, { from, to }) {
-  const fromMs = Date.parse(from);
-  const toMs = Date.parse(to);
-  return (rows || [])
-    .filter((row) => {
-      const rowMs = Date.parse(row.timestamp_utc || row.timestamp_paris || row.timestamp || row.time);
-      if (!Number.isFinite(rowMs)) return false;
-      if (Number.isFinite(fromMs) && rowMs < fromMs) return false;
-      if (Number.isFinite(toMs) && rowMs > toMs) return false;
-      return true;
-    })
-    .sort((left, right) => String(left.timestamp_utc || left.timestamp_paris).localeCompare(String(right.timestamp_utc || right.timestamp_paris)));
-}
 
-function marketFeedSymbol(instrument) {
-  const mapping = {
-    MNQ: "MNQ1!",
-    MES: "MES1!",
-    NQ: "NQ1!",
-    ES: "ES1!",
-    GC: "GC1!",
-    CL: "CL1!",
-    DXY: "DXY",
-    VIX: "VIX",
-    US10Y: "US10Y",
-    US02Y: "US02Y",
-  };
-  return mapping[instrument] || instrument;
-}
 
-function marketFeedCandidates(instrument, timeframe) {
-  const symbol = marketFeedSymbol(instrument);
-  const cleanSymbol = symbol.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-  const tf = canonicalTimeframe(timeframe);
-  const readableTf = { "5": "M5", "15": "M15", "1H": "H1", "4H": "H4" }[tf] || tf;
-  return dedupeBy([
-    writerDocumentId("prod", "tradingview", symbol, tf),
-    writerDocumentId("prod", "tradingview", symbol, readableTf),
-    safeDocId("prod", "tradingview", symbol, tf),
-    safeDocId("prod", "tradingview", symbol, readableTf),
-    writerDocumentId("tradingview", symbol, tf),
-    writerDocumentId("tradingview", symbol, readableTf),
-    safeDocId("tradingview", symbol, tf),
-    safeDocId("tradingview", symbol, readableTf),
-    `${cleanSymbol}_${tf}`,
-    `${cleanSymbol}_${readableTf}`,
-    `${symbol}_${tf}`,
-    `${symbol}_${readableTf}`,
-  ], (item) => item);
-}
 
-function writerDocumentId(...parts) {
-  return parts.map((part) => {
-    const text = String(part ?? "").trim()
-      .replaceAll("/", "_")
-      .replaceAll("\\", "_")
-      .replaceAll(" ", "_");
-    return text || "_";
-  }).join("__");
-}
 
-function canonicalTimeframe(value) {
-  const text = String(value || "").trim().toUpperCase();
-  return {
-    M1: "1",
-    "1M": "1",
-    "1": "1",
-    M5: "5",
-    "5M": "5",
-    "5": "5",
-    M15: "15",
-    "15M": "15",
-    "15": "15",
-    H1: "1H",
-    "1H": "1H",
-    "60": "1H",
-    H4: "4H",
-    "4H": "4H",
-    "240": "4H",
-  }[text] || text;
-}
 
-function timeframeMinutes(timeframe) {
-  return {
-    "1": 1,
-    "5": 5,
-    "15": 15,
-    "1H": 60,
-    "4H": 240,
-  }[canonicalTimeframe(timeframe)] || 5;
-}
 
-function resampleRows(rows, targetTimeframe) {
-  const bucketMs = timeframeMinutes(targetTimeframe) * 60 * 1000;
-  const buckets = new Map();
-  for (const row of rows || []) {
-    const epochMs = Date.parse(row.timestamp_utc || row.timestamp_paris || row.timestamp || row.time);
-    if (!Number.isFinite(epochMs)) continue;
-    const bucketStart = Math.floor(epochMs / bucketMs) * bucketMs;
-    const bucket = buckets.get(bucketStart) || [];
-    bucket.push(row);
-    buckets.set(bucketStart, bucket);
-  }
-  return [...buckets.entries()].sort(([left], [right]) => left - right).map(([bucketStart, bucket]) => {
-    const sorted = bucket.slice().sort((left, right) => String(left.timestamp_utc || left.timestamp_paris).localeCompare(String(right.timestamp_utc || right.timestamp_paris)));
-    const first = sorted[0];
-    const last = sorted.at(-1);
-    const high = maxBy(sorted, (row) => numeric(row.high, Number.NEGATIVE_INFINITY));
-    const low = maxBy(sorted, (row) => -numeric(row.low, Number.POSITIVE_INFINITY));
-    return {
-      ...last,
-      timeframe: canonicalTimeframe(targetTimeframe),
-      timestamp_utc: normalizeUtcIso(new Date(bucketStart).toISOString()),
-      timestamp_paris: toParisIso(bucketStart),
-      open: first.open,
-      high: high?.high ?? null,
-      low: low?.low ?? null,
-      close: last.close,
-      volume: sorted.reduce((sum, row) => sum + numeric(row.volume, 0), 0),
-      source: `derived_from_${canonicalTimeframe(first.timeframe || "5")}`,
-      derived_from_timeframe: canonicalTimeframe(first.timeframe || "5"),
-      raw_refs: dedupeBy(sorted.flatMap((row) => row.raw_refs || (row.raw_ref ? [row.raw_ref] : [])), (item) => item),
-    };
-  });
-}
 
-function safeDocId(...parts) {
-  return parts.map((part) => {
-    const text = String(part ?? "").trim()
-      .replaceAll("/", "_")
-      .replaceAll("\\", "_")
-      .replaceAll(" ", "_")
-      .replaceAll("!", "_")
-      .replaceAll(":", "_");
-    return text || "_";
-  }).join("__");
-}
 
 
 async function buildMasterCutoffBundle(store, args = {}, clock = new SystemClock()) {
@@ -7028,48 +4251,7 @@ async function resolveMonitorContext(store, args = {}) {
   };
 }
 
-function resolveOperationalReadScope(args = {}, { requireMaster = false, requireThesis = false } = {}) {
-  if (["replay", "backtest"].includes(args.mode)) {
-    throw deskError("RUN_SCOPE_MISMATCH", "Generic live/front bundles cannot read replay data; use the replay-scoped bundle tools.", {
-      mode: args.mode,
-      backtest_id: args.backtest_id || null,
-    });
-  }
-  const required = ["strategy_id", "session", "mode", "trading_date", "run_id", "as_of_utc"];
-  if (requireMaster) required.push("master_id");
-  if (requireThesis) required.push("thesis_id");
-  const missing = required.filter((field) => args[field] === undefined || args[field] === null || String(args[field]).trim() === "");
-  if (missing.length) {
-    throw deskError("SCOPE_REQUIRED", "A complete operational scope is required.", { missing });
-  }
-  const asOfMs = Date.parse(args.as_of_utc);
-  if (!Number.isFinite(asOfMs)) {
-    throw deskError("INVALID_SCOPE", "as_of_utc must be a valid ISO timestamp.", { as_of_utc: args.as_of_utc });
-  }
-  const scope = createDeskExecutionScope({
-    strategy_id: args.strategy_id,
-    session: args.session,
-    mode: args.mode,
-    trading_date: args.trading_date,
-    timezone: args.timezone || "Europe/Paris",
-    cutoff_paris: toParisIso(asOfMs),
-    cutoff_utc: new Date(asOfMs).toISOString(),
-    run_id: args.run_id,
-  }, { requireRun: true });
-  return { ...scope, as_of_utc: new Date(asOfMs).toISOString() };
-}
 
-function operationalSelectorArgs(scope) {
-  return {
-    strategy_id: scope.strategy_id,
-    session: scope.session,
-    mode: scope.mode,
-    trading_date: scope.trading_date,
-    run_id: scope.run_id,
-    backtest_id: scope.backtest_id || undefined,
-    as_of_utc: scope.as_of_utc || scope.cutoff_utc,
-  };
-}
 
 function assertOperationalDocumentScope(document, scope, errorCode = "CROSS_SCOPE_REFERENCE") {
   const mismatches = [];
@@ -7096,31 +4278,6 @@ function assertOperationalDocumentScope(document, scope, errorCode = "CROSS_SCOP
   return true;
 }
 
-function deriveActiveThesisFromMaster(master) {
-  if (!master) {
-    return null;
-  }
-  const full = master.full_analysis || master;
-  const thesis = full.active_thesis || master.active_thesis || null;
-  if (!thesis || typeof thesis !== "object") {
-    return null;
-  }
-  return {
-    ...thesis,
-    thesis_id: thesis.thesis_id || activeThesisVNextId({
-      ...thesis,
-      linked_master_analysis_id: master.analysis_id,
-      valid_from: thesis.valid_from || master.created_at_paris || master.created_at,
-      instrument: thesis.instrument || full.executive_summary?.final_instrument || "MNQ",
-    }),
-    linked_master_analysis_id: thesis.linked_master_analysis_id || master.analysis_id || null,
-    pack_id: thesis.pack_id || master.pack_id || null,
-    date: thesis.date || master.date || null,
-    session: thesis.session || master.session || "asia_open",
-    timezone: thesis.timezone || master.timezone || "Europe/Paris",
-    status: thesis.status || "WAIT_MONITORED",
-  };
-}
 
 function candidateSetupsFromMaster(master) {
   const full = master?.full_analysis || {};
@@ -7156,10 +4313,6 @@ function manualMonitorBundleId({ session, mode, checkpoint }) {
   return stableVNextId("manual_monitor_bundle", `${date}_${session}_${hm}`, `${checkpoint.cadence}_${mode}`);
 }
 
-function masterCutoffBundleId({ date, session, cutoff_paris, mode }) {
-  const hm = String(cutoff_paris).slice(11, 16).replace(":", "") || "cutoff";
-  return stableVNextId("master_cutoff_bundle", `${date}_${session}_${hm}`, mode || "live");
-}
 
 function selectMasterCutoffBundle(docs, args = {}) {
   if (args.bundle_id) {
@@ -7186,43 +4339,6 @@ function masterCutoffBundleMatchesScope(doc, args) {
     (!args.mode || doc.mode === args.mode);
 }
 
-function missingMasterCutoffBundle(args = {}) {
-  const date = args.trading_date || args.date || String(args.cutoff_paris || "").slice(0, 10) || null;
-  const session = args.session || null;
-  const cutoff = args.cutoff_paris || null;
-  return {
-    ok: false,
-    status: "missing",
-    bundle_id: args.bundle_id || (date && session && cutoff ? masterCutoffBundleId({ date, session, cutoff_paris: cutoff, mode: args.mode || "live" }) : null),
-    bundle_type: "master_cutoff",
-    date,
-    trading_date: date,
-    strategy_id: args.strategy_id || null,
-    run_id: args.run_id || null,
-    session,
-    cutoff_paris: cutoff,
-    mode: args.mode || "live",
-    as_of_utc: args.as_of_utc || null,
-    resolved_scope: args.resolved_scope || null,
-    scope_hash: args.resolved_scope?.scope_hash || null,
-    fallback: false,
-    execution_allowed: false,
-    missing_reason: "master_cutoff_bundle_not_found",
-    data_quality: {
-      status: "missing",
-      execution_allowed: false,
-      blockers: ["master_cutoff_bundle_not_found"],
-      warnings: [],
-      missing: ["master_cutoff_bundle"],
-      stale: [],
-      explicit_missing_data: ["master_cutoff_bundle_not_found"],
-      anti_lookahead_compliant: true,
-      raw_refs_available: false,
-      checkpoint_paris: cutoff,
-    },
-    next_action: "prepare_master_cutoff_bundle_job",
-  };
-}
 
 async function buildMasterCutoffRawWindows(store, { cutoff, instruments, raw_scope }) {
   const specs = [
@@ -8160,11 +5276,6 @@ function buildMasterSetupDocs(masterAnalysis, { analysis_id } = {}, tick = new S
   return buildSetupDocs(analysis, { analysis_id, decision_id: analysis.decision_id }, tick).map((setup) => decorateMasterSetupDoc(setup, masterAnalysis));
 }
 
-function firstArray(...values) {
-  return values.find((value) => Array.isArray(value) && value.length > 0)
-    || values.find((value) => Array.isArray(value))
-    || [];
-}
 
 function decorateMasterSetupDoc(setup, masterAnalysis) {
   const waitSetup = setup.instrument === "WAIT" || setup.direction === "wait" || ["wait", "wait_only", "no_trade"].includes(setup.setup_type);
@@ -8184,15 +5295,7 @@ function decorateMasterSetupDoc(setup, masterAnalysis) {
   };
 }
 
-function hasReplayGeometry(setup) {
-  return Boolean(setup.entry_zone && setup.stop_loss != null && hasTakeProfitGeometry(setup.take_profits || setup.targets || setup.tp1 || setup.target));
-}
 
-function hasTakeProfitGeometry(value) {
-  if (Array.isArray(value)) return value.length > 0;
-  if (value && typeof value === "object") return Object.keys(value).length > 0;
-  return value != null && value !== "";
-}
 
 function buildSetupDocs(analysis, { analysis_id, decision_id } = {}, tick = new SystemClock().now()) {
   const primarySetupId = analysis.primary_setup_id || analysis.executive_summary?.primary_setup_id || analysis.executable_decision?.setup_id || null;
@@ -8279,250 +5382,27 @@ function filterSetupDocs(docs, { pack_id, analysis_id, decision_id, status = "an
 }
 
 
-function replaySetupOnCandles(setup, rows, meta = {}, clock = new SystemClock()) {
-  return replaySetupOutcome({ setup, candles: rows, cutoff: meta.replay_window?.to, meta, clock });
-}
-
-
-function replayWindowForSetup(setup, args = {}, pack = null, clock = new SystemClock()) {
-  const date = setup.date || pack?.date || clock.now().utc.slice(0, 10);
-  const offset = parisOffsetForDate(date);
-  const cutoffParis = pack?.data_cutoff?.cutoff_paris || pack?.data_cutoff?.to_paris || pack?.data_cutoff?.timestamp_paris;
-  return {
-    from: args.replay_from || setup.replay_from || cutoffParis || `${date}T00:15:00${offset}`,
-    to: args.replay_to || setup.replay_to || `${date}T22:30:00${offset}`,
-  };
-}
 
 
 
-function strictReplaySetupFilters(args = {}) {
-  const date = args.date || (!args.from_date && args.to_date ? args.to_date : (args.from_date && args.from_date === args.to_date ? args.to_date : null));
-  return {
-    date: date || undefined,
-    from_date: date ? undefined : args.from_date,
-    to_date: date ? undefined : args.to_date,
-    instrument: args.instrument || "all",
-    direction: args.direction || "all",
-  };
-}
 
-function normalizeNyOpenPricingMode(value) {
-  const text = String(value || NY_OPEN_DEFAULT_PRICING_MODE).trim().toLowerCase();
-  if (["middle", "mid", "midpoint"].includes(text)) return "middle";
-  if (["optimistic", "best", "best_case"].includes(text)) return "optimistic";
-  return NY_OPEN_DEFAULT_PRICING_MODE;
-}
 
-function nyOpenStrictPricingModes() {
-  return NY_OPEN_PRICING_MODES;
-}
 
-function selectedStrictModeResult(modeResults = [], pricing_mode) {
-  const mode = normalizeNyOpenPricingMode(pricing_mode);
-  return modeResults.find((item) => item.pricing_mode === mode) ||
-    modeResults.find((item) => item.pricing_mode === NY_OPEN_DEFAULT_PRICING_MODE) ||
-    modeResults[0] ||
-    { pricing_mode: mode, replay: null, trade: null };
-}
 
-function selectNyOpenStrictSetup(setups = [], args = {}) {
-  const requestedId = args.setup_id || args.setup_record_id;
-  return [...(setups || [])]
-    .filter((setup) => strategyDocMatches(setup, NY_OPEN_STRATEGY_ID))
-    .filter((setup) => !requestedId || setupDocumentId(setup) === requestedId || setup.setup_id === requestedId || setup.setup_record_id === requestedId)
-    .filter((setup) => !args.analysis_id || setup.analysis_id === args.analysis_id)
-    .filter((setup) => !args.date || strategyDateFromDoc(setup) === args.date)
-    .filter(isStrictReplayCandidateSetup)
-    .sort((left, right) => strictSetupScore(right) - strictSetupScore(left))
-    .at(0) || null;
-}
 
-function isStrictReplayCandidateSetup(setup) {
-  const instrument = String(setup?.instrument || "").toUpperCase();
-  const direction = String(setup?.direction || "").toLowerCase();
-  const status = String(setup?.status || setup?.lifecycle_status || "").toLowerCase();
-  if (!["MNQ", "MES", "NQ", "ES"].includes(instrument)) return false;
-  if (!["long", "short"].includes(direction)) return false;
-  if (["cancelled", "expired", "no_trade"].some((item) => status.includes(item))) return false;
-  return hasReplayGeometry(setup);
-}
 
-function strictSetupScore(setup) {
-  const primary = setup?.is_primary === true ? 1_000_000 : 0;
-  const replayable = setup?.replayable === true ? 100_000 : 0;
-  const priority = Math.max(0, 10_000 - Number(setup?.priority || 999));
-  const confidence = Number(setup?.confidence_pct || 0);
-  return primary + replayable + priority + confidence;
-}
 
-function nyOpenStrictReplayWindow(setup, args = {}) {
-  const date = args.date || setup?.date || strategyDateFromDoc(setup) || String(new SystemClock().now().paris).slice(0, 10);
-  const offset = parisOffsetForDate(date);
-  return {
-    from: args.replay_from || `${date}T${NY_OPEN_STRICT_ENTRY_TIME}${offset}`,
-    to: args.replay_to || `${date}T${NY_OPEN_STRICT_END_TIME}${offset}`,
-  };
-}
 
-function strictSetupForReplay(setup, pricing_mode = NY_OPEN_DEFAULT_PRICING_MODE) {
-  return {
-    ...setup,
-    executable: true,
-    decision: "strict_limit_order",
-    final_decision: "strict_limit_order",
-    strict_mode: true,
-    pricing_mode: normalizeNyOpenPricingMode(pricing_mode),
-    strict_pricing_mode: normalizeNyOpenPricingMode(pricing_mode),
-  };
-}
 
-function nyOpenStrictSetupPatch({ setup, modeResults = [], replayWindow, strategy_id, tick, pricing_mode }) {
-  const selected = selectedStrictModeResult(modeResults, pricing_mode);
-  const replay = selected.replay || null;
-  const trade = selected.trade || null;
-  const status = strictSetupStatusFromReplay(replay);
-  const entryTime = replay?.entry?.time || null;
-  const replayMap = Object.fromEntries(modeResults.map((item) => [item.pricing_mode, item.replay]).filter(([, item]) => Boolean(item)));
-  const tradeIdMap = Object.fromEntries(modeResults.map((item) => [item.pricing_mode, item.trade?.trade_id || null]));
-  const resultMap = Object.fromEntries(modeResults.map((item) => [item.pricing_mode, item.trade?.result_R ?? item.replay?.r_result ?? null]));
-  const mode = selected.pricing_mode || normalizeNyOpenPricingMode(pricing_mode);
-  return stripUndefined({
-    strategy_id,
-    strict_mode: true,
-    strict_mode_version: "ny_open_strict_v1",
-    strict_assumption: "limit_order_working_from_1535",
-    strict_pricing_mode: mode,
-    strict_replay_window: replayWindow,
-    strict_replays: replayMap,
-    strict_trade_ids: tradeIdMap,
-    strict_results_R: resultMap,
-    strict_replay_status: replay?.replay_status || null,
-    strict_replay_result: replay || null,
-    strict_trade_id: trade?.trade_id || null,
-    status,
-    lifecycle_status: status,
-    replayable: true,
-    replay_status: replay?.replay_status || null,
-    replay_result: replay || null,
-    triggered_at: entryTime ? normalizeUtcIso(entryTime) : undefined,
-    triggered_at_utc: entryTime ? normalizeUtcIso(entryTime) : undefined,
-    triggered_at_paris: entryTime || undefined,
-    updated_at: tick.utc,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  });
-}
 
-function strictSetupStatusFromReplay(replay) {
-  const status = String(replay?.replay_status || "").toLowerCase();
-  if (status === "win") return `${strictBestTargetName(replay)}_TAKEN`;
-  if (status === "loss") return "STOPPED";
-  if (status === "open_or_expired") return "STRICT_EOD_MARK";
-  if (status === "no_fill") return "STRICT_NO_FILL";
-  if (status === "review_required") return "STRICT_REVIEW_REQUIRED";
-  if (status === "not_replayable") return "STRICT_NOT_REPLAYABLE";
-  if (status === "rejected") return "STRICT_REJECTED";
-  return "STRICT_REPLAYED";
-}
 
-function strictBestTargetName(replay) {
-  return String(replay?.best_target_hit?.name || replay?.evidence?.best_target_hit?.name || replay?.evidence?.outcome || "TP1").toUpperCase();
-}
 
-function nyOpenStrictTradeFromReplay({ setup, replay, replayWindow, strategy_id, tick, pricing_mode = NY_OPEN_DEFAULT_PRICING_MODE }) {
-  if (!replay?.entry || !["win", "loss", "open_or_expired"].includes(replay.replay_status)) {
-    return null;
-  }
-  const mode = normalizeNyOpenPricingMode(pricing_mode);
-  const result_R = Number.isFinite(Number(replay.r_result)) ? roundNumber(Number(replay.r_result), 4) : null;
-  const exitPrice = replay.exit?.price ?? replay.evidence?.exit_price ?? null;
-  const exitTime = replay.exit?.time || replay.evidence?.exit_timestamp || replayWindow.to;
-  const status = replay.replay_status === "loss" ? "STOPPED" : "CLOSED";
-  const closeReason = replay.replay_status === "loss"
-    ? "STOP"
-    : replay.replay_status === "open_or_expired" ? "EOD_MARK" : strictBestTargetName(replay);
-  return stripUndefined({
-    trade_id: nyOpenStrictTradeId(setup, mode),
-    strategy_id,
-    strategy_name: NY_OPEN_STRATEGY_NAME,
-    source: "nyopen_strict_replay",
-    strict_mode: true,
-    strict_mode_version: "ny_open_strict_v1",
-    pricing_mode: mode,
-    strict_pricing_mode: mode,
-    replay_id: replay.replay_id || null,
-    setup_id: setup.setup_id || setup.setup_record_id || null,
-    setup_record_id: setup.setup_record_id || null,
-    analysis_id: setup.analysis_id || null,
-    pack_id: setup.pack_id || null,
-    date: setup.date || strategyDateFromDoc(setup),
-    session: NY_OPEN_SESSION,
-    instrument: setup.instrument || replay.instrument || null,
-    direction: setup.direction || replay.direction || null,
-    status,
-    close_reason: closeReason,
-    entry_price: replay.entry?.price ?? replay.plan?.entry_price ?? null,
-    entry_zone: setup.entry_zone || null,
-    stop_loss: setup.stop_loss ?? setup.stop ?? replay.plan?.stop_loss ?? null,
-    take_profits: setup.take_profits || setup.targets || [],
-    exit_price: exitPrice,
-    result_R,
-    r_result: result_R,
-    opened_at_paris: replay.entry?.time || replayWindow.from,
-    executed_at_paris: replay.entry?.time || replayWindow.from,
-    closed_at_paris: exitTime,
-    replay_window: replayWindow,
-    replay_result: replay,
-    created_at: tick.utc,
-    created_at_utc: tick.utc,
-    created_at_paris: tick.paris,
-    updated_at: tick.utc,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  });
-}
 
-function nyOpenStrictTradeId(setup, pricing_mode = NY_OPEN_DEFAULT_PRICING_MODE) {
-  const mode = normalizeNyOpenPricingMode(pricing_mode);
-  return stableVNextId("strategy_trade", setupDocumentId(setup), mode === NY_OPEN_DEFAULT_PRICING_MODE ? "nyopen_strict_v1" : `nyopen_strict_v1_${mode}`);
-}
 
-function nyOpenStrictReplayId(setup, pricing_mode, tick = new SystemClock().now()) {
-  const stamp = tick.utc.replace(/[-:.TZ]/g, "").slice(0, 14);
-  return `${setupDocumentId(setup)}_${normalizeNyOpenPricingMode(pricing_mode)}_${stamp}`;
-}
 
-function summarizeNyOpenStrictReplay({ setup, modeResults = [], audit, replayWindow, strategy_id, pricing_mode }) {
-  const selected = selectedStrictModeResult(modeResults, pricing_mode);
-  return {
-    ok: true,
-    strategy_id,
-    strict_mode: true,
-    pricing_mode: selected.pricing_mode,
-    pricing_modes: NY_OPEN_PRICING_MODES,
-    setup_id: setup.setup_id || null,
-    setup_record_id: setup.setup_record_id || null,
-    trade_id: selected.trade?.trade_id || null,
-    replay_id: selected.replay?.replay_id || null,
-    replay_status: selected.replay?.replay_status || null,
-    outcome: selected.replay?.outcome || null,
-    result_R: selected.trade?.result_R ?? selected.replay?.r_result ?? null,
-    modes: Object.fromEntries(modeResults.map((item) => [item.pricing_mode, {
-      trade_id: item.trade?.trade_id || null,
-      replay_id: item.replay?.replay_id || null,
-      replay_status: item.replay?.replay_status || null,
-      outcome: item.replay?.outcome || null,
-      result_R: item.trade?.result_R ?? item.replay?.r_result ?? null,
-    }])),
-    replay_window: replayWindow,
-    audit_id: audit?.audit_id || null,
-  };
-}
 
-function stripUndefined(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
-}
+
+
 
 function stripDeskWorkLease(value = {}) {
   const { work_item_id: _workItemId, worker_id: _workerId, lease_token: _leaseToken, ...payload } = value;
@@ -8530,9 +5410,6 @@ function stripDeskWorkLease(value = {}) {
 }
 
 
-function publicReplayError(error) {
-  return String(error?.message || error || "replay_failed").slice(0, 500);
-}
 
 function localM5DatasetName(instrument) {
   const name = String(instrument || "").toUpperCase();
@@ -8541,19 +5418,7 @@ function localM5DatasetName(instrument) {
   return `${name}_M5`;
 }
 
-function parisOffsetForDate(dateText) {
-  const date = new Date(`${dateText}T12:00:00Z`);
-  const year = date.getUTCFullYear();
-  const dstStart = lastSundayUtc(year, 2);
-  const dstEnd = lastSundayUtc(year, 9);
-  return date >= dstStart && date < dstEnd ? "+02:00" : "+01:00";
-}
 
-function lastSundayUtc(year, monthIndex) {
-  const date = new Date(Date.UTC(year, monthIndex + 1, 0, 12, 0, 0));
-  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
-  return date;
-}
 
 function sanitizeId(value) {
   return String(value || "id")

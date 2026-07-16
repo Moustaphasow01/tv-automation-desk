@@ -105,6 +105,18 @@ Sixième lot — stratégie NY Open et audit, 16 juillet 2026 :
 - suite MCP complète validée à 219 tests sur 219 ;
 - aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
 
+Septième lot — extraction des algorithmes purs, 16 juillet 2026 :
+
+- déplacement de 187 fonctions de sélection, normalisation, projection et calcul dans `desk-market-feature-algorithms.js` et `desk-strategy-audit-algorithms.js` ;
+- mutualisation de huit utilitaires réellement partagés, importés par le domaine stratégie sans duplication ;
+- suppression complète des ports transitoires `marketFeaturePort` et `strategyAuditPort` ; les services importent désormais directement leurs algorithmes ;
+- conservation dans `store.js` des seuls imports encore nécessaires aux workflows transversaux Replay et Live ;
+- réduction de `store.js` de 8 564 à 5 429 lignes sur ce lot, soit 3 135 lignes sorties du monolithe ;
+- aucun import inutilisé ni helper interne orphelin détecté dans les cinq fichiers concernés ;
+- stabilisation de la suite MCP à quatre workers et mesure du benchmark Replay en temps CPU afin d'éviter les faux échecs liés à la contention WSL ;
+- 29 tests ciblés puis suite MCP complète validée à 219 tests sur 219 ;
+- aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
+
 ## Runtime conservé
 
 - frontend React actuel ;

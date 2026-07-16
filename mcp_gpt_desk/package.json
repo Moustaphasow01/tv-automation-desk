@@ -11,7 +11,7 @@
     "live:checkpoint-cycle": "node scripts/run_live_checkpoint_cycle.mjs",
     "replay:autopilot-codex": "node scripts/replay_autopilot_codex_agent.mjs",
     "seed:contracts": "node scripts/seed_contracts.mjs",
-    "test": "node --test test/*.test.js"
+    "test": "node --test --test-concurrency=4 test/*.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
