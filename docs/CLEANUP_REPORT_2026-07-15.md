@@ -84,6 +84,16 @@ Quatrième lot — orchestration Replay :
 - réduction de `store.js` de 9 605 à 8 893 lignes sur ce lot ;
 - suite MCP complète validée à 219 tests sur 219.
 
+Cinquième lot — marché et moteur de features, 16 juillet 2026 :
+
+- extraction dans `DeskMarketFeatureService` des fenêtres brutes, snapshots de session, niveaux, événements techniques, deltas cross-asset et statuts de conditions ;
+- déplacement des exécutions déterministes du moteur de features et des lectures marché utilisées pour préparer les setups Replay ;
+- maintien temporaire des algorithmes purs de sélection, normalisation et calcul derrière le port explicite `marketFeaturePort` ;
+- suppression de l'ancien wrapper automatisé du moteur de features devenu inutile ;
+- réduction de `store.js` de 8 893 à 8 711 lignes sur ce lot ;
+- suite MCP complète validée à 219 tests sur 219 ;
+- aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
+
 ## Runtime conservé
 
 - frontend React actuel ;
@@ -104,7 +114,7 @@ Quatrième lot — orchestration Replay :
 ## État de validation
 
 - configuration Docker Compose : valide ;
-- MCP/API : 219 tests sur 219 validés après les extractions contrats, packs, Replay, Live et Front, incluant intégrité, store persistant, transactions, projections et webhook ;
+- MCP/API : 219 tests sur 219 validés après les extractions contrats, packs, Replay, Live, Front, marché et features, incluant intégrité, store persistant, transactions, projections et webhook ;
 - packages métier : 66 tests domaine, 8 tests replay, 8 tests audit et 6 tests temps validés ;
 - frontend : 13 tests sur 13 validés, avec typecheck sans émission d'artefacts et build de production ;
 - bundle frontend Docker : 282,82 Ko de JavaScript avant compression, sans marqueur du mode mock ;

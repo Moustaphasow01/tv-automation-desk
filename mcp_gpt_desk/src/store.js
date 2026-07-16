@@ -54,6 +54,7 @@ import { deskError } from "./desk-errors.js";
 import { normalizeUtcIso } from "./desk-time-utils.js";
 import { DeskLiveService } from "./desk-live-service.js";
 import { DeskFrontService } from "./desk-front-service.js";
+import { DeskMarketFeatureService } from "./desk-market-feature-service.js";
 import {
   compareDeskWorkItems,
   DeskReplayService,
@@ -128,6 +129,44 @@ function replayOrchestrationPort() {
   };
 }
 
+function marketFeaturePort() {
+  return {
+    assertRawWindowQuery,
+    assertReplayRunMatchesQuery,
+    buildConditionStatusDoc,
+    buildCrossAssetDeltaDocs,
+    buildDeterministicFeatureSet,
+    buildFreshCrossAssetDelta,
+    buildScopedPackRawWindow,
+    canonicalTimeframe,
+    crossAssetDeltaReady,
+    datasetTimeframe,
+    featureDatasetCandidates,
+    featureRunCompleted,
+    featureRunFailed,
+    featureRunStarted,
+    latestClose,
+    marketFeedCandidates,
+    normalizeFeatureRows,
+    normalizeOperationalQuery,
+    publicReplayError,
+    rawWindowDatasetCandidates,
+    replaySetupOnCandles,
+    replayWindowForSetup,
+    resampleRows,
+    resolveFeatureEngineActiveThesis,
+    resolvePackForState,
+    rowMatchesInstrument,
+    selectConditionStatus,
+    selectCrossAssetDelta,
+    selectLevelMap,
+    selectSessionSnapshot,
+    selectTechnicalEvents,
+    summarizeCrossAssetDelta,
+    summarizeFeatureOutput,
+  };
+}
+
 export class PersistentDeskStore {
   constructor(clock = new SystemClock(), persistence = null) {
     this.clock = clock;
@@ -137,6 +176,7 @@ export class PersistentDeskStore {
     this.packs = new DeskPackService({ persistence, clock });
     this.live = new DeskLiveService({ persistence, clock, host: this });
     this.front = new DeskFrontService({ persistence, clock, marketFeedCandidates, canonicalTimeframe });
+    this.market = new DeskMarketFeatureService({ persistence, clock, host: this, port: marketFeaturePort() });
     this.replay = new DeskReplayService({ persistence, clock, host: this, orchestration: replayOrchestrationPort() });
     this.livePackPublishingEnabled = false;
   }
@@ -615,54 +655,27 @@ export class PersistentDeskStore {
   }
 
   async getLevelMap({ date, session = "asia_open", instrument }) {
-    const docs = await this.#listDocuments(COLLECTIONS.deskLevelMaps, 200).catch(() => []);
-    return selectLevelMap(docs, { date, session, instrument });
+    return this.market.getLevelMap({ date, session, instrument });
   }
 
   async getTechnicalEvents({ date, session = "asia_open", instrument, from, to, event_type }) {
-    const docs = await this.#listDocuments(COLLECTIONS.deskTechnicalEvents, 500).catch(() => []);
-    return selectTechnicalEvents(docs, { date, session, instrument, from, to, event_type });
+    return this.market.getTechnicalEvents({ date, session, instrument, from, to, event_type });
   }
 
   async getCrossAssetDelta({ timestamp_paris, window = "1h" }) {
-    const docs = await this.#listDocuments(COLLECTIONS.deskCrossAssetDeltas, 200).catch(() => []);
-    return selectCrossAssetDelta(docs, { timestamp_paris, window });
+    return this.market.getCrossAssetDelta({ timestamp_paris, window });
   }
 
   async ensureCrossAssetDelta({ timestamp_paris, window = "1h", save = true, raw_scope } = {}) {
-    const tick = this.clock.now();
-    const checkpoint = timestamp_paris || tick.paris;
-    const existing = await this.getCrossAssetDelta({ timestamp_paris: checkpoint, window }).catch(() => null);
-    if (crossAssetDeltaReady(existing)) {
-      return existing;
-    }
-    const fresh = await buildFreshCrossAssetDelta(this, {
-      timestamp_paris: checkpoint,
-      window,
-      computed_at: tick.utc,
-      raw_scope,
-    });
-    if (save !== false) {
-      for (const delta of fresh.deltas) {
-        await this.#setDocument(COLLECTIONS.deskCrossAssetDeltas, delta.delta_id, delta, { merge: true });
-      }
-    }
-    return fresh.result;
+    return this.market.ensureCrossAssetDelta({ timestamp_paris, window, save, raw_scope });
   }
 
   async getConditionStatus({ thesis_id, timestamp_paris }) {
-    const docs = await this.#listDocuments(COLLECTIONS.deskConditionStatus, 200).catch(() => []);
-    return selectConditionStatus(docs, { thesis_id, timestamp_paris });
+    return this.market.getConditionStatus({ thesis_id, timestamp_paris });
   }
 
   async getRawWindow(args) {
-    const query = normalizeOperationalQuery(args);
-    const run = query.replay
-      ? await this.#getDocument(COLLECTIONS.deskReplayRuns, query.backtest_id).catch(() => null)
-      : null;
-    if (query.replay) assertReplayRunMatchesQuery(run, query);
-    assertRawWindowQuery(args, query, run);
-    return buildScopedPackRawWindow(this, args, query, run);
+    return this.market.getRawWindow(args);
   }
 
   async createDeskJob(job) {
@@ -1079,7 +1092,7 @@ export class PersistentDeskStore {
     await this.#setDocument(COLLECTIONS.deskBacktestSteps, started.step_id, started, { merge: true });
     try {
       const setup = await this.#getDocument(COLLECTIONS.deskSetups, step.source_setup_id);
-      const replay = await this.#replaySetup(setup, { write_result, timeframe: "M5" });
+      const replay = await this.market.replaySetup(setup, { write_result, timeframe: "M5" });
       const trade = simulatedTradeFromReplay({ replay, run, step, setup, tick: _t });
       const completed = markBacktestStepDone(started, {
         output_ref: { collection: COLLECTIONS.deskSimulatedTrades, trade_id: trade.trade_id },
@@ -1168,185 +1181,11 @@ export class PersistentDeskStore {
   }
 
   async getSessionSnapshot({ date, session = "asia_open", instrument }) {
-    const docs = await this.#listDocuments(COLLECTIONS.deskSessionSnapshots, 200).catch(() => []);
-    return selectSessionSnapshot(docs, { date, session, instrument });
+    return this.market.getSessionSnapshot({ date, session, instrument });
   }
 
   async runFeatureEngine(args = {}) {
-    const _t = this.clock.now();
-    const run = featureRunStarted(args, _t);
-    try {
-      const pack = await resolvePackForState(this, {
-        date: args.date,
-        session: args.session || "asia_open",
-        timezone: args.timezone || "Europe/Paris",
-      });
-      if (!pack) {
-        throw new Error(`desk_pack_not_found_for_feature_engine:${args.date}:${args.session || "asia_open"}`);
-      }
-      const result = {
-        ok: true,
-        run_id: run.run_id,
-        date: args.date,
-        session: args.session || "asia_open",
-        cutoff_paris: args.cutoff_paris || pack.data_cutoff?.cutoff_paris || _t.paris,
-        saved: args.save !== false,
-        instruments: {},
-        cross_asset_deltas: {},
-        condition_status: null,
-      };
-      const featureComputedAt = normalizeUtcIso(result.cutoff_paris);
-      const activeThesis = await resolveFeatureEngineActiveThesis(this, args);
-      const firstInstrumentRows = {};
-      for (const instrument of args.instruments || ["MNQ", "MES"]) {
-        const candlesByTimeframe = await this.#loadFeatureCandles(pack, instrument, result.cutoff_paris);
-        const features = buildDeterministicFeatureSet({
-          date: result.date,
-          session: result.session,
-          instrument,
-          candlesByTimeframe,
-          cutoff_paris: result.cutoff_paris,
-          computed_at: featureComputedAt,
-        });
-        if (args.save !== false) {
-          await this.#setDocument(COLLECTIONS.deskSessionSnapshots, features.session_snapshot.snapshot_id, features.session_snapshot, { merge: true });
-          await this.#setDocument(COLLECTIONS.deskLevelMaps, features.level_map.level_map_id, features.level_map, { merge: true });
-          for (const event of features.technical_events) {
-            await this.#setDocument(COLLECTIONS.deskTechnicalEvents, event.event_id, event, { merge: true });
-          }
-        }
-        if (!Object.keys(firstInstrumentRows).length) {
-          Object.assign(firstInstrumentRows, candlesByTimeframe);
-        }
-        result.instruments[instrument] = summarizeFeatureOutput(features, candlesByTimeframe);
-      }
-      const rowsByAsset = await this.#loadCrossAssetRows(pack, result.cutoff_paris);
-      for (const delta of buildCrossAssetDeltaDocs({
-        timestamp_paris: result.cutoff_paris,
-        rowsByAsset,
-        computed_at: featureComputedAt,
-      })) {
-        result.cross_asset_deltas[delta.window] = summarizeCrossAssetDelta(delta);
-        if (args.save !== false) {
-          await this.#setDocument(COLLECTIONS.deskCrossAssetDeltas, delta.delta_id, delta, { merge: true });
-        }
-      }
-      if (activeThesis) {
-        const conditionStatus = buildConditionStatusDoc({
-          thesis: activeThesis,
-          timestamp_paris: result.cutoff_paris,
-          latest_price: latestClose(firstInstrumentRows["5"] || firstInstrumentRows.M5 || []),
-          computed_at: featureComputedAt,
-        });
-        result.condition_status = {
-          condition_status_id: conditionStatus.condition_status_id,
-          conditions_go_count: conditionStatus.conditions_go.length,
-          invalidations_count: conditionStatus.invalidations.length,
-        };
-        if (args.save !== false) {
-          await this.#setDocument(COLLECTIONS.deskConditionStatus, conditionStatus.condition_status_id, conditionStatus, { merge: true });
-        }
-      }
-      const completed = featureRunCompleted(run, result, _t);
-      if (args.save !== false) {
-        await this.#setDocument(COLLECTIONS.deskFeatureRuns, run.run_id, completed, { merge: true });
-      }
-      return result;
-    } catch (error) {
-      const failed = featureRunFailed(run, error, _t);
-      await this.#setDocument(COLLECTIONS.deskFeatureRuns, run.run_id, failed, { merge: true });
-      await this.#setDocument(COLLECTIONS.deskErrors, failed.error_id, failed.error, { merge: true });
-      return { ok: false, run_id: run.run_id, error: publicReplayError(error) };
-    }
-  }
-
-  async #replaySetup(setup, args) {
-    const timeframe = canonicalTimeframe(args.timeframe || "M5");
-    const window = replayWindowForSetup(setup, args);
-    let rows = [];
-    let rawRef = null;
-    for (const feedId of marketFeedCandidates(setup.instrument, timeframe)) {
-      rawRef = `${COLLECTIONS.marketFeeds}/${feedId}/${COLLECTIONS.marketFeedCandles}`;
-      rows = await this.#queryDocuments({
-        parentPath: `${COLLECTIONS.marketFeeds}/${feedId}`,
-        collectionId: COLLECTIONS.marketFeedCandles,
-        fromUtc: normalizeUtcIso(window.from),
-        toUtc: normalizeUtcIso(window.to),
-        orderField: "timestamp_utc",
-        limit: args.max_rows || 5000,
-      }).catch(() => []);
-      if (rows.length) break;
-    }
-    return replaySetupOnCandles(setup, rows, {
-      source: "postgres_market_feeds_v2",
-      raw_ref: rawRef,
-      replay_id: args.replay_id || null,
-      pricing_mode: args.pricing_mode || null,
-      replay_window: window,
-    });
-  }
-
-  async #loadFeatureCandles(pack, instrument, cutoffParis) {
-    const output = {};
-    for (const timeframe of Object.keys(featureDatasetCandidates(instrument))) {
-      const candidates = rawWindowDatasetCandidates(instrument, timeframe);
-      const dataset = candidates.find((candidate) => DATASETS.includes(candidate) && datasetRef(pack, candidate));
-      if (!dataset) {
-        output[timeframe] = [];
-        continue;
-      }
-      const ref = datasetRef(pack, dataset);
-      const response = await this.getDataset({
-        pack_id: pack.pack_id,
-        pack_build_id: pack.pack_build_id,
-        dataset,
-        as_of_utc: normalizeUtcIso(cutoffParis),
-        mode: "live",
-        max_rows: 5000,
-      });
-      const normalized = normalizeFeatureRows(
-        (response.rows || []).filter((row) => rowMatchesInstrument(row, instrument, dataset)),
-        {
-          instrument,
-          timeframe: datasetTimeframe(dataset, timeframe),
-          rawRef: ref.object_path || ref.storage_path || null,
-        },
-      );
-      const direct = normalized.filter((row) => canonicalTimeframe(row.timeframe) === timeframe);
-      const baseRows = direct.length ? direct : normalized.filter((row) => canonicalTimeframe(row.timeframe) === "5");
-      output[timeframe] = direct.length || timeframe === "5" ? baseRows : resampleRows(baseRows, timeframe);
-    }
-    return output;
-  }
-
-  async #loadCrossAssetRows(pack, cutoffParis) {
-    const output = {};
-    for (const asset of ["DXY", "VIX", "US10Y", "US02Y", "GC", "CL"]) {
-      const dataset = rawWindowDatasetCandidates(asset, "5")
-        .find((candidate) => DATASETS.includes(candidate) && datasetRef(pack, candidate));
-      if (!dataset) {
-        output[asset] = [];
-        continue;
-      }
-      const ref = datasetRef(pack, dataset);
-      const response = await this.getDataset({
-        pack_id: pack.pack_id,
-        pack_build_id: pack.pack_build_id,
-        dataset,
-        as_of_utc: normalizeUtcIso(cutoffParis),
-        mode: "live",
-        max_rows: 5000,
-      });
-      output[asset] = normalizeFeatureRows(
-        (response.rows || []).filter((row) => rowMatchesInstrument(row, asset, dataset)),
-        {
-          instrument: asset,
-          timeframe: "5",
-          rawRef: ref.object_path || ref.storage_path || null,
-        },
-      );
-    }
-    return output;
+    return this.market.runFeatureEngine(args);
   }
 
   async getMasterAnalysisBundle(args) {
@@ -1363,7 +1202,7 @@ export class PersistentDeskStore {
     await this.#setDocument(COLLECTIONS.deskMasterPrepJobs, job.job_id, job, { merge: true });
     try {
       const cutoff = args.cutoff_paris || args.as_of_utc || tick.paris;
-      const featureRun = await runAutomatedFeatureEngine(this, args, cutoff);
+      const featureRun = await this.market.runAutomated(args, cutoff);
       const bundle = await buildMasterCutoffBundle(this, args, this.clock);
       const existingBundle = await this.#getDocument(COLLECTIONS.deskMasterCutoffBundles, bundle.bundle_id).catch(() => null);
       const noRecalculation = Boolean(existingBundle?.source_hash && existingBundle.source_hash === bundle.source_hash && args.force_rebuild !== true);
@@ -1427,7 +1266,7 @@ export class PersistentDeskStore {
     }
     await this.#setDocument(COLLECTIONS.deskMonitorPrepJobs, job.job_id, job, { merge: true });
     try {
-      const featureRun = await runAutomatedFeatureEngine(this, args, checkpoint.timestamp_paris);
+      const featureRun = await this.market.runAutomated(args, checkpoint.timestamp_paris);
       const bundle = await buildManualMonitorBundle(this, { ...args, timestamp_paris: checkpoint.timestamp_paris }, this.clock);
       const existingBundle = await this.#getDocument(COLLECTIONS.deskManualMonitorBundles, bundle.bundle_id).catch(() => null);
       const noRecalculation = Boolean(existingBundle?.source_hash && existingBundle.source_hash === bundle.source_hash && args.force_rebuild !== true);
@@ -1586,7 +1425,7 @@ export class PersistentDeskStore {
     const replayWindow = nyOpenStrictReplayWindow(setup, args);
     const modeResults = [];
     for (const pricing_mode of nyOpenStrictPricingModes()) {
-      const replay = await this.#replaySetup(strictSetupForReplay(setup, pricing_mode), {
+      const replay = await this.market.replaySetup(strictSetupForReplay(setup, pricing_mode), {
         ...args,
         pricing_mode,
         replay_id: nyOpenStrictReplayId(setup, pricing_mode, tick),
@@ -2889,27 +2728,6 @@ async function safeRead(promise, fallback) {
   }
 }
 
-async function runAutomatedFeatureEngine(store, args, cutoffParis) {
-  const mode = args.mode || "live";
-  if (!["live", "paper"].includes(mode)) return null;
-  const date = args.trading_date || args.date || String(cutoffParis || "").slice(0, 10);
-  const result = await store.runFeatureEngine({
-    date,
-    session: args.session || "asia_open",
-    cutoff_paris: cutoffParis,
-    timezone: args.timezone || "Europe/Paris",
-    instruments: (args.instruments || ["MNQ", "MES"]).filter((instrument) => ["MNQ", "MES", "NQ", "ES"].includes(instrument)),
-    save: args.save !== false,
-    strategy_id: args.strategy_id,
-    mode,
-    trading_date: date,
-    run_id: args.run_id,
-    as_of_utc: args.as_of_utc || new Date(Date.parse(cutoffParis)).toISOString(),
-    master_id: args.master_id,
-    thesis_id: args.thesis_id,
-  });
-  return result;
-}
 
 async function resolveFeatureEngineActiveThesis(store, args) {
   const required = ["strategy_id", "session", "mode", "trading_date", "run_id", "as_of_utc", "master_id"];
