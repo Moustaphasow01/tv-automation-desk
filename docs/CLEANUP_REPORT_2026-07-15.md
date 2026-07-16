@@ -117,6 +117,18 @@ Septième lot — extraction des algorithmes purs, 16 juillet 2026 :
 - 29 tests ciblés puis suite MCP complète validée à 219 tests sur 219 ;
 - aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
 
+Huitième lot — extraction de l'orchestration Replay, 16 juillet 2026 :
+
+- déplacement de la fermeture complète de 73 fonctions Replay dans `desk-replay-orchestration-algorithms.js` : construction des runs et bundles, anti-lookahead, transitions, simulations, sélections et projections ;
+- exposition d'un registre immuable de 39 opérations consommé directement par `DeskReplayService` ;
+- suppression complète de `replayOrchestrationPort` et du paramètre d'injection transitoire associé ;
+- conservation dans `store.js` de la seule coordination transverse, avec imports explicites des helpers encore partagés ;
+- suppression de tous les imports devenus inutilisés et normalisation des grands blocs vides laissés par les extractions successives ;
+- réduction de `store.js` de 5 429 à 3 391 lignes sur ce lot, soit 2 038 lignes sorties ou nettoyées du monolithe ;
+- contrôles de syntaxe, chargement ESM et scan statique des imports validés sans dépendance manquante ;
+- 35 tests ciblés puis suite MCP complète validée à 219 tests sur 219 ;
+- aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
+
 ## Runtime conservé
 
 - frontend React actuel ;

@@ -20,6 +20,7 @@ import {
 import { buildReplaySetupDocsFromMonitor } from "./replay-continuity.js";
 import { deskError } from "./desk-errors.js";
 import { normalizeUtcIso } from "./desk-time-utils.js";
+import { REPLAY_ORCHESTRATION_ALGORITHMS } from "./desk-replay-orchestration-algorithms.js";
 
 const COLLECTIONS = DESK_COLLECTIONS;
 const REPLAY_AUTOPILOT_CONFIGS_COLLECTION = "desk_replay_autopilot_configs";
@@ -51,15 +52,15 @@ function replayCadenceValueToMinutes(value) {
 }
 
 export class DeskReplayService {
-  constructor({ persistence, clock, host, orchestration }) {
+  constructor({ persistence, clock, host }) {
     this.persistence = persistence;
     this.clock = clock;
     this.host = host;
-    this.orchestration = orchestration;
+    this.algorithms = REPLAY_ORCHESTRATION_ALGORITHMS;
   }
 
   async driveAutomation({ backtest_id, max_transitions = 8 } = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const transitions = [];
     for (let index = 0; index < Math.max(1, Math.min(Number(max_transitions) || 8, 12)); index += 1) {
       const state = await this.host.getReplayState({ backtest_id });
@@ -111,7 +112,7 @@ export class DeskReplayService {
   }
 
   async createOrchestratedReplayDay(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const tick = this.clock.now();
     const baseRun = h.buildOrchestratedReplayRunDoc(args, tick);
     const creationHash = replayRequestHash("create_orchestrated_replay", args);
@@ -170,7 +171,7 @@ export class DeskReplayService {
   }
 
   async prepareReplayMasterBundle(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const tick = this.clock.now();
     const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
     const begin = await this.beginMutation(run, args, {
@@ -239,7 +240,7 @@ export class DeskReplayService {
   }
 
   async getReplayMasterBundle(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const bundles = h.selectReplayBundles(await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []), args.backtest_id);
     const bundle = h.selectReplayBundle(bundles, { step_id: args.step_id, bundle_type: "master" });
     if (!bundle) throw new Error("replay_master_bundle_not_found");
@@ -251,7 +252,7 @@ export class DeskReplayService {
   }
 
   async saveReplayMasterAnalysis(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const tick = this.clock.now();
     const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
     const workItemId = args.work_item_id || run.current_work_item_id || null;
@@ -330,7 +331,7 @@ export class DeskReplayService {
   }
 
   async advanceReplayClock(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const tick = this.clock.now();
     const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
     h.assertReplayCanAdvance(run, args);
@@ -390,7 +391,7 @@ export class DeskReplayService {
   }
 
   async prepareReplayMonitorBundle(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const tick = this.clock.now();
     const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
     const begin = await this.beginMutation(run, args, {
@@ -453,7 +454,7 @@ export class DeskReplayService {
   }
 
   async getReplayMonitorBundle(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const bundles = h.selectReplayBundles(await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []), args.backtest_id);
     const bundle = h.selectReplayBundle(bundles, { step_id: args.step_id, bundle_type: "monitor" });
     if (!bundle) throw new Error("replay_monitor_bundle_not_found");
@@ -465,25 +466,25 @@ export class DeskReplayService {
   }
 
   async getReplayBundleManifest(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const docs = await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []);
     return projectReplayBundle(h.selectReplayBundleForRead(docs, args), { ...args, view: "manifest" });
   }
 
   async getReplayBundleSection(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const docs = await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []);
     return getReplayBundleSectionView(h.selectReplayBundleForRead(docs, args), args);
   }
 
   async getReplaySnapshot(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const docs = await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []);
     return getReplaySnapshotView(h.selectReplayBundleForRead(docs, args), args);
   }
 
   async saveReplayMonitor(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const tick = this.clock.now();
     const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
     const workItemId = args.work_item_id || run.current_work_item_id || null;
@@ -570,7 +571,7 @@ export class DeskReplayService {
   }
 
   async applyReplayMonitorResult(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const tick = this.clock.now();
     const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
     const steps = h.selectBacktestSteps(await this.persistence.listDocuments(COLLECTIONS.deskReplaySteps, 500).catch(() => []), run.backtest_id);
@@ -609,7 +610,7 @@ export class DeskReplayService {
   }
 
   async simulateReplayInterval(args = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const tick = this.clock.now();
     const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
     const begin = await this.beginMutation(run, args, {
@@ -664,7 +665,7 @@ export class DeskReplayService {
   }
 
   async getReplayTimeline({ backtest_id, limit = 200 } = {}) {
-    const h = this.orchestration;
+    const h = this.algorithms;
     const timeline = h.selectReplayTimeline(await this.persistence.listDocuments(COLLECTIONS.deskReplayTimeline, Math.max(50, Math.min(Number(limit) || 200, 500))).catch(() => []), backtest_id).slice(0, Math.max(1, Math.min(Number(limit) || 200, 500)));
     return { ok: true, backtest_id, count: timeline.length, timeline };
   }
@@ -719,7 +720,6 @@ export class DeskReplayService {
     });
     return { replayed: false, run: nextRun, result: finalResult };
   }
-
 
   async claimNext(args = {}) {
     const tick = this.clock.now();
