@@ -34,6 +34,14 @@ Espaces ajoutés :
 
 L'architecture et les endpoints M0 à M11 sont détaillés dans [docs/OPERATIONS_REPLAY_LAB_ARCHITECTURE.md](docs/OPERATIONS_REPLAY_LAB_ARCHITECTURE.md).
 
+Le chantier de redesign Front V2 dispose d'un kit de passation séparant la direction de design Claude de l'implémentation Codex :
+
+- [manifeste de mission](docs/CLAUDE_FRONT_REDESIGN_MANIFEST.md) ;
+- [prompt prêt à transmettre à Claude](docs/CLAUDE_FRONT_REDESIGN_PROMPT.md) ;
+- [contexte complet avec inventaire des écrans, code et CSS](docs/CLAUDE_FRONT_REDESIGN_HANDOFF.md).
+
+Le handoff peut être actualisé après une évolution du frontend avec `npm run handoff:claude`.
+
 Webhook TradingView local :
 
 ```text

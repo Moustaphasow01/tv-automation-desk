@@ -2,6 +2,11 @@
 
 > Snapshot fonctionnel du frontend de préproduction. Ce fichier est volontairement autonome : contexte produit, inventaire des écrans, contraintes, architecture et code/CSS actuels.
 
+## Documents complémentaires
+
+- `docs/CLAUDE_FRONT_REDESIGN_MANIFEST.md` définit la séparation des rôles : Claude décide du design, Codex l'implémente ensuite.
+- `docs/CLAUDE_FRONT_REDESIGN_PROMPT.md` contient le prompt prêt à copier dans Claude.
+
 ## Mission confiée à Claude
 
 Redesigner profondément le frontend, aujourd’hui jugé visuellement faible et mal organisé, en utilisant les skills de design/frontend disponibles. Le résultat attendu doit être cohérent, dense mais lisible, professionnel, responsive et réellement connecté au backend existant.
