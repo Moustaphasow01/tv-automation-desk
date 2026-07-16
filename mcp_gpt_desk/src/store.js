@@ -110,6 +110,7 @@ const REPLAY_AUTOPILOT_CONFIGS_COLLECTION = "desk_replay_autopilot_configs";
 const REPLAY_AUTOPILOT_RECOVERABLE_CODES = new Set([
   "SAVE_DOCUMENT_UNDEFINED",
   "RETRYABLE_FAILURE",
+  "WORK_ALREADY_CLAIMED_SAVE_BLOCKED",
 ]);
 const NY_OPEN_STRATEGY_ID = "ny_open_1530";
 const NY_OPEN_STRATEGY_NAME = "NY Open 15:30";
@@ -1407,7 +1408,11 @@ export class PersistentDeskStore {
     const bundles = selectReplayBundles(await this.#listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []), args.backtest_id);
     const bundle = selectReplayBundle(bundles, { step_id: args.step_id, bundle_type: "master" });
     if (!bundle) throw new Error("replay_master_bundle_not_found");
-    return projectReplayBundle(bundle, { ...args, bundle_type: "master" });
+    const run = await this.#getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id).catch(() => null);
+    const workItem = run?.current_work_item_id
+      ? await this.#getDocument(COLLECTIONS.deskAgentWorkItems, run.current_work_item_id).catch(() => null)
+      : null;
+    return projectReplayBundle(enrichReplayBundleSaveTargetForClaim(bundle, workItem), { ...args, bundle_type: "master" });
   }
 
   async saveReplayMasterAnalysis(args = {}) {
@@ -1613,7 +1618,11 @@ export class PersistentDeskStore {
     const bundles = selectReplayBundles(await this.#listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []), args.backtest_id);
     const bundle = selectReplayBundle(bundles, { step_id: args.step_id, bundle_type: "monitor" });
     if (!bundle) throw new Error("replay_monitor_bundle_not_found");
-    return projectReplayBundle(bundle, { ...args, bundle_type: "monitor" });
+    const run = await this.#getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id).catch(() => null);
+    const workItem = run?.current_work_item_id
+      ? await this.#getDocument(COLLECTIONS.deskAgentWorkItems, run.current_work_item_id).catch(() => null)
+      : null;
+    return projectReplayBundle(enrichReplayBundleSaveTargetForClaim(bundle, workItem), { ...args, bundle_type: "monitor" });
   }
 
   async getReplayBundleManifest(args = {}) {
@@ -5895,9 +5904,9 @@ function isRecoverableReplayAutopilotFailure(item = {}) {
   const code = String(lastError.code || item.error_code || "");
   const message = String(lastError.message || item.error_message || "");
   if (item.status !== "FAILED") return false;
+  if (REPLAY_AUTOPILOT_RECOVERABLE_CODES.has(code)) return Number(item.recovery_count || 0) < 3;
   if (lastError.retryable === false || item.retryable === false) return false;
   if (Number(item.recovery_count || 0) >= 3) return false;
-  if (REPLAY_AUTOPILOT_RECOVERABLE_CODES.has(code)) return true;
   if (message.includes("SAVE_DOCUMENT_UNDEFINED")) return true;
   if (message.includes("trigger_policy.min_score")) return true;
   if (message.toLowerCase().includes("undefined") && message.toLowerCase().includes("document")) return true;
@@ -7359,6 +7368,8 @@ async function driveReplayAutomationLoop(store, { backtest_id, max_transitions =
 }
 
 function replayCadenceMinutes(run, state = {}) {
+  const explicit = replayCadenceValueToMinutes(run.cadence || run.monitor_cadence);
+  if (explicit) return explicit;
   const recommended = Number(state?.recommended_replay_cadence?.recommended_minutes);
   if (Number.isFinite(recommended) && recommended > 0) {
     return Math.max(1, Math.min(240, recommended));
@@ -7366,6 +7377,17 @@ function replayCadenceMinutes(run, state = {}) {
   const value = String(run.cadence || run.monitor_cadence || "15m").toLowerCase();
   const parsed = Number.parseInt(value.replace(/[^0-9]/g, ""), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+}
+
+function replayCadenceValueToMinutes(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (["m15", "15", "15m"].includes(normalized)) return 15;
+  if (["m30", "30", "30m"].includes(normalized)) return 30;
+  if (["h1", "1h", "60", "60m"].includes(normalized)) return 60;
+  const parsed = Number.parseInt(normalized.replace(/[^0-9]/g, ""), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.max(1, Math.min(240, parsed));
 }
 
 async function prepareLiveCursorClaimWork(store, plan, args, tick) {
@@ -7569,6 +7591,7 @@ function replayClaimResponse(result, args) {
     return { ok: true, status: "NO_WORK", scope: "replay", reason: "no_ready_step", backtest_id: args.backtest_id || null };
   }
   const item = result.work_item;
+  const saveTarget = enrichReplaySaveTargetForClaim(result.save_target, item);
   return {
     ok: true,
     status: "WORK_CLAIMED",
@@ -7587,7 +7610,7 @@ function replayClaimResponse(result, args) {
     bundle: { bundle_id: item.bundle_id, bundle_tool: item.bundle_tool, bundle_args: result.bundle_args },
     execution_prompt: result.execution_prompt,
     prompt_hash: result.prompt_hash,
-    save_target: result.save_target,
+    save_target: saveTarget,
     expected_revision: item.expected_revision,
     idempotency_key: item.idempotency_key,
   };
@@ -7601,8 +7624,38 @@ function deskWorkClaimResponse(item) {
     execution_prompt: item.execution_prompt,
     prompt_hash: item.execution_prompt_hash,
     bundle_args: item.bundle_args,
-    save_target: item.save_target,
+    save_target: enrichReplaySaveTargetForClaim(item.save_target, item),
   };
+}
+
+function enrichReplayBundleSaveTargetForClaim(bundle = {}, workItem = null) {
+  if (!bundle || !workItem || workItem.status !== "CLAIMED" || workItem.step_id !== bundle.step_id) {
+    return bundle;
+  }
+  return {
+    ...bundle,
+    save_target: enrichReplaySaveTargetForClaim(bundle.save_target, workItem),
+  };
+}
+
+function enrichReplaySaveTargetForClaim(saveTarget = null, workItem = null) {
+  if (!saveTarget || !workItem || workItem.status !== "CLAIMED") return saveTarget;
+  const leasePayload = {
+    work_item_id: workItem.work_item_id,
+    worker_id: workItem.claimed_by || workItem.worker_id,
+    lease_token: workItem.lease_token,
+  };
+  const enriched = {
+    ...saveTarget,
+    ...leasePayload,
+  };
+  if (saveTarget.suggested_payload && typeof saveTarget.suggested_payload === "object") {
+    enriched.suggested_payload = {
+      ...saveTarget.suggested_payload,
+      ...leasePayload,
+    };
+  }
+  return enriched;
 }
 
 function deskWorkSummary(item, { includeLeaseToken = false } = {}) {

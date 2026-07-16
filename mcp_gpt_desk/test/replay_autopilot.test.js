@@ -153,6 +153,76 @@ test("GPT replay autopilot creates or resumes a configured replay and exposes on
   assert.equal(persistence.count(DESK_COLLECTIONS.deskAgentWorkItems), 1);
 });
 
+test("claimed replay Master injects lease handle into claim and bundle save targets", async () => {
+  const { registry } = await makeAutopilotStore();
+
+  await callDeskTool(registry, "upsert_replay_autopilot_config", {
+    config_id: "replay_autopilot_claim_save_target_test",
+    backtest_id: "replay_autopilot_claim_save_target_run",
+    trading_date: "2026-07-14",
+    session: "asia_open",
+    strategy_id: "asia_open",
+    pack_id: "2026-07-14_asia_open_replay_source_test",
+    pack_build_id: "packbuild__2026-07-14_asia_open_replay_source_test",
+    start_time: "2026-07-14T00:00:00+02:00",
+    end_time: "2026-07-14T02:00:00+02:00",
+    cadence: "60m",
+    instruments: ["MNQ", "MES", "NQ", "ES"],
+  });
+  const started = await callDeskTool(registry, "start_or_resume_replay_autopilot", {
+    config_id: "replay_autopilot_claim_save_target_test",
+    worker_id: "gpt-replay-autopilot-test",
+  });
+  assert.equal(started.isError, false);
+  assert.equal(started.structuredContent.status, "WAITING_GPT");
+
+  const claimed = await callDeskTool(registry, "claim_next_desk_work", {
+    ...started.structuredContent.gpt_claim.args,
+    worker_id: "gpt-replay-worker-lease-test",
+  });
+  assert.equal(claimed.isError, false);
+  assert.equal(claimed.structuredContent.status, "WORK_CLAIMED");
+  assert.equal(claimed.structuredContent.workflow, "REPLAY_MASTER");
+
+  const handle = claimed.structuredContent.claim_handle;
+  assert.equal(claimed.structuredContent.save_target.work_item_id, handle.work_item_id);
+  assert.equal(claimed.structuredContent.save_target.worker_id, "gpt-replay-worker-lease-test");
+  assert.equal(claimed.structuredContent.save_target.lease_token, handle.lease_token);
+
+  const bundle = await callDeskTool(registry, "get_replay_master_bundle", {
+    backtest_id: handle.backtest_id,
+    step_id: handle.step_id,
+    view: "compact",
+  });
+  assert.equal(bundle.isError, false);
+  assert.equal(bundle.structuredContent.save_target.suggested_payload.work_item_id, handle.work_item_id);
+  assert.equal(bundle.structuredContent.save_target.suggested_payload.worker_id, "gpt-replay-worker-lease-test");
+  assert.equal(bundle.structuredContent.save_target.suggested_payload.lease_token, handle.lease_token);
+
+  const saved = await callDeskTool(registry, "save_replay_master_analysis", {
+    ...bundle.structuredContent.save_target.suggested_payload,
+    full_analysis: {
+      executive_summary: { final_decision: "wait", summary: "Claimed replay Master." },
+      setups: [],
+    },
+    active_thesis: {
+      thesis_id: "main",
+      status: "WAIT_MONITORED",
+      instrument: "MNQ",
+      direction: "long",
+      dominant_scenario: "Wait for the configured replay checkpoint.",
+      health_score: 70,
+    },
+    setups: [],
+  });
+  assert.equal(saved.isError, false, saved.structuredContent.error);
+
+  const state = await callDeskTool(registry, "get_replay_state", { backtest_id: handle.backtest_id });
+  assert.equal(state.isError, false);
+  assert.equal(state.structuredContent.selected_backtest.current_replay_time, "2026-07-14T01:00:00.000+02:00");
+  assert.equal(state.structuredContent.status, "WAITING_GPT_MONITOR");
+});
+
 test("GPT replay autopilot re-arms a known retryable document serialization failure", async () => {
   const { persistence, registry } = await makeAutopilotStore();
 
@@ -201,4 +271,56 @@ test("GPT replay autopilot re-arms a known retryable document serialization fail
   assert.equal(recovered.structuredContent.recovered.status, "RECOVERED");
   assert.equal(recovered.structuredContent.work_item.status, "READY");
   assert.equal(recovered.structuredContent.work_item.attempt_count, 0);
+});
+
+test("GPT replay autopilot re-arms a claimed save blocked failure even when GPT marks it non retryable", async () => {
+  const { persistence, registry } = await makeAutopilotStore();
+
+  await callDeskTool(registry, "upsert_replay_autopilot_config", {
+    config_id: "replay_autopilot_claimed_save_blocked_recovery_test",
+    backtest_id: "replay_autopilot_claimed_save_blocked_recovery_run",
+    trading_date: "2026-07-14",
+    session: "asia_open",
+    strategy_id: "asia_open",
+    pack_id: "2026-07-14_asia_open_replay_source_test",
+    pack_build_id: "packbuild__2026-07-14_asia_open_replay_source_test",
+    start_time: "2026-07-14T00:00:00+02:00",
+    end_time: "2026-07-14T02:00:00+02:00",
+    cadence: "60m",
+    instruments: ["MNQ", "MES", "NQ", "ES"],
+  });
+  const first = await callDeskTool(registry, "start_or_resume_replay_autopilot", {
+    config_id: "replay_autopilot_claimed_save_blocked_recovery_test",
+    worker_id: "gpt-replay-autopilot-test",
+  });
+  assert.equal(first.isError, false);
+
+  const workId = first.structuredContent.work_item.work_item_id;
+  const failed = {
+    ...await persistence.getDocument(DESK_COLLECTIONS.deskAgentWorkItems, workId),
+    status: "FAILED",
+    attempt_count: 1,
+    failure_count: 1,
+    claimed_by: null,
+    worker_id: null,
+    lease_token: null,
+    retryable: false,
+    last_error: {
+      code: "WORK_ALREADY_CLAIMED_SAVE_BLOCKED",
+      message: "Pause automation before using the manual Master save path.",
+      retryable: false,
+    },
+  };
+  await persistence.setDocument(DESK_COLLECTIONS.deskAgentWorkItems, workId, failed);
+
+  const recovered = await callDeskTool(registry, "start_or_resume_replay_autopilot", {
+    config_id: "replay_autopilot_claimed_save_blocked_recovery_test",
+    worker_id: "gpt-replay-autopilot-test",
+  });
+  assert.equal(recovered.isError, false);
+  assert.equal(recovered.structuredContent.status, "WAITING_GPT");
+  assert.equal(recovered.structuredContent.recovered.status, "RECOVERED");
+  assert.equal(recovered.structuredContent.work_item.status, "READY");
+  assert.equal(recovered.structuredContent.work_item.attempt_count, 0);
+  assert.equal(recovered.structuredContent.work_item.failure_count, 0);
 });
