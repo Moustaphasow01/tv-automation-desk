@@ -129,6 +129,17 @@ Huitième lot — extraction de l'orchestration Replay, 16 juillet 2026 :
 - 35 tests ciblés puis suite MCP complète validée à 219 tests sur 219 ;
 - aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
 
+Neuvième lot — audit final du store et des points d'entrée, 16 juillet 2026 :
+
+- audit du graphe d'imports des 53 modules et scripts JavaScript initiaux ; les trois modules de schémas initialement isolés sont des réexports actifs de `schemas.js` ; après extraction, les 57 fichiers du graphe runtime sont tous atteignables depuis un point d'entrée déclaré ;
+- vérification des cinq scripts restants : chacun est déclaré comme commande npm ou gate locale et conserve une responsabilité opérationnelle actuelle ; aucun script n'a donc été supprimé sans preuve ;
+- déplacement des 84 dernières fonctions de premier niveau de `store.js` dans quatre modules propriétaires : état Live/Front, backtest, bundles Live et utilitaires documentaires ;
+- conservation dans `PersistentDeskStore` de la façade MCP, des délégations de services et des coordinations de persistance transverses ;
+- réduction de `store.js` de 3 391 à 1 300 lignes, soit 2 091 lignes sorties du dernier bloc monolithique ;
+- aucun import inutilisé, identifiant non lié ou algorithme interne orphelin détecté dans les cinq fichiers concernés ;
+- contrôles de syntaxe et de chargement ESM validés, puis 53 tests ciblés et suite MCP complète validée à 219 tests sur 219 ;
+- aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
+
 ## Runtime conservé
 
 - frontend React actuel ;
