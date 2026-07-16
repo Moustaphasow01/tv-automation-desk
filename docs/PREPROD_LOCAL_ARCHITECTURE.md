@@ -25,6 +25,8 @@ API/MCP
         -> packs, datasets, intégrité, macro et news
      -> DeskReplayService
         -> file Replay, claims, leases, récupération et autopilot
+        -> création des runs, transitions Master/Monitor et horloge Replay
+        -> mutations révisionnées, idempotence et matérialisation des sorties GPT
      -> DeskLiveService
         -> curseurs Live, claims, heartbeat, clôture et réconciliation
      -> DeskFrontService
@@ -48,7 +50,7 @@ Les opérations sensibles — claims, leases, révisions, idempotence et mutatio
 
 Le runtime et les tests exercent désormais la même classe `PersistentDeskStore`. En test, un port `InMemoryDeskPersistence` remplace PostgreSQL sans modifier la logique métier : il charge au besoin les fixtures historiques en lecture, mais toutes les écritures restent en mémoire. L'ancien `LocalDeskStore` et son chemin d'exécution fichier ont été supprimés.
 
-La modularisation du store est progressive. `DeskContractService` possède le chargement des contrats embarqués, leur versionnement, leur activation, leur archivage et leur audit. `DeskPackService` possède la résolution des packs logiques et immuables, la lecture des datasets, les contrôles d'intégrité, les niveaux de marché ainsi que les datasets macro et news. `DeskReplayService` possède la file de travail Replay, les leases et l'autopilot. `DeskLiveService` possède le cycle de vie transactionnel des curseurs Live. `DeskFrontService` possède les projections courantes, les mutations opérateur et les lectures marché destinées au frontend. `PersistentDeskStore` reste la façade compatible avec les outils MCP et coordonne les workflows qui traversent plusieurs domaines.
+La modularisation du store est progressive. `DeskContractService` possède le chargement des contrats embarqués, leur versionnement, leur activation, leur archivage et leur audit. `DeskPackService` possède la résolution des packs logiques et immuables, la lecture des datasets, les contrôles d'intégrité, les niveaux de marché ainsi que les datasets macro et news. `DeskReplayService` possède la file de travail Replay, les leases, l'autopilot et toute la séquence d'orchestration Master/Monitor, y compris les mutations révisionnées et idempotentes. Les algorithmes purs de construction des bundles lui sont fournis par un port explicite pendant la modularisation. `DeskLiveService` possède le cycle de vie transactionnel des curseurs Live. `DeskFrontService` possède les projections courantes, les mutations opérateur et les lectures marché destinées au frontend. `PersistentDeskStore` reste la façade compatible avec les outils MCP et coordonne les workflows qui traversent plusieurs domaines.
 
 ## Sécurité locale
 

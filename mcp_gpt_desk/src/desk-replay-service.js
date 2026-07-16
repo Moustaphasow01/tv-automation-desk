@@ -1,5 +1,9 @@
 import { DESK_COLLECTIONS } from "@tv-automation/desk-contracts/collections";
+import { assertMonotonicReplayClock, prepareReplayMutation, replayIdempotencyDocumentId, replayRequestHash, resolveIdempotentReplayResult } from "./replay-concurrency.js";
+import { getReplayBundleSectionView, getReplaySnapshotView, projectReplayBundle } from "./replay-bundle-view.js";
 import {
+  assertReplayWorkForSave,
+  buildReplayAgentWorkItem,
   claimReplayWorkItem,
   completeReplayWorkItem,
   failReplayWorkItem,
@@ -13,6 +17,7 @@ import {
   selectVisibleDeskWork,
   supersedeReplayWorkItem,
 } from "./replay-agent-work.js";
+import { buildReplaySetupDocsFromMonitor } from "./replay-continuity.js";
 import { deskError } from "./desk-errors.js";
 import { normalizeUtcIso } from "./desk-time-utils.js";
 
@@ -24,12 +29,697 @@ const REPLAY_AUTOPILOT_RECOVERABLE_CODES = new Set([
   "WORK_ALREADY_CLAIMED_SAVE_BLOCKED",
 ]);
 
+function replayCadenceMinutes(run, state = {}) {
+  const explicit = replayCadenceValueToMinutes(run.cadence || run.monitor_cadence);
+  if (explicit) return explicit;
+  const recommended = Number(state?.recommended_replay_cadence?.recommended_minutes);
+  if (Number.isFinite(recommended) && recommended > 0) return Math.max(1, Math.min(240, recommended));
+  const value = String(run.cadence || run.monitor_cadence || "15m").toLowerCase();
+  const parsed = Number.parseInt(value.replace(/[^0-9]/g, ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+}
+
+function replayCadenceValueToMinutes(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (["m15", "15", "15m"].includes(normalized)) return 15;
+  if (["m30", "30", "30m"].includes(normalized)) return 30;
+  if (["h1", "1h", "60", "60m"].includes(normalized)) return 60;
+  const parsed = Number.parseInt(normalized.replace(/[^0-9]/g, ""), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.max(1, Math.min(240, parsed));
+}
+
 export class DeskReplayService {
-  constructor({ persistence, clock, host }) {
+  constructor({ persistence, clock, host, orchestration }) {
     this.persistence = persistence;
     this.clock = clock;
     this.host = host;
+    this.orchestration = orchestration;
   }
+
+  async driveAutomation({ backtest_id, max_transitions = 8 } = {}) {
+    const h = this.orchestration;
+    const transitions = [];
+    for (let index = 0; index < Math.max(1, Math.min(Number(max_transitions) || 8, 12)); index += 1) {
+      const state = await this.host.getReplayState({ backtest_id });
+      const run = state.selected_backtest;
+      const step = state.current_step;
+      if (!run) throw deskError("RUN_NOT_FOUND", `Replay run not found: ${backtest_id}.`);
+      if (run.automation_enabled !== true) {
+        return { ok: true, status: "PAUSED", backtest_id, replay_status: run.status, transitions };
+      }
+      if (["WAITING_GPT_MASTER", "WAITING_GPT_MONITOR"].includes(run.status)) {
+        return {
+          ok: true,
+          status: "WAITING_GPT",
+          backtest_id,
+          replay_status: run.status,
+          work_item_id: state.current_work_item?.work_item_id || null,
+          workflow: state.current_work_item?.workflow || null,
+          transitions,
+        };
+      }
+      if (["COMPLETED", "DAY_END", "FAILED", "CANCELLED"].includes(run.status)) {
+        return { ok: true, status: "TERMINAL", backtest_id, replay_status: run.status, transitions };
+      }
+
+      const common = {
+        backtest_id,
+        step_id: step?.step_id,
+        expected_revision: Number(run.revision || 0),
+      };
+      const key = (operation) => `replay-auto:${operation}:${step?.step_id || "run"}:${Number(run.revision || 0)}`;
+      let result;
+      if (["MASTER_DATA_PREPARING", "CREATED", "REPLAN_REQUIRED"].includes(run.status)) {
+        result = await this.prepareReplayMasterBundle({ ...common, idempotency_key: key("prepare-master"), include_raw_refs: false });
+      } else if (["READY_FOR_NEXT_MONITOR", "WAITING_NEXT_STEP", "SIMULATION_UPDATED", "MASTER_MATERIALIZED"].includes(run.status)) {
+        result = await this.advanceReplayClock({ ...common, idempotency_key: key("advance-clock"), minutes: replayCadenceMinutes(run, state) });
+      } else if (run.status === "MONITOR_DATA_PREPARING" && !step?.simulation_ref) {
+        result = await this.simulateReplayInterval({ ...common, idempotency_key: key("simulate-interval") });
+      } else if (run.status === "MONITOR_DATA_PREPARING") {
+        result = await this.prepareReplayMonitorBundle({ ...common, idempotency_key: key("prepare-monitor"), timestamp_paris: step?.timestamp_paris, include_raw_refs: false });
+      } else if (["MONITOR_SAVED", "MONITOR_APPLIED"].includes(run.status)) {
+        result = await this.applyReplayMonitorResult({ ...common, idempotency_key: key("apply-monitor") });
+      } else {
+        return { ok: false, status: "BLOCKED", backtest_id, replay_status: run.status, reason: "unsupported_automatic_transition", transitions };
+      }
+      transitions.push({ from_status: run.status, operation: result?.next_action || h.nextReplayAction(run.status), to_status: result?.status || null, revision: result?.revision ?? null });
+    }
+    const finalState = await this.host.getReplayState({ backtest_id });
+    return { ok: true, status: "TRANSITION_LIMIT", backtest_id, replay_status: finalState.status, transitions };
+  }
+
+  async createOrchestratedReplayDay(args = {}) {
+    const h = this.orchestration;
+    const tick = this.clock.now();
+    const baseRun = h.buildOrchestratedReplayRunDoc(args, tick);
+    const creationHash = replayRequestHash("create_orchestrated_replay", args);
+    const existing = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, baseRun.backtest_id).catch(() => null);
+    if (existing) {
+      if (existing.creation_idempotency_key === args.idempotency_key && existing.creation_request_hash === creationHash) {
+        return h.replayCreationResult(existing, null, { idempotent_replay: true });
+      }
+      throw deskError("IDEMPOTENCY_CONFLICT", `Replay run already exists: ${baseRun.backtest_id}.`);
+    }
+    const pack = await this.host.getDeskPack({ pack_id: baseRun.pack_id, pack_build_id: baseRun.pack_build_id, mode: "replay" });
+    h.assertRunPackScope(baseRun, pack);
+    const contracts = await this.host.getActiveContracts();
+    const run = h.pinReplaySources(baseRun, pack, contracts, creationHash, tick);
+    const step = h.buildReplayStepDoc(run, {
+      sequence: 1,
+      step_type: "MASTER",
+      status: "MASTER_DATA_PREPARING",
+      timestamp_paris: run.current_replay_time,
+    }, tick);
+    const replayRun = { ...run, current_step_id: step.step_id };
+    const timeline = h.replayTimelineEvent(replayRun, step, {
+      event_type: "RUN_CREATED",
+      phase: "Replay",
+      action: "START_REPLAY_DAY",
+      status: replayRun.status,
+      note: "Orchestrated GPT replay created without initial setups.",
+    }, tick);
+    const result = h.replayCreationResult(replayRun, step);
+    if (typeof this.persistence.createReplayRun === "function") {
+      const committed = await this.persistence.createReplayRun({
+        runCollection: COLLECTIONS.deskReplayRuns,
+        idempotencyCollection: COLLECTIONS.deskReplayIdempotency,
+        run: replayRun,
+        idempotencyKey: args.idempotency_key,
+        requestHash: creationHash,
+        writes: [
+          { collection: COLLECTIONS.deskReplaySteps, documentId: step.step_id, data: step },
+          { collection: COLLECTIONS.deskReplayTimeline, documentId: timeline.event_id, data: timeline },
+        ],
+        result,
+        tick,
+      });
+      if (replayRun.automation_enabled) {
+        return { ...committed.result, automation: await this.driveAutomation({ backtest_id: replayRun.backtest_id }) };
+      }
+      return committed.result;
+    }
+    await this.persistence.setDocument(COLLECTIONS.deskReplayRuns, replayRun.backtest_id, replayRun);
+    await this.persistence.setDocument(COLLECTIONS.deskReplaySteps, step.step_id, step);
+    await this.persistence.setDocument(COLLECTIONS.deskReplayTimeline, timeline.event_id, timeline);
+    if (replayRun.automation_enabled) {
+      return { ...result, automation: await this.driveAutomation({ backtest_id: replayRun.backtest_id }) };
+    }
+    return result;
+  }
+
+  async prepareReplayMasterBundle(args = {}) {
+    const h = this.orchestration;
+    const tick = this.clock.now();
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
+    const begin = await this.beginMutation(run, args, {
+      operation: "prepare_replay_master_bundle",
+      nextStatus: "WAITING_GPT_MASTER",
+      allowedStatuses: ["MASTER_DATA_PREPARING", "CREATED", "REPLAN_REQUIRED"],
+    });
+    if (begin.existing_result) return begin.existing_result;
+    const steps = h.selectBacktestSteps(await this.persistence.listDocuments(COLLECTIONS.deskReplaySteps, 500).catch(() => []), run.backtest_id);
+    const preparation = h.resolveReplayMasterPreparation(steps, run, args.step_id, tick);
+    const step = preparation.step;
+    const replanContext = preparation.is_replan
+      ? h.buildReplayReplanContext(run, preparation, {
+          master: h.selectLatestReplayMaster(await this.persistence.listDocuments(COLLECTIONS.deskReplayMasterAnalyses, 500).catch(() => []), run.backtest_id),
+          thesis: h.selectReplayActiveThesis(await this.persistence.listDocuments(COLLECTIONS.deskReplayActiveTheses, 500).catch(() => []), run.backtest_id),
+          setups: h.selectReplayScopedSetups(await this.persistence.listDocuments(COLLECTIONS.deskReplaySetups, 500).catch(() => []), run.backtest_id),
+          monitor: h.selectReplayMonitors(await this.persistence.listDocuments(COLLECTIONS.deskReplayMonitors, 500).catch(() => []), run.backtest_id)[0] || null,
+          position: h.selectReplayPositions(await this.persistence.listDocuments(COLLECTIONS.deskReplayPositions, 500).catch(() => []), run.backtest_id)[0] || null,
+        })
+      : null;
+    const bundle = await h.buildReplayMasterBundle(this.host, run, step, args, this.clock, replanContext);
+    h.assertReplayBundleExecutable(bundle);
+    const readyStep = h.patchReplayStep(step, {
+      status: "WAITING_GPT_MASTER",
+      bundle_id: bundle.bundle_id,
+      bundle_ref: { collection: COLLECTIONS.deskReplayBundles, document_id: bundle.bundle_id },
+      source_hash: bundle.source_hash,
+      source_manifest_hash: bundle.source_manifest_hash,
+      anti_lookahead_compliant: true,
+      validation_result: "passed",
+    }, tick);
+    let readyRun = h.patchReplayRun(run, {
+      status: "WAITING_GPT_MASTER",
+      current_step_id: readyStep.step_id,
+      latest_bundle_id: bundle.bundle_id,
+    }, tick);
+    const workItem = readyRun.automation_enabled ? buildReplayAgentWorkItem({ run: readyRun, step: readyStep, bundle, tick }) : null;
+    if (workItem) readyRun = h.patchReplayRun(readyRun, { current_work_item_id: workItem.work_item_id, automation_status: "waiting_gpt" }, tick);
+    const timeline = h.replayTimelineEvent(readyRun, readyStep, {
+      event_type: "MASTER_BUNDLE_READY",
+      phase: "Master",
+      action: "WAITING_GPT_MASTER",
+      status: readyRun.status,
+      note: "Cutoff-scoped Master bundle ready for manual ChatGPT analysis.",
+      ref: { collection: COLLECTIONS.deskReplayBundles, document_id: bundle.bundle_id },
+      anti_lookahead_compliant: true,
+    }, tick);
+    const result = { ok: true, backtest_id: readyRun.backtest_id, step_id: readyStep.step_id, status: readyRun.status, bundle_id: bundle.bundle_id, bundle: projectReplayBundle(bundle, { view: "compact" }), work_item: workItem ? deskWorkSummary(workItem) : null, next_action: h.nextReplayAction(readyRun.status) };
+    const committed = await this.commitMutation({
+      run,
+      runPatch: readyRun,
+      mutation: begin.mutation,
+      writes: [
+        { collection: COLLECTIONS.deskReplayBundles, documentId: bundle.bundle_id, data: bundle },
+        { collection: COLLECTIONS.deskReplaySteps, documentId: readyStep.step_id, data: readyStep },
+        { collection: COLLECTIONS.deskReplayTimeline, documentId: timeline.event_id, data: timeline },
+        ...(workItem ? [
+          { collection: COLLECTIONS.deskAgentWorkItems, documentId: workItem.work_item_id, data: workItem },
+          { collection: COLLECTIONS.deskAgentWorkEvents, documentId: `${workItem.work_item_id}__ready__${tick.epochMs}`, data: replayWorkEvent(workItem, "READY", tick) },
+        ] : []),
+      ],
+      result,
+      tick,
+    });
+    return committed.result;
+  }
+
+  async getReplayMasterBundle(args = {}) {
+    const h = this.orchestration;
+    const bundles = h.selectReplayBundles(await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []), args.backtest_id);
+    const bundle = h.selectReplayBundle(bundles, { step_id: args.step_id, bundle_type: "master" });
+    if (!bundle) throw new Error("replay_master_bundle_not_found");
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id).catch(() => null);
+    const workItem = run?.current_work_item_id
+      ? await this.persistence.getDocument(COLLECTIONS.deskAgentWorkItems, run.current_work_item_id).catch(() => null)
+      : null;
+    return projectReplayBundle(enrichReplayBundleSaveTargetForClaim(bundle, workItem), { ...args, bundle_type: "master" });
+  }
+
+  async saveReplayMasterAnalysis(args = {}) {
+    const h = this.orchestration;
+    const tick = this.clock.now();
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
+    const workItemId = args.work_item_id || run.current_work_item_id || null;
+    const workItem = workItemId ? await this.persistence.getDocument(COLLECTIONS.deskAgentWorkItems, workItemId).catch(() => null) : null;
+    if (args.work_item_id) assertReplayWorkForSave(workItem, args, "REPLAY_MASTER", tick);
+    else if (workItem?.status === "CLAIMED") throw deskError("WORK_ALREADY_CLAIMED", "Pause automation before using the manual Master save path.");
+    const begin = await this.beginMutation(run, args, {
+      operation: "save_replay_master_analysis",
+      nextStatus: "READY_FOR_NEXT_MONITOR",
+      allowedStatuses: ["WAITING_GPT_MASTER", "REPLAN_REQUIRED"],
+    });
+    if (begin.existing_result) return begin.existing_result;
+    const steps = h.selectBacktestSteps(await this.persistence.listDocuments(COLLECTIONS.deskReplaySteps, 500).catch(() => []), run.backtest_id);
+    const step = h.resolveReplayStep(steps, run, args.step_id, "MASTER");
+    h.assertReplayContractSave(run, args, "master", step);
+    const master = h.normalizeReplayMasterAnalysis(args, run, step, tick);
+    const setupDocs = h.buildReplaySetupDocs(master, run, step, tick);
+    const thesis = h.normalizeReplayActiveThesis(args.active_thesis || h.deriveActiveThesisFromMaster(master), master, run, step, tick);
+    const writes = [{ collection: COLLECTIONS.deskReplayMasterAnalyses, documentId: master.analysis_id, data: master }];
+    writes.push(...setupDocs.map((setup) => ({ collection: COLLECTIONS.deskReplaySetups, documentId: setup.setup_record_id, data: setup })));
+    if (thesis) writes.push({ collection: COLLECTIONS.deskReplayActiveTheses, documentId: thesis.thesis_id, data: thesis });
+    if (args.context_transmission) {
+      const context = h.normalizeReplayContextTransmission(args.context_transmission, run, step, { linked_analysis_id: master.analysis_id }, tick);
+      writes.push({ collection: COLLECTIONS.deskReplayContextTransmissions, documentId: context.context_id, data: context });
+    }
+    const savedStep = h.patchReplayStep(step, {
+      status: "MASTER_MATERIALIZED",
+      output_ref: { collection: COLLECTIONS.deskReplayMasterAnalyses, document_id: master.analysis_id },
+      setup_count: setupDocs.length,
+      thesis_id: thesis?.thesis_id || null,
+    }, tick);
+    const savedRun = h.patchReplayRun(run, {
+      status: "READY_FOR_NEXT_MONITOR",
+      linked_master_analysis_id: master.analysis_id,
+      active_replay_thesis_id: thesis?.thesis_id || null,
+      current_step_id: savedStep.step_id,
+      setup_count: setupDocs.length,
+      current_work_item_id: null,
+      last_completed_work_item_id: workItem?.work_item_id || run.last_completed_work_item_id || null,
+      automation_status: run.automation_enabled ? "running" : run.automation_status,
+    }, tick);
+    const timeline = h.replayTimelineEvent(savedRun, savedStep, {
+      event_type: "GPT_MASTER_SAVED",
+      phase: "Master",
+      action: "MASTER_MATERIALIZED",
+      status: savedRun.status,
+      note: `Master saved; ${setupDocs.length} replay setup(s) materialized.`,
+      ref: { collection: COLLECTIONS.deskReplayMasterAnalyses, document_id: master.analysis_id },
+      anti_lookahead_compliant: true,
+    }, tick);
+    writes.push(
+      { collection: COLLECTIONS.deskReplaySteps, documentId: savedStep.step_id, data: savedStep },
+      { collection: COLLECTIONS.deskReplayTimeline, documentId: timeline.event_id, data: timeline },
+    );
+    if (workItem) {
+      const completedWork = completeReplayWorkItem(workItem, {
+        worker_id: args.worker_id,
+        lease_token: args.lease_token,
+        output_ref: { collection: COLLECTIONS.deskReplayMasterAnalyses, document_id: master.analysis_id },
+      }, tick, { allowMaterialized: !args.work_item_id });
+      writes.push(
+        { collection: COLLECTIONS.deskAgentWorkItems, documentId: completedWork.work_item_id, data: completedWork },
+        { collection: COLLECTIONS.deskAgentWorkEvents, documentId: `${completedWork.work_item_id}__completed__${tick.epochMs}`, data: replayWorkEvent(completedWork, "COMPLETED", tick, { worker_id: args.worker_id }) },
+      );
+    }
+    const result = { ok: true, backtest_id: savedRun.backtest_id, step_id: savedStep.step_id, status: savedRun.status, analysis_id: master.analysis_id, setup_count: setupDocs.length, setup_ids: setupDocs.map((setup) => setup.setup_record_id), active_replay_thesis_id: thesis?.thesis_id || null, next_action: h.nextReplayAction(savedRun.status) };
+    const committed = await this.commitMutation({
+      run, runPatch: savedRun, mutation: begin.mutation, writes, result, tick,
+      preconditions: args.work_item_id ? [{
+        collection: COLLECTIONS.deskAgentWorkItems,
+        documentId: args.work_item_id,
+        equals: { status: "CLAIMED", claimed_by: args.worker_id, lease_token: args.lease_token },
+      }] : [],
+    });
+    return run.automation_enabled ? { ...committed.result, automation: await this.driveAutomation({ backtest_id: run.backtest_id }) } : committed.result;
+  }
+
+  async advanceReplayClock(args = {}) {
+    const h = this.orchestration;
+    const tick = this.clock.now();
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
+    h.assertReplayCanAdvance(run, args);
+    const steps = h.selectBacktestSteps(await this.persistence.listDocuments(COLLECTIONS.deskReplaySteps, 500).catch(() => []), run.backtest_id);
+    const sequence = steps.length + 1;
+    const timestamp = h.offsetIso(run.current_replay_time, (Number(args.minutes) || 15) * 60 * 1000);
+    if (run.end_time && Date.parse(timestamp) > Date.parse(run.end_time)) {
+      const begin = await this.beginMutation(run, args, {
+        operation: "advance_replay_clock",
+        nextStatus: "COMPLETED",
+        allowedStatuses: ["READY_FOR_NEXT_MONITOR", "WAITING_NEXT_STEP", "SIMULATION_UPDATED", "MASTER_MATERIALIZED"],
+      });
+      if (begin.existing_result) return begin.existing_result;
+      const ended = h.patchReplayRun(run, { status: "COMPLETED", completed_at_utc: tick.utc }, tick);
+      const result = { ok: true, backtest_id: ended.backtest_id, status: ended.status, next_action: h.nextReplayAction(ended.status) };
+      return (await this.commitMutation({ run, runPatch: ended, mutation: begin.mutation, result, tick })).result;
+    }
+    assertMonotonicReplayClock(run.current_replay_time, timestamp, run.end_time || null);
+    const begin = await this.beginMutation(run, args, {
+      operation: "advance_replay_clock",
+      nextStatus: "MONITOR_DATA_PREPARING",
+      allowedStatuses: ["READY_FOR_NEXT_MONITOR", "WAITING_NEXT_STEP", "SIMULATION_UPDATED", "MASTER_MATERIALIZED"],
+    });
+    if (begin.existing_result) return begin.existing_result;
+    const step = h.buildReplayStepDoc(run, {
+      sequence,
+      step_type: "MONITOR",
+      status: "MONITOR_DATA_PREPARING",
+      timestamp_paris: timestamp,
+      previous_step_id: run.current_step_id,
+    }, tick);
+    const advancedRun = h.patchReplayRun(run, {
+      status: "MONITOR_DATA_PREPARING",
+      current_step_id: step.step_id,
+      current_replay_time: timestamp,
+    }, tick);
+    const timeline = h.replayTimelineEvent(advancedRun, step, {
+      event_type: "CLOCK_ADVANCED",
+      phase: "Clock",
+      action: `ADVANCE_${Number(args.minutes) || 15}M`,
+      status: advancedRun.status,
+      note: `Replay clock advanced to ${timestamp}.`,
+      anti_lookahead_compliant: true,
+    }, tick);
+    const result = { ok: true, backtest_id: advancedRun.backtest_id, step_id: step.step_id, status: advancedRun.status, current_replay_time: timestamp, step, next_action: h.nextReplayAction(advancedRun.status) };
+    return (await this.commitMutation({
+      run,
+      runPatch: advancedRun,
+      mutation: begin.mutation,
+      writes: [
+        { collection: COLLECTIONS.deskReplaySteps, documentId: step.step_id, data: step },
+        { collection: COLLECTIONS.deskReplayTimeline, documentId: timeline.event_id, data: timeline },
+      ],
+      result,
+      tick,
+    })).result;
+  }
+
+  async prepareReplayMonitorBundle(args = {}) {
+    const h = this.orchestration;
+    const tick = this.clock.now();
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
+    const begin = await this.beginMutation(run, args, {
+      operation: "prepare_replay_monitor_bundle",
+      nextStatus: "WAITING_GPT_MONITOR",
+      allowedStatuses: ["MONITOR_DATA_PREPARING"],
+    });
+    if (begin.existing_result) return begin.existing_result;
+    const steps = h.selectBacktestSteps(await this.persistence.listDocuments(COLLECTIONS.deskReplaySteps, 500).catch(() => []), run.backtest_id);
+    const step = h.resolveReplayStep(steps, run, args.step_id, "MONITOR");
+    const monitorStep = h.patchReplayStep(step, { status: "MONITOR_DATA_PREPARING", timestamp_paris: args.timestamp_paris || step.timestamp_paris }, tick);
+    const monitorRun = h.patchReplayRun(run, { status: "MONITOR_DATA_PREPARING", current_step_id: monitorStep.step_id, current_replay_time: monitorStep.timestamp_paris }, tick);
+    const replayDocs = {
+      master: h.selectLatestReplayMaster(await this.persistence.listDocuments(COLLECTIONS.deskReplayMasterAnalyses, 500).catch(() => []), run.backtest_id),
+      thesis: h.selectReplayActiveThesis(await this.persistence.listDocuments(COLLECTIONS.deskReplayActiveTheses, 500).catch(() => []), run.backtest_id),
+      setups: h.selectReplayScopedSetups(await this.persistence.listDocuments(COLLECTIONS.deskReplaySetups, 500).catch(() => []), run.backtest_id),
+      monitors: h.selectReplayMonitors(await this.persistence.listDocuments(COLLECTIONS.deskReplayMonitors, 500).catch(() => []), run.backtest_id),
+      positions: h.selectReplayPositions(await this.persistence.listDocuments(COLLECTIONS.deskReplayPositions, 500).catch(() => []), run.backtest_id),
+    };
+    const bundle = await h.buildReplayMonitorBundle(this.host, monitorRun, monitorStep, replayDocs, args, this.clock);
+    h.assertReplayBundleExecutable(bundle);
+    const readyStep = h.patchReplayStep(monitorStep, {
+      status: "WAITING_GPT_MONITOR",
+      bundle_id: bundle.bundle_id,
+      bundle_ref: { collection: COLLECTIONS.deskReplayBundles, document_id: bundle.bundle_id },
+      source_hash: bundle.source_hash,
+      source_manifest_hash: bundle.source_manifest_hash,
+      anti_lookahead_compliant: true,
+      validation_result: "passed",
+    }, tick);
+    let readyRun = h.patchReplayRun(monitorRun, { status: "WAITING_GPT_MONITOR", latest_bundle_id: bundle.bundle_id }, tick);
+    const workItem = readyRun.automation_enabled ? buildReplayAgentWorkItem({ run: readyRun, step: readyStep, bundle, tick }) : null;
+    if (workItem) readyRun = h.patchReplayRun(readyRun, { current_work_item_id: workItem.work_item_id, automation_status: "waiting_gpt" }, tick);
+    const timeline = h.replayTimelineEvent(readyRun, readyStep, {
+      event_type: "MONITOR_BUNDLE_READY",
+      phase: "Monitor",
+      action: "WAITING_GPT_MONITOR",
+      status: readyRun.status,
+      note: "Replay monitor bundle ready for manual ChatGPT analysis.",
+      ref: { collection: COLLECTIONS.deskReplayBundles, document_id: bundle.bundle_id },
+      anti_lookahead_compliant: true,
+    }, tick);
+    const result = { ok: true, backtest_id: readyRun.backtest_id, step_id: readyStep.step_id, status: readyRun.status, bundle_id: bundle.bundle_id, bundle: projectReplayBundle(bundle, { view: "compact" }), work_item: workItem ? deskWorkSummary(workItem) : null, next_action: h.nextReplayAction(readyRun.status) };
+    return (await this.commitMutation({
+      run,
+      runPatch: readyRun,
+      mutation: begin.mutation,
+      writes: [
+        { collection: COLLECTIONS.deskReplayBundles, documentId: bundle.bundle_id, data: bundle },
+        { collection: COLLECTIONS.deskReplaySteps, documentId: readyStep.step_id, data: readyStep },
+        { collection: COLLECTIONS.deskReplayTimeline, documentId: timeline.event_id, data: timeline },
+        ...(workItem ? [
+          { collection: COLLECTIONS.deskAgentWorkItems, documentId: workItem.work_item_id, data: workItem },
+          { collection: COLLECTIONS.deskAgentWorkEvents, documentId: `${workItem.work_item_id}__ready__${tick.epochMs}`, data: replayWorkEvent(workItem, "READY", tick) },
+        ] : []),
+      ],
+      result,
+      tick,
+    })).result;
+  }
+
+  async getReplayMonitorBundle(args = {}) {
+    const h = this.orchestration;
+    const bundles = h.selectReplayBundles(await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []), args.backtest_id);
+    const bundle = h.selectReplayBundle(bundles, { step_id: args.step_id, bundle_type: "monitor" });
+    if (!bundle) throw new Error("replay_monitor_bundle_not_found");
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id).catch(() => null);
+    const workItem = run?.current_work_item_id
+      ? await this.persistence.getDocument(COLLECTIONS.deskAgentWorkItems, run.current_work_item_id).catch(() => null)
+      : null;
+    return projectReplayBundle(enrichReplayBundleSaveTargetForClaim(bundle, workItem), { ...args, bundle_type: "monitor" });
+  }
+
+  async getReplayBundleManifest(args = {}) {
+    const h = this.orchestration;
+    const docs = await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []);
+    return projectReplayBundle(h.selectReplayBundleForRead(docs, args), { ...args, view: "manifest" });
+  }
+
+  async getReplayBundleSection(args = {}) {
+    const h = this.orchestration;
+    const docs = await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []);
+    return getReplayBundleSectionView(h.selectReplayBundleForRead(docs, args), args);
+  }
+
+  async getReplaySnapshot(args = {}) {
+    const h = this.orchestration;
+    const docs = await this.persistence.listDocuments(COLLECTIONS.deskReplayBundles, 500).catch(() => []);
+    return getReplaySnapshotView(h.selectReplayBundleForRead(docs, args), args);
+  }
+
+  async saveReplayMonitor(args = {}) {
+    const h = this.orchestration;
+    const tick = this.clock.now();
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
+    const workItemId = args.work_item_id || run.current_work_item_id || null;
+    const workItem = workItemId ? await this.persistence.getDocument(COLLECTIONS.deskAgentWorkItems, workItemId).catch(() => null) : null;
+    if (args.work_item_id) assertReplayWorkForSave(workItem, args, "REPLAY_MONITOR", tick);
+    else if (workItem?.status === "CLAIMED") throw deskError("WORK_ALREADY_CLAIMED", "Pause automation before using the manual Monitor save path.");
+    const begin = await this.beginMutation(run, args, {
+      operation: "save_replay_monitor",
+      nextStatus: "MONITOR_SAVED",
+      allowedStatuses: ["WAITING_GPT_MONITOR"],
+    });
+    if (begin.existing_result) return begin.existing_result;
+    const steps = h.selectBacktestSteps(await this.persistence.listDocuments(COLLECTIONS.deskReplaySteps, 500).catch(() => []), run.backtest_id);
+    const step = h.resolveReplayStep(steps, run, args.step_id, "MONITOR");
+    h.assertReplayContractSave(run, args, "monitor", step);
+    const monitor = h.normalizeReplayMonitor(args, run, step, tick);
+    const writes = [{ collection: COLLECTIONS.deskReplayMonitors, documentId: monitor.monitor_id, data: monitor }];
+    if (args.monitor_context_transmission) {
+      const context = h.normalizeReplayContextTransmission(args.monitor_context_transmission, run, step, { linked_monitor_id: monitor.monitor_id }, tick);
+      writes.push({ collection: COLLECTIONS.deskReplayContextTransmissions, documentId: context.context_id, data: context });
+    }
+    const existingThesis = h.selectReplayActiveThesis(await this.persistence.listDocuments(COLLECTIONS.deskReplayActiveTheses, 500).catch(() => []), run.backtest_id);
+    if (existingThesis) {
+      const updatedThesis = h.patchReplayThesis(existingThesis, monitor, tick);
+      writes.push({ collection: COLLECTIONS.deskReplayActiveTheses, documentId: updatedThesis.thesis_id, data: updatedThesis });
+    }
+    const existingSetups = h.selectReplayScopedSetups(await this.persistence.listDocuments(COLLECTIONS.deskReplaySetups, 500).catch(() => []), run.backtest_id);
+    const monitorSetupDocs = buildReplaySetupDocsFromMonitor({
+      monitor,
+      run,
+      step,
+      existingSetups,
+      tick,
+      makeSetupId: (value) => h.scopedReplayChildId(run, "setup", value),
+    });
+    writes.push(...monitorSetupDocs.map((setup) => ({ collection: COLLECTIONS.deskReplaySetups, documentId: setup.setup_record_id, data: setup })));
+    const savedStep = h.patchReplayStep(step, {
+      status: "MONITOR_SAVED",
+      output_ref: { collection: COLLECTIONS.deskReplayMonitors, document_id: monitor.monitor_id },
+    }, tick);
+    const savedRun = h.patchReplayRun(run, {
+      status: "MONITOR_SAVED",
+      latest_monitor_id: monitor.monitor_id,
+      current_step_id: savedStep.step_id,
+      setup_count: Math.max(Number(run.setup_count || 0), existingSetups.length + monitorSetupDocs.filter((setup) => !existingSetups.some((item) => item.setup_record_id === setup.setup_record_id)).length),
+      current_work_item_id: null,
+      last_completed_work_item_id: workItem?.work_item_id || run.last_completed_work_item_id || null,
+      automation_status: run.automation_enabled ? "running" : run.automation_status,
+    }, tick);
+    const timeline = h.replayTimelineEvent(savedRun, savedStep, {
+      event_type: "GPT_MONITOR_SAVED",
+      phase: "Monitor",
+      action: monitor.monitor_decision?.action || monitor.monitor_decision?.decision || "MONITOR_SAVED",
+      status: savedRun.status,
+      note: "Replay monitor saved and ready to apply/simulate.",
+      ref: { collection: COLLECTIONS.deskReplayMonitors, document_id: monitor.monitor_id },
+      anti_lookahead_compliant: true,
+    }, tick);
+    writes.push(
+      { collection: COLLECTIONS.deskReplaySteps, documentId: savedStep.step_id, data: savedStep },
+      { collection: COLLECTIONS.deskReplayTimeline, documentId: timeline.event_id, data: timeline },
+    );
+    if (workItem) {
+      const completedWork = completeReplayWorkItem(workItem, {
+        worker_id: args.worker_id,
+        lease_token: args.lease_token,
+        output_ref: { collection: COLLECTIONS.deskReplayMonitors, document_id: monitor.monitor_id },
+      }, tick, { allowMaterialized: !args.work_item_id });
+      writes.push(
+        { collection: COLLECTIONS.deskAgentWorkItems, documentId: completedWork.work_item_id, data: completedWork },
+        { collection: COLLECTIONS.deskAgentWorkEvents, documentId: `${completedWork.work_item_id}__completed__${tick.epochMs}`, data: replayWorkEvent(completedWork, "COMPLETED", tick, { worker_id: args.worker_id }) },
+      );
+    }
+    const result = { ok: true, backtest_id: savedRun.backtest_id, step_id: savedStep.step_id, status: savedRun.status, monitor_id: monitor.monitor_id, next_action: h.nextReplayAction(savedRun.status) };
+    const committed = await this.commitMutation({
+      run, runPatch: savedRun, mutation: begin.mutation, writes, result, tick,
+      preconditions: args.work_item_id ? [{
+        collection: COLLECTIONS.deskAgentWorkItems,
+        documentId: args.work_item_id,
+        equals: { status: "CLAIMED", claimed_by: args.worker_id, lease_token: args.lease_token },
+      }] : [],
+    });
+    return run.automation_enabled ? { ...committed.result, automation: await this.driveAutomation({ backtest_id: run.backtest_id }) } : committed.result;
+  }
+
+  async applyReplayMonitorResult(args = {}) {
+    const h = this.orchestration;
+    const tick = this.clock.now();
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
+    const steps = h.selectBacktestSteps(await this.persistence.listDocuments(COLLECTIONS.deskReplaySteps, 500).catch(() => []), run.backtest_id);
+    const step = h.resolveReplayStep(steps, run, args.step_id, "MONITOR");
+    const monitor = h.selectReplayMonitorForStep(await this.persistence.listDocuments(COLLECTIONS.deskReplayMonitors, 500).catch(() => []), run.backtest_id, step.step_id);
+    if (!monitor) throw new Error("replay_monitor_not_found_for_step");
+    const positions = h.selectReplayPositions(await this.persistence.listDocuments(COLLECTIONS.deskReplayPositions, 500).catch(() => []), run.backtest_id);
+    const apply = h.buildReplayMonitorApplication(run, step, monitor, positions, tick);
+    const begin = await this.beginMutation(run, args, {
+      operation: "apply_replay_monitor_result",
+      nextStatus: apply.run_status,
+      allowedStatuses: ["MONITOR_SAVED", "MONITOR_APPLIED"],
+    });
+    if (begin.existing_result) return begin.existing_result;
+    const writes = [];
+    if (apply.position) writes.push({ collection: COLLECTIONS.deskReplayPositions, documentId: apply.position.position_id, data: apply.position });
+    const appliedStep = h.patchReplayStep(step, { status: "SIMULATION_UPDATED", applied_decision: apply.action }, tick);
+    const appliedRun = h.patchReplayRun(run, {
+      status: apply.run_status,
+      latest_position_id: apply.position?.position_id || run.latest_position_id || null,
+    }, tick);
+    const timeline = h.replayTimelineEvent(appliedRun, appliedStep, {
+      event_type: "MONITOR_RESULT_APPLIED",
+      phase: "Simulation",
+      action: apply.action,
+      status: appliedRun.status,
+      note: apply.note,
+      anti_lookahead_compliant: true,
+    }, tick);
+    writes.push(
+      { collection: COLLECTIONS.deskReplaySteps, documentId: appliedStep.step_id, data: appliedStep },
+      { collection: COLLECTIONS.deskReplayTimeline, documentId: timeline.event_id, data: timeline },
+    );
+    const result = { ok: true, backtest_id: appliedRun.backtest_id, step_id: appliedStep.step_id, status: appliedRun.status, action: apply.action, position: apply.position || null, next_action: h.nextReplayAction(appliedRun.status) };
+    return (await this.commitMutation({ run, runPatch: appliedRun, mutation: begin.mutation, writes, result, tick })).result;
+  }
+
+  async simulateReplayInterval(args = {}) {
+    const h = this.orchestration;
+    const tick = this.clock.now();
+    const run = await this.persistence.getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
+    const begin = await this.beginMutation(run, args, {
+      operation: "simulate_replay_interval",
+      nextStatus: "MONITOR_DATA_PREPARING",
+      allowedStatuses: ["MONITOR_DATA_PREPARING"],
+    });
+    if (begin.existing_result) return begin.existing_result;
+    const steps = h.selectBacktestSteps(await this.persistence.listDocuments(COLLECTIONS.deskReplaySteps, 500).catch(() => []), run.backtest_id);
+    const step = h.resolveReplayStep(steps, run, args.step_id, "MONITOR");
+    const positions = h.selectReplayPositions(await this.persistence.listDocuments(COLLECTIONS.deskReplayPositions, 500).catch(() => []), run.backtest_id);
+    const setups = h.selectReplayScopedSetups(await this.persistence.listDocuments(COLLECTIONS.deskReplaySetups, 500).catch(() => []), run.backtest_id);
+    const position = positions[0] || null;
+    const from = args.from_timestamp || step.previous_timestamp_paris || h.offsetIso(step.timestamp_paris, -15 * 60 * 1000);
+    const to = args.to_timestamp || step.timestamp_paris || run.current_replay_time;
+    const simulation = await h.buildReplayIntervalSimulation(this.host, run, step, position, setups, { from, to }, tick);
+    const simulatedStep = h.patchReplayStep(step, {
+      status: "MONITOR_DATA_PREPARING",
+      simulation_ref: { collection: COLLECTIONS.deskReplayTradeSimulations, document_id: simulation.simulation_id },
+      anti_lookahead_compliant: true,
+      validation_result: "passed",
+    }, tick);
+    const simulatedRun = h.patchReplayRun(run, {
+      status: "MONITOR_DATA_PREPARING",
+      latest_simulation_id: simulation.simulation_id,
+      latest_position_id: simulation.position_update?.position_id || run.latest_position_id || null,
+    }, tick);
+    const timeline = h.replayTimelineEvent(simulatedRun, simulatedStep, {
+      event_type: "INTERVAL_SIMULATED",
+      phase: "Simulation",
+      action: "SIMULATE_INTERVAL",
+      status: simulatedRun.status,
+      note: `Replay interval simulated up to ${to}.`,
+      ref: { collection: COLLECTIONS.deskReplayTradeSimulations, document_id: simulation.simulation_id },
+      anti_lookahead_compliant: true,
+    }, tick);
+    const result = { ok: true, backtest_id: simulatedRun.backtest_id, step_id: simulatedStep.step_id, status: simulatedRun.status, simulation, next_action: h.nextReplayAction(simulatedRun.status) };
+    return (await this.commitMutation({
+      run,
+      runPatch: simulatedRun,
+      mutation: begin.mutation,
+      writes: [
+        { collection: COLLECTIONS.deskReplayTradeSimulations, documentId: simulation.simulation_id, data: simulation },
+        ...(simulation.setup_updates || []).map((setup) => ({ collection: COLLECTIONS.deskReplaySetups, documentId: setup.setup_record_id, data: setup })),
+        ...(simulation.position_update ? [{ collection: COLLECTIONS.deskReplayPositions, documentId: simulation.position_update.position_id, data: simulation.position_update }] : []),
+        { collection: COLLECTIONS.deskReplaySteps, documentId: simulatedStep.step_id, data: simulatedStep },
+        { collection: COLLECTIONS.deskReplayTimeline, documentId: timeline.event_id, data: timeline },
+      ],
+      result,
+      tick,
+    })).result;
+  }
+
+  async getReplayTimeline({ backtest_id, limit = 200 } = {}) {
+    const h = this.orchestration;
+    const timeline = h.selectReplayTimeline(await this.persistence.listDocuments(COLLECTIONS.deskReplayTimeline, Math.max(50, Math.min(Number(limit) || 200, 500))).catch(() => []), backtest_id).slice(0, Math.max(1, Math.min(Number(limit) || 200, 500)));
+    return { ok: true, backtest_id, count: timeline.length, timeline };
+  }
+
+  async beginMutation(run, args, config) {
+    const idempotencyKey = String(args.idempotency_key || "").trim();
+    if (idempotencyKey) {
+      const id = replayIdempotencyDocumentId(run.backtest_id, idempotencyKey);
+      const existing = await this.persistence.getDocument(COLLECTIONS.deskReplayIdempotency, id).catch(() => null);
+      if (existing) {
+        const request_hash = replayRequestHash(config.operation, args);
+        const result = resolveIdempotentReplayResult(existing, { idempotency_key: idempotencyKey, request_hash });
+        return { existing_result: { ...result, idempotent_replay: true } };
+      }
+    }
+    return { mutation: prepareReplayMutation(run, args, config) };
+  }
+
+  async commitMutation({ run, runPatch, mutation, writes = [], result, tick, preconditions = [] }) {
+    if (typeof this.persistence.commitReplayMutation === "function") {
+      return this.persistence.commitReplayMutation({
+        runCollection: COLLECTIONS.deskReplayRuns,
+        idempotencyCollection: COLLECTIONS.deskReplayIdempotency,
+        backtestId: run.backtest_id,
+        idempotencyKey: mutation.idempotency_key,
+        requestHash: mutation.request_hash,
+        expectedRevision: mutation.expected_revision,
+        runPatch,
+        writes,
+        preconditions,
+        result,
+        tick,
+      });
+    }
+    const nextRun = { ...run, ...runPatch, revision: mutation.next_revision };
+    const finalResult = { ...result, revision: mutation.next_revision, idempotent_replay: false };
+    for (const write of writes) {
+      await this.persistence.setDocument(write.collection, write.documentId, write.data, { merge: write.merge === true });
+    }
+    await this.persistence.setDocument(COLLECTIONS.deskReplayRuns, run.backtest_id, nextRun, { merge: true });
+    const id = replayIdempotencyDocumentId(run.backtest_id, mutation.idempotency_key);
+    await this.persistence.setDocument(COLLECTIONS.deskReplayIdempotency, id, {
+      idempotency_id: id,
+      idempotency_key: mutation.idempotency_key,
+      request_hash: mutation.request_hash,
+      backtest_id: run.backtest_id,
+      expected_revision: mutation.expected_revision,
+      applied_revision: mutation.next_revision,
+      status: "applied",
+      result: finalResult,
+      created_at_utc: tick.utc,
+    });
+    return { replayed: false, run: nextRun, result: finalResult };
+  }
+
 
   async claimNext(args = {}) {
     const tick = this.clock.now();

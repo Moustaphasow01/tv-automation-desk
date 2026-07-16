@@ -74,6 +74,16 @@ Troisième lot — 16 juillet 2026 :
 - réduction de `store.js` de 10 667 à 9 605 lignes sur ce lot, soit 1 062 lignes sorties ou supprimées du monolithe ;
 - aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
 
+Quatrième lot — orchestration Replay :
+
+- déplacement dans `DeskReplayService` de la création des runs, de la préparation et lecture des bundles Master/Monitor, des sauvegardes GPT, de l'horloge, de l'application des résultats et de la simulation ;
+- déplacement de la boucle autopilot et de la sélection explicite des cadences `15m`, `30m` et `60m` ;
+- déplacement des primitives de mutation Replay : révisions, préconditions, idempotence et commit transactionnel ;
+- maintien temporaire des algorithmes purs de construction de bundle derrière `replayOrchestrationPort`, sans dépendance circulaire ;
+- suppression de deux anciens constructeurs de bundles Live devenus inaccessibles et de leur helper de projection ;
+- réduction de `store.js` de 9 605 à 8 893 lignes sur ce lot ;
+- suite MCP complète validée à 219 tests sur 219.
+
 ## Runtime conservé
 
 - frontend React actuel ;
