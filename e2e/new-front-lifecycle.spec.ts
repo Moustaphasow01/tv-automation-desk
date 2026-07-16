@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { installDeskApiMock } from "./mockDeskApi";
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("desk-session", "ny_open"));
+  await installDeskApiMock(page);
 });
 
 test("parcours Master → Monitor → Setup → Position → clôture", async ({ page }) => {
@@ -48,7 +49,7 @@ test.describe("mobile 320 px", () => {
   test("le cockpit et les alertes qualité restent utilisables sans débordement global", async ({ page }) => {
     await page.goto("/#/live", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("button", { name: "Menu", exact: true })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Session" })).toBeVisible();
+    await expect(page.getByLabel(/Session automatique :/)).toBeVisible();
     await expect(page.getByRole("heading", { name: "Setup expiré après déclenchement strict", exact: true })).toBeVisible();
 
     const dimensions = await page.evaluate(() => ({

@@ -58,6 +58,14 @@ API/MCP
 - `frontend` : build React servi par Nginx ;
 - `desk_objects` : volume réservé aux objets locaux des packs.
 
+## Frontend React
+
+Le frontend est une application React unique. Ses douze routes actives sont `live`, `sessions`, `master`, `monitors`, `thesis`, `setup`, `news`, `performance`, `timeline`, `audit`, `alerts` et `more`. Toutes sont rattachées à `src/App.tsx` et atteignables depuis la navigation principale ou secondaire.
+
+La session affichée est choisie automatiquement selon l'heure de Paris : Asia avant 08:00, London de 08:00 à 15:30, puis New York. Le bandeau latéral montre les trois phases mais n'est plus un sélecteur manuel. Les pages métier lisent l'agrégat de session puis rafraîchissent séparément les ressources marché, position, macro, news, activité, alertes et audit.
+
+Le runtime de production ne contient aucune donnée factice. Les scénarios Playwright interceptent `/api/v1` avec une fixture isolée dans `e2e/mockDeskApi.ts`, bloquent le service worker pendant le test et utilisent une clé opérateur dédiée au seul build E2E. Cette mécanique ne fait partie ni du bundle de production ni de l'image Docker PREPROD et n'écrit jamais dans PostgreSQL.
+
 ## Persistance
 
 La table `desk_documents` conserve le modèle documentaire du Desk pendant la transition : clé primaire `(collection, document_id)` et contenu JSONB indexé. Cette forme évite de réécrire simultanément toute la logique métier, tout en supprimant la dépendance à Firestore.

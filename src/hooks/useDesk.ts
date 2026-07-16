@@ -26,17 +26,15 @@ export const deskKeys = {
   activity: (id: SessionId) => ["desk-activity", id] as const,
   alerts: (id: SessionId) => ["desk-alerts", id] as const,
   audit: (id: SessionId) => ["desk-audit", id] as const,
-  overview: (scope: DeskDetailScope) => ["desk-overview", scope.session, scope.strategyId, scope.date] as const,
   timeline: (scope: DeskDetailScope) => ["desk-timeline", scope.session, scope.strategyId, scope.date] as const,
   master: (id: string, scope: DeskDetailScope) => ["desk-master", id, scope.session, scope.date] as const,
   monitor: (id: string, scope: DeskDetailScope) => ["desk-monitor", id, scope.session, scope.date] as const,
   thesis: (id: string, scope: DeskDetailScope) => ["desk-thesis", id, scope.session, scope.date] as const,
   thesisConditions: (id: string, scope: DeskDetailScope) => ["desk-thesis-conditions", id, scope.session, scope.date] as const,
-  setup: (id: string, scope: DeskDetailScope) => ["desk-setup", id, scope.session, scope.date] as const,
-  sessions: ["desk-sessions"] as const
+  setup: (id: string, scope: DeskDetailScope) => ["desk-setup", id, scope.session, scope.date] as const
 };
 
-export interface DeskSessionResources {
+interface DeskSessionResources {
   market?: DeskMarketResource;
   position?: DeskPositionResource;
   macro?: DeskMacroResource;
@@ -201,28 +199,8 @@ export function useDeskSession(id: SessionId) {
   };
 }
 
-export function useSessionSummaries() {
-  return useQuery({
-    queryKey: deskKeys.sessions,
-    queryFn: () => deskApi.getSessionSummaries(),
-    staleTime: 30_000,
-    retry: 1
-  });
-}
-
 export function deskDetailScope(session: DeskSession): DeskDetailScope {
   return { session: session.id, strategyId: session.strategyId, date: session.date };
-}
-
-export function useSessionOverviewDetail(scope: DeskDetailScope) {
-  return useQuery({
-    queryKey: deskKeys.overview(scope),
-    queryFn: () => deskApi.getSessionOverview(scope),
-    enabled: Boolean(scope.strategyId && scope.date),
-    staleTime: 30_000,
-    refetchInterval: refreshPolicyMs.projection,
-    retry: 1
-  });
 }
 
 export function useTimelineDetail(scope: DeskDetailScope) {

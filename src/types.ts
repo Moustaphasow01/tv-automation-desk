@@ -149,17 +149,6 @@ export interface DeskSession {
   };
 }
 
-export interface SessionSummary {
-  id: SessionId;
-  label: string;
-  shortLabel: string;
-  status: string;
-  severity: Severity;
-  decision: string;
-  health: number;
-  lastMonitorAt: string;
-}
-
 export interface FrontResourceMeta {
   contract: string;
   schemaVersion: "1.0.0";
@@ -276,13 +265,6 @@ export interface DeskDetailScope {
   date: string;
 }
 
-export interface DeskSessionOverviewResource extends FrontResourceMeta {
-  overview: Pick<DeskSession,
-    "id" | "strategyId" | "label" | "shortLabel" | "date" | "mode" | "status" | "severity" |
-    "lastDataAt" | "lastMonitorAt" | "nextMonitorAt" | "nextMacro" | "dataQuality" | "automation" | "liveBrief"
-  >;
-}
-
 export interface DeskTimelineResource extends FrontResourceMeta {
   timeline: DeskSession["timeline"];
 }
@@ -378,7 +360,6 @@ export interface DeskOperatorCommandResult {
 
 export interface DeskApi {
   getSession(id: SessionId): Promise<DeskSession>;
-  getSessionSummaries(): Promise<SessionSummary[]>;
   getMarketSnapshot(id: SessionId): Promise<DeskMarketResource>;
   getPosition(id: SessionId): Promise<DeskPositionResource>;
   getMacroCalendar(id: SessionId): Promise<DeskMacroResource>;
@@ -389,7 +370,6 @@ export interface DeskApi {
   getAudit(id: SessionId): Promise<DeskAuditResource>;
   getPerformanceCalendar(id: SessionId, year: number, month: number, pricingMode: PerformancePricingMode): Promise<DeskPerformanceCalendarResource>;
   getPerformanceDay(id: SessionId, date: string, pricingMode: PerformancePricingMode): Promise<DeskPerformanceDayResource>;
-  getSessionOverview(scope: DeskDetailScope): Promise<DeskSessionOverviewResource>;
   getTimeline(scope: DeskDetailScope): Promise<DeskTimelineResource>;
   getMaster(masterId: string, scope: DeskDetailScope): Promise<DeskMasterResource>;
   getMonitor(monitorId: string, scope: DeskDetailScope): Promise<DeskMonitorResource>;

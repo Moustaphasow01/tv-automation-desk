@@ -7,8 +7,7 @@ import type {
   DeskOperatorScope,
   DeskOperatorState,
   DeskSession,
-  SessionId,
-  SessionSummary
+  SessionId
 } from "@/types";
 
 const apiBase = String(import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(/\/+$/, "");
@@ -75,7 +74,6 @@ const performancePath = (path: string, id: SessionId, values: Record<string, str
 
 const restApi: DeskApi = {
   getSession: id => getJson<DeskSession>(sessionPath(deskEndpoints.liveDesk, id)),
-  getSessionSummaries: () => getJson<SessionSummary[]>(deskEndpoints.sessions),
   getMarketSnapshot: id => getJson(sessionPath(deskEndpoints.marketSnapshot, id)),
   getPosition: id => getJson(sessionPath(deskEndpoints.position, id)),
   getMacroCalendar: id => getJson(sessionPath(deskEndpoints.macroCalendar, id)),
@@ -86,7 +84,6 @@ const restApi: DeskApi = {
   getAudit: id => getJson(sessionPath(deskEndpoints.audit, id)),
   getPerformanceCalendar: (id, year, month, pricingMode) => getJson(performancePath(deskEndpoints.performanceCalendar, id, { year, month, pricing_mode: pricingMode })),
   getPerformanceDay: (id, date, pricingMode) => getJson(performancePath(deskEndpoints.performanceDay, id, { date, pricing_mode: pricingMode })),
-  getSessionOverview: scope => getJson(detailPath(deskEndpoints.sessionOverview(scope.strategyId, scope.date), scope)),
   getTimeline: scope => getJson(detailPath(deskEndpoints.timeline(scope.strategyId, scope.date), scope)),
   getMaster: (masterId, scope) => getJson(detailPath(deskEndpoints.master(masterId), scope)),
   getMonitor: (monitorId, scope) => getJson(detailPath(deskEndpoints.monitor(monitorId), scope)),

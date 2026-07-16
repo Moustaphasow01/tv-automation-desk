@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { SessionId } from "@/types";
 
-export type MarketPhase = "asia" | "london" | "ny";
+type MarketPhase = "asia" | "london" | "ny";
 
 interface Value {
   sessionId: SessionId;

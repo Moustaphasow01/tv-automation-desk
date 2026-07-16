@@ -2,8 +2,6 @@ const pathPart = (value: string) => encodeURIComponent(value);
 
 export const deskEndpoints = {
   liveDesk: "/live-desk/current",
-  sessions: "/sessions",
-  sessionOverview: (strategyId: string, date: string) => `/sessions/${pathPart(strategyId)}/${pathPart(date)}/overview`,
   timeline: (strategyId: string, date: string) => `/sessions/${pathPart(strategyId)}/${pathPart(date)}/timeline`,
   master: (masterId: string) => `/masters/${pathPart(masterId)}`,
   monitor: (monitorId: string) => `/monitors/${pathPart(monitorId)}`,

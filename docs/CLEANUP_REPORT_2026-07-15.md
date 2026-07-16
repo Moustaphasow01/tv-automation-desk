@@ -140,6 +140,17 @@ Neuvième lot — audit final du store et des points d'entrée, 16 juillet 2026 
 - contrôles de syntaxe et de chargement ESM validés, puis 53 tests ciblés et suite MCP complète validée à 219 tests sur 219 ;
 - aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
 
+Dixième lot — audit final du frontend, 16 juillet 2026 :
+
+- audit du graphe d'imports des 27 modules de production React : toutes les pages, composants, hooks, contextes, clients API et styles sont atteignables depuis `src/main.tsx` ; les cinq fichiers restants sont exclusivement des tests ou fixtures ;
+- vérification des douze routes `live`, `sessions`, `master`, `monitors`, `thesis`, `setup`, `news`, `performance`, `timeline`, `audit`, `alerts` et `more` dans le navigateur local, sans erreur de chargement ni erreur console ;
+- suppression des hooks historiques `useSessionSummaries` et `useSessionOverviewDetail`, ainsi que de leurs clés React Query, méthodes clientes, endpoints frontend et types devenus sans consommateur ; les endpoints serveur ne sont pas supprimés par ce lot ;
+- réduction de la surface publique de trois helpers opérateur et de deux types internes qui n'étaient importés par aucun autre module ;
+- suppression de 97 classes CSS historiques sans élément React associé : anciens onglets, cartes Master/Monitor/Audit, listes de niveaux, sélecteur de session manuel, toast et variantes remplacées ; feuille réduite de 85 605 à 71 255 octets et de 1 073 à 909 lignes ;
+- correction du sélecteur automatique latéral, passé de l'ancien ciblage de deux boutons à une grille réelle de trois phases `ASIA`, `LONDON` et `NY` ;
+- remise en état des tests E2E : API simulée uniquement dans Playwright, service worker bloqué pendant l'interception et clé opérateur de test limitée au build E2E ; aucune écriture n'est envoyée à PostgreSQL ;
+- aucun package de production ou fichier entier supprimé sans preuve d'inaccessibilité, et aucun changement appliqué au dépôt original ou à un environnement cloud.
+
 ## Runtime conservé
 
 - frontend React actuel ;
@@ -162,8 +173,8 @@ Neuvième lot — audit final du store et des points d'entrée, 16 juillet 2026 
 - configuration Docker Compose : valide ;
 - MCP/API : 219 tests sur 219 validés après les extractions contrats, packs, Replay, Live, Front, marché, features, stratégie et audit, incluant intégrité, store persistant, transactions, projections et webhook ;
 - packages métier : 66 tests domaine, 8 tests replay, 8 tests audit et 6 tests temps validés ;
-- frontend : 13 tests sur 13 validés, avec typecheck sans émission d'artefacts et build de production ;
-- bundle frontend Docker : 282,82 Ko de JavaScript avant compression, sans marqueur du mode mock ;
+- frontend : typecheck validé, 13 tests React sur 13 et 3 scénarios Playwright sur 3 validés, puis build de production ;
+- bundle frontend nettoyé : 282,24 Ko de JavaScript et 61,46 Ko de CSS avant compression, sans chemin mock de production ;
 - dépendances MCP réinstallées depuis le lockfile : aucun package Firebase/Google Cloud et aucune vulnérabilité npm signalée ;
 - contrats générés et finalisés : 5 contrats actifs, aucune violation ; couverture domaine à 94,9 % des lignes et 97,46 % des fonctions ;
 - scan du runtime : aucune dépendance ou référence active à Firebase, Firestore, Cloud Run ou GCloud ;
@@ -171,7 +182,7 @@ Neuvième lot — audit final du store et des points d'entrée, 16 juillet 2026 
 - PostgreSQL réel : schéma initialisé, contrats seedés et écritures JSONB contrôlées ;
 - webhook TradingView : acceptation locale en 202, rejet d'un mauvais secret en 401, secret absent des documents persistés ;
 - MCP HTTP via Nginx : négociation `2025-03-26` réussie avec session MCP ;
-- navigateur Firefox Playwright : Desk rendu, navigation client validée, appels API en 200, aucune erreur ni alerte console.
+- navigateur Firefox Playwright : les douze routes du Desk sont rendues, les appels API passent en 200 et aucune erreur ou alerte console n'est émise ; grille automatique à trois phases vérifiée après reconstruction Docker.
 - CI locale renforcée : contrats, finalisation, couverture domaine et tests des quatre packages métier sont maintenant des gates explicites.
 
 ## Dette volontairement conservée

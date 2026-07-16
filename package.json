@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -b --pretty false",
     "test:react": "vitest run --pool=threads --maxWorkers=1 --no-file-parallelism",
-    "pretest:e2e": "vite build --mode development",
+    "pretest:e2e": "VITE_DESK_API_KEY=e2e-operator-key vite build --mode development",
     "test:e2e": "playwright test",
     "test:front": "npm run test:react && npm run test:e2e"
   },

@@ -11,17 +11,17 @@ import {
 import { deskKeys } from "@/hooks/useDesk";
 import type { DeskOperatorCommandInput, DeskOperatorScope, DeskSession } from "@/types";
 
-export type OperatorAuthState = {
+type OperatorAuthState = {
   status: "loading" | "ready" | "signed_out" | "unavailable" | "error";
   email: string | null;
   message: string | null;
 };
 
-export const operatorKeys = {
+const operatorKeys = {
   state: (scope: DeskOperatorScope) => ["desk-operator-state", scope.session, scope.strategyId, scope.tradingDate, scope.mode] as const
 };
 
-export function deskOperatorScope(session: DeskSession): DeskOperatorScope {
+function deskOperatorScope(session: DeskSession): DeskOperatorScope {
   return {
     session: session.id,
     strategyId: session.strategyId,
