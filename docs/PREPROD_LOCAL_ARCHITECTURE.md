@@ -21,6 +21,8 @@ API/MCP
   -> PersistentDeskStore
      -> DeskContractService
         -> contrats embarqués ou persistance documentaire
+     -> DeskPackService
+        -> packs, datasets, intégrité, macro et news
      -> PostgresDeskPersistence
         -> desk_documents (JSONB)
 ```
@@ -40,7 +42,7 @@ Les opérations sensibles — claims, leases, révisions, idempotence et mutatio
 
 Le runtime et les tests exercent désormais la même classe `PersistentDeskStore`. En test, un port `InMemoryDeskPersistence` remplace PostgreSQL sans modifier la logique métier : il charge au besoin les fixtures historiques en lecture, mais toutes les écritures restent en mémoire. L'ancien `LocalDeskStore` et son chemin d'exécution fichier ont été supprimés.
 
-La modularisation du store est progressive. Le registre de contrats est le premier domaine extrait : `DeskContractService` possède le chargement des contrats embarqués, leur versionnement, leur activation, leur archivage et leur audit. `PersistentDeskStore` conserve une façade compatible pour les outils MCP.
+La modularisation du store est progressive. `DeskContractService` possède le chargement des contrats embarqués, leur versionnement, leur activation, leur archivage et leur audit. `DeskPackService` possède la résolution des packs logiques et immuables, la lecture des datasets, les contrôles d'intégrité, les niveaux de marché ainsi que les datasets macro et news. `PersistentDeskStore` conserve une façade compatible pour les outils MCP.
 
 ## Sécurité locale
 

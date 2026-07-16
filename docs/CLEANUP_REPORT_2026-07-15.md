@@ -55,6 +55,15 @@ Au total, les passes de nettoyage retirent désormais plus de 6 000 lignes histo
 - correction du fallback des contrats actifs après activation d'une version non embarquée ;
 - ajout de tests dédiés au chargement embarqué, à l'immutabilité des versions, à l'audit forcé, à l'activation et à l'archivage.
 
+Deuxième lot :
+
+- extraction des packs, builds immuables, datasets, niveaux, macro et news dans `DeskPackService` ;
+- déplacement des erreurs et de la normalisation UTC partagées dans des modules dédiés ;
+- centralisation de l'invalidation des builds compromis dans le service propriétaire ;
+- conservation des snapshots PostgreSQL du marché live dans le store, en attente d'un domaine séparé ;
+- réduction de `store.js` de 11 145 à 10 614 lignes ;
+- ajout de tests dédiés à la sélection et au filtrage des packs, aux fallbacks macro/news, aux datasets interdits et aux manifests corrompus.
+
 ## Runtime conservé
 
 - frontend React actuel ;
@@ -75,7 +84,7 @@ Au total, les passes de nettoyage retirent désormais plus de 6 000 lignes histo
 ## État de validation
 
 - configuration Docker Compose : valide ;
-- MCP/API : 214 tests sur 214 validés après la première extraction de service, incluant store persistant, contrats, transactions, projections et webhook ;
+- MCP/API : 217 tests sur 217 validés après les extractions contrats et packs, incluant intégrité, store persistant, transactions, projections et webhook ;
 - packages métier : 66 tests domaine, 8 tests replay, 8 tests audit et 6 tests temps validés ;
 - frontend : 13 tests sur 13 validés, avec typecheck sans émission d'artefacts et build de production ;
 - bundle frontend Docker : 282,82 Ko de JavaScript avant compression, sans marqueur du mode mock ;
