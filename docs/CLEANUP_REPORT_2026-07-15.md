@@ -64,6 +64,16 @@ Deuxième lot :
 - réduction de `store.js` de 11 145 à 10 614 lignes ;
 - ajout de tests dédiés à la sélection et au filtrage des packs, aux fallbacks macro/news, aux datasets interdits et aux manifests corrompus.
 
+Troisième lot — 16 juillet 2026 :
+
+- extraction de la file Replay, des claims, leases, récupérations et de l'autopilot dans `DeskReplayService` ;
+- extraction du cycle transactionnel des curseurs Live dans `DeskLiveService` ;
+- extraction des projections frontend, des commandes opérateur, du calendrier macro et du snapshot marché dans `DeskFrontService` ;
+- conservation des noms et payloads publics de `PersistentDeskStore`, qui reste la façade MCP ;
+- suppression de dix helpers privés dont la définition était la seule référence statique, et de deux imports devenus inaccessibles ;
+- réduction de `store.js` de 10 667 à 9 605 lignes sur ce lot, soit 1 062 lignes sorties ou supprimées du monolithe ;
+- aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
+
 ## Runtime conservé
 
 - frontend React actuel ;
@@ -84,7 +94,7 @@ Deuxième lot :
 ## État de validation
 
 - configuration Docker Compose : valide ;
-- MCP/API : 217 tests sur 217 validés après les extractions contrats et packs, incluant intégrité, store persistant, transactions, projections et webhook ;
+- MCP/API : 219 tests sur 219 validés après les extractions contrats, packs, Replay, Live et Front, incluant intégrité, store persistant, transactions, projections et webhook ;
 - packages métier : 66 tests domaine, 8 tests replay, 8 tests audit et 6 tests temps validés ;
 - frontend : 13 tests sur 13 validés, avec typecheck sans émission d'artefacts et build de production ;
 - bundle frontend Docker : 282,82 Ko de JavaScript avant compression, sans marqueur du mode mock ;

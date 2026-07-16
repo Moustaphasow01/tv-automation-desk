@@ -1,4 +1,4 @@
-import { createHash, randomInt, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DATASETS } from "./schemas.js";
@@ -11,7 +11,6 @@ import {
   DECISION_MODEL_VERSION,
   DECISION_SCHEMA_VERSION,
   DECISION_SOURCE_ROLE,
-  canonicalSha256,
   createDeskExecutionScope,
   normalizeDecision,
   planThesisSetupPositionSplit,
@@ -34,42 +33,13 @@ import {
 import {
   assertReplayWorkForSave,
   buildReplayAgentWorkItem,
-  claimReplayWorkItem,
   completeReplayWorkItem,
-  failReplayWorkItem,
-  heartbeatReplayWorkItem,
-  pauseReplayWorkItem,
-  preserveExistingWorkItem,
   replayWorkEvent,
-  replayWorkMatchesRun,
-  replayWorkOutputMaterialized,
-  resumeReplayWorkItem,
-  selectClaimableReplayWork,
-  selectVisibleDeskWork,
-  supersedeReplayWorkItem,
 } from "./replay-agent-work.js";
-import { buildLiveCursorWork } from "./live-cursor-work.js";
 import {
-  prepareDueLiveMasterBundle,
-  prepareDueLiveMonitorBundle,
   prepareLiveReplanMasterAfterMonitor,
 } from "./live-orchestration.js";
 import { floorParisCheckpoint, isLiveMonitorCheckpointInWindow } from "./live-scope.js";
-import {
-  claimLiveCursor,
-  completeLiveCursor,
-  failLiveCursor,
-  heartbeatLiveCursor,
-  initLiveRunCursor,
-  liveRunCursorId,
-  reconcileLiveCursorTick,
-  shadowLiveCursorBundle,
-} from "./live-cursor.js";
-import {
-  frontProjectionCurrentStateId,
-  frontProjectionMatchesScope,
-  prepareFrontProjectionMaterialization,
-} from "./front-projection-materializer.js";
 import {
   buildReplayContinuityState,
   buildReplayEventCheckpoints,
@@ -94,24 +64,23 @@ import {
   DeskPackService,
   compactPack,
   datasetRef,
-  impactRank,
   replaySourceCoverage,
-  resolvePackCutoffUtc,
 } from "./desk-pack-service.js";
 import { deskError } from "./desk-errors.js";
 import { normalizeUtcIso } from "./desk-time-utils.js";
+import { DeskLiveService } from "./desk-live-service.js";
+import { DeskFrontService } from "./desk-front-service.js";
+import {
+  compareDeskWorkItems,
+  DeskReplayService,
+  deskWorkSummary,
+  enrichReplayBundleSaveTargetForClaim,
+} from "./desk-replay-service.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const PACKAGE_ROOT = resolve(__dirname, "..");
 const COLLECTIONS = DESK_COLLECTIONS;
 const LIVE_CURSOR_COLLECTION = "desk_live_run_cursor";
-const LIVE_DEAD_LETTER_COLLECTION = "desk_agent_work_dead_letter";
-const REPLAY_AUTOPILOT_CONFIGS_COLLECTION = "desk_replay_autopilot_configs";
-const REPLAY_AUTOPILOT_RECOVERABLE_CODES = new Set([
-  "SAVE_DOCUMENT_UNDEFINED",
-  "RETRYABLE_FAILURE",
-  "WORK_ALREADY_CLAIMED_SAVE_BLOCKED",
-]);
 const NY_OPEN_STRATEGY_ID = "ny_open_1530";
 const NY_OPEN_STRATEGY_NAME = "NY Open 15:30";
 const NY_OPEN_SESSION = "ny_open";
@@ -140,6 +109,9 @@ export class PersistentDeskStore {
     this.persistence = persistence;
     this.contracts = new DeskContractService({ persistence, clock });
     this.packs = new DeskPackService({ persistence, clock });
+    this.live = new DeskLiveService({ persistence, clock, host: this });
+    this.front = new DeskFrontService({ persistence, clock, marketFeedCandidates, canonicalTimeframe });
+    this.replay = new DeskReplayService({ persistence, clock, host: this });
     this.livePackPublishingEnabled = false;
   }
 
@@ -176,56 +148,11 @@ export class PersistentDeskStore {
   }
 
   async getFrontDailyMacroCalendar({ date, importance_min = "medium" } = {}) {
-    const events = await this.#listDocuments(COLLECTIONS.macroCalendarEvents, 500).catch(() => []);
-    return frontDailyMacroCalendar(events, { date, importance_min });
+    return this.front.getDailyMacroCalendar({ date, importance_min });
   }
 
   async getFrontLiveMarketSnapshot({ date } = {}) {
-    const tick = this.clock.now();
-    const tradingDate = String(date || tick.paris).slice(0, 10);
-    const specs = [
-      { instrument: "MNQ", symbol: "MNQ", timeframes: ["1", "5"], lookbackDays: 0 },
-      { instrument: "MES", symbol: "MES", timeframes: ["1", "5"], lookbackDays: 0 },
-      { instrument: "CL", symbol: "MCL", timeframes: ["1", "5"], lookbackDays: 0 },
-      { instrument: "NVDA", symbol: "NVDA", timeframes: ["1", "5"], lookbackDays: 7 },
-      { instrument: "AAPL", symbol: "AAPL", timeframes: ["1", "5"], lookbackDays: 7 },
-      { instrument: "MSFT", symbol: "MSFT", timeframes: ["1", "5"], lookbackDays: 7 },
-      { instrument: "TSLA", symbol: "TSLA", timeframes: ["1", "5"], lookbackDays: 7 },
-      { instrument: "SMH", symbol: "SMH", timeframes: ["1", "5"], lookbackDays: 7 },
-      { instrument: "SOXX", symbol: "SOXX", timeframes: ["1", "5"], lookbackDays: 7 },
-    ];
-    const values = await Promise.all(specs.map(async (spec) => {
-      const window = frontLiveMarketWindow(tradingDate, tick.utc, spec.lookbackDays);
-      for (const timeframe of spec.timeframes) {
-        for (const feedId of marketFeedCandidates(spec.instrument, timeframe).slice(0, 4)) {
-          const rows = await this.#queryDocuments({
-            parentPath: `${COLLECTIONS.marketFeeds}/${feedId}`,
-            collectionId: COLLECTIONS.marketFeedCandles,
-            fromUtc: window.fromUtc,
-            toUtc: window.toUtc,
-            orderField: "timestamp_utc",
-            limit: 5000,
-          }).catch(() => []);
-          if (!rows.length) continue;
-          const summary = summarizeFrontLiveMarketRows(rows, {
-            ...spec,
-            timeframe,
-            feedId,
-            requestedDate: tradingDate,
-          });
-          if (summary) return summary;
-        }
-      }
-      return null;
-    }));
-    const instruments = Object.fromEntries(values.filter(Boolean).map((value) => [value.symbol, value]));
-    return {
-      ok: Object.keys(instruments).length > 0,
-      date: tradingDate,
-      timestamp_paris: latestFrontMarketTimestamp(instruments) || tick.paris,
-      source: "postgres_market_feeds",
-      instruments,
-    };
+    return this.front.getLiveMarketSnapshot({ date });
   }
 
   async getNewsDigest({ date, session = "asia_open", pack_id, pack_build_id, as_of_utc, mode = "live" } = {}) {
@@ -394,9 +321,9 @@ export class PersistentDeskStore {
       setup_ids: setupDocs.map((setup) => setup.setup_record_id),
       ...writeTimestamps(payload, existing, _t),
     };
-    const frontProjection = await this.#prepareFrontProjection(doc, "MASTER", analysis_id, _t);
+    const frontProjection = await this.front.prepareProjection(doc, "MASTER", analysis_id, _t);
     if (payload.front_projection) {
-      await this.#commitFrontProjection({
+      await this.front.commitProjection({
         sourceWrite: { collection: COLLECTIONS.deskMasterAnalyses, documentId: analysis_id, data: doc, merge: true },
         plan: frontProjection,
       });
@@ -485,9 +412,9 @@ export class PersistentDeskStore {
       monitor_id,
       ...writeTimestamps(monitor, existing, _t),
     };
-    const frontProjection = await this.#prepareFrontProjection(doc, "MONITOR", monitor_id, _t);
+    const frontProjection = await this.front.prepareProjection(doc, "MONITOR", monitor_id, _t);
     if (monitor.front_projection) {
-      await this.#commitFrontProjection({
+      await this.front.commitProjection({
         sourceWrite: { collection: COLLECTIONS.deskHourlyMonitors, documentId: monitor_id, data: doc, merge: true },
         plan: frontProjection,
       });
@@ -646,54 +573,19 @@ export class PersistentDeskStore {
   }
 
   async getFrontProjectionCurrent(args = {}) {
-    const documentId = frontProjectionCurrentStateId(args);
-    const current = await this.#getDocument(COLLECTIONS.deskFrontCurrentStates, documentId).catch(() => null);
-    return current && frontProjectionMatchesScope(current, args) ? current : null;
+    return this.front.getProjectionCurrent(args);
   }
 
   async getFrontOperatorCommandState({ state_id }) {
-    return this.#getDocument(COLLECTIONS.dashboardState, state_id);
+    return this.front.getOperatorCommandState({ state_id });
   }
 
   async getFrontOperatorCommand({ command_id }) {
-    return this.#getDocument(COLLECTIONS.dashboardCommands, command_id);
+    return this.front.getOperatorCommand({ command_id });
   }
 
   async commitFrontOperatorCommandMutation(plan) {
-    if (typeof this.persistence.commitOperatorCommandMutation === "function") {
-      return this.persistence.commitOperatorCommandMutation({
-        stateCollection: COLLECTIONS.dashboardState,
-        commandCollection: COLLECTIONS.dashboardCommands,
-        eventCollection: COLLECTIONS.dashboardCommandEvents,
-        auditCollection: COLLECTIONS.deskAuditLogs,
-        ...plan,
-      });
-    }
-    const existingCommand = await this.getFrontOperatorCommand({ command_id: plan.commandId }).catch(() => null);
-    if (existingCommand) {
-      if (existingCommand.request_hash !== plan.requestHash) {
-        throw deskError("IDEMPOTENCY_CONFLICT", "Operator command idempotency conflict.", { command_id: plan.commandId });
-      }
-      return { replayed: true, command: existingCommand, result: existingCommand.result || null };
-    }
-    const currentState = await this.getFrontOperatorCommandState({ state_id: plan.stateId }).catch(() => null);
-    if (Number(currentState?.revision || 0) !== Number(plan.expectedRevision)) {
-      throw deskError("REVISION_CONFLICT", "Operator state revision conflict.");
-    }
-    for (const condition of plan.preconditions || []) {
-      const current = await this.#getDocument(condition.collection, condition.documentId).catch(() => null);
-      if (!current || canonicalSha256(current) !== condition.expectedHash) {
-        throw deskError("TARGET_CONFLICT", "Canonical operator target changed before commit.");
-      }
-    }
-    for (const write of plan.writes || []) {
-      await this.#setDocument(write.collection, write.documentId, write.data, { merge: write.merge === true });
-    }
-    await this.#setDocument(COLLECTIONS.dashboardState, plan.stateId, plan.stateDoc);
-    await this.#setDocument(COLLECTIONS.dashboardCommands, plan.commandId, plan.commandDoc);
-    await this.#setDocument(COLLECTIONS.dashboardCommandEvents, plan.eventDoc.event_id, plan.eventDoc);
-    await this.#setDocument(COLLECTIONS.deskAuditLogs, plan.auditDoc.audit_id, plan.auditDoc);
-    return { replayed: false, command: plan.commandDoc, result: plan.result };
+    return this.front.commitOperatorCommandMutation(plan);
   }
 
   async getLevelMap({ date, session = "asia_open", instrument }) {
@@ -975,9 +867,7 @@ export class PersistentDeskStore {
   }
 
   async getLiveRunCursor({ cursor_id, trading_date, session } = {}) {
-    const resolvedCursorId = cursor_id || liveRunCursorId(trading_date, session);
-    const cursor = await this.#getDocument(LIVE_CURSOR_COLLECTION, resolvedCursorId).catch(() => null);
-    return { ok: true, cursor };
+    return this.live.getRunCursor({ cursor_id, trading_date, session });
   }
 
   async claimNextDeskWork(args = {}) {
@@ -985,88 +875,27 @@ export class PersistentDeskStore {
   }
 
   async claimNextLive(args = {}) {
-    const tick = this.clock.now();
-    const cursorId = liveRunCursorId(args.trading_date, args.session);
-    const initialCursor = initLiveRunCursor(args, tick);
-    const observed = await this.#getDocument(LIVE_CURSOR_COLLECTION, cursorId).catch(() => initialCursor);
-    const preview = claimLiveCursor(observed, args, tick);
-    const work = preview.result?.status === "WORK_DUE"
-      ? await prepareLiveCursorClaimWork(this, preview.result, args, tick)
-      : null;
-    const claimTick = this.clock.now();
-    const outcome = await this.persistence.claimLiveCursor({
-      cursorCollection: LIVE_CURSOR_COLLECTION,
-      eventCollection: COLLECTIONS.deskAgentWorkEvents,
-      deadLetterCollection: LIVE_DEAD_LETTER_COLLECTION,
-      cursorId,
-      initialCursor,
-      transition: (current) => claimLiveCursor(current, work ? { ...args, lease_token: randomUUID(), work } : args, claimTick),
-    });
-    return finalizeLiveClaimResponse(outcome.result, args.worker_id);
+    return this.live.claimNext(args);
   }
 
   async heartbeatLive(args = {}) {
-    const tick = this.clock.now();
-    const outcome = await this.#transitionLiveCursor(args.cursor_id, null, (current) => heartbeatLiveCursor(current, args, tick));
-    return outcome.result;
+    return this.live.heartbeat(args);
   }
 
   async completeLive(args = {}) {
-    const tick = this.clock.now();
-    const observed = (await this.getLiveRunCursor(args)).cursor;
-    if (!observed) throw deskError("LIVE_CURSOR_NOT_FOUND", `Live cursor not found: ${args.cursor_id}.`);
-    const materialization = await resolveLiveCursorMaterialization(this, observed);
-    const outcome = await this.#transitionLiveCursor(args.cursor_id, null, (current) => completeLiveCursor(current, args, tick, materialization));
-    return outcome.result;
+    return this.live.complete(args);
   }
 
   async failLive(args = {}) {
-    const tick = this.clock.now();
-    const jitterSeconds = randomInt(0, 16);
-    const outcome = await this.#transitionLiveCursor(args.cursor_id, null, (current) => failLiveCursor(current, args, tick, { jitterSeconds }));
-    return outcome.result;
+    return this.live.fail(args);
   }
 
   async reconcileLiveCursors() {
-    const tick = this.clock.now();
-    const cursors = await this.#listDocuments(LIVE_CURSOR_COLLECTION, 500).catch(() => []);
-    const results = [];
-    for (const cursor of cursors) {
-      if (!["IDLE", "DUE", "RETRY", "BLOCKED", "DEGRADED"].includes(cursor.cursor_status)
-        && !(cursor.cursor_status === "CLOSED" && cursor.closed_at_utc && !cursor.expires_at_utc)) continue;
-      const outcome = await this.#transitionLiveCursor(cursor.cursor_id, cursor, (current) => reconcileLiveCursorTick(current, tick));
-      results.push({ cursor_id: cursor.cursor_id, event_count: outcome.events.length, cursor_status: outcome.cursor.cursor_status });
-    }
-    return { ok: true, reconciled: results.length, cursors: results };
+    return this.live.reconcile();
   }
 
   async claimNextReplay(args = {}) {
-    const tick = this.clock.now();
-    const items = await this.#queryCollectionDocuments({
-      collection: COLLECTIONS.deskAgentWorkItems,
-      filters: [{ field: "status", operator: "in", value: ["READY", "CLAIMED"] }],
-      limit: 500,
-    }).catch(() => []);
-    for (const candidate of selectClaimableReplayWork(items, { ...args, workflows: args.workflows || ["REPLAY_MASTER", "REPLAY_MONITOR"] }, tick)) {
-      const run = await this.#getDocument(COLLECTIONS.deskReplayRuns, candidate.backtest_id).catch(() => null);
-      if (!replayWorkMatchesRun(candidate, run)) {
-        const superseded = supersedeReplayWorkItem(candidate, tick);
-        await this.#setDocument(COLLECTIONS.deskAgentWorkItems, candidate.work_item_id, superseded);
-        await this.#writeDeskWorkEvent(replayWorkEvent(superseded, "SUPERSEDED", tick));
-        continue;
-      }
-      const proposed = claimReplayWorkItem(candidate, args, tick);
-      const claimed = typeof this.persistence.claimDeskWorkItem === "function"
-        ? await this.persistence.claimDeskWorkItem({ collection: COLLECTIONS.deskAgentWorkItems, workItemId: candidate.work_item_id, proposed, tick })
-        : proposed;
-      if (!claimed) continue;
-      if (typeof this.persistence.claimDeskWorkItem !== "function") {
-        await this.#setDocument(COLLECTIONS.deskAgentWorkItems, claimed.work_item_id, claimed);
-      }
-      await this.#writeDeskWorkEvent(replayWorkEvent(claimed, "CLAIMED", tick, { worker_id: args.worker_id }));
-      return replayClaimResponse(deskWorkClaimResponse(claimed), args);
-    }
-    return replayClaimResponse({ ok: true, status: "NO_WORK" }, args);
+    return this.replay.claimNext(args);
   }
 
   async heartbeatReplay(args = {}) {
@@ -1082,200 +911,39 @@ export class PersistentDeskStore {
   }
 
   async getDeskWorkItem({ work_item_id }) {
-    const work_item = await this.#getDocument(COLLECTIONS.deskAgentWorkItems, work_item_id);
-    return { ok: true, work_item };
+    return this.replay.getWorkItem({ work_item_id });
   }
 
   async peekNextDeskWork(args = {}) {
-    const statuses = args.include_terminal === true ? ["READY", "CLAIMED", "FAILED"] : ["READY", "CLAIMED"];
-    const items = await this.#queryCollectionDocuments({
-      collection: COLLECTIONS.deskAgentWorkItems,
-      filters: [{ field: "status", operator: "in", value: statuses }],
-      limit: 500,
-    }).catch(() => []);
-    const work_item = selectVisibleDeskWork(items, args)[0] || null;
-    return { ok: true, status: workQueueStatus(work_item), work_item: work_item ? deskWorkSummary(work_item) : null };
+    return this.replay.peekNext(args);
   }
 
   async upsertReplayAutopilotConfig(args = {}) {
-    const tick = this.clock.now();
-    const config = normalizeReplayAutopilotConfig(args, tick);
-    const existing = await this.#getDocument(REPLAY_AUTOPILOT_CONFIGS_COLLECTION, config.config_id).catch(() => null);
-    const doc = {
-      ...(existing || {}),
-      ...config,
-      created_at_utc: existing?.created_at_utc || config.created_at_utc,
-      created_at_paris: existing?.created_at_paris || config.created_at_paris,
-      updated_at_utc: tick.utc,
-      updated_at_paris: tick.paris,
-    };
-    await this.#setDocument(REPLAY_AUTOPILOT_CONFIGS_COLLECTION, doc.config_id, doc, { merge: true });
-    return { ok: true, status: "CONFIG_SAVED", config: projectReplayAutopilotConfig(doc) };
+    return this.replay.upsertAutopilotConfig(args);
   }
 
   async startOrResumeReplayAutopilot(args = {}) {
-    const tick = this.clock.now();
-    const resolved = await this.#resolveReplayAutopilotConfig(args);
-    if (!resolved.config) {
-      return { ok: true, status: "CONFIG_MISSING", reason: resolved.reason, selector: resolved.selector };
-    }
-    const config = resolved.config;
-    if (config.enabled === false || config.status === "PAUSED" || config.status === "ARCHIVED") {
-      return { ok: true, status: "CONFIG_DISABLED", config: projectReplayAutopilotConfig(config) };
-    }
-
-    const createArgs = replayAutopilotCreateArgs(config, args);
-    let creation = null;
-    let run = await this.#getDocument(COLLECTIONS.deskReplayRuns, createArgs.backtest_id).catch(() => null);
-    if (!run) {
-      creation = await this.createOrchestratedReplayDay(createArgs);
-      run = creation.replay_run || await this.#getDocument(COLLECTIONS.deskReplayRuns, createArgs.backtest_id).catch(() => null);
-    } else if (run.automation_enabled !== true) {
-      const resumedRun = patchReplayRun(run, { automation_enabled: true, automation_status: "running" }, tick);
-      await this.#setDocument(COLLECTIONS.deskReplayRuns, run.backtest_id, resumedRun, { merge: true });
-      run = resumedRun;
-    }
-
-    const recovered = args.recover_failed === false
-      ? null
-      : await this.#recoverReplayAutopilotWork(createArgs.backtest_id, tick, args.worker_id);
-    const automation = await this.driveReplayAutomation({
-      backtest_id: createArgs.backtest_id,
-      max_transitions: args.max_transitions || config.max_transitions || 6,
-    });
-    const state = await this.getReplayState({ backtest_id: createArgs.backtest_id });
-    return projectReplayAutopilotStartResult({ config, creation, recovered, automation, state, worker_id: args.worker_id });
-  }
-
-  async #resolveReplayAutopilotConfig(args = {}) {
-    const selector = replayAutopilotConfigSelector(args);
-    if (selector.config_id) {
-      const config = await this.#getDocument(REPLAY_AUTOPILOT_CONFIGS_COLLECTION, selector.config_id).catch(() => null);
-      return { config, selector, reason: config ? null : "config_id_not_found" };
-    }
-    const configs = await this.#listDocuments(REPLAY_AUTOPILOT_CONFIGS_COLLECTION, 100).catch(() => []);
-    const config = selectReplayAutopilotConfig(configs, selector);
-    return { config, selector, reason: config ? null : "matching_config_not_found" };
-  }
-
-  async #recoverReplayAutopilotWork(backtestId, tick, workerId) {
-    const items = await this.#queryCollectionDocuments({
-      collection: COLLECTIONS.deskAgentWorkItems,
-      filters: [
-        { field: "backtest_id", operator: "==", value: backtestId },
-        { field: "status", operator: "==", value: "FAILED" },
-      ],
-      limit: 50,
-    }).catch(() => []);
-    const ordered = items.sort(compareDeskWorkItems);
-    const item = ordered.find(isRecoverableReplayAutopilotFailure);
-    if (!item) {
-      const blocked = ordered[0] || null;
-      return blocked ? { status: "WORK_FAILED_REQUIRES_OPERATOR", work_item: deskWorkSummary(blocked) } : null;
-    }
-    const recovered = recoverReplayAutopilotWorkItem(item, tick, workerId);
-    await this.#setDocument(COLLECTIONS.deskAgentWorkItems, recovered.work_item_id, recovered, { merge: true });
-    await this.#writeDeskWorkEvent(replayWorkEvent(recovered, "RECOVERED", tick, {
-      worker_id: workerId || "replay_autopilot",
-      recovered_error: item.last_error || null,
-    }));
-    const run = await this.#getDocument(COLLECTIONS.deskReplayRuns, backtestId).catch(() => null);
-    if (run) {
-      await this.#setDocument(COLLECTIONS.deskReplayRuns, backtestId, patchReplayRun(run, {
-        current_work_item_id: recovered.work_item_id,
-        automation_status: "waiting_gpt",
-        last_automation_error: null,
-      }, tick), { merge: true });
-    }
-    return { status: "RECOVERED", work_item: deskWorkSummary(recovered), recovered_error: item.last_error || null };
+    return this.replay.startOrResumeAutopilot(args);
   }
 
   async heartbeatDeskWork(args = {}) {
-    const tick = this.clock.now();
-    const item = (await this.getDeskWorkItem(args)).work_item;
-    const updated = heartbeatReplayWorkItem(item, args, tick);
-    await this.#setDocument(COLLECTIONS.deskAgentWorkItems, updated.work_item_id, updated);
-    await this.#writeDeskWorkEvent(replayWorkEvent(updated, "HEARTBEAT", tick, { worker_id: args.worker_id }));
-    return { ok: true, status: updated.status, work_item: deskWorkSummary(updated) };
+    return this.replay.heartbeatWork(args);
   }
 
   async completeDeskWork(args = {}) {
-    const tick = this.clock.now();
-    const item = (await this.getDeskWorkItem(args)).work_item;
-    if (item.status === "COMPLETED") {
-      return { ok: true, status: "COMPLETED", idempotent_replay: true, work_item: deskWorkSummary(item) };
-    }
-    const run = await this.#getDocument(COLLECTIONS.deskReplayRuns, item.backtest_id);
-    const materialized = replayWorkOutputMaterialized(item, run);
-    if (!materialized) throw deskError("WORK_OUTPUT_NOT_MATERIALIZED", "The expected Desk output must be saved before completing this work item.");
-    const completed = completeReplayWorkItem(item, args, tick, { allowMaterialized: true });
-    await this.#setDocument(COLLECTIONS.deskAgentWorkItems, completed.work_item_id, completed);
-    await this.#writeDeskWorkEvent(replayWorkEvent(completed, "COMPLETED", tick, { worker_id: args.worker_id }));
-    const automation = run?.automation_enabled ? await this.driveReplayAutomation({ backtest_id: run.backtest_id }) : null;
-    return { ok: true, status: "COMPLETED", work_item: deskWorkSummary(completed), automation };
+    return this.replay.completeWork(args);
   }
 
   async failDeskWork(args = {}) {
-    const tick = this.clock.now();
-    const item = (await this.getDeskWorkItem(args)).work_item;
-    const failed = failReplayWorkItem(item, args, tick);
-    await this.#setDocument(COLLECTIONS.deskAgentWorkItems, failed.work_item_id, failed);
-    const eventType = failed.status === "READY" ? "RETRY_SCHEDULED" : "FAILED";
-    await this.#writeDeskWorkEvent(replayWorkEvent(failed, eventType, tick, { worker_id: args.worker_id, error_code: args.error_code }));
-    return { ok: true, status: failed.status, retry_scheduled: failed.status === "READY", work_item: deskWorkSummary(failed) };
+    return this.replay.failWork(args);
   }
 
   async setReplayAutomation(args = {}) {
-    const tick = this.clock.now();
-    const run = await this.#getDocument(COLLECTIONS.deskReplayRuns, args.backtest_id);
-    const enabled = args.enabled === true;
-    const items = await this.#queryCollectionDocuments({
-      collection: COLLECTIONS.deskAgentWorkItems,
-      filters: [{ field: "backtest_id", operator: "==", value: run.backtest_id }],
-      limit: 200,
-    }).catch(() => []);
-    for (const item of items) {
-      const updated = enabled ? resumeReplayWorkItem(item, tick) : pauseReplayWorkItem(item, tick, args.reason);
-      if (updated !== item) await this.#setDocument(COLLECTIONS.deskAgentWorkItems, updated.work_item_id, updated);
-    }
-    const updatedRun = patchReplayRun(run, { automation_enabled: enabled, automation_status: enabled ? "running" : "paused" }, tick);
-    await this.#setDocument(COLLECTIONS.deskReplayRuns, run.backtest_id, updatedRun, { merge: true });
-    const automation = enabled ? await this.driveReplayAutomation({ backtest_id: run.backtest_id }) : null;
-    return { ok: true, backtest_id: run.backtest_id, automation_enabled: enabled, automation };
+    return this.replay.setAutomation(args);
   }
 
   async driveReplayAutomation(args = {}) {
     return driveReplayAutomationLoop(this, args);
-  }
-
-  async #transitionLiveCursor(cursorId, initialCursor, transition) {
-    if (typeof this.persistence.transitionLiveCursor !== "function") {
-      throw deskError("LIVE_CURSOR_TRANSACTION_UNAVAILABLE", "Persistent live cursor transactions are unavailable.");
-    }
-    return this.persistence.transitionLiveCursor({
-      cursorCollection: LIVE_CURSOR_COLLECTION,
-      eventCollection: COLLECTIONS.deskAgentWorkEvents,
-      deadLetterCollection: LIVE_DEAD_LETTER_COLLECTION,
-      cursorId,
-      initialCursor,
-      transition,
-    });
-  }
-
-  async #upsertLiveCursor(bundle, prepared, tick) {
-    const tradingDate = bundle.trading_date || bundle.date;
-    const cursorId = liveRunCursorId(tradingDate, bundle.session);
-    const initial = initLiveRunCursor({ trading_date: tradingDate, session: bundle.session }, tick);
-    return this.#transitionLiveCursor(cursorId, initial, (current) => ({
-      cursor: shadowLiveCursorBundle(current, liveCursorInput(bundle, prepared), tick),
-      result: null,
-      events: [],
-      dead_letters: [],
-    }));
-  }
-
-  async #writeDeskWorkEvent(event) {
-    await this.#setDocument(COLLECTIONS.deskAgentWorkEvents, event.event_id, event);
   }
 
   async createOrchestratedReplayDay(args = {}) {
@@ -2174,7 +1842,7 @@ export class PersistentDeskStore {
       }
       const preparedBundle = noRecalculation ? existingBundle : bundle;
       const cursor = args.save !== false
-        ? await this.#upsertLiveCursor(preparedBundle, completed, tick)
+        ? await this.live.upsertBundle(preparedBundle, completed, tick)
         : null;
       return { ok: true, job_id: completed.job_id, status: completed.status, bundle_id: completed.bundle_id, bundle: preparedBundle, work_item: null, cursor_id: cursor?.cursor?.cursor_id || cursor?.cursor_id || null, feature_engine: completed.feature_engine, no_recalculation: noRecalculation };
     } catch (error) {
@@ -2243,7 +1911,7 @@ export class PersistentDeskStore {
       }
       const preparedBundle = noRecalculation ? existingBundle : bundle;
       const cursor = args.save !== false
-        ? await this.#upsertLiveCursor(preparedBundle, completed, tick)
+        ? await this.live.upsertBundle(preparedBundle, completed, tick)
         : null;
       return {
         ok: true,
@@ -2286,9 +1954,9 @@ export class PersistentDeskStore {
       agent_work_item_id: null,
       agent_worker_id: monitor.worker_id || null,
     }, tick);
-    const frontProjection = await this.#prepareFrontProjection(doc, "MONITOR", doc.monitor_id, tick);
+    const frontProjection = await this.front.prepareProjection(doc, "MONITOR", doc.monitor_id, tick);
     if (monitor.front_projection) {
-      await this.#commitFrontProjection({
+      await this.front.commitProjection({
         sourceWrite: { collection: COLLECTIONS.deskManualMonitors, documentId: doc.monitor_id, data: doc, merge: true },
         plan: frontProjection,
       });
@@ -2414,28 +2082,6 @@ export class PersistentDeskStore {
 
   async #setDocument(collection, documentId, data, { merge = false } = {}) {
     return this.persistence.setDocument(collection, documentId, data, { merge });
-  }
-
-  async #prepareFrontProjection(canonical, sourceType, sourceId, tick) {
-    const currentId = frontProjectionCurrentStateId(canonical);
-    const existingCurrent = canonical.front_projection
-      ? await this.#getDocument(COLLECTIONS.deskFrontCurrentStates, currentId).catch(() => null)
-      : null;
-    return prepareFrontProjectionMaterialization({ canonical, sourceType, sourceId, tick, existingCurrent });
-  }
-
-  async #commitFrontProjection({ sourceWrite, plan }) {
-    if (typeof this.persistence.commitFrontProjectionMutation === "function") {
-      return this.persistence.commitFrontProjectionMutation({
-        sourceWrite,
-        projectionWrites: plan.writes,
-        currentStatePrecondition: plan.currentStatePrecondition,
-      });
-    }
-    await this.#setDocument(sourceWrite.collection, sourceWrite.documentId, sourceWrite.data, { merge: sourceWrite.merge === true });
-    for (const write of plan.writes) {
-      await this.#setDocument(write.collection, write.documentId, write.data, { merge: write.merge === true });
-    }
   }
 
   async #applyNyOpenStrictReplay(args = {}) {
@@ -5453,9 +5099,6 @@ function timelineEventTone(value) {
   return "info";
 }
 
-function workItemTimestamp(item) {
-  return item?.last_error?.occurred_at_paris || item?.updated_at_paris || item?.created_at_paris || item?.cutoff_paris || "";
-}
 
 function continuityWorkSummary(item) {
   if (!item) return "Aucun travail d'orchestration associé.";
@@ -5752,237 +5395,6 @@ function buildNyOpenMasterPrompt({ strategy_id, date, cutoff_paris, bundle, cont
 
 function promptJson(value) {
   return JSON.stringify(value, null, 2);
-}
-
-function replayAutopilotConfigSelector(args = {}) {
-  return {
-    config_id: args.config_id || null,
-    trading_date: args.trading_date || null,
-    session: args.session || null,
-    mode: args.mode || null,
-  };
-}
-
-function normalizeReplayAutopilotConfig(args = {}, tick) {
-  const tradingDate = args.trading_date || args.date;
-  const session = args.session;
-  const strategyId = args.strategy_id || (session === "ny_open" ? "ny_open_1530" : "asia_open");
-  const configId = args.config_id || replayAutopilotDefaultConfigId({ trading_date: tradingDate, session });
-  const backtestId = args.backtest_id || replayAutopilotDefaultBacktestId({ trading_date: tradingDate, session, cadence: args.cadence });
-  const start = normalizeReplayTimestamp(args.start_time || args.initial_cutoff || args.cutoff_paris, tradingDate);
-  const cutoff = normalizeReplayTimestamp(args.cutoff_paris || args.initial_cutoff || args.start_time, tradingDate);
-  const end = normalizeReplayTimestamp(args.end_time, tradingDate);
-  return {
-    ...args,
-    config_schema_version: "1.0.0",
-    config_id: configId,
-    enabled: args.enabled !== false,
-    status: args.status || "READY",
-    backtest_id: backtestId,
-    strategy_id: strategyId,
-    trading_date: tradingDate,
-    date: tradingDate,
-    session,
-    pack_id: args.pack_id,
-    pack_build_id: args.pack_build_id,
-    cutoff_paris: cutoff,
-    cutoff_utc: args.cutoff_utc || normalizeUtcIso(cutoff),
-    initial_cutoff: args.initial_cutoff ? normalizeReplayTimestamp(args.initial_cutoff, tradingDate) : cutoff,
-    start_time: start,
-    end_time: end,
-    cadence: normalizeReplayAutopilotCadence(args.cadence),
-    timezone: args.timezone || "Europe/Paris",
-    instruments: args.instruments || ["MNQ", "MES", "NQ", "ES"],
-    risk_model: args.risk_model || "0.5pct_fixed",
-    automation_mode: "gpt_scheduled_task",
-    created_at_utc: tick.utc,
-    created_at_paris: tick.paris,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  };
-}
-
-function replayAutopilotCreateArgs(config = {}, args = {}) {
-  assertReplayAutopilotConfigStartable(config);
-  const backtestId = config.backtest_id || replayAutopilotDefaultBacktestId(config);
-  return {
-    backtest_id: backtestId,
-    replay_run_id: config.replay_run_id || backtestId,
-    run_id: config.run_id || backtestId,
-    strategy_id: config.strategy_id || (config.session === "ny_open" ? "ny_open_1530" : "asia_open"),
-    date: config.trading_date || config.date,
-    trading_date: config.trading_date || config.date,
-    session: config.session,
-    pack_id: config.pack_id,
-    pack_build_id: config.pack_build_id,
-    cutoff_paris: config.cutoff_paris || config.initial_cutoff || config.start_time,
-    cutoff_utc: config.cutoff_utc || normalizeUtcIso(config.cutoff_paris || config.initial_cutoff || config.start_time),
-    initial_cutoff: config.initial_cutoff || config.cutoff_paris || config.start_time,
-    start_time: config.start_time || config.cutoff_paris || config.initial_cutoff,
-    end_time: config.end_time,
-    cadence: normalizeReplayAutopilotCadence(config.cadence),
-    timezone: config.timezone || "Europe/Paris",
-    instruments: config.instruments || ["MNQ", "MES", "NQ", "ES"],
-    risk_model: config.risk_model || "0.5pct_fixed",
-    automation_enabled: true,
-    automation_mode: "gpt_scheduled_task",
-    idempotency_key: config.idempotency_key || `replay-autopilot:create:${config.config_id || backtestId}:${config.pack_build_id}:${backtestId}`,
-    requested_by: args.worker_id || "gpt-replay-autopilot",
-  };
-}
-
-function assertReplayAutopilotConfigStartable(config = {}) {
-  const missing = ["trading_date", "session", "pack_id", "pack_build_id", "start_time", "end_time"]
-    .filter((field) => !config[field] && !(field === "trading_date" && config.date));
-  if (missing.length) {
-    throw deskError("REPLAY_AUTOPILOT_CONFIG_INCOMPLETE", "Replay autopilot config is missing required fields.", {
-      config_id: config.config_id || null,
-      missing,
-    });
-  }
-}
-
-function selectReplayAutopilotConfig(configs = [], selector = {}) {
-  return configs
-    .filter((config) => config && config.enabled !== false)
-    .filter((config) => !["PAUSED", "ARCHIVED"].includes(config.status))
-    .filter((config) => selector.mode === "latest_ready_config" || !selector.trading_date || config.trading_date === selector.trading_date || config.date === selector.trading_date)
-    .filter((config) => selector.mode === "latest_ready_config" || !selector.session || config.session === selector.session)
-    .sort((left, right) =>
-      String(right.updated_at_utc || right.created_at_utc || "").localeCompare(String(left.updated_at_utc || left.created_at_utc || "")) ||
-      String(right.trading_date || "").localeCompare(String(left.trading_date || "")))
-    [0] || null;
-}
-
-function replayAutopilotDefaultConfigId({ trading_date, session } = {}) {
-  return `replay_autopilot__${sanitizeAutopilotId(trading_date || "date")}__${sanitizeAutopilotId(session || "session")}`;
-}
-
-function replayAutopilotDefaultBacktestId({ trading_date, date, session, cadence } = {}) {
-  const day = trading_date || date || "date";
-  const normalizedCadence = normalizeReplayAutopilotCadence(cadence);
-  return `replay_${sanitizeAutopilotId(day)}_${sanitizeAutopilotId(session || "session")}_${sanitizeAutopilotId(normalizedCadence)}_autopilot`;
-}
-
-function sanitizeAutopilotId(value) {
-  return String(value || "")
-    .trim()
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase() || "auto";
-}
-
-function normalizeReplayAutopilotCadence(value) {
-  const text = String(value || "60m").toLowerCase();
-  if (text === "1h" || text === "60" || text === "60m") return "60m";
-  if (text === "30" || text === "30m") return "30m";
-  if (text === "m15" || text === "15" || text === "15m") return "15m";
-  return value || "60m";
-}
-
-function projectReplayAutopilotConfig(config = {}) {
-  return {
-    config_id: config.config_id || null,
-    enabled: config.enabled !== false,
-    status: config.status || null,
-    backtest_id: config.backtest_id || null,
-    strategy_id: config.strategy_id || null,
-    trading_date: config.trading_date || config.date || null,
-    session: config.session || null,
-    pack_id: config.pack_id || null,
-    pack_build_id: config.pack_build_id || null,
-    start_time: config.start_time || null,
-    end_time: config.end_time || null,
-    cadence: config.cadence || null,
-    instruments: config.instruments || [],
-    updated_at_utc: config.updated_at_utc || null,
-  };
-}
-
-function isRecoverableReplayAutopilotFailure(item = {}) {
-  const lastError = item.last_error || {};
-  const code = String(lastError.code || item.error_code || "");
-  const message = String(lastError.message || item.error_message || "");
-  if (item.status !== "FAILED") return false;
-  if (REPLAY_AUTOPILOT_RECOVERABLE_CODES.has(code)) return Number(item.recovery_count || 0) < 3;
-  if (lastError.retryable === false || item.retryable === false) return false;
-  if (Number(item.recovery_count || 0) >= 3) return false;
-  if (message.includes("SAVE_DOCUMENT_UNDEFINED")) return true;
-  if (message.includes("trigger_policy.min_score")) return true;
-  if (message.toLowerCase().includes("undefined") && message.toLowerCase().includes("document")) return true;
-  return false;
-}
-
-function recoverReplayAutopilotWorkItem(item, tick, workerId) {
-  const history = Array.isArray(item.recovery_history) ? item.recovery_history : [];
-  return {
-    ...item,
-    status: "READY",
-    claimed_by: null,
-    worker_id: null,
-    lease_token: null,
-    lease_expires_at_utc: null,
-    lease_expires_at_paris: null,
-    claimed_at_utc: null,
-    claimed_at_paris: null,
-    retry_after_utc: null,
-    retry_after_paris: null,
-    attempt_count: 0,
-    failure_count: 0,
-    recovery_count: Number(item.recovery_count || 0) + 1,
-    recovery_history: [
-      ...history.slice(-4),
-      {
-        recovered_at_utc: tick.utc,
-        recovered_at_paris: tick.paris,
-        recovered_by: workerId || "replay_autopilot",
-        previous_error: item.last_error || null,
-      },
-    ],
-    last_error: null,
-    updated_at_utc: tick.utc,
-    updated_at_paris: tick.paris,
-  };
-}
-
-function projectReplayAutopilotStartResult({ config, creation, recovered, automation, state, worker_id }) {
-  const run = state?.selected_backtest || null;
-  const workItem = state?.current_work_item || null;
-  const terminal = ["COMPLETED", "DAY_END", "FAILED", "CANCELLED"].includes(state?.status);
-  const status = terminal
-    ? "TERMINAL"
-    : workItem?.status === "FAILED"
-      ? "WORK_FAILED_REQUIRES_OPERATOR"
-      : workItem?.status === "CLAIMED"
-        ? "WORK_BUSY"
-        : ["WAITING_GPT_MASTER", "WAITING_GPT_MONITOR"].includes(state?.status)
-          ? "WAITING_GPT"
-          : automation?.status || state?.status || "UNKNOWN";
-  return {
-    ok: true,
-    status,
-    config: projectReplayAutopilotConfig(config),
-    backtest_id: run?.backtest_id || config?.backtest_id || null,
-    replay_status: state?.status || run?.status || null,
-    current_replay_time: run?.current_replay_time || state?.replay_time || null,
-    current_step_id: run?.current_step_id || state?.current_step_id || null,
-    revision: Number(run?.revision || 0),
-    created_replay: Boolean(creation && creation.idempotent_replay !== true),
-    idempotent_replay: Boolean(creation?.idempotent_replay),
-    recovered,
-    automation,
-    gpt_action_required: status === "WAITING_GPT",
-    gpt_claim: status === "WAITING_GPT" ? {
-      tool: "claim_next_desk_work",
-      args: {
-        worker_id: worker_id || "gpt-replay-autopilot",
-        workflows: ["REPLAY_MASTER", "REPLAY_MONITOR"],
-        backtest_id: run?.backtest_id || config?.backtest_id || null,
-      },
-    } : null,
-    work_item: workItem ? deskWorkSummary(workItem) : null,
-    next_action: status === "WAITING_GPT" ? "claim_next_desk_work" : state?.next_action || null,
-  };
 }
 
 function assertRunPackScope(run, pack) {
@@ -6640,15 +6052,6 @@ function scopedReplayChildId(run, type, value) {
   return `${run.backtest_id}__${sanitizeId(type)}__${sanitizeId(existing || type)}`;
 }
 
-function filterVisibleByCutoff(items, cutoff, keys) {
-  const cutoffMs = Date.parse(cutoff);
-  return (items || []).filter((item) => {
-    const timestamp = keys.map((key) => item?.[key]).find(Boolean);
-    if (!timestamp) return true;
-    const valueMs = Date.parse(timestamp);
-    return !Number.isFinite(valueMs) || !Number.isFinite(cutoffMs) || valueMs <= cutoffMs;
-  });
-}
 
 function buildAntiLookaheadPolicy({ cutoff, rolling, macro = [], news = [] }) {
   const maxPrice = maxRollingTimestamp(rolling);
@@ -7390,81 +6793,6 @@ function replayCadenceValueToMinutes(value) {
   return Math.max(1, Math.min(240, parsed));
 }
 
-async function prepareLiveCursorClaimWork(store, plan, args, tick) {
-  const result = plan.workflow === "LIVE_MASTER"
-    ? await prepareDueLiveMasterBundle(store, {
-        workflow: args.session === "ny_open" ? "ny_open" : "asia_open",
-        trading_date: args.trading_date,
-        cutoff_paris: plan.checkpoint,
-        as_of_utc: new Date(plan.checkpoint).toISOString(),
-        run_id: `front_live_${args.trading_date}_${args.session}`,
-        mode: "live",
-        include_raw_refs: true,
-        save: true,
-        enqueue_agent_work: false,
-      }, { now: tick.epochMs })
-    : await prepareDueLiveMonitorBundle(store, {
-        session: args.session,
-        trading_date: args.trading_date,
-        timestamp_paris: plan.checkpoint,
-        as_of_utc: new Date(plan.checkpoint).toISOString(),
-        run_id: `front_live_${args.trading_date}_${args.session}`,
-        mode: "live",
-        catchup_mode: true,
-        include_raw_refs: true,
-        save: true,
-        enqueue_agent_work: false,
-      }, { now: tick.epochMs });
-  if (result?.ok === false || !result?.bundle?.bundle_id) {
-    throw deskError("LIVE_BUNDLE_NOT_READY", "The due live bundle could not be prepared for cursor claim.", {
-      workflow: plan.workflow,
-      checkpoint: plan.checkpoint,
-      preparation_status: result?.status || null,
-      skipped_reason: result?.skipped_reason || null,
-    });
-  }
-  const item = buildLiveCursorWork({ bundle: result.bundle, plan });
-  return {
-    workflow: plan.workflow,
-    checkpoint: plan.checkpoint,
-    master_id: result.master_id || item.save_target?.linked_master_analysis_id || null,
-    thesis_id: result.thesis_id || item.save_target?.linked_active_thesis_id || null,
-    data_quality: liveCursorDataQuality(result.bundle, result.status),
-    bundle: {
-      bundle_id: item.bundle_id,
-      bundle_tool: item.bundle_tool,
-      bundle_args: item.bundle_args,
-    },
-    execution_prompt: item.execution_prompt,
-    prompt_hash: item.prompt_hash,
-    save_target: item.save_target,
-  };
-}
-
-function finalizeLiveClaimResponse(result, workerId) {
-  if (result?.status !== "WORK_CLAIMED") return result;
-  const handle = result.claim_handle;
-  const executionPrompt = [
-    result.execution_prompt,
-    "",
-    "Attribution LIVE active:",
-    `- cursor_id: ${handle.cursor_id}`,
-    `- workflow: ${handle.workflow}`,
-    `- checkpoint: ${handle.checkpoint}`,
-    `- worker_id: ${workerId}`,
-    `- lease_token: ${handle.lease_token}`,
-    `- lease_expires_at_utc: ${handle.lease_expires_at_utc}`,
-    "- Utilise heartbeat_live si le bail risque d'expirer.",
-    "- Après matérialisation des sorties, appelle complete_live avec ce handle.",
-    "- En cas d'échec, appelle fail_live avec ce handle et une classe structurée.",
-  ].join("\n");
-  return {
-    ...result,
-    execution_prompt: executionPrompt,
-    prompt_hash: createHash("sha256").update(executionPrompt).digest("hex"),
-  };
-}
-
 async function claimNextDeskWorkFacade(store, args, tick) {
   const workflows = args.workflows || ["LIVE_MASTER", "LIVE_M15_MONITOR", "REPLAY_MASTER", "REPLAY_MONITOR"];
   const liveWorkflows = workflows.filter((workflow) => workflow.startsWith("LIVE_"));
@@ -7531,180 +6859,6 @@ function unifiedClaimResponse(result, workerId) {
       fail: "fail_desk_work",
     },
   };
-}
-
-function liveCursorInput(bundle, prepared) {
-  const workflow = bundle.bundle_type === "master_cutoff" ? "LIVE_MASTER" : "LIVE_M15_MONITOR";
-  const suggested = bundle.save_target?.suggested_payload || {};
-  return {
-    workflow,
-    checkpoint: bundle.cutoff_paris || bundle.timestamp_paris,
-    bundle_id: bundle.bundle_id,
-    work_status: prepared?.status || "READY",
-    data_quality: liveCursorDataQuality(bundle, prepared?.status),
-    master_id: suggested.linked_master_analysis_id || null,
-    thesis_id: suggested.linked_active_thesis_id || null,
-  };
-}
-
-function liveCursorDataQuality(bundle, fallback) {
-  const value = String(
-    bundle?.data_quality?.status
-      || bundle?.data_quality_audit?.status
-      || bundle?.quality?.status
-      || fallback
-      || "ready",
-  ).toLowerCase();
-  if (value.includes("stale")) return "stale";
-  if (value.includes("degrad") || value.includes("fail") || value.includes("missing")) return "degraded";
-  return "ready";
-}
-
-async function resolveLiveCursorMaterialization(store, cursor) {
-  if (cursor.attempt?.workflow === "LIVE_MASTER") {
-    const selector = {
-      strategy_id: cursor.strategy_id,
-      session: cursor.session,
-      mode: "live",
-      trading_date: cursor.trading_date,
-      run_id: cursor.run_id,
-      as_of_utc: new Date(cursor.attempt.checkpoint).toISOString(),
-    };
-    const master = await store.getLatestMasterAnalysis(selector).then((value) => value.analysis).catch(() => null);
-    const thesis = master?.analysis_id
-      ? await store.getActiveThesis({ ...selector, master_id: master.analysis_id, status: "any" }).then((value) => value.active_thesis).catch(() => null)
-      : null;
-    return {
-      outputMaterialized: Boolean(master?.analysis_id && thesis?.thesis_id),
-      materializedMasterId: master?.analysis_id || null,
-      materializedThesisId: thesis?.thesis_id || null,
-    };
-  }
-  const monitor = await store.getLatestManualMonitor({ bundle_id: cursor.attempt?.bundle_id, limit: 1 })
-    .then((value) => value.latest_monitor || value.monitors?.[0] || null)
-    .catch(() => null);
-  return { outputMaterialized: Boolean(monitor?.monitor_id) };
-}
-
-function replayClaimResponse(result, args) {
-  if (result?.status !== "WORK_CLAIMED") {
-    return { ok: true, status: "NO_WORK", scope: "replay", reason: "no_ready_step", backtest_id: args.backtest_id || null };
-  }
-  const item = result.work_item;
-  const saveTarget = enrichReplaySaveTargetForClaim(result.save_target, item);
-  return {
-    ok: true,
-    status: "WORK_CLAIMED",
-    scope: "replay",
-    claim_handle: {
-      work_item_id: item.work_item_id,
-      backtest_id: item.backtest_id,
-      step_id: item.step_id,
-      sequence: item.sequence ?? null,
-      lease_token: item.lease_token,
-      lease_expires_at_utc: item.lease_expires_at_utc,
-    },
-    workflow: item.workflow,
-    cutoff_paris: item.cutoff_paris,
-    as_of_utc: item.as_of_utc || null,
-    bundle: { bundle_id: item.bundle_id, bundle_tool: item.bundle_tool, bundle_args: result.bundle_args },
-    execution_prompt: result.execution_prompt,
-    prompt_hash: result.prompt_hash,
-    save_target: saveTarget,
-    expected_revision: item.expected_revision,
-    idempotency_key: item.idempotency_key,
-  };
-}
-
-function deskWorkClaimResponse(item) {
-  return {
-    ok: true,
-    status: "WORK_CLAIMED",
-    work_item: deskWorkSummary(item, { includeLeaseToken: true }),
-    execution_prompt: item.execution_prompt,
-    prompt_hash: item.execution_prompt_hash,
-    bundle_args: item.bundle_args,
-    save_target: enrichReplaySaveTargetForClaim(item.save_target, item),
-  };
-}
-
-function enrichReplayBundleSaveTargetForClaim(bundle = {}, workItem = null) {
-  if (!bundle || !workItem || workItem.status !== "CLAIMED" || workItem.step_id !== bundle.step_id) {
-    return bundle;
-  }
-  return {
-    ...bundle,
-    save_target: enrichReplaySaveTargetForClaim(bundle.save_target, workItem),
-  };
-}
-
-function enrichReplaySaveTargetForClaim(saveTarget = null, workItem = null) {
-  if (!saveTarget || !workItem || workItem.status !== "CLAIMED") return saveTarget;
-  const leasePayload = {
-    work_item_id: workItem.work_item_id,
-    worker_id: workItem.claimed_by || workItem.worker_id,
-    lease_token: workItem.lease_token,
-  };
-  const enriched = {
-    ...saveTarget,
-    ...leasePayload,
-  };
-  if (saveTarget.suggested_payload && typeof saveTarget.suggested_payload === "object") {
-    enriched.suggested_payload = {
-      ...saveTarget.suggested_payload,
-      ...leasePayload,
-    };
-  }
-  return enriched;
-}
-
-function deskWorkSummary(item, { includeLeaseToken = false } = {}) {
-  if (!item) return null;
-  return {
-    work_item_id: item.work_item_id || null,
-    workflow: item.workflow || null,
-    automation_scope: item.automation_scope || null,
-    status: item.status || null,
-    priority: item.priority ?? null,
-    backtest_id: item.backtest_id || null,
-    run_id: item.run_id || null,
-    trading_date: item.trading_date || null,
-    session: item.session || null,
-    step_id: item.step_id || null,
-    sequence: item.sequence ?? null,
-    cutoff_paris: item.cutoff_paris || null,
-    as_of_utc: item.as_of_utc || null,
-    bundle_id: item.bundle_id || null,
-    bundle_tool: item.bundle_tool || null,
-    save_tool: item.save_tool || null,
-    expected_revision: item.expected_revision ?? null,
-    idempotency_key: item.idempotency_key || null,
-    prompt_name: item.prompt_name || null,
-    prompt_version: item.prompt_version || null,
-    prompt_hash: item.prompt_hash || null,
-    prompt_text: item.prompt_text || null,
-    attempt_count: item.attempt_count ?? null,
-    max_attempts: item.max_attempts ?? null,
-    retry_after_utc: item.retry_after_utc || null,
-    failure_count: item.failure_count || 0,
-    claimed_by: item.claimed_by || null,
-    ...(includeLeaseToken ? { lease_token: item.lease_token || null } : {}),
-    lease_expires_at_utc: item.lease_expires_at_utc || null,
-    last_error: item.last_error || null,
-    completed_at_utc: item.completed_at_utc || null,
-  };
-}
-
-function workQueueStatus(item) {
-  if (!item) return "NO_WORK";
-  if (item.status === "CLAIMED") return "WORK_BUSY";
-  if (item.status === "FAILED") return "WORK_FAILED";
-  return "WORK_READY";
-}
-
-function compareDeskWorkItems(left, right) {
-  return Number(left.priority || 999) - Number(right.priority || 999)
-    || String(right.created_at_utc || "").localeCompare(String(left.created_at_utc || ""));
 }
 
 function buildOrchestratedReplayState({ runs, selectedRun, steps, timeline, monitors, positions, setups = [], simulations, activeThesis, bundles, workItems = [] }) {
@@ -8080,14 +7234,6 @@ function summarizeReplayState(backtest, trades, results) {
   };
 }
 
-function rawWindowUnavailable(args) {
-  return {
-    ok: false,
-    ...args,
-    warning: "raw_window_requires_persistent_store",
-    note: "Raw-window audit is available on the PostgreSQL-backed MCP store. Local JSON mode cannot query market feed subcollections.",
-  };
-}
 
 function rawWindowQuality(rows, { reason, attempted_raw_refs = [] } = {}) {
   const rowCount = rows?.length || 0;
@@ -9997,116 +9143,6 @@ function summarizeDatasetRefs(datasets, includeRawRefs) {
   }]));
 }
 
-function frontDailyMacroCalendar(events, { date, importance_min }) {
-  const selected = (events || [])
-    .filter((event) => event && event.active !== false)
-    .filter((event) => {
-      const eventDate = String(event.date || event.timestamp_paris || event.scheduled_at_paris || "").slice(0, 10);
-      return !date || eventDate === date;
-    })
-    .filter((event) => impactRank(event.impact || event.importance) >= impactRank(importance_min))
-    .sort((left, right) => String(left.timestamp_paris || left.scheduled_at_paris || left.time_paris || "")
-      .localeCompare(String(right.timestamp_paris || right.scheduled_at_paris || right.time_paris || "")));
-  return {
-    ok: true,
-    date: date || null,
-    importance_min,
-    source: "macro_calendar_events",
-    events: selected,
-  };
-}
-
-function frontLiveMarketWindow(date, nowUtc, lookbackDays = 0) {
-  const requestedStart = Date.parse(`${date}T00:00:00.000Z`);
-  const fromDate = new Date(requestedStart - Math.max(0, Number(lookbackDays) || 0) * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
-  const fromMs = parisWallClockEpoch(fromDate, "00:00:00");
-  const nowMs = Date.parse(nowUtc);
-  const nowParisDate = Number.isFinite(nowMs) ? toParisIso(nowMs).slice(0, 10) : date;
-  const nextDate = new Date(requestedStart + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const requestedEndMs = parisWallClockEpoch(nextDate, "00:00:00") - 1;
-  const toMs = date < nowParisDate ? requestedEndMs : nowMs;
-  return {
-    fromUtc: documentFeedUtc(fromMs),
-    toUtc: documentFeedUtc(Number.isFinite(toMs) ? toMs : requestedEndMs),
-  };
-}
-
-function parisWallClockEpoch(date, time) {
-  const target = Date.parse(`${date}T${time}.000Z`);
-  let epochMs = target;
-  for (let iteration = 0; iteration < 3; iteration += 1) {
-    const observed = Date.parse(`${toParisIso(epochMs).slice(0, 19)}.000Z`);
-    epochMs += target - observed;
-  }
-  return epochMs;
-}
-
-function documentFeedUtc(epochMs) {
-  return new Date(epochMs).toISOString().replace(/\.\d{3}Z$/, "+00:00");
-}
-
-function summarizeFrontLiveMarketRows(rows, { symbol, timeframe, feedId, requestedDate }) {
-  const ordered = (rows || [])
-    .map((row) => ({ row, epochMs: frontMarketRowEpoch(row) }))
-    .filter((item) => Number.isFinite(item.epochMs))
-    .filter((item) => toParisIso(item.epochMs).slice(0, 10) <= requestedDate)
-    .sort((left, right) => left.epochMs - right.epochMs);
-  const lastEntry = ordered.at(-1);
-  if (!lastEntry) return null;
-  const latestDate = toParisIso(lastEntry.epochMs).slice(0, 10);
-  const daily = ordered.filter((item) => toParisIso(item.epochMs).slice(0, 10) === latestDate);
-  const first = daily[0]?.row || lastEntry.row;
-  const last = lastEntry.row;
-  const open = frontMarketNumber(first.open);
-  const close = frontMarketNumber(last.close);
-  const highs = daily.map(({ row }) => frontMarketNumber(row.high)).filter((value) => value != null);
-  const lows = daily.map(({ row }) => frontMarketNumber(row.low)).filter((value) => value != null);
-  const high = highs.length ? Math.max(...highs) : frontMarketNumber(last.high);
-  const low = lows.length ? Math.min(...lows) : frontMarketNumber(last.low);
-  const intradaySeries = daily.slice(-240).map(({ row, epochMs }) => ({
-    timestamp_paris: toParisIso(epochMs),
-    open: frontMarketNumber(row.open),
-    high: frontMarketNumber(row.high),
-    low: frontMarketNumber(row.low),
-    close: frontMarketNumber(row.close),
-  })).filter((point) => point.close != null);
-  return {
-    symbol,
-    latest_close: close,
-    change_pct: open && close != null ? ((close - open) / open) * 100 : null,
-    latest_timestamp_paris: toParisIso(lastEntry.epochMs),
-    market_date: latestDate,
-    day_ohlc: { open, high, low, close },
-    rsi_14: frontMarketNumber(last.rsi_14),
-    atr_14: frontMarketNumber(last.atr_14),
-    timeframe: canonicalTimeframe(timeframe) === "1" ? "M1" : "M5",
-    series_timeframe: canonicalTimeframe(timeframe) === "1" ? "M1" : "M5",
-    intraday_series: intradaySeries,
-    source: `market_feeds/${feedId}/candles`,
-    availability: "live_postgres",
-  };
-}
-
-function frontMarketRowEpoch(row) {
-  return Date.parse(row?.timestamp_utc || row?.time_utc || row?.timestamp || row?.timestamp_paris || "");
-}
-
-function frontMarketNumber(value) {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function latestFrontMarketTimestamp(instruments) {
-  return Object.values(instruments || {})
-    .map((value) => value?.latest_timestamp_paris)
-    .filter(Boolean)
-    .sort()
-    .at(-1) || null;
-}
-
 function isOptionalEmptyNewsDigest(newsDigest) {
   return newsDigest?.empty_ok === true ||
     newsDigest?.status === "not_configured" ||
@@ -10114,27 +9150,7 @@ function isOptionalEmptyNewsDigest(newsDigest) {
     newsDigest?.reason === "historical_news_digest_source_not_configured";
 }
 
-function normalizeStoragePath(storagePath, bucketName) {
-  const text = String(storagePath || "");
-  if (text.startsWith("gs://")) {
-    const withoutScheme = text.slice("gs://".length);
-    const slash = withoutScheme.indexOf("/");
-    const path = slash >= 0 ? withoutScheme.slice(slash + 1) : "";
-    return path;
-  }
-  if (text.startsWith(`${bucketName}/`)) {
-    return text.slice(bucketName.length + 1);
-  }
-  return text.replace(/^\/+/, "");
-}
 
-function localPathFromStoragePath(storagePath) {
-  const text = String(storagePath || "");
-  if (text.startsWith("local://")) {
-    return text.slice("local://".length);
-  }
-  return null;
-}
 
 function stableLocalId(prefix, date, session, tick = new SystemClock().now(), runId = null) {
   const stamp = tick.utc.replace(/[-:.TZ]/g, "").slice(0, 14);
@@ -10303,42 +9319,11 @@ function filterSetupDocs(docs, { pack_id, analysis_id, decision_id, status = "an
   };
 }
 
-function selectReplaySetups(docs, {
-  setup_record_id,
-  pack_id,
-  analysis_id,
-  decision_id,
-  primary_only = false,
-  limit = 25,
-} = {}) {
-  return (docs || [])
-    .filter((setup) => !setup_record_id || setup.setup_record_id === setup_record_id)
-    .filter((setup) => !pack_id || setup.pack_id === pack_id)
-    .filter((setup) => !analysis_id || setup.analysis_id === analysis_id)
-    .filter((setup) => !decision_id || setup.decision_id === decision_id)
-    .filter((setup) => !primary_only || setup.is_primary === true)
-    .sort((left, right) => {
-      const leftDate = String(left.date || left.saved_at || "");
-      const rightDate = String(right.date || right.saved_at || "");
-      if (leftDate !== rightDate) return rightDate.localeCompare(leftDate);
-      return Number(left.priority || 999) - Number(right.priority || 999);
-    })
-    .slice(0, Math.max(1, Math.min(Number(limit) || 25, 100)));
-}
 
 function replaySetupOnCandles(setup, rows, meta = {}, clock = new SystemClock()) {
   return replaySetupOutcome({ setup, candles: rows, cutoff: meta.replay_window?.to, meta, clock });
 }
 
-function filterReplayRows(rows, { from, to }) {
-  const fromMs = Date.parse(from);
-  const toMs = Date.parse(to);
-  return (Array.isArray(rows) ? rows : []).filter((row) => {
-    const time = row.timestamp_paris || row.timestamp_utc || row.time || row.date;
-    const ms = Date.parse(time);
-    return Number.isFinite(ms) && ms >= fromMs && ms <= toMs;
-  });
-}
 
 function replayWindowForSetup(setup, args = {}, pack = null, clock = new SystemClock()) {
   const date = setup.date || pack?.date || clock.now().utc.slice(0, 10);
@@ -10350,34 +9335,7 @@ function replayWindowForSetup(setup, args = {}, pack = null, clock = new SystemC
   };
 }
 
-function replayPatch(replay, clock = new SystemClock()) {
-  const _t = clock.now();
-  return {
-    replay_status: replay.replay_status,
-    replay_result: replay,
-    replayed_at: replay.replayed_at ?? _t.utc,
-    replayed_at_utc: replay.replayed_at_utc ?? _t.utc,
-    replayed_at_paris: replay.replayed_at_paris ?? _t.paris,
-  };
-}
 
-function replaySummary(results, args) {
-  return {
-    ok: true,
-    count: results.length,
-    write_result: args.write_result !== false,
-    summary: {
-      win: results.filter((item) => item.replay_status === "win").length,
-      loss: results.filter((item) => item.replay_status === "loss").length,
-      managed: results.filter((item) => item.replay_status === "managed").length,
-      no_fill: results.filter((item) => item.replay_status === "no_fill").length,
-      wait: results.filter((item) => item.replay_status === "wait").length,
-      not_replayable: results.filter((item) => item.replay_status === "not_replayable").length,
-      error: results.filter((item) => item.replay_status === "error").length,
-    },
-    results,
-  };
-}
 
 function strictReplaySetupFilters(args = {}) {
   const date = args.date || (!args.from_date && args.to_date ? args.to_date : (args.from_date && args.from_date === args.to_date ? args.to_date : null));
@@ -10612,26 +9570,6 @@ function stripDeskWorkLease(value = {}) {
   return payload;
 }
 
-function nonReplayableSetup(setup, reason, clock = new SystemClock()) {
-  const _t = clock.now();
-  return {
-    ok: true,
-    replay_id: `${setup.setup_record_id}_${_t.utc.replace(/[-:.TZ]/g, "").slice(0, 14)}`,
-    setup_record_id: setup.setup_record_id,
-    setup_id: setup.setup_id,
-    analysis_id: setup.analysis_id || null,
-    pack_id: setup.pack_id || null,
-    instrument: setup.instrument || null,
-    replay_status: "not_replayable",
-    outcome: "missing_data",
-    reason,
-    r_result: null,
-    max_favorable_r: null,
-    replayed_at: _t.utc,
-    replayed_at_utc: _t.utc,
-    replayed_at_paris: _t.paris,
-  };
-}
 
 function publicReplayError(error) {
   return String(error?.message || error || "replay_failed").slice(0, 500);
