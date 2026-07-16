@@ -94,6 +94,17 @@ Cinquième lot — marché et moteur de features, 16 juillet 2026 :
 - suite MCP complète validée à 219 tests sur 219 ;
 - aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
 
+Sixième lot — stratégie NY Open et audit, 16 juillet 2026 :
+
+- extraction dans `DeskStrategyAuditService` de l'état NY Open, du calendrier, des détails journaliers et de la timeline Live ;
+- déplacement du calcul et de la persistance des performances, des événements opérateur audités et du replay strict selon les trois modes de pricing ;
+- déplacement de l'agrégation d'audit des contrats, données, features, jobs et erreurs backend ;
+- maintien temporaire des calculs purs de projection et de performance derrière le port explicite `strategyAuditPort` ;
+- suppression des trois anciennes méthodes privées d'orchestration stratégie dans `PersistentDeskStore` ;
+- réduction de `store.js` de 8 711 à 8 564 lignes sur ce lot ; aucun helper de premier niveau laissé sans appel par le scan statique ;
+- suite MCP complète validée à 219 tests sur 219 ;
+- aucun changement appliqué au dépôt original, à Firebase, à Google Cloud ou au futur environnement OVH.
+
 ## Runtime conservé
 
 - frontend React actuel ;
@@ -114,7 +125,7 @@ Cinquième lot — marché et moteur de features, 16 juillet 2026 :
 ## État de validation
 
 - configuration Docker Compose : valide ;
-- MCP/API : 219 tests sur 219 validés après les extractions contrats, packs, Replay, Live, Front, marché et features, incluant intégrité, store persistant, transactions, projections et webhook ;
+- MCP/API : 219 tests sur 219 validés après les extractions contrats, packs, Replay, Live, Front, marché, features, stratégie et audit, incluant intégrité, store persistant, transactions, projections et webhook ;
 - packages métier : 66 tests domaine, 8 tests replay, 8 tests audit et 6 tests temps validés ;
 - frontend : 13 tests sur 13 validés, avec typecheck sans émission d'artefacts et build de production ;
 - bundle frontend Docker : 282,82 Ko de JavaScript avant compression, sans marqueur du mode mock ;
