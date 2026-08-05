@@ -1,32 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import { Card, Icon, SectionTitle, StatusBadge, StatusPill } from "@/components/common";
+import { deskStatusText as humanDeskText } from "@/lib/presentation";
 import type { DeskSession, TimelineEvent } from "@/types";
 
 const fmt = (value: number | null | undefined) => value == null ? "—" : new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(value);
 const sameText = (left?: string | null, right?: string | null) => (left || "").trim().toLowerCase() === (right || "").trim().toLowerCase();
-const deskCopy: Record<string, string> = {
-  "Run Master to create a current thesis.": "Lancez le Master pour créer la thèse courante.",
-  "Master analysis required": "Analyse Master requise",
-  "WAIT": "Attente",
-  "wait": "Attente",
-  "MARKET FEED": "Flux marché",
-  "NO_ACTION": "Aucune action",
-  "NO ACTIVE THESIS": "Aucune thèse active",
-  "NO_ACTIVE_THESIS": "Aucune thèse active",
-  "NO SETUP": "Aucun setup",
-  "NO_SETUP": "Aucun setup",
-  "NO POSITION": "Aucune position",
-  "NO_POSITION": "Aucune position",
-};
-const humanDeskText = (value?: string | null) => {
-  if (!value) return "";
-  const trimmed = value.trim();
-  if (deskCopy[trimmed]) return deskCopy[trimmed];
-  return Object.entries(deskCopy).reduce((text, [code, label]) => {
-    if (code === "WAIT" || code === "wait") return text;
-    return text.replaceAll(code, label);
-  }, value);
-};
 const severityTone = (value: string): "critical" | "warning" | "positive" | "info" =>
   value === "critical" ? "critical" : value === "warning" ? "warning" : "info";
 
