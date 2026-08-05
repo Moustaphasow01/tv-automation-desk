@@ -11,6 +11,7 @@
 .tmp_*/
 .local/
 .superpowers/
+.worktrees/
 
 # Runtime state
 logs/
