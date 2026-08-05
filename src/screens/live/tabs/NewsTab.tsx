@@ -78,7 +78,7 @@ export function NewsTab({ data }: { data: DeskSession }) {
         </Card>)}
       </div>
       : <Card className="headline-window-empty"><strong>Aucun flux éditorial matérialisé</strong><p>Le calendrier macro ci-dessus sert de fallback réel : il reste visible le week-end et couvre les 48 heures passées et à venir.</p></Card>}
-    <Card className="source-rules-react"><p><strong>Sources :</strong> calendrier backend autonome et collecte éditoriale GDELT DOC 2.0. Chaque article conserve son URL et son domaine d'origine. Les news sont filtrées au cutoff avant d'entrer dans les packs LIVE ou Replay.</p></Card>
+    <Card className="source-rules-react"><p><strong>Sources :</strong> calendrier backend autonome et collecte éditoriale GDELT DOC 2.0. Chaque article conserve son URL et son domaine d’origine. Les news sont filtrées au cutoff avant d’entrer dans les packs LIVE ou Replay.</p></Card>
   </>;
 }
 
