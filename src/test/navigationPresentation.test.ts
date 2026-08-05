@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { activeNavigationSpace, navigationSpaces } from "@/navigation";
 import {
+  deskStatusText,
+  dataQualityLabel,
   gptProcessLabel,
   incidentLabel,
   replayLabel,
+  sessionLabel,
   shortReference,
   workflowLabel,
 } from "@/lib/presentation";
@@ -39,5 +42,39 @@ describe("présentation des références techniques", () => {
     const reference = "incident_0123456789abcdef";
     expect(incidentLabel(reference)).not.toBe(reference);
     expect(shortReference(reference)).toBe("#89ABCDEF");
+  });
+});
+
+describe("traduction des sessions, de la qualité et des statuts", () => {
+  it("traduit les codes de session connus et laisse passer les autres", () => {
+    expect(sessionLabel("asia_open")).toBe("Session Asie");
+    expect(sessionLabel("ny_open")).toBe("Session New York");
+    expect(sessionLabel("full_day")).toBe("Journée continue");
+    expect(sessionLabel("Asia Open")).toBe("Session Asie");
+    expect(sessionLabel("NY Open")).toBe("Session New York");
+    expect(sessionLabel("custom_scope")).toBe("custom scope");
+    expect(sessionLabel(null)).toBe("");
+  });
+
+  it("traduit les statuts de qualité de donnée connus et laisse passer les autres", () => {
+    expect(dataQualityLabel("ready")).toBe("prête");
+    expect(dataQualityLabel("healthy")).toBe("opérationnelle");
+    expect(dataQualityLabel("context_limited")).toBe("contexte partiel");
+    expect(dataQualityLabel("degraded")).toBe("dégradée");
+    expect(dataQualityLabel("waiting")).toBe("en attente");
+    expect(dataQualityLabel("unmapped_status")).toBe("unmapped status");
+    expect(dataQualityLabel(null)).toBe("");
+    expect(dataQualityLabel("")).toBe("");
+  });
+
+  it("traduit les phrases et codes de statut du desk", () => {
+    expect(deskStatusText("WAIT")).toBe("Attente");
+    expect(deskStatusText("NO_SETUP")).toBe("Aucun setup");
+    expect(deskStatusText("NO POSITION")).toBe("Aucune position");
+    expect(deskStatusText("Master analysis required")).toBe("Analyse Master requise");
+    expect(deskStatusText("")).toBe("");
+    expect(deskStatusText(null)).toBe("");
+    expect(deskStatusText("SOME_UNKNOWN_STATUS")).toBe("SOME_UNKNOWN_STATUS");
+    expect(deskStatusText("Desk: NO_SETUP right now")).toBe("Desk: Aucun setup right now");
   });
 });

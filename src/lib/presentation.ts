@@ -51,3 +51,58 @@ function extractTime(value: string) {
   const match = value.match(/T(\d{2})[_:](\d{2})/);
   return match ? `${match[1]}:${match[2]}` : null;
 }
+
+const SESSION_LABELS: Record<string, string> = {
+  "Asia Open": "Session Asie",
+  "NY Open": "Session New York",
+  asia_open: "Session Asie",
+  ny_open: "Session New York",
+  full_day: "Journée continue",
+};
+
+export function sessionLabel(value: string | null | undefined) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return SESSION_LABELS[trimmed] || trimmed.replaceAll("_", " ");
+}
+
+const DATA_QUALITY_LABELS: Record<string, string> = {
+  ready: "prête",
+  healthy: "opérationnelle",
+  context_limited: "contexte partiel",
+  degraded: "dégradée",
+  waiting: "en attente",
+};
+
+export function dataQualityLabel(value: string | null | undefined) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return DATA_QUALITY_LABELS[trimmed] || trimmed.replaceAll("_", " ");
+}
+
+const DESK_STATUS_COPY: Record<string, string> = {
+  "Run Master to create a current thesis.": "Lancez le Master pour créer la thèse courante.",
+  "Master analysis required": "Analyse Master requise",
+  WAIT: "Attente",
+  wait: "Attente",
+  "MARKET FEED": "Flux marché",
+  NO_ACTION: "Aucune action",
+  "NO ACTIVE THESIS": "Aucune thèse active",
+  NO_ACTIVE_THESIS: "Aucune thèse active",
+  "NO SETUP": "Aucun setup",
+  NO_SETUP: "Aucun setup",
+  "NO POSITION": "Aucune position",
+  NO_POSITION: "Aucune position",
+};
+
+export function deskStatusText(value: string | null | undefined) {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (DESK_STATUS_COPY[trimmed]) return DESK_STATUS_COPY[trimmed];
+  return Object.entries(DESK_STATUS_COPY).reduce((text, [code, label]) => {
+    // Skip WAIT/wait in the substring fallback: as a bare 4-letter code it would
+    // also match inside unrelated words like "awaiting"/"waiting", mangling them.
+    if (code === "WAIT" || code === "wait") return text;
+    return text.replaceAll(code, label);
+  }, value);
+}
