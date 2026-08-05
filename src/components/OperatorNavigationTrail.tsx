@@ -118,6 +118,12 @@ function describeLocation(pathname: string, search: string): { label: string; pa
   if (parts[0] === "history" && parts[1] === "sessions") {
     return detail(`Session ${formatDate(parts[2])}`, [{ label: "Archives", to: "/history" }]);
   }
+  if (parts[0] === "live" && parts[1]) {
+    const liveTabLabels: Record<string, string> = {
+      thesis: "Plan actif",
+    };
+    return detail(liveTabLabels[parts[1]] || "Session en direct", [{ label: "Session en direct", to: "/live" }]);
+  }
   if (parts[0] === "strategies" && parts[1]) {
     return detail("Version de stratégie", [{ label: "Stratégie & contrats", to: "/strategies" }]);
   }
