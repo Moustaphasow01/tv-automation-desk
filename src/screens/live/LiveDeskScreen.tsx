@@ -7,12 +7,10 @@ import {
   DecisionCard,
   DecisionDeskStrip,
   LiveSectionHeading,
-  MacroNewsCard,
   MarketTable,
   OperationalTimeline,
   StatusRibbon,
-  ThesisSummary,
-  Timeline
+  ThesisSummary
 } from "@/components/deskCards";
 import type { LiveDeskScreenProps } from "./LiveDeskScreen.types";
 import { dataQualityLabel, sessionLabel } from "@/lib/presentation";
@@ -22,10 +20,9 @@ import "./liveDeskScreen.css";
 const liveSections = [
   { id: "live-decision", key: "F1", label: "Décision" },
   { id: "live-market", key: "F2", label: "Marché" },
-  { id: "live-thesis", key: "F3", label: "Lecture" },
-  { id: "live-execution", key: "F4", label: "Exécution" },
-  { id: "live-risk", key: "F5", label: "Risque" },
-  { id: "live-activity", key: "F6", label: "Activité" }
+  { id: "live-execution", key: "F3", label: "Exécution" },
+  { id: "live-thesis", key: "F4", label: "Analyse" },
+  { id: "live-activity", key: "F5", label: "Activité" }
 ] as const;
 
 type LiveSectionId = (typeof liveSections)[number]["id"];
@@ -146,25 +143,13 @@ export function LiveDeskScreen({
       {activeTabContent}
     </div>
 
-    <div id="live-risk" className="live-module live-screen__module">
-      <LiveSectionHeading title="Risque temporel & agenda"/>
-      <div className="live-risk-grid">
-        <MacroNewsCard data={data} onOpenNews={actions.openNews}/>
-      </div>
-    </div>
-
     <div id="live-activity" className="live-module live-screen__module">
       <LiveSectionHeading
-        title="Activité & journal"
-        subtitle="Traçabilité des décisions et des workers"
-        action={<button className="text-btn" onClick={actions.openJournal}>Tout voir <Icon name="arrow" size={15}/></button>}
+        title="Activité"
+        subtitle="Traçabilité des workers et qualité des données"
+        action={<button className="text-btn" onClick={actions.openJournal}>Voir le journal <Icon name="arrow" size={15}/></button>}
       />
-      <div className="content-grid">
-        <ActivityCard data={data}/>
-        <article className="card timeline-card">
-          <Timeline data={data} compact onSelect={actions.openTimelineEvent}/>
-        </article>
-      </div>
+      <ActivityCard data={data}/>
       <details className="live-quality-disclosure">
         <summary><span>Qualité des données & audit</span><strong>{data.dataQuality.label}</strong></summary>
         <AuditMini data={data} onOpenAudit={actions.openAudit}/>
