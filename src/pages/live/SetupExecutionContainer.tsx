@@ -11,7 +11,7 @@ export function SetupExecutionContainer({ data: initialData }: { data: DeskSessi
     levels: query.data?.levels || initialData.levels
   };
   return <>
-    <div className="content-grid">
+    <div className="setup-control-grid">
       <SetupCard data={data}/>
       <section id="position"><PositionCard data={data}/></section>
     </div>
