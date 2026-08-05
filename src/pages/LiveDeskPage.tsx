@@ -2,15 +2,34 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useOverlay } from "@/context/OverlayContext";
 import { useDeskContext } from "@/context/DeskContext";
 import { DeskPage } from "@/pages/pageState";
+import { MasterTabContainer } from "@/pages/live/MasterTabContainer";
+import { MonitorsTabContainer } from "@/pages/live/MonitorsTabContainer";
+import { SessionsTabContainer } from "@/pages/live/SessionsTabContainer";
 import { SetupExecutionContainer } from "@/pages/live/SetupExecutionContainer";
 import { ThesisTabContainer } from "@/pages/live/ThesisTabContainer";
+import { TimelineTabContainer } from "@/pages/live/TimelineTabContainer";
+import { NewsTab } from "@/screens/live/tabs/NewsTab";
 import { LiveDeskScreen } from "@/screens/live";
 import type { LiveTabDefinition } from "@/screens/live/LiveDeskScreen.types";
-import type { TimelineEvent } from "@/types";
+import type { DeskSession, TimelineEvent } from "@/types";
 
 const liveTabs: LiveTabDefinition[] = [
-  { id: "thesis", label: "Lecture" }
+  { id: "thesis", label: "Lecture" },
+  { id: "master", label: "Master" },
+  { id: "monitors", label: "Monitors" },
+  { id: "news", label: "Risque" },
+  { id: "timeline", label: "Journal" },
+  { id: "sessions", label: "Sessions" }
 ];
+
+function activeTabContentFor(activeTab: string, data: DeskSession, onSelectTimelineEvent: (event: TimelineEvent) => void) {
+  if (activeTab === "master") return <MasterTabContainer data={data}/>;
+  if (activeTab === "monitors") return <MonitorsTabContainer data={data}/>;
+  if (activeTab === "news") return <NewsTab data={data}/>;
+  if (activeTab === "timeline") return <TimelineTabContainer data={data} onSelect={onSelectTimelineEvent}/>;
+  if (activeTab === "sessions") return <SessionsTabContainer/>;
+  return <ThesisTabContainer data={data}/>;
+}
 
 export default function LiveDeskPage() {
   const navigate = useNavigate();
@@ -41,14 +60,13 @@ export default function LiveDeskPage() {
     onRefresh={() => void meta.refetch()}
     tabs={liveTabs}
     activeTab={activeTab}
-    activeTabContent={<ThesisTabContainer data={data}/>}
+    activeTabContent={activeTabContentFor(activeTab, data, openTimelineEvent)}
     executionContent={<SetupExecutionContainer data={data}/>}
     actions={{
-      openJournal: () => navigate("/timeline"),
+      openJournal: () => navigate("/live/timeline"),
       openSetup: () => document.getElementById("live-execution")?.scrollIntoView({ behavior: "smooth", block: "start" }),
       openThesis: () => navigate("/live/thesis"),
       openAudit: () => navigate("/audit"),
-      openNews: () => navigate("/news"),
       openTimelineEvent,
       onChangeTab: id => navigate(`/live/${id}`)
     }}

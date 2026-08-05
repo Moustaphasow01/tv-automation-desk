@@ -11,7 +11,6 @@ export interface LiveDeskScreenActions {
   openSetup: () => void;
   openThesis: () => void;
   openAudit: () => void;
-  openNews: () => void;
   openTimelineEvent: (event: TimelineEvent) => void;
   onChangeTab: (tabId: string) => void;
 }
