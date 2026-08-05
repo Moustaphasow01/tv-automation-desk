@@ -83,12 +83,12 @@ suivant plutôt que d'être anticipé ici sans preuve d'usage.
   correspondante. Un lien externe, une notification ou un runbook qui
   pointe vers `/master` atterrit donc directement sur l'onglet Master
   pré-sélectionné, pas sur l'onglet par défaut.
-- `/setup` redirige vers `/live#live-execution` (l'ancre de section
-  `live-execution` existe déjà dans `LiveDeskScreen.tsx` pour la nav interne
-  F1-F6) : la page atterrit avec un défilement automatique vers la zone
-  Exécution toujours visible, plutôt qu'en haut de page. L'exécution n'est
-  pas un onglet séparé, donc pas de segment de chemin dédié — seulement
-  cette ancre.
+- `/setup` redirige vers `/live` simple. **Correction technique** : l'app
+  utilise `HashRouter` (`src/main.tsx`), donc une ancre `/live#live-execution`
+  n'est pas fiable — le `#` est déjà le délimiteur du routeur lui-même, il
+  ne peut pas servir en plus de fragment de défilement. L'exécution reste
+  positionnée juste après Marché, donc visible sans grand défilement ; pas
+  de mécanisme d'ancre pour cette redirection.
 - `/alerts` reste une route à part entière pour l'instant (pas absorbée
   dans les onglets, voir §2) ; elle n'est pas redirigée.
 - Chaque route `/live/<onglet>` reste bookmarkable et fonctionne après un
