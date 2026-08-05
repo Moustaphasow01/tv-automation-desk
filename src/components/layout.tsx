@@ -4,6 +4,7 @@ import { BrandMark, Icon, type IconName } from "@/components/common";
 import { OperatorNavigationTrail } from "@/components/OperatorNavigationTrail";
 import { useDeskContext } from "@/context/DeskContext";
 import { useDeskMarketSnapshot, useDeskSessionBase } from "@/hooks/useDesk";
+import { sessionLabel } from "@/lib/presentation";
 import {
   activeNavigationSpace,
   navigationCatalog,
@@ -124,10 +125,10 @@ export function AppShell() {
     </aside>
 
     <header className="app-topbar">
-      <button className="brand-button mobile-brand" onClick={() => navigate("/more")} aria-label="Menu"><BrandMark/><span><strong>Desk Futures</strong><small>{humanSessionLabel(data?.label) || "Cockpit"}</small></span></button>
+      <button className="brand-button mobile-brand" onClick={() => navigate("/more")} aria-label="Menu"><BrandMark/><span><strong>Desk Futures</strong><small>{sessionLabel(data?.label) || "Cockpit"}</small></span></button>
       <div className="topbar-terminal-state" aria-label="État du desk">
         <span><i className="api-dot"/>LIVE</span>
-        <span>SESSION <strong>{humanSessionLabel(data?.label) || "—"}</strong></span>
+        <span>SESSION <strong>{sessionLabel(data?.label) || "—"}</strong></span>
         <span>PHASE <strong>{phaseLabel}</strong></span>
       </div>
       {showMarketTape && <div className="terminal-market-tape" aria-label="Bande de marché">
@@ -213,15 +214,4 @@ function commandSuggestions(raw: string): CommandSuggestion[] {
     { label: "Ouvrir l’incident", detail: "Recherche par référence technique", to: `/operations/incidents/${encodeURIComponent(term)}`, icon: "alert", kind: "référence" },
     { label: "Ouvrir l’analyse GPT", detail: "Recherche par référence technique", to: `/operations/observability?process=${encodeURIComponent(term)}`, icon: "brain", kind: "référence" }
   ];
-}
-
-function humanSessionLabel(value?: string | null) {
-  if (!value) return "";
-  return ({
-    "Asia Open": "Session Asie",
-    "NY Open": "Session New York",
-    asia_open: "Session Asie",
-    ny_open: "Session New York",
-    full_day: "Journée continue",
-  } as Record<string, string>)[value] || value.replaceAll("_", " ");
 }
