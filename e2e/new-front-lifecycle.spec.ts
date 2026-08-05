@@ -12,7 +12,7 @@ test("parcours V5 Master → Monitor → Setup → Position → clôture", async
   await expect(page.getByText("master_ny_2026_07_13_1530")).toBeVisible();
 
   await page.goto("/#/monitors", { waitUntil: "domcontentloaded" });
-  await expect(page).toHaveURL(/#\/monitors$/);
+  await expect(page).toHaveURL(/#\/live\/monitors$/);
   await expect(page.getByRole("heading", { name: "Monitors" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "EXPIRE_SETUP" })).toBeVisible();
 
@@ -119,11 +119,17 @@ test("les 36 routes restent directement accessibles dans le shell V5", async ({ 
   ];
   expect(routes).toHaveLength(36);
 
-  // /live, /thesis et /setup redirigent désormais vers la page fusionnée /live/thesis.
+  // /live, /thesis et /setup redirigent vers la page fusionnée /live/thesis ;
+  // /sessions, /master, /monitors, /timeline et /news redirigent vers leur onglet /live/<tab> respectif.
   const redirectTargets: Record<string, string> = {
     "/live": "/live/thesis",
     "/thesis": "/live/thesis",
-    "/setup": "/live/thesis"
+    "/setup": "/live/thesis",
+    "/sessions": "/live/sessions",
+    "/master": "/live/master",
+    "/monitors": "/live/monitors",
+    "/timeline": "/live/timeline",
+    "/news": "/live/news"
   };
 
   for (const route of routes) {
