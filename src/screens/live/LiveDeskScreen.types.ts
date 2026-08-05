@@ -1,4 +1,10 @@
+import type { ReactNode } from "react";
 import type { DeskSession, TimelineEvent } from "@/types";
+
+export interface LiveTabDefinition {
+  id: string;
+  label: string;
+}
 
 export interface LiveDeskScreenActions {
   openJournal: () => void;
@@ -7,6 +13,7 @@ export interface LiveDeskScreenActions {
   openAudit: () => void;
   openNews: () => void;
   openTimelineEvent: (event: TimelineEvent) => void;
+  onChangeTab: (tabId: string) => void;
 }
 
 export interface LiveDeskScreenProps {
@@ -16,4 +23,8 @@ export interface LiveDeskScreenProps {
   dataUpdatedAt: number;
   onRefresh: () => void;
   actions: LiveDeskScreenActions;
+  tabs: LiveTabDefinition[];
+  activeTab: string;
+  activeTabContent: ReactNode;
+  executionContent: ReactNode;
 }

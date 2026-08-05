@@ -4,17 +4,12 @@ import { MetricCard, MetricStrip, PageHeading } from "@/components/operations";
 import {
   ActivityCard,
   AuditMini,
-  BriefCard,
-  DeskReading,
   DecisionCard,
   DecisionDeskStrip,
-  DeltaCard,
   LiveSectionHeading,
   MacroNewsCard,
   MarketTable,
-  PositionCard,
   OperationalTimeline,
-  SetupCard,
   StatusRibbon,
   ThesisSummary,
   Timeline
@@ -35,7 +30,18 @@ const liveSections = [
 
 type LiveSectionId = (typeof liveSections)[number]["id"];
 
-export function LiveDeskScreen({ data, phaseLabel, refreshing, dataUpdatedAt, onRefresh, actions }: LiveDeskScreenProps) {
+export function LiveDeskScreen({
+  data,
+  phaseLabel,
+  refreshing,
+  dataUpdatedAt,
+  onRefresh,
+  actions,
+  tabs,
+  activeTab,
+  activeTabContent,
+  executionContent
+}: LiveDeskScreenProps) {
   const [activeSection, setActiveSection] = useState<LiveSectionId>("live-decision");
   const upcomingMacro = data.macro.find(event => event.isNext);
 
@@ -123,22 +129,21 @@ export function LiveDeskScreen({ data, phaseLabel, refreshing, dataUpdatedAt, on
       <MarketTable data={data}/>
     </div>
 
-    <div id="live-thesis" className="live-module live-screen__module">
-      <LiveSectionHeading title="Lecture du Desk" subtitle="Faits, interprétation et évolution de la thèse"/>
-      <div className="content-grid">
-        <BriefCard eyebrow="Marché" headline={data.marketBrief.headline} text={data.marketBrief.text} verdict={data.marketBrief.verdict} icon="chart"/>
-        <BriefCard eyebrow="Cross-asset" headline={data.crossAssetBrief.headline} text={data.crossAssetBrief.text} verdict={data.crossAssetBrief.verdict} icon="globe"/>
-      </div>
-      <DeskReading data={data}/>
-      <DeltaCard data={data}/>
-    </div>
-
     <div id="live-execution" className="live-module live-screen__module">
       <LiveSectionHeading title="Plan & exécution" subtitle="Setup théorique et position canonique restent distincts"/>
-      <div className="content-grid">
-        <SetupCard data={data} onOpenSetup={actions.openSetup}/>
-        <PositionCard data={data} onOpenPosition={actions.openSetup}/>
-      </div>
+      {executionContent}
+    </div>
+
+    <div id="live-thesis" className="live-module live-screen__module">
+      <nav className="desk-function-bar live-tab-bar" aria-label="Détail de la session">
+        {tabs.map(tab => <button
+          key={tab.id}
+          className={activeTab === tab.id ? "active" : ""}
+          aria-pressed={activeTab === tab.id}
+          onClick={() => actions.onChangeTab(tab.id)}
+        >{tab.label}</button>)}
+      </nav>
+      {activeTabContent}
     </div>
 
     <div id="live-risk" className="live-module live-screen__module">

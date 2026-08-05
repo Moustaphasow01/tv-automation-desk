@@ -11,6 +11,27 @@
   scroll-margin-top: 72px;
 }
 
+/*
+ * Both the F1-F6 quick-jump nav (.live-screen__section-nav) and the tab bar
+ * (.live-tab-bar) share the base `.desk-function-bar` class from src/styles/v2.css,
+ * which makes them `position: sticky` at the same `top` with the same height and
+ * z-index. Verified via computed styles in a live-rendered repro (desktop 1440px
+ * and narrower widths): `.desk-function-bar` unconditionally resolves to
+ * `top: -10px; height: 38px` everywhere — the base rule (top:-9px/height:30px)
+ * and the `@media (max-width: 1023px)` override (top:-10px) are both shadowed by
+ * an unconditional, later-in-source "corrective layer" rule in v2.css that always
+ * wins the cascade regardless of viewport width. So there is only one offset to
+ * account for here, not one per breakpoint.
+ * Without a correction, once the user scrolls into #live-thesis both bars stick
+ * to the exact same rectangle, and .live-tab-bar (later in the DOM) fully paints
+ * over the F1-F6 nav, making it invisible/unusable. Push the tab bar down by the
+ * F1-F6 nav's own sticky top + its rendered height so both stay visible and
+ * stacked: -10px + 38px = 28px.
+ */
+.live-tab-bar {
+  top: 28px;
+}
+
 .live-screen__module {
   scroll-margin-top: 88px;
 }
