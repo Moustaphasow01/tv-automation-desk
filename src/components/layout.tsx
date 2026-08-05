@@ -34,7 +34,7 @@ export function AppShell() {
   const { sessionId, phase, phaseLabel, nextPhaseAt } = useDeskContext();
   const location = useLocation();
   const navigate = useNavigate();
-  const showMarketTape = location.pathname === "/live";
+  const showMarketTape = location.pathname === "/live" || location.pathname.startsWith("/live/");
   const { data } = useDeskSessionBase(sessionId, { enabled: showMarketTape, refetchInterval: false });
   const { data: marketData } = useDeskMarketSnapshot(sessionId, {
     enabled: showMarketTape,
@@ -107,7 +107,7 @@ export function AppShell() {
           <div>{activeSpace.items.map(item => <NavLink
             key={item.to}
             to={item.to}
-            end={["/live", "/performance", "/operations", "/replay"].includes(item.to)}
+            end={["/performance", "/operations", "/replay"].includes(item.to)}
             title={collapsed ? item.label : item.description}
           ><Icon name={item.icon}/><span>{item.label}</span></NavLink>)}</div>
         </section>
@@ -159,7 +159,7 @@ export function AppShell() {
 
     <button type="button" className="mobile-context" aria-label={`Session automatique : ${phaseLabel}`} onClick={() => navigate("/sessions")}><i className="api-dot"/><strong>{phaseLabel}</strong><em>AUTO</em><span>→ {nextPhaseAt}</span></button>
     <main id="main-content" className="app-main"><OperatorNavigationTrail/><Outlet/></main>
-    <nav className="bottom-nav" aria-label="Navigation mobile">{bottom.map(item => <NavLink key={item.to} to={item.to} end={item.to === "/live"} className={({ isActive }) => `bottom-nav__item ${isActive ? "active" : ""}`}><Icon name={item.icon}/><span>{item.label}</span></NavLink>)}</nav>
+    <nav className="bottom-nav" aria-label="Navigation mobile">{bottom.map(item => <NavLink key={item.to} to={item.to} className={({ isActive }) => `bottom-nav__item ${isActive ? "active" : ""}`}><Icon name={item.icon}/><span>{item.label}</span></NavLink>)}</nav>
   </div>;
 }
 

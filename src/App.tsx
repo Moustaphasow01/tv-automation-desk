@@ -71,7 +71,8 @@ export default function App() {
     <Route element={<AppShell/>}>
       <Route index element={<Navigate to="/live" replace/>}/>
       <Route path="/dashboard" element={routeElement(DashboardPage)}/>
-      <Route path="/live" element={routeElement(LiveDeskPage)}/>
+      <Route path="/live" element={<Navigate to="/live/thesis" replace/>}/>
+      <Route path="/live/:tab" element={routeElement(LiveDeskPage)}/>
       <Route path="/sessions" element={routeElement(SessionsPage)}/>
       <Route path="/master" element={routeElement(MasterPage)}/>
       <Route path="/monitors" element={routeElement(MonitorsPage)}/>
