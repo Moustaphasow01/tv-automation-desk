@@ -16,13 +16,13 @@ export interface NavigationSpace extends NavigationItem {
 const todayItems: NavigationItem[] = [
   item("/dashboard", "Vue d’ensemble", "Santé, session et priorités", "chart"),
   item("/live", "Session en direct", "Décision courante et marché", "live"),
-  item("/master", "Analyse initiale", "Document Master de la session", "master"),
-  item("/monitors", "Suivis", "Évolutions du plan actif", "monitor"),
+  item("/live/master", "Analyse initiale", "Document Master de la session", "master"),
+  item("/live/monitors", "Suivis", "Évolutions du plan actif", "monitor"),
   item("/live/thesis", "Plan actif", "Thèse et invalidations", "brain"),
-  item("/timeline", "Journal", "Décisions dans l’ordre", "timeline"),
-  item("/news", "Agenda & actualités", "Macro, événements et risques", "news"),
+  item("/live/timeline", "Journal", "Décisions dans l’ordre", "timeline"),
+  item("/live/news", "Agenda & actualités", "Macro, événements et risques", "news"),
   item("/alerts", "Alertes de session", "Historique des alertes LIVE", "bell"),
-  item("/sessions", "Phases de marché", "Découpage horaire de la journée", "clock"),
+  item("/live/sessions", "Phases de marché", "Découpage horaire de la journée", "clock"),
 ];
 
 const replayItems: NavigationItem[] = [

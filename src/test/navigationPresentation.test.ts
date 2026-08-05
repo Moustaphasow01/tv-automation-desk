@@ -35,8 +35,8 @@ describe("information architecture V3", () => {
     const settings = navigationSpaces.find(space => space.id === "settings")!;
     const todayPaths = today.items.map(item => item.to);
     const settingsPaths = settings.items.map(item => item.to);
-    expect(todayPaths).toEqual(expect.arrayContaining(["/master", "/monitors", "/alerts", "/sessions"]));
-    expect(settingsPaths).not.toEqual(expect.arrayContaining(["/master", "/monitors", "/alerts", "/sessions"]));
+    expect(todayPaths).toEqual(expect.arrayContaining(["/live/master", "/live/monitors", "/alerts", "/live/sessions"]));
+    expect(settingsPaths).not.toEqual(expect.arrayContaining(["/live/master", "/live/monitors", "/alerts", "/live/sessions"]));
   });
 
   it("classe l'historique dans Performance, pas Replay", () => {
@@ -63,6 +63,20 @@ describe("information architecture V3", () => {
   it("garde l'espace Aujourd'hui actif sur n'importe quel onglet /live/*", () => {
     expect(activeNavigationSpace("/live/thesis").id).toBe("today");
     expect(activeNavigationSpace("/live/master").id).toBe("today");
+  });
+
+  it("pointe les 5 onglets restants directement vers /live/* sans redirection", () => {
+    const today = navigationSpaces.find(space => space.id === "today")!;
+    const expected: Record<string, string> = {
+      "Analyse initiale": "/live/master",
+      "Suivis": "/live/monitors",
+      "Agenda & actualités": "/live/news",
+      "Journal": "/live/timeline",
+      "Phases de marché": "/live/sessions",
+    };
+    for (const [label, to] of Object.entries(expected)) {
+      expect(today.items.find(item => item.label === label)?.to).toBe(to);
+    }
   });
 });
 
