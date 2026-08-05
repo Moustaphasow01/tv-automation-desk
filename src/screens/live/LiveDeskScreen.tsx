@@ -20,6 +20,7 @@ import {
   Timeline
 } from "@/components/deskCards";
 import type { LiveDeskScreenProps } from "./LiveDeskScreen.types";
+import { dataQualityLabel, sessionLabel } from "@/lib/presentation";
 import type { DeskSession } from "@/types";
 import "./liveDeskScreen.css";
 
@@ -47,9 +48,9 @@ export function LiveDeskScreen({ data, phaseLabel, refreshing, dataUpdatedAt, on
     <PageHeading
       eyebrow={`Session automatique · ${phaseLabel}`}
       title="Live Desk"
-      subtitle={`${sessionDisplayLabel(data.label)} · ${data.date} · ${deskLabel(data.strategyId)}`}
+      subtitle={`${sessionLabel(data.label)} · ${data.date} · ${sessionLabel(data.strategyId)}`}
       actions={<>
-        <DataSourceBadge label="SOURCE LIVE" detail={qualityLabel(data.dataQuality.status)}/>
+        <DataSourceBadge label="SOURCE LIVE" detail={dataQualityLabel(data.dataQuality.status)}/>
         <button className={`live-sync-indicator ${refreshing ? "is-refreshing" : ""}`} onClick={onRefresh}>
           <span className="live-sync-indicator__gear"><Icon name="settings" size={14}/></span>
           <span><strong>{refreshing ? "Synchronisation…" : "Desk actif"}</strong><small>mis à jour {formatUpdatedAt(dataUpdatedAt)}</small></span>
@@ -176,24 +177,6 @@ function taskStatusTone(status: DeskSession["claim"]["nextTaskStatus"]) {
   if (status === "late") return "negative";
   if (status === "waiting") return "warning";
   return "neutral";
-}
-
-function deskLabel(value: string) {
-  return ({ asia_open: "Session Asie", ny_open: "Session New York", full_day: "Journée continue" } as Record<string, string>)[value] || value.replaceAll("_", " ");
-}
-
-function sessionDisplayLabel(value: string) {
-  return ({
-    "Asia Open": "Session Asie",
-    "NY Open": "Session New York",
-    asia_open: "Session Asie",
-    ny_open: "Session New York",
-    full_day: "Journée continue",
-  } as Record<string, string>)[value] || value.replaceAll("_", " ");
-}
-
-function qualityLabel(value: string) {
-  return ({ ready: "prête", healthy: "opérationnelle", context_limited: "contexte partiel", degraded: "dégradée", waiting: "en attente" } as Record<string, string>)[value] || value.replaceAll("_", " ");
 }
 
 function formatUpdatedAt(value: number) {
