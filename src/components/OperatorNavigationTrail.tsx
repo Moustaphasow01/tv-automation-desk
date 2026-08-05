@@ -121,6 +121,11 @@ function describeLocation(pathname: string, search: string): { label: string; pa
   if (parts[0] === "live" && parts[1]) {
     const liveTabLabels: Record<string, string> = {
       thesis: "Plan actif",
+      master: "Analyse initiale",
+      monitors: "Suivis",
+      news: "Agenda & actualités",
+      timeline: "Journal",
+      sessions: "Phases de marché",
     };
     return detail(liveTabLabels[parts[1]] || "Session en direct", [{ label: "Session en direct", to: "/live" }]);
   }

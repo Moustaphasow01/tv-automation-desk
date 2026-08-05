@@ -162,7 +162,7 @@ export function AppShell() {
       <div className="app-topbar__actions"><button className="icon-btn theme-mode-btn" onClick={() => setTheme(value => value === "light" ? "dark" : "light")} aria-label={theme === "light" ? "Passer en mode sombre" : "Passer en mode clair"}><span>{theme === "light" ? "☀" : "☾"}</span></button><button className="icon-btn" onClick={() => setDensity(value => value === "compact" ? "comfortable" : "compact")} aria-label="Changer la densité"><Icon name="layers"/></button><button className="icon-btn notification-btn" onClick={() => navigate("/alerts")} aria-label="Alertes"><Icon name="bell"/>{!!data?.alerts?.length && <span>{data.alerts.length}</span>}</button></div>
     </header>
 
-    <button type="button" className="mobile-context" aria-label={`Session automatique : ${phaseLabel}`} onClick={() => navigate("/sessions")}><i className="api-dot"/><strong>{phaseLabel}</strong><em>AUTO</em><span>→ {nextPhaseAt}</span></button>
+    <button type="button" className="mobile-context" aria-label={`Session automatique : ${phaseLabel}`} onClick={() => navigate("/live/sessions")}><i className="api-dot"/><strong>{phaseLabel}</strong><em>AUTO</em><span>→ {nextPhaseAt}</span></button>
     <main id="main-content" className="app-main"><OperatorNavigationTrail/><Outlet/></main>
     <nav className="bottom-nav" aria-label="Navigation mobile">{bottom.map(item => <NavLink key={item.to} to={item.to} className={({ isActive }) => `bottom-nav__item ${isActive ? "active" : ""}`}><Icon name={item.icon}/><span>{item.label}</span></NavLink>)}</nav>
   </div>;
