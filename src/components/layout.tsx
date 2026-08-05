@@ -30,6 +30,11 @@ const bottom: NavigationItem[] = [
   { to: "/more", label: "Plus", description: "", icon: "menu" },
 ];
 
+// Secondary-nav items whose `to` is a path-prefix of one or more sibling items (e.g. "/live" is a
+// prefix of "/live/thesis") must use NavLink's `end` matching, otherwise they stay highlighted
+// whenever any child route is active. Items without descendants don't need `end`.
+export const secondaryNavExactMatchPaths = ["/live", "/performance", "/operations", "/replay"];
+
 export function AppShell() {
   const { sessionId, phase, phaseLabel, nextPhaseAt } = useDeskContext();
   const location = useLocation();
@@ -107,7 +112,7 @@ export function AppShell() {
           <div>{activeSpace.items.map(item => <NavLink
             key={item.to}
             to={item.to}
-            end={["/performance", "/operations", "/replay"].includes(item.to)}
+            end={secondaryNavExactMatchPaths.includes(item.to)}
             title={collapsed ? item.label : item.description}
           ><Icon name={item.icon}/><span>{item.label}</span></NavLink>)}</div>
         </section>

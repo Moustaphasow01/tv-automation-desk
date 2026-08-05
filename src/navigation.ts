@@ -18,8 +18,7 @@ const todayItems: NavigationItem[] = [
   item("/live", "Session en direct", "Décision courante et marché", "live"),
   item("/master", "Analyse initiale", "Document Master de la session", "master"),
   item("/monitors", "Suivis", "Évolutions du plan actif", "monitor"),
-  item("/thesis", "Plan actif", "Thèse et invalidations", "brain"),
-  item("/setup", "Position", "Setup et cycle de vie", "position"),
+  item("/live/thesis", "Plan actif", "Thèse et invalidations", "brain"),
   item("/timeline", "Journal", "Décisions dans l’ordre", "timeline"),
   item("/news", "Agenda & actualités", "Macro, événements et risques", "news"),
   item("/alerts", "Alertes de session", "Historique des alertes LIVE", "bell"),
@@ -57,7 +56,7 @@ const settingsItems: NavigationItem[] = [
 
 export const navigationSpaces: NavigationSpace[] = [
   space("today", "/live", "Aujourd’hui", "Piloter la session courante", "live", todayItems, pathname =>
-    ["/", "/dashboard", "/live", "/sessions", "/master", "/monitors", "/thesis", "/setup", "/timeline", "/news", "/alerts"].some(path => pathname === path)),
+    pathname.startsWith("/live/") || ["/", "/dashboard", "/live", "/sessions", "/master", "/monitors", "/timeline", "/news", "/alerts"].some(path => pathname === path)),
   space("replay", "/replay", "Replay", "Tester des journées passées", "layers", replayItems, pathname =>
     pathname.startsWith("/replay")),
   space("performance", "/performance/analysis", "Performance", "Mesurer les résultats", "chart", performanceItems, pathname =>

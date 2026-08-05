@@ -52,6 +52,18 @@ describe("information architecture V3", () => {
     expect(new Set(labels).size).toBe(labels.length);
     expect(labels).not.toContain("Documents de session");
   });
+
+  it("pointe directement vers les nouvelles routes /live/* sans passer par une redirection", () => {
+    const today = navigationSpaces.find(space => space.id === "today")!;
+    const thesisItem = today.items.find(item => item.label === "Plan actif");
+    expect(thesisItem?.to).toBe("/live/thesis");
+    expect(today.items.some(item => item.to === "/setup")).toBe(false);
+  });
+
+  it("garde l'espace Aujourd'hui actif sur n'importe quel onglet /live/*", () => {
+    expect(activeNavigationSpace("/live/thesis").id).toBe("today");
+    expect(activeNavigationSpace("/live/master").id).toBe("today");
+  });
 });
 
 describe("présentation des références techniques", () => {
