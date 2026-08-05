@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeNavigationSpace, navigationSpaces } from "@/navigation";
+import { activeNavigationSpace, navigationCatalog, navigationSpaces } from "@/navigation";
 import {
   deskStatusText,
   dataQualityLabel,
@@ -28,6 +28,29 @@ describe("information architecture V3", () => {
     expect(activeNavigationSpace("/operations/notifications/notification_123").id).toBe("operations");
     expect(activeNavigationSpace("/operations/runbooks/runbook_123").id).toBe("operations");
     expect(activeNavigationSpace("/replay/runs/replay_2026-06-11").id).toBe("replay");
+  });
+
+  it("classe les facettes du Live dans l'espace Aujourd'hui, pas Réglages", () => {
+    const today = navigationSpaces.find(space => space.id === "today")!;
+    const settings = navigationSpaces.find(space => space.id === "settings")!;
+    const todayPaths = today.items.map(item => item.to);
+    const settingsPaths = settings.items.map(item => item.to);
+    expect(todayPaths).toEqual(expect.arrayContaining(["/master", "/monitors", "/alerts", "/sessions"]));
+    expect(settingsPaths).not.toEqual(expect.arrayContaining(["/master", "/monitors", "/alerts", "/sessions"]));
+  });
+
+  it("classe l'historique dans Performance, pas Replay", () => {
+    const replay = navigationSpaces.find(space => space.id === "replay")!;
+    const performance = navigationSpaces.find(space => space.id === "performance")!;
+    expect(performance.items.map(item => item.to)).toContain("/history");
+    expect(replay.items.map(item => item.to)).not.toContain("/history");
+    expect(activeNavigationSpace("/history/sessions/session_123").id).toBe("performance");
+  });
+
+  it("n'expose qu'une seule fois chaque espace dans le catalogue de recherche", () => {
+    const labels = navigationCatalog.map(group => group.label);
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).not.toContain("Documents de session");
   });
 });
 
