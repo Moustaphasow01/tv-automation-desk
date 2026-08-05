@@ -80,6 +80,30 @@ function createSession(): DeskSession {
     title: section.title,
     content: section.body
   }));
+  raw.currentCheckpointAt = raw.lastMonitorAt;
+  raw.lastCompletedCheckpointAt = raw.lastMonitorAt;
+  raw.nextCheckpointAt = raw.nextMonitorAt;
+  raw.claim = {
+    lastClaimAt: raw.lastMonitorAt,
+    lastClaimAtUtc: "2026-07-13T15:45:00.000Z",
+    workerId: "e2e-live-worker",
+    nextTaskStatus: "waiting",
+    nextTaskStatusLabel: "En attente",
+    nextTaskWorkflow: "LIVE_M15_MONITOR",
+    nextTaskLabel: "Monitor GPT M5",
+    nextTaskCheckpoint: raw.nextMonitorAt,
+    followingTaskCheckpoint: "18:15",
+    followingTaskWorkflow: "LIVE_M15_MONITOR",
+    lastCompletedCheckpoint: raw.lastMonitorAt,
+    dueCheckpoint: raw.nextMonitorAt,
+    readyAt: raw.nextMonitorAt,
+    bundleReadyAt: raw.nextMonitorAt,
+    latencySeconds: 42,
+    latencyTargetSeconds: 120,
+    latencyStatus: "on_target",
+    bundleClaimLatencySeconds: 42,
+    bundleClaimLatencyStatus: "on_target"
+  };
   return raw as DeskSession;
 }
 

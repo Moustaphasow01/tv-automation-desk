@@ -2,7 +2,17 @@ import { createHash } from "node:crypto";
 import { DATASETS } from "./schemas.js";
 import { SystemClock } from "@tv-automation/desk-time";
 import { DESK_COLLECTIONS } from "@tv-automation/desk-contracts/collections";
-import { createDeskExecutionScope } from "@tv-automation/desk-domain";
+import {
+  DAILY_RUN_SCOPE,
+  dailyRunPhaseAt,
+  dailyRunStrategyAt,
+} from "./daily-run-model.js";
+import {
+  PREDICATE_EVENT_ROWS_INSTRUMENT_V1,
+  createDeskExecutionScope,
+  evaluatePositionRequestEligibility,
+  setupConditionInstrumentsV1,
+} from "@tv-automation/desk-domain";
 import {
   canonicalizeReplayBundle,
   replayTransportContract,
@@ -11,13 +21,22 @@ import {
   buildReplayContinuityState,
   buildReplayEventCheckpoints,
   buildReplayPositionFromTriggeredSetup,
+  canonicalReplaySetupConditionSource,
+  evaluateReplaySetupConditions,
   evaluateReplayPositionOnRows,
   evaluateReplaySetupOnRows,
+  normalizeReplayEntryMode,
+  normalizeReplaySetupConditions,
+  normalizeReplaySetupStatus,
+  normalizeReplayTriggerScore,
   projectReplayActiveThesis,
+  projectReplaySetupLifecycleAt,
   recommendReplayCadenceMinutes,
   selectActiveReplaySetups,
+  selectOpenReplayPosition,
 } from "./replay-continuity.js";
 import {
+  assertRuntimeContractMatrix,
   compactContract,
   contractContext,
   contractHandshake,
@@ -32,11 +51,14 @@ import {
 import { deskError } from "./desk-errors.js";
 import { normalizeUtcIso } from "./desk-time-utils.js";
 import {
+  finalizeDeskDataQuality,
+  normalizeDeskInstrumentScopes,
+} from "./data-availability-policy.js";
+import {
   assertReplaySourceCoverage,
   assertRunPackScope,
   compactTimestamp,
   dedupeBy,
-  filterRawWindowRows,
   maxBy,
   numeric,
   offsetIso,
@@ -50,6 +72,18 @@ import {
   hasReplayGeometry,
   stripUndefined,
 } from "./desk-strategy-audit-algorithms.js";
+import {
+  applyPartialExitAtPrice,
+  finalizePositionAtPrice,
+  markPositionAtPrice,
+} from "./position-continuity-engine.js";
+import {
+  ACTIVE_STRATEGY_RUNTIME_VERSIONS,
+  assertActiveStrategyContractContext,
+  assertActiveStrategyRuntimePins,
+  assertActiveStrategySaveTarget,
+} from "./strategy-runtime-versioning.js";
+import { deriveCanonicalTimeframeFromClosedM1 } from "./canonical-market-resampler.js";
 
 const COLLECTIONS = DESK_COLLECTIONS;
 
@@ -58,6 +92,8 @@ export function deskEnvironment() {
 }
 
 export function pinReplaySources(run, pack, contracts, creationHash, tick) {
+  assertActiveStrategyRuntimePins(run, { operation: "pin_replay_sources" });
+  assertRuntimeContractMatrix(contracts, { operation: "pin_replay_sources" });
   if (!contracts?.master_contract || !contracts?.monitor_contract) {
     throw deskError("CONTRACT_MISMATCH", "Both active Master and Monitor contracts must be pinned when the replay is created.");
   }
@@ -69,10 +105,18 @@ export function pinReplaySources(run, pack, contracts, creationHash, tick) {
     pinned_contracts: {
       master_contract: compactContract(contracts.master_contract),
       monitor_contract: compactContract(contracts.monitor_contract),
+      execution_policy_contract: compactContract(contracts.execution_policy_contract),
+      execution_plan_contract: compactContract(contracts.execution_plan_contract),
+      monitor_command_contract: compactContract(contracts.monitor_command_contract),
+      condition_catalog_contract: compactContract(contracts.condition_catalog_contract),
     },
     contract_snapshot_ref: {
       master: contracts.master_contract.contract_id || null,
       monitor: contracts.monitor_contract.contract_id || null,
+      execution_policy: contracts.execution_policy_contract.contract_id || null,
+      execution_plan: contracts.execution_plan_contract.contract_id || null,
+      monitor_command: contracts.monitor_command_contract.contract_id || null,
+      condition_catalog: contracts.condition_catalog_contract.contract_id || null,
       pinned_at_utc: tick.utc,
     },
     source_pack_purpose: sourceCoverage.pack_purpose,
@@ -105,6 +149,10 @@ export function replayCreationResult(run, step, extra = {}) {
 }
 
 export function buildOrchestratedReplayRunDoc(args, tick) {
+  assertActiveStrategyRuntimePins(args, {
+    operation: "create_orchestrated_replay",
+    allowMissing: true,
+  });
   const date = args.trading_date || args.date || args.date_from;
   const session = args.session;
   const strategy_id = args.strategy_id;
@@ -112,12 +160,14 @@ export function buildOrchestratedReplayRunDoc(args, tick) {
   const cutoffUtc = args.cutoff_utc || normalizeUtcIso(cutoff);
   const endTime = normalizeReplayTimestamp(args.end_time, date);
   const backtest_id = args.backtest_id;
+  const timezone = args.timezone || "Europe/Paris";
+  const instrumentScopes = normalizeDeskInstrumentScopes(args);
   const scope = createDeskExecutionScope({
     strategy_id,
     session,
     mode: "replay",
     trading_date: date,
-    timezone: args.timezone,
+    timezone,
     cutoff_paris: cutoff,
     cutoff_utc: cutoffUtc,
     run_id: args.run_id || backtest_id,
@@ -127,6 +177,16 @@ export function buildOrchestratedReplayRunDoc(args, tick) {
   });
   return {
     replay_schema_version: "2.0.0",
+    replay_execution_policy_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_policy,
+    position_engine_version: "3.0.0",
+    condition_engine_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_engine,
+    execution_plan_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_plan,
+    monitor_command_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_command,
+    condition_catalog_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_catalog,
+    deterministic_compiler_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.deterministic_compiler,
+    strategy_profile: args.strategy_profile || "OPPORTUNITY_SEEKING_CONTROLLED",
+    strategy_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.strategy_version,
+    autopilot_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.autopilot_version,
     backtest_id,
     replay_run_id: args.replay_run_id || backtest_id,
     run_id: args.run_id || backtest_id,
@@ -136,6 +196,24 @@ export function buildOrchestratedReplayRunDoc(args, tick) {
     date_from: date,
     date_to: date,
     session,
+    run_scope: args.run_scope || "session",
+    phases: args.phases || [],
+    current_phase: args.run_scope === DAILY_RUN_SCOPE ? dailyRunPhaseAt(cutoff) : session,
+    phase_master_ids: {},
+    pending_replan_reason: null,
+    execution_id: args.execution_id || null,
+    run_family_id: args.run_family_id || null,
+    run_number: Number(args.run_number || 1),
+    aggregate_role: args.aggregate_role || "primary",
+    aggregate_eligible: args.aggregate_eligible !== false,
+    result_eligible: false,
+    result_certification_status: "PENDING",
+    risk_policy: {
+      max_daily_loss_r: Number(args.risk_policy?.max_daily_loss_r ?? 3),
+      max_consecutive_losses: Number(args.risk_policy?.max_consecutive_losses ?? 3),
+      cooldown_after_loss_minutes: Number(args.risk_policy?.cooldown_after_loss_minutes ?? 30),
+      min_replan_interval_minutes: Number(args.risk_policy?.min_replan_interval_minutes ?? 60),
+    },
     mode: "replay",
     replay_mode: "orchestrated_gpt_in_the_loop",
     automation_enabled: args.automation_enabled !== false,
@@ -147,7 +225,7 @@ export function buildOrchestratedReplayRunDoc(args, tick) {
     last_automation_error: null,
     cadence: normalizeMonitorCadence(args.cadence),
     monitor_cadence: normalizeMonitorCadence(args.cadence),
-    timezone: args.timezone || "Europe/Paris",
+    timezone,
     cutoff_paris: scope.cutoff_paris,
     cutoff_utc: scope.cutoff_utc,
     pack_id: scope.pack_id,
@@ -169,8 +247,10 @@ export function buildOrchestratedReplayRunDoc(args, tick) {
     setup_count: 0,
     steps_total: 0,
     steps_done: 0,
-    instruments: args.instruments || ["MNQ", "MES", "NQ", "ES"],
-    risk_model: args.risk_model || "0.5pct_fixed",
+    instruments: instrumentScopes.instruments,
+    trading_instruments: instrumentScopes.trading_instruments,
+    context_instruments: instrumentScopes.context_instruments,
+    risk_model: args.risk_model || "0.25pct_net_equity",
     source_collection: COLLECTIONS.deskReplaySetups,
     source_setup_ids: [],
     gpt_in_the_loop: true,
@@ -194,6 +274,8 @@ export function normalizeReplayTimestamp(value, date) {
 }
 
 export function buildReplayStepDoc(run, { sequence, step_type, status, timestamp_paris, previous_step_id } = {}, tick) {
+  const resolvedTimestamp = timestamp_paris || run.current_replay_time;
+  const phase = run.run_scope === DAILY_RUN_SCOPE ? dailyRunPhaseAt(resolvedTimestamp) : run.session;
   const step_id = `${run.backtest_id}__step__${String(sequence).padStart(4, "0")}__${String(step_type || "STEP").toLowerCase()}__${compactTimestamp(timestamp_paris || run.current_replay_time)}`;
   return {
     step_id,
@@ -212,6 +294,9 @@ export function buildReplayStepDoc(run, { sequence, step_type, status, timestamp
     status,
     mode: "replay",
     session: run.session,
+    run_scope: run.run_scope || "session",
+    phase,
+    phase_strategy_id: run.run_scope === DAILY_RUN_SCOPE ? dailyRunStrategyAt(resolvedTimestamp) : run.strategy_id,
     date: run.date,
     timestamp_paris: timestamp_paris || run.current_replay_time,
     cutoff_paris: timestamp_paris || run.current_replay_time,
@@ -303,7 +388,7 @@ export function resolveReplayMasterPreparation(steps, run, stepId, tick) {
 export function buildReplayReplanContext(run, preparation, docs = {}) {
   return {
     requested: true,
-    reason: docs.monitor?.monitor_decision?.action || docs.monitor?.monitor_decision?.decision || "REPLAN_REQUIRED",
+    reason: run.pending_replan_reason || docs.monitor?.monitor_decision?.action || docs.monitor?.monitor_decision?.decision || "REPLAN_REQUIRED",
     requested_at_paris: run.current_replay_time,
     source_step_id: preparation.source_step?.step_id || run.current_step_id || null,
     previous_master_analysis: docs.master || null,
@@ -311,6 +396,7 @@ export function buildReplayReplanContext(run, preparation, docs = {}) {
     previous_setups: docs.setups || [],
     triggering_monitor: docs.monitor || null,
     current_position: docs.position || null,
+    phase: preparation.step?.phase || run.current_phase || run.session,
   };
 }
 
@@ -334,6 +420,7 @@ export function replayTimelineEvent(run, step, event, tick) {
     cutoff_paris: step?.cutoff_paris || step?.timestamp_paris || run.current_replay_time || tick.paris,
     time: step?.timestamp_paris || run.current_replay_time || tick.paris,
     phase: event.phase || event.event_type,
+    run_phase: step?.phase || run.current_phase || run.session,
     action: event.action || event.event_type,
     event_type: event.event_type,
     event_rank: replayEventRank(event.event_type),
@@ -367,6 +454,7 @@ export function nextReplayAction(status) {
     SIMULATION_UPDATED: "advance_replay_clock",
     WAITING_NEXT_STEP: "advance_replay_clock",
     REPLAN_REQUIRED: "prepare_replay_master_bundle",
+    WORK_FAILED_REQUIRES_OPERATOR: "inspect_failed_work_item_then_retry_or_cancel",
     DAY_END: "review_replay_report",
     COMPLETED: "review_replay_report",
     FAILED: "inspect_replay_error",
@@ -391,12 +479,17 @@ export function replayEventRank(eventType) {
 }
 
 export async function buildReplayMasterBundle(store, run, step, args = {}, clock = new SystemClock(), replanContext = null) {
+  assertActiveStrategyRuntimePins(run, { operation: "build_replay_master_bundle" });
   const tick = clock.now();
   const cutoff = step.cutoff_paris || step.timestamp_paris || run.current_replay_time;
   const date = run.date || String(cutoff).slice(0, 10);
   const session = run.session;
   const contracts = run.pinned_contracts || await store.getActiveContracts();
   const contract_context = contractContext(contracts, "master", { tick, pinnedForReplay: true, backtestId: run.backtest_id });
+  assertActiveStrategyContractContext(contract_context, {
+    workflow: "REPLAY_MASTER",
+    operation: "build_replay_master_bundle",
+  });
   const asOfUtc = normalizeUtcIso(cutoff);
   const pack = await store.getDeskPack({
     pack_id: run.pack_id,
@@ -413,9 +506,14 @@ export async function buildReplayMasterBundle(store, run, step, args = {}, clock
     : { items: [], warning: "news_digest_not_available" };
   const visibleMacro = macro.events || [];
   const visibleNews = news.items || [];
-  const base = {
+  const bundleId = replayBundleId(run, step, "master");
+  const analysisId = scopedReplayChildId(run, "master", step.step_id);
+  const planId = stableVNextId("plan", analysisId, "execution_plan_v1_2");
+  const thesisId = stableVNextId("thesis", analysisId, "primary");
+  const setupIdCandidates = [1, 2, 3, 4, 5].map((rank) => stableVNextId("setup", planId, `candidate_${rank}`));
+    const base = {
     ok: true,
-    bundle_id: replayBundleId(run, step, "master"),
+    bundle_id: bundleId,
     backtest_id: run.backtest_id,
     replay_run_id: run.replay_run_id || run.backtest_id,
     strategy_id: run.strategy_id,
@@ -432,12 +530,23 @@ export async function buildReplayMasterBundle(store, run, step, args = {}, clock
     mode: "replay",
     bundle_type: "master",
     session,
+    run_scope: run.run_scope || "session",
+    phase: step.phase || run.current_phase || session,
+    phase_strategy_id: step.phase_strategy_id || run.strategy_id,
+    phases: run.phases || [],
     date,
     timezone: run.timezone || "Europe/Paris",
     contract_name: "DeskReplayMasterBundleTransport",
     schema_version: "2.0.0",
     transport_contract: replayTransportContract("master"),
     contract_context,
+    contract_output_identity: {
+      analysis_id: analysisId,
+      plan_id: planId,
+      thesis_id: thesisId,
+      setup_id_candidates: setupIdCandidates,
+      authority: "BACKEND_PINNED",
+    },
     contract_handshake: contractHandshake("replay_master", contract_context, {
       saveTool: "save_replay_master_analysis",
       backtestId: run.backtest_id,
@@ -476,7 +585,9 @@ export async function buildReplayMasterBundle(store, run, step, args = {}, clock
     chatgpt_replay_instructions: {
       required_mode: replanContext ? "manual_gpt_master_replan_replay" : "manual_gpt_master_replay",
       save_tool: "save_replay_master_analysis",
-      required_payload_keys: ["backtest_id", "step_id", "expected_revision", "idempotency_key", "pack_build_id", "contract_name", "schema_version", "contract_hash", "analysis_id", "full_analysis", "active_thesis", "setups"],
+      required_payload_keys: String(contract_context.schema_version) === ACTIVE_STRATEGY_RUNTIME_VERSIONS.master_contract
+        ? ["backtest_id", "step_id", "expected_revision", "idempotency_key", "pack_build_id", "contract_name", "schema_version", "contract_hash", "analysis_id", "analysis_output"]
+        : ["backtest_id", "step_id", "expected_revision", "idempotency_key", "pack_build_id", "contract_name", "schema_version", "contract_hash", "analysis_id", "full_analysis", "active_thesis", "setups"],
       contract_handshake: contractHandshake("replay_master", contract_context, {
         saveTool: "save_replay_master_analysis",
         backtestId: run.backtest_id,
@@ -484,6 +595,13 @@ export async function buildReplayMasterBundle(store, run, step, args = {}, clock
       decision_boundary: replanContext
         ? "Backend prepared a new cutoff-scoped Master step. GPT must replan this backtest_id from the prior Master, thesis, triggering Monitor, current position, and newly visible data."
         : "Backend prepares data only. GPT creates the Master inside this backtest_id.",
+      execution_plan_rule: "Master V5.4 proposes zero to five distinct ranked candidates in Execution Plan V1.4. Executable logic uses only Catalog V1.2 enums and typed parameters; prose is audit-only. The backend compiles and hashes it; GPT cannot size contracts, trigger, fill or create a position.",
+      opportunity_profile: "OPPORTUNITY_SEEKING_CONTROLLED: up to 3 ranked candidates, contextual score 0.55, requested risk >0 and <=0.25 percent of NET_EQUITY, mandatory stop and RR>=2; optional contextual gaps are soft.",
+      risk_rounding_rule: "The broker alone computes integer contracts with ceil rounding and blocks submission beyond max_rounding_excess_pct.",
+      soft_effect_rule: "REQUIRE_CONFIRMATION requires an explicit Catalog V1.2 condition. REDUCE_RISK requires a lower execution_plan.risk.risk_pct_requested before compilation; otherwise it remains advisory, never an implicit veto.",
+      gate_phase_rule: "Hard gates block only at their phase. Required EVENT_BLACKOUT without decidable evidence remains UNKNOWN and blocks ENTRY_TRIGGER only.",
+      memory_rule: "Temporary VETO conditions use LATEST_ONLY, clear when false and require fresh closed-M1 confirmation; only explicit structural INVALIDATION uses INVALIDATE_TERMINAL. BLOCK_IF_TRUE can never use LATCH_UNTIL_TRIGGER.",
+      cadence_causality_rule: "Scheduled GPT analysis runs on M15 while the same LIVE/REPLAY deterministic engine replays every closed M1; critical lifecycle events remain explicit. Confirmation cannot fill same-bar and reacquisition must be re-evaluated.",
     },
     save_target: {
       tool: "save_replay_master_analysis",
@@ -493,8 +611,20 @@ export async function buildReplayMasterBundle(store, run, step, args = {}, clock
         step_id: step.step_id,
         expected_revision: Number(run.revision || 0) + 1,
         idempotency_key: `save-master:${run.backtest_id}:${step.step_id}`,
-        analysis_id: scopedReplayChildId(run, "master", step.step_id),
+        analysis_id: analysisId,
+        plan_id: planId,
+        thesis_id: thesisId,
+        setup_id_candidates: setupIdCandidates,
+        bundle_id: bundleId,
+        pack_id: run.pack_id,
+        trading_date: run.trading_date || run.date,
+        session: run.session,
+        replay_run_id: run.replay_run_id || run.backtest_id,
+        timezone: run.timezone || "Europe/Paris",
+        cutoff_paris: cutoff,
         pack_build_id: run.pack_build_id,
+        ...replayStrategyArtifactVersions(run),
+        position_engine_version: run.position_engine_version || "3.0.0",
         ...contractSavePayload(contract_context),
         mode: "replay",
       },
@@ -507,17 +637,38 @@ export async function buildReplayMasterBundle(store, run, step, args = {}, clock
 }
 
 export async function buildReplayMonitorBundle(store, run, step, replayDocs, args = {}, clock = new SystemClock()) {
+  assertActiveStrategyRuntimePins(run, { operation: "build_replay_monitor_bundle" });
   const tick = clock.now();
   const checkpoint = args.timestamp_paris || step.timestamp_paris || run.current_replay_time;
   const date = run.date || String(checkpoint).slice(0, 10);
   const session = run.session;
   const contracts = run.pinned_contracts || await store.getActiveContracts();
   const contract_context = contractContext(contracts, "monitor", { tick, pinnedForReplay: true, backtestId: run.backtest_id });
+  assertActiveStrategyContractContext(contract_context, {
+    workflow: "REPLAY_MONITOR",
+    operation: "build_replay_monitor_bundle",
+  });
   const master = replayDocs.master || null;
   const thesis = projectReplayActiveThesis(replayDocs.thesis || null, replayDocs.monitors || []);
   const setups = replayDocs.setups || [];
   const previousMonitor = (replayDocs.monitors || []).find((monitor) => monitor.step_id !== step.step_id) || null;
   const position = (replayDocs.positions || [])[0] || null;
+  const bundleId = replayBundleId(run, step, "monitor");
+  const monitorId = scopedReplayChildId(run, "monitor", step.step_id);
+  const commandId = stableVNextId("monitor_command", monitorId, "v1_2");
+  const commandExpectedRevision = Number(run.revision || 0) + 1;
+  const planId = thesis?.plan_id
+    || master?.analysis_output?.execution_plan?.plan_id
+    || master?.deterministic_execution_plan?.plan_id
+    || null;
+  const existingSetupIds = setups
+    .map((setup) => setup.setup_id || setup.setup_record_id)
+    .filter(Boolean);
+  const setupIdCandidates = [1, 2, 3, 4, 5].map((rank) => stableVNextId(
+    "setup",
+    planId || master?.analysis_id || run.backtest_id,
+    `monitor_${step.sequence || 0}_${rank}`,
+  ));
   const replayContinuity = buildReplayContinuityState({
     run,
     currentStep: step,
@@ -546,9 +697,9 @@ export async function buildReplayMonitorBundle(store, run, step, replayDocs, arg
   });
   const sourceCoverage = assertReplaySourceCoverage(run, pack, checkpoint);
   const rolling = await buildPinnedReplaySnapshots(store, run, pack, checkpoint, args.include_raw_refs !== false);
-  const base = {
+    const base = {
     ok: true,
-    bundle_id: replayBundleId(run, step, "monitor"),
+    bundle_id: bundleId,
     backtest_id: run.backtest_id,
     replay_run_id: run.replay_run_id || run.backtest_id,
     strategy_id: run.strategy_id,
@@ -568,9 +719,23 @@ export async function buildReplayMonitorBundle(store, run, step, replayDocs, arg
     schema_version: "2.0.0",
     transport_contract: replayTransportContract("monitor"),
     session,
+    run_scope: run.run_scope || "session",
+    phase: step.phase || run.current_phase || session,
+    phase_strategy_id: step.phase_strategy_id || run.strategy_id,
+    phases: run.phases || [],
     date,
     timezone: run.timezone || "Europe/Paris",
     contract_context,
+    contract_output_identity: {
+      monitor_id: monitorId,
+      command_id: commandId,
+      expected_revision: commandExpectedRevision,
+      plan_id: planId,
+      thesis_id: thesis?.thesis_id || null,
+      existing_setup_ids: existingSetupIds,
+      setup_id_candidates: setupIdCandidates,
+      authority: "BACKEND_PINNED",
+    },
     contract_handshake: contractHandshake("replay_monitor", contract_context, {
       saveTool: "save_replay_monitor",
       backtestId: run.backtest_id,
@@ -606,10 +771,18 @@ export async function buildReplayMonitorBundle(store, run, step, replayDocs, arg
     chatgpt_replay_instructions: {
       required_mode: "manual_gpt_monitor_replay",
       save_tool: "save_replay_monitor",
-      required_payload_keys: ["backtest_id", "step_id", "expected_revision", "idempotency_key", "monitor_id", "master_id", "thesis_id", "sequence", "scheduled_for_utc", "as_of_utc", "pack_build_id", "contract_name", "schema_version", "contract_hash", "monitor_decision"],
+      required_payload_keys: String(contract_context.schema_version) === ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract
+        ? ["backtest_id", "step_id", "expected_revision", "idempotency_key", "monitor_id", "master_id", "thesis_id", "sequence", "scheduled_for_utc", "as_of_utc", "pack_build_id", "contract_name", "schema_version", "contract_hash", "monitor_output"]
+        : ["backtest_id", "step_id", "expected_revision", "idempotency_key", "monitor_id", "master_id", "thesis_id", "sequence", "scheduled_for_utc", "as_of_utc", "pack_build_id", "contract_name", "schema_version", "contract_hash", "monitor_decision"],
       setup_continuity_contract: {
-        note: "If a setup becomes candidate, pre-armed or conditionally armed, persist it as structured setup_candidate/setup_transition/armed_setup; classify each condition importance as HARD_BLOCKER, MANDATORY, PRIMARY, SECONDARY, OPTIONAL or ADVISORY.",
-        backend_between_monitors: "Only structured backend-evaluable conditions and entry/stop/target fields can be simulated between two Monitor cutoffs.",
+        note: "Monitor V2.4 emits one structured Monitor Command V1.4. Separate thesis, setup, position and replan intentions; use only Condition Catalog V1.2 enums and typed parameters. Prose is never executable.",
+        backend_between_monitors: "The same LIVE/REPLAY deterministic engine evaluates structured conditions and position lifecycle on every closed M1 candle between scheduled GPT M15 checkpoints and explicit critical checkpoints. Confirmation cannot fill same-bar and reacquisition is re-evaluated.",
+        opportunity_profile: "OPPORTUNITY_SEEKING_CONTROLLED preserves up to 3 ranked plan candidates with contextual score 0.55; optional missing context remains soft.",
+        risk_rule: "Requested risk stays <=0.25 percent NET_EQUITY, stop mandatory, RR>=2. Broker-only integer ceil sizing is bounded by max_rounding_excess_pct.",
+        soft_effect_rule: "REQUIRE_CONFIRMATION requires a Catalog V1.2 condition. REDUCE_RISK requires a replan with lower requested risk; without it the soft effect remains advisory.",
+        event_gate_rule: "Required EVENT_BLACKOUT without decidable data remains UNKNOWN and blocks ENTRY_TRIGGER only.",
+        memory_rule: "Temporary VETO=LATEST_ONLY then fresh M1 confirmation after clearing; structural INVALIDATION=INVALIDATE_TERMINAL; no BLOCK_IF_TRUE latch.",
+        cas_rule: "Copy command_id, plan_id, monitor_id and expected_revision exactly; expected_revision is strict compare-and-swap.",
       },
       contract_handshake: contractHandshake("replay_monitor", contract_context, {
         saveTool: "save_replay_monitor",
@@ -625,13 +798,26 @@ export async function buildReplayMonitorBundle(store, run, step, replayDocs, arg
         step_id: step.step_id,
         expected_revision: Number(run.revision || 0) + 1,
         idempotency_key: `save-monitor:${run.backtest_id}:${step.step_id}`,
-        monitor_id: scopedReplayChildId(run, "monitor", step.step_id),
+        monitor_id: monitorId,
+        command_id: commandId,
+        plan_id: planId,
+        existing_setup_ids: existingSetupIds,
+        setup_id_candidates: setupIdCandidates,
+        bundle_id: bundleId,
+        pack_id: run.pack_id,
+        trading_date: run.trading_date || run.date,
+        session: run.session,
+        replay_run_id: run.replay_run_id || run.backtest_id,
+        timezone: run.timezone || "Europe/Paris",
+        cutoff_paris: checkpoint,
         master_id: master?.analysis_id || null,
         thesis_id: thesis?.thesis_id || null,
         sequence: step.sequence,
         scheduled_for_utc: normalizeUtcIso(checkpoint),
         as_of_utc: normalizeUtcIso(checkpoint),
         pack_build_id: run.pack_build_id,
+        ...replayStrategyArtifactVersions(run),
+        position_engine_version: run.position_engine_version || "3.0.0",
         ...contractSavePayload(contract_context),
         timestamp_paris: checkpoint,
         cadence: run.cadence || "15m",
@@ -644,6 +830,18 @@ export async function buildReplayMonitorBundle(store, run, step, replayDocs, arg
     created_at_paris: tick.paris,
   };
   return canonicalizeReplayBundle({ ...base, source_hash: hashObject(sourceHashPayload(base)) });
+}
+
+function replayStrategyArtifactVersions(run = {}) {
+  assertActiveStrategyRuntimePins(run, { operation: "build_replay_save_target" });
+  return {
+    replay_execution_policy_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_policy,
+    execution_plan_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_plan,
+    monitor_command_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_command,
+    condition_catalog_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_catalog,
+    deterministic_compiler_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.deterministic_compiler,
+    condition_engine_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_engine,
+  };
 }
 
 export function replayBundleId(run, step, type) {
@@ -718,17 +916,15 @@ export function replayBundleQuality({ pack, rolling, thesis, master, macro, news
   const integrityEntries = Object.values(rolling?.integrity || {});
   const integrityValid = integrityEntries.length > 0 && integrityEntries.every((item) => item?.valid === true);
   if (!integrityValid) missing.push("dataset_integrity");
-  const status = missing.length ? "degraded" : warnings.length ? "degraded" : stale.length ? "stale" : "ready";
-  return {
-    status,
-    execution_allowed: missing.length === 0 && integrityValid,
+  return finalizeDeskDataQuality({
+    blockers: missing,
     missing,
-    stale: dedupeBy(stale, (item) => item),
+    stale,
     warnings,
-    informational: dedupeBy(informational, (item) => item),
-    anti_lookahead_compliant: integrityValid,
-    source_coverage: sourceCoverage || (pack ? replaySourceCoverage(pack) : null),
-  };
+    informational,
+    antiLookaheadCompliant: integrityValid,
+    sourceCoverage: sourceCoverage || (pack ? replaySourceCoverage(pack) : null),
+  });
 }
 
 export function assertReplayBundleExecutable(bundle) {
@@ -739,10 +935,26 @@ export function assertReplayBundleExecutable(bundle) {
       anti_lookahead_policy: bundle?.anti_lookahead_policy || null,
     });
   }
+  const workflow = bundle?.bundle_type === "master" ? "REPLAY_MASTER" : "REPLAY_MONITOR";
+  assertActiveStrategyContractContext(bundle?.contract_context, {
+    workflow,
+    operation: "assert_replay_bundle_executable",
+  });
+  assertActiveStrategySaveTarget(bundle?.save_target?.suggested_payload, {
+    workflow,
+    mode: "replay",
+    operation: "assert_replay_bundle_executable",
+  });
   return true;
 }
 
 export function assertReplayContractSave(run, args, type, step) {
+  assertActiveStrategyRuntimePins(run, { operation: `save_replay_${type}` });
+  assertActiveStrategySaveTarget(args, {
+    workflow: type === "monitor" ? "REPLAY_MONITOR" : "REPLAY_MASTER",
+    mode: "replay",
+    operation: `save_replay_${type}`,
+  });
   const expected = type === "monitor" ? run.pinned_contracts?.monitor_contract : run.pinned_contracts?.master_contract;
   if (!expected) throw deskError("CONTRACT_MISMATCH", `Pinned ${type} contract is missing from the replay run.`);
   const mismatches = [];
@@ -794,6 +1006,10 @@ export function normalizeReplayMasterAnalysis(args, run, step, tick) {
   const full = {
     ...(args.full_analysis || {}),
     setups: firstArray(args.setups, args.full_analysis?.setups, args.full_analysis?.candidate_setups, args.full_analysis?.setup_candidates),
+    no_setup_proof: args.no_setup_proof
+      || args.full_analysis?.no_setup_proof
+      || args.executable_decision?.no_setup_proof
+      || null,
   };
   return {
     ...args,
@@ -831,24 +1047,69 @@ export function normalizeReplayMasterAnalysis(args, run, step, tick) {
 }
 
 export function buildReplaySetupDocs(master, run, step, tick) {
-  return buildMasterSetupDocs(master, { analysis_id: master.analysis_id }, tick).map((setup) => ({
-    ...setup,
-    setup_record_id: scopedReplayChildId(run, "setup", setup.setup_id || setup.setup_record_id),
-    backtest_id: run.backtest_id,
-    replay_run_id: run.replay_run_id || run.backtest_id,
-    strategy_id: run.strategy_id,
-    trading_date: run.trading_date || run.date,
-    resolved_scope: run.resolved_scope,
-    scope_hash: run.scope_hash,
-    pack_id: run.pack_id,
-    pack_build_id: run.pack_build_id,
-    source_manifest_hash: run.source_manifest_hash,
-    step_id: step.step_id,
-    mode: "replay",
-    source_analysis_collection: COLLECTIONS.deskReplayMasterAnalyses,
-    source_collection: COLLECTIONS.deskReplaySetups,
-    anti_lookahead_compliant: true,
-  }));
+  return buildMasterSetupDocs(master, { analysis_id: master.analysis_id }, tick).map((setup) => {
+    const conditions = normalizeReplaySetupConditions(canonicalReplaySetupConditionSource(setup));
+    const entryGeometry = canonicalSetupEntryGeometry(setup);
+    const geometryReady = Boolean(
+      ["long", "short"].includes(String(setup.direction || "").toLowerCase())
+      && entryGeometry.execution_price !== null
+      && finiteNumber(setup.stop_loss ?? setup.stop) !== null
+      && finiteNumber(setup.take_profit_1 ?? setup.tp1 ?? setup.targets?.[0] ?? setup.take_profits?.[0]?.target) !== null,
+    );
+    const sourceStatus = String(setup.status || setup.lifecycle_status || setup.setup_status || "").toUpperCase();
+    const explicitlyArmed = ["ACTIVE", "EXECUTABLE", "ARMED", "ARMED_CONDITIONAL"].includes(sourceStatus)
+      || setup.executable === true;
+    const status = explicitlyArmed
+      ? geometryReady && conditions.length
+        ? "ARMED_CONDITIONAL"
+        : "PRE_ARMED"
+      : normalizeReplaySetupStatus(sourceStatus);
+    const backendCanTrigger = status === "ARMED_CONDITIONAL"
+      && geometryReady
+      && conditions.length > 0
+      && setup.backend_can_trigger !== false;
+    const triggerPolicy = {
+      ...(setup.trigger_policy || {}),
+      min_score: normalizeReplayTriggerScore(setup.trigger_policy?.min_score, 0.65),
+      allow_entry_only: false,
+      allow_same_bar_entry: false,
+      backend_can_trigger: backendCanTrigger,
+    };
+    return {
+      ...setup,
+      setup_record_id: scopedReplayChildId(run, "setup", setup.setup_id || setup.setup_record_id),
+      backtest_id: run.backtest_id,
+      replay_run_id: run.replay_run_id || run.backtest_id,
+      strategy_id: run.strategy_id,
+      trading_date: run.trading_date || run.date,
+      resolved_scope: run.resolved_scope,
+      scope_hash: run.scope_hash,
+      pack_id: run.pack_id,
+      pack_build_id: run.pack_build_id,
+      source_manifest_hash: run.source_manifest_hash,
+      step_id: step.step_id,
+      mode: "replay",
+      status,
+      lifecycle_status: status,
+      setup_status: status,
+      entry_mode: normalizeReplayEntryMode(setup.entry_mode, setup),
+      conditions,
+      trigger_policy: triggerPolicy,
+      management_policy: {
+        ...(setup.management_policy || setup.management || {}),
+        break_even_at_r: finiteNumber(
+          setup.management_policy?.break_even_at_r
+            ?? setup.management?.break_even_at_r,
+        ) ?? 0.7,
+      },
+      condition_summary: evaluateReplaySetupConditions(conditions, triggerPolicy),
+      backend_can_trigger: backendCanTrigger,
+      execution_geometry_ready: geometryReady,
+      source_analysis_collection: COLLECTIONS.deskReplayMasterAnalyses,
+      source_collection: COLLECTIONS.deskReplaySetups,
+      anti_lookahead_compliant: true,
+    };
+  });
 }
 
 export function normalizeReplayActiveThesis(thesis, master, run, step, tick) {
@@ -969,6 +1230,10 @@ export function patchReplayThesis(thesis, monitor, tick) {
   return {
     ...thesis,
     ...(monitor.thesis_update || {}),
+    ...(thesis.pinned_plan ? {
+      plan_id: thesis.plan_id,
+      pinned_plan: thesis.pinned_plan,
+    } : {}),
     latest_monitor_id: monitor.monitor_id,
     latest_monitor_step_id: monitor.step_id,
     health_score: typeof monitor.thesis_health_score === "number"
@@ -980,126 +1245,449 @@ export function patchReplayThesis(thesis, monitor, tick) {
   };
 }
 
-export function buildReplayMonitorApplication(run, step, monitor, positions, tick) {
-  const action = normalizeReplayMonitorAction(monitor.monitor_decision);
-  const existing = positions[0] || null;
+export function buildReplayMonitorApplication(run, step, monitor, positions, tick, context = {}) {
+  const nativeCommand = monitor.deterministic_monitor_command && typeof monitor.deterministic_monitor_command === "object"
+    ? monitor.deterministic_monitor_command
+    : {};
+  const nativePositionRequest = nativeCommand.position_request && typeof nativeCommand.position_request === "object"
+    ? nativeCommand.position_request
+    : monitor.position_request && typeof monitor.position_request === "object"
+      ? monitor.position_request
+      : {};
+  const nativePositionAction = String(nativePositionRequest.type || "NONE").trim().toUpperCase();
+  const nativeReplanType = String(
+    nativeCommand.replan_request?.type
+      || monitor.replan_request?.type
+      || "NOOP",
+  ).trim().toUpperCase();
+  const nativeThesisCommand = String(nativeCommand.thesis_command?.type || "NOOP").trim().toUpperCase();
+  const requiresReplan = nativeReplanType === "REQUEST"
+    || ["INVALIDATE", "EXPIRE", "REQUIRE_REPLAN", "SUPERSEDE"].includes(nativeThesisCommand);
+  let action = nativePositionAction !== "NONE"
+    ? nativePositionAction
+    : normalizeReplayMonitorAction(monitor.monitor_decision);
+  if (nativePositionAction === "NONE" && nativeReplanType === "REQUEST") action = "REPLAN_FULL";
+  if (nativePositionAction === "NONE" && nativeThesisCommand === "INVALIDATE") action = "INVALIDATE_THESIS";
+  if (nativePositionAction === "NONE" && ["EXPIRE", "REQUIRE_REPLAN", "SUPERSEDE"].includes(nativeThesisCommand)) action = "REPLAN_FULL";
+  const existing = selectOpenReplayPosition(positions) || positions[0] || null;
   if (action === "TRIGGER_GO") {
-    const position = {
-      ...(existing || {}),
-      position_id: existing?.position_id || scopedReplayChildId(run, "position", step.step_id),
-      backtest_id: run.backtest_id,
-      replay_run_id: run.replay_run_id || run.backtest_id,
-      strategy_id: run.strategy_id,
-      trading_date: run.trading_date || run.date,
-      resolved_scope: run.resolved_scope,
-      scope_hash: run.scope_hash,
-      pack_id: run.pack_id,
-      pack_build_id: run.pack_build_id,
-      source_manifest_hash: run.source_manifest_hash,
-      step_id: step.step_id,
-      monitor_id: monitor.monitor_id,
-      mode: "replay",
-      status: "OPEN",
-      instrument: monitor.monitor_decision?.instrument || monitor.instrument || null,
-      direction: monitor.monitor_decision?.direction || monitor.direction || null,
-      entry_price: monitor.monitor_decision?.entry_price ?? monitor.monitor_decision?.entry ?? null,
-      stop_loss: monitor.monitor_decision?.stop_loss ?? null,
-      take_profit_1: monitor.monitor_decision?.take_profit_1 ?? monitor.monitor_decision?.tp1 ?? null,
-      opened_at_paris: step.timestamp_paris,
-      anti_lookahead_compliant: true,
-      created_at: existing?.created_at || tick.utc,
-      created_at_utc: existing?.created_at_utc || tick.utc,
-      created_at_paris: existing?.created_at_paris || tick.paris,
-      updated_at: tick.utc,
-      updated_at_utc: tick.utc,
-      updated_at_paris: tick.paris,
+    return {
+      action: "ARM_SETUP",
+      requested_action: action,
+      position: existing,
+      run_status: "WAITING_NEXT_STEP",
+      note: "GPT TRIGGER_GO normalized to ARM_SETUP; only the deterministic closed-candle engine may create a position.",
+      trigger_deferred_to_engine: true,
     };
-    return { action, position, run_status: "WAITING_NEXT_STEP", note: "Replay position created from GPT monitor decision." };
   }
   if (action === "REPLAN_FULL") {
+    const lastReplanMs = Date.parse(run.last_replan_at_paris || "");
+    const checkpointMs = Date.parse(step.timestamp_paris || "");
+    const minimumMinutes = positivePolicyNumber(run.risk_policy?.min_replan_interval_minutes, 60);
+    const thesisRequiresImmediateReplan = replayThesisRequiresImmediateReplan(
+      context.activeThesis,
+      step.timestamp_paris,
+    );
+    if (monitor.monitor_decision?.hard_invalidation !== true
+      && !thesisRequiresImmediateReplan
+      && Number.isFinite(lastReplanMs)
+      && Number.isFinite(checkpointMs)
+      && checkpointMs - lastReplanMs < minimumMinutes * 60_000) {
+      return {
+        action: "MAINTAIN_THESIS",
+        position: existing,
+        run_status: "WAITING_NEXT_STEP",
+        note: `REPLAN_FULL debounced: the previous replan is less than ${minimumMinutes} minutes old.`,
+        replan_debounced: true,
+        pending_replan_at_paris: new Date(lastReplanMs + minimumMinutes * 60_000).toISOString(),
+      };
+    }
     return { action, position: existing, run_status: "REPLAN_REQUIRED", note: "GPT monitor requested a full replan." };
   }
   if (action === "INVALIDATE_THESIS") {
     return { action, position: existing, run_status: "REPLAN_REQUIRED", note: "Replay thesis invalidated by GPT monitor." };
   }
   if (action === "EXIT_POSITION" && existing) {
+    const eligibility = replayPositionRequestEligibility({ action, request: nativePositionRequest, position: existing });
+    if (!eligibility.actionable) {
+      return { action, position: existing, run_status: requiresReplan ? "REPLAN_REQUIRED" : "WAITING_NEXT_STEP", note: "Replay exit request deferred: " + eligibility.reason + ".", management_deferred_to_engine: true };
+    }
+    const exit = replayMonitorExitGeometry(existing, monitor, context.simulation);
+    const finalized = finalizePositionAtPrice(existing, {
+      exitPrice: exit.exit_price,
+      exitReason: exit.exit_reason,
+      closedAtParis: step.timestamp_paris,
+      closedAtUtc: monitor.as_of_utc || monitor.scheduled_for_utc || null,
+      tick,
+    });
+    if (!finalized.changed) {
+      return {
+        action,
+        position: existing,
+        run_status: requiresReplan ? "REPLAN_REQUIRED" : "WAITING_NEXT_STEP",
+        note: "Replay exit deferred because no immutable interval mark is available.",
+      };
+    }
     return {
       action,
-      position: { ...existing, status: "CLOSED", closed_at_paris: step.timestamp_paris, updated_at: tick.utc, updated_at_utc: tick.utc, updated_at_paris: tick.paris },
-      run_status: "WAITING_NEXT_STEP",
-      note: "Replay position closed by GPT monitor decision.",
+      position: mergeReplayPositionState(existing, {
+        ...finalized.position,
+        exit_price_source: exit.exit_price_source,
+        exit_price_dataset: exit.exit_price_dataset,
+        exit_price_timestamp_utc: exit.exit_price_timestamp_utc,
+      }),
+      run_status: requiresReplan ? "REPLAN_REQUIRED" : "WAITING_NEXT_STEP",
+      note: `Replay position closed by the deterministic engine at immutable mark ${exit.exit_price}.`,
     };
   }
   if (action === "MOVE_STOP_BE" && existing) {
+    const mark = replaySimulationMarkForInstrument(context.simulation, existing.instrument);
+    const eligibility = replayPositionRequestEligibility({ action, request: nativePositionRequest, position: existing, mark });
+    if (!eligibility.actionable) {
+      return {
+        action,
+        position: existing,
+        run_status: requiresReplan ? "REPLAN_REQUIRED" : "WAITING_NEXT_STEP",
+        note: "Replay break-even request deferred: " + eligibility.reason + ".",
+        management_deferred_to_engine: true,
+        management_eligibility: eligibility,
+      };
+    }
     return {
       action,
-      position: {
-        ...existing,
+      position: mergeReplayPositionState(existing, {
         status: "PROTECTED",
         stop_loss: existing.entry_price ?? existing.entry ?? existing.stop_loss,
         latest_management_action: action,
         updated_at: tick.utc,
         updated_at_utc: tick.utc,
         updated_at_paris: tick.paris,
-      },
-      run_status: "WAITING_NEXT_STEP",
-      note: "Replay stop moved to breakeven by GPT monitor decision.",
+      }),
+      run_status: requiresReplan ? "REPLAN_REQUIRED" : "WAITING_NEXT_STEP",
+      note: "Replay stop moved to breakeven by the deterministic engine after immutable-price validation.",
     };
   }
-  if (action === "TAKE_PARTIAL" && existing) {
+  if (["TAKE_PARTIAL", "REDUCE_RISK"].includes(action) && existing) {
+    const eligibility = replayPositionRequestEligibility({ action, request: nativePositionRequest, position: existing });
+    if (!eligibility.actionable) {
+      return { action, position: existing, run_status: requiresReplan ? "REPLAN_REQUIRED" : "WAITING_NEXT_STEP", note: "Replay partial request deferred: " + eligibility.reason + ".", management_deferred_to_engine: true, management_eligibility: eligibility };
+    }
+    const mark = replaySimulationMarkForInstrument(context.simulation, existing.instrument);
+    const partial = applyPartialExitAtPrice(existing, {
+      fillPrice: mark?.close,
+      filledAtParis: step.timestamp_paris,
+      filledAtUtc: mark?.timestamp_utc || monitor.as_of_utc || null,
+      reduceFraction: nativePositionRequest.reduce_fraction ?? null,
+      managementAction: action,
+      tick,
+    });
     return {
       action,
-      position: {
-        ...existing,
-        status: "PARTIAL_TAKEN",
-        partial_taken: true,
-        latest_management_action: action,
-        updated_at: tick.utc,
-        updated_at_utc: tick.utc,
-        updated_at_paris: tick.paris,
-      },
-      run_status: "WAITING_NEXT_STEP",
-      note: "Replay partial take-profit applied from GPT monitor decision.",
+      position: partial.changed
+        ? mergeReplayPositionState(existing, {
+          ...partial.position,
+          latest_management_action: action,
+          partial_fill_price_source: "immutable_replay_market_mark",
+          partial_fill_price_dataset: mark?.dataset || null,
+        })
+        : existing,
+      run_status: requiresReplan ? "REPLAN_REQUIRED" : "WAITING_NEXT_STEP",
+      note: partial.changed
+        ? `Replay ${action === "REDUCE_RISK" ? "risk reduction" : "partial"} filled by the deterministic engine at immutable mark ${mark.close}.`
+        : `Replay ${action === "REDUCE_RISK" ? "risk reduction" : "partial"} request deferred: ${partial.reason}.`,
+      management_deferred_to_engine: !partial.changed,
     };
   }
-  return { action, position: existing, run_status: "WAITING_NEXT_STEP", note: "Replay monitor applied without opening a new position." };
+  return { action, position: existing, run_status: requiresReplan ? "REPLAN_REQUIRED" : "WAITING_NEXT_STEP", note: "Replay monitor applied without opening a new position." };
 }
 
 export function normalizeReplayMonitorAction(decision = {}) {
   return String(decision.action || decision.decision || decision.action_now || "WAIT_MORE").trim().toUpperCase();
 }
 
-export async function buildReplayIntervalSimulation(store, run, step, position, setups = [], { from, to }, tick) {
+export function mergeReplayPositionState(existing, update) {
+  if (!update) return existing || null;
+  if (!existing) return update;
+  const merged = { ...existing, ...update };
+  for (const key of [
+    "position_id",
+    "instrument",
+    "direction",
+    "entry_price",
+    "initial_stop_loss",
+    "opened_at_paris",
+    "opened_at_utc",
+    "created_at",
+    "created_at_utc",
+    "created_at_paris",
+  ]) {
+    if ((update[key] === null || update[key] === undefined || update[key] === "") && existing[key] !== null && existing[key] !== undefined && existing[key] !== "") {
+      merged[key] = existing[key];
+    }
+  }
+  return merged;
+}
+
+function replayMonitorPositionGeometry(monitor = {}) {
+  const decision = monitor.monitor_decision || {};
+  const setup = [
+    decision.setup,
+    decision.armed_setup,
+    decision.setup_transition,
+    decision.setup_candidate,
+    monitor.armed_setup,
+    monitor.setup_transition,
+    monitor.setup_candidate,
+  ].find((candidate) => candidate && typeof candidate === "object" && !Array.isArray(candidate)) || {};
+  return {
+    setup_record_id: setup.setup_record_id || null,
+    setup_id: setup.setup_id || setup.id || decision.setup_id || null,
+    instrument: decision.instrument || setup.instrument || setup.contract || monitor.instrument || null,
+    direction: decision.direction || setup.direction || monitor.direction || null,
+    entry_price: decision.entry_price
+      ?? decision.entry
+      ?? setup.entry_price
+      ?? setup.entry
+      ?? canonicalSetupEntryGeometry(setup).execution_price
+      ?? monitor.entry_price
+      ?? monitor.entry
+      ?? null,
+    stop_loss: decision.stop_loss ?? decision.stop ?? setup.stop_loss ?? setup.stop ?? monitor.stop_loss ?? monitor.stop ?? null,
+    take_profit_1: decision.take_profit_1
+      ?? decision.tp1
+      ?? setup.take_profit_1
+      ?? setup.tp1
+      ?? setup.targets?.[0]?.price
+      ?? setup.targets?.[0]
+      ?? monitor.take_profit_1
+      ?? monitor.tp1
+      ?? null,
+  };
+}
+
+function hasCompleteReplayPositionGeometry(position = {}) {
+  const direction = String(position.direction || "").trim().toLowerCase();
+  return Boolean(position.instrument)
+    && ["long", "short", "buy", "sell", "bull", "bear", "bullish", "bearish"].includes(direction)
+    && Number.isFinite(Number(position.entry_price))
+    && Number.isFinite(Number(position.stop_loss))
+    && Number(position.entry_price) !== Number(position.stop_loss);
+}
+
+function replayMonitorExitGeometry(position = {}, monitor = {}, simulation = null) {
+  const marketMark = replaySimulationMarkForInstrument(simulation, position.instrument);
+  if (marketMark?.close !== null && marketMark?.close !== undefined) {
+    return {
+      exit_price: marketMark.close,
+      exit_reason: "MONITOR_EXIT_POSITION",
+      exit_price_source: "immutable_replay_market_mark",
+      exit_price_dataset: marketMark.dataset,
+      exit_price_timestamp_utc: marketMark.timestamp_utc,
+    };
+  }
+  return {
+    exit_price: null,
+    exit_reason: "MONITOR_EXIT_POSITION",
+    exit_price_source: null,
+    exit_price_dataset: null,
+    exit_price_timestamp_utc: null,
+  };
+}
+
+function replayPositionRequestEligibility({ action, request = {}, position, mark = null }) {
+  return evaluatePositionRequestEligibility({
+    request: { ...request, type: action },
+    position,
+    mark: mark
+      ? {
+        price: mark.close,
+        timestamp: mark.timestamp_utc || mark.timestamp_paris || null,
+        source: mark.dataset || "immutable_replay_market_mark",
+        immutable: true,
+        reconciled: true,
+      }
+      : null,
+    sourceAction: action,
+  });
+}
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function replaySimulationMarkForInstrument(simulation, instrument) {
+  const normalizedInstrument = String(instrument || "").toUpperCase();
+  const marks = Array.isArray(simulation?.market_marks) ? simulation.market_marks : [];
+  return marks.find((mark) => String(mark.instrument || "").toUpperCase() === normalizedInstrument) || null;
+}
+
+function isOpenReplayPosition(position) {
+  if (!position) return false;
+  return ["OPEN", "PROTECTED", "PARTIAL_TAKEN", "PENDING", "RUNNING"].includes(String(position.status || "").toUpperCase())
+    && !position.closed_at
+    && !position.closed_at_utc
+    && !position.closed_at_paris
+    && (position.exit_price === undefined || position.exit_price === null);
+}
+
+export async function buildReplayIntervalSimulation(store, run, step, position, setups = [], {
+  from,
+  to,
+  positionHistory = [],
+}, tick) {
   assertReplayIntervalBounds(run, step, { from, to });
+  const replayTick = {
+    ...tick,
+    utc: normalizeUtcIso(to),
+    paris: to,
+    epochMs: Date.parse(to),
+  };
   const pack = await store.getDeskPack({
     pack_id: run.pack_id,
     pack_build_id: run.pack_build_id,
     mode: "replay",
   });
   assertRunPackScope(run, pack);
-  const activeSetups = selectActiveReplaySetups(setups);
+  const lifecycleSetups = (setups || []).map((setup) => (
+    projectReplaySetupLifecycleAt(setup, {
+      asOfParis: to,
+      asOfUtc: replayTick.utc,
+    })
+  ));
+  const lifecycleSetupUpdates = lifecycleSetups.filter((setup, index) => (
+    normalizeReplaySetupStatus(setup.status || setup.lifecycle_status || setup.setup_status)
+    !== normalizeReplaySetupStatus(
+      setups[index]?.status || setups[index]?.lifecycle_status || setups[index]?.setup_status,
+    )
+  ));
+  const activeSetups = selectActiveReplaySetups(lifecycleSetups, {
+    asOfParis: to,
+    asOfUtc: replayTick.utc,
+  });
   const instruments = [...new Set([
     position?.instrument,
     ...activeSetups.map((setup) => setup.instrument),
+    ...activeSetups.flatMap((setup) => [
+      ...setupConditionInstrumentsV1(setup),
+      ...canonicalReplaySetupConditionSource(setup).map((condition) => condition?.reference_instrument
+        || condition?.parameters?.reference_instrument
+        || condition?.instrument
+        || condition?.contract
+        || condition?.asset
+        || condition?.market),
+    ]),
   ].filter(Boolean).map((instrument) => String(instrument).toUpperCase()))];
   const datasets = [];
-  for (const instrument of instruments) {
-    const datasetName = replayPositionDataset(pack, instrument);
+  const needsMacroEvents = instruments.includes(PREDICATE_EVENT_ROWS_INSTRUMENT_V1);
+  const priceInstruments = instruments.filter((instrument) => instrument !== PREDICATE_EVENT_ROWS_INSTRUMENT_V1);
+  const datasetSpecs = replayExecutionDatasetSpecs(pack, priceInstruments, activeSetups, position);
+  for (const {
+    instrument,
+    timeframe,
+    datasetName,
+    sourceDatasetName,
+    derivedFromM1,
+  } of datasetSpecs) {
+    if (!sourceDatasetName) {
+      datasets.push({
+        instrument,
+        timeframe,
+        datasetName,
+        sourceDatasetName: null,
+        derivedFromM1: false,
+        derivationLineage: null,
+        dataset: null,
+        intervalRows: [],
+        data_status: "UNAVAILABLE",
+      });
+      continue;
+    }
     const dataset = await store.getDataset({
       pack_id: run.pack_id,
       pack_build_id: run.pack_build_id,
-      dataset: datasetName,
+      dataset: sourceDatasetName,
       as_of_utc: normalizeUtcIso(to),
       mode: "replay",
       format: "json",
       max_rows: Number.MAX_SAFE_INTEGER,
     });
-    const intervalRows = filterRawWindowRows(dataset?.rows || [], { from, to });
-    datasets.push({ instrument, datasetName, dataset, intervalRows });
+    const derivation = derivedFromM1
+      ? deriveCanonicalTimeframeFromClosedM1(dataset?.rows || [], {
+          cutoffUtc: normalizeUtcIso(to),
+          targetTimeframe: timeframe,
+          asset: instrument,
+          requestedSymbol: `${instrument}1!`,
+          sourceDataset: sourceDatasetName,
+        })
+      : null;
+    const executionRows = (derivation?.rows || dataset?.rows || []).map((row) => ({
+      ...row,
+      instrument,
+      timeframe,
+      execution_timeframe: timeframe,
+      execution_timeframe_fallback: derivedFromM1 === true,
+    }));
+    const intervalRows = filterReplayClosedRows(executionRows, {
+      from,
+      to,
+      timeframe,
+    });
+    datasets.push({
+      instrument,
+      timeframe,
+      datasetName,
+      sourceDatasetName,
+      derivedFromM1,
+      derivationLineage: derivation?.lineage || null,
+      dataset,
+      intervalRows,
+      data_status: intervalRows.length ? "AVAILABLE" : "UNAVAILABLE",
+    });
   }
-  const allRows = datasets.flatMap((item) => item.intervalRows || []);
+  if (needsMacroEvents) {
+    const macroRef = pack.datasets?.macro_calendar || null;
+    if (!macroRef) {
+      datasets.push({
+        instrument: PREDICATE_EVENT_ROWS_INSTRUMENT_V1,
+        datasetName: null,
+        dataset: null,
+        intervalRows: [],
+        data_status: "UNAVAILABLE",
+      });
+    } else {
+      const macroDataset = await store.getDataset({
+        pack_id: run.pack_id,
+        pack_build_id: run.pack_build_id,
+        dataset: "macro_calendar",
+        as_of_utc: normalizeUtcIso(to),
+        mode: "replay",
+        format: "json",
+        max_rows: 5_000,
+      });
+      const macroRows = (macroDataset.rows || []).map((event) => ({
+        ...event,
+        instrument: PREDICATE_EVENT_ROWS_INSTRUMENT_V1,
+        timeframe: "EVENT",
+        event_record: true,
+        event_row_type: "MACRO_CALENDAR_EVENT",
+        event_cutoff_utc: normalizeUtcIso(to),
+        event_source_manifest_hash: pack.source_manifest_hash || pack.manifest?.source_manifest_hash || null,
+      }));
+      datasets.push({
+        instrument: PREDICATE_EVENT_ROWS_INSTRUMENT_V1,
+        datasetName: "macro_calendar",
+        dataset: macroDataset,
+        intervalRows: macroRows,
+        data_status: macroRows.length ? "AVAILABLE" : "UNAVAILABLE",
+      });
+    }
+  }
+  const allRows = datasets
+    .filter((item) => item.instrument !== PREDICATE_EVENT_ROWS_INSTRUMENT_V1)
+    .flatMap((item) => item.intervalRows || []);
   const maxTimestampUsed = allRows
-    .map((row) => row.timestamp_utc || row.timestamp_paris || row.timestamp || row.time)
+    .map((row) => replayRowCloseTimestamp(row))
     .filter(Boolean)
     .sort()
     .at(-1) || null;
@@ -1113,30 +1701,77 @@ export async function buildReplayIntervalSimulation(store, run, step, position, 
     });
   }
   const sourceManifestHash = pack.source_manifest_hash || pack.manifest?.source_manifest_hash || null;
-  const rawRefs = datasets.map(({ datasetName }) => ({
-    dataset: datasetName,
-    object_path: pack.datasets?.[datasetName]?.object_path || pack.datasets?.[datasetName]?.storage_path || null,
-    gcs_generation: pack.datasets?.[datasetName]?.gcs_generation || null,
-    sha256: pack.datasets?.[datasetName]?.sha256 || null,
-  }));
-  const rowsByInstrument = new Map(datasets.map((item) => [item.instrument, item.intervalRows || []]));
+  const rawRefs = datasets.filter(({ datasetName }) => Boolean(datasetName)).map((item) => {
+    const sourceDatasetName = item.sourceDatasetName || item.datasetName;
+    return {
+      dataset: item.datasetName,
+      source_dataset: sourceDatasetName,
+      object_path: pack.datasets?.[sourceDatasetName]?.object_path || pack.datasets?.[sourceDatasetName]?.storage_path || null,
+      gcs_generation: pack.datasets?.[sourceDatasetName]?.gcs_generation || null,
+      sha256: pack.datasets?.[sourceDatasetName]?.sha256 || null,
+      derivation_lineage: item.derivationLineage || null,
+    };
+  });
+  const marketMarks = datasets
+    .filter(({ instrument }) => instrument !== PREDICATE_EVENT_ROWS_INSTRUMENT_V1)
+    .map(({ instrument, datasetName, intervalRows }) => {
+    const row = intervalRows.at(-1) || null;
+    return {
+      instrument,
+      dataset: datasetName,
+      timestamp_utc: row?.timestamp_utc || null,
+      timestamp_paris: row?.timestamp_paris || null,
+      close: finiteNumber(row?.close),
+    };
+  });
+  const rowsByInstrument = new Map();
+  const entryRowsByInstrument = new Map();
+  for (const item of datasets) {
+    const combined = [...(rowsByInstrument.get(item.instrument) || []), ...(item.intervalRows || [])]
+      .sort((left, right) => Date.parse(left.timestamp_utc || left.timestamp_paris || "")
+        - Date.parse(right.timestamp_utc || right.timestamp_paris || ""));
+    rowsByInstrument.set(item.instrument, combined);
+    if (item.timeframe === "M1") {
+      entryRowsByInstrument.set(item.instrument, item.intervalRows || []);
+    }
+  }
+  const riskGate = evaluateReplayDailyRiskGate(positionHistory, {
+    policy: run.risk_policy,
+    at: to,
+  });
   let positionUpdate = null;
   let simulationStatus = position ? "UNCHANGED" : "NO_POSITION";
   let simulationNote = position ? "Interval recorded from the immutable dataset pinned to this replay." : "No replay position to simulate.";
   if (position) {
-    const instrumentRows = rowsByInstrument.get(String(position.instrument || "").toUpperCase()) || [];
-    const positionEvaluation = evaluateReplayPositionOnRows(position, instrumentRows, { tick });
+    const instrumentRows = entryRowsByInstrument.get(String(position.instrument || "").toUpperCase()) || [];
+    const positionEvaluation = evaluateReplayPositionOnRows(position, instrumentRows, { tick: replayTick });
     if (positionEvaluation.changed) {
       positionUpdate = positionEvaluation.position;
       simulationStatus = positionEvaluation.reason;
       simulationNote = `Replay position updated during interval: ${positionEvaluation.reason}.`;
+    } else if (instrumentRows.length) {
+      positionUpdate = markPositionAtPrice(positionEvaluation.position || position, instrumentRows.at(-1)?.close, { tick: replayTick });
+      simulationStatus = "MARKED_TO_MARKET";
+      simulationNote = "Open replay position marked deterministically at the latest immutable close.";
     }
   }
   const setupEvaluations = [];
   let triggeredPosition = null;
   for (const setup of activeSetups) {
-    const instrumentRows = rowsByInstrument.get(String(setup.instrument || "").toUpperCase()) || [];
-    const evaluation = evaluateReplaySetupOnRows(setup, instrumentRows, { tick });
+    const instrumentRows = entryRowsByInstrument.get(String(setup.instrument || "").toUpperCase()) || [];
+    let evaluation = evaluateReplaySetupOnRows(setup, instrumentRows, { tick: replayTick, rowsByInstrument });
+    if (evaluation.triggered && riskGate.blocked) {
+      evaluation = deferReplaySetupTrigger(evaluation, setup, {
+        tick: replayTick,
+        reason: `RISK_GATE_${riskGate.reason}`,
+      });
+    }
+    if (evaluation.triggered && (position || triggeredPosition)) {
+      evaluation = deferReplaySetupTrigger(evaluation, setup, {
+        tick: replayTick,
+        reason: position ? "POSITION_ALREADY_OPEN_TRIGGER_DEFERRED" : "ANOTHER_SETUP_TRIGGERED_FIRST",
+      });
+    }
     setupEvaluations.push(evaluation);
     if (!position && !triggeredPosition && evaluation.triggered) {
       triggeredPosition = buildReplayPositionFromTriggeredSetup({
@@ -1145,17 +1780,47 @@ export async function buildReplayIntervalSimulation(store, run, step, position, 
         step,
         monitor: { monitor_id: setup.monitor_id || null },
         trigger: evaluation,
-        tick,
+        tick: replayTick,
         makePositionId: (value) => scopedReplayChildId(run, "position", `${step.step_id}_${value}`),
       });
-      positionUpdate = triggeredPosition;
-      simulationStatus = "SETUP_TRIGGERED";
-      simulationNote = "Conditional replay setup triggered from immutable interval prices.";
+      const triggerMs = Date.parse(evaluation.trigger_row?.timestamp_utc || evaluation.trigger_row?.timestamp_paris || "");
+      const postTriggerRows = instrumentRows.filter((row) => {
+        const rowMs = Date.parse(row.timestamp_utc || row.timestamp_paris || "");
+        return !Number.isFinite(triggerMs) || (Number.isFinite(rowMs) && rowMs > triggerMs);
+      });
+      const positionEvaluation = evaluateReplayPositionOnRows(triggeredPosition, postTriggerRows, { tick: replayTick });
+      positionUpdate = positionEvaluation.changed
+        ? positionEvaluation.position
+        : markPositionAtPrice(triggeredPosition, postTriggerRows.at(-1)?.close, { tick: replayTick });
+      evaluation.setup = {
+        ...evaluation.setup,
+        status: "TRIGGERED",
+        lifecycle_status: "TRIGGERED",
+        setup_status: "TRIGGERED",
+        status_authority: "backend",
+        trigger_source: "backend_immutable_interval",
+        execution_status: "POSITION_CREATED",
+        linked_position_id: triggeredPosition.position_id,
+      };
+      simulationStatus = positionEvaluation.changed ? positionEvaluation.reason : "SETUP_TRIGGERED";
+      simulationNote = positionEvaluation.changed
+        ? `Conditional replay setup triggered and position resolved during the same immutable interval: ${positionEvaluation.reason}.`
+        : "Conditional replay setup triggered from immutable interval prices.";
     }
   }
-  const setupUpdates = setupEvaluations
-    .filter((evaluation) => evaluation.setup && (evaluation.triggered || evaluation.setup.condition_summary))
+  const evaluatedSetupUpdates = setupEvaluations
+    .filter((evaluation) => evaluation.setup && (
+      evaluation.triggered
+      || evaluation.setup.condition_summary
+      || normalizeReplaySetupStatus(evaluation.setup.status) !== normalizeReplaySetupStatus(
+        setups.find((setup) => setup.setup_record_id === evaluation.setup.setup_record_id)?.status,
+      )
+    ))
     .map((evaluation) => evaluation.setup);
+  const setupUpdates = [...new Map(
+    [...lifecycleSetupUpdates, ...evaluatedSetupUpdates]
+      .map((setup) => [setup.setup_record_id || setup.setup_id, setup]),
+  ).values()];
   return {
     simulation_id: scopedReplayChildId(run, "simulation", `${step.sequence || 0}_${compactTimestamp(to)}`),
     backtest_id: run.backtest_id,
@@ -1177,7 +1842,7 @@ export async function buildReplayIntervalSimulation(store, run, step, position, 
     cutoff_paris: to,
     position_id: positionUpdate?.position_id || position?.position_id || null,
     position: position || null,
-    position_update: positionUpdate,
+    position_update: mergeReplayPositionState(position, positionUpdate),
     setup_updates: setupUpdates,
     active_setup_count: activeSetups.length,
     setup_evaluations: setupEvaluations.map((evaluation) => ({
@@ -1189,10 +1854,38 @@ export async function buildReplayIntervalSimulation(store, run, step, position, 
       condition_summary: evaluation.setup?.condition_summary || null,
     })),
     dataset: datasets[0]?.datasetName || null,
-    datasets: datasets.map((item) => ({ instrument: item.instrument, dataset: item.datasetName, row_count: item.intervalRows.length })),
+    datasets: datasets.map((item) => ({
+      instrument: item.instrument,
+      timeframe: item.timeframe || null,
+      dataset: item.datasetName,
+      source_dataset: item.sourceDatasetName || item.datasetName || null,
+      derived_from_m1: item.derivedFromM1 === true,
+      derivation_lineage: item.derivationLineage || null,
+      row_count: item.intervalRows.length,
+      data_status: item.data_status,
+    })),
+    market_marks: marketMarks,
     row_count: allRows.length,
     max_price_timestamp_used: maxTimestampUsed,
     future_prices_used: false,
+    risk_gate: riskGate,
+    portfolio_arbitration: {
+      policy: "RANK_THEN_PRIORITY_FIRST_ELIGIBLE",
+      max_setups: 5,
+      max_simultaneous_positions: 1,
+      global_risk_budget_pct: 0.25,
+      evaluated_setup_ids: setupEvaluations
+        .map((evaluation) => evaluation.setup?.setup_id || evaluation.setup?.setup_record_id)
+        .filter(Boolean),
+      winner_setup_id: triggeredPosition?.setup_id
+        || triggeredPosition?.linked_setup_id
+        || setupEvaluations.find((evaluation) => evaluation.triggered)?.setup?.setup_id
+        || null,
+      deferred_setup_ids: setupEvaluations
+        .filter((evaluation) => evaluation.reason === "ANOTHER_SETUP_TRIGGERED_FIRST")
+        .map((evaluation) => evaluation.setup?.setup_id || evaluation.setup?.setup_record_id)
+        .filter(Boolean),
+    },
     integrity: datasets.map((item) => item.dataset?.integrity).filter(Boolean)[0] || null,
     data_quality: rawWindowQuality(allRows, { reason: instruments.length ? "pinned_dataset_has_no_rows_in_interval" : "no_replay_position_or_setup" }),
     raw_refs: rawRefs,
@@ -1201,10 +1894,235 @@ export async function buildReplayIntervalSimulation(store, run, step, position, 
       note: simulationNote,
     },
     anti_lookahead_compliant: true,
+    interval_semantics: "[from,to) by candle open; only candles closed by to are visible",
     computed_with_cutoff: to,
     created_at: tick.utc,
     created_at_utc: tick.utc,
     created_at_paris: tick.paris,
+  };
+}
+
+export function evaluateReplayDailyRiskGate(positions = [], { policy = {}, at } = {}) {
+  const maxDailyLossR = positivePolicyNumber(policy?.max_daily_loss_r, 3);
+  const maxConsecutiveLosses = Math.max(1, Math.trunc(positivePolicyNumber(policy?.max_consecutive_losses, 3)));
+  const cooldownMinutes = positivePolicyNumber(policy?.cooldown_after_loss_minutes, 30);
+  const terminal = (positions || [])
+    .filter((position) => ["CLOSED", "STOPPED"].includes(String(position.status || "").toUpperCase()))
+    .filter((position) => finiteNumber(position.result_r ?? position.result_R ?? position.realized_R) !== null)
+    .sort((left, right) => Date.parse(
+      left.closed_at_paris || left.closed_at_utc || left.updated_at_paris || left.updated_at_utc || "",
+    ) - Date.parse(
+      right.closed_at_paris || right.closed_at_utc || right.updated_at_paris || right.updated_at_utc || "",
+    ));
+  const realizedR = terminal.reduce(
+    (sum, position) => sum + finiteNumber(position.result_r ?? position.result_R ?? position.realized_R),
+    0,
+  );
+  let consecutiveLosses = 0;
+  for (const position of [...terminal].reverse()) {
+    if (finiteNumber(position.result_r ?? position.result_R ?? position.realized_R) < 0) consecutiveLosses += 1;
+    else break;
+  }
+  const latest = terminal.at(-1) || null;
+  const latestResultR = finiteNumber(latest?.result_r ?? latest?.result_R ?? latest?.realized_R);
+  const latestClosedMs = Date.parse(
+    latest?.closed_at_paris || latest?.closed_at_utc || latest?.updated_at_paris || latest?.updated_at_utc || "",
+  );
+  const atMs = Date.parse(at || "");
+  const cooldownUntilMs = latestResultR < 0 && Number.isFinite(latestClosedMs)
+    ? latestClosedMs + cooldownMinutes * 60_000
+    : Number.NaN;
+  const dailyLossBlocked = realizedR <= -maxDailyLossR;
+  const streakBlocked = consecutiveLosses >= maxConsecutiveLosses;
+  const cooldownBlocked = Number.isFinite(cooldownUntilMs) && Number.isFinite(atMs) && atMs < cooldownUntilMs;
+  const reason = dailyLossBlocked
+    ? "MAX_DAILY_LOSS_REACHED"
+    : streakBlocked
+      ? "MAX_CONSECUTIVE_LOSSES_REACHED"
+      : cooldownBlocked
+        ? "LOSS_COOLDOWN_ACTIVE"
+        : "ELIGIBLE";
+  return {
+    blocked: dailyLossBlocked || streakBlocked || cooldownBlocked,
+    reason,
+    realized_r: Number(realizedR.toFixed(8)),
+    closed_trade_count: terminal.length,
+    consecutive_losses: consecutiveLosses,
+    limits: {
+      max_daily_loss_r: maxDailyLossR,
+      max_consecutive_losses: maxConsecutiveLosses,
+      cooldown_after_loss_minutes: cooldownMinutes,
+    },
+    cooldown_until: Number.isFinite(cooldownUntilMs) ? new Date(cooldownUntilMs).toISOString() : null,
+  };
+}
+
+export function certifyReplayRunResult({
+  run,
+  positions = [],
+  simulations = [],
+  setups = [],
+  masterAnalyses = [],
+} = {}) {
+  const findings = [];
+  const ambiguousPositions = positions.filter((position) => String(position.status || "").toUpperCase() === "REVIEW_REQUIRED");
+  const openPositions = positions.filter((position) => isOpenReplayPosition(position));
+  const unpricedTerminalPositions = positions.filter((position) => {
+    const status = String(position.status || "").toUpperCase();
+    return ["CLOSED", "STOPPED"].includes(status)
+      && finiteNumber(position.result_r ?? position.result_R ?? position.realized_R) === null;
+  });
+  const lookaheadSimulations = simulations.filter((simulation) => simulation.future_prices_used === true);
+  const orphanTriggeredSetups = setups.filter((setup) => (
+    String(setup.status || setup.lifecycle_status || "").toUpperCase() === "TRIGGERED"
+    && !setup.linked_position_id
+  ));
+  const executableSetups = setups.filter((setup) => setup.execution_geometry_ready === true
+    && Array.isArray(canonicalReplaySetupConditionSource(setup))
+    && canonicalReplaySetupConditionSource(setup).length > 0);
+  const nonExecutableSetupDocuments = setups.filter((setup) => (
+    ["SETUP_CANDIDATE", "PRE_ARMED", "ARMED_CONDITIONAL"].includes(
+      normalizeReplaySetupStatus(setup.status || setup.lifecycle_status || setup.setup_status),
+    )
+    && setup.execution_geometry_ready !== true
+  ));
+  if (ambiguousPositions.length) findings.push({ code: "AMBIGUOUS_INTRABAR_POSITIONS", count: ambiguousPositions.length });
+  if (openPositions.length) findings.push({ code: "OPEN_POSITIONS_AT_RUN_END", count: openPositions.length });
+  if (unpricedTerminalPositions.length) findings.push({ code: "UNPRICED_TERMINAL_POSITIONS", count: unpricedTerminalPositions.length });
+  if (lookaheadSimulations.length) findings.push({ code: "LOOKAHEAD_SIMULATIONS", count: lookaheadSimulations.length });
+  if (orphanTriggeredSetups.length) findings.push({ code: "ORPHAN_TRIGGERED_SETUPS", count: orphanTriggeredSetups.length });
+  const noSetupProofs = masterAnalyses
+    .map((master) => master?.no_setup_proof
+      || master?.full_analysis?.no_setup_proof
+      || master?.executable_decision?.no_setup_proof)
+    .filter(isCompleteNoSetupProof);
+  if (!positions.length && !executableSetups.length && noSetupProofs.length === 0) {
+    findings.push({ code: "NO_EXECUTABLE_SETUP", count: nonExecutableSetupDocuments.length || 1 });
+  }
+  const certified = findings.length === 0;
+  return {
+    certified,
+    status: certified
+      ? positions.length
+        ? "CERTIFIED_ENGINE_V3"
+        : "VALID_NO_OPPORTUNITY"
+      : "INVALID_NO_EXECUTABLE_SETUP",
+    result_eligible: certified,
+    aggregate_eligible: certified && run?.aggregate_eligible !== false,
+    engine_version: run?.position_engine_version || "3.0.0",
+    policy_version: run?.replay_execution_policy_version || "3.0.0",
+    no_setup_proof_count: noSetupProofs.length,
+    findings,
+  };
+}
+
+function isCompleteNoSetupProof(proof) {
+  if (!proof || typeof proof !== "object" || Array.isArray(proof)) return false;
+  const blockingReasons = proof.blocking_reasons || proof.blockers || proof.evidence;
+  const waitConditions = proof.wait_to_go_conditions || proof.wait_conditions;
+  const revalidationTriggers = proof.revalidation_triggers || proof.revalidation_conditions;
+  return Boolean(
+    proof.best_long && typeof proof.best_long === "object"
+    && proof.best_short && typeof proof.best_short === "object"
+    && Array.isArray(blockingReasons) && blockingReasons.length > 0
+    && Array.isArray(waitConditions) && waitConditions.length > 0
+    && Array.isArray(revalidationTriggers) && revalidationTriggers.length > 0
+  );
+}
+
+function positivePolicyNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function replayThesisRequiresImmediateReplan(thesis, checkpointParis) {
+  if (!thesis) return true;
+  const status = String(thesis.status || thesis.lifecycle_status || "").toUpperCase();
+  if (["INVALIDATED", "EXPIRED", "CANCELLED", "CANCELED", "REPLAN_REQUIRED"].includes(status)) {
+    return true;
+  }
+  const checkpointMs = Date.parse(checkpointParis || "");
+  const expiryMs = Date.parse(
+    thesis.requires_replan_after
+      || thesis.setup_expiry_time
+      || thesis.valid_until
+      || thesis.expires_at_paris
+      || "",
+  );
+  return Number.isFinite(checkpointMs) && Number.isFinite(expiryMs) && checkpointMs >= expiryMs;
+}
+
+export function filterReplayClosedRows(rows, { from, to, timeframe = "5" } = {}) {
+  const fromMs = Date.parse(from);
+  const toMs = Date.parse(to);
+  return (rows || [])
+    .map((row) => ({ row, closeMs: replayRowCloseMs(row, timeframe) }))
+    .filter(({ closeMs }) => {
+      if (!Number.isFinite(closeMs)) return false;
+      if (Number.isFinite(fromMs) && closeMs <= fromMs) return false;
+      if (Number.isFinite(toMs) && closeMs > toMs) return false;
+      return true;
+    })
+    .sort((left, right) => left.closeMs - right.closeMs)
+    .map(({ row, closeMs }) => ({
+      ...row,
+      candle_close_utc: row.candle_close_utc || new Date(closeMs).toISOString(),
+    }));
+}
+
+function replayRowCloseTimestamp(row, fallbackTimeframe = "5") {
+  const closeMs = replayRowCloseMs(row, fallbackTimeframe);
+  return Number.isFinite(closeMs) ? new Date(closeMs).toISOString() : null;
+}
+
+function replayRowCloseMs(row = {}, fallbackTimeframe = "5") {
+  const explicitClose = Date.parse(
+    row.candle_close_utc
+      || row.close_timestamp_utc
+      || row.closed_at_utc
+      || "",
+  );
+  if (Number.isFinite(explicitClose)) return explicitClose;
+  const openedAt = Date.parse(row.timestamp_utc || row.timestamp_paris || row.timestamp || row.time || "");
+  if (!Number.isFinite(openedAt)) return Number.NaN;
+  return openedAt + replayTimeframeMilliseconds(row.timeframe || fallbackTimeframe);
+}
+
+function replayTimeframeMilliseconds(value) {
+  const raw = String(value || "5").trim().toUpperCase();
+  const match = raw.match(/^M?(\d+)$/);
+  if (match) return Math.max(1, Number(match[1])) * 60_000;
+  const hour = raw.match(/^H(\d+)$/);
+  if (hour) return Math.max(1, Number(hour[1])) * 60 * 60_000;
+  return 5 * 60_000;
+}
+
+function datasetTimeframeFromName(datasetName) {
+  const match = String(datasetName || "").toUpperCase().match(/_(M\d+|H\d+)$/);
+  return match?.[1] || "M5";
+}
+
+function deferReplaySetupTrigger(evaluation, originalSetup, { tick, reason }) {
+  const retainedStatus = String(
+    originalSetup.status || originalSetup.lifecycle_status || originalSetup.setup_status || "ARMED_CONDITIONAL",
+  ).toUpperCase();
+  return {
+    ...evaluation,
+    triggered: false,
+    status: retainedStatus,
+    reason,
+    setup: {
+      ...evaluation.setup,
+      status: retainedStatus,
+      lifecycle_status: retainedStatus,
+      setup_status: retainedStatus,
+      status_authority: originalSetup.status_authority || "backend_normalized",
+      trigger_source: originalSetup.trigger_source || null,
+      execution_status: "TRIGGER_DEFERRED",
+      triggered_at_paris: originalSetup.triggered_at_paris || null,
+      trigger_deferred_reason: reason,
+      trigger_deferred_at_utc: tick?.utc || null,
+    },
   };
 }
 
@@ -1233,12 +2151,13 @@ export function assertReplayIntervalBounds(run, step, { from, to }) {
 }
 
 export function replayPositionDataset(pack, instrument) {
+  const normalized = String(instrument || "").toUpperCase();
   const candidates = {
-    MNQ: ["MNQ_M5"],
-    NQ: ["NQ_M15", "MNQ_M5"],
-    MES: ["MES_M5"],
-    ES: ["ES_M15", "MES_M5"],
-  }[String(instrument || "").toUpperCase()] || [localM5DatasetName(instrument)];
+    MNQ: ["MNQ_M1"],
+    NQ: ["NQ_M1", "MNQ_M1"],
+    MES: ["MES_M1"],
+    ES: ["ES_M1", "MES_M1"],
+  }[normalized] || [normalized + "_M1"];
   const dataset = candidates.find((name) => pack.datasets?.[name]);
   if (!dataset) {
     throw deskError("DATASET_NOT_FOUND", "Pinned pack has no price dataset for the replay position.", {
@@ -1249,6 +2168,87 @@ export function replayPositionDataset(pack, instrument) {
     });
   }
   return dataset;
+}
+
+export function replayExecutionDatasetSpecs(pack, instruments, setups = [], position = null) {
+  const requirements = new Map();
+  const add = (instrumentValue, timeframeValue) => {
+    const instrument = String(instrumentValue || "").toUpperCase();
+    if (!instrument || instrument === PREDICATE_EVENT_ROWS_INSTRUMENT_V1) return;
+    const timeframe = normalizeReplayExecutionTimeframe(timeframeValue);
+    requirements.set(`${instrument}:${timeframe}`, { instrument, timeframe });
+  };
+  if (position?.instrument) add(position.instrument, "M1");
+  for (const instrument of instruments || []) add(instrument, "M1");
+  for (const setup of setups || []) {
+    add(setup.instrument, "M1");
+    for (const condition of canonicalReplaySetupConditionSource(setup)) {
+      const instrument = condition.reference_instrument
+        || condition.parameters?.reference_instrument
+        || condition.instrument
+        || setup.instrument;
+      add(instrument, condition.timeframe || "M1");
+    }
+  }
+  return [...requirements.values()].map((requirement) => (
+    resolveReplayExecutionDatasetSpec(
+      pack,
+      requirement.instrument,
+      requirement.timeframe,
+    )
+  ));
+}
+
+function resolveReplayExecutionDatasetSpec(pack, instrument, timeframe) {
+  const directDatasetName = replayDatasetForTimeframe(pack, instrument, timeframe);
+  if (directDatasetName) {
+    return {
+      instrument,
+      timeframe,
+      datasetName: directDatasetName,
+      sourceDatasetName: directDatasetName,
+      derivedFromM1: false,
+    };
+  }
+  const sourceDatasetName = timeframe === "M1"
+    ? null
+    : replayDatasetForTimeframe(pack, instrument, "M1");
+  return {
+    instrument,
+    timeframe,
+    datasetName: sourceDatasetName ? `${instrument}_${timeframe}` : null,
+    sourceDatasetName,
+    derivedFromM1: Boolean(sourceDatasetName),
+  };
+}
+
+function replayDatasetForTimeframe(pack, instrument, timeframe) {
+  const suffix = {
+    M1: "M1",
+    M5: "M5",
+    M15: "M15",
+    H1: "H1",
+    H4: "H4",
+  }[timeframe] || "M1";
+  const aliases = {
+    MNQ: ["MNQ"],
+    NQ: ["NQ", "MNQ"],
+    MES: ["MES"],
+    ES: ["ES", "MES"],
+  }[instrument] || [instrument];
+  return aliases
+    .map((candidate) => `${candidate}_${suffix}`)
+    .find((datasetName) => pack.datasets?.[datasetName]) || null;
+}
+
+function normalizeReplayExecutionTimeframe(value) {
+  const normalized = String(value || "M1").trim().toUpperCase();
+  if (["1", "1M", "M1"].includes(normalized)) return "M1";
+  if (["5", "5M", "M5"].includes(normalized)) return "M5";
+  if (["15", "15M", "M15"].includes(normalized)) return "M15";
+  if (["60", "1H", "H1"].includes(normalized)) return "H1";
+  if (["240", "4H", "H4"].includes(normalized)) return "H4";
+  return "M1";
 }
 
 export function selectReplayTimeline(docs, backtestId) {
@@ -1324,6 +2324,7 @@ export function selectBacktestSteps(docs, backtestId) {
 
 export function normalizeMonitorCadence(value) {
   const normalized = String(value || "15m").trim().toLowerCase();
+  if (["m5", "5", "5m"].includes(normalized)) return "5m";
   if (["m15", "15", "15m"].includes(normalized)) return "15m";
   if (["m30", "30", "30m"].includes(normalized)) return "30m";
   if (["h1", "1h", "60", "60m"].includes(normalized)) return "60m";
@@ -1736,7 +2737,16 @@ export function stableStringify(value) {
 
 export function buildMasterSetupDocs(masterAnalysis, { analysis_id } = {}, tick = new SystemClock().now()) {
   const full = masterAnalysis.full_analysis || {};
-  const setups = firstArray(full.setups, full.candidate_setups, full.setup_candidates, full.active_thesis?.setups);
+  const setups = firstArray(
+    masterAnalysis.setups,
+    masterAnalysis.candidate_setups,
+    masterAnalysis.setup_candidates,
+    masterAnalysis.active_thesis?.setups,
+    full.setups,
+    full.candidate_setups,
+    full.setup_candidates,
+    full.active_thesis?.setups,
+  );
   if (!setups.length) {
     return [];
   }
@@ -1766,9 +2776,50 @@ export function buildMasterSetupDocs(masterAnalysis, { analysis_id } = {}, tick 
 }
 
 export function decorateMasterSetupDoc(setup, masterAnalysis) {
+  const fullAnalysis = masterAnalysis.full_analysis || {};
+  const activeThesis = fullAnalysis.active_thesis || masterAnalysis.active_thesis || {};
+  const replayTimeline = masterAnalysis.mode === "replay"
+    || Boolean(masterAnalysis.backtest_id || masterAnalysis.replay_run_id);
+  const linkedThesisSetupId = activeThesis.linked_setup_id || null;
+  const inheritsThesisValidity = !linkedThesisSetupId
+    || linkedThesisSetupId === setup.setup_id
+    || setup.is_primary === true;
+  const materializedAtParis = firstValidIso(
+    setup.materialized_at_paris,
+    setup.saved_at_paris,
+    setup.created_at_paris,
+  );
+  const requestedValidFromParis = firstValidIso(
+    setup.valid_from_paris,
+    setup.valid_from,
+    inheritsThesisValidity ? activeThesis.valid_from : null,
+    masterAnalysis.cutoff_paris,
+    masterAnalysis.as_of_utc,
+  );
+  // A Replay is evaluated on its immutable historical clock. The wall-clock
+  // save time remains useful audit metadata, but must never move a historical
+  // setup beyond its own expiry. LIVE keeps the anti-retroactive guard.
+  const validFromParis = replayTimeline
+    ? requestedValidFromParis
+    : latestValidIso(requestedValidFromParis, materializedAtParis);
+  const expiresAtParis = firstValidIso(
+    setup.expires_at_paris,
+    setup.expiry_paris,
+    setup.setup_expiry_time,
+    setup.expires_at,
+    setup.valid_until,
+    inheritsThesisValidity ? activeThesis.setup_expiry_time : null,
+    inheritsThesisValidity ? activeThesis.valid_until : null,
+  );
+  const expiredBeforeMaterialization = Boolean(
+    validFromParis
+    && expiresAtParis
+    && Date.parse(expiresAtParis) <= Date.parse(validFromParis),
+  );
   const waitSetup = setup.instrument === "WAIT" || setup.direction === "wait" || ["wait", "wait_only", "no_trade"].includes(setup.setup_type);
   const replayable = !waitSetup && hasReplayGeometry(setup);
-  const status = setup.status || (waitSetup ? "wait" : setup.executable ? "executable" : "candidate");
+  const requestedStatus = setup.status || (waitSetup ? "wait" : setup.executable ? "executable" : "candidate");
+  const status = expiredBeforeMaterialization ? "EXPIRED" : requestedStatus;
   const inheritedReplayStatus = setup.replay_status && setup.replay_status !== "pending" ? setup.replay_status : null;
   return {
     ...setup,
@@ -1776,11 +2827,51 @@ export function decorateMasterSetupDoc(setup, masterAnalysis) {
     schema_version: masterAnalysis.schema_version || "4.0.0",
     source_analysis_collection: COLLECTIONS.deskMasterAnalyses,
     status,
-    lifecycle_status: setup.lifecycle_status || status,
+    lifecycle_status: expiredBeforeMaterialization ? "EXPIRED" : setup.lifecycle_status || status,
+    setup_status: expiredBeforeMaterialization ? "EXPIRED" : setup.setup_status || status,
+    valid_from_paris: validFromParis || null,
+    expires_at_paris: expiresAtParis || null,
+    materialized_at_paris: materializedAtParis || null,
+    backend_can_trigger: expiredBeforeMaterialization ? false : setup.backend_can_trigger,
+    activation_eligible: !expiredBeforeMaterialization,
+    activation_rejected: expiredBeforeMaterialization,
+    activation_rejected_reason: expiredBeforeMaterialization
+      ? replayTimeline
+        ? "SETUP_EXPIRED_ON_REPLAY_TIMELINE"
+        : "SETUP_EXPIRED_BEFORE_LIVE_MATERIALIZATION"
+      : null,
+    lifecycle_integrity_status: expiredBeforeMaterialization
+      ? "SAFE_EXPIRED_BEFORE_ACTIVATION"
+      : "VALID",
+    lifecycle_integrity: {
+      valid: true,
+      safe_terminal: expiredBeforeMaterialization,
+      historical_violation_repaired: false,
+      activation_rejected_reason: expiredBeforeMaterialization
+        ? replayTimeline
+          ? "SETUP_EXPIRED_ON_REPLAY_TIMELINE"
+          : "SETUP_EXPIRED_BEFORE_LIVE_MATERIALIZATION"
+        : null,
+      requested_valid_from_paris: requestedValidFromParis || null,
+      materialized_at_paris: materializedAtParis || null,
+      effective_valid_from_paris: validFromParis || null,
+      expires_at_paris: expiresAtParis || null,
+    },
     replayable,
     replay_status: inheritedReplayStatus || (waitSetup ? "wait" : replayable ? "not_replayed" : "not_replayable"),
     replay_result: setup.replay_result ?? null,
   };
+}
+
+function firstValidIso(...values) {
+  return values.find((value) => value && Number.isFinite(Date.parse(value))) || null;
+}
+
+function latestValidIso(...values) {
+  const valid = values
+    .filter((value) => value && Number.isFinite(Date.parse(value)))
+    .sort((left, right) => Date.parse(right) - Date.parse(left));
+  return valid[0] || null;
 }
 
 export function buildSetupDocs(analysis, { analysis_id, decision_id } = {}, tick = new SystemClock().now()) {
@@ -1788,8 +2879,16 @@ export function buildSetupDocs(analysis, { analysis_id, decision_id } = {}, tick
   return (analysis.setups || []).map((setup, index) => {
     const setup_id = String(setup.setup_id || `setup_${index + 1}`);
     const setup_record_id = setup.setup_record_id || `${sanitizeId(analysis_id)}_${sanitizeId(setup_id)}`;
+    const entryGeometry = canonicalSetupEntryGeometry(setup);
     return {
       ...setup,
+      ...(entryGeometry.entry_zone ? {
+        entry_zone: entryGeometry.entry_zone,
+        entry_zone_lower: entryGeometry.entry_zone.from,
+        entry_zone_upper: entryGeometry.entry_zone.to,
+      } : {}),
+      entry_execution_price: entryGeometry.execution_price,
+      entry_execution_rule: entryGeometry.execution_rule,
       ...executionScopeFields(analysis),
       setup_record_id,
       setup_id,
@@ -1816,6 +2915,36 @@ export function buildSetupDocs(analysis, { analysis_id, decision_id } = {}, tick
       saved_at_paris: tick.paris,
     };
   });
+}
+
+export function canonicalSetupEntryGeometry(setup = {}) {
+  const zone = setup.entry_zone && typeof setup.entry_zone === "object" ? setup.entry_zone : {};
+  const from = finiteNumber(zone.lower ?? zone.from ?? zone.low ?? zone.min ?? setup.entry_from);
+  const to = finiteNumber(zone.upper ?? zone.to ?? zone.high ?? zone.max ?? setup.entry_to);
+  const direct = finiteNumber(setup.entry_price ?? setup.entry ?? setup.trigger_price);
+  const lower = from === null || to === null ? from ?? to : Math.min(from, to);
+  const upper = from === null || to === null ? from ?? to : Math.max(from, to);
+  const direction = String(setup.direction || "").toLowerCase();
+  const executionPrice = direct ?? (
+    lower === null || upper === null
+      ? lower ?? upper
+      : direction === "short"
+        ? lower
+        : upper
+  );
+  return {
+    entry_zone: lower === null && upper === null
+      ? null
+      : { from: lower ?? upper, to: upper ?? lower },
+    execution_price: executionPrice,
+    execution_rule: direct !== null
+      ? "explicit_entry_price"
+      : direction === "short"
+        ? "short_lower_bound"
+        : direction === "long"
+          ? "long_upper_bound"
+          : "available_bound",
+  };
 }
 
 export function executionScopeFields(source = {}) {
@@ -1865,6 +2994,7 @@ export const REPLAY_ORCHESTRATION_ALGORITHMS = Object.freeze({
   buildReplayReplanContext,
   buildReplaySetupDocs,
   buildReplayStepDoc,
+  certifyReplayRunResult,
   deriveActiveThesisFromMaster,
   nextReplayAction,
   normalizeReplayActiveThesis,

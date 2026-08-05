@@ -10,6 +10,9 @@
   "exports": {
     ".": "./index.js"
   },
+  "bin": {
+    "desk-replay-outcome": "./bin/replay-outcome-cli.mjs"
+  },
   "scripts": {
     "test": "node --test test/*.test.js"
   },

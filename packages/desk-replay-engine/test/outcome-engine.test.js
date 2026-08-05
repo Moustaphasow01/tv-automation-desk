@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
 import {
@@ -209,6 +211,32 @@ describe("desk-replay-engine", () => {
     assert.equal(corrected.revision, 2);
     assert.equal(corrected.correction_audit_id, "audit_correction_1");
     assert.equal(corrected.correction_of_outcome_id, "outcome_1");
+  });
+
+  it("exposes the immutable outcome engine through the Node CLI for Python bridges", () => {
+    const cli = fileURLToPath(new URL("../bin/replay-outcome-cli.mjs", import.meta.url));
+    const proc = spawnSync(
+      process.execPath,
+      [cli],
+      {
+        input: JSON.stringify({
+          simulation_id: "python_replay",
+          step_id: "candidate_1",
+          setup: longSetup,
+          candles: [candle("2026-07-06T10:05:00+02:00", 111, 99, 110)],
+          cutoff: "2026-07-06T10:15:00+02:00",
+          clock: clock.now(),
+        }),
+        encoding: "utf8",
+      },
+    );
+
+    assert.equal(proc.status, 0, proc.stderr || proc.stdout);
+    const payload = JSON.parse(proc.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.result.schema_version, "replay_outcome_v2");
+    assert.equal(payload.result.replay_engine, "desk-replay-engine");
+    assert.match(payload.result.content_hash, /^[a-f0-9]{64}$/);
   });
 
 });

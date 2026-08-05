@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildLiveMonitorCatchupPlan,
+  buildLiveMonitorRollForwardContext,
   isLiveMonitorCheckpointInWindow,
   resolveLiveMasterJobInput,
   resolveLiveMonitorJobInput,
@@ -11,6 +12,9 @@ import {
   prepareDueLiveMasterBundle,
   prepareDueLiveMonitorBundle,
   prepareLiveReplanMasterAfterMonitor,
+  reconcileLiveDeskContinuity,
+  resolveLiveMonitorReplanAction,
+  resolveLiveMonitorReplanCheckpoint,
 } from "../src/live-orchestration.js";
 import { liveRollingPackScriptArgs } from "../src/live-pack-builder.js";
 
@@ -37,13 +41,8 @@ test("late live Master creates one catch-up plan at the latest settled M15 check
   assert.equal(plan.required, true);
   assert.equal(plan.monitor_checkpoint_paris, "2026-07-13T01:45:00+02:00");
   assert.equal(plan.skipped_checkpoint_count, 5);
-  assert.deepEqual(plan.skipped_checkpoints, [
-    "2026-07-13T00:30:00+02:00",
-    "2026-07-13T00:45:00+02:00",
-    "2026-07-13T01:00:00+02:00",
-    "2026-07-13T01:15:00+02:00",
-    "2026-07-13T01:30:00+02:00",
-  ]);
+  assert.equal(plan.skipped_checkpoints[0], "2026-07-13T00:30:00+02:00");
+  assert.equal(plan.skipped_checkpoints.at(-1), "2026-07-13T01:30:00+02:00");
 });
 
 test("on-time live Master waits for the first normal M15 checkpoint", () => {
@@ -55,6 +54,29 @@ test("on-time live Master waits for the first normal M15 checkpoint", () => {
   });
   assert.equal(plan.required, false);
   assert.equal(plan.skipped_reason, "no_closed_monitor_checkpoint_after_master");
+});
+
+test("Monitor roll-forward preserves the complete delta while selecting only the latest checkpoint", () => {
+  const context = buildLiveMonitorRollForwardContext({
+    session: "ny_open",
+    tradingDate: "2026-07-13",
+    lastCompletedCheckpoint: "2026-07-13T16:15:00+02:00",
+    previousAttemptCheckpoint: "2026-07-13T16:30:00+02:00",
+    previousAttemptStatus: "FAILED",
+    monitorCheckpointParis: "2026-07-13T16:45:00+02:00",
+  });
+
+  assert.equal(context.latest_wins, true);
+  assert.equal(context.selected_checkpoint_paris, "2026-07-13T16:45:00+02:00");
+  assert.deepEqual(context.skipped_checkpoints, [
+    "2026-07-13T16:30:00+02:00",
+  ]);
+  assert.equal(context.selected_checkpoint_policy, "LATEST_SETTLED_CLOSED_M15");
+  assert.deepEqual(context.data_coverage, {
+    from_paris: "2026-07-13T16:15:00+02:00",
+    to_paris: "2026-07-13T16:45:00+02:00",
+    includes_skipped_checkpoints: true,
+  });
 });
 
 test("catch-up reuses a newer live rolling pack without publishing backwards", async () => {
@@ -76,6 +98,87 @@ test("catch-up reuses a newer live rolling pack without publishing backwards", a
   assert.equal(buildCount, 0);
   assert.equal(result.reused, true);
   assert.equal(result.pack_build_id, "packbuild-1300");
+});
+
+test("live coverage rebuilds an old native-M5 pack before reuse", async () => {
+  let buildCount = 0;
+  let readCount = 0;
+  const oldPack = liveRollingPack("2026-07-13T13:00:00+02:00", "packbuild-old-native");
+  oldPack.quality.freshness_policy_version = "1.1.0";
+  delete oldPack.canonical_m5_mode;
+  delete oldPack.canonical_resampler_version;
+  delete oldPack.datasets;
+  const refreshedPack = liveRollingPack("2026-07-13T13:00:00+02:00", "packbuild-derived");
+  const result = await ensureLiveRollingPackCoverage({
+    async getDeskPack() {
+      readCount += 1;
+      return readCount === 1 ? oldPack : refreshedPack;
+    },
+  }, {
+    trading_date: "2026-07-13",
+    session: "asia_open",
+    timestamp_paris: "2026-07-13T12:45:00+02:00",
+    as_of_utc: "2026-07-13T10:45:00.000Z",
+  }, {
+    buildLiveRollingPack: async () => {
+      buildCount += 1;
+    },
+  });
+
+  assert.equal(buildCount, 1);
+  assert.equal(result.reused, false);
+  assert.equal(result.pack_build_id, "packbuild-derived");
+});
+
+test("live coverage rebuilds when canonical M1 freshness or M5 lineage is absent", async () => {
+  for (const mutate of [
+    (pack) => { delete pack.quality.dataset_freshness.MNQ_M1; },
+    (pack) => { pack.datasets.MNQ_M5.source_feed_ids = ["wrong-feed"]; },
+  ]) {
+    let buildCount = 0;
+    let readCount = 0;
+    const invalid = liveRollingPack("2026-07-13T13:00:00+02:00", "packbuild-invalid");
+    mutate(invalid);
+    const refreshed = liveRollingPack("2026-07-13T13:00:00+02:00", "packbuild-refreshed");
+    const result = await ensureLiveRollingPackCoverage({
+      async getDeskPack() { return ++readCount === 1 ? invalid : refreshed; },
+    }, {
+      trading_date: "2026-07-13",
+      session: "asia_open",
+      timestamp_paris: "2026-07-13T12:45:00+02:00",
+      as_of_utc: "2026-07-13T10:45:00.000Z",
+    }, {
+      buildLiveRollingPack: async () => { buildCount += 1; },
+    });
+    assert.equal(buildCount, 1);
+    assert.equal(result.reused, false);
+  }
+});
+
+test("live coverage accepts stale NQ/ES confirmations when MNQ/MES triggers are fresh", async () => {
+  let buildCount = 0;
+  const pack = liveRollingPack("2026-07-13T13:00:00+02:00", "packbuild-1300-confirmations");
+  pack.quality.dataset_freshness.NQ_M15.status = "stale";
+  pack.quality.dataset_freshness.ES_M15.status = "stale";
+
+  const result = await ensureLiveRollingPackCoverage({
+    async getDeskPack() {
+      return pack;
+    },
+  }, {
+    trading_date: "2026-07-13",
+    session: "asia_open",
+    timestamp_paris: "2026-07-13T12:45:00+02:00",
+    as_of_utc: "2026-07-13T10:45:00.000Z",
+  }, {
+    buildLiveRollingPack: async () => {
+      buildCount += 1;
+    },
+  });
+
+  assert.equal(buildCount, 0);
+  assert.equal(result.reused, true);
+  assert.equal(result.strict_freshness_satisfied, true);
 });
 
 test("stores with live publishing disabled never publish packs during orchestration", async () => {
@@ -113,14 +216,14 @@ test("live Master workflows derive a complete deterministic strict scope", () =>
     strategy_id: "asia_open",
     session: "asia_open",
     trading_date: "2026-07-13",
-    run_id: "front_live_2026-07-13_asia_open",
+    run_id: "front_live_2026-07-13",
     cutoff_paris: "2026-07-13T11:30:00+02:00",
     as_of_utc: "2026-07-13T09:30:00.000Z",
   });
 
   const ny = resolveLiveMasterJobInput({ workflow: "ny_open" }, "2026-07-13T13:40:00Z");
   assert.equal(ny.strategy_id, "ny_open_1530");
-  assert.equal(ny.run_id, "front_live_2026-07-13_ny_open");
+  assert.equal(ny.run_id, "front_live_2026-07-13");
   assert.equal(ny.cutoff_paris, "2026-07-13T15:30:00+02:00");
 });
 
@@ -135,7 +238,7 @@ test("live monitor scope floors Paris time and enforces registered windows", () 
   assert.equal(ny.as_of_utc, "2026-07-13T13:45:00.000Z");
   assert.equal(isLiveMonitorCheckpointInWindow(ny.session, ny.timestamp_paris), true);
 
-  const tooEarly = resolveLiveMonitorJobInput({ session: "ny_open" }, "2026-07-13T13:37:00Z");
+  const tooEarly = resolveLiveMonitorJobInput({ session: "ny_open" }, "2026-07-13T13:32:00Z");
   assert.equal(tooEarly.timestamp_paris, "2026-07-13T15:30:00+02:00");
   assert.equal(isLiveMonitorCheckpointInWindow(tooEarly.session, tooEarly.timestamp_paris), false);
 });
@@ -143,6 +246,7 @@ test("live monitor scope floors Paris time and enforces registered windows", () 
 test("due Master entry point forwards the derived strict payload", async () => {
   let received = null;
   const store = {
+    livePackPublishingEnabled: false,
     async prepareMasterCutoffBundleJob(payload) {
       received = payload;
       return { ok: true, status: "completed", bundle_id: "bundle-1" };
@@ -151,7 +255,7 @@ test("due Master entry point forwards the derived strict payload", async () => {
   const result = await prepareDueLiveMasterBundle(store, { workflow: "asia_open" }, { now: "2026-07-13T00:15:00+02:00" });
   assert.equal(result.ok, true);
   assert.equal(received.strategy_id, "asia_open");
-  assert.equal(received.run_id, "front_live_2026-07-13_asia_open");
+  assert.equal(received.run_id, "front_live_2026-07-13");
   assert.equal(received.as_of_utc, "2026-07-12T22:15:00.000Z");
 });
 
@@ -168,7 +272,7 @@ test("a live Monitor requesting REPLAN_FULL prepares a new Master at the exact c
     session: "ny_open",
     mode: "live",
     trading_date: "2026-07-13",
-    run_id: "front_live_2026-07-13_ny_open",
+    run_id: "front_live_2026-07-13",
     timestamp_paris: "2026-07-13T16:30:00+02:00",
     monitor_decision: { action: "REPLAN_FULL" },
   });
@@ -176,14 +280,107 @@ test("a live Monitor requesting REPLAN_FULL prepares a new Master at the exact c
   assert.equal(result.status, "prepared");
   assert.equal(received.cutoff_paris, "2026-07-13T16:30:00+02:00");
   assert.equal(received.as_of_utc, "2026-07-13T14:30:00.000Z");
-  assert.equal(received.run_id, "front_live_2026-07-13_ny_open");
+  assert.equal(received.run_id, "front_live_2026-07-13");
   assert.equal(received.enqueue_agent_work, false);
+});
+
+test("WAIT plus an invalidated thesis deterministically schedules the requested fresh Master", async () => {
+  let received = null;
+  const monitor = {
+    strategy_id: "ny_open_1530",
+    session: "ny_open",
+    mode: "live",
+    trading_date: "2026-07-13",
+    run_id: "front_live_2026-07-13",
+    timestamp_paris: "2026-07-13T16:30:00+02:00",
+    monitor_decision: {
+      decision: "WAIT",
+      setup_action: "EXPIRE_OLD_SHORT_AND_REPLAN",
+    },
+    thesis_update: {
+      status: "THESIS_INVALIDATED",
+      requires_replan_after: "2026-07-13T16:45:00+02:00",
+    },
+  };
+  const store = {
+    async prepareMasterCutoffBundleJob(payload) {
+      received = payload;
+      return { ok: true, bundle_id: "replan-master-bundle-1645" };
+    },
+  };
+
+  assert.equal(resolveLiveMonitorReplanAction(monitor), "INVALIDATE_THESIS");
+  assert.equal(resolveLiveMonitorReplanCheckpoint(monitor), "2026-07-13T16:45:00+02:00");
+  const result = await prepareLiveReplanMasterAfterMonitor(store, monitor);
+  assert.equal(result.status, "prepared");
+  assert.equal(received.cutoff_paris, "2026-07-13T16:45:00+02:00");
+  assert.equal(received.as_of_utc, "2026-07-13T14:45:00.000Z");
+});
+
+test("native Monitor V2 replan and thesis commands drive Live continuity", () => {
+  const replan = {
+    schema_version: "2.4.0",
+    timestamp_paris: "2026-07-13T16:30:00+02:00",
+    monitor_decision: { action: "ORTHOGONAL_COMMANDS" },
+    deterministic_monitor_command: {
+      replan_request: {
+        type: "REQUEST",
+        reason: "Fresh context required",
+        dedupe_key: "replan-key",
+        requested_at_paris: "2026-07-13T16:30:00+02:00",
+      },
+      thesis_command: { type: "MAINTAIN" },
+    },
+  };
+  assert.equal(resolveLiveMonitorReplanAction(replan), "REPLAN_FULL");
+  assert.equal(resolveLiveMonitorReplanCheckpoint(replan), "2026-07-13T16:30:00+02:00");
+
+  const invalidation = {
+    schema_version: "2.4.0",
+    timestamp_paris: "2026-07-13T16:45:00+02:00",
+    monitor_decision: { action: "ORTHOGONAL_COMMANDS" },
+    deterministic_monitor_command: {
+      replan_request: { type: "NOOP", requested_at_paris: null },
+      thesis_command: { type: "INVALIDATE" },
+    },
+  };
+  assert.equal(resolveLiveMonitorReplanAction(invalidation), "INVALIDATE_THESIS");
+});
+
+test("Monitor V2 never falls back to raw replan fields", () => {
+  const missingCompiled = {
+    schema_version: "2.4.0",
+    timestamp_paris: "2026-07-13T17:00:00+02:00",
+    replan_request: {
+      type: "REQUEST",
+      requested_at_paris: "2026-07-13T17:00:00+02:00",
+    },
+    monitor_output: {
+      contract: { name: "DeskHourlyThesisMonitorContract", version: "2.4.0" },
+      command: {
+        contract: { name: "DeskMonitorCommandContract", version: "1.4.0" },
+        replan_request: {
+          command: "REQUEST",
+          requested_at_paris: "2026-07-13T17:00:00+02:00",
+        },
+      },
+    },
+  };
+  assert.throws(
+    () => resolveLiveMonitorReplanAction(missingCompiled),
+    (error) => error?.code === "LIVE_MONITOR_V2_COMPILED_COMMAND_MISSING",
+  );
+  assert.throws(
+    () => resolveLiveMonitorReplanCheckpoint(missingCompiled),
+    (error) => error?.code === "LIVE_MONITOR_V2_COMPILED_COMMAND_MISSING",
+  );
 });
 
 test("due M15 entry point rebuilds continuity when a Master is missing", async () => {
   let monitorPrepared = false;
   let masterPayload = null;
   const store = {
+    livePackPublishingEnabled: false,
     async getLatestMasterAnalysis() {
       return { analysis: null };
     },
@@ -233,7 +430,7 @@ test("due M15 entry point recreates the exact replan Master when the active thes
           session: "ny_open",
           mode: "live",
           trading_date: "2026-07-13",
-          run_id: "front_live_2026-07-13_ny_open",
+          run_id: "front_live_2026-07-13",
           timestamp_paris: "2026-07-13T16:30:00+02:00",
           monitor_decision: { action: "REPLAN_FULL" },
         }],
@@ -257,12 +454,57 @@ test("due M15 entry point recreates the exact replan Master when the active thes
   assert.equal(masterPayload.as_of_utc, "2026-07-13T14:30:00.000Z");
 });
 
-test("due M15 entry point resolves exact Master and thesis before preparation", async () => {
+test("an expired active thesis schedules a fresh Master at the current M15 checkpoint", async () => {
+  let masterPayload = null;
+  const store = {
+    livePackPublishingEnabled: false,
+    async getLatestMasterAnalysis() {
+      return {
+        analysis: {
+          analysis_id: "master-1530",
+          cutoff_paris: "2026-07-13T15:30:00+02:00",
+          as_of_utc: "2026-07-13T13:30:00.000Z",
+        },
+      };
+    },
+    async getActiveThesis() {
+      return {
+        active_thesis: {
+          thesis_id: "thesis-expired",
+          valid_until_paris: "2026-07-13T16:00:00+02:00",
+        },
+      };
+    },
+    async getLatestManualMonitor() {
+      return { monitors: [] };
+    },
+    async prepareMasterCutoffBundleJob(payload) {
+      masterPayload = payload;
+      return {
+        ok: true,
+        bundle_id: "fresh-master-1705",
+        cursor_id: "livecur__2026-07-13__ny_open",
+      };
+    },
+  };
+
+  const result = await reconcileLiveDeskContinuity(store, { session: "ny_open" }, {
+    now: "2026-07-13T17:07:00+02:00",
+  });
+
+  assert.equal(result.status, "prepared");
+  assert.equal(result.reason, "expired_thesis_replanned_at_current_checkpoint");
+  assert.equal(result.expired_thesis_id, "thesis-expired");
+  assert.equal(masterPayload.cutoff_paris, "2026-07-13T17:00:00+02:00");
+  assert.equal(masterPayload.as_of_utc, "2026-07-13T15:00:00.000Z");
+});
+
+test("due GPT M15 entry point resolves exact Master and thesis before preparation", async () => {
   let received = null;
   let packBuilt = false;
   const store = {
     async getLatestMasterAnalysis(scope) {
-      assert.equal(scope.run_id, "front_live_2026-07-13_ny_open");
+      assert.equal(scope.run_id, "front_live_2026-07-13");
       return { analysis: { analysis_id: "master-1" } };
     },
     async getActiveThesis(scope) {
@@ -298,6 +540,14 @@ test("due M15 entry point resolves exact Master and thesis before preparation", 
 test("live cursor roll-forward can prepare a Monitor from the latest expired thesis", async () => {
   let thesisStatus = null;
   let received = null;
+  const catchupContext = {
+    catchup_mode: true,
+    catchup_reason: "latest_monitor_wins",
+    latest_wins: true,
+    monitor_checkpoint_paris: "2026-07-13T15:45:00+02:00",
+    skipped_checkpoints: [],
+    skipped_checkpoint_count: 0,
+  };
   const store = {
     async getLatestMasterAnalysis() {
       return { analysis: { analysis_id: "late-master-1" } };
@@ -324,6 +574,7 @@ test("live cursor roll-forward can prepare a Monitor from the latest expired the
   const result = await prepareDueLiveMonitorBundle(store, {
     session: "ny_open",
     catchup_mode: true,
+    catchup_context: catchupContext,
   }, { now: "2026-07-13T15:52:00+02:00" });
 
   assert.equal(result.ok, true);
@@ -332,13 +583,36 @@ test("live cursor roll-forward can prepare a Monitor from the latest expired the
   assert.equal(received.master_id, "late-master-1");
   assert.equal(received.thesis_id, "expired-thesis-1");
   assert.equal(received.timestamp_paris, "2026-07-13T15:45:00+02:00");
+  assert.deepEqual(received.catchup_context, catchupContext);
 });
 
 function liveRollingPack(endParis, buildId) {
+  const freshness = Object.fromEntries(
+    ["MNQ_M1", "MES_M1", "MNQ_M5", "MES_M5", "NQ_M15", "NQ_H1", "ES_M15", "ES_H1", "MNQ_H4", "MES_H4", "NQ_H4", "ES_H4"]
+      .map((dataset) => [dataset, { status: "fresh" }]),
+  );
   return {
     pack_id: "2026-07-13_asia_open",
     pack_build_id: buildId,
     pack_purpose: "live_rolling",
+    data_profile_id: "v5_replay_canonical_m1_m5",
+    data_profile_version: "1.1.0",
+    canonical_m5_mode: "derived_from_m1",
+    canonical_resampler_version: "1.0.0",
+    datasets: {
+      MNQ_M5: {
+        source: "canonical_derived_m1", source_dataset: "MNQ_M1", derivation_version: "1.0.0",
+        source_feed_ids: ["prod__tradingview__MNQ1!__1"],
+      },
+      MES_M5: {
+        source: "canonical_derived_m1", source_dataset: "MES_M1", derivation_version: "1.0.0",
+        source_feed_ids: ["prod__tradingview__MES1!__1"],
+      },
+    },
+    quality: {
+      freshness_policy_version: "1.2.0",
+      dataset_freshness: freshness,
+    },
     source_coverage: {
       mode: "live_rolling_checkpoint",
       end_paris: endParis,

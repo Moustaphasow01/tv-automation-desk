@@ -11,6 +11,12 @@ Cette copie est un projet indépendant du dépôt Firebase/Google Cloud d'origin
 Aucune commande de déploiement Firebase, Firestore, Cloud Run ou GCloud n'est incluse dans le démarrage local.
 Le frontend utilise toujours l'API locale : aucun mode mock n'est compilé dans le bundle de production.
 
+Le dépôt contient également le kit prêt à installer sur un futur VPS Windows :
+PostgreSQL natif, Caddy, services Node.js, sauvegardes, rollback et NinjaTrader
+Sim101. Rien n'est déployé à distance à ce stade. Voir
+[la readiness pré-VPS](docs/VPS_WINDOWS_READINESS_2026-07-23.md) et
+[le runbook de cutover](docs/VPS_WINDOWS_CUTOVER_RUNBOOK_2026-07-23.md).
+
 ## Démarrage
 
 1. Copier `.env.preprod.example` vers `.env.preprod` et changer les secrets locaux.
@@ -32,13 +38,14 @@ Espaces ajoutés :
 - `http://localhost:8080/#/history` : historique navigable ;
 - `http://localhost:8080/#/strategies` : configurations et versions.
 
-L'architecture et les endpoints M0 à M11 sont détaillés dans [docs/OPERATIONS_REPLAY_LAB_ARCHITECTURE.md](docs/OPERATIONS_REPLAY_LAB_ARCHITECTURE.md).
+L'architecture et les endpoints M0 à M17 sont détaillés dans [docs/OPERATIONS_REPLAY_LAB_ARCHITECTURE.md](docs/OPERATIONS_REPLAY_LAB_ARCHITECTURE.md). La carte officielle des fichiers actifs/support est dans [docs/PREPROD_PROJECT_MANIFEST.md](docs/PREPROD_PROJECT_MANIFEST.md).
 
 Le chantier de redesign Front V2 dispose d'un kit de passation séparant la direction de design Claude de l'implémentation Codex :
 
-- [manifeste de mission](docs/CLAUDE_FRONT_REDESIGN_MANIFEST.md) ;
-- [prompt prêt à transmettre à Claude](docs/CLAUDE_FRONT_REDESIGN_PROMPT.md) ;
-- [contexte complet avec inventaire des écrans, code et CSS](docs/CLAUDE_FRONT_REDESIGN_HANDOFF.md).
+- [point d'entrée du kit](docs/front-redesign/README.md) ;
+- [manifeste de mission](docs/front-redesign/MANIFEST.md) ;
+- [prompt prêt à transmettre à Claude](docs/front-redesign/PROMPT.md) ;
+- [contexte complet avec inventaire des écrans, code et CSS](docs/front-redesign/HANDOFF.md).
 
 Le handoff peut être actualisé après une évolution du frontend avec `npm run handoff:claude`.
 
@@ -48,7 +55,29 @@ Webhook TradingView local :
 POST http://localhost:8787/api/v1/webhooks/tradingview?token=<TRADINGVIEW_WEBHOOK_SECRET>
 ```
 
+En mode public, le secret en query string est volontairement refusé. TradingView
+doit alors envoyer le secret dans le payload JSON, afin qu'il n'apparaisse pas
+dans les journaux d'accès.
+
 Les scripts Pine maintenus sont dans `tradingview/` : exporteur webhook unitaire, exporteur Volume Profile et exporteurs batch M1/M5/M15/H1/H4. Les fichiers batch sont conservés car leurs alertes peuvent être configurées directement dans TradingView, hors du graphe d'import de l'application.
+
+Readiness LIVE V4 locale, sans claim GPT ni ordre broker :
+
+```bash
+npm --prefix mcp_gpt_desk run live:shadow-readiness -- \
+  --trading-date 2026-07-20 --session asia_open \
+  --checkpoint-paris 2026-07-20T12:00:00+02:00
+```
+
+Tick de continuité setup/position paper sur bougies closes :
+
+```bash
+npm --prefix mcp_gpt_desk run live:paper-tick -- \
+  --trading-date 2026-07-20 --session asia_open \
+  --timestamp-paris 2026-07-20T12:05:00+02:00
+```
+
+Voir `docs/AUTOPILOT_V4_LIVE_PREPROD_READINESS_2026-07-20.md`.
 
 ## Arrêt
 
@@ -64,6 +93,14 @@ Ajouter `--volumes` supprime aussi les données PostgreSQL locales ; ne l'utilis
 npm run typecheck
 npm run test:react
 cd mcp_gpt_desk && npm test
+```
+
+Gates du packaging Windows :
+
+```bash
+npm run guard:strategy-contracts
+npm run guard:windows-deployment
+npm run benchmark:local
 ```
 
 Pour l'acceptation complète contre les conteneurs réels Nginx, API et PostgreSQL :

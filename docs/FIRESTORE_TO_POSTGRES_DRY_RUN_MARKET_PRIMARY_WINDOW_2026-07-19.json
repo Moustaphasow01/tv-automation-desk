@@ -1,0 +1,241 @@
+{
+  "ok": true,
+  "mode": "dry-run",
+  "import_id": "firestore_dry_run_20260719T175827Z",
+  "project_id": "tv-automation-23d50",
+  "requested_collections": [
+    "market_feeds"
+  ],
+  "excluded_collections": {
+    "broker_order_intent_events": "excluded by default: old broker test events",
+    "broker_order_intents": "excluded by default: old broker test state, migrate later into trade_order_intents after validation",
+    "broker_runtime_control": "excluded by default: broker automation not enabled in PREPROD",
+    "broker_runtime_events": "excluded by default: broker automation not enabled in PREPROD",
+    "desk_cloud_run_slots": "excluded: Cloud Run runtime-specific state",
+    "desk_cross_asset_deltas": "excluded: cross-asset deltas are noisy and recalculable",
+    "live_study_values": "excluded by default: high-volume derived study values",
+    "market_candles": "excluded: legacy residual replaced by market_feeds/*/candles",
+    "ninjatrader_bridge_mirrors": "excluded by default: bridge mirror/test state",
+    "study_candles": "excluded: high-volume derived study candles"
+  },
+  "options": {
+    "include_candles": true,
+    "feed_ids": [
+      "prod__tradingview__MNQ1!__1",
+      "prod__tradingview__MNQ1!__5",
+      "prod__tradingview__MNQ1!__15",
+      "prod__tradingview__MNQ1!__1H",
+      "prod__tradingview__MNQ1!__4H",
+      "prod__tradingview__MES1!__1",
+      "prod__tradingview__MES1!__5",
+      "prod__tradingview__MES1!__15",
+      "prod__tradingview__MES1!__1H",
+      "prod__tradingview__MES1!__4H"
+    ],
+    "recent_candles": false,
+    "candle_from_doc_id": "20260630T220000Z",
+    "candle_to_doc_id": "20260717T210000Z",
+    "max_docs_per_collection": 0,
+    "max_candles_per_feed": 0,
+    "batch_size": 250,
+    "sample_limit": 3
+  },
+  "targets": {
+    "market_candles": {
+      "seen": 40384,
+      "would_write": 40384,
+      "skipped": 0,
+      "quarantined": 0,
+      "errors": 0
+    },
+    "market_feeds": {
+      "seen": 10,
+      "would_write": 10,
+      "skipped": 0,
+      "quarantined": 0,
+      "errors": 0
+    },
+    "skipped": {
+      "seen": 40,
+      "would_write": 0,
+      "skipped": 40,
+      "quarantined": 0,
+      "errors": 0
+    }
+  },
+  "samples": {
+    "market_feeds": [
+      {
+        "source_path": "market_feeds/prod__tradingview__MES1!__1",
+        "document_id": "prod__tradingview__MES1!__1",
+        "keys": [
+          "created_at_utc",
+          "enabled",
+          "environment",
+          "feed_id",
+          "latest_candle_path",
+          "latest_timestamp_utc",
+          "provider",
+          "schema_version",
+          "source_service",
+          "symbol",
+          "timeframe",
+          "timeframe_group",
+          "timezone",
+          "updated_at_utc"
+        ]
+      },
+      {
+        "source_path": "market_feeds/prod__tradingview__MES1!__15",
+        "document_id": "prod__tradingview__MES1!__15",
+        "keys": [
+          "created_at_utc",
+          "enabled",
+          "environment",
+          "feed_id",
+          "latest_candle_path",
+          "latest_timestamp_utc",
+          "provider",
+          "schema_version",
+          "source_service",
+          "symbol",
+          "timeframe",
+          "timeframe_group",
+          "timezone",
+          "updated_at_utc"
+        ]
+      },
+      {
+        "source_path": "market_feeds/prod__tradingview__MES1!__1H",
+        "document_id": "prod__tradingview__MES1!__1H",
+        "keys": [
+          "created_at_utc",
+          "enabled",
+          "environment",
+          "feed_id",
+          "latest_candle_path",
+          "latest_timestamp_utc",
+          "provider",
+          "schema_version",
+          "source_service",
+          "symbol",
+          "timeframe",
+          "timeframe_group",
+          "timezone",
+          "updated_at_utc"
+        ]
+      }
+    ],
+    "market_candles": [
+      {
+        "source_path": "market_feeds/prod__tradingview__MES1!__1/candles/20260630T220000Z",
+        "document_id": "20260630T220000Z",
+        "keys": [
+          "asset",
+          "atr_14",
+          "chart_symbol",
+          "chart_timeframe",
+          "close",
+          "created_at",
+          "created_at_utc",
+          "environment",
+          "feed_id",
+          "high",
+          "is_closed",
+          "low",
+          "open",
+          "provider",
+          "requested_symbol",
+          "rsi_14",
+          "schema_version",
+          "source",
+          "source_file",
+          "source_row",
+          "source_service",
+          "symbol",
+          "timeframe",
+          "timeframe_group",
+          "timestamp_local",
+          "timestamp_ny",
+          "timestamp_paris",
+          "timestamp_utc",
+          "trading_date",
+          "trading_date_paris"
+        ]
+      },
+      {
+        "source_path": "market_feeds/prod__tradingview__MES1!__1/candles/20260630T220100Z",
+        "document_id": "20260630T220100Z",
+        "keys": [
+          "asset",
+          "atr_14",
+          "chart_symbol",
+          "chart_timeframe",
+          "close",
+          "created_at",
+          "created_at_utc",
+          "environment",
+          "feed_id",
+          "high",
+          "is_closed",
+          "low",
+          "open",
+          "provider",
+          "requested_symbol",
+          "rsi_14",
+          "schema_version",
+          "source",
+          "source_file",
+          "source_row",
+          "source_service",
+          "symbol",
+          "timeframe",
+          "timeframe_group",
+          "timestamp_local",
+          "timestamp_ny",
+          "timestamp_paris",
+          "timestamp_utc",
+          "trading_date",
+          "trading_date_paris"
+        ]
+      },
+      {
+        "source_path": "market_feeds/prod__tradingview__MES1!__1/candles/20260630T220200Z",
+        "document_id": "20260630T220200Z",
+        "keys": [
+          "asset",
+          "atr_14",
+          "chart_symbol",
+          "chart_timeframe",
+          "close",
+          "created_at",
+          "created_at_utc",
+          "environment",
+          "feed_id",
+          "high",
+          "is_closed",
+          "low",
+          "open",
+          "provider",
+          "requested_symbol",
+          "rsi_14",
+          "schema_version",
+          "source",
+          "source_file",
+          "source_row",
+          "source_service",
+          "symbol",
+          "timeframe",
+          "timeframe_group",
+          "timestamp_local",
+          "timestamp_ny",
+          "timestamp_paris",
+          "timestamp_utc",
+          "trading_date",
+          "trading_date_paris"
+        ]
+      }
+    ]
+  },
+  "quarantine_samples": []
+}

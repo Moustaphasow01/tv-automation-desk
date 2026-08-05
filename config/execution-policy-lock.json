@@ -1,0 +1,172 @@
+{
+  "schema_version": "execution_policy_lock_v4",
+  "locked_at": "2026-08-03",
+  "reason": "LIVE and Replay produce only the V5.4/V2.4 analytical matrix with Plan/Command 1.4, deterministic Policy V4.3, compiler 1.4 and condition engine 1.2. Previous artifacts are immutable historical reads.",
+  "policy": {
+    "registry_key": "execution_policy_contract",
+    "path": "packages/desk-contracts/contracts/DeskDeterministicExecutionPolicy_v4_3_0.md",
+    "schema_path": "packages/desk-contracts/schemas/entities/execution-plan-v1-4.schema.json",
+    "schema_version": "4.3.0",
+    "sha256": "f8861200515007771e9f79dc4bce5e6d908fa8b2444932fa917ab0bd9d3bdc22",
+    "schema_sha256": "3ac5c2be613c3d0deff83e10373b8ebe99be5b91d52dec0eb84902c097bea5f9",
+    "companion_schemas": [
+      {
+        "path": "packages/desk-contracts/schemas/entities/monitor-command-v1-4.schema.json",
+        "sha256": "db084f0b08ac7b2d27a24169068d339be4fa00355bc9c1046d002fd5e29ab5b3"
+      },
+      {
+        "path": "packages/desk-contracts/schemas/entities/condition-catalog-v1-2.schema.json",
+        "sha256": "df376ca491228176fc86b0d2f440fd4f28e1c6709adf675135f6606e02b8837a"
+      },
+      {
+        "path": "packages/desk-contracts/schemas/entities/compiled-execution-plan-v1-4.schema.json",
+        "sha256": "9798898e8f054a2c70d33d4d34e25626d592c573c1befc8924f9a61405b79601"
+      },
+      {
+        "path": "packages/desk-contracts/schemas/entities/compiled-monitor-command-v1-4.schema.json",
+        "sha256": "92f9a765d61254488ae1fdc40789f6172da783181afd6420e32213dca5d6cb87"
+      }
+    ]
+  },
+  "components": [
+    {
+      "registry_key": "execution_plan_contract",
+      "path": "packages/desk-contracts/contracts/DeskExecutionPlanContract_v1_4_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/execution-plan-v1-4.schema.json",
+      "schema_version": "1.4.0",
+      "sha256": "a1e40d10c891b9f2df47f30b35dd7be7e0f4e59aaecf75d9dbc1f685e207c828",
+      "schema_sha256": "3ac5c2be613c3d0deff83e10373b8ebe99be5b91d52dec0eb84902c097bea5f9",
+      "companion_schemas": [
+        {
+          "path": "packages/desk-contracts/schemas/entities/compiled-execution-plan-v1-4.schema.json",
+          "sha256": "9798898e8f054a2c70d33d4d34e25626d592c573c1befc8924f9a61405b79601"
+        }
+      ]
+    },
+    {
+      "registry_key": "monitor_command_contract",
+      "path": "packages/desk-contracts/contracts/DeskMonitorCommandContract_v1_4_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/monitor-command-v1-4.schema.json",
+      "schema_version": "1.4.0",
+      "sha256": "aae4dde166a9702fae80a49172afcb950833ab938b2eeaca79f2554275bc5ebb",
+      "schema_sha256": "db084f0b08ac7b2d27a24169068d339be4fa00355bc9c1046d002fd5e29ab5b3",
+      "companion_schemas": [
+        {
+          "path": "packages/desk-contracts/schemas/entities/compiled-monitor-command-v1-4.schema.json",
+          "sha256": "92f9a765d61254488ae1fdc40789f6172da783181afd6420e32213dca5d6cb87"
+        }
+      ]
+    },
+    {
+      "registry_key": "condition_catalog_contract",
+      "path": "packages/desk-contracts/contracts/DeskConditionCatalogContract_v1_2_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/condition-catalog-v1-2.schema.json",
+      "artifact_path": "packages/desk-contracts/catalogs/condition-catalog-v1-2.json",
+      "artifact_sha256": "d983535ce63428decda23df4b32f578e21d2912e018f965e3780c62bda71f176",
+      "schema_version": "1.2.0",
+      "sha256": "2af8d5325a0a14a533944a3763b4a288346512c2886441b24a50f1ca2919eb61",
+      "schema_sha256": "df376ca491228176fc86b0d2f440fd4f28e1c6709adf675135f6606e02b8837a"
+    }
+  ],
+  "legacy_policies": [
+    {
+      "registry_key": "execution_policy_contract_v4_2",
+      "path": "packages/desk-contracts/contracts/DeskDeterministicExecutionPolicy_v4_2_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/execution-plan-v1-2.schema.json",
+      "schema_version": "4.2.0",
+      "sha256": "5118ad4fa7d0239662157064701f1c7a8611b0fd52cb3e22a4f0cbfb25f18e4c",
+      "schema_sha256": "6dc877efa7102f3c8c1320cb8695858ad162aaccfaccba320a2da0aa6d125580"
+    },
+    {
+      "registry_key": "execution_policy_contract_v4_0",
+      "path": "packages/desk-contracts/contracts/DeskDeterministicExecutionPolicy_v4_0_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/execution-plan-v1.schema.json",
+      "schema_version": "4.0.0",
+      "sha256": "57a0e827fb3a8898974650ca2b358930d69ec9f82892766c285c354fc3300399",
+      "schema_sha256": "c6e2f45932b78bf6f58932013aed25e5121c347823bb0a59d2aec8d5d9b6121c"
+    }
+  ],
+  "legacy_components": [
+    {
+      "registry_key": "execution_plan_contract_v1_3",
+      "path": "packages/desk-contracts/contracts/DeskExecutionPlanContract_v1_3_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/execution-plan-v1-3.schema.json",
+      "schema_version": "1.3.0",
+      "sha256": "de2512c53637e31983a4502d9e26cb5edb99d3479c1359c3b5e7de8df446cab3",
+      "schema_sha256": "78884247771afce00604715414427113340551c399379b5b09abb8585b2972d9"
+    },
+    {
+      "registry_key": "monitor_command_contract_v1_3",
+      "path": "packages/desk-contracts/contracts/DeskMonitorCommandContract_v1_3_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/monitor-command-v1-3.schema.json",
+      "schema_version": "1.3.0",
+      "sha256": "c083ea2b6051cef9ca82c74d7e074ae6669d62f8282a362e77d569ecf48ecb36",
+      "schema_sha256": "f5074a757d4f634c4d6f2df1887b0be09289dedf277025d872d42c5dd5141f21"
+    },
+    {
+      "registry_key": "execution_plan_contract_v1_2",
+      "path": "packages/desk-contracts/contracts/DeskExecutionPlanContract_v1_2_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/execution-plan-v1-2.schema.json",
+      "schema_version": "1.2.0",
+      "sha256": "f303073fdb069afd103e315b82fea15c2feaf8c9141204787f06f10d15079221",
+      "schema_sha256": "6dc877efa7102f3c8c1320cb8695858ad162aaccfaccba320a2da0aa6d125580"
+    },
+    {
+      "registry_key": "monitor_command_contract_v1_2",
+      "path": "packages/desk-contracts/contracts/DeskMonitorCommandContract_v1_2_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/monitor-command-v1-2.schema.json",
+      "schema_version": "1.2.0",
+      "sha256": "3503a6cba7323cf677604aa99685dc2c25b19e43d82d8edbdd0475d58419b6fd",
+      "schema_sha256": "f9cd6825dbafe8bae5999f72e53dbe2448ad11ab507f955d6e53618a2b631e2d"
+    },
+    {
+      "registry_key": "execution_plan_contract_v1_0",
+      "path": "packages/desk-contracts/contracts/DeskExecutionPlanContract_v1_0_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/execution-plan-v1.schema.json",
+      "schema_version": "1.0.0",
+      "sha256": "df8ba73e27d8cd0bd4e14094d4b307e6a1ecf346f13ed4d097924514611cb738",
+      "schema_sha256": "c6e2f45932b78bf6f58932013aed25e5121c347823bb0a59d2aec8d5d9b6121c"
+    },
+    {
+      "registry_key": "monitor_command_contract_v1_0",
+      "path": "packages/desk-contracts/contracts/DeskMonitorCommandContract_v1_0_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/monitor-command-v1.schema.json",
+      "schema_version": "1.0.0",
+      "sha256": "08757f2e272fea75865a6d02b92502fbb1b3d269eefe0f2043c9a6ab3f5a273c",
+      "schema_sha256": "794bbc935bc6c6f0a11263a66bf564a4bdc0258b45ab5322e29d9ce6644a36b7"
+    },
+    {
+      "registry_key": "condition_catalog_contract_v1_0",
+      "path": "packages/desk-contracts/contracts/DeskConditionCatalogContract_v1_0_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/condition-catalog-v1.schema.json",
+      "artifact_path": "packages/desk-contracts/catalogs/condition-catalog-v1.json",
+      "artifact_sha256": "5e2a92c4c730af93c32a1df15fcaad6f5f90ab746a7118ea634f13eb1b0c42b1",
+      "schema_version": "1.0.0",
+      "sha256": "27008c0ff43fc188b4b24ecea391fca3f2ac0d595db2b8f8da5d345405587e6c",
+      "schema_sha256": "51df5313e1e748280fe15eb9c2758d8184741fe421daf0ada5af072d74fb91ba"
+    }
+  ],
+  "compiler": {
+    "compiler_version": "1.4.0",
+    "condition_engine_version": "1.2.0",
+    "opportunity_policy_version": "1.2.0",
+    "artifacts": [
+      {
+        "path": "packages/desk-domain/src/deterministic-compilers-v1.js",
+        "sha256": "7f1d6f54c141973ad2ac410d03635c9d099afd8c81d30ba0d399113277aaa2b1"
+      },
+      {
+        "path": "packages/desk-domain/src/deterministic-compiler-entry-v1.js",
+        "sha256": "aa10245a4305ab2e448584d06b9093352080dc1e001db5f00061ab2c3fc32406"
+      },
+      {
+        "path": "packages/desk-domain/src/opportunity-policy-v1.js",
+        "sha256": "8c9a1ae1da6bc796d8de9a4a4508221e31e6dd769f80f5741a6d2e5174060f9f"
+      },
+      {
+        "path": "packages/desk-domain/src/deterministic-predicate-registry-v1.js",
+        "sha256": "428e4371c60d6b84ee2de35183d1ffbaf539cf25f40cb9c118fd214245ce3993"
+      }
+    ]
+  }
+}

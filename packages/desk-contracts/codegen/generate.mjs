@@ -7,6 +7,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const entitiesDir = join(root, "schemas", "entities");
 const commonDir = join(root, "schemas", "common");
 const toolsDir = join(root, "schemas", "tools");
+const catalogsDir = join(root, "catalogs");
 const enumsPath = join(root, "enums", "enums.json");
 const registryPath = join(root, "registry.json");
 
@@ -74,6 +75,7 @@ async function main() {
   const entitySchemas = Object.fromEntries(schemas.map(({ file, schema }) => [file, schema]));
   const commonSchemas = await readJsonDirectory(commonDir);
   const toolInputSchemasByFile = await readJsonDirectory(toolsDir);
+  const catalogs = await readJsonDirectory(catalogsDir);
 
   const ts = [
     "/* Generated from packages/desk-contracts/schemas. Do not edit manually. */",
@@ -81,6 +83,7 @@ async function main() {
     ...Object.entries(enums).map(([name, values]) =>
       `export const ${name} = ${JSON.stringify(values)} as const;\nexport type ${name}Value = typeof ${name}[number];`,
     ),
+    `export const catalogs = ${JSON.stringify(catalogs, null, 2)} as const;`,
     "",
     ...schemas.map(({ name, schema }) => `export type ${name} = ${tsType(schema)};`),
     "",
@@ -92,6 +95,7 @@ async function main() {
     [
       "/* Generated from packages/desk-contracts JSON sources. Do not edit manually. */",
       jsExport("enums", enums),
+      jsExport("catalogs", catalogs),
       jsExport("registry", registry),
       jsExport("entitySchemas", entitySchemas),
       jsExport("commonSchemas", commonSchemas),

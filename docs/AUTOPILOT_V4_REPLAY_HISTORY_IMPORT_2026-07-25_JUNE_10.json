@@ -1,0 +1,53 @@
+{
+  "ok": true,
+  "mode": "import",
+  "import_id": "v4_replay_history_20260725_june10_existing_firestore_copy",
+  "source_project": "tv-automation-23d50",
+  "source_transport": "existing_postgres_firestore_copy",
+  "strategy_version": "autopilot_v4",
+  "run_ids": [
+    "replay_2026_06_10_asia_open_15m_autopilot_v2"
+  ],
+  "validations": {
+    "replay_2026_06_10_asia_open_15m_autopilot_v2": {
+      "terminal": true,
+      "anti_lookahead_compliant": true,
+      "simulations_checked": 88,
+      "positions": 8,
+      "closed_positions": 8,
+      "priced_closed_positions": 8,
+      "unpriced_closed_positions": 0,
+      "setups": 62,
+      "masters": 26,
+      "monitors": 88,
+      "steps": 114
+    }
+  },
+  "collections": {
+    "replay_2026_06_10_asia_open_15m_autopilot_v2": {
+      "desk_replay_runs": 1,
+      "desk_replay_steps": 114,
+      "desk_replay_bundles": 114,
+      "desk_replay_master_analyses": 26,
+      "desk_replay_monitors": 88,
+      "desk_replay_active_theses": 0,
+      "desk_replay_setups": 62,
+      "desk_replay_positions": 8,
+      "desk_replay_trade_simulations": 88,
+      "desk_replay_context_transmissions": 0,
+      "desk_replay_timeline": 493,
+      "desk_replay_audit_logs": 0,
+      "desk_agent_work_items": 0,
+      "desk_agent_work_events": 0
+    }
+  },
+  "deleted": {},
+  "upserted": {},
+  "promoted_existing_documents": 994,
+  "pending_firestore_trace_refresh": true,
+  "notes": [
+    "The scoped Firestore refresh was blocked by the daily read quota before the source run could be read.",
+    "The existing PostgreSQL copy was validated against the strict V4 run contract and all 88 anti-lookahead simulations before promotion.",
+    "Missing GPT work and context trace collections remain pending until the Firestore quota resets."
+  ]
+}

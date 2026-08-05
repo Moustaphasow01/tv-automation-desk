@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://desk-futures.local/schemas/tradingview-m1-backfill-manifest-v2.schema.json",
+  "title": "TradingView M1 Backfill Manifest V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source", "environment", "timezone", "window", "files", "capture_proof"],
+  "properties": {
+    "schema_version": { "const": "tradingview-m1-backfill-manifest-v2" },
+    "source": { "const": "tradingview" },
+    "environment": { "const": "prod" },
+    "timezone": { "const": "Europe/Paris" },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_paris", "end_paris", "semantics"],
+      "properties": {
+        "start_paris": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T00:00:00(?:\\.000)?[+-]\\d{2}:\\d{2}$" },
+        "end_paris": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T22:00:00(?:\\.000)?[+-]\\d{2}:\\d{2}$" },
+        "semantics": { "const": "[start,end)" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "symbol", "timeframe", "sha256", "row_count"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^[^/\\\\]+\\.csv$" },
+          "symbol": { "enum": ["MNQ1!", "MES1!"] },
+          "timeframe": { "const": "1" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "row_count": { "const": 1320 }
+        }
+      }
+    },
+    "capture_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "row_count", "policy_version", "minimum_settlement_lag_seconds", "premature_capture_count"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^[^/\\\\]+\\.jsonl$" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "row_count": { "const": 2640 },
+        "policy_version": { "const": "settled_closed_bar_v2" },
+        "minimum_settlement_lag_seconds": { "type": "integer", "minimum": 60 },
+        "premature_capture_count": { "const": 0 }
+      }
+    }
+  }
+}

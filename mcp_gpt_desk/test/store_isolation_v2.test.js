@@ -28,7 +28,7 @@ test("V2 replay reads an exact immutable build and returns verified integrity", 
 
   assert.equal(result.pack_build_id, fixture.packBuildId);
   assert.equal(result.integrity.valid, true);
-  assert.equal(result.rows.at(-1).timestamp_utc, "2026-07-08T22:00:00.000Z");
+  assert.equal(result.rows.at(-1).timestamp_utc, "2026-07-08T21:45:00.000Z");
   assert.equal(result.source_manifest_hash.length, 64);
 });
 

@@ -10,6 +10,7 @@ import {
   sourceHashPayload,
 } from "./desk-replay-orchestration-algorithms.js";
 import {
+  assertRuntimeContractMatrix,
   compactContract,
   contractContext,
   contractHandshake,
@@ -28,16 +29,21 @@ import {
   safeRead,
 } from "./desk-market-feature-algorithms.js";
 import {
-  crossAssetWindowForSession,
   featureInstrument,
   firstArray,
   getLatestOperationalMonitor,
+  immutablePackRawScope,
   masterCutoffBundleId,
   operationalSelectorArgs,
   readFeatureContext,
   resolveOperationalReadScope,
 } from "./desk-strategy-audit-algorithms.js";
 import { documentTimestampUtc, isDocumentAtOrBefore } from "./desk-document-algorithms.js";
+import { finalizeDeskDataQuality } from "./data-availability-policy.js";
+import {
+  ACTIVE_STRATEGY_RUNTIME_VERSIONS,
+  assertActiveStrategyContractContext,
+} from "./strategy-runtime-versioning.js";
 
 const COLLECTIONS = DESK_COLLECTIONS;
 
@@ -56,7 +62,7 @@ export async function buildMasterCutoffBundle(store, args = {}, clock = new Syst
   const mode = resolvedScope.mode;
   const timezone = resolvedScope.timezone;
   const instruments = args.instruments?.length ? args.instruments : ["MNQ", "MES", "NQ", "ES"];
-  const contracts = await safeRead(store.getActiveContracts(), {});
+  const contracts = assertRuntimeContractMatrix(await store.getActiveContracts(), { operation: "build_live_master_bundle" });
   const contract_context = contractContext(contracts, "master", { tick, pinnedForReplay: false });
   const pack = args.pack_id
     ? await safeRead(store.getDeskPack({ pack_id: args.pack_id, mode, include_draft: false }), null)
@@ -72,7 +78,7 @@ export async function buildMasterCutoffBundle(store, args = {}, clock = new Syst
   const active_thesis = latest_master_analysis?.analysis_id
     ? await safeRead(store.getActiveThesis({ ...selector, master_id: latest_master_analysis.analysis_id, status: "active" }).then((result) => result.active_thesis), null)
     : null;
-  const raw_scope = pack ? { ...selector, timezone, pack_id: pack.pack_id, pack_build_id: pack.pack_build_id } : null;
+  const raw_scope = immutablePackRawScope(resolvedScope, pack);
   const futures_core = await buildMasterCutoffRawWindows(store, { cutoff, instruments, raw_scope });
   const cross_asset = await buildCrossAssetRawWindows(store, { cutoff, raw_scope });
   const rolling = pack
@@ -93,8 +99,16 @@ export async function buildMasterCutoffBundle(store, args = {}, clock = new Syst
         include_raw_refs: args.include_raw_refs !== false,
         raw_scope,
       });
-  const features = await readFeatureContext(store, { date, session, activeThesis: active_thesis, latestMaster: latest_master_analysis, timestamp_paris: cutoff });
-  const cross_delta = await safeRead(store.ensureCrossAssetDelta({ timestamp_paris: cutoff, window: crossAssetWindowForSession(session, cutoff), save: args.save !== false, raw_scope }), { status: "missing", delta: null, stale_check: { is_stale: true, execution_allowed: false, reason: "cross_asset_delta_missing" } });
+  const features = await readFeatureContext(store, {
+    date,
+    session,
+    activeThesis: active_thesis,
+    latestMaster: latest_master_analysis,
+    timestamp_paris: cutoff,
+    raw_scope,
+    computed_at: resolvedScope.as_of_utc,
+  });
+  const cross_delta = features.cross;
   const raw_refs = dedupeBy([
     ...Object.values(futures_core).flatMap((item) => item.raw_refs || []),
     ...Object.values(cross_asset).flatMap((item) => item.raw_refs || []),
@@ -110,6 +124,11 @@ export async function buildMasterCutoffBundle(store, args = {}, clock = new Syst
     news_digest,
   });
   const bundle_id = masterCutoffBundleId({ date, session, cutoff_paris: cutoff, mode });
+  const cutoffKey = String(cutoff).slice(11, 16).replace(":", "");
+  const analysis_id = stableVNextId("master", date, [session, resolvedScope.run_id, cutoffKey].filter(Boolean).join("_"));
+  const plan_id = stableVNextId("plan", analysis_id, "execution_plan_v1_2");
+  const thesis_id = stableVNextId("thesis", analysis_id, "primary");
+  const setup_id_candidates = [1, 2, 3, 4, 5].map((rank) => stableVNextId("setup", plan_id, `candidate_${rank}`));
   const base = {
     ok: data_quality.status !== "failed",
     status: data_quality.status,
@@ -131,6 +150,13 @@ export async function buildMasterCutoffBundle(store, args = {}, clock = new Syst
     pack_build_id: pack?.pack_build_id || null,
     source_manifest_hash: pack?.source_manifest_hash || pack?.manifest?.source_manifest_hash || null,
     contract_context,
+    contract_output_identity: {
+      analysis_id,
+      plan_id,
+      thesis_id,
+      setup_id_candidates,
+      authority: "BACKEND_PINNED",
+    },
     contract_handshake: contractHandshake("master_cutoff", contract_context, {
       saveTool: "save_master_analysis",
       backtestId: args.backtest_id || null,
@@ -178,11 +204,18 @@ export async function buildMasterCutoffBundle(store, args = {}, clock = new Syst
       required_bundle_tool: "get_master_cutoff_bundle",
       save_tool: "save_master_analysis",
       source_coverage_rule: "The immutable active live pack must cover as_of_utc. Never reuse an earlier decision-cutoff build for a later revalidation.",
-      market_availability_rule: "Only missing_unexpected is a feed failure. stale_market_closed and not_yet_open are normal session states and do not justify DATA_NOT_READY by themselves.",
+      market_availability_rule: "data_quality is authoritative. Context-only missing_unexpected is DEGRADED, not DATA_NOT_READY; block only when execution_allowed=false or analysis_mode=blocked.",
       stale_context_rule: "Use last_known/H4 only for regime context, never as a fresh trigger.",
       tech_gap_rule: "A not_yet_open tech gap is not applicable until a current-session quote exists.",
       vix_rule: "Cash VIX may be closed; report fresh confirmation as unavailable without treating the source as broken.",
       save_scope_rule: "Start from save_target.suggested_payload and preserve its identifiers, operational scope, pack_build_id and contract handshake.",
+      execution_plan_rule: "Master V5.4 proposes zero to five ranked candidates in Execution Plan V1.4. Every executable field uses Catalog V1.2 enums and typed parameters; prose is audit-only. The backend compiles, hashes and validates it; GPT never invents compiler metadata, quantity, trigger or fill.",
+      opportunity_profile: "OPPORTUNITY_SEEKING_CONTROLLED: up to 3 distinct ranked candidates, weighted contextual confirmation 0.55, requested risk >0 and <=0.25 percent of NET_EQUITY, mandatory stop and RR >=2. Optional contextual gaps remain soft.",
+      risk_rounding_rule: "The broker alone computes integer contracts with ceil rounding and blocks BROKER_SUBMIT when rounding_excess_percent exceeds policy.max_rounding_excess_pct.",
+      soft_effect_rule: "REQUIRE_CONFIRMATION is executable only through an explicit Catalog V1.2 condition. REDUCE_RISK is executable only through a lower execution_plan.risk.risk_pct_requested before compilation; otherwise it remains advisory, never an implicit veto.",
+      gate_phase_rule: "Hard gates block only at their enforcement phase. Required EVENT_BLACKOUT with unavailable evidence remains UNKNOWN and blocks ENTRY_TRIGGER only.",
+      memory_rule: "Temporary VETO conditions use LATEST_ONLY, clear when false and require fresh closed-M1 confirmation; only explicit structural INVALIDATION uses INVALIDATE_TERMINAL. BLOCK_IF_TRUE can never use LATCH_UNTIL_TRIGGER.",
+      cadence_causality_rule: "Scheduled GPT analysis runs on M15, with extra critical-event Monitors; the shared deterministic LIVE/REPLAY engine evaluates every closed M1. Confirmation cannot fill same-bar and reacquisition must be re-evaluated.",
     },
     raw_refs,
     save_target: {
@@ -190,6 +223,10 @@ export async function buildMasterCutoffBundle(store, args = {}, clock = new Syst
       collection: COLLECTIONS.deskMasterAnalyses,
       suggested_payload: {
         ...contractSavePayload(contract_context),
+        analysis_id,
+        plan_id,
+        thesis_id,
+        setup_id_candidates,
         bundle_id,
         strategy_id: resolvedScope.strategy_id,
         date,
@@ -200,6 +237,8 @@ export async function buildMasterCutoffBundle(store, args = {}, clock = new Syst
         timezone,
         pack_id: pack?.pack_id || null,
         pack_build_id: pack?.pack_build_id || null,
+        ...liveStrategyArtifactVersions(contract_context),
+        position_engine_version: "3.0.0",
         created_at_paris: cutoff,
         mode,
       },
@@ -235,7 +274,7 @@ export async function buildManualMonitorBundle(store, args = {}, clock = new Sys
   const session = resolvedScope.session;
   const mode = resolvedScope.mode;
   const timezone = resolvedScope.timezone;
-  const contracts = await safeRead(store.getActiveContracts(), {});
+  const contracts = assertRuntimeContractMatrix(await store.getActiveContracts(), { operation: "build_live_monitor_bundle" });
   const contract_context = contractContext(contracts, "monitor", { tick, pinnedForReplay: false });
   const pack = args.pack_id
     ? await safeRead(store.getDeskPack({ pack_id: args.pack_id, mode, include_draft: false }), null)
@@ -252,19 +291,37 @@ export async function buildManualMonitorBundle(store, args = {}, clock = new Sys
   const previousManualMonitor = activeThesis?.thesis_id || args.bundle_id
     ? await safeRead(store.getLatestManualMonitor({ thesis_id: activeThesis?.thesis_id, limit: 1 }).then((result) => result.latest_monitor), null)
     : null;
+  const liveSetupResult = await safeRead(store.getDeskSetups({
+    analysis_id: latestMaster.analysis_id,
+    status: "any",
+    limit: 100,
+  }), { setups: [] });
+  const liveSetups = (liveSetupResult.setups || []).filter((setup) => (
+    setup.strategy_id === resolvedScope.strategy_id
+      && setup.session === resolvedScope.session
+      && (setup.trading_date || setup.date) === resolvedScope.trading_date
+      && (setup.run_id || setup.replay_run_id) === resolvedScope.run_id
+      && String(setup.mode || "live") === String(resolvedScope.mode)
+  ));
+  const activePosition = await safeRead(store.getActivePosition({
+    thesis_id: activeThesis.thesis_id,
+  }).then((result) => result.position), null);
   const macro_calendar = pack
     ? await safeRead(store.getMacroCalendar({ pack_id: pack.pack_id, pack_build_id: pack.pack_build_id, date, as_of_utc: resolvedScope.as_of_utc, mode }), { warning: "macro_calendar_not_available", events: [] })
     : { warning: "pack_not_found_for_macro_calendar", events: [] };
   const news_digest = pack
     ? await safeRead(store.getNewsDigest({ pack_id: pack.pack_id, pack_build_id: pack.pack_build_id, date, session, as_of_utc: resolvedScope.as_of_utc, mode }), { warning: "news_digest_not_available", items: [] })
     : { warning: "pack_not_found_for_news_digest", items: [] };
-  const features = await readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris: checkpoint.timestamp_paris });
-  const raw_scope = pack ? {
-    ...operationalSelectorArgs(resolvedScope),
-    timezone,
-    pack_id: pack.pack_id,
-    pack_build_id: pack.pack_build_id,
-  } : null;
+  const raw_scope = immutablePackRawScope(resolvedScope, pack);
+  const features = await readFeatureContext(store, {
+    date,
+    session,
+    activeThesis,
+    latestMaster,
+    timestamp_paris: checkpoint.timestamp_paris,
+    raw_scope,
+    computed_at: resolvedScope.as_of_utc,
+  });
   const rolling = pack
     ? await buildPinnedReplaySnapshots(store, {
         run_id: resolvedScope.run_id,
@@ -293,12 +350,46 @@ export async function buildManualMonitorBundle(store, args = {}, clock = new Sys
     rolling,
   });
   const bundle_id = manualMonitorBundleId({ session, mode, checkpoint });
+  const monitor_id = stableVNextId(
+    "manual_monitor",
+    bundle_id,
+    activeThesis?.thesis_id || session || "desk",
+  );
+  const command_id = stableVNextId("monitor_command", monitor_id, "v1_2");
+  const expected_revision = Number(
+    activeThesis?.revision
+      ?? latestMonitor?.revision
+      ?? previousManualMonitor?.revision
+      ?? 0,
+  );
+  const plan_id = activeThesis?.plan_id
+    || latestMaster?.analysis_output?.execution_plan?.plan_id
+    || latestMaster?.deterministic_execution_plan?.plan_id
+    || null;
+  const existing_setup_ids = liveSetups
+    .map((setup) => setup.setup_id || setup.setup_record_id)
+    .filter(Boolean);
+  const setup_id_candidates = [1, 2, 3, 4, 5].map((rank) => stableVNextId(
+    "setup",
+    plan_id || latestMaster.analysis_id,
+    `monitor_${String(checkpoint.timestamp_paris).slice(11, 16).replace(":", "")}_${rank}`,
+  ));
   const catchup_context = args.catchup_mode === true ? args.catchup_context || null : null;
   const base = {
     ok: true,
     contract_name: "DeskManualMonitorBundle",
     schema_version: "1.0.0",
     contract_context,
+    contract_output_identity: {
+      monitor_id,
+      command_id,
+      expected_revision,
+      plan_id,
+      thesis_id: activeThesis?.thesis_id || null,
+      existing_setup_ids,
+      setup_id_candidates,
+      authority: "BACKEND_PINNED",
+    },
     contract_handshake: contractHandshake("manual_m15_monitor", contract_context, {
       saveTool: "save_manual_monitor",
     }),
@@ -334,6 +425,16 @@ export async function buildManualMonitorBundle(store, args = {}, clock = new Sys
     thesis_context_source: context.source,
     latest_master_analysis: latestMaster,
     candidate_setups: context.candidateSetups,
+    live_setups: liveSetups,
+    active_position: activePosition,
+    paper_execution: {
+      enabled: store.livePaperExecutionEnabled !== false,
+      execution_mode: store.liveExecutionMode || "shadow",
+      broker_execution: false,
+      setup_count: liveSetups.length,
+      active_position_id: activePosition?.position_id || null,
+      active_position_status: activePosition?.status || null,
+    },
     latest_monitor: latestMonitor,
     previous_manual_monitor: previousManualMonitor,
     macro_calendar,
@@ -371,15 +472,37 @@ export async function buildManualMonitorBundle(store, args = {}, clock = new Sys
       created_at_paris: tick.paris,
     },
     chatgpt_manual_monitor_instructions: {
-      required_mode: "manual_chatgpt_m15_monitor",
+      required_mode: "manual_chatgpt_m5_monitor",
       final_report_required_sections: ["Decision executable", "Regle finale"],
       save_tool: "save_manual_monitor",
-      required_payload_keys: ["contract_name", "schema_version", "contract_hash", "timestamp_paris", "monitor_decision"],
+      required_payload_keys: [
+        "contract_name",
+        "schema_version",
+        "contract_hash",
+        "timestamp_paris",
+        ...(String(contract_context.schema_version) === ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract ? ["monitor_output"] : ["monitor_decision"]),
+        "thesis_update",
+        "thesis_health_score",
+        "expected_vs_realized",
+        "macro_update",
+        "cross_asset_delta",
+        "technical_delta",
+        "position_check",
+      ],
+      executable_entry_rule: "GPT never confirms a fill. Monitor V2.4 emits one structured Monitor Command V1.4; ARM only requests ARMED_CONDITIONAL. The deterministic closed-M1 engine alone triggers and creates the position on a later eligible bar.",
+      deterministic_setup_rule: "Preserve canonical identities. Complete setups use only Condition Catalog V1.2 enums and typed parameters, all targets/actions, management and validity; prose is never executable. The backend freezes min_score=0.55.",
+      opportunity_profile: "OPPORTUNITY_SEEKING_CONTROLLED preserves up to 3 ranked plan candidates; optional missing context remains soft while required trigger data remains fail-closed at ENTRY_TRIGGER.",
+      risk_rounding_rule: "Requested risk stays <=0.25 percent NET_EQUITY with stop and RR>=2. Broker-only ceil sizing must stay within max_rounding_excess_pct.",
+      soft_effect_rule: "REQUIRE_CONFIRMATION requires an explicit Catalog V1.2 condition. REDUCE_RISK requires a replan with lower requested risk; management REDUCE_RISK is only for an open position. Otherwise the effect is advisory.",
+      gate_phase_rule: "Required EVENT_BLACKOUT without decidable data remains UNKNOWN and blocks ENTRY_TRIGGER only; a future-phase gate does not delete a candidate.",
+      memory_rule: "Temporary VETO=LATEST_ONLY then fresh M1 confirmation after clearing; structural INVALIDATION=INVALIDATE_TERMINAL; no BLOCK_IF_TRUE latch.",
+      cas_rule: "Copy command_id, plan_id, monitor_id and expected_revision exactly. expected_revision is strict compare-and-swap.",
+      cadence_rule: "Scheduled GPT cadence is M15 plus critical-event Monitors. Shared LIVE/REPLAY deterministic supervision remains closed-M1; same-bar confirmation entry is forbidden and reacquisition is re-evaluated.",
       contract_handshake: contractHandshake("manual_m15_monitor", contract_context, {
         saveTool: "save_manual_monitor",
       }),
-      decision_boundary: "ChatGPT decides after the operator launches the monitor; backend never auto-decides in V1.",
-      market_availability_rule: "Only missing_unexpected is a feed failure. stale_market_closed and not_yet_open are normal session states and do not justify DATA_NOT_READY by themselves.",
+      decision_boundary: "GPT owns the analytical proposal; the deterministic backend owns activation, fills, position management and result R.",
+      market_availability_rule: "data_quality is authoritative. Context-only missing_unexpected is DEGRADED, not DATA_NOT_READY; block only when execution_allowed=false or analysis_mode=blocked.",
       stale_context_rule: "Use last_known/H4 only for regime context, never as a fresh trigger.",
       tech_gap_rule: "A not_yet_open tech gap is not applicable until a current-session quote exists.",
       vix_rule: "Cash VIX may be closed; report fresh confirmation as unavailable without treating the source as broken.",
@@ -389,17 +512,26 @@ export async function buildManualMonitorBundle(store, args = {}, clock = new Sys
       collection: COLLECTIONS.deskManualMonitors,
       suggested_payload: {
         ...contractSavePayload(contract_context),
+        monitor_id,
+        command_id,
+        expected_revision,
+        plan_id,
+        existing_setup_ids,
+        setup_id_candidates,
         bundle_id,
         linked_active_thesis_id: activeThesis?.thesis_id || null,
         linked_master_analysis_id: latestMaster?.analysis_id || null,
         pack_id: pack?.pack_id || null,
         pack_build_id: pack?.pack_build_id || null,
+        ...liveStrategyArtifactVersions(contract_context),
+        position_engine_version: "3.0.0",
         strategy_id: resolvedScope.strategy_id,
         trading_date: resolvedScope.trading_date,
         run_id: resolvedScope.run_id,
         session,
         timestamp_paris: checkpoint.timestamp_paris,
         as_of_utc: resolvedScope.as_of_utc,
+        timezone,
         cadence: checkpoint.cadence,
         mode,
         status: "SAVED",
@@ -411,6 +543,24 @@ export async function buildManualMonitorBundle(store, args = {}, clock = new Sys
     created_at_paris: tick.paris,
   };
   return { ...base, source_hash: hashObject(sourceHashPayload(base)) };
+}
+
+function liveStrategyArtifactVersions(contractContext = {}) {
+  const workflow = String(contractContext.contract_name || "") === "DeskMasterAnalysisContract"
+    ? "LIVE_MASTER"
+    : "LIVE_M15_MONITOR";
+  assertActiveStrategyContractContext(contractContext, {
+    workflow,
+    operation: "build_live_save_target",
+  });
+  return {
+    execution_policy_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_policy,
+    execution_plan_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_plan,
+    monitor_command_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_command,
+    condition_catalog_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_catalog,
+    deterministic_compiler_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.deterministic_compiler,
+    condition_engine_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_engine,
+  };
 }
 
 export async function resolveMonitorContext(store, args = {}) {
@@ -483,7 +633,16 @@ export function assertOperationalDocumentScope(document, scope, errorCode = "CRO
 
 export function candidateSetupsFromMaster(master) {
   const full = master?.full_analysis || {};
-  return firstArray(full.setups, full.candidate_setups, full.setup_candidates, full.active_thesis?.setups).slice(0, 20);
+  return firstArray(
+    master?.setups,
+    master?.candidate_setups,
+    master?.setup_candidates,
+    master?.active_thesis?.setups,
+    full.setups,
+    full.candidate_setups,
+    full.setup_candidates,
+    full.active_thesis?.setups,
+  ).slice(0, 20);
 }
 
 export function manualMonitorCheckpoint(args = {}, tick = new SystemClock().now()) {
@@ -496,7 +655,8 @@ export function manualMonitorCheckpoint(args = {}, tick = new SystemClock().now(
     if (!Number.isFinite(value)) throw deskError("INVALID_SCOPE", "as_of_utc must be a valid instant.", { as_of_utc: args.as_of_utc });
     return { cadence, timestamp_paris: toParisIso(value) };
   }
-  const stepMs = cadence === "15m" ? 15 * 60 * 1000 : 15 * 60 * 1000;
+  const cadenceMinutes = Number.parseInt(String(cadence).replace(/[^0-9]/g, ""), 10) || 5;
+  const stepMs = cadenceMinutes * 60 * 1000;
   const rounded = Math.floor(tick.epochMs / stepMs) * stepMs;
   return { cadence, timestamp_paris: toParisIso(rounded) };
 }
@@ -614,7 +774,7 @@ export function masterCutoffDataQuality({ pack, futures_core, cross_asset, rolli
       .filter((instrument) => rolling?.snapshots?.["15m"]?.instruments?.[instrument]?.availability === "missing_unexpected");
     if (unexpectedCrossMissing.length) {
       stale.push("cross_asset_delta");
-      blockers.push(`cross_asset_delta_missing_open_sources:${unexpectedCrossMissing.join(",")}`);
+      warnings.push(`cross_asset_context_missing_open_sources:${unexpectedCrossMissing.join(",")}`);
     } else {
       informational.push("cross_asset_delta_partial_only_for_closed_or_not_yet_open_sources");
     }
@@ -635,20 +795,15 @@ export function masterCutoffDataQuality({ pack, futures_core, cross_asset, rolli
       }
     }
   }
-  const execution_allowed = blockers.length === 0;
-  const status = blockers.length ? "missing" : stale.length ? "stale" : warnings.length || missing.length ? "degraded" : "ready";
-  return {
-    status,
-    execution_allowed,
+  return finalizeDeskDataQuality({
     blockers,
     warnings,
-    informational: dedupeBy(informational, (item) => item),
+    informational,
     missing,
     stale,
-    explicit_missing_data: dedupeBy([...blockers, ...warnings, ...missing, ...stale], (item) => item),
-    anti_lookahead_compliant: true,
-    raw_refs_available: Object.values(futures_core || {}).some((item) => item.raw_refs?.length),
-  };
+    antiLookaheadCompliant: true,
+    rawRefsAvailable: Object.values(futures_core || {}).some((item) => item.raw_refs?.length),
+  });
 }
 
 export function buildMacroHorizon({ timestamp_paris, macro_calendar }) {
@@ -790,25 +945,23 @@ export function manualBundleDataQuality({ pack, activeThesis, latestMaster, macr
     const unexpectedCrossMissing = ["DXY", "VIX", "US10Y", "US02Y", "CL", "GC"]
       .filter((instrument) => rolling?.snapshots?.["15m"]?.instruments?.[instrument]?.availability === "missing_unexpected");
     if (unexpectedCrossMissing.length) {
-      blockers.push(`cross_asset_delta_missing_open_sources:${unexpectedCrossMissing.join(",")}`);
+      stale.push("cross_asset_delta");
+      warnings.push(`cross_asset_context_missing_open_sources:${unexpectedCrossMissing.join(",")}`);
     } else {
       informational.push("cross_asset_delta_partial_only_for_closed_or_not_yet_open_sources");
     }
   }
-  const execution_allowed = blockers.length === 0;
-  const status = blockers.length ? "missing" : missing.length ? "degraded" : stale.length ? "stale" : warnings.length ? "degraded" : "ready";
   return {
-    status,
-    execution_allowed,
-    blockers,
-    missing,
-    stale,
-    warnings,
-    informational: dedupeBy(informational, (item) => item),
+    ...finalizeDeskDataQuality({
+      blockers,
+      missing,
+      stale,
+      warnings,
+      informational,
+      antiLookaheadCompliant: true,
+      rawRefsAvailable: Object.values(rolling.snapshots || {}).some((snapshot) => Object.values(snapshot.instruments || {}).some((item) => item.raw_refs?.length)),
+    }),
     timezone: "Europe/Paris",
-    explicit_missing_data: missing.concat(stale).concat(warnings),
-    anti_lookahead_compliant: true,
-    raw_refs_available: Object.values(rolling.snapshots || {}).some((snapshot) => Object.values(snapshot.instruments || {}).some((item) => item.raw_refs?.length)),
   };
 }
 

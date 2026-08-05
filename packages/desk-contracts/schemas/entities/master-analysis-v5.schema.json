@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/master-analysis-v5.schema.json",
+  "title": "DeskMasterAnalysisContractV5",
+  "version": "5.0.0",
+  "type": "object",
+  "required": ["contract", "profile", "source", "scope", "analysis_sections", "market_context", "hypotheses", "selected_hypothesis", "execution_plan", "active_thesis", "monitor_handoff", "audit"],
+  "properties": {
+    "contract": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "DeskMasterAnalysisContract" },
+        "version": { "const": "5.0.0" }
+      },
+      "additionalProperties": false
+    },
+    "profile": { "const": "OPPORTUNITY_SEEKING_CONTROLLED" },
+    "source": {
+      "type": "object",
+      "required": ["analysis_id", "bundle_id", "pack_id", "pack_build_id"],
+      "properties": {
+        "analysis_id": { "type": "string", "minLength": 1 },
+        "bundle_id": { "type": "string", "minLength": 1 },
+        "pack_id": { "type": "string", "minLength": 1 },
+        "pack_build_id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "scope": { "$ref": "#/$defs/scope" },
+    "analysis_sections": {
+      "type": "object",
+      "required": ["facts", "interpretations", "macro", "cross_asset", "technical", "levels", "asset_selection", "opportunities", "risks", "decision_summary"],
+      "properties": {
+        "facts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fact" } },
+        "interpretations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/interpretation" } },
+        "macro": { "$ref": "#/$defs/sectionAssessment" },
+        "cross_asset": { "$ref": "#/$defs/sectionAssessment" },
+        "technical": { "$ref": "#/$defs/sectionAssessment" },
+        "levels": { "$ref": "#/$defs/sectionAssessment" },
+        "asset_selection": { "$ref": "#/$defs/sectionAssessment" },
+        "opportunities": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "risks": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "decision_summary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "market_context": {
+      "type": "object",
+      "required": ["global_regime", "regime_status", "volatility_regime", "primary_bias", "cross_asset_reading", "macro_reading"],
+      "properties": {
+        "global_regime": { "enum": ["RISK_ON_EXPANSION", "RISK_OFF_STRESS", "TECH_ROTATION", "BROAD_MARKET_ROTATION", "COMPRESSION", "RANGE", "EXHAUSTION", "NEUTRAL"] },
+        "regime_status": { "enum": ["DOMINANT", "SECONDARY", "ELIMINATED", "UNCONFIRMED"] },
+        "volatility_regime": { "enum": ["LOW", "NORMAL", "HIGH", "EXTREME", "UNKNOWN"] },
+        "primary_bias": { "enum": ["BULLISH", "BEARISH", "NEUTRAL", "MIXED", "UNKNOWN"] },
+        "cross_asset_reading": { "type": "string", "minLength": 1 },
+        "macro_reading": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "hypotheses": {
+      "type": "array",
+      "minItems": 6,
+      "items": { "$ref": "#/$defs/hypothesis" },
+      "allOf": [
+        { "contains": { "properties": { "kind": { "const": "BULL" } }, "required": ["kind"] }, "minContains": 1 },
+        { "contains": { "properties": { "kind": { "const": "BEAR" } }, "required": ["kind"] }, "minContains": 1 },
+        { "contains": { "properties": { "kind": { "const": "RANGE" } }, "required": ["kind"] }, "minContains": 1 },
+        { "contains": { "properties": { "kind": { "const": "BEST_LONG" } }, "required": ["kind"] }, "minContains": 1 },
+        { "contains": { "properties": { "kind": { "const": "BEST_SHORT" } }, "required": ["kind"] }, "minContains": 1 },
+        { "contains": { "properties": { "kind": { "const": "WAIT" } }, "required": ["kind"] }, "minContains": 1 }
+      ]
+    },
+    "selected_hypothesis": {
+      "type": "object",
+      "required": ["hypothesis_id", "kind", "reason"],
+      "properties": {
+        "hypothesis_id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["BULL", "BEAR", "RANGE", "BEST_LONG", "BEST_SHORT", "WAIT"] },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "execution_plan": {
+      "$ref": "execution-plan-v1.schema.json",
+      "$comment": "Backend validates execution_plan.plan_id == active_thesis.plan_id and all pinned source/scope identifiers."
+    },
+    "active_thesis": {
+      "type": "object",
+      "required": ["thesis_id", "plan_id", "selected_hypothesis_id", "primary_setup_id", "state", "bias", "instrument", "direction", "valid_from_paris", "valid_until_paris", "requires_replan_after_paris", "health_state", "summary", "expected_path", "failure_path", "scenario_transformations", "level_watchlist", "invalidation_condition_ids"],
+      "properties": {
+        "thesis_id": { "type": "string", "minLength": 1 },
+        "plan_id": { "type": "string", "minLength": 1 },
+        "selected_hypothesis_id": { "type": "string", "minLength": 1 },
+        "primary_setup_id": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "state": { "enum": ["NO_ACTIVE", "WAIT_MONITORED", "CONDITIONAL", "ACTIVE", "WEAKENED", "AT_RISK", "POST_EVENT", "INVALIDATED", "EXPIRED", "REPLAN_REQUIRED", "SUPERSEDED"] },
+        "bias": { "enum": ["BULLISH", "BEARISH", "NEUTRAL", "MIXED", "UNKNOWN"] },
+        "instrument": { "type": "string", "minLength": 1 },
+        "direction": { "enum": ["long", "short", "neutral", "wait"] },
+        "valid_from_paris": { "type": "string", "format": "date-time" },
+        "valid_until_paris": { "type": "string", "format": "date-time" },
+        "requires_replan_after_paris": { "type": "string", "format": "date-time" },
+        "health_state": { "enum": ["STRONG", "VALID", "FRAGILE", "VERY_FRAGILE", "NON_EXECUTABLE"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "expected_path": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/pathStep" } },
+        "failure_path": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/pathStep" } },
+        "scenario_transformations": { "type": "array", "items": { "$ref": "#/$defs/scenarioTransformation" } },
+        "level_watchlist": { "type": "array", "items": { "$ref": "#/$defs/watchLevel" } },
+        "invalidation_condition_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "monitor_handoff": {
+      "type": "object",
+      "required": ["gpt_cadence", "engine_cadence", "next_checkpoint_paris", "watch_condition_ids", "thesis_health_baseline", "context_transmission", "session_matrix", "allowed_windows", "update_agenda", "monitoring_priorities", "monitoring_playbook", "handoff_summary"],
+      "properties": {
+        "gpt_cadence": { "const": "M5" },
+        "engine_cadence": { "const": "M1" },
+        "next_checkpoint_paris": { "type": "string", "format": "date-time" },
+        "watch_condition_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "thesis_health_baseline": { "type": "number", "minimum": 0, "maximum": 100 },
+        "context_transmission": { "$ref": "#/$defs/contextTransmission" },
+        "session_matrix": { "type": "array", "items": { "$ref": "#/$defs/sessionWindow" } },
+        "allowed_windows": { "type": "array", "items": { "$ref": "#/$defs/sessionWindow" } },
+        "update_agenda": { "type": "array", "items": { "$ref": "#/$defs/agendaItem" } },
+        "monitoring_priorities": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "monitoring_playbook": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/playbookItem" } },
+        "handoff_summary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "audit": { "$ref": "#/$defs/audit" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "required": ["mode", "analysis_phase", "trading_date", "session", "run_id", "cutoff_paris", "timezone"],
+      "properties": {
+        "mode": { "enum": ["LIVE", "REPLAY", "BACK_FORWARD", "PAPER"] },
+        "analysis_phase": { "enum": ["ASIA_OPEN", "LONDON_HANDOFF", "NY_OPEN", "WORK_FORWARD", "POST_EVENT_REPLAN"] },
+        "trading_date": { "type": "string", "format": "date" },
+        "session": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "cutoff_paris": { "type": "string", "format": "date-time" },
+        "timezone": { "const": "Europe/Paris" }
+      },
+      "additionalProperties": false
+    },
+    "fact": {
+      "type": "object",
+      "required": ["fact_id", "category", "statement", "evidence_refs"],
+      "properties": {
+        "fact_id": { "type": "string", "minLength": 1 },
+        "category": { "enum": ["PRICE", "STRUCTURE", "MOMENTUM", "VOLATILITY", "CROSS_ASSET", "MACRO", "NEWS", "LIQUIDITY", "SESSION"] },
+        "statement": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "interpretation": {
+      "type": "object",
+      "required": ["interpretation_id", "statement", "fact_ids", "confidence"],
+      "properties": {
+        "interpretation_id": { "type": "string", "minLength": 1 },
+        "statement": { "type": "string", "minLength": 1 },
+        "fact_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "sectionAssessment": {
+      "type": "object",
+      "required": ["summary", "findings", "evidence_refs"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "findings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "pathStep": {
+      "type": "object",
+      "required": ["sequence", "condition", "implication"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "condition": { "type": "string", "minLength": 1 },
+        "implication": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "scenarioTransformation": {
+      "type": "object",
+      "required": ["from_hypothesis_id", "to_hypothesis_id", "condition_id", "reason"],
+      "properties": {
+        "from_hypothesis_id": { "type": "string", "minLength": 1 },
+        "to_hypothesis_id": { "type": "string", "minLength": 1 },
+        "condition_id": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "watchLevel": {
+      "type": "object",
+      "required": ["instrument", "label", "price", "purpose"],
+      "properties": {
+        "instrument": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "price": { "type": "number" },
+        "purpose": { "enum": ["ACTIVATION", "CONFIRMATION", "INVALIDATION", "TARGET", "CONTEXT"] }
+      },
+      "additionalProperties": false
+    },
+    "contextTransmission": {
+      "type": "object",
+      "required": ["facts", "interpretations", "thesis_state", "open_questions"],
+      "properties": {
+        "facts": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "interpretations": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "thesis_state": { "type": "string", "minLength": 1 },
+        "open_questions": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "sessionWindow": {
+      "type": "object",
+      "required": ["label", "start_paris", "end_paris", "objective"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "start_paris": { "type": "string", "minLength": 1 },
+        "end_paris": { "type": "string", "minLength": 1 },
+        "objective": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "agendaItem": {
+      "type": "object",
+      "required": ["at_paris", "reason", "priority"],
+      "properties": {
+        "at_paris": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string", "minLength": 1 },
+        "priority": { "enum": ["LOW", "NORMAL", "HIGH", "CRITICAL"] }
+      },
+      "additionalProperties": false
+    },
+    "playbookItem": {
+      "type": "object",
+      "required": ["condition_id", "on_state", "requested_command"],
+      "properties": {
+        "condition_id": { "type": "string", "minLength": 1 },
+        "on_state": { "enum": ["SATISFIED", "FAILED", "INVALIDATED", "EXPIRED", "UNKNOWN"] },
+        "requested_command": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "hypothesis": {
+      "type": "object",
+      "required": ["hypothesis_id", "kind", "status", "instrument", "direction", "confidence", "thesis", "supporting_fact_ids", "contradicting_fact_ids", "invalidation"],
+      "properties": {
+        "hypothesis_id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["BULL", "BEAR", "RANGE", "BEST_LONG", "BEST_SHORT", "WAIT"] },
+        "status": { "enum": ["DOMINANT", "CANDIDATE", "CONDITIONAL", "ELIMINATED", "WAIT_PROVED"] },
+        "instrument": { "type": "string", "minLength": 1 },
+        "direction": { "enum": ["long", "short", "neutral", "wait"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "thesis": { "type": "string", "minLength": 1 },
+        "supporting_fact_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "contradicting_fact_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "invalidation": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "audit": {
+      "type": "object",
+      "required": ["anti_lookahead_verified", "contract_context", "source_references"],
+      "properties": {
+        "anti_lookahead_verified": { "const": true },
+        "contract_context": {
+          "type": "object",
+          "required": ["master_contract", "execution_plan_contract", "execution_policy_contract", "condition_catalog_contract"],
+          "properties": {
+            "master_contract": { "const": "5.0.0" },
+            "execution_plan_contract": { "const": "1.0.0" },
+            "execution_policy_contract": { "const": "4.0.0" },
+            "condition_catalog_contract": { "const": "1.0.0" }
+          },
+          "additionalProperties": false
+        },
+        "source_references": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    }
+  }
+}

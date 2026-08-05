@@ -77,7 +77,9 @@ export function analyzeDatasetBytes({ buffer, dataset, format, cutoffUtc = null,
       previousTimestamp = epochMs;
       timestamps.push({ epochMs, value: new Date(epochMs).toISOString(), row_index: index });
 
-      if (isPrice && row.timestamp_paris != null && !validParisTimestamp(row.timestamp_paris, epochMs)) {
+      const timezoneEpochMs = Date.parse(row.timestamp_utc || timestamp);
+      if (isPrice && row.timestamp_paris != null
+        && (!Number.isFinite(timezoneEpochMs) || !validParisTimestamp(row.timestamp_paris, timezoneEpochMs))) {
         timezoneInvalid = true;
       }
     }
@@ -439,6 +441,8 @@ function validParisTimestamp(value, epochMs) {
 }
 
 function rowIdentity(row, index) {
+  const explicitIdentity = firstPresent(row?.article_id, row?.news_id, row?.event_id);
+  if (explicitIdentity) return `id:${explicitIdentity}`;
   const timestamp = observationTimestamp(row);
   if (!timestamp) return `row:${index}`;
   return [timestamp, row.asset || row.instrument || "", row.timeframe || "", row.event || row.title || ""].join("|");

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { deskApi } from "@/api/deskApi";
 import { refreshPolicyMs } from "@/api/endpoints";
@@ -20,9 +20,9 @@ export const deskKeys = {
   session: (id: SessionId) => ["desk-session", id] as const,
   market: (id: SessionId) => ["desk-market", id] as const,
   position: (id: SessionId) => ["desk-position", id] as const,
-  macro: (_id: SessionId) => ["desk-macro", "daily"] as const,
-  newsDigest: (_id: SessionId) => ["desk-news-digest", "daily"] as const,
-  newsHeadlines: (_id: SessionId) => ["desk-news-headlines", "daily"] as const,
+  macro: (id: SessionId, date = "current") => ["desk-macro", id, date] as const,
+  newsDigest: (id: SessionId, date = "current") => ["desk-news-digest", id, date] as const,
+  newsHeadlines: (id: SessionId, date = "current") => ["desk-news-headlines", id, date] as const,
   activity: (id: SessionId) => ["desk-activity", id] as const,
   alerts: (id: SessionId) => ["desk-alerts", id] as const,
   audit: (id: SessionId) => ["desk-audit", id] as const,
@@ -44,6 +44,13 @@ interface DeskSessionResources {
   alerts?: DeskAlertsResource;
   audit?: DeskAuditResource;
 }
+
+const liveQueryDefaults = {
+  retry: 0,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+  refetchOnMount: false
+} as const;
 
 /**
  * Merge independently refreshed read models over the initial aggregate.
@@ -81,78 +88,107 @@ export function mergeDeskSessionResources(session: DeskSession, resources: DeskS
   };
 }
 
-export function useDeskSession(id: SessionId) {
-  const sessionQuery = useQuery({
+interface DeskSessionQueryOptions {
+  enabled?: boolean;
+  refetchInterval?: number | false;
+  retry?: number;
+  refetchOnMount?: boolean | "always";
+  refetchOnReconnect?: boolean;
+}
+
+export function useDeskSessionBase(id: SessionId, options: DeskSessionQueryOptions = {}) {
+  return useQuery({
+    ...liveQueryDefaults,
     queryKey: deskKeys.session(id),
     queryFn: () => deskApi.getSession(id),
-    staleTime: 15_000,
-    refetchInterval: refreshPolicyMs.projection,
-    retry: 1
+    enabled: options.enabled ?? true,
+    staleTime: 30_000,
+    refetchInterval: options.refetchInterval ?? refreshPolicyMs.projection,
+    retry: options.retry ?? 1,
+    refetchOnMount: options.refetchOnMount ?? true,
+    refetchOnReconnect: options.refetchOnReconnect ?? true
   });
-  const dedicatedResourcesEnabled = Boolean(sessionQuery.data);
-  const marketQuery = useQuery({
+}
+
+export function useDeskMarketSnapshot(id: SessionId, options: { enabled?: boolean; refetchInterval?: number | false } = {}) {
+  return useQuery({
     queryKey: deskKeys.market(id),
     queryFn: () => deskApi.getMarketSnapshot(id),
-    enabled: dedicatedResourcesEnabled,
-    staleTime: 30_000,
-    refetchInterval: refreshPolicyMs.market,
-    retry: 1
+    enabled: options.enabled ?? true,
+    staleTime: 15_000,
+    refetchInterval: options.refetchInterval ?? refreshPolicyMs.market,
+    ...liveQueryDefaults
+  });
+}
+
+export function useDeskSession(id: SessionId) {
+  const sessionQuery = useDeskSessionBase(id, {
+    refetchInterval: Math.max(refreshPolicyMs.projection, 45_000),
+    retry: 2,
+    refetchOnMount: "always",
+    refetchOnReconnect: true
+  });
+  const criticalResourcesEnabled = useDeferredEnabled(Boolean(sessionQuery.data), 800);
+  const backgroundResourcesEnabled = useDeferredEnabled(Boolean(sessionQuery.data), 2_500);
+  const marketQuery = useDeskMarketSnapshot(id, {
+    enabled: criticalResourcesEnabled,
+    refetchInterval: refreshPolicyMs.market
   });
   const positionQuery = useQuery({
     queryKey: deskKeys.position(id),
     queryFn: () => deskApi.getPosition(id),
-    enabled: dedicatedResourcesEnabled,
-    staleTime: 5_000,
-    refetchInterval: query => query.state.data?.position.active ? refreshPolicyMs.activePosition : refreshPolicyMs.projection,
-    retry: 1
+    enabled: criticalResourcesEnabled,
+    staleTime: 15_000,
+    refetchInterval: query => query.state.data?.position.active ? Math.max(refreshPolicyMs.activePosition, 15_000) : 60_000,
+    ...liveQueryDefaults
   });
   const macroQuery = useQuery({
-    queryKey: deskKeys.macro(id),
+    queryKey: deskKeys.macro(id, sessionQuery.data?.date),
     queryFn: () => deskApi.getMacroCalendar(id),
-    enabled: dedicatedResourcesEnabled,
-    staleTime: 30_000,
-    refetchInterval: query => query.state.data?.nearEvent ? refreshPolicyMs.macroNearEvent : refreshPolicyMs.macro,
-    retry: 1
+    enabled: backgroundResourcesEnabled,
+    staleTime: 120_000,
+    refetchInterval: query => query.state.data?.nearEvent ? Math.max(refreshPolicyMs.macroNearEvent, 90_000) : refreshPolicyMs.macro,
+    ...liveQueryDefaults
   });
   const newsDigestQuery = useQuery({
-    queryKey: deskKeys.newsDigest(id),
+    queryKey: deskKeys.newsDigest(id, sessionQuery.data?.date),
     queryFn: () => deskApi.getNewsDigest(id),
-    enabled: dedicatedResourcesEnabled,
-    staleTime: 60_000,
+    enabled: backgroundResourcesEnabled,
+    staleTime: 300_000,
     refetchInterval: refreshPolicyMs.newsDigest,
-    retry: 1
+    ...liveQueryDefaults
   });
   const newsHeadlinesQuery = useQuery({
-    queryKey: deskKeys.newsHeadlines(id),
+    queryKey: deskKeys.newsHeadlines(id, sessionQuery.data?.date),
     queryFn: () => deskApi.getNewsHeadlines(id),
-    enabled: dedicatedResourcesEnabled,
-    staleTime: 30_000,
-    refetchInterval: refreshPolicyMs.news,
-    retry: 1
+    enabled: backgroundResourcesEnabled,
+    staleTime: 120_000,
+    refetchInterval: Math.max(refreshPolicyMs.news, 180_000),
+    ...liveQueryDefaults
   });
   const activityQuery = useQuery({
     queryKey: deskKeys.activity(id),
     queryFn: () => deskApi.getDeskActivity(id),
-    enabled: dedicatedResourcesEnabled,
-    staleTime: 5_000,
-    refetchInterval: query => isRunning(query.state.data?.automation.status) ? refreshPolicyMs.deskActivityRunning : refreshPolicyMs.deskActivityIdle,
-    retry: 1
+    enabled: criticalResourcesEnabled,
+    staleTime: 15_000,
+    refetchInterval: query => isRunning(query.state.data?.automation.status) ? Math.max(refreshPolicyMs.deskActivityRunning, 15_000) : 60_000,
+    ...liveQueryDefaults
   });
   const alertsQuery = useQuery({
     queryKey: deskKeys.alerts(id),
     queryFn: () => deskApi.getAlerts(id),
-    enabled: dedicatedResourcesEnabled,
-    staleTime: 5_000,
-    refetchInterval: refreshPolicyMs.alerts,
-    retry: 1
+    enabled: criticalResourcesEnabled,
+    staleTime: 30_000,
+    refetchInterval: Math.max(refreshPolicyMs.alerts, 30_000),
+    ...liveQueryDefaults
   });
   const auditQuery = useQuery({
     queryKey: deskKeys.audit(id),
     queryFn: () => deskApi.getAudit(id),
-    enabled: dedicatedResourcesEnabled,
-    staleTime: 30_000,
-    refetchInterval: refreshPolicyMs.audit,
-    retry: 1
+    enabled: backgroundResourcesEnabled,
+    staleTime: 300_000,
+    refetchInterval: Math.max(refreshPolicyMs.audit, 300_000),
+    ...liveQueryDefaults
   });
 
   const data = useMemo(() => {
@@ -182,6 +218,28 @@ export function useDeskSession(id: SessionId) {
   return {
     ...sessionQuery,
     data,
+    isFetching: [
+      sessionQuery,
+      marketQuery,
+      positionQuery,
+      macroQuery,
+      newsDigestQuery,
+      newsHeadlinesQuery,
+      activityQuery,
+      alertsQuery,
+      auditQuery
+    ].some(query => query.isFetching),
+    dataUpdatedAt: Math.max(
+      sessionQuery.dataUpdatedAt,
+      marketQuery.dataUpdatedAt,
+      positionQuery.dataUpdatedAt,
+      macroQuery.dataUpdatedAt,
+      newsDigestQuery.dataUpdatedAt,
+      newsHeadlinesQuery.dataUpdatedAt,
+      activityQuery.dataUpdatedAt,
+      alertsQuery.dataUpdatedAt,
+      auditQuery.dataUpdatedAt
+    ),
     refetch: async () => {
       const refetches: Array<() => Promise<unknown>> = [
         () => sessionQuery.refetch(),
@@ -197,6 +255,19 @@ export function useDeskSession(id: SessionId) {
       await Promise.all(refetches.map(refetch => refetch()));
     }
   };
+}
+
+function useDeferredEnabled(enabled: boolean, delayMs: number) {
+  const [deferred, setDeferred] = useState(false);
+  useEffect(() => {
+    if (!enabled) {
+      setDeferred(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setDeferred(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [delayMs, enabled]);
+  return deferred;
 }
 
 export function deskDetailScope(session: DeskSession): DeskDetailScope {

@@ -1,0 +1,10 @@
+*
+!packages
+!packages/**
+!mcp_gpt_desk
+!mcp_gpt_desk/package.json
+!mcp_gpt_desk/package-lock.json
+!mcp_gpt_desk/src
+!mcp_gpt_desk/src/**
+!mcp_gpt_desk/scripts
+!mcp_gpt_desk/scripts/**

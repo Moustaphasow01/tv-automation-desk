@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import { ConfirmActionForm } from "@/components/ConfirmActionForm";
 import { Card, Icon, SectionTitle, StatusBadge } from "@/components/common";
-import { PositionCard, SetupCard } from "@/components/deskCards";
+import { PageHeading } from "@/components/operations";
+import { DecisionDeskStrip, PositionCard, SetupCard } from "@/components/deskCards";
 import { useOverlay } from "@/context/OverlayContext";
 import { deskDetailScope, useSetupDetail } from "@/hooks/useDesk";
 import { useOperatorAuth, useOperatorCommand, useOperatorState } from "@/hooks/useOperator";
@@ -18,10 +20,18 @@ function SetupWorkspace({ initialData }: { initialData: DeskSession }) {
     setup: query.data?.setup || initialData.setup,
     levels: query.data?.levels || initialData.levels
   };
-  return <section className="view">
-    <SectionTitle title="Setup & Position" subtitle="Plan théorique séparé de l’exécution canonique"/>
-    <SetupCard data={data}/>
-    <section id="position"><PositionCard data={data}/></section>
+  return <section className="view setup-workspace-v2">
+    <PageHeading eyebrow="Exécution" title="Setup & Position" subtitle="Plan théorique séparé de l’exécution canonique"/>
+    <DecisionDeskStrip
+      data={data}
+      focusLabel="Sécurité opérateur"
+      focusValue={data.position.active ? `Position ${data.position.status}` : data.setup.statusLabel}
+      focusDetail={`Setup ${data.setup.status} · commandes idempotentes`}
+    />
+    <div className="setup-control-grid">
+      <SetupCard data={data}/>
+      <section id="position"><PositionCard data={data}/></section>
+    </div>
     <OperatorCommandPanel data={data}/>
     <Card className="source-rules-react">
       <div className="brief-card__header"><div><p className="eyebrow">Priorité des sources</p><h3>Règle opérationnelle</h3></div><span className="card-icon"><Icon name="database"/></span></div>
@@ -29,7 +39,7 @@ function SetupWorkspace({ initialData }: { initialData: DeskSession }) {
         <div><span>1</span><p><strong>Position et stop réels</strong><small>Backend d’exécution</small></p></div>
         <div><span>2</span><p><strong>Statut du setup</strong><small>desk_setups</small></p></div>
         <div><span>3</span><p><strong>Action recommandée</strong><small>Dernier Monitor valide</small></p></div>
-        <div><span>4</span><p><strong>Plan initial</strong><small>Master Analysis</small></p></div>
+        <div><span>4</span><p><strong>Plan initial</strong><small>Analyse Master</small></p></div>
       </div>
     </Card>
     <SectionTitle title="Niveaux liés"/>
@@ -80,15 +90,15 @@ function OperatorCommandPanel({ data }: { data: DeskSession }) {
   return <Card className="operator-panel">
     <div className="operator-panel__head">
       <div><p className="eyebrow">Commandes opérateur</p><h3>État canonique uniquement</h3></div>
-      <StatusBadge tone={canWrite ? "positive" : auth.status === "loading" ? "warning" : "muted"}>
+      <StatusBadge tone={canWrite ? "info" : auth.status === "loading" ? "warning" : "muted"}>
         {canWrite ? "AUTHENTIFIÉ" : auth.status === "loading" ? "CONNEXION" : "LECTURE SEULE"}
       </StatusBadge>
     </div>
     <p className="operator-panel__notice">Chaque action exige une confirmation textuelle, la révision courante et une clé d’idempotence. Aucun ordre broker n’est envoyé.</p>
     <div className="operator-panel__identity">
-      <span>{auth.email || auth.message || "Connexion Google requise pour écrire"}</span>
+      <span>{auth.email || auth.message || "PIN opérateur requis pour écrire"}</span>
       {!canWrite && auth.status !== "loading" && auth.status !== "unavailable" && <button type="button" className="secondary-btn" onClick={() => void auth.signIn()}>Se connecter</button>}
-      {canWrite && !auth.email?.endsWith("@desk.local") && <button type="button" className="text-btn" onClick={() => void auth.signOut()}>Déconnexion</button>}
+      {canWrite && <button type="button" className="text-btn" onClick={() => void auth.signOut()}>Déconnexion</button>}
     </div>
     {stateQuery.isError && <p className="operator-feedback operator-feedback--error">{stateQuery.error.message}</p>}
     {feedback && <p className="operator-feedback"><Icon name="check" size={16}/>{feedback}</p>}
@@ -120,50 +130,23 @@ export function OperatorConfirmation({
   onCancel: () => void;
   onConfirm: (values: { confirmationPhrase: string; reason: string; partialFraction: number }) => Promise<void>;
 }) {
-  const [confirmationPhrase, setConfirmationPhrase] = useState("");
-  const [reason, setReason] = useState("");
   const [partialFraction, setPartialFraction] = useState(0.5);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const confirmed = operatorConfirmationIsValid(confirmationPhrase, capability.confirmationPhrase, reason);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!confirmed || submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onConfirm({ confirmationPhrase, reason: reason.trim(), partialFraction });
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
-      setSubmitting(false);
-    }
-  };
-
-  return <form className="operator-confirmation" onSubmit={submit}>
-    <p>La commande sera appliquée à la cible <strong>{capability.targetId || "session active"}</strong> depuis la révision <strong>{revision}</strong>.</p>
-    <label>
-      Justification opérateur
-      <textarea value={reason} onChange={event => setReason(event.target.value)} maxLength={500} placeholder="Pourquoi cette action est-elle justifiée maintenant ?" autoFocus/>
-    </label>
+  return <ConfirmActionForm
+    target={capability.targetId || "Session active"}
+    revision={revision}
+    expectedPhrase={capability.confirmationPhrase}
+    onCancel={onCancel}
+    danger={capability.dangerLevel === "critical"}
+    validateExtra={() => partialFraction > 0 && partialFraction < 1}
+    onConfirm={({ confirmationPhrase, reason }) => onConfirm({ confirmationPhrase, reason, partialFraction })}
+  >
     {capability.command === "take_partial" && <label>
       Fraction à sortir
       <select value={partialFraction} onChange={event => setPartialFraction(Number(event.target.value))}>
         <option value={0.25}>25 %</option><option value={0.5}>50 %</option><option value={0.75}>75 %</option>
       </select>
     </label>}
-    <label>
-      Recopiez <code>{capability.confirmationPhrase}</code>
-      <input value={confirmationPhrase} onChange={event => setConfirmationPhrase(event.target.value.toUpperCase())} autoComplete="off" spellCheck={false}/>
-    </label>
-    {error && <p className="operator-feedback operator-feedback--error">{error}</p>}
-    <div className="modal__actions">
-      <button type="button" className="secondary-btn" onClick={onCancel} disabled={submitting}>Annuler</button>
-      <button type="submit" className={capability.dangerLevel === "critical" ? "danger-btn" : "primary-btn"} disabled={!confirmed || submitting}>
-        {submitting ? "Enregistrement…" : "Confirmer l’écriture"}
-      </button>
-    </div>
-  </form>;
+  </ConfirmActionForm>;
 }
 
 export function operatorConfirmationIsValid(confirmationPhrase: string, expectedPhrase: string, reason: string) {

@@ -1,0 +1,3703 @@
+{
+  "ok": true,
+  "generated_at_utc": "2026-07-20T07:10:53.518Z",
+  "window": {
+    "from_utc": "2026-06-30T22:00:00.000Z",
+    "to_utc": "2026-07-17T21:00:00.000Z"
+  },
+  "hot_scope_expected": {
+    "MNQ": [
+      "1",
+      "5",
+      "15",
+      "1H",
+      "4H"
+    ],
+    "MES": [
+      "1",
+      "5",
+      "15",
+      "1H",
+      "4H"
+    ],
+    "NQ": [
+      "5",
+      "15",
+      "1H",
+      "4H"
+    ],
+    "ES": [
+      "5",
+      "15",
+      "1H",
+      "4H"
+    ],
+    "DXY": [
+      "5",
+      "4H"
+    ],
+    "VIX": [
+      "5",
+      "4H"
+    ],
+    "US10Y": [
+      "5",
+      "4H"
+    ],
+    "US02Y": [
+      "5",
+      "4H"
+    ],
+    "GC": [
+      "5",
+      "4H"
+    ],
+    "CL": [
+      "5",
+      "4H"
+    ]
+  },
+  "assumed_missing_optional_feeds": {
+    "prod__tradingview__NQ1!__5": "Assumé temporairement : les timeframes principaux NQ restent disponibles.",
+    "prod__tradingview__ES1!__5": "Assumé temporairement : les timeframes principaux ES restent disponibles."
+  },
+  "summary": {
+    "market_feeds_total": 50,
+    "feeds_with_candles": 30,
+    "hot_scope_expected_feeds": 30,
+    "hot_scope_feeds_with_candles": 30,
+    "total_candles_in_window": 65517,
+    "quarantine_count": 0,
+    "hot_scope_completeness_by_status": {
+      "ASSUMED_MISSING": 2,
+      "DERIVED_OK": 2,
+      "OK": 16,
+      "REVIEW": 10
+    },
+    "source_stale_hot_scope_feed_count": 0,
+    "assumed_missing_optional_hot_scope_feed_count": 2,
+    "review_gap_hot_scope_feed_count": 10,
+    "local_derived_hot_scope_feed_count": 4,
+    "invalid_ohlc_feed_count": 0,
+    "out_of_hot_scope_no_candles_feed_count": 20,
+    "source_stale_hot_scope_feeds": [],
+    "assumed_missing_optional_hot_scope_feeds": [
+      "prod__tradingview__ES1!__5",
+      "prod__tradingview__NQ1!__5"
+    ],
+    "review_gap_hot_scope_feeds": [
+      "prod__tradingview__CL1!__5",
+      "prod__tradingview__DXY__5",
+      "prod__tradingview__GC1!__5",
+      "prod__tradingview__MES1!__5",
+      "prod__tradingview__MES1!__15",
+      "prod__tradingview__MNQ1!__5",
+      "prod__tradingview__MNQ1!__15",
+      "prod__tradingview__US02Y__5",
+      "prod__tradingview__US10Y__5",
+      "prod__tradingview__VIX__5"
+    ],
+    "local_derived_hot_scope_feeds": [
+      "prod__tradingview__MES1!__15",
+      "prod__tradingview__MES1!__1H",
+      "prod__tradingview__MNQ1!__15",
+      "prod__tradingview__MNQ1!__1H"
+    ]
+  },
+  "hot_scope_completeness": [
+    {
+      "instrument_code": "MNQ",
+      "timeframe": "1",
+      "status": "OK",
+      "feed_id": "prod__tradingview__MNQ1!__1",
+      "candle_count": 16258,
+      "last_timestamp_utc": "2026-07-17T20:59:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:59:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "MNQ",
+      "timeframe": "5",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__MNQ1!__5",
+      "candle_count": 3533,
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "MNQ",
+      "timeframe": "15",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__MNQ1!__15",
+      "candle_count": 1176,
+      "last_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "flags": [
+        "LOCAL_DERIVED",
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "MNQ",
+      "timeframe": "1H",
+      "status": "DERIVED_OK",
+      "feed_id": "prod__tradingview__MNQ1!__1H",
+      "candle_count": 293,
+      "last_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "flags": [
+        "LOCAL_DERIVED",
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "MNQ",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__MNQ1!__4H",
+      "candle_count": 77,
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "MES",
+      "timeframe": "1",
+      "status": "OK",
+      "feed_id": "prod__tradingview__MES1!__1",
+      "candle_count": 16256,
+      "last_timestamp_utc": "2026-07-17T20:59:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:59:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "MES",
+      "timeframe": "5",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__MES1!__5",
+      "candle_count": 3533,
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "MES",
+      "timeframe": "15",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__MES1!__15",
+      "candle_count": 1176,
+      "last_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "flags": [
+        "LOCAL_DERIVED",
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "MES",
+      "timeframe": "1H",
+      "status": "DERIVED_OK",
+      "feed_id": "prod__tradingview__MES1!__1H",
+      "candle_count": 293,
+      "last_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "flags": [
+        "LOCAL_DERIVED",
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "MES",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__MES1!__4H",
+      "candle_count": 77,
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "NQ",
+      "timeframe": "5",
+      "status": "ASSUMED_MISSING",
+      "feed_id": "prod__tradingview__NQ1!__5",
+      "candle_count": 780,
+      "last_timestamp_utc": "2026-07-03T16:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-03T16:55:00.000Z",
+      "flags": [
+        "ASSUMED_MISSING_OPTIONAL"
+      ]
+    },
+    {
+      "instrument_code": "NQ",
+      "timeframe": "15",
+      "status": "OK",
+      "feed_id": "prod__tradingview__NQ1!__15",
+      "candle_count": 1180,
+      "last_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "NQ",
+      "timeframe": "1H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__NQ1!__1H",
+      "candle_count": 295,
+      "last_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "NQ",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__NQ1!__4H",
+      "candle_count": 77,
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "ES",
+      "timeframe": "5",
+      "status": "ASSUMED_MISSING",
+      "feed_id": "prod__tradingview__ES1!__5",
+      "candle_count": 780,
+      "last_timestamp_utc": "2026-07-03T16:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-03T16:55:00.000Z",
+      "flags": [
+        "ASSUMED_MISSING_OPTIONAL"
+      ]
+    },
+    {
+      "instrument_code": "ES",
+      "timeframe": "15",
+      "status": "OK",
+      "feed_id": "prod__tradingview__ES1!__15",
+      "candle_count": 1180,
+      "last_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "ES",
+      "timeframe": "1H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__ES1!__1H",
+      "candle_count": 295,
+      "last_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "ES",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__ES1!__4H",
+      "candle_count": 77,
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "DXY",
+      "timeframe": "5",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__DXY__5",
+      "candle_count": 3328,
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "DXY",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__DXY__4H",
+      "candle_count": 75,
+      "last_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "VIX",
+      "timeframe": "5",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__VIX__5",
+      "candle_count": 1866,
+      "last_timestamp_utc": "2026-07-17T20:15:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:15:00.000Z",
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "VIX",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__VIX__4H",
+      "candle_count": 38,
+      "last_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "US10Y",
+      "timeframe": "5",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__US10Y__5",
+      "candle_count": 2846,
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "US10Y",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__US10Y__4H",
+      "candle_count": 71,
+      "last_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "US02Y",
+      "timeframe": "5",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__US02Y__5",
+      "candle_count": 2665,
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "US02Y",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__US02Y__4H",
+      "candle_count": 72,
+      "last_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "GC",
+      "timeframe": "5",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__GC1!__5",
+      "candle_count": 3533,
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "GC",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__GC1!__4H",
+      "candle_count": 77,
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "instrument_code": "CL",
+      "timeframe": "5",
+      "status": "REVIEW",
+      "feed_id": "prod__tradingview__CL1!__5",
+      "candle_count": 3533,
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "instrument_code": "CL",
+      "timeframe": "4H",
+      "status": "OK",
+      "feed_id": "prod__tradingview__CL1!__4H",
+      "candle_count": 77,
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "flags": [
+        "OK"
+      ]
+    }
+  ],
+  "feed_reports": [
+    {
+      "feed_id": "prod__tradingview__AAPL__5",
+      "instrument_code": "AAPL",
+      "symbol_code": "AAPL",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T19:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__AAPL__5/candles/20260717T195500Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 3900,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__AAPL__4H",
+      "instrument_code": "AAPL",
+      "symbol_code": "AAPL",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__AAPL__4H/candles/20260717T173000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 12600,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__CL1!__5",
+      "instrument_code": "CL",
+      "symbol_code": "CL1!",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 3533,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__CL1!__5/candles/20260717T205500Z",
+      "calendar_observed_slots": 4884,
+      "calendar_missing_slots": 1351,
+      "calendar_coverage_ratio": 0.723382,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 300,
+      "window_minus_source_seconds": 300,
+      "gap_summary": {
+        "total_gap_count": 14,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 2,
+        "calendar_missing_slots_from_gaps": 1351,
+        "max_gap_seconds": 191100,
+        "max_review_gap_seconds": 2100,
+        "samples": [
+          {
+            "from_utc": "2026-07-16T08:00:00.000Z",
+            "to_utc": "2026-07-16T08:35:00.000Z",
+            "gap_seconds": 2100,
+            "missing_slots_calendar": 6,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-16T09:45:00.000Z",
+            "to_utc": "2026-07-16T09:55:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-03T16:55:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 191100,
+            "missing_slots_calendar": 636,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:55:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 176700,
+            "missing_slots_calendar": 588,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:55:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:55:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:55:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:55:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__CL1!__4H",
+      "instrument_code": "CL",
+      "symbol_code": "CL1!",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 77,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__CL1!__4H/candles/20260717T180000Z",
+      "calendar_observed_slots": 102,
+      "calendar_missing_slots": 25,
+      "calendar_coverage_ratio": 0.754902,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 10800,
+      "window_minus_source_seconds": 10800,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 25,
+        "max_gap_seconds": 201600,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T14:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 201600,
+            "missing_slots_calendar": 13,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T18:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 187200,
+            "missing_slots_calendar": 12,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__DAX__5",
+      "instrument_code": "DAX",
+      "symbol_code": "DAX",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T15:25:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__DAX__5/candles/20260717T152500Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 20100,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__DAX__4H",
+      "instrument_code": "DAX",
+      "symbol_code": "DAX",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T15:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__DAX__4H/candles/20260717T150000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 21600,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__DXY__5",
+      "instrument_code": "DXY",
+      "symbol_code": "DXY",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 3328,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__DXY__5/candles/20260717T205500Z",
+      "calendar_observed_slots": 4884,
+      "calendar_missing_slots": 1556,
+      "calendar_coverage_ratio": 0.681409,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 300,
+      "window_minus_source_seconds": 300,
+      "gap_summary": {
+        "total_gap_count": 27,
+        "daily_maintenance_or_short_session_break_count": 20,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 5,
+        "calendar_missing_slots_from_gaps": 1556,
+        "max_gap_seconds": 191100,
+        "max_review_gap_seconds": 2100,
+        "samples": [
+          {
+            "from_utc": "2026-07-16T08:00:00.000Z",
+            "to_utc": "2026-07-16T08:35:00.000Z",
+            "gap_seconds": 2100,
+            "missing_slots_calendar": 6,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-02T23:30:00.000Z",
+            "to_utc": "2026-07-02T23:45:00.000Z",
+            "gap_seconds": 900,
+            "missing_slots_calendar": 2,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-14T23:30:00.000Z",
+            "to_utc": "2026-07-14T23:45:00.000Z",
+            "gap_seconds": 900,
+            "missing_slots_calendar": 2,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-15T23:30:00.000Z",
+            "to_utc": "2026-07-15T23:45:00.000Z",
+            "gap_seconds": 900,
+            "missing_slots_calendar": 2,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-16T09:45:00.000Z",
+            "to_utc": "2026-07-16T09:55:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-03T16:55:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 191100,
+            "missing_slots_calendar": 636,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-06-30T22:00:00.000Z",
+            "to_utc": "2026-06-30T23:45:00.000Z",
+            "gap_seconds": 6300,
+            "missing_slots_calendar": 20,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-01T22:00:00.000Z",
+            "to_utc": "2026-07-01T23:45:00.000Z",
+            "gap_seconds": 6300,
+            "missing_slots_calendar": 20,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__DXY__4H",
+      "instrument_code": "DXY",
+      "symbol_code": "DXY",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 75,
+      "first_timestamp_utc": "2026-06-30T23:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__DXY__4H/candles/20260717T190000Z",
+      "calendar_observed_slots": 102,
+      "calendar_missing_slots": 27,
+      "calendar_coverage_ratio": 0.735294,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 7200,
+      "window_minus_source_seconds": 7200,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 26,
+        "max_gap_seconds": 208800,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T15:00:00.000Z",
+            "to_utc": "2026-07-06T01:00:00.000Z",
+            "gap_seconds": 208800,
+            "missing_slots_calendar": 13,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T19:00:00.000Z",
+            "to_utc": "2026-07-13T01:00:00.000Z",
+            "gap_seconds": 194400,
+            "missing_slots_calendar": 13,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__ES1!__5",
+      "instrument_code": "ES",
+      "symbol_code": "ES1!",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 780,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-03T16:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-03T16:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__ES1!__5/candles/20260703T165500Z",
+      "calendar_observed_slots": 804,
+      "calendar_missing_slots": 24,
+      "calendar_coverage_ratio": 0.970149,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 1224300,
+      "window_minus_source_seconds": 1224300,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 2,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 24,
+        "max_gap_seconds": 3900,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-01T20:55:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:55:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "ASSUMED_MISSING_OPTIONAL"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__ES1!__15",
+      "instrument_code": "ES",
+      "symbol_code": "ES1!",
+      "timeframe": "15",
+      "timeframe_seconds": 900,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 1180,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__ES1!__15/candles/20260717T204500Z",
+      "calendar_observed_slots": 1628,
+      "calendar_missing_slots": 448,
+      "calendar_coverage_ratio": 0.724816,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 900,
+      "window_minus_source_seconds": 900,
+      "gap_summary": {
+        "total_gap_count": 12,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 448,
+        "max_gap_seconds": 191700,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T16:45:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 191700,
+            "missing_slots_calendar": 212,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:45:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 177300,
+            "missing_slots_calendar": 196,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:45:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:45:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:45:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:45:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:45:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-09T20:45:00.000Z",
+            "to_utc": "2026-07-09T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__ES1!__1H",
+      "instrument_code": "ES",
+      "symbol_code": "ES1!",
+      "timeframe": "1H",
+      "timeframe_seconds": 3600,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 295,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__ES1!__1H/candles/20260717T200000Z",
+      "calendar_observed_slots": 407,
+      "calendar_missing_slots": 112,
+      "calendar_coverage_ratio": 0.724816,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 3600,
+      "window_minus_source_seconds": 3600,
+      "gap_summary": {
+        "total_gap_count": 12,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 112,
+        "max_gap_seconds": 194400,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T16:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 194400,
+            "missing_slots_calendar": 53,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 180000,
+            "missing_slots_calendar": 49,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:00:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:00:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:00:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:00:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:00:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-09T20:00:00.000Z",
+            "to_utc": "2026-07-09T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__ES1!__4H",
+      "instrument_code": "ES",
+      "symbol_code": "ES1!",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 77,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__ES1!__4H/candles/20260717T180000Z",
+      "calendar_observed_slots": 102,
+      "calendar_missing_slots": 25,
+      "calendar_coverage_ratio": 0.754902,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 10800,
+      "window_minus_source_seconds": 10800,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 25,
+        "max_gap_seconds": 201600,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T14:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 201600,
+            "missing_slots_calendar": 13,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T18:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 187200,
+            "missing_slots_calendar": 12,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__GC1!__5",
+      "instrument_code": "GC",
+      "symbol_code": "GC1!",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 3533,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__GC1!__5/candles/20260717T205500Z",
+      "calendar_observed_slots": 4884,
+      "calendar_missing_slots": 1351,
+      "calendar_coverage_ratio": 0.723382,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 300,
+      "window_minus_source_seconds": 300,
+      "gap_summary": {
+        "total_gap_count": 14,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 2,
+        "calendar_missing_slots_from_gaps": 1351,
+        "max_gap_seconds": 191100,
+        "max_review_gap_seconds": 2100,
+        "samples": [
+          {
+            "from_utc": "2026-07-16T08:00:00.000Z",
+            "to_utc": "2026-07-16T08:35:00.000Z",
+            "gap_seconds": 2100,
+            "missing_slots_calendar": 6,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-16T09:45:00.000Z",
+            "to_utc": "2026-07-16T09:55:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-03T16:55:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 191100,
+            "missing_slots_calendar": 636,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:55:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 176700,
+            "missing_slots_calendar": 588,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:55:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:55:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:55:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:55:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__GC1!__4H",
+      "instrument_code": "GC",
+      "symbol_code": "GC1!",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 77,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__GC1!__4H/candles/20260717T180000Z",
+      "calendar_observed_slots": 102,
+      "calendar_missing_slots": 25,
+      "calendar_coverage_ratio": 0.754902,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 10800,
+      "window_minus_source_seconds": 10800,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 25,
+        "max_gap_seconds": 201600,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T14:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 201600,
+            "missing_slots_calendar": 13,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T18:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 187200,
+            "missing_slots_calendar": 12,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__HSI__5",
+      "instrument_code": "HSI",
+      "symbol_code": "HSI",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T08:05:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__HSI__5/candles/20260717T080500Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 46500,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__HSI__4H",
+      "instrument_code": "HSI",
+      "symbol_code": "HSI",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T05:20:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__HSI__4H/candles/20260717T052000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 56400,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MES1!__1",
+      "instrument_code": "MES",
+      "symbol_code": "MES1!",
+      "timeframe": "1",
+      "timeframe_seconds": 60,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 16256,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:59:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:59:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MES1!__1/candles/20260717T205900Z",
+      "calendar_observed_slots": 24420,
+      "calendar_missing_slots": 8164,
+      "calendar_coverage_ratio": 0.665684,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 60,
+      "window_minus_source_seconds": 60,
+      "gap_summary": {
+        "total_gap_count": 14,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 4,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 8164,
+        "max_gap_seconds": 190860,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T16:59:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 190860,
+            "missing_slots_calendar": 3180,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-06-30T23:59:00.000Z",
+            "to_utc": "2026-07-01T18:00:00.000Z",
+            "gap_seconds": 64860,
+            "missing_slots_calendar": 1080,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T23:59:00.000Z",
+            "to_utc": "2026-07-02T06:04:00.000Z",
+            "gap_seconds": 21900,
+            "missing_slots_calendar": 364,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:59:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:59:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:59:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:59:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:59:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MES1!__5",
+      "instrument_code": "MES",
+      "symbol_code": "MES1!",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 3533,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MES1!__5/candles/20260717T205500Z",
+      "calendar_observed_slots": 4884,
+      "calendar_missing_slots": 1351,
+      "calendar_coverage_ratio": 0.723382,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 300,
+      "window_minus_source_seconds": 300,
+      "gap_summary": {
+        "total_gap_count": 14,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 2,
+        "calendar_missing_slots_from_gaps": 1351,
+        "max_gap_seconds": 191100,
+        "max_review_gap_seconds": 2100,
+        "samples": [
+          {
+            "from_utc": "2026-07-16T08:00:00.000Z",
+            "to_utc": "2026-07-16T08:35:00.000Z",
+            "gap_seconds": 2100,
+            "missing_slots_calendar": 6,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-16T09:45:00.000Z",
+            "to_utc": "2026-07-16T09:55:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-03T16:55:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 191100,
+            "missing_slots_calendar": 636,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:55:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 176700,
+            "missing_slots_calendar": 588,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:55:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:55:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:55:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:55:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MES1!__15",
+      "instrument_code": "MES",
+      "symbol_code": "MES1!",
+      "timeframe": "15",
+      "timeframe_seconds": 900,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": "derived_local",
+      "is_local_derived": true,
+      "in_hot_scope": true,
+      "candle_count": 1176,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MES1!__15/candles/20260717T204500Z",
+      "calendar_observed_slots": 1628,
+      "calendar_missing_slots": 452,
+      "calendar_coverage_ratio": 0.722359,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 900,
+      "window_minus_source_seconds": 900,
+      "gap_summary": {
+        "total_gap_count": 14,
+        "daily_maintenance_or_short_session_break_count": 11,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 1,
+        "calendar_missing_slots_from_gaps": 452,
+        "max_gap_seconds": 191700,
+        "max_review_gap_seconds": 1800,
+        "samples": [
+          {
+            "from_utc": "2026-07-16T09:30:00.000Z",
+            "to_utc": "2026-07-16T10:00:00.000Z",
+            "gap_seconds": 1800,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-03T16:45:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 191700,
+            "missing_slots_calendar": 212,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:45:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 177300,
+            "missing_slots_calendar": 196,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:45:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:45:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:45:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:45:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:45:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "LOCAL_DERIVED",
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MES1!__1H",
+      "instrument_code": "MES",
+      "symbol_code": "MES1!",
+      "timeframe": "1H",
+      "timeframe_seconds": 3600,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": "derived_local",
+      "is_local_derived": true,
+      "in_hot_scope": true,
+      "candle_count": 293,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MES1!__1H/candles/20260717T200000Z",
+      "calendar_observed_slots": 407,
+      "calendar_missing_slots": 114,
+      "calendar_coverage_ratio": 0.719902,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 3600,
+      "window_minus_source_seconds": 3600,
+      "gap_summary": {
+        "total_gap_count": 13,
+        "daily_maintenance_or_short_session_break_count": 11,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 114,
+        "max_gap_seconds": 194400,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T16:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 194400,
+            "missing_slots_calendar": 53,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 180000,
+            "missing_slots_calendar": 49,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:00:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:00:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:00:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:00:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:00:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-09T20:00:00.000Z",
+            "to_utc": "2026-07-09T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "LOCAL_DERIVED",
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MES1!__4H",
+      "instrument_code": "MES",
+      "symbol_code": "MES1!",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 77,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MES1!__4H/candles/20260717T180000Z",
+      "calendar_observed_slots": 102,
+      "calendar_missing_slots": 25,
+      "calendar_coverage_ratio": 0.754902,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 10800,
+      "window_minus_source_seconds": 10800,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 25,
+        "max_gap_seconds": 201600,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T14:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 201600,
+            "missing_slots_calendar": 13,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T18:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 187200,
+            "missing_slots_calendar": 12,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MNQ1!__1",
+      "instrument_code": "MNQ",
+      "symbol_code": "MNQ1!",
+      "timeframe": "1",
+      "timeframe_seconds": 60,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 16258,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:59:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:59:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MNQ1!__1/candles/20260717T205900Z",
+      "calendar_observed_slots": 24420,
+      "calendar_missing_slots": 8162,
+      "calendar_coverage_ratio": 0.665766,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 60,
+      "window_minus_source_seconds": 60,
+      "gap_summary": {
+        "total_gap_count": 14,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 4,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 8162,
+        "max_gap_seconds": 190860,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T16:59:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 190860,
+            "missing_slots_calendar": 3180,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-06-30T23:59:00.000Z",
+            "to_utc": "2026-07-01T18:00:00.000Z",
+            "gap_seconds": 64860,
+            "missing_slots_calendar": 1080,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T23:59:00.000Z",
+            "to_utc": "2026-07-02T06:02:00.000Z",
+            "gap_seconds": 21780,
+            "missing_slots_calendar": 362,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:59:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:59:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:59:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:59:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:59:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 3660,
+            "missing_slots_calendar": 60,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MNQ1!__5",
+      "instrument_code": "MNQ",
+      "symbol_code": "MNQ1!",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 3533,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MNQ1!__5/candles/20260717T205500Z",
+      "calendar_observed_slots": 4884,
+      "calendar_missing_slots": 1351,
+      "calendar_coverage_ratio": 0.723382,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 300,
+      "window_minus_source_seconds": 300,
+      "gap_summary": {
+        "total_gap_count": 14,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 2,
+        "calendar_missing_slots_from_gaps": 1351,
+        "max_gap_seconds": 191100,
+        "max_review_gap_seconds": 2100,
+        "samples": [
+          {
+            "from_utc": "2026-07-16T08:00:00.000Z",
+            "to_utc": "2026-07-16T08:35:00.000Z",
+            "gap_seconds": 2100,
+            "missing_slots_calendar": 6,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-16T09:45:00.000Z",
+            "to_utc": "2026-07-16T09:55:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-03T16:55:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 191100,
+            "missing_slots_calendar": 636,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:55:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 176700,
+            "missing_slots_calendar": 588,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:55:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:55:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:55:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:55:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MNQ1!__15",
+      "instrument_code": "MNQ",
+      "symbol_code": "MNQ1!",
+      "timeframe": "15",
+      "timeframe_seconds": 900,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": "derived_local",
+      "is_local_derived": true,
+      "in_hot_scope": true,
+      "candle_count": 1176,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MNQ1!__15/candles/20260717T204500Z",
+      "calendar_observed_slots": 1628,
+      "calendar_missing_slots": 452,
+      "calendar_coverage_ratio": 0.722359,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 900,
+      "window_minus_source_seconds": 900,
+      "gap_summary": {
+        "total_gap_count": 14,
+        "daily_maintenance_or_short_session_break_count": 11,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 1,
+        "calendar_missing_slots_from_gaps": 452,
+        "max_gap_seconds": 191700,
+        "max_review_gap_seconds": 1800,
+        "samples": [
+          {
+            "from_utc": "2026-07-16T09:30:00.000Z",
+            "to_utc": "2026-07-16T10:00:00.000Z",
+            "gap_seconds": 1800,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-03T16:45:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 191700,
+            "missing_slots_calendar": 212,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:45:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 177300,
+            "missing_slots_calendar": 196,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:45:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:45:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:45:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:45:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:45:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "LOCAL_DERIVED",
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MNQ1!__1H",
+      "instrument_code": "MNQ",
+      "symbol_code": "MNQ1!",
+      "timeframe": "1H",
+      "timeframe_seconds": 3600,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": "derived_local",
+      "is_local_derived": true,
+      "in_hot_scope": true,
+      "candle_count": 293,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MNQ1!__1H/candles/20260717T200000Z",
+      "calendar_observed_slots": 407,
+      "calendar_missing_slots": 114,
+      "calendar_coverage_ratio": 0.719902,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 3600,
+      "window_minus_source_seconds": 3600,
+      "gap_summary": {
+        "total_gap_count": 13,
+        "daily_maintenance_or_short_session_break_count": 11,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 114,
+        "max_gap_seconds": 194400,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T16:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 194400,
+            "missing_slots_calendar": 53,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 180000,
+            "missing_slots_calendar": 49,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:00:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:00:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:00:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:00:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:00:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-09T20:00:00.000Z",
+            "to_utc": "2026-07-09T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "LOCAL_DERIVED",
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MNQ1!__4H",
+      "instrument_code": "MNQ",
+      "symbol_code": "MNQ1!",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 77,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MNQ1!__4H/candles/20260717T180000Z",
+      "calendar_observed_slots": 102,
+      "calendar_missing_slots": 25,
+      "calendar_coverage_ratio": 0.754902,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 10800,
+      "window_minus_source_seconds": 10800,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 25,
+        "max_gap_seconds": 201600,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T14:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 201600,
+            "missing_slots_calendar": 13,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T18:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 187200,
+            "missing_slots_calendar": 12,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MSFT__5",
+      "instrument_code": "MSFT",
+      "symbol_code": "MSFT",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T19:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MSFT__5/candles/20260717T195500Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 3900,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__MSFT__4H",
+      "instrument_code": "MSFT",
+      "symbol_code": "MSFT",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__MSFT__4H/candles/20260717T173000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 12600,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__NI225__5",
+      "instrument_code": "NI225",
+      "symbol_code": "NI225",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T06:30:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__NI225__5/candles/20260717T063000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 52200,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__NI225__4H",
+      "instrument_code": "NI225",
+      "symbol_code": "NI225",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T04:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__NI225__4H/candles/20260717T040000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 61200,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__NQ1!__5",
+      "instrument_code": "NQ",
+      "symbol_code": "NQ1!",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 780,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-03T16:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-03T16:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__NQ1!__5/candles/20260703T165500Z",
+      "calendar_observed_slots": 804,
+      "calendar_missing_slots": 24,
+      "calendar_coverage_ratio": 0.970149,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 1224300,
+      "window_minus_source_seconds": 1224300,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 2,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 24,
+        "max_gap_seconds": 3900,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-01T20:55:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:55:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 3900,
+            "missing_slots_calendar": 12,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "ASSUMED_MISSING_OPTIONAL"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__NQ1!__15",
+      "instrument_code": "NQ",
+      "symbol_code": "NQ1!",
+      "timeframe": "15",
+      "timeframe_seconds": 900,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 1180,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:45:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__NQ1!__15/candles/20260717T204500Z",
+      "calendar_observed_slots": 1628,
+      "calendar_missing_slots": 448,
+      "calendar_coverage_ratio": 0.724816,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 900,
+      "window_minus_source_seconds": 900,
+      "gap_summary": {
+        "total_gap_count": 12,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 448,
+        "max_gap_seconds": 191700,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T16:45:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 191700,
+            "missing_slots_calendar": 212,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:45:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 177300,
+            "missing_slots_calendar": 196,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:45:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:45:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:45:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:45:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:45:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-09T20:45:00.000Z",
+            "to_utc": "2026-07-09T22:00:00.000Z",
+            "gap_seconds": 4500,
+            "missing_slots_calendar": 4,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__NQ1!__1H",
+      "instrument_code": "NQ",
+      "symbol_code": "NQ1!",
+      "timeframe": "1H",
+      "timeframe_seconds": 3600,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 295,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__NQ1!__1H/candles/20260717T200000Z",
+      "calendar_observed_slots": 407,
+      "calendar_missing_slots": 112,
+      "calendar_coverage_ratio": 0.724816,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 3600,
+      "window_minus_source_seconds": 3600,
+      "gap_summary": {
+        "total_gap_count": 12,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 112,
+        "max_gap_seconds": 194400,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T16:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 194400,
+            "missing_slots_calendar": 53,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T20:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 180000,
+            "missing_slots_calendar": 49,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T20:00:00.000Z",
+            "to_utc": "2026-07-01T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-02T20:00:00.000Z",
+            "to_utc": "2026-07-02T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-06T20:00:00.000Z",
+            "to_utc": "2026-07-06T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-07T20:00:00.000Z",
+            "to_utc": "2026-07-07T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-08T20:00:00.000Z",
+            "to_utc": "2026-07-08T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          },
+          {
+            "from_utc": "2026-07-09T20:00:00.000Z",
+            "to_utc": "2026-07-09T22:00:00.000Z",
+            "gap_seconds": 7200,
+            "missing_slots_calendar": 1,
+            "classification": "daily_maintenance_or_short_session_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__NQ1!__4H",
+      "instrument_code": "NQ",
+      "symbol_code": "NQ1!",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 77,
+      "first_timestamp_utc": "2026-06-30T22:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T18:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__NQ1!__4H/candles/20260717T180000Z",
+      "calendar_observed_slots": 102,
+      "calendar_missing_slots": 25,
+      "calendar_coverage_ratio": 0.754902,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 10800,
+      "window_minus_source_seconds": 10800,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 25,
+        "max_gap_seconds": 201600,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-03T14:00:00.000Z",
+            "to_utc": "2026-07-05T22:00:00.000Z",
+            "gap_seconds": 201600,
+            "missing_slots_calendar": 13,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T18:00:00.000Z",
+            "to_utc": "2026-07-12T22:00:00.000Z",
+            "gap_seconds": 187200,
+            "missing_slots_calendar": 12,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__NVDA__5",
+      "instrument_code": "NVDA",
+      "symbol_code": "NVDA",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T19:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__NVDA__5/candles/20260717T195500Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 3900,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__NVDA__4H",
+      "instrument_code": "NVDA",
+      "symbol_code": "NVDA",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__NVDA__4H/candles/20260717T173000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 12600,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__SMH__5",
+      "instrument_code": "SMH",
+      "symbol_code": "SMH",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T19:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__SMH__5/candles/20260717T195500Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 3900,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__SMH__4H",
+      "instrument_code": "SMH",
+      "symbol_code": "SMH",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__SMH__4H/candles/20260717T173000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 12600,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__SOXX__5",
+      "instrument_code": "SOXX",
+      "symbol_code": "SOXX",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T19:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__SOXX__5/candles/20260717T195500Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 3900,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__SOXX__4H",
+      "instrument_code": "SOXX",
+      "symbol_code": "SOXX",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__SOXX__4H/candles/20260717T173000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 12600,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__SX5E__5",
+      "instrument_code": "SX5E",
+      "symbol_code": "SX5E",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T15:30:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__SX5E__5/candles/20260717T153000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 19800,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__SX5E__4H",
+      "instrument_code": "SX5E",
+      "symbol_code": "SX5E",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T15:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__SX5E__4H/candles/20260717T150000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 21600,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__TSLA__5",
+      "instrument_code": "TSLA",
+      "symbol_code": "TSLA",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T19:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__TSLA__5/candles/20260717T195500Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 3900,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__TSLA__4H",
+      "instrument_code": "TSLA",
+      "symbol_code": "TSLA",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": false,
+      "candle_count": 0,
+      "first_timestamp_utc": null,
+      "last_timestamp_utc": null,
+      "feed_latest_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__TSLA__4H/candles/20260717T173000Z",
+      "calendar_observed_slots": null,
+      "calendar_missing_slots": null,
+      "calendar_coverage_ratio": null,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": null,
+      "window_minus_actual_seconds": null,
+      "window_minus_source_seconds": 12600,
+      "gap_summary": {
+        "total_gap_count": 0,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 0,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 0,
+        "max_gap_seconds": 0,
+        "max_review_gap_seconds": 0,
+        "samples": []
+      },
+      "flags": [
+        "OUT_OF_HOT_SCOPE",
+        "NO_CANDLES_IMPORTED"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__US02Y__5",
+      "instrument_code": "US02Y",
+      "symbol_code": "US02Y",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 2665,
+      "first_timestamp_utc": "2026-07-01T00:10:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__US02Y__5/candles/20260717T205500Z",
+      "calendar_observed_slots": 4858,
+      "calendar_missing_slots": 2193,
+      "calendar_coverage_ratio": 0.54858,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 300,
+      "window_minus_source_seconds": 300,
+      "gap_summary": {
+        "total_gap_count": 256,
+        "daily_maintenance_or_short_session_break_count": 10,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 244,
+        "calendar_missing_slots_from_gaps": 2193,
+        "max_gap_seconds": 268800,
+        "max_review_gap_seconds": 2100,
+        "samples": [
+          {
+            "from_utc": "2026-07-02T04:35:00.000Z",
+            "to_utc": "2026-07-02T05:10:00.000Z",
+            "gap_seconds": 2100,
+            "missing_slots_calendar": 6,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-16T08:00:00.000Z",
+            "to_utc": "2026-07-16T08:35:00.000Z",
+            "gap_seconds": 2100,
+            "missing_slots_calendar": 6,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-06T17:50:00.000Z",
+            "to_utc": "2026-07-06T18:20:00.000Z",
+            "gap_seconds": 1800,
+            "missing_slots_calendar": 5,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-06T20:55:00.000Z",
+            "to_utc": "2026-07-06T21:25:00.000Z",
+            "gap_seconds": 1800,
+            "missing_slots_calendar": 5,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-10T02:20:00.000Z",
+            "to_utc": "2026-07-10T02:45:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-10T05:05:00.000Z",
+            "to_utc": "2026-07-10T05:30:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-10T07:00:00.000Z",
+            "to_utc": "2026-07-10T07:25:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-16T02:30:00.000Z",
+            "to_utc": "2026-07-16T02:55:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          }
+        ]
+      },
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__US02Y__4H",
+      "instrument_code": "US02Y",
+      "symbol_code": "US02Y",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 72,
+      "first_timestamp_utc": "2026-06-30T23:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__US02Y__4H/candles/20260717T190000Z",
+      "calendar_observed_slots": 102,
+      "calendar_missing_slots": 30,
+      "calendar_coverage_ratio": 0.705882,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 7200,
+      "window_minus_source_seconds": 7200,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 30,
+        "max_gap_seconds": 273600,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-02T19:00:00.000Z",
+            "to_utc": "2026-07-05T23:00:00.000Z",
+            "gap_seconds": 273600,
+            "missing_slots_calendar": 18,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T19:00:00.000Z",
+            "to_utc": "2026-07-12T23:00:00.000Z",
+            "gap_seconds": 187200,
+            "missing_slots_calendar": 12,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__US10Y__5",
+      "instrument_code": "US10Y",
+      "symbol_code": "US10Y",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 2846,
+      "first_timestamp_utc": "2026-07-01T00:10:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:55:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__US10Y__5/candles/20260717T205500Z",
+      "calendar_observed_slots": 4858,
+      "calendar_missing_slots": 2012,
+      "calendar_coverage_ratio": 0.585838,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 300,
+      "window_minus_source_seconds": 300,
+      "gap_summary": {
+        "total_gap_count": 129,
+        "daily_maintenance_or_short_session_break_count": 9,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 118,
+        "calendar_missing_slots_from_gaps": 2012,
+        "max_gap_seconds": 279000,
+        "max_review_gap_seconds": 2400,
+        "samples": [
+          {
+            "from_utc": "2026-07-06T20:25:00.000Z",
+            "to_utc": "2026-07-06T21:05:00.000Z",
+            "gap_seconds": 2400,
+            "missing_slots_calendar": 7,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-16T08:00:00.000Z",
+            "to_utc": "2026-07-16T08:35:00.000Z",
+            "gap_seconds": 2100,
+            "missing_slots_calendar": 6,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-08T02:40:00.000Z",
+            "to_utc": "2026-07-08T03:05:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-09T20:55:00.000Z",
+            "to_utc": "2026-07-09T21:20:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-10T20:55:00.000Z",
+            "to_utc": "2026-07-10T21:20:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-13T20:55:00.000Z",
+            "to_utc": "2026-07-13T21:20:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-14T20:55:00.000Z",
+            "to_utc": "2026-07-14T21:20:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-15T20:55:00.000Z",
+            "to_utc": "2026-07-15T21:20:00.000Z",
+            "gap_seconds": 1500,
+            "missing_slots_calendar": 4,
+            "classification": "review_gap"
+          }
+        ]
+      },
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__US10Y__4H",
+      "instrument_code": "US10Y",
+      "symbol_code": "US10Y",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 71,
+      "first_timestamp_utc": "2026-06-30T23:00:00.000Z",
+      "last_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T19:00:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__US10Y__4H/candles/20260717T190000Z",
+      "calendar_observed_slots": 102,
+      "calendar_missing_slots": 31,
+      "calendar_coverage_ratio": 0.696078,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 7200,
+      "window_minus_source_seconds": 7200,
+      "gap_summary": {
+        "total_gap_count": 2,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 2,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 31,
+        "max_gap_seconds": 288000,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-02T15:00:00.000Z",
+            "to_utc": "2026-07-05T23:00:00.000Z",
+            "gap_seconds": 288000,
+            "missing_slots_calendar": 19,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-10T19:00:00.000Z",
+            "to_utc": "2026-07-12T23:00:00.000Z",
+            "gap_seconds": 187200,
+            "missing_slots_calendar": 12,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__VIX__5",
+      "instrument_code": "VIX",
+      "symbol_code": "VIX",
+      "timeframe": "5",
+      "timeframe_seconds": 300,
+      "timeframe_group": "intraday",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 1866,
+      "first_timestamp_utc": "2026-07-01T07:15:00.000Z",
+      "last_timestamp_utc": "2026-07-17T20:15:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T20:15:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__VIX__5/candles/20260717T201500Z",
+      "calendar_observed_slots": 4765,
+      "calendar_missing_slots": 2899,
+      "calendar_coverage_ratio": 0.391605,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 2700,
+      "window_minus_source_seconds": 2700,
+      "gap_summary": {
+        "total_gap_count": 20,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 11,
+        "review_gap_count": 9,
+        "calendar_missing_slots_from_gaps": 2899,
+        "max_gap_seconds": 298800,
+        "max_review_gap_seconds": 2100,
+        "samples": [
+          {
+            "from_utc": "2026-07-16T08:00:00.000Z",
+            "to_utc": "2026-07-16T08:35:00.000Z",
+            "gap_seconds": 2100,
+            "missing_slots_calendar": 6,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-01T09:10:00.000Z",
+            "to_utc": "2026-07-01T09:20:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-01T10:40:00.000Z",
+            "to_utc": "2026-07-01T10:50:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-06T13:20:00.000Z",
+            "to_utc": "2026-07-06T13:30:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-07T08:40:00.000Z",
+            "to_utc": "2026-07-07T08:50:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-10T13:20:00.000Z",
+            "to_utc": "2026-07-10T13:30:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-15T13:20:00.000Z",
+            "to_utc": "2026-07-15T13:30:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          },
+          {
+            "from_utc": "2026-07-16T09:45:00.000Z",
+            "to_utc": "2026-07-16T09:55:00.000Z",
+            "gap_seconds": 600,
+            "missing_slots_calendar": 1,
+            "classification": "review_gap"
+          }
+        ]
+      },
+      "flags": [
+        "REVIEW_GAPS"
+      ]
+    },
+    {
+      "feed_id": "prod__tradingview__VIX__4H",
+      "instrument_code": "VIX",
+      "symbol_code": "VIX",
+      "timeframe": "4H",
+      "timeframe_seconds": 14400,
+      "timeframe_group": "higher_timeframe",
+      "provider": "tradingview",
+      "enabled": true,
+      "feed_status": null,
+      "is_local_derived": false,
+      "in_hot_scope": true,
+      "candle_count": 38,
+      "first_timestamp_utc": "2026-07-01T07:15:00.000Z",
+      "last_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "feed_latest_timestamp_utc": "2026-07-17T17:30:00.000Z",
+      "latest_candle_path": "market_feeds/prod__tradingview__VIX__4H/candles/20260717T173000Z",
+      "calendar_observed_slots": 99,
+      "calendar_missing_slots": 61,
+      "calendar_coverage_ratio": 0.383838,
+      "invalid_ohlc_count": 0,
+      "open_candle_count": 0,
+      "source_minus_actual_seconds": 0,
+      "window_minus_actual_seconds": 12600,
+      "window_minus_source_seconds": 12600,
+      "gap_summary": {
+        "total_gap_count": 21,
+        "daily_maintenance_or_short_session_break_count": 0,
+        "session_or_weekend_break_count": 21,
+        "review_gap_count": 0,
+        "calendar_missing_slots_from_gaps": 62,
+        "max_gap_seconds": 308700,
+        "max_review_gap_seconds": 0,
+        "samples": [
+          {
+            "from_utc": "2026-07-02T17:30:00.000Z",
+            "to_utc": "2026-07-06T07:15:00.000Z",
+            "gap_seconds": 308700,
+            "missing_slots_calendar": 20,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-01T17:30:00.000Z",
+            "to_utc": "2026-07-02T07:15:00.000Z",
+            "gap_seconds": 49500,
+            "missing_slots_calendar": 2,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-06T17:30:00.000Z",
+            "to_utc": "2026-07-07T07:15:00.000Z",
+            "gap_seconds": 49500,
+            "missing_slots_calendar": 2,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-07T17:30:00.000Z",
+            "to_utc": "2026-07-08T07:15:00.000Z",
+            "gap_seconds": 49500,
+            "missing_slots_calendar": 2,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-08T17:30:00.000Z",
+            "to_utc": "2026-07-09T07:15:00.000Z",
+            "gap_seconds": 49500,
+            "missing_slots_calendar": 2,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-06T07:15:00.000Z",
+            "to_utc": "2026-07-06T13:30:00.000Z",
+            "gap_seconds": 22500,
+            "missing_slots_calendar": 1,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-07T07:15:00.000Z",
+            "to_utc": "2026-07-07T13:30:00.000Z",
+            "gap_seconds": 22500,
+            "missing_slots_calendar": 1,
+            "classification": "session_or_weekend_break"
+          },
+          {
+            "from_utc": "2026-07-08T07:15:00.000Z",
+            "to_utc": "2026-07-08T13:30:00.000Z",
+            "gap_seconds": 22500,
+            "missing_slots_calendar": 1,
+            "classification": "session_or_weekend_break"
+          }
+        ]
+      },
+      "flags": [
+        "OK"
+      ]
+    }
+  ],
+  "notes": [
+    "calendar_missing_slots is intentionally calendar-based and includes normal session/weekend breaks.",
+    "review_gap_count excludes obvious long session/weekend breaks and common 45-90 minute maintenance breaks.",
+    "SOURCE_STALE_VS_WINDOW means local candles match a source feed whose latest_timestamp_utc is already older than the audit window end.",
+    "ASSUMED_MISSING_OPTIONAL means the missing/stale feed is accepted by current desk logic and is not counted as a blocking stale source."
+  ]
+}

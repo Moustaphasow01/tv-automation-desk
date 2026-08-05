@@ -1,4 +1,5 @@
-import { Card, HealthOrb, Icon, SectionTitle, StatusBadge } from "@/components/common";
+import { Card, Icon, SectionTitle, StatusBadge } from "@/components/common";
+import { MetricCard, MetricStrip, PageHeading } from "@/components/operations";
 import { Conditions } from "@/components/deskCards";
 import { deskDetailScope, useThesisConditionsDetail, useThesisDetail } from "@/hooks/useDesk";
 import { DeskPage } from "@/pages/pageState";
@@ -18,14 +19,18 @@ function ThesisWorkspace({ initialData }: { initialData: DeskSession }) {
     levels: thesisQuery.data?.levels || initialData.levels
   };
   return <section className="view">
-    <SectionTitle title="Thèse active" subtitle="État vivant mis à jour par les Monitors"/>
+    <PageHeading eyebrow="Temps réel" title="Thèse active" subtitle="État vivant mis à jour par les Monitors"/>
     <Card className="thesis-page-hero">
       <div className="thesis-page-hero__copy">
         <div className="instrument-title"><span className="instrument-badge">{data.thesis.instrument}</span><div><p className="eyebrow">{data.thesis.direction}</p><h1>{data.thesis.status}</h1></div></div>
         <p>{data.thesis.dominantScenario}</p>
         <StatusBadge tone={data.thesis.health < 40 ? "critical" : "warning"}>{data.thesis.previousStatus} → {data.thesis.status}</StatusBadge>
       </div>
-      <HealthOrb score={data.thesis.health}/>
+      <MetricStrip className="thesis-health-strip">
+        <MetricCard label="Santé" value={`${data.thesis.health}/100`} tone={data.thesis.health < 40 ? "negative" : data.thesis.health < 70 ? "warning" : "neutral"}/>
+        <MetricCard label="Confiance" value={`${data.thesis.confidence}%`}/>
+        <MetricCard label="Valide jusqu’à" value={data.thesis.validUntil}/>
+      </MetricStrip>
     </Card>
     <div className="content-grid">
       <Card className="score-drivers-react positive"><h3><Icon name="trendUp"/> Facteurs positifs</h3>{data.thesis.scoreDriversPositive.length ? <ul>{data.thesis.scoreDriversPositive.map(x => <li key={x}>{x}</li>)}</ul> : <p>Aucun facteur positif dominant.</p>}</Card>

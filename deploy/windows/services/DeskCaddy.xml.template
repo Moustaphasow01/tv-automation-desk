@@ -1,0 +1,24 @@
+<service>
+  <id>DeskFuturesCaddy</id>
+  <name>Desk Futures HTTPS Gateway</name>
+  <description>Caddy TLS, static frontend and reverse proxy.</description>
+  <executable>__CADDY_EXE__</executable>
+  <arguments>run --config "__INSTALL_ROOT__\current\deploy\caddy\Caddyfile.template" --adapter caddyfile</arguments>
+  <workingdirectory>__INSTALL_ROOT__\current</workingdirectory>
+  <env name="DESK_PUBLIC_HOST" value="__DESK_DOMAIN__"/>
+  <env name="DESK_TLS_EMAIL" value="__TLS_EMAIL__"/>
+  <env name="DESK_FRONT_ROOT" value="__INSTALL_ROOT__\current\front"/>
+  <env name="DESK_LOG_ROOT" value="__LOG_ROOT__"/>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>DeskFuturesApi</depend>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+  <logpath>__LOG_ROOT__\caddy-service</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>10</keepFiles>
+  </log>
+</service>

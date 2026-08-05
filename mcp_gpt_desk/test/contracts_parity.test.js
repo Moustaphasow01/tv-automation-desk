@@ -139,7 +139,7 @@ test("tool input schemas stay byte-for-byte compatible except intentional M7.3 a
 
   const changedByAuditGate = new Set(["save_desk_analysis", "save_desk_decision"]);
   const changedByStorageSplit = new Set(["save_active_thesis", "update_active_thesis"]);
-  const changedByM15ManualMonitor = new Set(["get_cross_asset_delta", "get_master_analysis_bundle", "save_contract"]);
+  const changedByM15ManualMonitor = new Set(["get_master_analysis_bundle", "save_contract"]);
   const changedByMcpTransportV2 = new Set(["get_active_contracts"]);
   const changedByFrontProjectionContract = new Set([
     "activate_contract_version",
@@ -169,6 +169,8 @@ test("tool input schemas stay byte-for-byte compatible except intentional M7.3 a
     "advance_replay_clock",
     "apply_replay_monitor_result",
     "claim_next_desk_work",
+    "claim_next_live_work",
+    "claim_next_replay_work",
     "claim_next_live",
     "claim_next_replay",
     "complete_live",
@@ -228,6 +230,7 @@ test("tool input schemas stay byte-for-byte compatible except intentional M7.3 a
     "save_manual_monitor",
     "save_replay_master_analysis",
     "save_replay_monitor",
+    "set_replay_autopilot_window",
     "simulate_replay_interval",
     "start_or_resume_replay_autopilot",
     "set_replay_automation",
@@ -257,7 +260,7 @@ test("tool input schemas stay byte-for-byte compatible except intentional M7.3 a
     assert.equal(statuses.includes("POSITION_ACTIVE"), false, `${name} must not accept thesis-owned position status`);
     assert.equal(statuses.includes("POSITION_PROTECTED"), false, `${name} must not accept thesis-owned position status`);
   }
-  assert.ok(current.get_cross_asset_delta.properties.window.enum.includes("15m"));
+  assert.equal(current.get_cross_asset_delta, undefined);
   assert.equal(current.save_contract.properties.force.type, "boolean");
 });
 

@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/monitor-command-v1.schema.json",
+  "title": "DeskMonitorCommandContract",
+  "version": "1.0.0",
+  "description": "Intentions orthogonales GPT; l’autorité de trigger, fill, position et résultat reste exclusivement backend.",
+  "type": "object",
+  "required": ["contract", "profile", "catalog_id", "command_id", "expected_revision", "created_at_paris", "plan_id", "monitor_id", "scope", "requested_action", "setup_transition", "transformation", "replan_request", "management_request", "evidence", "backend_authority", "audit"],
+  "properties": {
+    "contract": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "DeskMonitorCommandContract" },
+        "version": { "const": "1.0.0" }
+      },
+      "additionalProperties": false
+    },
+    "profile": { "const": "OPPORTUNITY_SEEKING_CONTROLLED" },
+    "catalog_id": { "const": "condition_catalog_v1" },
+    "command_id": { "type": "string", "minLength": 1 },
+    "expected_revision": { "type": "integer", "minimum": 0 },
+    "created_at_paris": { "type": "string", "format": "date-time" },
+    "plan_id": { "type": "string", "minLength": 1 },
+    "monitor_id": { "type": "string", "minLength": 1 },
+    "scope": { "$ref": "#/$defs/scope" },
+    "requested_action": { "enum": ["NO_ACTION", "APPLY_ORTHOGONAL_COMMANDS"] },
+    "setup_transition": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/setupTransition" }
+      ]
+    },
+    "transformation": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/thesisTransformation" }
+      ]
+    },
+    "replan_request": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/replanRequest" }
+      ]
+    },
+    "management_request": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/managementRequest" }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["facts", "interpretations", "thesis_evolution", "source_references"],
+      "properties": {
+        "facts": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "interpretations": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "thesis_evolution": { "type": "string", "minLength": 1 },
+        "source_references": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "backend_authority": { "const": "BACKEND_ONLY" },
+    "audit": { "$ref": "#/$defs/audit" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "requested_action": { "const": "NO_ACTION" } }, "required": ["requested_action"] },
+      "then": {
+        "properties": {
+          "setup_transition": { "type": "null" },
+          "transformation": { "type": "null" },
+          "replan_request": { "type": "null" },
+          "management_request": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "requested_action": { "const": "APPLY_ORTHOGONAL_COMMANDS" } }, "required": ["requested_action"] },
+      "then": {
+        "anyOf": [
+          { "properties": { "setup_transition": { "$ref": "#/$defs/setupTransition" } } },
+          { "properties": { "transformation": { "$ref": "#/$defs/thesisTransformation" } } },
+          { "properties": { "replan_request": { "$ref": "#/$defs/replanRequest" } } },
+          { "properties": { "management_request": { "$ref": "#/$defs/managementRequest" } } }
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "nullableString": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "required": ["mode", "trading_date", "session", "run_id", "cutoff_paris", "timezone"],
+      "properties": {
+        "mode": { "enum": ["LIVE", "REPLAY", "BACK_FORWARD", "PAPER"] },
+        "trading_date": { "type": "string", "format": "date" },
+        "session": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "cutoff_paris": { "type": "string", "format": "date-time" },
+        "timezone": { "const": "Europe/Paris" }
+      },
+      "additionalProperties": false
+    },
+    "setupTransition": {
+      "$comment": "For REPLACE, backend validates replaces_setup_id != setup_id and preserves both identities in the audit ledger.",
+      "type": "object",
+      "required": ["command", "setup_id", "replaces_setup_id", "reason", "setup"],
+      "properties": {
+        "command": { "enum": ["NOOP", "UPSERT_CANDIDATE", "PRE_ARM", "ARM", "CANCEL", "EXPIRE", "INVALIDATE", "REPLACE"] },
+        "setup_id": { "type": "string", "minLength": 1 },
+        "replaces_setup_id": { "$ref": "#/$defs/nullableString" },
+        "reason": { "type": "string", "minLength": 1 },
+        "setup": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "execution-plan-v1.schema.json#/$defs/setupProposal" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "command": { "enum": ["UPSERT_CANDIDATE", "PRE_ARM", "ARM", "REPLACE"] } }, "required": ["command"] },
+          "then": { "properties": { "setup": { "$ref": "execution-plan-v1.schema.json#/$defs/setupProposal" } } }
+        },
+        {
+          "if": { "properties": { "command": { "const": "REPLACE" } }, "required": ["command"] },
+          "then": { "properties": { "replaces_setup_id": { "type": "string", "minLength": 1 } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "thesisTransformation": {
+      "type": "object",
+      "required": ["command", "target_state", "reason", "payload"],
+      "properties": {
+        "command": { "enum": ["NOOP", "CREATE_WAIT", "MAKE_CONDITIONAL", "ACTIVATE", "MAINTAIN", "WEAKEN", "MARK_AT_RISK", "MARK_POST_EVENT", "INVALIDATE", "EXPIRE", "REQUIRE_REPLAN", "SUPERSEDE"] },
+        "target_state": { "enum": ["NO_ACTIVE", "WAIT_MONITORED", "CONDITIONAL", "ACTIVE", "WEAKENED", "AT_RISK", "POST_EVENT", "INVALIDATED", "EXPIRED", "REPLAN_REQUIRED", "SUPERSEDED"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "payload": {
+          "type": "object",
+          "required": ["summary", "health_score"],
+          "properties": {
+            "summary": { "type": "string", "minLength": 1 },
+            "health_score": { "type": "number", "minimum": 0, "maximum": 100 },
+            "bias": { "enum": ["BULLISH", "BEARISH", "NEUTRAL", "MIXED", "UNKNOWN"] },
+            "valid_until_paris": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "replanRequest": {
+      "type": "object",
+      "required": ["command", "reason", "requested_at_paris", "dedupe_key"],
+      "properties": {
+        "command": { "enum": ["NOOP", "REQUEST"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "requested_at_paris": { "type": "string", "format": "date-time" },
+        "dedupe_key": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "managementRequest": {
+      "type": "object",
+      "required": ["type", "position_id", "reduce_fraction", "requested_stop", "reason", "authority"],
+      "properties": {
+        "type": { "enum": ["NONE", "REDUCE_RISK", "MOVE_STOP_BE", "TAKE_PARTIAL", "EXIT_POSITION"] },
+        "position_id": { "type": "string", "minLength": 1 },
+        "reduce_fraction": {
+          "oneOf": [
+            { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "requested_stop": {
+          "oneOf": [
+            { "type": "number" },
+            { "type": "null" }
+          ]
+        },
+        "reason": { "type": "string", "minLength": 1 },
+        "authority": { "const": "GPT_REQUEST_ONLY" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "enum": ["REDUCE_RISK", "TAKE_PARTIAL"] } }, "required": ["type"] },
+          "then": { "properties": { "reduce_fraction": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "MOVE_STOP_BE" } }, "required": ["type"] },
+          "then": { "properties": { "requested_stop": { "type": "number" } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "audit": {
+      "type": "object",
+      "required": ["anti_lookahead_verified", "contract_context", "source_references"],
+      "properties": {
+        "anti_lookahead_verified": { "const": true },
+        "contract_context": {
+          "type": "object",
+          "required": ["monitor_contract", "monitor_command_contract", "execution_policy_contract", "condition_catalog_contract"],
+          "properties": {
+            "monitor_contract": { "const": "2.0.0" },
+            "monitor_command_contract": { "const": "1.0.0" },
+            "execution_policy_contract": { "const": "4.0.0" },
+            "condition_catalog_contract": { "const": "1.0.0" }
+          },
+          "additionalProperties": false
+        },
+        "source_references": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,78 @@
+/*
+ * Frontière de personnalisation de l'écran Live.
+ * Claude Design peut remplacer ce fichier et LiveDeskScreen.tsx sans toucher
+ * aux hooks, aux appels API, au routeur ou aux contrats backend.
+ */
+.live-screen {
+  --live-screen-module-gap: 8px;
+}
+
+.live-screen__section-nav {
+  scroll-margin-top: 72px;
+}
+
+.live-screen__module {
+  scroll-margin-top: 88px;
+}
+
+.live-screen__module + .live-screen__module {
+  margin-top: var(--live-screen-module-gap);
+}
+
+.live-metric-strip.metric-strip--ten {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1279px) {
+  .live-metric-strip.metric-strip--ten {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .live-metric-strip.metric-strip--ten .metric-card:nth-child(4n) {
+    border-right: 0 !important;
+  }
+
+  .live-metric-strip.metric-strip--ten .metric-card:nth-child(n + 5) {
+    border-top: 1px solid var(--line) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .live-screen {
+    --live-screen-module-gap: 4px;
+  }
+
+  .live-screen__section-nav {
+    scrollbar-width: none;
+  }
+
+  .live-screen__section-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .live-metric-strip.metric-strip--ten {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .live-metric-strip.metric-strip--ten .metric-card:nth-child(2n) {
+    border-right: 0 !important;
+  }
+
+  .live-metric-strip.metric-strip--ten .metric-card:nth-child(n + 3) {
+    border-top: 1px solid var(--line) !important;
+  }
+}
+
+@media (max-width: 479px) {
+  .live-metric-strip.metric-strip--ten {
+    grid-template-columns: 1fr;
+  }
+
+  .live-metric-strip.metric-strip--ten .metric-card {
+    border-right: 0 !important;
+  }
+
+  .live-metric-strip.metric-strip--ten .metric-card:nth-child(n + 2) {
+    border-top: 1px solid var(--line) !important;
+  }
+}

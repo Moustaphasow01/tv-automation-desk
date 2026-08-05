@@ -1,15 +1,36 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import Ajv2020Module from "ajv/dist/2020.js";
 import {
   getEntityContractDefinition,
+  getCatalog,
   getEntitySchema,
   listActiveEntityContracts,
   registry,
 } from "@tv-automation/desk-contracts";
 
 const Ajv2020 = Ajv2020Module.default || Ajv2020Module;
+
+const runtimeContractVersions = {
+  master_contract: ["DeskMasterAnalysisContract_v5_4_0", "5.4.0", "master-analysis-v5-4.schema.json"],
+  monitor_contract: ["DeskHourlyThesisMonitorContract_v2_4_0", "2.4.0", "hourly-monitor-v2-4.schema.json"],
+  execution_plan_contract: ["DeskExecutionPlanContract_v1_4_0", "1.4.0", "execution-plan-v1-4.schema.json"],
+  monitor_command_contract: ["DeskMonitorCommandContract_v1_4_0", "1.4.0", "monitor-command-v1-4.schema.json"],
+  condition_catalog_contract: ["DeskConditionCatalogContract_v1_2_0", "1.2.0", "condition-catalog-v1-2.schema.json"],
+  execution_policy_contract: ["DeskDeterministicExecutionPolicy_v4_3_0", "4.3.0", "execution-plan-v1-4.schema.json"],
+  front_projection_contract: ["DeskFrontProjectionContract_v1_0_0", "1.0.0", "desk-front-projection.schema.json"],
+};
+
+const immutableLegacyMarkdownHashes = {
+  DeskMasterAnalysisContract_v5_0_0: "0bbf5334c0e68559edd72f6f309d5fae8cb0a085ca26b4a8158d668e1fca5e6b",
+  DeskHourlyThesisMonitorContract_v2_0_0: "8a4fb14b6e7b4bb19a7b3e0cb726b81861dfdc5f3a4fc889a9624c1b09b0ea8c",
+  DeskExecutionPlanContract_v1_0_0: "df8ba73e27d8cd0bd4e14094d4b307e6a1ecf346f13ed4d097924514611cb738",
+  DeskMonitorCommandContract_v1_0_0: "08757f2e272fea75865a6d02b92502fbb1b3d269eefe0f2043c9a6ab3f5a273c",
+  DeskConditionCatalogContract_v1_0_0: "27008c0ff43fc188b4b24ecea391fca3f2ac0d595db2b8f8da5d345405587e6c",
+  DeskDeterministicExecutionPolicy_v4_0_0: "57a0e827fb3a8898974650ca2b358930d69ec9f82892766c285c354fc3300399",
+};
 
 const foundationContracts = [
   {
@@ -65,7 +86,7 @@ async function loadExample(fileName) {
 test("contracts registry declares the active entity lifecycle without exposing runtime tools", () => {
   const validate = compile("contract-registry.schema.json");
   assert.equal(validate(registry), true, JSON.stringify(validate.errors));
-  assert.equal(registry.registry_version, "2.0.0");
+  assert.equal(registry.registry_version, "3.1.0");
   assert.equal(registry.lifecycle_policy.runtime_exposed, "all_active_contracts");
 
   for (const contract of foundationContracts) {
@@ -75,6 +96,75 @@ test("contracts registry declares the active entity lifecycle without exposing r
     assert.equal(entry.example_path, `examples/${contract.exampleFile}`);
     assert.equal(entry.status, contract.status);
     assert.equal(entry.runtime_exposed, contract.runtimeExposed ?? false);
+  }
+});
+
+test("runtime registry pins only the immutable V5.4 contract matrix", async () => {
+  for (const [slot, [contractId, version, schemaFile]] of Object.entries(runtimeContractVersions)) {
+    const entry = registry.active_contracts[slot];
+    assert.equal(entry.contract_id, contractId, slot);
+    assert.equal(entry.schema_version, version, slot);
+    assert.equal(entry.schema_path, `schemas/entities/${schemaFile}`, slot);
+    assert.equal(entry.status, "active", slot);
+    assert.equal(entry.runtime_exposed, true, slot);
+    const markdown = await readFile(
+      new URL(`../../packages/desk-contracts/${entry.markdown_path}`, import.meta.url),
+    );
+    assert.equal(createHash("sha256").update(markdown).digest("hex"), entry.hash, slot);
+  }
+});
+
+test("V5.0/V2.0/V1.0/V4.0 Markdown remains byte-identical and registered as legacy", async () => {
+  const legacyEntries = Object.values(registry.legacy_contracts);
+  for (const [contractId, expectedHash] of Object.entries(immutableLegacyMarkdownHashes)) {
+    const entry = legacyEntries.find((candidate) => candidate.contract_id === contractId);
+    assert.ok(entry, contractId);
+    assert.equal(entry.hash, expectedHash, contractId);
+    assert.equal(entry.status, "archived", contractId);
+    assert.equal(entry.runtime_exposed, false, contractId);
+    const bytes = await readFile(
+      new URL(`../../packages/desk-contracts/${entry.markdown_path}`, import.meta.url),
+    );
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), expectedHash, contractId);
+  }
+});
+
+test("V5.4 schemas and condition catalog expose the new immutable pins", () => {
+  const master = getEntitySchema("master-analysis-v5-4.schema.json");
+  const monitor = getEntitySchema("hourly-monitor-v2-4.schema.json");
+  const plan = getEntitySchema("execution-plan-v1-4.schema.json");
+  const command = getEntitySchema("monitor-command-v1-4.schema.json");
+  const compiledPlan = getEntitySchema("compiled-execution-plan-v1-4.schema.json");
+  const compiledCommand = getEntitySchema("compiled-monitor-command-v1-4.schema.json");
+  const catalog = getCatalog("condition-catalog-v1-2.json");
+
+  assert.equal(master.version, "5.4.0");
+  assert.equal(monitor.version, "2.4.0");
+  assert.equal(plan.version, "1.4.0");
+  assert.equal(command.version, "1.4.0");
+  assert.equal(catalog.schema_version, "1.2.0");
+  assert.equal(catalog.catalog_id, "condition_catalog_v1_2");
+  assert.equal(compiledPlan.properties.schema_version.const, "deterministic_execution_plan_v1_4");
+  assert.equal(compiledPlan.properties.compiler_version.const, "1.4.0");
+  assert.equal(compiledPlan.$defs.policy.properties.policy_version.const, "1.2.0");
+  assert.equal(compiledCommand.properties.schema_version.const, "desk_monitor_command_v1_4");
+  assert.equal(compiledCommand.properties.compiler_version.const, "1.4.0");
+});
+
+test("condition catalog artifacts are byte-pinned for active and legacy contract lines", async () => {
+  const catalogEntries = [
+    registry.active_contracts.condition_catalog_contract,
+    registry.legacy_contracts.condition_catalog_contract_v1_0,
+  ];
+  for (const entry of catalogEntries) {
+    const bytes = await readFile(
+      new URL(`../../packages/desk-contracts/${entry.catalog_path}`, import.meta.url),
+    );
+    assert.equal(
+      createHash("sha256").update(bytes).digest("hex"),
+      entry.catalog_hash,
+      entry.contract_id,
+    );
   }
 });
 

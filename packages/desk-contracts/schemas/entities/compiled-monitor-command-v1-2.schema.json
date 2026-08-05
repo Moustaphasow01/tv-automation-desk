@@ -1,0 +1,850 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/compiled-monitor-command-v1-2.schema.json",
+  "title": "DeskCompiledMonitorCommandV1_2",
+  "version": "1.2.0",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "plan_id",
+    "compiler_version",
+    "source_reference",
+    "analytical_scope",
+    "policy",
+    "gates",
+    "source_action",
+    "canonical_action",
+    "thesis_command",
+    "setup_command",
+    "position_request",
+    "replan_request",
+    "transitions",
+    "alert",
+    "context_transmission",
+    "diagnostics",
+    "canonical_hash",
+    "valid",
+    "transport_context"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "desk_monitor_command_v1_2"
+    },
+    "plan_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "compiler_version": {
+      "const": "1.2.0"
+    },
+    "source_reference": {
+      "$ref": "#/$defs/sourceReference"
+    },
+    "analytical_scope": {
+      "$ref": "#/$defs/analyticalScope"
+    },
+    "policy": {
+      "$ref": "#/$defs/policy"
+    },
+    "gates": {
+      "$ref": "compiled-execution-plan-v1-2.schema.json#/$defs/canonicalGateSet"
+    },
+    "source_action": {
+      "$ref": "#/$defs/sourceAction"
+    },
+    "canonical_action": {
+      "$ref": "#/$defs/canonicalAction"
+    },
+    "thesis_command": {
+      "$ref": "#/$defs/thesisCommand"
+    },
+    "setup_command": {
+      "$ref": "#/$defs/setupCommand"
+    },
+    "position_request": {
+      "$ref": "#/$defs/positionRequest"
+    },
+    "replan_request": {
+      "$ref": "#/$defs/replanRequest"
+    },
+    "transitions": {
+      "type": "object",
+      "required": [
+        "thesis",
+        "setup",
+        "replan"
+      ],
+      "properties": {
+        "thesis": {
+          "$ref": "#/$defs/thesisTransition"
+        },
+        "setup": {
+          "$ref": "#/$defs/setupTransition"
+        },
+        "replan": {
+          "$ref": "#/$defs/replanTransition"
+        }
+      },
+      "additionalProperties": false
+    },
+    "alert": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/alert"
+        }
+      ]
+    },
+    "context_transmission": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/contextTransmission"
+        }
+      ]
+    },
+    "diagnostics": {
+      "$ref": "#/$defs/diagnostics"
+    },
+    "canonical_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "valid": {
+      "type": "boolean"
+    },
+    "transport_context": {
+      "type": "object",
+      "required": [
+        "source_mode"
+      ],
+      "properties": {
+        "source_mode": {
+          "oneOf": [
+            {
+              "enum": [
+                "LIVE",
+                "REPLAY",
+                "BACK_FORWARD",
+                "PAPER"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nullableString": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableNumber": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceReference": {
+      "type": "object",
+      "required": [
+        "contract_name",
+        "contract_version",
+        "monitor_id",
+        "linked_master_analysis_id",
+        "linked_active_thesis_id",
+        "timestamp_paris"
+      ],
+      "properties": {
+        "contract_name": {
+          "const": "DeskHourlyThesisMonitorContract"
+        },
+        "contract_version": {
+          "const": "2.2.0"
+        },
+        "monitor_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "linked_master_analysis_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "linked_active_thesis_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "timestamp_paris": {
+          "$ref": "#/$defs/nullableString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "analyticalScope": {
+      "type": "object",
+      "required": [
+        "strategy_id",
+        "session",
+        "trading_date",
+        "timezone",
+        "cutoff_paris",
+        "pack_id",
+        "pack_build_id"
+      ],
+      "properties": {
+        "strategy_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "session": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "trading_date": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "timezone": {
+          "const": "Europe/Paris"
+        },
+        "cutoff_paris": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "pack_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "pack_build_id": {
+          "$ref": "#/$defs/nullableString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "required": [
+        "policy_id",
+        "policy_version",
+        "weighted_confirmation_threshold",
+        "max_risk_pct",
+        "min_rr",
+        "gpt_may_trigger"
+      ],
+      "properties": {
+        "policy_id": {
+          "const": "OPPORTUNITY_SEEKING_CONTROLLED"
+        },
+        "policy_version": {
+          "const": "1.2.0"
+        },
+        "weighted_confirmation_threshold": {
+          "const": 0.55
+        },
+        "max_risk_pct": {
+          "const": 0.25
+        },
+        "min_rr": {
+          "const": 2
+        },
+        "gpt_may_trigger": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceAction": {
+      "enum": [
+        "MAINTAIN",
+        "MAINTAIN_THESIS",
+        "WAIT",
+        "WAIT_MORE",
+        "SETUP_CANDIDATE",
+        "PRE_ARM",
+        "PRE_ARMED",
+        "ARM",
+        "ARMED",
+        "SETUP_ARMED",
+        "ARM_SETUP",
+        "TRIGGER_GO",
+        "CANCEL",
+        "CANCEL_SETUP",
+        "WEAKEN",
+        "WEAKEN_THESIS",
+        "MARK_AT_RISK",
+        "INVALIDATE",
+        "INVALIDATE_THESIS",
+        "TRANSFORM",
+        "TRANSFORM_SCENARIO",
+        "REDUCE",
+        "REDUCE_RISK",
+        "MOVE_STOP_BE",
+        "BREAK_EVEN",
+        "TAKE_PARTIAL",
+        "PARTIAL",
+        "EXIT",
+        "EXIT_POSITION",
+        "REPLAN",
+        "REPLAN_REQUIRED",
+        "REPLAN_FULL",
+        "EXPIRE",
+        "EXPIRE_SETUP",
+        "NO_ACTION",
+        "NOOP",
+        "REQUESTED_COMMAND"
+      ]
+    },
+    "canonicalAction": {
+      "enum": [
+        "MAINTAIN_THESIS",
+        "WAIT_MORE",
+        "SETUP_CANDIDATE",
+        "PRE_ARM",
+        "ARM_SETUP",
+        "CANCEL_SETUP",
+        "WEAKEN_THESIS",
+        "MARK_AT_RISK",
+        "INVALIDATE_THESIS",
+        "TRANSFORM_SCENARIO",
+        "REDUCE_RISK",
+        "MOVE_STOP_BE",
+        "TAKE_PARTIAL",
+        "EXIT_POSITION",
+        "REPLAN_FULL",
+        "EXPIRE_SETUP",
+        "NO_ACTION",
+        "ORTHOGONAL_COMMANDS"
+      ]
+    },
+    "thesisPayload": {
+      "type": "object",
+      "properties": {
+        "thesis_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "NO_ACTIVE",
+            "WAIT_MONITORED",
+            "CONDITIONAL",
+            "ACTIVE",
+            "WEAKENED",
+            "AT_RISK",
+            "POST_EVENT",
+            "INVALIDATED",
+            "EXPIRED",
+            "REPLAN_REQUIRED",
+            "SUPERSEDED"
+          ]
+        },
+        "health_score": {
+          "oneOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "enum": [
+            "NO_ACTIVE",
+            "WAIT_MONITORED",
+            "CONDITIONAL",
+            "ACTIVE",
+            "WEAKENED",
+            "AT_RISK",
+            "POST_EVENT",
+            "INVALIDATED",
+            "EXPIRED",
+            "REPLAN_REQUIRED",
+            "SUPERSEDED"
+          ]
+        },
+        "bias": {
+          "enum": [
+            "BULLISH",
+            "BEARISH",
+            "NEUTRAL",
+            "MIXED",
+            "UNKNOWN"
+          ]
+        },
+        "instrument": {
+          "type": "string",
+          "minLength": 1
+        },
+        "direction": {
+          "enum": [
+            "long",
+            "short",
+            "neutral",
+            "wait"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "valid_until_paris": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requires_replan_after_paris": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "thesisCommand": {
+      "type": "object",
+      "required": [
+        "type",
+        "target_state",
+        "reason",
+        "payload"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "NOOP",
+            "CREATE_WAIT",
+            "MAKE_CONDITIONAL",
+            "ACTIVATE",
+            "MAINTAIN",
+            "WEAKEN",
+            "MARK_AT_RISK",
+            "MARK_POST_EVENT",
+            "INVALIDATE",
+            "EXPIRE",
+            "REQUIRE_REPLAN",
+            "SUPERSEDE"
+          ]
+        },
+        "target_state": {
+          "oneOf": [
+            {
+              "enum": [
+                "NO_ACTIVE",
+                "WAIT_MONITORED",
+                "CONDITIONAL",
+                "ACTIVE",
+                "WEAKENED",
+                "AT_RISK",
+                "POST_EVENT",
+                "INVALIDATED",
+                "EXPIRED",
+                "REPLAN_REQUIRED",
+                "SUPERSEDED"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "payload": {
+          "$ref": "#/$defs/thesisPayload"
+        }
+      },
+      "additionalProperties": false
+    },
+    "setupCommand": {
+      "type": "object",
+      "required": [
+        "type",
+        "reason",
+        "setup_id",
+        "replaces_setup_id",
+        "setup"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "NOOP",
+            "UPSERT_CANDIDATE",
+            "PRE_ARM",
+            "ARM",
+            "CANCEL",
+            "EXPIRE",
+            "INVALIDATE",
+            "REPLACE"
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "setup_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "replaces_setup_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "setup": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "compiled-execution-plan-v1-2.schema.json#/$defs/canonicalSetup"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "positionRequest": {
+      "type": "object",
+      "required": [
+        "type",
+        "position_id",
+        "reduce_fraction",
+        "requested_stop",
+        "reason",
+        "authority"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "NONE",
+            "REDUCE_RISK",
+            "MOVE_STOP_BE",
+            "TAKE_PARTIAL",
+            "EXIT_POSITION"
+          ]
+        },
+        "position_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "reduce_fraction": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requested_stop": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "reason": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "authority": {
+          "const": "GPT_REQUEST_ONLY"
+        }
+      },
+      "additionalProperties": false
+    },
+    "replanRequest": {
+      "type": "object",
+      "required": [
+        "type",
+        "reason",
+        "dedupe_key",
+        "requested_at_paris"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "NOOP",
+            "REQUEST"
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "dedupe_key": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "requested_at_paris": {
+          "$ref": "#/$defs/nullableString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "transitionBase": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "domain",
+        "accepted",
+        "previous_state",
+        "next_state",
+        "reason",
+        "terminal"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain": {
+          "enum": [
+            "thesis",
+            "setup",
+            "replan"
+          ]
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "previous_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "next_state": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terminal": {
+          "type": "boolean"
+        }
+      }
+    },
+    "thesisTransition": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/transitionBase"
+        },
+        {
+          "type": "object",
+          "required": [
+            "command"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "thesis_transition_v1"
+            },
+            "domain": {
+              "const": "thesis"
+            },
+            "command": {
+              "enum": [
+                "NOOP",
+                "CREATE_WAIT",
+                "MAKE_CONDITIONAL",
+                "ACTIVATE",
+                "MAINTAIN",
+                "WEAKEN",
+                "MARK_AT_RISK",
+                "MARK_POST_EVENT",
+                "INVALIDATE",
+                "EXPIRE",
+                "REQUIRE_REPLAN",
+                "SUPERSEDE"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "setupTransition": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/transitionBase"
+        },
+        {
+          "type": "object",
+          "required": [
+            "command"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "setup_transition_v1"
+            },
+            "domain": {
+              "const": "setup"
+            },
+            "command": {
+              "enum": [
+                "NOOP",
+                "UPSERT_CANDIDATE",
+                "PRE_ARM",
+                "ARM",
+                "CANCEL",
+                "EXPIRE",
+                "INVALIDATE",
+                "REPLACE"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "replanTransition": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/transitionBase"
+        },
+        {
+          "type": "object",
+          "required": [
+            "event"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "replan_transition_v1"
+            },
+            "domain": {
+              "const": "replan"
+            },
+            "event": {
+              "enum": [
+                "NOOP",
+                "REQUEST",
+                "QUEUE",
+                "START",
+                "COMPLETE",
+                "FAIL",
+                "RETRY",
+                "CANCEL",
+                "RESET"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "alert": {
+      "type": "object",
+      "required": [
+        "level",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "level": {
+          "enum": [
+            "INFO",
+            "WATCH",
+            "WARNING",
+            "ACTION",
+            "CRITICAL"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "contextTransmission": {
+      "type": "object",
+      "required": [
+        "facts",
+        "interpretations",
+        "thesis_evolution",
+        "source_references"
+      ],
+      "properties": {
+        "facts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "interpretations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "thesis_evolution": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_references": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "diagnosticEntry": {
+      "type": "object",
+      "required": [
+        "code",
+        "evidence"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {}
+      },
+      "additionalProperties": false
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": [
+        "errors",
+        "warnings",
+        "normalizations"
+      ],
+      "properties": {
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnosticEntry"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnosticEntry"
+          }
+        },
+        "normalizations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnosticEntry"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

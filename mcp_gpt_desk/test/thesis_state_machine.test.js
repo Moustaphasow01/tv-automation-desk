@@ -9,6 +9,7 @@ import { createTestDeskStore } from "./support/test-desk-store.js";
 import { callDeskTool, createDeskToolRegistry } from "../src/tools.js";
 import { validDecisionAudit } from "./fixtures/decision_audit_payloads.js";
 import { liveScope } from "./fixtures/live_scope.js";
+import { makeActiveLiveMasterSave } from "./support/active-strategy-save-fixtures.js";
 
 const scope = () => liveScope({ date: "2026-07-02", cutoff_paris: "2026-07-02T10:15:00+02:00" });
 
@@ -42,14 +43,12 @@ function activeThesisPayload(overrides = {}) {
 async function registry() {
   const root = await mkdtemp(join(tmpdir(), "gpt-desk-mcp-thesis-state-"));
   const store = createTestDeskStore({ root, projectRoot: root }).store;
-  await store.saveMasterAnalysis({
-    ...scope(),
-    analysis_id: "master_state_eval",
-    contract_name: "DeskMasterAnalysisContract",
-    schema_version: "4.0.0",
-    contract_hash: "test-master-hash",
-    full_analysis: {},
-  });
+  await store.saveMasterAnalysis(makeActiveLiveMasterSave({
+    scope: scope(),
+    analysisId: "master_state_eval",
+    thesisId: "thesis_master_state_seed",
+    planId: "plan_master_state_seed",
+  }));
   return { store, tools: createDeskToolRegistry(store) };
 }
 

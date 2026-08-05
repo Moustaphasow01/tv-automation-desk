@@ -1,0 +1,44 @@
+{
+  "version": "1.0.0",
+  "target": "AUTOPILOT_V4",
+  "runtime": {
+    "database": "postgresql",
+    "object_store": "local_immutable",
+    "firestore_allowed": false,
+    "google_cloud_runtime_allowed": false
+  },
+  "workflows": [
+    "REPLAY_MASTER",
+    "REPLAY_MONITOR",
+    "LIVE_MASTER",
+    "LIVE_M15_MONITOR"
+  ],
+  "required_capabilities": [
+    "immutable_pack_builds",
+    "anti_lookahead_bundles",
+    "active_thesis_continuity",
+    "setup_lifecycle",
+    "paper_position_lifecycle",
+    "lease_guarded_work_items",
+    "replay_autopilot_pool",
+    "live_cursor"
+  ],
+  "compatibility_facades": [
+    "get_backtest_results"
+  ],
+  "excluded_runtime_families": [
+    "legacy_multi_agent",
+    "legacy_desk_jobs",
+    "legacy_cross_asset_delta_documents",
+    "legacy_deterministic_backtests",
+    "legacy_ny_open_strict_strategy",
+    "legacy_generic_write_surface"
+  ],
+  "golden_replay": {
+    "trading_date": "2026-06-01",
+    "session": "asia_open",
+    "timezone": "Europe/Paris",
+    "start_local": "2026-06-01T00:00:00+02:00",
+    "end_local": "2026-06-01T20:00:00+02:00"
+  }
+}

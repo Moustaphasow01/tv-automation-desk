@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/hourly-monitor-v2.schema.json",
+  "title": "DeskHourlyThesisMonitorContractV2",
+  "version": "2.0.0",
+  "type": "object",
+  "required": ["contract", "profile", "catalog_id", "source", "scope", "links", "checkpoint", "delta_summary", "assessment", "checks", "condition_evaluations", "thesis_health", "command", "active_thesis_update", "data_quality", "catchup", "alert", "next_handoff", "audit"],
+  "properties": {
+    "contract": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "DeskHourlyThesisMonitorContract" },
+        "version": { "const": "2.0.0" }
+      },
+      "additionalProperties": false
+    },
+    "profile": { "const": "OPPORTUNITY_SEEKING_CONTROLLED" },
+    "catalog_id": { "const": "condition_catalog_v1" },
+    "source": {
+      "type": "object",
+      "required": ["monitor_id", "bundle_id", "pack_id", "pack_build_id"],
+      "properties": {
+        "monitor_id": { "type": "string", "minLength": 1 },
+        "bundle_id": { "type": "string", "minLength": 1 },
+        "pack_id": { "type": "string", "minLength": 1 },
+        "pack_build_id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "scope": { "$ref": "#/$defs/scope" },
+    "links": {
+      "$comment": "Backend validates links.plan_id == command.plan_id and that both equal the pinned execution plan.",
+      "type": "object",
+      "required": ["master_analysis_id", "plan_id", "active_thesis_id", "previous_monitor_id", "setup_id", "position_id"],
+      "properties": {
+        "master_analysis_id": { "type": "string", "minLength": 1 },
+        "plan_id": { "type": "string", "minLength": 1 },
+        "active_thesis_id": { "type": "string", "minLength": 1 },
+        "previous_monitor_id": { "$ref": "#/$defs/nullableString" },
+        "setup_id": { "$ref": "#/$defs/nullableString" },
+        "position_id": { "$ref": "#/$defs/nullableString" }
+      },
+      "additionalProperties": false
+    },
+    "checkpoint": {
+      "type": "object",
+      "required": ["checkpoint_paris", "gpt_cadence", "engine_cadence", "window_start_paris", "window_end_paris"],
+      "properties": {
+        "checkpoint_paris": { "type": "string", "format": "date-time" },
+        "gpt_cadence": { "const": "M5" },
+        "engine_cadence": { "const": "M1" },
+        "window_start_paris": { "type": "string", "format": "date-time" },
+        "window_end_paris": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "delta_summary": {
+      "type": "object",
+      "required": ["facts", "interpretations", "thesis_evolution", "new_risks", "new_opportunities"],
+      "properties": {
+        "facts": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "interpretations": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "thesis_evolution": { "type": "string", "minLength": 1 },
+        "new_risks": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "new_opportunities": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "assessment": {
+      "type": "object",
+      "required": ["expected_path", "realized_path", "failure_path", "causality_summary"],
+      "properties": {
+        "expected_path": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "realized_path": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "failure_path": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "causality_summary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "checks": {
+      "type": "object",
+      "required": ["expected_vs_realized", "macro_update", "cross_asset_delta", "technical_delta", "weak_signals", "scenario_transformation", "time_decay", "position"],
+      "properties": {
+        "expected_vs_realized": { "$ref": "#/$defs/check" },
+        "macro_update": { "$ref": "#/$defs/check" },
+        "cross_asset_delta": { "$ref": "#/$defs/check" },
+        "technical_delta": { "$ref": "#/$defs/check" },
+        "weak_signals": { "$ref": "#/$defs/check" },
+        "scenario_transformation": { "$ref": "#/$defs/check" },
+        "time_decay": { "$ref": "#/$defs/check" },
+        "position": { "$ref": "#/$defs/check" }
+      },
+      "additionalProperties": false
+    },
+    "condition_evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["condition_id", "state", "observed_at_paris", "authority", "evaluator_version", "evidence_refs", "reason"],
+        "properties": {
+          "condition_id": { "type": "string", "minLength": 1 },
+          "state": { "enum": ["NOT_STARTED", "PENDING", "SATISFIED", "FAILED", "INVALIDATED", "EXPIRED", "UNKNOWN"] },
+          "observed_at_paris": {
+            "oneOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ]
+          },
+          "authority": { "const": "BACKEND_SNAPSHOT" },
+          "evaluator_version": { "type": "string", "minLength": 1 },
+          "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "reason": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "thesis_health": {
+      "type": "object",
+      "required": ["state", "score", "previous_score", "drivers"],
+      "properties": {
+        "state": { "enum": ["STRONG", "VALID", "FRAGILE", "VERY_FRAGILE", "NON_EXECUTABLE"] },
+        "score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "previous_score": {
+          "oneOf": [
+            { "type": "number", "minimum": 0, "maximum": 100 },
+            { "type": "null" }
+          ]
+        },
+        "drivers": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "command": {
+      "$ref": "monitor-command-v1.schema.json",
+      "$comment": "Backend validates command.monitor_id == source.monitor_id and command.plan_id == links.plan_id."
+    },
+    "active_thesis_update": {
+      "type": "object",
+      "required": ["thesis_id", "state", "health_score", "summary", "valid_until_paris", "requires_replan_after_paris"],
+      "properties": {
+        "thesis_id": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["NO_ACTIVE", "WAIT_MONITORED", "CONDITIONAL", "ACTIVE", "WEAKENED", "AT_RISK", "POST_EVENT", "INVALIDATED", "EXPIRED", "REPLAN_REQUIRED", "SUPERSEDED"] },
+        "health_score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "summary": { "type": "string", "minLength": 1 },
+        "valid_until_paris": { "type": "string", "format": "date-time" }
+        ,"requires_replan_after_paris": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "data_quality": {
+      "type": "object",
+      "required": ["status", "hard_gate_states", "soft_gate_states", "notes"],
+      "properties": {
+        "status": { "enum": ["CANONICAL", "DEGRADED", "UNUSABLE"] },
+        "hard_gate_states": { "type": "array", "minItems": 12, "maxItems": 12, "items": { "$ref": "execution-plan-v1.schema.json#/$defs/hardGate" } },
+        "soft_gate_states": { "type": "array", "maxItems": 10, "items": { "$ref": "execution-plan-v1.schema.json#/$defs/softGate" } },
+        "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "catchup": {
+      "type": "object",
+      "required": ["policy", "cumulative_window_start_paris", "cumulative_window_end_paris", "superseded_checkpoints"],
+      "properties": {
+        "policy": { "const": "LATEST_SETTLED_CLOSED_M5" },
+        "cumulative_window_start_paris": { "type": "string", "format": "date-time" },
+        "cumulative_window_end_paris": { "type": "string", "format": "date-time" },
+        "superseded_checkpoints": { "type": "array", "items": { "type": "string", "format": "date-time" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "alert": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["level", "code", "message"],
+          "properties": {
+            "level": { "enum": ["INFO", "WATCH", "WARNING", "ACTION", "CRITICAL"] },
+            "code": { "type": "string", "minLength": 1 },
+            "message": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "next_handoff": {
+      "type": "object",
+      "required": ["next_checkpoint_paris", "watch_condition_ids", "priorities", "context_summary"],
+      "properties": {
+        "next_checkpoint_paris": { "type": "string", "format": "date-time" },
+        "watch_condition_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "priorities": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "context_summary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "audit": { "$ref": "#/$defs/audit" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nullableString": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "required": ["mode", "trading_date", "session", "run_id", "cutoff_paris", "timezone"],
+      "properties": {
+        "mode": { "enum": ["LIVE", "REPLAY", "BACK_FORWARD", "PAPER"] },
+        "trading_date": { "type": "string", "format": "date" },
+        "session": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "cutoff_paris": { "type": "string", "format": "date-time" },
+        "timezone": { "const": "Europe/Paris" }
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "required": ["status", "summary", "evidence_refs"],
+      "properties": {
+        "status": { "enum": ["UNCHANGED", "IMPROVED", "WEAKENED", "INVALIDATED", "NOT_APPLICABLE", "UNKNOWN"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "audit": {
+      "type": "object",
+      "required": ["anti_lookahead_verified", "contract_context", "source_references"],
+      "properties": {
+        "anti_lookahead_verified": { "const": true },
+        "contract_context": {
+          "type": "object",
+          "required": ["monitor_contract", "monitor_command_contract", "execution_policy_contract", "condition_catalog_contract"],
+          "properties": {
+            "monitor_contract": { "const": "2.0.0" },
+            "monitor_command_contract": { "const": "1.0.0" },
+            "execution_policy_contract": { "const": "4.0.0" },
+            "condition_catalog_contract": { "const": "1.0.0" }
+          },
+          "additionalProperties": false
+        },
+        "source_references": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "worker_id": "chatgpt-live-v4",
+  "lane": "live",
+  "enabled": true,
+  "timezone": "Europe/Paris",
+  "schedule": {
+    "kind": "quarter_hour",
+    "minute_offset": 3,
+    "description": "Run at 03, 18, 33 and 48 minutes of each market hour."
+  },
+  "claim_tool": "claim_next_live_work",
+  "heartbeat_tool": "heartbeat_live",
+  "complete_tool": "complete_live",
+  "fail_tool": "fail_live",
+  "max_claims_per_invocation": 1,
+  "fallback_lane": null,
+  "prompt_file": "docs/CHATGPT_LIVE_WORKER_PROMPT.md"
+}

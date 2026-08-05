@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { gptTelemetrySchema } from "./gpt-telemetry.js";
 
 export const claimNextLiveSchema = z.object({
   worker_id: z.string().min(3).max(120),
-  session: z.enum(["asia_open", "ny_open"]),
+  session: z.enum(["asia_open", "ny_open"]).optional(),
   trading_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   lease_seconds: z.number().int().min(120).max(840).default(660),
 }).strict();
@@ -20,6 +21,7 @@ export const heartbeatLiveSchema = z.object({
 
 export const completeLiveSchema = z.object({
   ...liveCursorLeaseShape,
+  telemetry: gptTelemetrySchema.optional(),
 }).strict();
 
 export const failLiveSchema = z.object({

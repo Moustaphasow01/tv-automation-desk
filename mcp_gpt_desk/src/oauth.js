@@ -4,6 +4,7 @@ export const OAUTH_SCOPES = ["desk.read", "desk.write"];
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 const AUTH_CODE_TTL_SECONDS = 5 * 60;
+const consumedAuthorizationCodes = new Map();
 
 export function oauthConfig(baseUrl) {
   const issuer = canonicalBaseUrl(baseUrl);
@@ -152,6 +153,7 @@ export function exchangeAuthorizationCode(baseUrl, form) {
     throw new OAuthError("invalid_target", "resource does not match authorization code.");
   }
   verifyPkce(form.code_verifier, payload.code_challenge);
+  consumeAuthorizationCode(payload);
   return issueTokenPair(cfg, {
     client_id: payload.client_id,
     scope: payload.scope,
@@ -165,6 +167,9 @@ export function exchangeRefreshToken(baseUrl, form) {
     throw new OAuthError("unsupported_grant_type", "Only refresh_token is supported here.");
   }
   const payload = verifySignedToken(form.refresh_token, { typ: "refresh_token", aud: "oauth-token", issuer: cfg.issuer });
+  if (form.client_id && form.client_id !== payload.client_id) {
+    throw new OAuthError("invalid_grant", "client_id does not match refresh token.");
+  }
   const requestedScopes = form.scope ? normalizeScopes(form.scope) : normalizeScopes(payload.scope);
   const originalScopes = new Set(normalizeScopes(payload.scope));
   for (const scope of requestedScopes) {
@@ -293,6 +298,17 @@ function verifyPkce(codeVerifier, expectedChallenge) {
   if (actual !== expectedChallenge) {
     throw new OAuthError("invalid_grant", "PKCE verification failed.");
   }
+}
+
+function consumeAuthorizationCode(payload) {
+  const now = Math.floor(Date.now() / 1000);
+  for (const [jti, expiresAt] of consumedAuthorizationCodes) {
+    if (expiresAt <= now) consumedAuthorizationCodes.delete(jti);
+  }
+  if (!payload.jti || consumedAuthorizationCodes.has(payload.jti)) {
+    throw new OAuthError("invalid_grant", "Authorization code was already used.");
+  }
+  consumedAuthorizationCodes.set(payload.jti, Number(payload.exp) || now + AUTH_CODE_TTL_SECONDS);
 }
 
 function signToken(payload, ttlSeconds) {

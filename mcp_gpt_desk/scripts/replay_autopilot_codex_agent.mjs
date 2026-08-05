@@ -132,31 +132,39 @@ Scope strict :
 - position_status backend : ${continuity.position_status || "NO_POSITION"}
 - prochains checkpoints connus : ${checkpoints}
 
+Pile obligatoire pour les nouveaux runs : Master V5, Monitor V2, Execution Plan V1, Monitor Command V1, Policy V4, Catalog V1, profil OPPORTUNITY_SEEKING_CONTROLLED. LIVE et REPLAY partagent la même sémantique; seule l'acquisition temporelle diffère. Si le work item pointe une autre pile, arrête CONTRACT_VERSION_UNEXPECTED sans conversion implicite.
+
 Procédure obligatoire :
 1. Appelle desk_ping. Si le MCP Desk Futures Data n'est pas disponible, ARRÊT sans analyse ni écriture.
-2. Appelle claim_next_desk_work avec :
+2. Appelle claim_next_replay_work avec :
    { "worker_id": "${workerId}", "workflows": ["REPLAY_MASTER", "REPLAY_MONITOR"], "backtest_id": "${state.selected_backtest?.backtest_id || ""}", "lease_seconds": 660 }
 3. Si aucun work n'est dû, réponds NO_WORK et n'écris rien.
 4. Si le claim retourne REPLAY_MASTER :
    - lis le bundle fourni par le claim ou via get_replay_master_bundle ;
    - produis le Master replay au cutoff exact, sans lookahead ;
    - sauvegarde avec save_replay_master_analysis en réutilisant strictement save_target ;
-   - termine avec complete_desk_work.
+   - termine avec complete_replay.
 5. Si le claim retourne REPLAY_MONITOR :
    - lis le bundle fourni par le claim ou via get_replay_monitor_bundle ;
-   - utilise replay_continuity comme source de vérité pour savoir s'il existe un setup, une position, ou une thèse active ;
-   - si tu proposes un setup candidat/pré-armé/armé, fournis un objet structuré setup_candidate, setup_transition ou armed_setup ;
-   - classe chaque condition en HARD_BLOCKER, MANDATORY, PRIMARY, SECONDARY, OPTIONAL ou ADVISORY ;
-   - seules les conditions structurées avec operator/threshold/field + entry/stop/take_profit pourront être simulées par le backend entre deux monitors ;
+   - utilise replay_continuity comme source de vérité pour le setup, la position et la thèse active ;
+   - produis monitor_output V2 dont command est l'unique Monitor Command V1 ;
+   - recopie command_id, monitor_id, plan_id et expected_revision exacts; expected_revision est un compare-and-swap, jamais une valeur à incrémenter ;
+   - NO_ACTION impose les quatre branches à null; UPSERT_CANDIDATE, PRE_ARM, ARM et REPLACE exigent setup_transition.setup complet ;
    - sauvegarde avec save_replay_monitor en réutilisant strictement save_target ;
-   - termine avec complete_desk_work.
-6. En cas d'erreur récupérable, appelle fail_desk_work avec error_code et message court. N'invente aucun id, prix, bundle_id, analysis_id, thesis_id ou monitor_id.
+   - termine avec complete_replay.
+6. En cas d'erreur récupérable, appelle fail_replay avec error_code et message court. N'invente aucun id, prix, bundle_id, analysis_id, thesis_id ou monitor_id.
 
-Règles setup importantes :
-- Toutes les conditions ne sont pas obligatoires. Mets mandatory seulement sur les vrais verrous.
-- Une condition optionnelle/advisory peut renforcer ou affaiblir le risque, mais ne doit pas bloquer seule un setup.
-- Si tu veux que le backend puisse déclencher entre deux monitors, donne une condition backend-évaluable : instrument, field, operator, threshold, direction, entry_price, stop_loss, take_profit_1, expiry.
-- Si aucune position n'est ouverte, ne dis pas "si un setup est déjà engagé" : lis replay_continuity et décide à partir de l'état backend.
+Règles V5/V2 importantes :
+- Recherche jusqu'à trois candidats réellement distincts classés rank 1..3; le seuil contextuel pondéré est 0.55. Une source facultative absente reste soft et ne suffit pas à imposer WAIT_NO_SETUP.
+- Le risque demandé reste >0 et <=0.25% de NET_EQUITY, stop obligatoire, RR recalculé>=2. Le broker seul calcule les contrats entiers par ceil et refuse tout excédent supérieur à max_rounding_excess_pct.
+- Chaque setup contient géométrie, toutes les cibles/actions, conditions, management, validité et preuves. Une prose n'est jamais exécutable.
+- Chaque condition utilise uniquement predicate_type/operator/role/effect/importance/memory_policy/timeframe du Catalog V1 et tous ses parameters typés, temporal_rule, weight, sequence et evidence_refs.
+- EVENT_BLACKOUT requis sans données décidables reste UNKNOWN et bloque seulement ENTRY_TRIGGER. Les gates futures ne suppriment pas un candidat avant leur phase.
+- VETO temporaire (EVENT_BLACKOUT, fenêtre, intermarket, volatilité) utilise LATEST_ONLY, se lève quand faux et exige une confirmation M1 fraîche. INVALIDATION structurelle seule utilise INVALIDATE_TERMINAL; LATCH_UNTIL_TRIGGER est interdit à BLOCK_IF_TRUE.
+- Aucun effet soft n'est caché : REQUIRE_CONFIRMATION exige une condition Catalog V1 explicite; REDUCE_RISK exige un nouveau plan dont risk.risk_pct_requested est abaissé avant compilation. Sinon l'effet reste advisory et jamais veto.
+- GPT analyse les checkpoints planifiés M15; le moteur rejoue chaque M1 fermée. Confirmation same-bar interdite; toute réacquisition après sortie de zone est réévaluée.
+- WAIT_NO_SETUP exige no_setup_proof complet avec best_long, best_short, blocking_reasons, wait_to_go_conditions structurées et revalidation_triggers.
+- GPT ne produit jamais ENGINE_TRIGGER, fill, position, quantité, ordre broker, résultat R, hash compilé ou diagnostics.
 
 Résumé Codex avant déclenchement :
 ${automation ? JSON.stringify(automation, null, 2) : "dry_run : Codex n'a pas exécuté driveReplayAutomation pendant ce cycle."}

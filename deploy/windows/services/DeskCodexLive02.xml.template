@@ -1,0 +1,29 @@
+<service>
+  <id>DeskFuturesCodexLive02</id>
+  <name>Desk Futures Codex LIVE 02</name>
+  <description>Second persistent Codex analytical worker for LIVE resilience and availability.</description>
+  <executable>__NODE_EXE__</executable>
+  <arguments>--env-file="__ENV_FILE__" "__INSTALL_ROOT__\current\app\mcp_gpt_desk\scripts\run_desk_ai_worker.mjs"</arguments>
+  <workingdirectory>__INSTALL_ROOT__\current\app\mcp_gpt_desk</workingdirectory>
+  <env name="DESK_AI_SERVICE_ID" value="codex_live_worker_02"/>
+  <env name="DESK_AI_WORKER_ID" value="codex-live-02"/>
+  <env name="DESK_AI_WORKER_SCOPE" value="live"/>
+  <env name="DESK_AI_WORKER_MODE" value="__AI_WORKER_MODE__"/>
+  <env name="DESK_CODEX_BIN" value="__CODEX_EXE__"/>
+  <env name="CODEX_HOME" value="__CODEX_HOME__"/>
+  <env name="DESK_CODEX_TEMP_PRINCIPAL" value="*S-1-5-18"/>
+  <env name="DESK_AI_WORKER_PROJECT_ROOT" value="__INSTALL_ROOT__\current\app\mcp_gpt_desk"/>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>__POSTGRES_SERVICE__</depend>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+  <logpath>__LOG_ROOT__\codex-live-02</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>10</keepFiles>
+  </log>
+</service>

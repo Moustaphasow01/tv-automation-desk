@@ -2,115 +2,139 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tv-automation.local/contracts/contract-registry.schema.json",
   "title": "DeskContractRegistry",
-  "version": "1.0.0",
-  "description": "Package-level registry for active runtime contracts and V2 entity contract lifecycle. Runtime MCP contract-management tools may expose a smaller subset until their own gate authorizes changes.",
+  "version": "3.1.0",
   "type": "object",
+  "required": ["registry_version", "active_contracts", "legacy_contracts", "entity_contracts", "lifecycle_policy"],
   "properties": {
-    "registry_version": {
-      "type": "string",
-      "const": "2.0.0"
-    },
+    "registry_version": { "const": "3.1.0" },
     "active_contracts": {
       "type": "object",
+      "required": ["master_contract", "monitor_contract", "front_projection_contract", "execution_policy_contract", "execution_plan_contract", "monitor_command_contract", "condition_catalog_contract"],
       "properties": {
-        "master_contract": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "monitor_contract": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "front_projection_contract": {
-          "type": "object",
-          "additionalProperties": true
-        }
+        "master_contract": { "$ref": "#/$defs/activeContractEntry" },
+        "monitor_contract": { "$ref": "#/$defs/activeContractEntry" },
+        "front_projection_contract": { "$ref": "#/$defs/activeContractEntry" },
+        "execution_policy_contract": { "$ref": "#/$defs/activeContractEntry" },
+        "execution_plan_contract": { "$ref": "#/$defs/activeContractEntry" },
+        "monitor_command_contract": { "$ref": "#/$defs/activeContractEntry" },
+        "condition_catalog_contract": { "$ref": "#/$defs/activeContractEntry" }
       },
-      "required": [
-        "master_contract",
-        "monitor_contract",
-        "front_projection_contract"
-      ],
-      "additionalProperties": true
+      "additionalProperties": false
+    },
+    "legacy_contracts": {
+      "type": "object",
+      "required": ["master_contract_v4", "master_contract_v5_0", "master_contract_v5_1", "master_contract_v5_2", "master_contract_v5_3", "monitor_contract_v1", "monitor_contract_v2_0", "monitor_contract_v2_1", "monitor_contract_v2_2", "monitor_contract_v2_3", "execution_plan_contract_v1_0", "execution_plan_contract_v1_1", "execution_plan_contract_v1_2", "execution_plan_contract_v1_3", "monitor_command_contract_v1_0", "monitor_command_contract_v1_1", "monitor_command_contract_v1_2", "monitor_command_contract_v1_3", "condition_catalog_contract_v1_0", "condition_catalog_contract_v1_1", "execution_policy_contract_v2", "execution_policy_contract_v3", "execution_policy_contract_v4_0", "execution_policy_contract_v4_1", "execution_policy_contract_v4_2"],
+      "properties": {
+        "master_contract_v4": { "$ref": "#/$defs/legacyContractEntry" },
+        "master_contract_v5_0": { "$ref": "#/$defs/legacyContractEntry" },
+        "master_contract_v5_1": { "$ref": "#/$defs/legacyContractEntry" },
+        "master_contract_v5_2": { "$ref": "#/$defs/legacyContractEntry" },
+        "master_contract_v5_3": { "$ref": "#/$defs/legacyContractEntry" },
+        "monitor_contract_v1": { "$ref": "#/$defs/legacyContractEntry" },
+        "monitor_contract_v2_0": { "$ref": "#/$defs/legacyContractEntry" },
+        "monitor_contract_v2_1": { "$ref": "#/$defs/legacyContractEntry" },
+        "monitor_contract_v2_2": { "$ref": "#/$defs/legacyContractEntry" },
+        "monitor_contract_v2_3": { "$ref": "#/$defs/legacyContractEntry" },
+        "execution_plan_contract_v1_0": { "$ref": "#/$defs/legacyContractEntry" },
+        "execution_plan_contract_v1_1": { "$ref": "#/$defs/legacyContractEntry" },
+        "execution_plan_contract_v1_2": { "$ref": "#/$defs/legacyContractEntry" },
+        "execution_plan_contract_v1_3": { "$ref": "#/$defs/legacyContractEntry" },
+        "monitor_command_contract_v1_0": { "$ref": "#/$defs/legacyContractEntry" },
+        "monitor_command_contract_v1_1": { "$ref": "#/$defs/legacyContractEntry" },
+        "monitor_command_contract_v1_2": { "$ref": "#/$defs/legacyContractEntry" },
+        "monitor_command_contract_v1_3": { "$ref": "#/$defs/legacyContractEntry" },
+        "condition_catalog_contract_v1_0": { "$ref": "#/$defs/legacyContractEntry" },
+        "condition_catalog_contract_v1_1": { "$ref": "#/$defs/legacyContractEntry" },
+        "execution_policy_contract_v2": { "$ref": "#/$defs/legacyContractEntry" },
+        "execution_policy_contract_v3": { "$ref": "#/$defs/legacyContractEntry" },
+        "execution_policy_contract_v4_0": { "$ref": "#/$defs/legacyContractEntry" },
+        "execution_policy_contract_v4_1": { "$ref": "#/$defs/legacyContractEntry" },
+        "execution_policy_contract_v4_2": { "$ref": "#/$defs/legacyContractEntry" }
+      },
+      "additionalProperties": false
     },
     "entity_contracts": {
       "type": "object",
+      "required": ["decision_audit_contract", "simulation_run_contract", "simulation_step_contract", "worker_mission_contract", "dashboard_state_contract", "front_projection_contract"],
       "properties": {
-        "decision_audit_contract": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "simulation_run_contract": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "simulation_step_contract": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "worker_mission_contract": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "dashboard_state_contract": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "front_projection_contract": {
-          "type": "object",
-          "additionalProperties": true
-        }
+        "decision_audit_contract": { "$ref": "#/$defs/entityEntry" },
+        "simulation_run_contract": { "$ref": "#/$defs/entityEntry" },
+        "simulation_step_contract": { "$ref": "#/$defs/entityEntry" },
+        "worker_mission_contract": { "$ref": "#/$defs/entityEntry" },
+        "dashboard_state_contract": { "$ref": "#/$defs/entityEntry" },
+        "front_projection_contract": { "$ref": "#/$defs/entityEntry" }
       },
-      "required": [
-        "decision_audit_contract",
-        "simulation_run_contract",
-        "simulation_step_contract",
-        "worker_mission_contract",
-        "dashboard_state_contract",
-        "front_projection_contract"
-      ],
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "lifecycle_policy": {
       "type": "object",
+      "required": ["statuses", "runtime_exposed", "breaking_change_rule"],
       "properties": {
         "statuses": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "draft",
-              "active",
-              "archived"
-            ]
-          }
+          "const": ["draft", "active", "archived"]
         },
-        "runtime_exposed": {
-          "type": "string",
-          "enum": [
-            "master_monitor_only",
-            "entity_contracts_planned",
-            "all_active_contracts"
-          ]
-        },
-        "breaking_change_rule": {
-          "type": "string",
-          "minLength": 1
-        }
+        "runtime_exposed": { "const": "all_active_contracts" },
+        "breaking_change_rule": { "type": "string", "minLength": 1 }
       },
-      "required": [
-        "statuses",
-        "runtime_exposed",
-        "breaking_change_rule"
-      ],
       "additionalProperties": false
     }
   },
-  "required": [
-    "registry_version",
-    "active_contracts",
-    "entity_contracts",
-    "lifecycle_policy"
-  ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "contractEntry": {
+      "type": "object",
+      "required": ["contract_id", "contract_name", "schema_version", "hash", "markdown_path", "schema_path", "status", "runtime_exposed"],
+      "properties": {
+        "contract_id": { "type": "string", "minLength": 1 },
+        "contract_name": { "enum": ["DeskMasterAnalysisContract", "DeskHourlyThesisMonitorContract", "DeskFrontProjectionContract", "DeskDeterministicExecutionPolicy", "DeskExecutionPlanContract", "DeskMonitorCommandContract", "DeskConditionCatalogContract"] },
+        "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "markdown_path": { "type": "string", "pattern": "^contracts/.+\\.md$" },
+        "schema_path": { "type": "string", "pattern": "^schemas/entities/.+\\.schema\\.json$" },
+        "companion_schema_paths": { "type": "array", "items": { "type": "string", "pattern": "^schemas/entities/.+\\.schema\\.json$" }, "uniqueItems": true },
+        "catalog_path": { "type": "string", "pattern": "^catalogs/.+\\.json$" },
+        "catalog_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "replaced_by": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["active", "archived"] },
+        "runtime_exposed": { "type": "boolean" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "required": ["catalog_path"] },
+          "then": { "required": ["catalog_hash"] }
+        }
+      ]
+    },
+    "activeContractEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/contractEntry" },
+        { "type": "object", "properties": { "status": { "const": "active" }, "runtime_exposed": { "const": true } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "legacyContractEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/contractEntry" },
+        { "type": "object", "properties": { "status": { "const": "archived" }, "runtime_exposed": { "const": false } } }
+      ],
+      "unevaluatedProperties": false
+    },
+    "entityEntry": {
+      "type": "object",
+      "required": ["contract_id", "contract_name", "schema_version", "schema_path", "example_path", "status", "runtime_exposed", "owner_milestone"],
+      "properties": {
+        "contract_id": { "type": "string", "minLength": 1 },
+        "contract_name": { "type": "string", "minLength": 1 },
+        "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "schema_path": { "type": "string", "pattern": "^schemas/entities/.+\\.schema\\.json$" },
+        "example_path": { "type": "string", "pattern": "^examples/.+\\.json$" },
+        "status": { "const": "active" },
+        "runtime_exposed": { "type": "boolean" },
+        "owner_milestone": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
 }

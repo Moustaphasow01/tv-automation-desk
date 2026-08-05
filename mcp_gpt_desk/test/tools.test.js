@@ -7,6 +7,10 @@ import { createTestDeskStore } from "./support/test-desk-store.js";
 import { callDeskTool, createDeskToolRegistry, listDeskTools } from "../src/tools.js";
 import { validDecisionAudit } from "./fixtures/decision_audit_payloads.js";
 import { liveScope } from "./fixtures/live_scope.js";
+import {
+  makeActiveLiveMasterSave,
+  makeActiveLiveMonitorSave,
+} from "./support/active-strategy-save-fixtures.js";
 
 test("desk_ping is exposed and returns the ChatGPT connection contract", async () => {
   const root = await mkdtemp(join(tmpdir(), "gpt-desk-mcp-tools-"));
@@ -36,22 +40,6 @@ test("desk_ping is exposed and returns the ChatGPT connection contract", async (
   assert.equal(result.isError, false);
 });
 
-test("get_desk_methodology exposes mandatory backforward prompt", async () => {
-  const root = await mkdtemp(join(tmpdir(), "gpt-desk-mcp-tools-"));
-  const store = createTestDeskStore({ root, projectRoot: root }).store;
-  const registry = createDeskToolRegistry(store);
-
-  const tools = listDeskTools(registry);
-  const methodologyTool = tools.find((tool) => tool.name === "get_desk_methodology");
-  assert.ok(methodologyTool);
-
-  const result = await callDeskTool(registry, "get_desk_methodology", {});
-  assert.equal(result.isError, false);
-  assert.equal(result.structuredContent.schema_version, "1.1.0");
-  assert.match(result.structuredContent.prompt, /Entonnoir marche obligatoire/);
-  assert.equal(result.structuredContent.anti_lookahead_policy.hard_gate, true);
-});
-
 test("vNext contract tools expose bundled active contracts", async () => {
   const root = await mkdtemp(join(tmpdir(), "gpt-desk-mcp-tools-"));
   const store = createTestDeskStore({ root, projectRoot: root }).store;
@@ -60,10 +48,14 @@ test("vNext contract tools expose bundled active contracts", async () => {
   const active = await callDeskTool(registry, "get_active_contracts", {});
   assert.equal(active.isError, false);
   assert.equal(active.structuredContent.master_contract.contract_name, "DeskMasterAnalysisContract");
-  assert.equal(active.structuredContent.master_contract.schema_version, "4.0.0");
-  assert.match(active.structuredContent.master_contract.content_markdown, /Master Analysis/);
+  assert.equal(active.structuredContent.master_contract.schema_version, "5.4.0");
+  assert.match(active.structuredContent.master_contract.content_markdown, /DeskMasterAnalysisContract.*v5\.4\.0/);
   assert.equal(active.structuredContent.monitor_contract.contract_name, "DeskHourlyThesisMonitorContract");
-  assert.equal(active.structuredContent.monitor_contract.schema_version, "1.0.0");
+  assert.equal(active.structuredContent.monitor_contract.schema_version, "2.4.0");
+  assert.equal(active.structuredContent.execution_plan_contract.schema_version, "1.4.0");
+  assert.equal(active.structuredContent.monitor_command_contract.schema_version, "1.4.0");
+  assert.equal(active.structuredContent.condition_catalog_contract.schema_version, "1.2.0");
+  assert.equal(active.structuredContent.execution_policy_contract.schema_version, "4.3.0");
   assert.equal(active.structuredContent.front_projection_contract.contract_name, "DeskFrontProjectionContract");
   assert.equal(active.structuredContent.front_projection_contract.schema_version, "1.0.0");
 
@@ -80,7 +72,10 @@ test("vNext contract tools expose bundled active contracts", async () => {
     contract_name: "DeskMasterAnalysisContract",
   });
   assert.equal(versions.isError, false);
-  assert.equal(versions.structuredContent.versions[0].contract_id, "DeskMasterAnalysisContract_v4_0_0");
+  assert.equal(versions.structuredContent.versions[0].contract_id, "DeskMasterAnalysisContract_v5_4_0");
+  assert.ok(versions.structuredContent.versions.some((item) => item.contract_id === "DeskMasterAnalysisContract_v5_1_0"));
+  assert.ok(versions.structuredContent.versions.some((item) => item.contract_id === "DeskMasterAnalysisContract_v5_0_0"));
+  assert.ok(versions.structuredContent.versions.some((item) => item.contract_id === "DeskMasterAnalysisContract_v4_0_0"));
 });
 
 test("vNext write tools persist thesis and monitor", async () => {
@@ -88,14 +83,12 @@ test("vNext write tools persist thesis and monitor", async () => {
   const store = createTestDeskStore({ root, projectRoot: root }).store;
   const registry = createDeskToolRegistry(store);
   const scope = liveScope({ date: "2026-07-02", cutoff_paris: "2026-07-02T01:00:00+02:00" });
-  await store.saveMasterAnalysis({
-    ...scope,
-    analysis_id: "master_test",
-    contract_name: "DeskMasterAnalysisContract",
-    schema_version: "4.0.0",
-    contract_hash: "master-hash",
-    full_analysis: {},
-  });
+  await store.saveMasterAnalysis(makeActiveLiveMasterSave({
+    scope,
+    analysisId: "master_test",
+    thesisId: "thesis_master_test_seed",
+    planId: "plan_master_test",
+  }));
 
   const thesis = await callDeskTool(registry, "save_active_thesis", {
     ...scope,
@@ -123,26 +116,14 @@ test("vNext write tools persist thesis and monitor", async () => {
   assert.equal(thesis.isError, false);
   assert.equal(thesis.structuredContent.thesis_id, "thesis_test");
 
-  const monitor = await callDeskTool(registry, "save_hourly_monitor", {
-    ...scope,
-    monitor_id: "monitor_test",
-    contract_name: "DeskHourlyThesisMonitorContract",
-    schema_version: "1.0.0",
-    contract_hash: "abc123",
-    timestamp_paris: "2026-07-02T01:00:00+02:00",
-    linked_master_analysis_id: "master_test",
-    linked_active_thesis_id: "thesis_test",
-    monitor_decision: { action: "maintain" },
-    thesis_health_score: { score: 72 },
-    expected_vs_realized: [],
-    macro_update: {},
-    cross_asset_delta: {},
-    technical_delta: {},
-    wait_to_go_check: [],
-    invalidation_check: [],
-    weak_signals: [],
-    monitor_context_transmission: {},
-  });
+  const monitor = await callDeskTool(registry, "save_manual_monitor", makeActiveLiveMonitorSave({
+    scope,
+    monitorId: "monitor_test",
+    masterId: "master_test",
+    thesisId: "thesis_test",
+    planId: "plan_master_test",
+    expectedRevision: 0,
+  }));
   assert.equal(monitor.isError, false);
   assert.equal(monitor.structuredContent.monitor_id, "monitor_test");
 
@@ -289,5 +270,5 @@ test("get_desk_setups exposes materialized analysis setups", async () => {
     setup_record_id: "analysis_tool_test_A",
   });
   assert.equal(replay.isError, true);
-  assert.match(replay.structuredContent.error, /LEGACY_REPLAY_FORBIDDEN/);
+  assert.match(replay.structuredContent.error, /READ_ONLY_REPLAY_FORBIDDEN/);
 });

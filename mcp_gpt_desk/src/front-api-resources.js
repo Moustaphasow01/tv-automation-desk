@@ -38,6 +38,7 @@ const marketItemSchema = z.object({
   rsi: z.string(),
   atr: z.string(),
   seriesTimeframe: z.string(),
+  availability: z.string(),
   series: z.array(z.object({
     time: z.string(),
     open: z.number().nullable(),
@@ -91,6 +92,11 @@ const headlineSchema = z.object({
   forecast: z.string(),
   actual: z.string(),
   isNext: z.boolean(),
+  url: z.string(),
+  provider: z.string(),
+  publishedAt: z.string(),
+  assets: z.array(z.string()),
+  topics: z.array(z.string()),
 });
 
 const activityItemSchema = z.object({
@@ -187,6 +193,12 @@ export const frontApiResourceSchemas = {
       digestUpdatedAt: z.string(),
       digest: z.string(),
       headlines: z.array(headlineSchema),
+      status: z.string(),
+      provider: z.string(),
+      freshness: z.object({
+        status: z.string(),
+        ageMinutes: z.number().nullable(),
+      }),
     }),
   }),
   newsHeadlines: resourceBaseSchema.extend({
@@ -247,6 +259,9 @@ export const FRONT_RESOURCE_CACHE_SECONDS = {
   "/api/v1/performance/day": 15,
 };
 
+const LIVE_CONTEXT_CACHE_TTL_MS = boundedTtlMs(process.env.DESK_FRONT_LIVE_CONTEXT_CACHE_TTL_MS, 10_000, 0, 60_000);
+const liveContextCaches = new WeakMap();
+
 export async function loadFrontApiResource(store, pathname, scopeInput = {}) {
   if (pathname === "/api/v1/market/snapshot") return loadFrontMarketResource(store, scopeInput);
   if (pathname === "/api/v1/positions/current") return loadFrontPositionResource(store, scopeInput);
@@ -303,6 +318,7 @@ export async function loadFrontMarketResource(store, scopeInput = {}) {
     date: context.scope.trading_date,
     session: context.scope.session,
     instrument,
+    front_cache: scopeInput.front_cache === true,
   }), "market_snapshot_not_available");
   const snapshot = snapshotRead.value?.session_snapshot || null;
   const projected = projectDeskSession({ live: context.live, marketSnapshot: snapshot });
@@ -330,10 +346,11 @@ export async function loadFrontMacroResource(store, scopeInput = {}) {
   const macroRead = await safeResourceRead(() => loadFrontDailyMacroSource(store, {
     date: context.scope.trading_date,
     mode: context.scope.mode,
+    as_of_utc: context.live.resolved_scope?.as_of_utc || context.scope.as_of_utc,
   }), "macro_calendar_not_available");
   const projected = projectDeskSession({ live: context.live, macro: macroRead.value });
   return frontApiResourceSchemas.macro.parse({
-    ...resourceBase("DeskFrontMacroResource", context, macroRead.warning),
+    ...resourceBase("DeskFrontMacroResource", context, macroRead.warning || macroRead.value?.warning),
     nextMacro: projected.nextMacro,
     nearEvent: hasNearMacroEvent(macroRead.value?.events, context.live.resolved_scope?.as_of_utc || context.scope.as_of_utc),
     macro: projected.macro,
@@ -404,30 +421,37 @@ export async function loadFrontAuditResource(store, scopeInput = {}) {
 
 async function liveContext(store, scopeInput) {
   const scope = normalizeFrontApiScope(scopeInput);
-  const live = await store.getLiveDeskState(scope);
-  return { scope: live.resolved_scope || scope, live };
+  if (scopeInput.front_cache !== true || LIVE_CONTEXT_CACHE_TTL_MS <= 0) {
+    const live = await store.getLiveDeskState(scope);
+    return { scope: live.resolved_scope || scope, live };
+  }
+  return cachedLiveContext(
+    store,
+    liveContextCacheKey(scopeInput, scope),
+    () => store.getLiveDeskState({ ...scope, front_cache: true })
+      .then((live) => ({ scope: live.resolved_scope || scope, live })),
+  );
 }
 
 async function loadNewsSource(store, scopeInput) {
   const context = await liveContext(store, scopeInput);
-  const newsRead = await safeResourceRead(() => store.getNewsDigest({
-    date: context.scope.trading_date,
-    session: context.scope.session,
-    pack_id: undefined,
-    pack_build_id: undefined,
-    as_of_utc: undefined,
-    mode: context.scope.mode,
-  }), "news_digest_not_available");
-  const news = newsRead.value || { items: [] };
-  let macro = null;
-  if (!Array.isArray(news.items) || news.items.length === 0) {
-    const macroRead = await safeResourceRead(() => loadFrontDailyMacroSource(store, {
+  const [newsRead, macroRead] = await Promise.all([
+    safeResourceRead(() => store.getNewsDigest({
+      date: context.scope.trading_date,
+      session: context.scope.session,
+      pack_id: undefined,
+      pack_build_id: undefined,
+      as_of_utc: context.live.resolved_scope?.as_of_utc || context.scope.as_of_utc,
+      mode: context.scope.mode,
+    }), "news_digest_not_available"),
+    safeResourceRead(() => loadFrontDailyMacroSource(store, {
       date: context.scope.trading_date,
       mode: context.scope.mode,
-    }), "macro_calendar_not_available");
-    macro = macroRead.value;
-  }
-  return { context, news, macro, warning: newsRead.warning };
+      as_of_utc: context.live.resolved_scope?.as_of_utc || context.scope.as_of_utc,
+    }), "macro_calendar_not_available"),
+  ]);
+  const news = newsRead.value || { items: [] };
+  return { context, news, macro: macroRead.value, warning: newsRead.warning };
 }
 
 function resourceBase(contract, context, warning = null) {
@@ -474,4 +498,65 @@ function hasNearMacroEvent(eventsValue, asOfUtc) {
     const deltaMs = eventMs - nowMs;
     return Number.isFinite(eventMs) && deltaMs >= 0 && deltaMs <= 90 * 60 * 1000;
   });
+}
+
+function cachedLiveContext(store, key, read) {
+  if (!store) return read();
+  const cache = liveContextCacheFor(store);
+  const now = Date.now();
+  const existing = cache.get(key);
+  if (existing && existing.expiresAt > now) return existing.promise;
+  const entry = { expiresAt: Number.POSITIVE_INFINITY, promise: null };
+  entry.promise = Promise.resolve()
+    .then(read)
+    .then((context) => {
+      if (cache.get(key) === entry) entry.expiresAt = Date.now() + LIVE_CONTEXT_CACHE_TTL_MS;
+      return context;
+    })
+    .catch((error) => {
+      if (cache.get(key) === entry) cache.delete(key);
+      throw error;
+    });
+  cache.set(key, entry);
+  pruneLiveContextCache(cache, now);
+  return entry.promise;
+}
+
+function liveContextCacheFor(store) {
+  let cache = liveContextCaches.get(store);
+  if (!cache) {
+    cache = new Map();
+    liveContextCaches.set(store, cache);
+  }
+  return cache;
+}
+
+function pruneLiveContextCache(cache, now = Date.now()) {
+  if (cache.size <= 100) return;
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(key);
+  }
+  while (cache.size > 100) {
+    cache.delete(cache.keys().next().value);
+  }
+}
+
+function liveContextCacheKey(input = {}, scope = {}) {
+  const explicitAsOf = Boolean(input.as_of_utc);
+  const asOfMs = Date.parse(scope.as_of_utc || "");
+  const asOfBucket = explicitAsOf && Number.isFinite(asOfMs) ? Math.floor(asOfMs / LIVE_CONTEXT_CACHE_TTL_MS) : "front-now";
+  return JSON.stringify([
+    scope.strategy_id,
+    scope.session,
+    scope.mode,
+    scope.trading_date,
+    scope.run_id,
+    asOfBucket,
+  ]);
+}
+
+function boundedTtlMs(value, fallback, min, max) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(parsed, max));
 }

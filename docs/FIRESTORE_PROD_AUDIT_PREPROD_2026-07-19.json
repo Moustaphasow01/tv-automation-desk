@@ -1,0 +1,2589 @@
+{
+  "ok": true,
+  "audited_at_utc": "2026-07-19T00:32:49.920071+00:00",
+  "project_id": "tv-automation-23d50",
+  "symbol": "MES1!",
+  "read_only": true,
+  "large_doc_threshold_bytes": 1000000,
+  "max_full_size_scan_docs": 5000,
+  "firestore_indexes": {
+    "path": "firebase/firestore.indexes.json",
+    "present": true,
+    "index_count": 12,
+    "collection_groups": [
+      "desk_active_theses",
+      "desk_agent_work_dead_letter",
+      "desk_hourly_monitors",
+      "desk_live_run_cursor",
+      "desk_master_analyses",
+      "live_data_feed_status",
+      "live_study_values",
+      "market_candles",
+      "study_candles",
+      "tradingview_alert_queue",
+      "tradingview_webhook_events"
+    ]
+  },
+  "collections": {
+    "broker_order_intent_events": {
+      "path": "broker_order_intent_events",
+      "id": "broker_order_intent_events",
+      "document_count": 3,
+      "sample_ids": [
+        "BRKTEST_20260614163317_40523875_20260614163318_BRIDGE_READ_BLOCKED",
+        "BRKTEST_20260614163317_40523875_20260614163318_TEST_CREATED",
+        "BRKTEST_20260614163317_40523875_20260614163318_TEST_SIM_DRY_RUN_READY"
+      ],
+      "max_doc_size_bytes": 815,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 3,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "broker_order_intents": {
+      "path": "broker_order_intents",
+      "id": "broker_order_intents",
+      "document_count": 1,
+      "sample_ids": [
+        "BRKTEST_20260614163317_40523875"
+      ],
+      "max_doc_size_bytes": 1623,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "dashboard_command_events": {
+      "path": "dashboard_command_events",
+      "id": "dashboard_command_events",
+      "document_count": 22,
+      "sample_ids": [
+        "CMD_20260614_053650865Z_540b2757__20260614_053650901Z__QUEUED__669360",
+        "CMD_20260614_053650865Z_540b2757__20260614_053650993Z__EXECUTED_SUCCESS__71155b",
+        "CMD_20260614_104655637Z_dcd295db__20260614_104655688Z__QUEUED__729eae"
+      ],
+      "max_doc_size_bytes": 7576,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 22,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "dashboard_commands": {
+      "path": "dashboard_commands",
+      "id": "dashboard_commands",
+      "document_count": 11,
+      "sample_ids": [
+        "CMD_20260614_053650865Z_540b2757",
+        "CMD_20260614_104655637Z_dcd295db",
+        "CMD_20260614_113811401Z_9ce58444"
+      ],
+      "max_doc_size_bytes": 871,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 11,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_active_theses": {
+      "path": "desk_active_theses",
+      "id": "desk_active_theses",
+      "document_count": 5,
+      "sample_ids": [
+        "2026-07-02_asia_open_WAIT_thesis",
+        "ny_open_1530_thesis_2026_07_08_MNQ_short_failed_reclaim",
+        "thesis_master_2026_07_13_asia_open_front_live_2026_07_13_asia_open_MNQ"
+      ],
+      "max_doc_size_bytes": 5398,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 5,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_agent_outputs": {
+      "path": "desk_agent_outputs",
+      "id": "desk_agent_outputs",
+      "document_count": 12246,
+      "sample_ids": [
+        "DESK_20260611T013350736208_bc9b9afd__intraday",
+        "DESK_20260611T013350736208_bc9b9afd__macro",
+        "DESK_20260611T013350736208_bc9b9afd__quant"
+      ],
+      "max_doc_size_bytes": 532,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    },
+    "desk_agent_work_dead_letter": {
+      "path": "desk_agent_work_dead_letter",
+      "id": "desk_agent_work_dead_letter",
+      "document_count": 1,
+      "sample_ids": [
+        "dlq__live__front_live_2026-07-14_ny_open__2026-07-14T17:30:00+02:00"
+      ],
+      "max_doc_size_bytes": 822,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_agent_work_events": {
+      "path": "desk_agent_work_events",
+      "id": "desk_agent_work_events",
+      "document_count": 1453,
+      "sample_ids": [
+        "deskwork__live__LIVE_M15_MONITOR__manual_monitor_bundle_2026_07_13_asia_open_1300_15m_live__ready__1783940520586",
+        "deskwork__live__LIVE_M15_MONITOR__manual_monitor_bundle_2026_07_13_asia_open_1300_15m_live__superseded__1783943806509",
+        "deskwork__live__LIVE_M15_MONITOR__manual_monitor_bundle_2026_07_13_asia_open_1315_15m_live__ready__1783941410416"
+      ],
+      "max_doc_size_bytes": 2603,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1453,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_agent_work_items": {
+      "path": "desk_agent_work_items",
+      "id": "desk_agent_work_items",
+      "document_count": 427,
+      "sample_ids": [
+        "deskwork__live__LIVE_M15_MONITOR__manual_monitor_bundle_2026_07_13_asia_open_1300_15m_live",
+        "deskwork__live__LIVE_M15_MONITOR__manual_monitor_bundle_2026_07_13_asia_open_1315_15m_live",
+        "deskwork__live__LIVE_M15_MONITOR__manual_monitor_bundle_2026_07_13_asia_open_1330_15m_live"
+      ],
+      "max_doc_size_bytes": 13472,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 427,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_alerts": {
+      "path": "desk_alerts",
+      "id": "desk_alerts",
+      "document_count": 2,
+      "sample_ids": [
+        "2026-07-08_asia_open_monitor_0515_data_degraded_alert",
+        "2026-07-08_asia_open_monitor_0800_data_degraded_alert"
+      ],
+      "max_doc_size_bytes": 937,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 2,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_analyses": {
+      "path": "desk_analyses",
+      "id": "desk_analyses",
+      "document_count": 24,
+      "sample_ids": [
+        "2026-06-04_asia_open_analysis_v1_1",
+        "2026-06-05_asia_open_analysis_v1",
+        "2026-06-05_asia_open_analysis_v1_1"
+      ],
+      "max_doc_size_bytes": 19367,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 24,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_archive_batches": {
+      "path": "desk_archive_batches",
+      "id": "desk_archive_batches",
+      "document_count": 1,
+      "sample_ids": [
+        "gpt_archive_20260703T163953Z"
+      ],
+      "max_doc_size_bytes": 1323,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_audit_logs": {
+      "path": "desk_audit_logs",
+      "id": "desk_audit_logs",
+      "document_count": 11,
+      "sample_ids": [
+        "strategy_audit_ny_open_1530_nyopen_strict_replay_master_ny_open_2026_07_01_1530_replay_v1_setup_mes_post_ism_breakdown_2026_07_01",
+        "strategy_audit_ny_open_1530_nyopen_strict_replay_ny_open_1530_master_2026_07_07_cutoff_1530_MNQ_SHORT_FAILED_RECLAIM_29622_NYOPEN",
+        "strategy_audit_ny_open_1530_nyopen_strict_replay_strategy_trade_master_2026_07_13_ny_open_front_live_2026_07_13_ny_open_setup_1_n"
+      ],
+      "max_doc_size_bytes": 655,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 11,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_cloud_run_slots": {
+      "path": "desk_cloud_run_slots",
+      "id": "desk_cloud_run_slots",
+      "document_count": 1538,
+      "sample_ids": [
+        "MES1!__M5__20260611T0920+0200__CLOUD_M5_EU_SESSION",
+        "MES1!__M5__20260611T0920+0200__SMOKE_TEST",
+        "MES1!__M5__20260611T0925+0200__CLOUD_M5_EU_SESSION"
+      ],
+      "max_doc_size_bytes": 148082,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1538,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_condition_status": {
+      "path": "desk_condition_status",
+      "id": "desk_condition_status",
+      "document_count": 13,
+      "sample_ids": [
+        "thesis_master_2026_07_13_asia_open_front_live_2026_07_13_asia_open_MNQ_2026_07_13T13_30_00_02_00",
+        "thesis_master_2026_07_13_asia_open_front_live_2026_07_13_asia_open_MNQ_2026_07_13T13_45_00_02_00",
+        "thesis_master_2026_07_13_asia_open_front_live_2026_07_13_asia_open_MNQ_2026_07_13T14_00_00_02_00"
+      ],
+      "max_doc_size_bytes": 3850,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 13,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_context_transmissions": {
+      "path": "desk_context_transmissions",
+      "id": "desk_context_transmissions",
+      "document_count": 14,
+      "sample_ids": [
+        "2026-07-02_asia_open_context_transmission_master_v4_0_0_20260704_1354",
+        "2026-07-08_asia_open_master_context_cutoff0005",
+        "context_2026_07_02_asia_open_20260704115709"
+      ],
+      "max_doc_size_bytes": 2735,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 14,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_contract_registry": {
+      "path": "desk_contract_registry",
+      "id": "desk_contract_registry",
+      "document_count": 1,
+      "sample_ids": [
+        "active_contracts"
+      ],
+      "max_doc_size_bytes": 618,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_contracts": {
+      "path": "desk_contracts",
+      "id": "desk_contracts",
+      "document_count": 2,
+      "sample_ids": [
+        "DeskHourlyThesisMonitorContract_v1_0_0",
+        "DeskMasterAnalysisContract_v4_0_0"
+      ],
+      "max_doc_size_bytes": 40420,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 2,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_cross_asset_deltas": {
+      "path": "desk_cross_asset_deltas",
+      "id": "desk_cross_asset_deltas",
+      "document_count": 31579,
+      "sample_ids": [
+        "20260702000500_1h",
+        "20260702000500_4h",
+        "20260702000500_session"
+      ],
+      "max_doc_size_bytes": 1164,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    },
+    "desk_cycle_snapshots": {
+      "path": "desk_cycle_snapshots",
+      "id": "desk_cycle_snapshots",
+      "document_count": 1222,
+      "sample_ids": [
+        "DESK_20260611T013350736208_bc9b9afd",
+        "DESK_20260611T014150519006_4527593c",
+        "DESK_20260611T014433979566_c15a8ec0"
+      ],
+      "max_doc_size_bytes": 199148,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1222,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_cycles": {
+      "path": "desk_cycles",
+      "id": "desk_cycles",
+      "document_count": 1530,
+      "sample_ids": [
+        "DESK_20260611T013350736208_bc9b9afd",
+        "DESK_20260611T014150519006_4527593c",
+        "DESK_20260611T014433979566_c15a8ec0"
+      ],
+      "max_doc_size_bytes": 161217,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1530,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_data_quality_audits": {
+      "path": "desk_data_quality_audits",
+      "id": "desk_data_quality_audits",
+      "document_count": 144,
+      "sample_ids": [
+        "data_quality_manual_monitor_bundle_2026_07_10_asia_open_0000_15m_live_2026_07_10T00_00_00_000_02_00",
+        "data_quality_manual_monitor_bundle_2026_07_10_asia_open_0015_15m_live_2026_07_10T00_15_00_000_02_00",
+        "data_quality_manual_monitor_bundle_2026_07_10_asia_open_0030_15m_live_2026_07_10T00_30_00_000_02_00"
+      ],
+      "max_doc_size_bytes": 1180,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 144,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_debate_results": {
+      "path": "desk_debate_results",
+      "id": "desk_debate_results",
+      "document_count": 94,
+      "sample_ids": [
+        "DEBATE_024b8f546a1c",
+        "DEBATE_066f63705eb2",
+        "DEBATE_06f0f6a8ae9f"
+      ],
+      "max_doc_size_bytes": 49399,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 94,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_decision_journal": {
+      "path": "desk_decision_journal",
+      "id": "desk_decision_journal",
+      "document_count": 12,
+      "sample_ids": [
+        "2026-07-02_asia_open_master_v4_0_0_20260704_1354",
+        "2026-07-02_ny_open_1530_master_v4_0_0",
+        "2026-07-08_asia_open_master_v4_0_0_cutoff0005"
+      ],
+      "max_doc_size_bytes": 3828,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 12,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_decisions": {
+      "path": "desk_decisions",
+      "id": "desk_decisions",
+      "document_count": 27,
+      "sample_ids": [
+        "2026-06-04_asia_open_decision_A_v1_1",
+        "2026-06-05_asia_open_decision_A_v1",
+        "2026-06-05_asia_open_decision_A_v1_1"
+      ],
+      "max_doc_size_bytes": 7558,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 27,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_engine_status": {
+      "path": "desk_engine_status",
+      "id": "desk_engine_status",
+      "document_count": 1,
+      "sample_ids": [
+        "latest__MES1!"
+      ],
+      "max_doc_size_bytes": 619,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_errors": {
+      "path": "desk_errors",
+      "id": "desk_errors",
+      "document_count": 3,
+      "sample_ids": [
+        "feature_error_feature_run_2026_07_14_ny_open_2026_07_14T17_15_00_02_00_2026_07_14T15_23_13_775Z",
+        "feature_error_feature_run_2026_07_14_ny_open_2026_07_14T17_30_00_02_00_2026_07_14T15_35_27_514Z",
+        "feature_error_feature_run_2026_07_14_ny_open_2026_07_14T17_45_00_02_00_2026_07_14T15_51_19_231Z"
+      ],
+      "max_doc_size_bytes": 391,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 3,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_feature_runs": {
+      "path": "desk_feature_runs",
+      "id": "desk_feature_runs",
+      "document_count": 59,
+      "sample_ids": [
+        "feature_run_2026_06_26_asia_open_2026_06_26T00_05_00_02_00",
+        "feature_run_2026_06_26_ny_open_2026_06_26T15_30_00_02_00",
+        "feature_run_2026_06_29_asia_open_2026_06_29T00_05_00_02_00"
+      ],
+      "max_doc_size_bytes": 1444,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 59,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_hourly_monitors": {
+      "path": "desk_hourly_monitors",
+      "id": "desk_hourly_monitors",
+      "document_count": 22,
+      "sample_ids": [
+        "2026-07-02_0100_WAIT_MORE",
+        "2026-07-02_0900_MARK_AT_RISK",
+        "2026-07-02_1400_REDUCE_RISK"
+      ],
+      "max_doc_size_bytes": 9407,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 22,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_level_maps": {
+      "path": "desk_level_maps",
+      "id": "desk_level_maps",
+      "document_count": 80,
+      "sample_ids": [
+        "2026-06-26_asia_open_MES_levels",
+        "2026-06-26_asia_open_MNQ_levels",
+        "2026-06-26_ny_open_MES_levels"
+      ],
+      "max_doc_size_bytes": 107938,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 80,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_live_run_cursor": {
+      "path": "desk_live_run_cursor",
+      "id": "desk_live_run_cursor",
+      "document_count": 7,
+      "sample_ids": [
+        "livecur__2026-07-14__ny_open",
+        "livecur__2026-07-15__asia_open",
+        "livecur__2026-07-15__ny_open"
+      ],
+      "max_doc_size_bytes": 1065,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 7,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_manual_monitor_bundles": {
+      "path": "desk_manual_monitor_bundles",
+      "id": "desk_manual_monitor_bundles",
+      "document_count": 106,
+      "sample_ids": [
+        "manual_monitor_bundle_2026_07_10_asia_open_0000_15m_live",
+        "manual_monitor_bundle_2026_07_10_asia_open_0015_15m_live",
+        "manual_monitor_bundle_2026_07_10_asia_open_0030_15m_live"
+      ],
+      "max_doc_size_bytes": 239411,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 106,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_manual_monitors": {
+      "path": "desk_manual_monitors",
+      "id": "desk_manual_monitors",
+      "document_count": 6,
+      "sample_ids": [
+        "manual_monitor_manual_monitor_bundle_2026_07_13_asia_open_1445_15m_live_thesis_master_2026_07_13_asia_open_front_live_2026_07_13_asia_open_MNQ",
+        "manual_monitor_manual_monitor_bundle_2026_07_13_ny_open_1600_15m_live_thesis_master_2026_07_13_ny_open_front_live_2026_07_13_ny_open_MNQ",
+        "manual_monitor_manual_monitor_bundle_2026_07_13_ny_open_1615_15m_live_thesis_master_2026_07_13_ny_open_front_live_2026_07_13_ny_open_MNQ"
+      ],
+      "max_doc_size_bytes": 16298,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 6,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_master_analyses": {
+      "path": "desk_master_analyses",
+      "id": "desk_master_analyses",
+      "document_count": 12,
+      "sample_ids": [
+        "2026-07-02_asia_open_master_v4_0_0_20260704_1354",
+        "2026-07-02_ny_open_1530_master_v4_0_0",
+        "2026-07-08_asia_open_master_v4_0_0_cutoff0005"
+      ],
+      "max_doc_size_bytes": 41148,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 12,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_master_cutoff_bundles": {
+      "path": "desk_master_cutoff_bundles",
+      "id": "desk_master_cutoff_bundles",
+      "document_count": 38,
+      "sample_ids": [
+        "master_cutoff_bundle_2026_06_26_asia_open_0005_live",
+        "master_cutoff_bundle_2026_06_26_ny_open_1530_live",
+        "master_cutoff_bundle_2026_06_29_asia_open_0005_live"
+      ],
+      "max_doc_size_bytes": 572171,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 38,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_master_prep_jobs": {
+      "path": "desk_master_prep_jobs",
+      "id": "desk_master_prep_jobs",
+      "document_count": 53,
+      "sample_ids": [
+        "master_prep_job_2026_06_26_asia_open_0005_live",
+        "master_prep_job_2026_06_26_ny_open_1530_live",
+        "master_prep_job_2026_06_29_asia_open_0005_live"
+      ],
+      "max_doc_size_bytes": 1359,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 53,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_monitor_context_transmissions": {
+      "path": "desk_monitor_context_transmissions",
+      "id": "desk_monitor_context_transmissions",
+      "document_count": 7,
+      "sample_ids": [
+        "2026-07-08_asia_open_monitor_0515_context",
+        "monitor_context_manual_monitor_manual_monitor_bundle_2026_07_13_asia_open_1445_15m_live_thesis_m_thesis_master_2026_07_13_asia_open_front_live_2026_07_13_asia_open_MNQ",
+        "monitor_context_manual_monitor_manual_monitor_bundle_2026_07_13_ny_open_1600_15m_live_thesis_mas_thesis_master_2026_07_13_ny_open_front_live_2026_07_13_ny_open_MNQ"
+      ],
+      "max_doc_size_bytes": 3011,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 7,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_monitor_prep_jobs": {
+      "path": "desk_monitor_prep_jobs",
+      "id": "desk_monitor_prep_jobs",
+      "document_count": 108,
+      "sample_ids": [
+        "monitor_prep_job_2026_07_09_ny_open_15_30_live",
+        "monitor_prep_job_2026_07_10_asia_open_00_00_live",
+        "monitor_prep_job_2026_07_10_asia_open_00_15_live"
+      ],
+      "max_doc_size_bytes": 2626,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 108,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_pack_builds": {
+      "path": "desk_pack_builds",
+      "id": "desk_pack_builds",
+      "document_count": 84,
+      "sample_ids": [
+        "packbuild__2026-06-01_asia_open_replay_source__665d45ec-d8d6-428e-ae05-b615f5c19759",
+        "packbuild__2026-06-02_asia_open_replay_source__25935d24-0226-4563-8947-75c0e51c8c29",
+        "packbuild__2026-06-03_asia_open_replay_source__dbf4a4a1-248a-40ff-8273-866ffc20830a"
+      ],
+      "max_doc_size_bytes": 79271,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 84,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_packs": {
+      "path": "desk_packs",
+      "id": "desk_packs",
+      "document_count": 102,
+      "sample_ids": [
+        "2026-04-10_asia_open",
+        "2026-04-15_asia_open",
+        "2026-04-16_asia_open"
+      ],
+      "max_doc_size_bytes": 20478,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 102,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_position_states": {
+      "path": "desk_position_states",
+      "id": "desk_position_states",
+      "document_count": 22,
+      "sample_ids": [
+        "DESK_20260611T095049474529_67e8088f",
+        "DESK_20260611T095549372334_d70a8e8b",
+        "DESK_20260611T100058769056_56b1dce2"
+      ],
+      "max_doc_size_bytes": 1638,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 22,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_positions": {
+      "path": "desk_positions",
+      "id": "desk_positions",
+      "document_count": 2,
+      "sample_ids": [
+        "2026-07-02_MNQ_SHORT_REPLAY_MONITOR_A",
+        "2026-07-02_MNQ_SHORT_STRICT_REPLAY_A"
+      ],
+      "max_doc_size_bytes": 1138,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 2,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_ready_orders": {
+      "path": "desk_ready_orders",
+      "id": "desk_ready_orders",
+      "document_count": 22,
+      "sample_ids": [
+        "DESK_20260611T095049474529_67e8088f",
+        "DESK_20260611T095549372334_d70a8e8b",
+        "DESK_20260611T100058769056_56b1dce2"
+      ],
+      "max_doc_size_bytes": 3143,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 22,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_active_theses": {
+      "path": "desk_replay_active_theses",
+      "id": "desk_replay_active_theses",
+      "document_count": 107,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0001__master__2026_07_06T00_05_00_02_00__thesis",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0004__master__2026_07_06T00_35_00_000_02_00__thesis",
+        "front_replay_2026_07_06_asia_open_mrhpsfmv__thesis__thesis_front_replay_2026_07_06_asia_open_mrhpsfmv_mes_failed_breakdown_long_0003"
+      ],
+      "max_doc_size_bytes": 6749,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 107,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_autopilot_configs": {
+      "path": "desk_replay_autopilot_configs",
+      "id": "desk_replay_autopilot_configs",
+      "document_count": 26,
+      "sample_ids": [
+        "replay_autopilot__2026_06_01__asia_open",
+        "replay_autopilot__2026_06_01__asia_open__15m_v2",
+        "replay_autopilot__2026_06_02__asia_open"
+      ],
+      "max_doc_size_bytes": 1859,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 26,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_bundles": {
+      "path": "desk_replay_bundles",
+      "id": "desk_replay_bundles",
+      "document_count": 459,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0001__master__2026_07_06T00_05_00_02_00_master",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0002__monitor__2026_07_06T00_20_00_000_02_00_monitor",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0003__monitor__2026_07_06T00_35_00_000_02_00_monitor"
+      ],
+      "max_doc_size_bytes": 962479,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 459,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_context_transmissions": {
+      "path": "desk_replay_context_transmissions",
+      "id": "desk_replay_context_transmissions",
+      "document_count": 433,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0001__master__2026_07_06T00_05_00_02_00_front_replay_2026_07_06_asia_open_mrgtzzu2__step__0001__master__2026_07_06T00_05_00_02_00",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0002__monitor__2026_07_06T00_20_00_000_02_00_front_replay_2026_07_06_asia_open_mrgtzzu2__step__0002__monitor__2026_07_06T00_20_00_000_02_00",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0003__monitor__2026_07_06T00_35_00_000_02_00_front_replay_2026_07_06_asia_open_mrgtzzu2__step__0003__monitor__2026_07_06T00_35_00_000_02_00"
+      ],
+      "max_doc_size_bytes": 5086,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 433,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_idempotency": {
+      "path": "desk_replay_idempotency",
+      "id": "desk_replay_idempotency",
+      "document_count": 1896,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__08ae6d2f33447574fb93ba1c78c2d89c",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__2cfbeaa57ea97d8ba4d14326ea0d1083",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__53f18e14a75b183384d6a70358d54aec"
+      ],
+      "max_doc_size_bytes": 963530,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1896,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_master_analyses": {
+      "path": "desk_replay_master_analyses",
+      "id": "desk_replay_master_analyses",
+      "document_count": 109,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0001__master__2026_07_06T00_05_00_02_00",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0004__master__2026_07_06T00_35_00_000_02_00",
+        "front_replay_2026_07_06_asia_open_mrhpsfmv__step__0001__master__2026_07_06T00_05_00_02_00"
+      ],
+      "max_doc_size_bytes": 41707,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 109,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_monitors": {
+      "path": "desk_replay_monitors",
+      "id": "desk_replay_monitors",
+      "document_count": 325,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0002__monitor__2026_07_06T00_20_00_000_02_00",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0003__monitor__2026_07_06T00_35_00_000_02_00",
+        "front_replay_2026_07_06_asia_open_mrhpsfmv__step__0002__monitor__2026_07_06T00_20_00_000_02_00"
+      ],
+      "max_doc_size_bytes": 20547,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 325,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_positions": {
+      "path": "desk_replay_positions",
+      "id": "desk_replay_positions",
+      "document_count": 8,
+      "sample_ids": [
+        "replay_2026_06_01_asia_open_15m_autopilot_v2__step__0003__monitor__2026_06_01T00_30_00_000_02_00_replay_2026_06_01_asia_open_15m_autopilot_v2__step__0002__monitor__2026_06_01T00_15_00_000_02_00_setup_1",
+        "replay_2026_06_01_asia_open_15m_autopilot_v2__step__0022__monitor__2026_06_01T05_00_00_000_02_00_replay_2026_06_01_asia_open_15m_autopilot_v2__step__0021__monitor__2026_06_01T04_45_00_000_02_00_setup_1",
+        "replay_2026_06_01_asia_open_15m_autopilot_v2__step__0029__monitor__2026_06_01T06_45_00_000_02_00_replay_2026_06_01_asia_open_15m_autopilot_v2__step__0028__monitor__2026_06_01T06_30_00_000_02_00_setup_1"
+      ],
+      "max_doc_size_bytes": 2525,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 8,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_runs": {
+      "path": "desk_replay_runs",
+      "id": "desk_replay_runs",
+      "document_count": 36,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrgtzzu2",
+        "front_replay_2026_07_06_asia_open_mrhpsfmv",
+        "front_replay_2026_07_09_asia_open_mrd276p2"
+      ],
+      "max_doc_size_bytes": 5393,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 36,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_setups": {
+      "path": "desk_replay_setups",
+      "id": "desk_replay_setups",
+      "document_count": 90,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrhpsfmv__setup__setup_front_replay_2026_07_06_asia_open_mrhpsfmv_mes_failed_breakdown_long_0003",
+        "front_replay_2026_07_06_asia_open_mrhpsfmv__setup__setup_front_replay_2026_07_06_asia_open_mrhpsfmv_mes_failed_breakout_short_0004",
+        "front_replay_2026_07_06_asia_open_mrhpsfmv__setup__setup_front_replay_2026_07_06_asia_open_mrhpsfmv_mes_post_expiry_breakdown_short_0005"
+      ],
+      "max_doc_size_bytes": 5987,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 90,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_steps": {
+      "path": "desk_replay_steps",
+      "id": "desk_replay_steps",
+      "document_count": 463,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0001__master__2026_07_06T00_05_00_02_00",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0002__monitor__2026_07_06T00_20_00_000_02_00",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__step__0003__monitor__2026_07_06T00_35_00_000_02_00"
+      ],
+      "max_doc_size_bytes": 3047,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 463,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_timeline": {
+      "path": "desk_replay_timeline",
+      "id": "desk_replay_timeline",
+      "document_count": 1905,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__event__0000_REPLAY_CANCELLED_2026-07-12T11_29_27_206Z",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__event__0001_GPT_MASTER_SAVED_2026-07-11T21_07_43_515Z",
+        "front_replay_2026_07_06_asia_open_mrgtzzu2__event__0001_MASTER_BUNDLE_READY_2026-07-11T20_55_00_047Z"
+      ],
+      "max_doc_size_bytes": 1995,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1905,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_replay_trade_simulations": {
+      "path": "desk_replay_trade_simulations",
+      "id": "desk_replay_trade_simulations",
+      "document_count": 303,
+      "sample_ids": [
+        "front_replay_2026_07_06_asia_open_mrhpsfmv__simulation__10_2026_07_06T02_05_00_000_02_00",
+        "replay_2026_06_01_asia_open_15m_autopilot_v2__simulation__10_2026_06_01T02_15_00_000_02_00",
+        "replay_2026_06_01_asia_open_15m_autopilot_v2__simulation__11_2026_06_01T02_30_00_000_02_00"
+      ],
+      "max_doc_size_bytes": 25697,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 303,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_reports": {
+      "path": "desk_reports",
+      "id": "desk_reports",
+      "document_count": 5,
+      "sample_ids": [
+        "2026-07-02_asia_open_master_report_v4_0_0_20260704_1354",
+        "2026-07-02_asia_open_report_v1",
+        "2026-07-08_asia_open_master_report_v4_0_0_cutoff0005"
+      ],
+      "max_doc_size_bytes": 7316,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 5,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_risk_gate_verdicts": {
+      "path": "desk_risk_gate_verdicts",
+      "id": "desk_risk_gate_verdicts",
+      "document_count": 93,
+      "sample_ids": [
+        "DESK_20260611T095049474529_67e8088f__8",
+        "DESK_20260611T095120153936_295df0b6__8",
+        "DESK_20260611T095549372334_d70a8e8b__8"
+      ],
+      "max_doc_size_bytes": 5438,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 93,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_rolling_snapshots": {
+      "path": "desk_rolling_snapshots",
+      "id": "desk_rolling_snapshots",
+      "document_count": 318,
+      "sample_ids": [
+        "rolling_snapshot_2026_07_10_asia_open_15m_2026_07_10T00_00_00_000_02_00",
+        "rolling_snapshot_2026_07_10_asia_open_15m_2026_07_10T00_15_00_000_02_00",
+        "rolling_snapshot_2026_07_10_asia_open_15m_2026_07_10T00_30_00_000_02_00"
+      ],
+      "max_doc_size_bytes": 20312,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 318,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_runtime_control": {
+      "path": "desk_runtime_control",
+      "id": "desk_runtime_control",
+      "document_count": 1,
+      "sample_ids": [
+        "global"
+      ],
+      "max_doc_size_bytes": 386,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_session_snapshots": {
+      "path": "desk_session_snapshots",
+      "id": "desk_session_snapshots",
+      "document_count": 80,
+      "sample_ids": [
+        "2026-06-26_asia_open_MES_snapshot",
+        "2026-06-26_asia_open_MNQ_snapshot",
+        "2026-06-26_ny_open_MES_snapshot"
+      ],
+      "max_doc_size_bytes": 1278,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 80,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_setup_replays": {
+      "path": "desk_setup_replays",
+      "id": "desk_setup_replays",
+      "document_count": 34,
+      "sample_ids": [
+        "2026-07-03_asia_open_analysis_v1_1_WAIT_2026_07_03_A_20260704095317",
+        "2026-07-03_asia_open_analysis_v1_1_WAIT_2026_07_03_A_20260704095916",
+        "master_2026_07_13_ny_open_front_live_2026_07_13_ny_open_setup_1_conservative_20260713135454"
+      ],
+      "max_doc_size_bytes": 2371,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 34,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_setups": {
+      "path": "desk_setups",
+      "id": "desk_setups",
+      "document_count": 16,
+      "sample_ids": [
+        "2026-07-02_ny_open_1530_master_v4_0_0_2026-07-02_MES_long_conditional",
+        "2026-07-02_ny_open_1530_master_v4_0_0_2026-07-02_MNQ_short_conditional",
+        "2026-07-02_ny_open_1530_master_v4_0_0_2026-07-02_ny_open_WAIT_primary"
+      ],
+      "max_doc_size_bytes": 15154,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 16,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_shared_memory": {
+      "path": "desk_shared_memory",
+      "id": "desk_shared_memory",
+      "document_count": 2,
+      "sample_ids": [
+        "DESK_1970-01-01_c60be2c119",
+        "DESK_2026-06-11_258f57a10e"
+      ],
+      "max_doc_size_bytes": 64004,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 2,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_strategy_daily_performance": {
+      "path": "desk_strategy_daily_performance",
+      "id": "desk_strategy_daily_performance",
+      "document_count": 4,
+      "sample_ids": [
+        "strategy_day_ny_open_1530_2026_07_08",
+        "strategy_day_ny_open_1530_2026_07_09",
+        "strategy_day_ny_open_1530_middle"
+      ],
+      "max_doc_size_bytes": 508,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 4,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_strategy_equity_curve": {
+      "path": "desk_strategy_equity_curve",
+      "id": "desk_strategy_equity_curve",
+      "document_count": 7,
+      "sample_ids": [
+        "strategy_equity_ny_open_1530_0001_strategy_trade_ny_open_1530_master_2026_07_08_cutoff_1530_MNQ_SHORT_FAILED_RECLA",
+        "strategy_equity_ny_open_1530_0001_strategy_trade_ny_open_1530_master_2026_07_09_cutoff_1530_MNQ_LONG_RETEST_NYOPEN",
+        "strategy_equity_ny_open_1530_0002_strategy_trade_ny_open_1530_master_2026_07_09_cutoff_1530_MNQ_LONG_RETEST_NYOPEN"
+      ],
+      "max_doc_size_bytes": 641,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 7,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_strategy_stats": {
+      "path": "desk_strategy_stats",
+      "id": "desk_strategy_stats",
+      "document_count": 1,
+      "sample_ids": [
+        "ny_open_1530"
+      ],
+      "max_doc_size_bytes": 662,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_strategy_trades": {
+      "path": "desk_strategy_trades",
+      "id": "desk_strategy_trades",
+      "document_count": 12,
+      "sample_ids": [
+        "strategy_trade_master_2026_07_13_ny_open_front_live_2026_07_13_ny_open_setup_1_nyopen_strict_v1",
+        "strategy_trade_master_2026_07_13_ny_open_front_live_2026_07_13_ny_open_setup_1_nyopen_strict_v1_middle",
+        "strategy_trade_master_2026_07_13_ny_open_front_live_2026_07_13_ny_open_setup_1_nyopen_strict_v1_optimistic"
+      ],
+      "max_doc_size_bytes": 4109,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 12,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_technical_events": {
+      "path": "desk_technical_events",
+      "id": "desk_technical_events",
+      "document_count": 7746,
+      "sample_ids": [
+        "2026-06-26_MES_breakdown_level_008_support_7406.5192_2026_06_25T15_50_00_000_02_00",
+        "2026-06-26_MES_breakdown_level_011_support_7420.3333_2026_06_24T19_25_00_000_02_00",
+        "2026-06-26_MES_breakdown_level_011_support_7420.3333_2026_06_24T19_40_00_000_02_00"
+      ],
+      "max_doc_size_bytes": 869,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    },
+    "desk_telegram_deliveries": {
+      "path": "desk_telegram_deliveries",
+      "id": "desk_telegram_deliveries",
+      "document_count": 338,
+      "sample_ids": [
+        "BRIEF__MORNING_BRIEF__DESK_20260612T090108081108_4be2e14c",
+        "BRIEF__PRE_US_BRIEF__DESK_20260611T151535924752_016f4f8a",
+        "BRIEF__PRE_US_BRIEF__DESK_20260612T151542193803_d77796aa"
+      ],
+      "max_doc_size_bytes": 55315,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 338,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "desk_tool_logs": {
+      "path": "desk_tool_logs",
+      "id": "desk_tool_logs",
+      "document_count": 11207,
+      "sample_ids": [
+        "1782579698111_84a12d7a24",
+        "1782589029466_742caa4b34",
+        "1782662578522_9a92f61400"
+      ],
+      "max_doc_size_bytes": 155,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    },
+    "desk_trade_outcomes": {
+      "path": "desk_trade_outcomes",
+      "id": "desk_trade_outcomes",
+      "document_count": 22,
+      "sample_ids": [
+        "DESK_20260611T095049474529_67e8088f",
+        "DESK_20260611T095549372334_d70a8e8b",
+        "DESK_20260611T100058769056_56b1dce2"
+      ],
+      "max_doc_size_bytes": 1638,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 22,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "live_data_feed_status": {
+      "path": "live_data_feed_status",
+      "id": "live_data_feed_status",
+      "document_count": 121673,
+      "sample_ids": [
+        "2026-06-10T11:00:01.256000+00:00__MES1!__1H__tradingview_webhook_backfill",
+        "2026-06-10T11:00:02.531000+00:00__MES1!__30__tradingview_webhook_backfill",
+        "2026-06-10T11:30:00.947000+00:00__MES1!__30__tradingview_webhook_backfill"
+      ],
+      "max_doc_size_bytes": 455,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    },
+    "live_study_values": {
+      "path": "live_study_values",
+      "id": "live_study_values",
+      "document_count": 777131,
+      "sample_ids": [
+        "AAPL__4H__2026-07-02T13:30:00+00:00__TradingView_Webhook__atr_10",
+        "AAPL__4H__2026-07-02T13:30:00+00:00__TradingView_Webhook__rsi_14",
+        "AAPL__4H__2026-07-02T17:30:00+00:00__TradingView_Webhook__atr_10"
+      ],
+      "max_doc_size_bytes": 305,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    },
+    "macro_calendar_events": {
+      "path": "macro_calendar_events",
+      "id": "macro_calendar_events",
+      "document_count": 1069,
+      "sample_ids": [
+        "2026-06-01__01:00__S_P_Global_Manufacturing_PMI_Final",
+        "2026-06-01__01:40__Cotality_Dwelling_Prices_MoM",
+        "2026-06-01__01:50__Capital_Spending_YoY"
+      ],
+      "max_doc_size_bytes": 1374,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1069,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "macro_news_state": {
+      "path": "macro_news_state",
+      "id": "macro_news_state",
+      "document_count": 1,
+      "sample_ids": [
+        "current"
+      ],
+      "max_doc_size_bytes": 17631,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "market_candles": {
+      "path": "market_candles",
+      "id": "market_candles",
+      "document_count": 30635,
+      "sample_ids": [
+        "MCL1!__1H__2026-06-16T12:00:00+00:00",
+        "MCL1!__1H__2026-06-16T13:00:00+00:00",
+        "MCL1!__1H__2026-06-16T14:00:00+00:00"
+      ],
+      "max_doc_size_bytes": 836,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    },
+    "market_feeds": {
+      "path": "market_feeds",
+      "id": "market_feeds",
+      "document_count": 50,
+      "sample_ids": [
+        "prod__tradingview__AAPL__4H",
+        "prod__tradingview__AAPL__5",
+        "prod__tradingview__CL1!__4H"
+      ],
+      "max_doc_size_bytes": 527,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 50,
+        "reason": "full_scan"
+      },
+      "nested_collections": {
+        "market_feeds/prod__tradingview__AAPL__4H/candles": {
+          "path": "market_feeds/prod__tradingview__AAPL__4H/candles",
+          "id": "candles",
+          "document_count": 1268,
+          "sample_ids": [
+            "20240102T143000Z",
+            "20240102T183000Z",
+            "20240103T143000Z"
+          ],
+          "max_doc_size_bytes": 955,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__AAPL__5/candles": {
+          "path": "market_feeds/prod__tradingview__AAPL__5/candles",
+          "id": "candles",
+          "document_count": 34296,
+          "sample_ids": [
+            "20240105T153000Z",
+            "20240105T153500Z",
+            "20240105T154000Z"
+          ],
+          "max_doc_size_bytes": 941,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__CL1!__4H/candles": {
+          "path": "market_feeds/prod__tradingview__CL1!__4H/candles",
+          "id": "candles",
+          "document_count": 3093,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240102T030000Z",
+            "20240102T070000Z"
+          ],
+          "max_doc_size_bytes": 947,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__CL1!__5/candles": {
+          "path": "market_feeds/prod__tradingview__CL1!__5/candles",
+          "id": "candles",
+          "document_count": 46685,
+          "sample_ids": [
+            "20240109T210000Z",
+            "20240109T210500Z",
+            "20240109T211000Z"
+          ],
+          "max_doc_size_bytes": 933,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__DAX__4H/candles": {
+          "path": "market_feeds/prod__tradingview__DAX__4H/candles",
+          "id": "candles",
+          "document_count": 1933,
+          "sample_ids": [
+            "20240102T080000Z",
+            "20240102T120000Z",
+            "20240102T160000Z"
+          ],
+          "max_doc_size_bytes": 963,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__DAX__5/candles": {
+          "path": "market_feeds/prod__tradingview__DAX__5/candles",
+          "id": "candles",
+          "document_count": 40396,
+          "sample_ids": [
+            "20240108T083000Z",
+            "20240108T083500Z",
+            "20240108T084000Z"
+          ],
+          "max_doc_size_bytes": 949,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__DXY__4H/candles": {
+          "path": "market_feeds/prod__tradingview__DXY__4H/candles",
+          "id": "candles",
+          "document_count": 3163,
+          "sample_ids": [
+            "20240102T000000Z",
+            "20240102T040000Z",
+            "20240102T080000Z"
+          ],
+          "max_doc_size_bytes": 943,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__DXY__5/candles": {
+          "path": "market_feeds/prod__tradingview__DXY__5/candles",
+          "id": "candles",
+          "document_count": 46685,
+          "sample_ids": [
+            "20240109T203000Z",
+            "20240109T203500Z",
+            "20240109T204000Z"
+          ],
+          "max_doc_size_bytes": 932,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__ES1!__15/candles": {
+          "path": "market_feeds/prod__tradingview__ES1!__15/candles",
+          "id": "candles",
+          "document_count": 21972,
+          "sample_ids": [
+            "20240105T170000Z",
+            "20240105T171500Z",
+            "20240105T173000Z"
+          ],
+          "max_doc_size_bytes": 951,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__ES1!__1H/candles": {
+          "path": "market_feeds/prod__tradingview__ES1!__1H/candles",
+          "id": "candles",
+          "document_count": 7143,
+          "sample_ids": [
+            "20240111T180000Z",
+            "20240111T190000Z",
+            "20240111T200000Z"
+          ],
+          "max_doc_size_bytes": 959,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__ES1!__4H/candles": {
+          "path": "market_feeds/prod__tradingview__ES1!__4H/candles",
+          "id": "candles",
+          "document_count": 3088,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240102T030000Z",
+            "20240102T070000Z"
+          ],
+          "max_doc_size_bytes": 960,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__ES1!__5/candles": {
+          "path": "market_feeds/prod__tradingview__ES1!__5/candles",
+          "id": "candles",
+          "document_count": 5844,
+          "sample_ids": [
+            "20260531T220000Z",
+            "20260531T220500Z",
+            "20260531T221000Z"
+          ],
+          "max_doc_size_bytes": 948,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__GC1!__4H/candles": {
+          "path": "market_feeds/prod__tradingview__GC1!__4H/candles",
+          "id": "candles",
+          "document_count": 3093,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240102T030000Z",
+            "20240102T070000Z"
+          ],
+          "max_doc_size_bytes": 951,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__GC1!__5/candles": {
+          "path": "market_feeds/prod__tradingview__GC1!__5/candles",
+          "id": "candles",
+          "document_count": 43613,
+          "sample_ids": [
+            "20240109T210000Z",
+            "20240109T210500Z",
+            "20240109T211000Z"
+          ],
+          "max_doc_size_bytes": 937,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__HSI__4H/candles": {
+          "path": "market_feeds/prod__tradingview__HSI__4H/candles",
+          "id": "candles",
+          "document_count": 1239,
+          "sample_ids": [
+            "20240102T012000Z",
+            "20240102T052000Z",
+            "20240103T012000Z"
+          ],
+          "max_doc_size_bytes": 954,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__HSI__5/candles": {
+          "path": "market_feeds/prod__tradingview__HSI__5/candles",
+          "id": "candles",
+          "document_count": 32490,
+          "sample_ids": [
+            "20240104T063000Z",
+            "20240104T063500Z",
+            "20240104T064000Z"
+          ],
+          "max_doc_size_bytes": 942,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MES1!__1/candles": {
+          "path": "market_feeds/prod__tradingview__MES1!__1/candles",
+          "id": "candles",
+          "document_count": 16256,
+          "sample_ids": [
+            "20260630T220000Z",
+            "20260630T220100Z",
+            "20260630T220200Z"
+          ],
+          "max_doc_size_bytes": 952,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MES1!__15/candles": {
+          "path": "market_feeds/prod__tradingview__MES1!__15/candles",
+          "id": "candles",
+          "document_count": 2268,
+          "sample_ids": [
+            "20260531T220000Z",
+            "20260531T221500Z",
+            "20260531T223000Z"
+          ],
+          "max_doc_size_bytes": 857,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MES1!__1H/candles": {
+          "path": "market_feeds/prod__tradingview__MES1!__1H/candles",
+          "id": "candles",
+          "document_count": 567,
+          "sample_ids": [
+            "20260531T220000Z",
+            "20260531T230000Z",
+            "20260601T000000Z"
+          ],
+          "max_doc_size_bytes": 865,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MES1!__4H/candles": {
+          "path": "market_feeds/prod__tradingview__MES1!__4H/candles",
+          "id": "candles",
+          "document_count": 3917,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240102T030000Z",
+            "20240102T070000Z"
+          ],
+          "max_doc_size_bytes": 965,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MES1!__5/candles": {
+          "path": "market_feeds/prod__tradingview__MES1!__5/candles",
+          "id": "candles",
+          "document_count": 180107,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240101T230500Z",
+            "20240101T231000Z"
+          ],
+          "max_doc_size_bytes": 963,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MNQ1!__1/candles": {
+          "path": "market_feeds/prod__tradingview__MNQ1!__1/candles",
+          "id": "candles",
+          "document_count": 16258,
+          "sample_ids": [
+            "20260630T220000Z",
+            "20260630T220100Z",
+            "20260630T220200Z"
+          ],
+          "max_doc_size_bytes": 956,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MNQ1!__15/candles": {
+          "path": "market_feeds/prod__tradingview__MNQ1!__15/candles",
+          "id": "candles",
+          "document_count": 2268,
+          "sample_ids": [
+            "20260531T220000Z",
+            "20260531T221500Z",
+            "20260531T223000Z"
+          ],
+          "max_doc_size_bytes": 861,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MNQ1!__1H/candles": {
+          "path": "market_feeds/prod__tradingview__MNQ1!__1H/candles",
+          "id": "candles",
+          "document_count": 567,
+          "sample_ids": [
+            "20260531T220000Z",
+            "20260531T230000Z",
+            "20260601T000000Z"
+          ],
+          "max_doc_size_bytes": 869,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MNQ1!__4H/candles": {
+          "path": "market_feeds/prod__tradingview__MNQ1!__4H/candles",
+          "id": "candles",
+          "document_count": 3917,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240102T030000Z",
+            "20240102T070000Z"
+          ],
+          "max_doc_size_bytes": 969,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MNQ1!__5/candles": {
+          "path": "market_feeds/prod__tradingview__MNQ1!__5/candles",
+          "id": "candles",
+          "document_count": 180107,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240101T230500Z",
+            "20240101T231000Z"
+          ],
+          "max_doc_size_bytes": 956,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MSFT__4H/candles": {
+          "path": "market_feeds/prod__tradingview__MSFT__4H/candles",
+          "id": "candles",
+          "document_count": 1268,
+          "sample_ids": [
+            "20240102T143000Z",
+            "20240102T183000Z",
+            "20240103T143000Z"
+          ],
+          "max_doc_size_bytes": 955,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__MSFT__5/candles": {
+          "path": "market_feeds/prod__tradingview__MSFT__5/candles",
+          "id": "candles",
+          "document_count": 34296,
+          "sample_ids": [
+            "20240105T153000Z",
+            "20240105T153500Z",
+            "20240105T154000Z"
+          ],
+          "max_doc_size_bytes": 941,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__NI225__4H/candles": {
+          "path": "market_feeds/prod__tradingview__NI225__4H/candles",
+          "id": "candles",
+          "document_count": 1060,
+          "sample_ids": [
+            "20240104T000000Z",
+            "20240104T040000Z",
+            "20240105T000000Z"
+          ],
+          "max_doc_size_bytes": 959,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__NI225__5/candles": {
+          "path": "market_feeds/prod__tradingview__NI225__5/candles",
+          "id": "candles",
+          "document_count": 31413,
+          "sample_ids": [
+            "20240104T000000Z",
+            "20240104T000500Z",
+            "20240104T001000Z"
+          ],
+          "max_doc_size_bytes": 947,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__NQ1!__15/candles": {
+          "path": "market_feeds/prod__tradingview__NQ1!__15/candles",
+          "id": "candles",
+          "document_count": 60038,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240101T231500Z",
+            "20240101T233000Z"
+          ],
+          "max_doc_size_bytes": 954,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__NQ1!__1H/candles": {
+          "path": "market_feeds/prod__tradingview__NQ1!__1H/candles",
+          "id": "candles",
+          "document_count": 15016,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240102T000000Z",
+            "20240102T010000Z"
+          ],
+          "max_doc_size_bytes": 961,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__NQ1!__4H/candles": {
+          "path": "market_feeds/prod__tradingview__NQ1!__4H/candles",
+          "id": "candles",
+          "document_count": 3917,
+          "sample_ids": [
+            "20240101T230000Z",
+            "20240102T030000Z",
+            "20240102T070000Z"
+          ],
+          "max_doc_size_bytes": 964,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__NQ1!__5/candles": {
+          "path": "market_feeds/prod__tradingview__NQ1!__5/candles",
+          "id": "candles",
+          "document_count": 5844,
+          "sample_ids": [
+            "20260531T220000Z",
+            "20260531T220500Z",
+            "20260531T221000Z"
+          ],
+          "max_doc_size_bytes": 951,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__NVDA__4H/candles": {
+          "path": "market_feeds/prod__tradingview__NVDA__4H/candles",
+          "id": "candles",
+          "document_count": 1268,
+          "sample_ids": [
+            "20240102T143000Z",
+            "20240102T183000Z",
+            "20240103T143000Z"
+          ],
+          "max_doc_size_bytes": 956,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__NVDA__5/candles": {
+          "path": "market_feeds/prod__tradingview__NVDA__5/candles",
+          "id": "candles",
+          "document_count": 34296,
+          "sample_ids": [
+            "20240105T153000Z",
+            "20240105T153500Z",
+            "20240105T154000Z"
+          ],
+          "max_doc_size_bytes": 943,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__SMH__4H/candles": {
+          "path": "market_feeds/prod__tradingview__SMH__4H/candles",
+          "id": "candles",
+          "document_count": 1268,
+          "sample_ids": [
+            "20240102T143000Z",
+            "20240102T183000Z",
+            "20240103T143000Z"
+          ],
+          "max_doc_size_bytes": 950,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__SMH__5/candles": {
+          "path": "market_feeds/prod__tradingview__SMH__5/candles",
+          "id": "candles",
+          "document_count": 36108,
+          "sample_ids": [
+            "20240105T153000Z",
+            "20240105T153500Z",
+            "20240105T154000Z"
+          ],
+          "max_doc_size_bytes": 936,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__SOXX__4H/candles": {
+          "path": "market_feeds/prod__tradingview__SOXX__4H/candles",
+          "id": "candles",
+          "document_count": 1268,
+          "sample_ids": [
+            "20240102T143000Z",
+            "20240102T183000Z",
+            "20240103T143000Z"
+          ],
+          "max_doc_size_bytes": 985,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__SOXX__5/candles": {
+          "path": "market_feeds/prod__tradingview__SOXX__5/candles",
+          "id": "candles",
+          "document_count": 34296,
+          "sample_ids": [
+            "20240105T153000Z",
+            "20240105T153500Z",
+            "20240105T154000Z"
+          ],
+          "max_doc_size_bytes": 971,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__SX5E__4H/candles": {
+          "path": "market_feeds/prod__tradingview__SX5E__4H/candles",
+          "id": "candles",
+          "document_count": 1947,
+          "sample_ids": [
+            "20240102T080000Z",
+            "20240102T120000Z",
+            "20240102T160000Z"
+          ],
+          "max_doc_size_bytes": 955,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__SX5E__5/candles": {
+          "path": "market_feeds/prod__tradingview__SX5E__5/candles",
+          "id": "candles",
+          "document_count": 40535,
+          "sample_ids": [
+            "20240108T094500Z",
+            "20240108T095000Z",
+            "20240108T095500Z"
+          ],
+          "max_doc_size_bytes": 943,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__TSLA__4H/candles": {
+          "path": "market_feeds/prod__tradingview__TSLA__4H/candles",
+          "id": "candles",
+          "document_count": 1268,
+          "sample_ids": [
+            "20240102T143000Z",
+            "20240102T183000Z",
+            "20240103T143000Z"
+          ],
+          "max_doc_size_bytes": 955,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__TSLA__5/candles": {
+          "path": "market_feeds/prod__tradingview__TSLA__5/candles",
+          "id": "candles",
+          "document_count": 34296,
+          "sample_ids": [
+            "20240105T153000Z",
+            "20240105T153500Z",
+            "20240105T154000Z"
+          ],
+          "max_doc_size_bytes": 942,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__US02Y__4H/candles": {
+          "path": "market_feeds/prod__tradingview__US02Y__4H/candles",
+          "id": "candles",
+          "document_count": 3017,
+          "sample_ids": [
+            "20240102T000000Z",
+            "20240102T040000Z",
+            "20240102T080000Z"
+          ],
+          "max_doc_size_bytes": 946,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__US02Y__5/candles": {
+          "path": "market_feeds/prod__tradingview__US02Y__5/candles",
+          "id": "candles",
+          "document_count": 45306,
+          "sample_ids": [
+            "20240109T180000Z",
+            "20240109T180500Z",
+            "20240109T181000Z"
+          ],
+          "max_doc_size_bytes": 934,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__US10Y__4H/candles": {
+          "path": "market_feeds/prod__tradingview__US10Y__4H/candles",
+          "id": "candles",
+          "document_count": 3020,
+          "sample_ids": [
+            "20240102T000000Z",
+            "20240102T040000Z",
+            "20240102T080000Z"
+          ],
+          "max_doc_size_bytes": 946,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__US10Y__5/candles": {
+          "path": "market_feeds/prod__tradingview__US10Y__5/candles",
+          "id": "candles",
+          "document_count": 45710,
+          "sample_ids": [
+            "20240109T172500Z",
+            "20240109T173000Z",
+            "20240109T173500Z"
+          ],
+          "max_doc_size_bytes": 934,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__VIX__4H/candles": {
+          "path": "market_feeds/prod__tradingview__VIX__4H/candles",
+          "id": "candles",
+          "document_count": 2427,
+          "sample_ids": [
+            "20240102T081500Z",
+            "20240102T121500Z",
+            "20240102T143000Z"
+          ],
+          "max_doc_size_bytes": 942,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        },
+        "market_feeds/prod__tradingview__VIX__5/candles": {
+          "path": "market_feeds/prod__tradingview__VIX__5/candles",
+          "id": "candles",
+          "document_count": 41486,
+          "sample_ids": [
+            "20240109T083500Z",
+            "20240109T084000Z",
+            "20240109T084500Z"
+          ],
+          "max_doc_size_bytes": 930,
+          "large_doc_scan": {
+            "exhaustive": false,
+            "scanned_docs": 3,
+            "reason": "sampled_bounded_market_collection"
+          },
+          "nested_collections": {}
+        }
+      }
+    },
+    "ninjatrader_bridge_mirrors": {
+      "path": "ninjatrader_bridge_mirrors",
+      "id": "ninjatrader_bridge_mirrors",
+      "document_count": 1,
+      "sample_ids": [
+        "local_default"
+      ],
+      "max_doc_size_bytes": 2922,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 1,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "replay_job_events": {
+      "path": "replay_job_events",
+      "id": "replay_job_events",
+      "document_count": 3,
+      "sample_ids": [
+        "RPLAY_20260614_113904381Z_83839c97__20260614_113904381Z__QUEUED",
+        "RPLAY_20260707_214100117Z_369b81ca__20260707_214100117Z__QUEUED",
+        "RPLAY_20260707_225507525Z_b4b0c545__20260707_225507525Z__QUEUED"
+      ],
+      "max_doc_size_bytes": 386,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 3,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "replay_jobs": {
+      "path": "replay_jobs",
+      "id": "replay_jobs",
+      "document_count": 3,
+      "sample_ids": [
+        "RPLAY_20260614_113904381Z_83839c97",
+        "RPLAY_20260707_214100117Z_369b81ca",
+        "RPLAY_20260707_225507525Z_b4b0c545"
+      ],
+      "max_doc_size_bytes": 620,
+      "large_doc_scan": {
+        "exhaustive": true,
+        "scanned_docs": 3,
+        "reason": "full_scan"
+      },
+      "nested_collections": {}
+    },
+    "study_candles": {
+      "path": "study_candles",
+      "id": "study_candles",
+      "document_count": 777131,
+      "sample_ids": [
+        "AAPL__240__2026-07-02T13:30:00+00:00__ATR(10)",
+        "AAPL__240__2026-07-02T13:30:00+00:00__RSI(14)",
+        "AAPL__240__2026-07-02T17:30:00+00:00__ATR(10)"
+      ],
+      "max_doc_size_bytes": 179,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    },
+    "tradingview_alert_queue": {
+      "path": "tradingview_alert_queue",
+      "id": "tradingview_alert_queue",
+      "document_count": 96771,
+      "sample_ids": [
+        "alert_0000bad2b694b5e8935533cd0b195bd0c2cdd82275bfa04e410bcbe94464a8f0",
+        "alert_000150f5e7496a7ecb0da2cc72bd596dbacdbfd7876ec101f30d0ac8026cad3a",
+        "alert_00017acba45301eca3a659055d11204172a066b1a3966f7f3f925cfdb72d5932"
+      ],
+      "max_doc_size_bytes": 2462,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    },
+    "tradingview_webhook_events": {
+      "path": "tradingview_webhook_events",
+      "id": "tradingview_webhook_events",
+      "document_count": 121673,
+      "sample_ids": [
+        "2026-06-10T11:00:01.256Z__MES1!_60_1781085600000",
+        "2026-06-10T11:00:02.531Z__MES1!_30_1781087400000",
+        "2026-06-10T11:30:00.947Z__MES1!_30_1781089200000"
+      ],
+      "max_doc_size_bytes": 3813,
+      "large_doc_scan": {
+        "exhaustive": false,
+        "scanned_docs": 3,
+        "reason": "sampled_bounded_market_collection"
+      },
+      "nested_collections": {}
+    }
+  },
+  "collection_count": 84,
+  "large_documents": [],
+  "large_document_count": 0,
+  "market_candles_residual": {
+    "collection": "market_candles",
+    "present": true,
+    "document_count": 30635,
+    "indexed_in_firestore_indexes": true
+  },
+  "latest_market_candles": {
+    "1": {
+      "is_closed": true,
+      "cmf": null,
+      "volume": 381.0,
+      "volume_profile_poc": null,
+      "previous_session_poc": null,
+      "provider": "tradingview",
+      "timestamp_utc": "2026-07-17T20:59:00+00:00",
+      "timestamp_local": "2026-07-17T20:59:00+00:00",
+      "current_session_poc": null,
+      "rsi_14": 49.7065159405,
+      "trading_date": "2026-07-17",
+      "di_minus": null,
+      "timeframe": "1",
+      "trading_date_paris": "2026-07-17",
+      "timestamp_paris": "2026-07-17T22:59:00+02:00",
+      "obv": null,
+      "high": 7497.0,
+      "cci_based_ma": null,
+      "ema_50": null,
+      "stoch_d": null,
+      "cci": null,
+      "ema_100": null,
+      "volume_profile_val": null,
+      "feed_id": "prod__tradingview__MES1!__1",
+      "created_at_utc": "2026-07-17T21:01:06.657Z",
+      "source_row": 0,
+      "lower_band_1": null,
+      "ema_200": null,
+      "source_file": "tradingview_webhook",
+      "adx": null,
+      "timeframe_group": "intraday",
+      "close": 7495.0,
+      "previous_session_vah": null,
+      "atr_10": 1.4791777841,
+      "upper_band_1": null,
+      "open": 7496.0,
+      "updated_at_utc": "2026-07-17T21:01:06.657Z",
+      "environment": "prod",
+      "vwap": null,
+      "symbol": "MES1!",
+      "ema_20": null,
+      "timestamp_ny": "2026-07-17T16:59:00-04:00",
+      "low": 7494.75,
+      "current_session_val": null,
+      "alert_id": "MES1!_1_1784321940000",
+      "previous_session_val": null,
+      "di_plus": null,
+      "created_at": "2026-07-17T21:01:06.657Z",
+      "roc": null,
+      "source": "tradingview_webhook",
+      "schema_version": "market-candle-v2",
+      "stoch_k": null,
+      "source_service": "firebase_tradingview_webhook",
+      "current_session_vah": null,
+      "volume_profile_vah": null
+    },
+    "5": {
+      "is_closed": true,
+      "cmf": null,
+      "volume": 1180.0,
+      "volume_profile_poc": null,
+      "previous_session_poc": null,
+      "provider": "tradingview",
+      "timestamp_utc": "2026-07-17T20:55:00+00:00",
+      "timestamp_local": "2026-07-17T20:55:00+00:00",
+      "current_session_poc": null,
+      "rsi_14": 46.0406833589,
+      "trading_date": "2026-07-17",
+      "di_minus": null,
+      "timeframe": "5",
+      "trading_date_paris": "2026-07-17",
+      "timestamp_paris": "2026-07-17T22:55:00+02:00",
+      "obv": null,
+      "high": 7498.0,
+      "cci_based_ma": null,
+      "ema_50": null,
+      "stoch_d": null,
+      "cci": null,
+      "ema_100": null,
+      "volume_profile_val": null,
+      "feed_id": "prod__tradingview__MES1!__5",
+      "created_at_utc": "2026-07-17T21:01:06.023Z",
+      "source_row": 0,
+      "lower_band_1": null,
+      "ema_200": null,
+      "source_file": "tradingview_webhook",
+      "adx": null,
+      "timeframe_group": "intraday",
+      "close": 7495.0,
+      "previous_session_vah": null,
+      "atr_10": 5.5361972318,
+      "upper_band_1": null,
+      "open": 7496.75,
+      "updated_at_utc": "2026-07-17T21:01:06.023Z",
+      "environment": "prod",
+      "vwap": null,
+      "symbol": "MES1!",
+      "ema_20": null,
+      "timestamp_ny": "2026-07-17T16:55:00-04:00",
+      "low": 7494.75,
+      "current_session_val": null,
+      "alert_id": "MES1!_5_1784321700000",
+      "previous_session_val": null,
+      "di_plus": null,
+      "created_at": "2026-07-17T21:01:06.023Z",
+      "roc": null,
+      "source": "tradingview_webhook",
+      "schema_version": "market-candle-v2",
+      "stoch_k": null,
+      "source_service": "firebase_tradingview_webhook",
+      "current_session_vah": null,
+      "volume_profile_vah": null
+    },
+    "30": null,
+    "1H": {
+      "source_file": "firestore_m5_aggregation",
+      "atr_14": 12.07198,
+      "is_closed": true,
+      "chart_symbol": "MES1!",
+      "timestamp_utc": "2026-07-03T16:00:00+00:00",
+      "provider": "tradingview",
+      "volume": 10170.0,
+      "timestamp_local": "2026-07-03T18:00:00+02:00",
+      "rsi_14": 56.136691,
+      "timeframe_group": "higher_timeframe",
+      "timeframe": "1H",
+      "source_row": 0,
+      "high": 7559.25,
+      "created_at_utc": "2026-07-03T21:21:08.432585+00:00",
+      "close": 7557.25,
+      "asset": "MES",
+      "open": 7558.75,
+      "updated_at_utc": "2026-07-03T21:21:08.432585+00:00",
+      "environment": "prod",
+      "symbol": "MES1!",
+      "low": 7553.5,
+      "requested_symbol": "MES1!",
+      "feed_id": "prod__tradingview__MES1!__1H",
+      "trading_date": "2026-07-03",
+      "trading_date_paris": "2026-07-03",
+      "created_at": "2026-07-03T23:21:08.432557+02:00",
+      "timestamp_paris": "2026-07-03T18:00:00+02:00",
+      "source": "firestore_m5_aggregation",
+      "schema_version": "market-candle-v2",
+      "source_service": "firestore_incremental_writer",
+      "timestamp_ny": "2026-07-03T12:00:00-04:00"
+    },
+    "4H": {
+      "is_closed": true,
+      "cmf": null,
+      "volume": 244708.0,
+      "volume_profile_poc": null,
+      "previous_session_poc": null,
+      "provider": "tradingview",
+      "timestamp_utc": "2026-07-17T18:00:00+00:00",
+      "timestamp_local": "2026-07-17T18:00:00+00:00",
+      "current_session_poc": null,
+      "rsi_14": 28.0310077883,
+      "trading_date": "2026-07-17",
+      "di_minus": null,
+      "timeframe": "4H",
+      "trading_date_paris": "2026-07-17",
+      "timestamp_paris": "2026-07-17T20:00:00+02:00",
+      "obv": null,
+      "high": 7516.5,
+      "cci_based_ma": null,
+      "ema_50": null,
+      "stoch_d": null,
+      "cci": null,
+      "ema_100": null,
+      "volume_profile_val": null,
+      "feed_id": "prod__tradingview__MES1!__4H",
+      "created_at_utc": "2026-07-17T21:01:09.198Z",
+      "source_row": 0,
+      "lower_band_1": null,
+      "ema_200": null,
+      "source_file": "tradingview_webhook",
+      "adx": null,
+      "timeframe_group": "higher_timeframe",
+      "close": 7495.0,
+      "previous_session_vah": null,
+      "atr_10": 33.3106680514,
+      "upper_band_1": null,
+      "open": 7511.0,
+      "updated_at_utc": "2026-07-17T21:01:09.198Z",
+      "environment": "prod",
+      "vwap": null,
+      "symbol": "MES1!",
+      "ema_20": null,
+      "timestamp_ny": "2026-07-17T14:00:00-04:00",
+      "low": 7484.5,
+      "current_session_val": null,
+      "alert_id": "MES1!_4H_1784311200000",
+      "previous_session_val": null,
+      "di_plus": null,
+      "created_at": "2026-07-17T21:01:09.198Z",
+      "roc": null,
+      "source": "tradingview_webhook",
+      "schema_version": "market-candle-v2",
+      "stoch_k": null,
+      "source_service": "firebase_tradingview_webhook",
+      "current_session_vah": null,
+      "volume_profile_vah": null
+    }
+  },
+  "latest_studies": {
+    "5": {
+      "timestamp_utc": "2026-07-17T20:55:00+00:00",
+      "field_count": 2,
+      "source": "live_study_values"
+    },
+    "30": {
+      "timestamp_utc": "2026-07-02T00:00:00+00:00",
+      "field_count": 23,
+      "source": "live_study_values"
+    },
+    "1H": {
+      "timestamp_utc": "2026-07-01T23:00:00+00:00",
+      "field_count": 23,
+      "source": "live_study_values"
+    },
+    "4H": {
+      "timestamp_utc": "2026-07-17T18:00:00+00:00",
+      "field_count": 2,
+      "source": "live_study_values"
+    }
+  },
+  "feed_status": {
+    "timestamp_ny": null,
+    "latest_bar_timestamp_utc": "2026-07-17T17:30:00+00:00",
+    "timestamp_utc": "2026-07-17T21:01:09.198+00:00",
+    "status": "OK",
+    "bars_inserted": 1,
+    "latest_bar_age_seconds": 12669,
+    "timestamp_paris": null,
+    "created_at": "2026-07-17T21:01:09.198Z",
+    "source": "tradingview_webhook",
+    "error_message": null,
+    "timeframe": "4H",
+    "symbol": "VIX",
+    "duplicates_ignored": 0,
+    "bars_fetched": 1
+  },
+  "warnings": [
+    "residual_market_candles_present",
+    "missing_market_candles:30"
+  ],
+  "errors": [],
+  "legacy_collection_probes": {
+    "market_candles": {
+      "ok": true,
+      "sample_count": 1,
+      "sample_ids": [
+        "MES1!__1__2026-07-02T00:51:00+00:00"
+      ]
+    },
+    "live_study_values": {
+      "ok": true,
+      "sample_count": 1,
+      "sample_ids": [
+        "MNQ1!__1__2026-07-17T20:59:00+00:00__TradingView_Webhook__rsi_14"
+      ]
+    },
+    "study_candles": {
+      "ok": true,
+      "sample_count": 1,
+      "sample_ids": [
+        "MNQ1!__1__2026-07-17T20:59:00+00:00__RSI(14)"
+      ]
+    },
+    "live_data_feed_status": {
+      "ok": true,
+      "sample_count": 1,
+      "sample_ids": [
+        "2026-07-17T21:01:09.198+00:00__VIX__4H__tradingview_webhook"
+      ]
+    },
+    "tradingview_webhook_events": {
+      "ok": true,
+      "sample_count": 1,
+      "sample_ids": [
+        "2026-07-17T21:01:06.657+00:00__MNQ1!_1_1784321940000"
+      ]
+    },
+    "tradingview_alert_queue": {
+      "ok": true,
+      "sample_count": 1,
+      "sample_ids": [
+        "alert_a711130ede5db8d780a6a15c2a7e9f07597f6f2e7cebc9625bda12d39c1065b7"
+      ]
+    }
+  }
+}

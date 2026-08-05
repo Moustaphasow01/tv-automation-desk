@@ -47,6 +47,31 @@ test("computes SHA-256, CRC32C, size, rows and cutoff bounds", () => {
   assert.equal(result.sha256.length, 64);
 });
 
+test("validates timestamp_paris against candle open while bar_close_utc owns cutoff availability", () => {
+  const closeAwareCsv = [
+    "asset,timeframe,timestamp_utc,bar_close_utc,timestamp_paris,open,high,low,close",
+    "MNQ,M1,2026-07-08T22:00:00.000Z,2026-07-08T22:01:00.000Z,2026-07-09T00:00:00.000+02:00,100,102,99,101",
+    "",
+  ].join("\n");
+
+  const result = analyzeDatasetBytes({
+    buffer: closeAwareCsv,
+    dataset: "MNQ_M1",
+    format: "csv",
+    cutoffUtc: "2026-07-08T22:01:00.000Z",
+  });
+  assert.equal(result.max_timestamp_utc, "2026-07-08T22:01:00.000Z");
+  assert.throws(
+    () => analyzeDatasetBytes({
+      buffer: closeAwareCsv,
+      dataset: "MNQ_M1",
+      format: "csv",
+      cutoffUtc: "2026-07-08T22:00:00.000Z",
+    }),
+    (error) => error.code === "LOOKAHEAD_DETECTED",
+  );
+});
+
 test("rejects lookahead and UTC-labelled Paris timestamps", () => {
   const future = csv.replace("2026-07-08T22:00:00.000Z", "2026-07-09T13:30:00.000Z")
     .replace("2026-07-09T00:00:00.000+02:00", "2026-07-09T15:30:00.000+02:00");
@@ -114,4 +139,49 @@ test("macro actuals and news fail closed at cutoff", () => {
     { title: "future", published_at_utc: "2026-07-09T14:00:00Z" },
     { title: "unknown" },
   ], "2026-07-09T13:30:00Z").map((item) => item.title), ["known"]);
+});
+
+test("news integrity distinguishes different articles published with the same timestamp and title", () => {
+  const digest = JSON.stringify({
+    items: [
+      {
+        article_id: "news-a",
+        title: "Shared headline",
+        published_at_utc: "2026-07-09T13:00:00.000Z",
+      },
+      {
+        article_id: "news-b",
+        title: "Shared headline",
+        published_at_utc: "2026-07-09T13:00:00.000Z",
+      },
+    ],
+  });
+
+  const result = analyzeDatasetBytes({
+    buffer: digest,
+    dataset: "news_digest",
+    format: "json",
+    cutoffUtc: "2026-07-09T13:30:00.000Z",
+  });
+
+  assert.equal(result.row_count, 2);
+  assert.throws(
+    () => analyzeDatasetBytes({
+      buffer: JSON.stringify({
+        items: [
+          ...JSON.parse(digest).items,
+          {
+            article_id: "news-a",
+            title: "Shared headline",
+            published_at_utc: "2026-07-09T13:00:00.000Z",
+          },
+        ],
+      }),
+      dataset: "news_digest",
+      format: "json",
+      cutoffUtc: "2026-07-09T13:30:00.000Z",
+    }),
+    (error) => error.code === "DATASET_SCHEMA_MISMATCH"
+      && error.details?.duplicate_count === 1,
+  );
 });

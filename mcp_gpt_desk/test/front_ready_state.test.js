@@ -7,7 +7,10 @@ import { FixedClock } from "@tv-automation/desk-time";
 import { DESK_COLLECTIONS } from "@tv-automation/desk-contracts/collections";
 import { createTestDeskStore } from "./support/test-desk-store.js";
 import { callDeskTool, createDeskToolRegistry, listDeskTools } from "../src/tools.js";
+import { buildFrontMasterState, buildLiveDeskState, liveCheckpointSchedule, liveTaskState } from "../src/desk-state-algorithms.js";
+import { readFeatureContext } from "../src/desk-strategy-audit-algorithms.js";
 import { liveScope, nyLiveScope } from "./fixtures/live_scope.js";
+import { makeActiveLiveMasterSave } from "./support/active-strategy-save-fixtures.js";
 
 const asiaScope = (overrides = {}) => liveScope({
   date: "2026-07-08",
@@ -23,15 +26,44 @@ const nyScope = (overrides = {}) => nyLiveScope({
   ...overrides,
 });
 
-async function seedMaster(store, analysis_id, scope = asiaScope()) {
-  return store.saveMasterAnalysis({
-    ...scope,
-    analysis_id,
-    contract_name: "DeskMasterAnalysisContract",
-    schema_version: "4.0.0",
-    contract_hash: "test-master-hash",
-    full_analysis: {},
-  });
+test("LIVE schedule separates completed, due and following checkpoints and measures ready-to-claim latency", () => {
+  const clock = new FixedClock(Date.parse("2026-07-28T07:20:00.000Z"));
+  const schedule = liveCheckpointSchedule({
+    cursor_id: "livecur__2026-07-28",
+    trading_date: "2026-07-28",
+    cadence_minutes: 15,
+    target_checkpoint: "2026-07-28T09:15:00+02:00",
+    last_completed_checkpoint: "2026-07-28T09:00:00+02:00",
+    window: {
+      open_paris: "2026-07-28T00:30:00+02:00",
+      close_paris: "2026-07-28T22:00:00+02:00",
+    },
+    attempt: {
+      checkpoint: "2026-07-28T09:15:00+02:00",
+      available_at_utc: "2026-07-28T07:15:30.000Z",
+    },
+  }, {
+    checkpoint: "2026-07-28T09:15:00+02:00",
+    at_utc: "2026-07-28T07:17:00.000Z",
+  }, clock.now());
+
+  assert.equal(schedule.last_completed_checkpoint, "2026-07-28T09:00:00+02:00");
+  assert.equal(schedule.due_checkpoint, "2026-07-28T09:15:00+02:00");
+  assert.equal(schedule.next_checkpoint, "2026-07-28T09:30:00.000+02:00");
+  assert.equal(schedule.ready_at_paris, "2026-07-28T09:15:00.000+02:00");
+  assert.equal(schedule.claim_latency_seconds, 120);
+  assert.equal(schedule.claim_latency_status, "on_target");
+  assert.equal(schedule.bundle_claim_latency_seconds, 90);
+  assert.equal(schedule.bundle_claim_latency_status, "on_target");
+});
+
+async function seedMaster(store, analysis_id, scope = asiaScope(), { thesisId = `seed-thesis-${analysis_id}` } = {}) {
+  return store.saveMasterAnalysis(makeActiveLiveMasterSave({
+    scope,
+    analysisId: analysis_id,
+    thesisId,
+    planId: `seed-plan-${analysis_id}`,
+  }));
 }
 
 async function makeStore() {
@@ -39,6 +71,100 @@ async function makeStore() {
   const clock = new FixedClock(Date.parse("2026-07-08T08:00:00.000Z"));
   return { root, ...createTestDeskStore({ root, projectRoot: root, clock }) };
 }
+
+function crossAssetGuardStore(rawWindowCalls = []) {
+  const pack = {
+    pack_id: "2026-07-08_asia_open",
+    pack_build_id: "packbuild__2026-07-08_asia_open_v2",
+    active_build_id: "packbuild__2026-07-08_asia_open_v2",
+    source_manifest_hash: "a".repeat(64),
+    date: "2026-07-08",
+    trading_date: "2026-07-08",
+    strategy_id: "asia_open",
+    session: "asia_open",
+    mode: "live",
+    timezone: "Europe/Paris",
+    status: "ready",
+    data_cutoff: { cutoff_paris: "2026-07-08T08:00:00+02:00" },
+    datasets: {
+      DXY_CL_GC_VIX: { status: "ready", row_count: 12 },
+      US10Y_US02Y: { status: "ready", row_count: 6 },
+    },
+  };
+  const legacyFailure = async () => {
+    throw new Error("legacy_desk_cross_asset_deltas_must_not_be_used_by_front_v4");
+  };
+  return {
+    getLatestAsiaOpenPack: async () => ({ pack_id: pack.pack_id, pack_build_id: pack.pack_build_id }),
+    getDeskPack: async () => pack,
+    getActiveContracts: async () => ({}),
+    getLatestMasterAnalysis: async () => ({ analysis: null }),
+    getActiveThesis: async () => ({ active_thesis: null, theses: [] }),
+    getLatestHourlyMonitor: async () => ({ latest_monitor: null, monitors: [] }),
+    getLatestManualMonitor: async () => ({ latest_monitor: null, monitors: [] }),
+    getActivePosition: async () => ({ position: null }),
+    getLevelMap: async () => ({ ok: true, count: 0, level_map: null }),
+    getTechnicalEvents: async () => ({ ok: true, count: 0, events: [] }),
+    getSessionSnapshot: async () => ({ ok: true, count: 0, session_snapshot: null }),
+    getConditionStatus: async () => ({ ok: true, count: 0, condition_status: null }),
+    listDeskJobs: async () => ({ ok: true, count: 0, jobs: [] }),
+    listAlerts: async () => ({ ok: true, count: 0, alerts: [] }),
+    getMasterCutoffBundle: async () => ({
+      bundle_id: "master_cutoff_bundle_cross_asset_guard",
+      pack_id: pack.pack_id,
+      pack_build_id: pack.pack_build_id,
+      source_manifest_hash: pack.source_manifest_hash,
+      data_quality: { status: "ready", execution_allowed: true, blockers: [], missing: [], stale: [] },
+    }),
+    getDeskSetups: async () => ({ ok: true, count: 0, setups: [] }),
+    getRawWindow: async (args) => {
+      rawWindowCalls.push(args);
+      return {
+        ok: true,
+        status: "ready",
+        source: "immutable_pack_dataset",
+        instrument: args.instrument,
+        timeframe: args.timeframe,
+        row_count: 2,
+        rows: [
+          { asset: args.instrument, timeframe: args.timeframe, timestamp_paris: args.from, close: 100 },
+          { asset: args.instrument, timeframe: args.timeframe, timestamp_paris: args.to, close: 101 },
+        ],
+        raw_refs: [{ dataset: args.instrument, object_path: `local://${args.instrument}_${args.timeframe}.csv` }],
+        attempted_raw_refs: [args.instrument],
+      };
+    },
+    getCrossAssetDelta: legacyFailure,
+    ensureCrossAssetDelta: legacyFailure,
+  };
+}
+
+test("LIVE task KPI distinguishes waiting, in progress, executed and late states", () => {
+  const tick = { epochMs: Date.parse("2026-07-28T07:00:00.000Z") };
+  const base = {
+    cursor_status: "DUE",
+    target_checkpoint: "2026-07-28T09:01:00+02:00",
+    last_completed_checkpoint: "2026-07-28T08:45:00+02:00",
+    attempt: { status: "PENDING" },
+  };
+  assert.equal(liveTaskState(base, tick), "WAITING");
+  assert.equal(liveTaskState({
+    ...base,
+    cursor_status: "LEASED",
+    attempt: { status: "LEASED" },
+  }, tick), "IN_PROGRESS");
+  assert.equal(liveTaskState({
+    ...base,
+    cursor_status: "IDLE",
+    target_checkpoint: "2026-07-28T09:00:00+02:00",
+    last_completed_checkpoint: "2026-07-28T09:00:00+02:00",
+    attempt: { status: "DONE" },
+  }, tick), "EXECUTED");
+  assert.equal(liveTaskState({
+    ...base,
+    target_checkpoint: "2026-07-28T08:56:00+02:00",
+  }, tick), "LATE");
+});
 
 test("front-ready MCP tools expose jobs and Live Desk state without a frontend", async () => {
   const { store, persistence } = await makeStore();
@@ -97,6 +223,54 @@ test("front-ready MCP tools expose jobs and Live Desk state without a frontend",
   });
   assert.equal(cancelled.isError, false);
   assert.equal(cancelled.structuredContent.status, "CANCELLED");
+});
+
+test("front V4 read models use immutable pack raw windows instead of legacy cross asset deltas", async () => {
+  const rawWindowCalls = [];
+  const store = crossAssetGuardStore(rawWindowCalls);
+  const scope = asiaScope({ cutoff_paris: "2026-07-08T08:00:00+02:00" });
+  const clock = new FixedClock(Date.parse(scope.as_of_utc));
+
+  const features = await readFeatureContext(store, {
+    date: scope.trading_date,
+    session: scope.session,
+    activeThesis: null,
+    latestMaster: null,
+    timestamp_paris: scope.cutoff_paris,
+    raw_scope: {
+      strategy_id: scope.strategy_id,
+      session: scope.session,
+      mode: scope.mode,
+      trading_date: scope.trading_date,
+      run_id: scope.run_id,
+      as_of_utc: scope.as_of_utc,
+      pack_id: "2026-07-08_asia_open",
+      pack_build_id: "packbuild__2026-07-08_asia_open_v2",
+      timezone: "Europe/Paris",
+    },
+    computed_at: scope.as_of_utc,
+  });
+  assert.equal(features.cross.source, "immutable_pack_raw_windows");
+  assert.equal(features.cross.legacy_collection, false);
+  assert.equal(features.cross.status, "ready");
+  assert.equal(features.cross.delta.assets.DXY.row_count, 2);
+  assert.equal(features.cross.delta.assets.US10Y.row_count, 2);
+
+  const live = await buildLiveDeskState(store, scope, clock);
+  assert.equal(live.data_readiness.cross_asset_delta, "ready");
+  assert.equal(live.macro_cross_asset_summary.DXY.row_count, 2);
+  assert.equal(live.pack_build_id, "packbuild__2026-07-08_asia_open_v2");
+
+  const master = await buildFrontMasterState(store, scope, clock);
+  assert.equal(master.data_readiness.cross_asset_delta, "ready");
+  assert.equal(master.pack_build_id, "packbuild__2026-07-08_asia_open_v2");
+
+  const instruments = rawWindowCalls.map((call) => call.instrument);
+  for (const instrument of ["DXY", "VIX", "US10Y", "US02Y", "GC", "CL"]) {
+    assert.ok(instruments.includes(instrument), `${instrument} must be read from immutable raw windows`);
+  }
+  assert.equal(rawWindowCalls.every((call) => call.pack_build_id === "packbuild__2026-07-08_asia_open_v2"), true);
+  assert.equal(rawWindowCalls.every((call) => call.timeframe === "M15"), true);
 });
 
 test("live cockpit read model exposes trailing M15 gaps, recovery and a readable checkpoint brief", async () => {
@@ -194,7 +368,12 @@ test("live cockpit read model exposes trailing M15 gaps, recovery and a readable
 test("expired theses are not returned as active and can be archived", async () => {
   const { store, persistence } = await makeStore();
   const registry = createDeskToolRegistry(store);
-  await seedMaster(store, "master_expired", asiaScope({ cutoff_paris: "2026-07-08T06:00:00+02:00" }));
+  await seedMaster(
+    store,
+    "master_expired",
+    asiaScope({ cutoff_paris: "2026-07-08T06:00:00+02:00" }),
+    { thesisId: "thesis_expired" },
+  );
   await store.saveActiveThesis({
     ...asiaScope({ cutoff_paris: "2026-07-08T06:00:00+02:00" }),
     thesis_id: "thesis_expired",
@@ -216,6 +395,21 @@ test("expired theses are not returned as active and can be archived", async () =
     scenario_transformation_map: [],
     monitoring_playbook: [],
   });
+  await persistence.setDocument("desk_live_run_cursor", "livecur__2026-07-08", {
+    cursor_id: "livecur__2026-07-08",
+    schema_version: "2.0.0",
+    strategy_id: "asia_open",
+    session: "asia_open",
+    trading_date: "2026-07-08",
+    run_id: "front_live_2026-07-08",
+    cursor_status: "DUE",
+    target_checkpoint: "2026-07-08T08:30:00+02:00",
+    last_completed_checkpoint: "2026-07-08T07:00:00+02:00",
+    attempt: {
+      workflow: "LIVE_M15_MONITOR",
+      status: "READY",
+    },
+  });
 
   const active = await callDeskTool(registry, "get_active_thesis", {
     ...asiaScope(),
@@ -231,6 +425,23 @@ test("expired theses are not returned as active and can be archived", async () =
   assert.equal(live.isError, false);
   assert.equal(live.structuredContent.desk_status, "EXPIRED");
   assert.equal(live.structuredContent.action_now.decision, "REPLAN_FULL");
+  assert.equal(live.structuredContent.active_thesis, null);
+  assert.equal(live.structuredContent.latest_thesis.thesis_id, "thesis_expired");
+  assert.equal(live.structuredContent.next_revalidation_time, "2026-07-08T08:30:00+02:00");
+  assert.deepEqual(live.structuredContent.next_live_checkpoint, {
+    cursor_id: "livecur__2026-07-08",
+    cursor_status: "DUE",
+    workflow: "LIVE_M15_MONITOR",
+    attempt_status: "READY",
+    target_checkpoint: "2026-07-08T08:30:00+02:00",
+    last_completed_checkpoint: "2026-07-08T07:00:00+02:00",
+    task_status: "LATE",
+    last_claimed_at_utc: null,
+    last_claimed_at_paris: null,
+    last_claimed_checkpoint: null,
+    last_claimed_workflow: null,
+    last_claimed_worker_id: null,
+  });
 
   const archived = await callDeskTool(registry, "archive_expired_theses", {
     session: "asia_open",
@@ -242,7 +453,7 @@ test("expired theses are not returned as active and can be archived", async () =
   assert.equal(stored.status, "EXPIRED");
 });
 
-test("save_master_analysis materializes Master v4 setups for replay/front states", async () => {
+test("save_master_analysis materializes a native Master V5.4 setup for replay/front states", async () => {
   const { root, store, persistence } = await makeStore();
   await mkdir(join(root, "desk_packs"), { recursive: true });
   await writeFile(
@@ -259,58 +470,24 @@ test("save_master_analysis materializes Master v4 setups for replay/front states
     "utf8",
   );
 
-  const saved = await store.saveMasterAnalysis({
-    ...asiaScope(),
-    analysis_id: "master_v4_test",
-    contract_name: "DeskMasterAnalysisContract",
-    schema_version: "4.0.0",
-    contract_hash: "hash",
-    pack_id: "2026-07-08_asia_open",
-    date: "2026-07-08",
-    session: "asia_open",
-    created_at_paris: "2026-07-08T08:00:00+02:00",
-    full_analysis: {
-      executive_summary: {
-        primary_setup_id: "A",
-        final_decision: "wait",
-        final_instrument: "WAIT",
-        final_direction: "wait",
-      },
-      setups: [
-        {
-          setup_id: "A",
-          label: "Wait setup",
-          instrument: "WAIT",
-          direction: "wait",
-          setup_type: "wait_only",
-          risk_pct: 0,
-          confidence_pct: 70,
-        },
-        {
-          setup_id: "B",
-          label: "Replayable setup",
-          instrument: "MNQ",
-          direction: "long",
-          setup_type: "buy_stop_breakout",
-          entry_zone: { from: 30100, to: 30120 },
-          stop_loss: 30040,
-          take_profits: [{ name: "TP1", target: 30220 }],
-          risk_pct: 0.5,
-          confidence_pct: 65,
-          executable: true,
-        },
-      ],
-    },
-  });
+  const saved = await store.saveMasterAnalysis(makeActiveLiveMasterSave({
+    scope: asiaScope(),
+    analysisId: "master_v5_1_test",
+    thesisId: "thesis_v5_1_test",
+    planId: "plan_v5_1_test",
+    setupId: "B",
+    packId: "2026-07-08_asia_open",
+  }));
 
   assert.equal(saved.ok, true);
-  assert.equal(saved.setup_count, 2);
+  assert.equal(saved.setup_count, 1);
 
-  const setups = await store.getDeskSetups({ analysis_id: "master_v4_test", limit: 10 });
-  assert.equal(setups.count, 2);
-  assert.equal(setups.setups.find((setup) => setup.setup_id === "A").replay_status, "wait");
-  assert.equal(setups.setups.find((setup) => setup.setup_id === "B").replayable, true);
-  assert.equal(setups.setups.find((setup) => setup.setup_id === "B").source_contract, "DeskMasterAnalysisContract");
+  const setups = await store.getDeskSetups({ analysis_id: "master_v5_1_test", limit: 10 });
+  assert.equal(setups.count, 1);
+  assert.equal(setups.setups[0].setup_id, "B");
+  assert.equal(setups.setups[0].execution_policy_version, "4.3.0");
+  assert.equal(setups.setups[0].execution_authority, "BACKEND_ONLY");
+  assert.equal(setups.setups[0].source_contract, "DeskMasterAnalysisContract");
 });
 
 test("run_feature_engine feeds deterministic feature collections and audit state", async () => {
@@ -543,7 +720,7 @@ test("live Master work completes only after the analysis and linked thesis are s
   });
   assert.equal(prepared.isError, false, prepared.structuredContent.error);
   assert.equal(prepared.structuredContent.work_item, null);
-  assert.equal(prepared.structuredContent.cursor_id, "livecur__2026-07-08__asia_open");
+  assert.equal(prepared.structuredContent.cursor_id, "livecur__2026-07-08");
   assert.equal(persistence.count(DESK_COLLECTIONS.deskAgentWorkItems), 0);
   const cursorState = await store.getLiveRunCursor({ trading_date: "2026-07-08", session: "asia_open" });
   assert.equal(cursorState.cursor.attempt.workflow, "LIVE_MASTER");
@@ -551,50 +728,10 @@ test("live Master work completes only after the analysis and linked thesis are s
   return;
 });
 
-test("cross asset delta never returns stale documents as valid deltas", async () => {
-  const { root, store } = await makeStore();
-  await mkdir(join(root, "desk_cross_asset_deltas"), { recursive: true });
-  await writeFile(join(root, "desk_cross_asset_deltas", "old_delta.json"), JSON.stringify({
-    delta_id: "old_delta",
-    timestamp_paris: "2026-07-02T15:30:00+02:00",
-    window: "1h",
-    assets: { DXY: { row_count: 10 } },
-  }), "utf8");
+test("legacy cross asset delta tool is absent from the V4 registry", async () => {
+  const { store } = await makeStore();
   const registry = createDeskToolRegistry(store);
-  const result = await callDeskTool(registry, "get_cross_asset_delta", {
-    timestamp_paris: "2026-07-09T15:30:00+02:00",
-    window: "1h",
-  });
-  assert.equal(result.isError, false);
-  assert.equal(result.structuredContent.delta, null);
-  assert.equal(result.structuredContent.status, "stale");
-  assert.equal(result.structuredContent.stale_check.execution_allowed, false);
-  assert.equal(result.structuredContent.stale_check.returned_timestamp_paris, "2026-07-02T15:30:00+02:00");
-});
-
-test("cross asset delta returns partial executable deltas when secondary assets are missing", async () => {
-  const { root, store } = await makeStore();
-  await mkdir(join(root, "desk_cross_asset_deltas"), { recursive: true });
-  await writeFile(join(root, "desk_cross_asset_deltas", "partial_delta.json"), JSON.stringify({
-    delta_id: "partial_delta",
-    timestamp_paris: "2026-07-09T15:30:00+02:00",
-    window: "1h",
-    assets: {
-      DXY: { row_count: 12, first_close: 100, last_close: 101 },
-      CL: { row_count: 12, first_close: 68, last_close: 69 },
-      GC: { row_count: 12, first_close: 3300, last_close: 3310 },
-    },
-  }), "utf8");
-  const registry = createDeskToolRegistry(store);
-  const result = await callDeskTool(registry, "get_cross_asset_delta", {
-    timestamp_paris: "2026-07-09T15:30:00+02:00",
-    window: "1h",
-  });
-  assert.equal(result.isError, false);
-  assert.equal(result.structuredContent.status, "partial");
-  assert.equal(result.structuredContent.delta.quality.status, "partial");
-  assert.equal(result.structuredContent.stale_check.execution_allowed, true);
-  assert.deepEqual(result.structuredContent.stale_check.missing_assets, ["VIX", "US10Y", "US02Y"]);
+  assert.equal(registry.some((tool) => tool.name === "get_cross_asset_delta"), false);
 });
 
 test("manual M15 monitor prep job builds idempotent bundle and saves manual result", async () => {
@@ -661,13 +798,15 @@ test("manual M15 monitor prep job builds idempotent bundle and saves manual resu
     mode: "live",
   });
   assert.equal(prepared.isError, false);
-  assert.equal(prepared.structuredContent.status, "STALE", JSON.stringify(prepared.structuredContent));
+  assert.equal(prepared.structuredContent.status, "DEGRADED", JSON.stringify(prepared.structuredContent));
+  assert.equal(prepared.structuredContent.bundle.data_quality.execution_allowed, true);
+  assert.equal(prepared.structuredContent.bundle.data_quality.analysis_mode, "degraded");
   assert.equal(prepared.structuredContent.feature_engine.status, "DONE");
   assert.equal(prepared.structuredContent.feature_engine.condition_status_id, "thesis_manual_m15_2026_07_08T07_15_00_02_00");
   assert.equal(prepared.structuredContent.bundle.policy.chatgpt_decides_on_go_monitor, true);
   assert.equal(prepared.structuredContent.bundle.policy.automatic_openai_api_decision, false);
   assert.equal(prepared.structuredContent.bundle.contract_context.contract_name, "DeskHourlyThesisMonitorContract");
-  assert.equal(prepared.structuredContent.bundle.contract_context.schema_version, "1.0.0");
+  assert.equal(prepared.structuredContent.bundle.contract_context.schema_version, "2.4.0");
   assert.equal(prepared.structuredContent.bundle.contract_context.pinned_for_replay, false);
   assert.equal(prepared.structuredContent.bundle.contract_handshake.direct_mcp_save_required, true);
   assert.equal(prepared.structuredContent.bundle.contract_handshake.operator_json_handoff_allowed, false);
@@ -681,7 +820,7 @@ test("manual M15 monitor prep job builds idempotent bundle and saves manual resu
   assert.equal(prepared.structuredContent.bundle.rolling_15m_snapshot.instruments.MNQ.close, 111);
   assert.equal(prepared.structuredContent.bundle.raw_refs.includes("local://MNQ_M5.csv"), false);
   assert.equal(prepared.structuredContent.work_item, null);
-  assert.equal(prepared.structuredContent.cursor_id, "livecur__2026-07-08__asia_open");
+  assert.equal(prepared.structuredContent.cursor_id, "livecur__2026-07-08");
   assert.equal(persistence.count(DESK_COLLECTIONS.deskAgentWorkItems), 0);
   const cursorState = await store.getLiveRunCursor({ trading_date: "2026-07-08", session: "asia_open" });
   assert.equal(cursorState.cursor.attempt.workflow, "LIVE_M15_MONITOR");
@@ -722,40 +861,36 @@ test("backtest runner creates steps, simulated trades, results, and replay state
   ].entries()) {
     persistence.seed(feedCollection, `mes-m5-${index}`, { asset: "MES", timeframe: "5", ...candle });
   }
-  await store.saveMasterAnalysis({
-    ...asiaScope({ cutoff_paris: "2026-07-08T07:00:00+02:00" }),
-    analysis_id: "master_backtest_test",
-    contract_name: "DeskMasterAnalysisContract",
-    schema_version: "4.0.0",
-    contract_hash: "hash",
-    pack_id: "2026-07-08_asia_open",
-    date: "2026-07-08",
-    session: "asia_open",
-    created_at_paris: "2026-07-08T07:00:00+02:00",
-    full_analysis: {
-      executive_summary: {
-        primary_setup_id: "MES_LONG",
-        final_decision: "prendre",
-        final_instrument: "MES",
-        final_direction: "long",
-      },
-      setups: [
-        {
-          setup_id: "MES_LONG",
-          label: "MES long replay",
-          instrument: "MES",
-          direction: "long",
-          setup_type: "buy_stop_breakout",
-          entry_zone: { from: 5002, to: 5003 },
-          stop_loss: 4996,
-          take_profits: [{ name: "TP1", target: 5010 }],
-          risk_pct: 0.5,
-          confidence_pct: 68,
-          executable: true,
-        },
-      ],
+  await store.saveMasterAnalysis(makeActiveLiveMasterSave({
+    scope: asiaScope({ cutoff_paris: "2026-07-08T07:00:00+02:00" }),
+    analysisId: "master_backtest_test",
+    thesisId: "thesis_backtest_test",
+    planId: "plan_backtest_test",
+    setupId: "MES_LONG",
+    packId: "2026-07-08_asia_open",
+    outputMutator: (output) => {
+      const setup = output.execution_plan.setups[0];
+      setup.instrument = "MES";
+      setup.entry = { price: 5002 };
+      setup.stop = { type: "STRUCTURAL", price: 4998 };
+      setup.targets = [{ target_id: "tp1", price: 5010, action: "FULL_CLOSE", close_fraction: 1 }];
+      setup.conditions = setup.conditions.map((condition) => ({
+        ...condition,
+        instrument: "MES",
+        parameters: { threshold: 5001 },
+      }));
+      setup.validity.expires_at_paris = "2026-07-08T12:00:00+02:00";
+      output.active_thesis.instrument = "MES";
+      output.active_thesis.valid_until_paris = "2026-07-08T12:00:00+02:00";
+      output.active_thesis.requires_replan_after_paris = "2026-07-08T12:00:00+02:00";
+      output.active_thesis.level_watchlist = output.active_thesis.level_watchlist.map((level) => ({
+        ...level,
+        instrument: "MES",
+        price: 5002,
+      }));
+      output.hypotheses = output.hypotheses.map((hypothesis) => ({ ...hypothesis, instrument: "MES" }));
     },
-  });
+  }));
 
   const registry = createDeskToolRegistry(store);
   const created = await callDeskTool(registry, "create_backtest_run", {
@@ -776,7 +911,7 @@ test("backtest runner creates steps, simulated trades, results, and replay state
   assert.equal(run.structuredContent.status, "DONE");
   assert.equal(run.structuredContent.steps_run, 1);
   assert.equal(run.structuredContent.result.trades, 1);
-  assert.equal(run.structuredContent.result.total_r, 1);
+  assert.equal(run.structuredContent.result.total_r, 2);
   assert.equal(run.structuredContent.simulated_trades[0].status, "WIN");
 
   const timeline = await callDeskTool(registry, "get_backtest_timeline", {
@@ -800,7 +935,7 @@ test("backtest runner creates steps, simulated trades, results, and replay state
   assert.equal(replayState.structuredContent.selected_backtest.backtest_id, "bt_mes_local");
   assert.equal(replayState.structuredContent.timeline.length, 1);
   assert.equal(replayState.structuredContent.simulated_trades.length, 1);
-  assert.equal(replayState.structuredContent.summary_stats.total_r, 1);
+  assert.equal(replayState.structuredContent.summary_stats.total_r, 2);
 });
 
 test("orchestrated GPT replay stays run-scoped from Master bundle to monitor replan", async () => {

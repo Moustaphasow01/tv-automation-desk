@@ -1,18 +1,50 @@
 import { createHash, randomUUID } from "node:crypto";
+import { normalizeGptTelemetry } from "./gpt-telemetry.js";
+import { deskDataAvailabilityWorkerRules } from "./data-availability-policy.js";
+import {
+  ACTIVE_STRATEGY_RUNTIME_VERSIONS,
+  assertActiveStrategyContractContext,
+  assertActiveStrategyRuntimePins,
+  assertActiveStrategySaveTarget,
+  isActiveStrategyRuntimePins,
+} from "./strategy-runtime-versioning.js";
 
 export const DESK_AGENT_WORK_ITEM_SCHEMA_VERSION = "1.0.0";
-export const DESK_REPLAY_PROMPT_VERSION = "1.0.0";
+export const DESK_REPLAY_PROMPT_VERSION = "2.4.0";
 export const DESK_WORK_READY_STATUSES = Object.freeze(["READY", "CLAIMED"]);
 export const DESK_AGENT_WORKFLOWS = Object.freeze(["REPLAY_MASTER", "REPLAY_MONITOR"]);
+const MIN_LEASE_SECONDS = 60;
+const MAX_LEASE_SECONDS = 20 * 60;
+const MAX_CLAIM_LIFETIME_SECONDS = 45 * 60;
+const RETRY_BASE_SECONDS = 30;
+const RETRY_MAX_SECONDS = 15 * 60;
 
 export function buildReplayAgentWorkItem({ run, step, bundle, tick }) {
   const bundleType = bundle.bundle_type;
   const workflow = bundleType === "master" ? "REPLAY_MASTER" : "REPLAY_MONITOR";
   const saveTarget = bundle.save_target || {};
   const suggested = saveTarget.suggested_payload || {};
+  assertActiveStrategyRuntimePins(run, { operation: "build_replay_agent_work_item" });
+  assertActiveStrategyContractContext(bundle.contract_context, {
+    workflow,
+    operation: "build_replay_agent_work_item",
+  });
+  assertActiveStrategySaveTarget(suggested, {
+    workflow,
+    mode: "replay",
+    operation: "build_replay_agent_work_item",
+  });
   const workItemId = replayWorkItemId(run.backtest_id, step.step_id, workflow);
   const base = {
     work_item_schema_version: DESK_AGENT_WORK_ITEM_SCHEMA_VERSION,
+    strategy_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.strategy_version,
+    autopilot_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.autopilot_version,
+    replay_execution_policy_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_policy,
+    execution_plan_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_plan,
+    monitor_command_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_command,
+    condition_catalog_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_catalog,
+    deterministic_compiler_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.deterministic_compiler,
+    condition_engine_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_engine,
     work_item_id: workItemId,
     automation_scope: "replay",
     workflow,
@@ -44,6 +76,7 @@ export function buildReplayAgentWorkItem({ run, step, bundle, tick }) {
     expected_revision: suggested.expected_revision,
     idempotency_key: suggested.idempotency_key,
     contract_context: bundle.contract_context,
+    runtime_versions: ACTIVE_STRATEGY_RUNTIME_VERSIONS,
     prompt_name: bundleType === "master" ? "DeskReplayMasterAgentPrompt" : "DeskReplayMonitorAgentPrompt",
     prompt_version: DESK_REPLAY_PROMPT_VERSION,
     attempt_count: 0,
@@ -62,10 +95,24 @@ export function buildReplayAgentWorkItem({ run, step, bundle, tick }) {
     updated_at_paris: tick.paris,
   };
   const promptText = buildDeskWorkPrompt(base);
+  const promptHash = sha256(promptText);
   return {
     ...base,
     prompt_text: promptText,
-    prompt_hash: sha256(promptText),
+    prompt_hash: promptHash,
+    source_hash: sha256(JSON.stringify({
+      work_item_schema_version: DESK_AGENT_WORK_ITEM_SCHEMA_VERSION,
+      workflow,
+      backtest_id: run.backtest_id,
+      step_id: step.step_id,
+      bundle_id: bundle.bundle_id,
+      bundle_source_hash: bundle.source_hash || null,
+      save_tool: saveTarget.tool || null,
+      expected_revision: suggested.expected_revision ?? null,
+      prompt_version: DESK_REPLAY_PROMPT_VERSION,
+      prompt_hash: promptHash,
+      autopilot_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.autopilot_version,
+    })),
   };
 }
 
@@ -74,14 +121,16 @@ export function preserveExistingWorkItem(existing, prepared) {
   if (["CLAIMED", "COMPLETED"].includes(existing.status)) return existing;
   if (existing.status === "SUPERSEDED") return existing;
   if (existing.status === "PAUSED" && existing.pause_reason !== "source_pack_not_ready") return existing;
-  if (["READY", "CLAIMED", "PAUSED", "COMPLETED", "FAILED", "SUPERSEDED"].includes(existing.status) && existing.source_hash === prepared.source_hash) return existing;
+  if (["READY", "CLAIMED", "PAUSED", "COMPLETED", "FAILED", "SUPERSEDED"].includes(existing.status) && existing.source_hash && prepared.source_hash && existing.source_hash === prepared.source_hash) return existing;
   return prepared;
 }
 
 export function claimReplayWorkItem(item, { worker_id, lease_seconds = 720 }, tick) {
   if (!isClaimableWorkItem(item, tick)) throw workError("WORK_NOT_CLAIMABLE", "Desk work item is not claimable.");
   const leaseToken = randomUUID();
-  const leaseExpiresAt = new Date(tick.epochMs + lease_seconds * 1000).toISOString();
+  const boundedLeaseSeconds = boundLeaseSeconds(lease_seconds);
+  const leaseExpiresAt = new Date(tick.epochMs + boundedLeaseSeconds * 1000).toISOString();
+  const leaseDeadlineAt = new Date(tick.epochMs + MAX_CLAIM_LIFETIME_SECONDS * 1000).toISOString();
   const claimed = {
     ...item,
     status: "CLAIMED",
@@ -92,15 +141,24 @@ export function claimReplayWorkItem(item, { worker_id, lease_seconds = 720 }, ti
     claimed_at_paris: tick.paris,
     lease_expires_at_utc: leaseExpiresAt,
     lease_expires_at_paris: leaseExpiresAt,
+    lease_deadline_at_utc: leaseDeadlineAt,
     retry_after_utc: null,
     retry_after_paris: null,
     attempt_count: Number(item.attempt_count || 0) + 1,
     updated_at_utc: tick.utc,
     updated_at_paris: tick.paris,
   };
-  const executionPrompt = buildClaimedReplayPrompt(claimed);
-  return {
+  const promptText = buildDeskWorkPrompt(claimed);
+  const promptHash = sha256(promptText);
+  const currentPrompt = {
     ...claimed,
+    prompt_version: DESK_REPLAY_PROMPT_VERSION,
+    prompt_text: promptText,
+    prompt_hash: promptHash,
+  };
+  const executionPrompt = buildClaimedReplayPrompt(currentPrompt);
+  return {
+    ...currentPrompt,
     execution_prompt: executionPrompt,
     execution_prompt_hash: sha256(executionPrompt),
   };
@@ -108,7 +166,12 @@ export function claimReplayWorkItem(item, { worker_id, lease_seconds = 720 }, ti
 
 export function heartbeatReplayWorkItem(item, { worker_id, lease_token, lease_seconds = 720 }, tick) {
   assertWorkLease(item, { worker_id, lease_token }, tick);
-  const leaseExpiresAt = new Date(tick.epochMs + lease_seconds * 1000).toISOString();
+  const hardDeadline = Date.parse(item.lease_deadline_at_utc || "");
+  if (!Number.isFinite(hardDeadline) || hardDeadline <= tick.epochMs) {
+    throw workError("WORK_LEASE_MAX_DURATION", "Desk work lease reached its maximum lifetime.");
+  }
+  const requestedExpiry = tick.epochMs + boundLeaseSeconds(lease_seconds) * 1000;
+  const leaseExpiresAt = new Date(Math.min(requestedExpiry, hardDeadline)).toISOString();
   return {
     ...item,
     lease_expires_at_utc: leaseExpiresAt,
@@ -120,9 +183,10 @@ export function heartbeatReplayWorkItem(item, { worker_id, lease_token, lease_se
   };
 }
 
-export function completeReplayWorkItem(item, { worker_id, lease_token, output_ref = null }, tick, { allowMaterialized = false } = {}) {
+export function completeReplayWorkItem(item, { worker_id, lease_token, output_ref = null, telemetry = null }, tick, { allowMaterialized = false } = {}) {
   if (item.status === "COMPLETED") return item;
   if (!allowMaterialized) assertWorkLease(item, { worker_id, lease_token }, tick);
+  const gptTelemetry = normalizeGptTelemetry(telemetry) || item.gpt_telemetry || null;
   return {
     ...item,
     status: "COMPLETED",
@@ -130,11 +194,14 @@ export function completeReplayWorkItem(item, { worker_id, lease_token, output_re
     completed_at_utc: tick.utc,
     completed_at_paris: tick.paris,
     completed_output_ref: output_ref || item.completed_output_ref || null,
+    gpt_telemetry: gptTelemetry,
+    telemetry_recorded_at_utc: gptTelemetry ? tick.utc : item.telemetry_recorded_at_utc || null,
     retry_after_utc: null,
     retry_after_paris: null,
     lease_token: null,
     lease_expires_at_utc: null,
     lease_expires_at_paris: null,
+    lease_deadline_at_utc: null,
     updated_at_utc: tick.utc,
     updated_at_paris: tick.paris,
   };
@@ -144,6 +211,9 @@ export function failReplayWorkItem(item, { worker_id, lease_token, error_code, e
   assertWorkLease(item, { worker_id, lease_token }, tick, { allowExpired: true });
   const exhausted = Number(item.attempt_count || 0) >= Number(item.max_attempts || 3);
   const status = retryable && !exhausted ? "READY" : "FAILED";
+  const retryAfter = status === "READY"
+    ? new Date(tick.epochMs + retryDelayMs(item)).toISOString()
+    : null;
   return {
     ...item,
     status,
@@ -152,8 +222,9 @@ export function failReplayWorkItem(item, { worker_id, lease_token, error_code, e
     lease_token: null,
     lease_expires_at_utc: null,
     lease_expires_at_paris: null,
-    retry_after_utc: null,
-    retry_after_paris: null,
+    lease_deadline_at_utc: null,
+    retry_after_utc: retryAfter,
+    retry_after_paris: retryAfter,
     failure_count: Number(item.failure_count || 0) + 1,
     last_error: {
       code: error_code,
@@ -162,6 +233,10 @@ export function failReplayWorkItem(item, { worker_id, lease_token, error_code, e
       occurred_at_utc: tick.utc,
       occurred_at_paris: tick.paris,
     },
+    ...(status === "FAILED" ? {
+      failed_at_utc: tick.utc,
+      failed_at_paris: tick.paris,
+    } : {}),
     updated_at_utc: tick.utc,
     updated_at_paris: tick.paris,
   };
@@ -176,6 +251,7 @@ export function pauseReplayWorkItem(item, tick, reason = "automation_paused") {
     lease_token: null,
     lease_expires_at_utc: null,
     lease_expires_at_paris: null,
+    lease_deadline_at_utc: null,
     updated_at_utc: tick.utc,
     updated_at_paris: tick.paris,
   };
@@ -203,6 +279,7 @@ export function supersedeReplayWorkItem(item, tick, reason = "replay_state_advan
     lease_token: null,
     lease_expires_at_utc: null,
     lease_expires_at_paris: null,
+    lease_deadline_at_utc: null,
     updated_at_utc: tick.utc,
     updated_at_paris: tick.paris,
   };
@@ -242,6 +319,7 @@ export function selectVisibleDeskWork(items, args = {}) {
 
 export function isClaimableWorkItem(item, tick) {
   if (item.automation_scope !== "replay" || !DESK_AGENT_WORKFLOWS.includes(item.workflow)) return false;
+  if (!isActiveReplayWorkItem(item)) return false;
   const retryAfter = Date.parse(item.retry_after_utc || item.retry_after_paris || "");
   if (Number.isFinite(retryAfter) && retryAfter > tick.epochMs) return false;
   if (item.status === "READY") {
@@ -255,6 +333,10 @@ export function isClaimableWorkItem(item, tick) {
 
 export function replayWorkMatchesRun(item, run) {
   if (!run || run.backtest_id !== item.backtest_id || run.automation_enabled !== true) return false;
+  if (!isActiveReplayWorkItem(item)
+    || !isActiveStrategyRuntimePins(run, { operation: "match_replay_work_run" })) {
+    return false;
+  }
   if (run.current_step_id !== item.step_id) return false;
   if (item.workflow === "REPLAY_MASTER") return run.status === "WAITING_GPT_MASTER";
   if (item.workflow === "REPLAY_MONITOR") return run.status === "WAITING_GPT_MONITOR";
@@ -270,6 +352,12 @@ export function replayWorkOutputMaterialized(item, run) {
 
 export function assertReplayWorkForSave(item, args, workflow, tick) {
   if (!item) throw workError("WORK_NOT_FOUND", "Desk work item was not found.");
+  if (!isActiveReplayWorkItem(item)) {
+    throw workError(
+      "HISTORICAL_STRATEGY_WORK_READ_ONLY",
+      "Historical strategy work items remain readable but cannot be saved or completed by the active runtime.",
+    );
+  }
   if (item.workflow !== workflow) throw workError("WORKFLOW_MISMATCH", "Desk work item does not match the save workflow.");
   if (item.backtest_id !== args.backtest_id || item.step_id !== args.step_id) {
     throw workError("WORK_SCOPE_MISMATCH", "Desk work item does not match the replay save scope.");
@@ -321,16 +409,40 @@ function workStatusPriority(status) {
   return 3;
 }
 
+function boundLeaseSeconds(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 720;
+  return Math.max(MIN_LEASE_SECONDS, Math.min(Math.floor(parsed), MAX_LEASE_SECONDS));
+}
+
+function retryDelayMs(item) {
+  const failureNumber = Number(item.failure_count || 0);
+  const exponentialSeconds = Math.min(
+    RETRY_MAX_SECONDS,
+    RETRY_BASE_SECONDS * (2 ** Math.min(failureNumber, 8)),
+  );
+  const digest = createHash("sha256")
+    .update(`${item.work_item_id || "work"}:${failureNumber + 1}`)
+    .digest();
+  const jitterRatio = digest.readUInt16BE(0) / 65_535 * 0.2;
+  return Math.round(exponentialSeconds * (1 + jitterRatio) * 1000);
+}
+
 export function replayWorkItemId(backtestId, stepId, workflow) {
   return `deskwork__${sanitize(backtestId)}__${sanitize(stepId)}__${String(workflow).toLowerCase()}`;
 }
 
 function buildDeskWorkPrompt(item) {
   const contract = item.contract_context || {};
+  const nativeV5 = (item.workflow === "REPLAY_MASTER"
+      && String(contract.schema_version) === ACTIVE_STRATEGY_RUNTIME_VERSIONS.master_contract)
+    || (item.workflow === "REPLAY_MONITOR"
+      && String(contract.schema_version) === ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract);
   return [
     "Tu executes un travail automatise du Desk Futures en mode replay GPT-in-the-loop.",
     "Le backend est l'unique source de continuite, de scope, de revision et d'idempotence.",
     "N'invente aucun identifiant et n'utilise jamais de donnees live.",
+    "Ne suspends jamais et ne desactive jamais la tache recurrente ChatGPT; rapporte seulement le statut final du cycle.",
     "",
     `Workflow: ${item.workflow}`,
     `Work item: ${item.work_item_id}`,
@@ -351,18 +463,64 @@ function buildDeskWorkPrompt(item) {
     "5. Utilise uniquement les lectures replay-scoped du manifest si un approfondissement est necessaire.",
     "6. Pars exclusivement de bundle.save_target.suggested_payload pour construire la sauvegarde.",
     `7. Complete l'analyse conforme au contrat puis appelle ${item.save_tool} directement par MCP.`,
-    "8. Ajoute au save work_item_id, worker_id et lease_token retournes par claim_next_desk_work.",
-    "9. Apres le save reussi, appelle complete_desk_work avec les memes work_item_id, worker_id et lease_token.",
-    "10. En cas d'echec, appelle fail_desk_work avec un code structure et termine.",
+    "8. Ajoute au save work_item_id, worker_id et lease_token retournes par claim_next_replay_work.",
+    "9. Apres le save reussi, appelle complete_replay avec les memes work_item_id, worker_id et lease_token.",
+    "10. En cas d'echec, appelle fail_replay avec un code structure et termine.",
     "",
     "Regles de donnees:",
-    "- Seul missing_unexpected est une panne de source.",
-    "- stale_market_closed et not_yet_open sont des etats normaux de session.",
-    "- last_known/H4 sert au contexte, jamais a un trigger frais.",
+    ...deskDataAvailabilityWorkerRules(),
     "- Un gap technologique est non applicable avant la premiere cotation courante.",
     "- Le VIX cash ferme ne bloque pas seul l'analyse.",
     "- Aucun JSON ne doit etre rendu a l'operateur pour etre copie dans le front.",
+    "- Ne suspends jamais et ne desactive jamais la tache recurrente ChatGPT: si le backend attend GPT, termine le tour apres avoir indique le prochain appel MCP exact.",
+    "",
+    ...(nativeV5 ? [
+      "Contrat d'execution actif Master V5.4 / Monitor V2.4, Plan V1.4, Command V1.4, Policy V4.3 et Catalog V1.2:",
+      "- LIVE et REPLAY utilisent exactement contrats, compilateur, predicates, gates, machines d'etat et outcome. Seule l'acquisition temporelle differe; aucun fallback LIVE n'est autorise.",
+      "- Profil OPPORTUNITY_SEEKING_CONTROLLED: recherche zero a cinq candidats distincts rank 1..5; seuil contextuel 0.55; une confirmation facultative absente reste soft et ne suffit pas a produire WAIT_NO_SETUP.",
+      "- La tolerance ne change pas le risque: risk_pct_requested>0 et <=0.25% de NET_EQUITY, stop obligatoire, RR recalcule>=2. Le broker seul calcule les contrats entiers par ceil et bloque si rounding_excess_percent depasse max_rounding_excess_pct.",
+      "- GPT ne produit jamais ENGINE_TRIGGER, TRIGGERED, CLOSED, fill, position, quantite, ordre broker, resultat R, hash compile ni diagnostics. Le moteur rejoue chaque bougie M1 fermee entre les checkpoints GPT M15 et les checkpoints critiques explicites.",
+      "- Tout setup contient setup_id epingle, rank, requested_state, pattern, instrument, direction, order_type, entry_mode, entry.price ou entry.zone_lower+zone_upper, stop.type+price, toutes les targets action+close_fraction (PARTIAL_CLOSE strictement entre 0 et 1 ; FULL_CLOSE toujours égal à 1 car il ferme tout le reliquat), rr_expected, conditions, management, validity, rationale et evidence_refs.",
+      "- Chaque condition utilise exclusivement les enums Catalog V1.2 et fournit tous les parameters, temporal_rule, weight, sequence et evidence_refs. Une phrase libre n'est jamais executable.",
+      "- VETO temporaire (EVENT_BLACKOUT, TIME_WINDOW, intermarket, volatilite) utilise BLOCK_IF_TRUE, required_for_trigger=false, weight=0, memory_policy=LATEST_ONLY; il se leve quand faux puis exige une confirmation M1 fraiche.",
+      "- INVALIDATION est reservee a une rupture structurelle explicite avec INVALIDATE_TERMINAL. LATCH_UNTIL_TRIGGER est interdit a tout BLOCK_IF_TRUE; MANDATORY d'activation/confirmation utilise REQUIRE_TRUE.",
+      "- Les gates sont phasees. EVENT_BLACKOUT requis indeterminable reste UNKNOWN et bloque seulement ENTRY_TRIGGER; les donnees contextuelles facultatives absentes restent soft.",
+      "- La confirmation ne peut pas entrer same-bar. NEXT_BAR attend une M1 fermee ulterieure; toute reacquisition apres sortie de zone est reevaluee par les predicates machine.",
+      "- Aucun effet soft n'est cache: REQUIRE_CONFIRMATION exige une condition Catalog V1.2 explicite; REDUCE_RISK exige un nouveau plan avec risk.risk_pct_requested abaisse avant compilation, sinon il reste advisory et jamais veto.",
+      "- WAIT_NO_SETUP exige best_long, best_short, blocking_reasons, wait_to_go_conditions structurees et revalidation_triggers.",
+      "- Recopie exactement plan_id, analysis/monitor/thesis/setup/command IDs, expected_revision et idempotency. expected_revision est un compare-and-swap: ne l'incremente et ne le devine jamais.",
+      ...(item.workflow === "REPLAY_MONITOR" ? [
+        "- monitor_output.command est l'unique Command V1.4; NO_ACTION met les quatre branches a null.",
+        "- UPSERT_CANDIDATE, PRE_ARM, ARM et REPLACE exigent setup_transition.setup complet. CANCEL/EXPIRE/INVALIDATE ciblent l'identite existante; REPLACE utilise une nouvelle identite distincte.",
+        "- Toute management_request reste GPT_REQUEST_ONLY et le backend valide l'etat de position.",
+      ] : [
+        "- analysis_output.execution_plan et active_thesis sont complets; active_thesis.plan_id egale execution_plan.plan_id et selected_hypothesis_id appartient aux hypotheses.",
+        "- Un candidat secondaire incomplet est omis plutot que de faire echouer un candidat principal valide; scope, identite et anti-lookahead restent atomiques.",
+      ]),
+    ] : [
+      "Contrat d'execution legacy epingle:",
+      "- Respecte strictement son schema sans conversion implicite vers V5/V2.",
+      "- GPT ne confirme jamais TRIGGERED, CLOSED, fill, position ou resultat R; le backend reste autorite d'execution.",
+    ]),
   ].join("\n");
+}
+
+function isActiveReplayWorkItem(item = {}) {
+  if (!isActiveStrategyRuntimePins(item, { operation: "replay_work_item" })) return false;
+  try {
+    assertActiveStrategyContractContext(item.contract_context, {
+      workflow: item.workflow,
+      operation: "replay_work_item",
+    });
+    assertActiveStrategySaveTarget(item.save_target, {
+      workflow: item.workflow,
+      mode: "replay",
+      operation: "replay_work_item",
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function buildClaimedReplayPrompt(item) {
@@ -380,7 +538,7 @@ function buildClaimedReplayPrompt(item) {
       `- partial_output_ref: ${JSON.stringify(item.partial_output_ref)}`,
       "- Une sortie partielle existe deja: verifie-la par MCP et reprends uniquement les saves contractuels restants.",
     ] : []),
-    "- Si le bail risque d'expirer avant le save, appelle heartbeat_desk_work.",
+    "- Si le bail risque d'expirer avant le save, appelle heartbeat_replay.",
   ].join("\n");
 }
 

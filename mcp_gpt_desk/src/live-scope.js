@@ -1,4 +1,10 @@
 import { toParisIso } from "@tv-automation/desk-time";
+import { dailyRunId } from "./daily-run-model.js";
+import {
+  GPT_MONITOR_CADENCE_MINUTES,
+  GPT_MONITOR_CADENCE_VALUE,
+  GPT_MONITOR_CATCHUP_POLICY,
+} from "./desk-monitor-cadence.js";
 
 const LIVE_MASTER_WORKFLOW_CONFIG = Object.freeze({
   asia_open: { strategy_id: "asia_open", session: "asia_open", cutoff_time: "00:15:00" },
@@ -9,8 +15,8 @@ const LIVE_MASTER_WORKFLOW_CONFIG = Object.freeze({
 });
 
 const LIVE_MONITOR_WINDOWS = Object.freeze({
-  asia_open: { from: "00:30", to: "14:45" },
-  ny_open: { from: "15:45", to: "21:45" },
+  asia_open: { from: "00:30", to: "15:25" },
+  ny_open: { from: "15:35", to: "22:00" },
 });
 
 const LIVE_MONITOR_SETTLEMENT_LAG_MS = 2 * 60 * 1000;
@@ -52,7 +58,9 @@ export function resolveLiveMonitorJobInput(args = {}, now = Date.now()) {
   const nowMs = instantMs(now);
   const session = canonicalLiveSession(args.session);
   if (!session) throw new Error(`LIVE_MONITOR_SESSION_UNSUPPORTED:${args.session || "missing"}`);
-  const timestampParis = normalizeParisInstant(args.timestamp_paris || floorParisCheckpoint(nowMs, 15));
+  const timestampParis = normalizeParisInstant(
+    args.timestamp_paris || floorParisCheckpoint(nowMs, GPT_MONITOR_CADENCE_MINUTES),
+  );
   const tradingDate = args.trading_date || timestampParis.slice(0, 10);
   const asOfUtc = normalizeUtc(args.as_of_utc || timestampParis);
   assertSameInstant(timestampParis, asOfUtc, "timestamp_paris", "as_of_utc");
@@ -66,12 +74,14 @@ export function resolveLiveMonitorJobInput(args = {}, now = Date.now()) {
     as_of_utc: asOfUtc,
     timezone: "Europe/Paris",
     timestamp_paris: timestampParis,
-    cadence: "15m",
+    cadence: GPT_MONITOR_CADENCE_VALUE,
     include_raw_refs: args.include_raw_refs !== false,
     save: args.save !== false,
     lock_ttl_seconds: args.lock_ttl_seconds || 180,
     force_rebuild: args.force_rebuild === true,
     enqueue_agent_work: args.enqueue_agent_work !== false,
+    catchup_mode: args.catchup_mode === true,
+    catchup_context: args.catchup_context || null,
   };
 }
 
@@ -94,10 +104,10 @@ export function isLiveMonitorCheckpointInWindow(session, timestampParis) {
 }
 
 export function liveRunId(tradingDate, session) {
-  return `front_live_${tradingDate}_${canonicalLiveSession(session) || session}`;
+  return dailyRunId(tradingDate);
 }
 
-export function floorParisCheckpoint(now = Date.now(), cadenceMinutes = 15) {
+export function floorParisCheckpoint(now = Date.now(), cadenceMinutes = GPT_MONITOR_CADENCE_MINUTES) {
   const paris = toParisIso(instantMs(now));
   const match = paris.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):\d{2}(?:\.\d+)?([+-]\d{2}:\d{2})$/);
   if (!match) throw new Error(`PARIS_TIMESTAMP_INVALID:${paris}`);
@@ -110,7 +120,7 @@ export function buildLiveMonitorCatchupPlan({
   tradingDate,
   masterCutoffParis,
   masterMaterializedAtParis,
-  cadenceMinutes = 15,
+  cadenceMinutes = GPT_MONITOR_CADENCE_MINUTES,
   settlementLagMs = LIVE_MONITOR_SETTLEMENT_LAG_MS,
 } = {}) {
   const cutoffMs = instantMs(masterCutoffParis);
@@ -141,7 +151,7 @@ export function buildLiveMonitorCatchupPlan({
 
   const firstCheckpointMs = instantMs(floorParisCheckpoint(cutoffMs, cadenceMinutes)) + cadenceMinutes * 60 * 1000;
   const skipped = [];
-  for (let cursor = firstCheckpointMs; cursor < checkpointMs && skipped.length < 96; cursor += cadenceMinutes * 60 * 1000) {
+  for (let cursor = firstCheckpointMs; cursor < checkpointMs && skipped.length < 512; cursor += cadenceMinutes * 60 * 1000) {
     const candidate = toParisIso(cursor).replace(/\.\d{3}/, "");
     if (candidate.slice(0, 10) === expectedTradingDate && isLiveMonitorCheckpointInWindow(session, candidate)) skipped.push(candidate);
   }
@@ -153,6 +163,85 @@ export function buildLiveMonitorCatchupPlan({
     analysis_window: {
       from_paris: toParisIso(cutoffMs).replace(/\.\d{3}/, ""),
       to_paris: checkpointParis,
+    },
+  };
+}
+
+export function buildLiveMonitorRollForwardContext({
+  session,
+  tradingDate,
+  lastCompletedCheckpoint,
+  previousAttemptCheckpoint,
+  previousAttemptStatus,
+  monitorCheckpointParis,
+  cadenceMinutes = GPT_MONITOR_CADENCE_MINUTES,
+} = {}) {
+  const targetMs = instantMs(monitorCheckpointParis);
+  const targetParis = toParisIso(targetMs).replace(/\.\d{3}/, "");
+  const expectedTradingDate = tradingDate || targetParis.slice(0, 10);
+  if (targetParis.slice(0, 10) !== expectedTradingDate
+    || !isLiveMonitorCheckpointInWindow(session, targetParis)) {
+    return null;
+  }
+
+  const completedMs = optionalInstantMs(lastCompletedCheckpoint);
+  const previousAttemptMs = optionalInstantMs(previousAttemptCheckpoint);
+  const cadenceMs = cadenceMinutes * 60 * 1000;
+  let analysisFromMs = null;
+  let firstSkippedMs = null;
+
+  if (Number.isFinite(completedMs) && completedMs < targetMs) {
+    analysisFromMs = completedMs;
+    firstSkippedMs = completedMs + cadenceMs;
+  } else if (Number.isFinite(previousAttemptMs) && previousAttemptMs < targetMs) {
+    analysisFromMs = previousAttemptMs;
+    firstSkippedMs = String(previousAttemptStatus || "").toUpperCase() === "DONE"
+      ? previousAttemptMs + cadenceMs
+      : previousAttemptMs;
+  }
+
+  if (!Number.isFinite(firstSkippedMs) || firstSkippedMs >= targetMs) {
+    return null;
+  }
+
+  const skipped = [];
+  for (let cursor = firstSkippedMs; cursor < targetMs && skipped.length < 512; cursor += cadenceMs) {
+    const candidate = toParisIso(cursor).replace(/\.\d{3}/, "");
+    if (candidate.slice(0, 10) === expectedTradingDate
+      && isLiveMonitorCheckpointInWindow(session, candidate)) {
+      skipped.push(candidate);
+    }
+  }
+  if (!skipped.length) return null;
+
+  const analysisFromParis = toParisIso(analysisFromMs).replace(/\.\d{3}/, "");
+  return {
+    catchup_mode: true,
+    catchup_reason: "latest_monitor_wins",
+    latest_wins: true,
+    selected_checkpoint_policy: GPT_MONITOR_CATCHUP_POLICY,
+    previous_materialized_checkpoint_paris: Number.isFinite(completedMs)
+      ? toParisIso(completedMs).replace(/\.\d{3}/, "")
+      : null,
+    previous_attempt_checkpoint_paris: Number.isFinite(previousAttemptMs)
+      ? toParisIso(previousAttemptMs).replace(/\.\d{3}/, "")
+      : null,
+    previous_attempt_status: previousAttemptStatus || null,
+    monitor_checkpoint_paris: targetParis,
+    selected_checkpoint_paris: targetParis,
+    cadence: `${cadenceMinutes}m`,
+    skipped_checkpoints: skipped,
+    unmaterialized_checkpoints: skipped,
+    skipped_checkpoint_count: skipped.length,
+    skipped_checkpoint_status: "SUPERSEDED_BY_LATEST_MONITOR",
+    analysis_window: {
+      from_paris: analysisFromParis,
+      to_paris: targetParis,
+    },
+    data_coverage: {
+      from_paris: analysisFromParis,
+      to_paris: targetParis,
+      includes_skipped_checkpoints: true,
     },
   };
 }
@@ -233,4 +322,9 @@ function instantMs(value) {
   const parsed = Date.parse(String(value));
   if (!Number.isFinite(parsed)) throw new Error(`INSTANT_INVALID:${value}`);
   return parsed;
+}
+
+function optionalInstantMs(value) {
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : null;
 }

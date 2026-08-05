@@ -235,7 +235,8 @@ test("macro and news remain available without a session pack or Master", async (
   assert.equal(digest.news.digest, "Digest quotidien autonome.");
   assert.equal(headlines.headlines[0].title, "Futures stables");
   assert.equal(calls.every(([, input]) => input.pack_id === undefined && input.pack_build_id === undefined), true);
-  assert.equal(calls.every(([, input]) => input.as_of_utc === undefined), true);
+  assert.equal(calls.find(([kind]) => kind === "news")[1].as_of_utc, scope.as_of_utc);
+  assert.equal(calls.filter(([kind]) => kind === "macro").every(([, input]) => input.as_of_utc === undefined), true);
 });
 
 test("news resources expose the complete daily macro calendar when no headline provider is configured", async () => {
@@ -261,11 +262,12 @@ test("news resources expose the complete daily macro calendar when no headline p
     loadFrontApiResource(store, "/api/v1/news/headlines", scope),
   ]);
 
-  assert.match(digest.news.digest, /2 événements macro aujourd’hui, dont 1 à fort impact/);
+  assert.match(digest.news.digest, /2 événements macro dans la fenêtre glissante de 48 h avant\/après, dont 1 à fort impact/);
   assert.deepEqual(digest.news.headlines.map((item) => item.title), ["Discours BOE", "CPI m\/m"]);
   assert.equal(digest.news.headlines[0].source, "Calendrier macro");
   assert.equal(headlines.headlines.length, 2);
-  assert.equal(sourceReads.every(input => input.pack_id === undefined && input.pack_build_id === undefined && input.as_of_utc === undefined), true);
+  assert.equal(sourceReads.every(input => input.pack_id === undefined && input.pack_build_id === undefined), true);
+  assert.equal(sourceReads.find(input => Object.hasOwn(input, "session")).as_of_utc, scope.as_of_utc);
 });
 
 test("market resource falls back to passive daily packs with OHLC and mega caps", async () => {

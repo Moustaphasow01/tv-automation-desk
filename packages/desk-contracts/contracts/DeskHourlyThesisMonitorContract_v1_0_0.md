@@ -349,10 +349,10 @@ refuser de déclencher GO.
 | `get_latest_hourly_monitor` | Récupérer le dernier monitor |
 | `get_active_position` | Récupérer position active |
 | `get_condition_status` | Conditions GO/invalidation |
-| `get_cross_asset_delta` | Deltas DXY/VIX/taux/gold/oil |
+| Bundle monitor / snapshots pack | Contexte cross-asset DXY/VIX/taux/gold/oil déjà scellé au cutoff |
 | `get_level_map` | Niveaux prioritaires |
 | `get_technical_events` | Événements techniques récents |
-| `get_raw_window` | Audit raw data si doute |
+| `get_raw_window` | Audit raw data scoped pack si doute, avec `pack_id`, `pack_build_id` et `as_of_utc` |
 ## 8.2 Fonctions d’écriture
 | Fonction | Rôle |
 |---|---|
@@ -608,7 +608,7 @@ session context ;
 macro horizon ;
 technical events ;
 level test events ;
-cross-asset deltas ;
+contexte cross-asset issu des snapshots/packs immuables ;
 condition status.
 • 
 • 

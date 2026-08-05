@@ -1,0 +1,210 @@
+{
+  "contract_name": "DeskConditionCatalogContract",
+  "schema_version": "1.0.0",
+  "catalog_id": "condition_catalog_v1",
+  "profile": "OPPORTUNITY_SEEKING_CONTROLLED",
+  "profile_defaults": {
+    "min_weighted_confirmation_ratio": 0.55,
+    "max_risk_pct": 0.25,
+    "min_rr": 2,
+    "hard_gate_policy": "FAIL_CLOSED",
+    "contextual_gap_policy": "SOFT_REQUIRE_CONFIRMATION"
+  },
+  "condition_roles": ["ACTIVATION", "CONFIRMATION", "INVALIDATION", "VETO"],
+  "condition_effects": ["REQUIRE_TRUE", "BLOCK_IF_TRUE"],
+  "operators": [
+    {"code":"CLOSE_ABOVE","field":"close","description":"Dernière clôture éligible au-dessus du seuil."},
+    {"code":"CLOSE_BELOW","field":"close","description":"Dernière clôture éligible sous le seuil."},
+    {"code":"CROSS_ABOVE","field":"close","description":"Croisement haussier du seuil après armement."},
+    {"code":"CROSS_BELOW","field":"close","description":"Croisement baissier du seuil après armement."},
+    {"code":"TOUCH_ABOVE","field":"high_low","description":"Le plus haut touche ou dépasse le seuil."},
+    {"code":"TOUCH_BELOW","field":"high_low","description":"Le plus bas touche ou traverse le seuil."},
+    {"code":"REJECT_ABOVE","field":"ohlc_pattern","description":"Test au-dessus puis clôture de rejet sous le seuil."},
+    {"code":"REJECT_BELOW","field":"ohlc_pattern","description":"Test sous le seuil puis clôture de rejet au-dessus."},
+    {"code":"REJECT_RESISTANCE","field":"ohlc_pattern","description":"Rejet déterministe d’une résistance référencée."},
+    {"code":"REJECT_SUPPORT","field":"ohlc_pattern","description":"Rejet déterministe d’un support référencé."},
+    {"code":"WITHIN_WINDOW","field":"clock","description":"Le checkpoint est inclus dans la fenêtre autorisée."},
+    {"code":"OUTSIDE_WINDOW","field":"clock","description":"Le checkpoint est hors de la fenêtre définie."},
+    {"code":"ALIGNS_WITH","field":"intermarket","description":"L’instrument de confirmation est aligné avec le scénario."},
+    {"code":"DIVERGES_FROM","field":"intermarket","description":"L’instrument de confirmation diverge du scénario."},
+    {"code":"EVENT_ACTIVE","field":"event","description":"Une fenêtre événementielle bloquante est active."},
+    {"code":"EVENT_CLEAR","field":"event","description":"Aucune fenêtre événementielle bloquante n’est active."}
+  ],
+  "predicate_types": [
+    {
+      "code":"PRICE_RELATION",
+      "required_parameters":["threshold"],
+      "parameter_definitions":[{"name":"threshold","type":"NUMBER","unit":"PRICE","source":"GPT_PINNED","description":"Prix de référence explicite du plan."}],
+      "allowed_operators":["CLOSE_ABOVE","CLOSE_BELOW"],
+      "evaluation_field":"close",
+      "source_requirements":[{"source_code":"PRIMARY_OHLC","kind":"OHLC_CANDLES","required":true,"description":"Bougie canonique clôturée de l’instrument."}],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":false,
+      "backend_evaluator":"evaluate_price_relation"
+    },
+    {
+      "code":"PRICE_CROSS",
+      "required_parameters":["threshold"],
+      "parameter_definitions":[{"name":"threshold","type":"NUMBER","unit":"PRICE","source":"GPT_PINNED","description":"Prix traversé après armement."}],
+      "allowed_operators":["CROSS_ABOVE","CROSS_BELOW"],
+      "evaluation_field":"close",
+      "source_requirements":[{"source_code":"PRIMARY_OHLC","kind":"OHLC_CANDLES","required":true,"description":"Deux clôtures canoniques consécutives au minimum."}],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":true,
+      "backend_evaluator":"evaluate_price_cross"
+    },
+    {
+      "code":"ZONE_TOUCH",
+      "required_parameters":["zone_lower","zone_upper"],
+      "parameter_definitions":[
+        {"name":"zone_lower","type":"NUMBER","unit":"PRICE","source":"GPT_PINNED","description":"Borne basse inclusive."},
+        {"name":"zone_upper","type":"NUMBER","unit":"PRICE","source":"GPT_PINNED","description":"Borne haute inclusive."}
+      ],
+      "allowed_operators":["TOUCH_ABOVE","TOUCH_BELOW"],
+      "evaluation_field":"high_low",
+      "source_requirements":[{"source_code":"PRIMARY_OHLC","kind":"OHLC_CANDLES","required":true,"description":"High/low canoniques de la bougie clôturée."}],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":false,
+      "backend_evaluator":"evaluate_zone_touch"
+    },
+    {
+      "code":"BREAKOUT_CLOSE",
+      "required_parameters":["threshold"],
+      "parameter_definitions":[{"name":"threshold","type":"NUMBER","unit":"PRICE","source":"GPT_PINNED","description":"Niveau que la clôture doit casser."}],
+      "allowed_operators":["CLOSE_ABOVE","CLOSE_BELOW"],
+      "evaluation_field":"close",
+      "source_requirements":[{"source_code":"PRIMARY_OHLC","kind":"OHLC_CANDLES","required":true,"description":"Clôture canonique, jamais une mèche seule."}],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":false,
+      "backend_evaluator":"evaluate_breakout_close"
+    },
+    {
+      "code":"BREAK_RETEST_SEQUENCE",
+      "required_parameters":["break_condition_id","retest_level","tolerance_points","max_bars","require_rejection_confirmation"],
+      "parameter_definitions":[
+        {"name":"break_condition_id","type":"IDENTIFIER","unit":"IDENTIFIER","source":"CONDITION_REFERENCE","description":"Condition de cassure antérieure dans le même plan."},
+        {"name":"retest_level","type":"NUMBER","unit":"PRICE","source":"GPT_PINNED","description":"Niveau déterministe du retest."},
+        {"name":"tolerance_points","type":"NUMBER","unit":"POINTS","source":"GPT_PINNED","description":"Tolérance non négative autour du niveau."},
+        {"name":"max_bars","type":"POSITIVE_INTEGER","unit":"BARS","source":"GPT_PINNED","description":"Fenêtre maximale après cassure."},
+        {"name":"require_rejection_confirmation","type":"BOOLEAN","unit":"BOOLEAN","source":"GPT_PINNED","description":"Impose ou non une clôture de rejet."}
+      ],
+      "allowed_operators":["REJECT_ABOVE","REJECT_BELOW","REJECT_RESISTANCE","REJECT_SUPPORT"],
+      "evaluation_field":"ohlc_pattern",
+      "source_requirements":[
+        {"source_code":"PRIMARY_OHLC","kind":"OHLC_CANDLES","required":true,"description":"Séquence de bougies canoniques depuis l’armement."},
+        {"source_code":"CONDITION_MEMORY","kind":"CONDITION_MEMORY","required":true,"description":"État et heure de la cassure référencée."}
+      ],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":true,
+      "backend_evaluator":"evaluate_break_retest_sequence"
+    },
+    {
+      "code":"REJECTION_PATTERN",
+      "required_parameters":["threshold","tolerance_points"],
+      "parameter_definitions":[
+        {"name":"threshold","type":"NUMBER","unit":"PRICE","source":"GPT_PINNED","description":"Niveau rejeté."},
+        {"name":"tolerance_points","type":"NUMBER","unit":"POINTS","source":"GPT_PINNED","description":"Tolérance non négative."}
+      ],
+      "allowed_operators":["REJECT_ABOVE","REJECT_BELOW","REJECT_RESISTANCE","REJECT_SUPPORT"],
+      "evaluation_field":"ohlc_pattern",
+      "source_requirements":[{"source_code":"PRIMARY_OHLC","kind":"OHLC_CANDLES","required":true,"description":"OHLC canonique nécessaire au rejet."}],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":false,
+      "backend_evaluator":"evaluate_rejection_pattern"
+    },
+    {
+      "code":"VWAP_RELATION",
+      "required_parameters":["reference_code"],
+      "parameter_definitions":[{"name":"reference_code","type":"IDENTIFIER","unit":"IDENTIFIER","source":"PACK_REFERENCE","description":"Référence VWAP explicite du snapshot, par exemple SESSION_VWAP."}],
+      "allowed_operators":["CLOSE_ABOVE","CLOSE_BELOW"],
+      "evaluation_field":"close",
+      "source_requirements":[
+        {"source_code":"PRIMARY_OHLC","kind":"OHLC_CANDLES","required":true,"description":"Clôture canonique comparée."},
+        {"source_code":"SESSION_VWAP","kind":"SESSION_SNAPSHOT","required":true,"description":"Valeur VWAP correspondant à reference_code et au cutoff."}
+      ],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":false,
+      "backend_evaluator":"evaluate_vwap_relation"
+    },
+    {
+      "code":"RSI_THRESHOLD",
+      "required_parameters":["threshold","indicator_period"],
+      "parameter_definitions":[
+        {"name":"threshold","type":"NUMBER","unit":"NONE","source":"GPT_PINNED","description":"Seuil RSI entre 0 et 100, vérifié par le backend."},
+        {"name":"indicator_period","type":"POSITIVE_INTEGER","unit":"PERIODS","source":"GPT_PINNED","description":"Période du RSI épinglée."}
+      ],
+      "allowed_operators":["CLOSE_ABOVE","CLOSE_BELOW","CROSS_ABOVE","CROSS_BELOW"],
+      "evaluation_field":"indicator_value",
+      "source_requirements":[{"source_code":"RSI_SERIES","kind":"TECHNICAL_INDICATOR","required":true,"description":"Série RSI canonique du timeframe demandé."}],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":true,
+      "backend_evaluator":"evaluate_rsi_threshold"
+    },
+    {
+      "code":"TIME_WINDOW",
+      "required_parameters":["window_start_paris","window_end_paris"],
+      "parameter_definitions":[
+        {"name":"window_start_paris","type":"TIME_OF_DAY","unit":"TIME_PARIS","source":"GPT_PINNED","description":"Début inclusif en heure de Paris."},
+        {"name":"window_end_paris","type":"TIME_OF_DAY","unit":"TIME_PARIS","source":"GPT_PINNED","description":"Fin exclusive en heure de Paris."}
+      ],
+      "allowed_operators":["WITHIN_WINDOW","OUTSIDE_WINDOW"],
+      "evaluation_field":"clock",
+      "source_requirements":[{"source_code":"PARIS_CLOCK","kind":"CLOCK","required":true,"description":"Horloge du checkpoint en Europe/Paris."}],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":false,
+      "backend_evaluator":"evaluate_time_window"
+    },
+    {
+      "code":"INTERMARKET_CONFIRMATION",
+      "required_parameters":["reference_instrument"],
+      "parameter_definitions":[{"name":"reference_instrument","type":"INSTRUMENT_REF","unit":"SYMBOL","source":"PACK_REFERENCE","description":"Instrument de confirmation présent dans le pack épinglé."}],
+      "allowed_operators":["ALIGNS_WITH","DIVERGES_FROM"],
+      "evaluation_field":"intermarket",
+      "source_requirements":[{"source_code":"REFERENCE_INSTRUMENT_SNAPSHOT","kind":"INTERMARKET_SNAPSHOT","required":true,"description":"Snapshot canonique de reference_instrument au même cutoff."}],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":false,
+      "backend_evaluator":"evaluate_intermarket_confirmation"
+    },
+    {
+      "code":"EVENT_BLACKOUT",
+      "required_parameters":["event_window_ref"],
+      "parameter_definitions":[{"name":"event_window_ref","type":"IDENTIFIER","unit":"IDENTIFIER","source":"PACK_REFERENCE","description":"Identifiant immuable de la fenêtre événementielle du calendrier."}],
+      "allowed_operators":["EVENT_ACTIVE","EVENT_CLEAR"],
+      "evaluation_field":"event",
+      "source_requirements":[{"source_code":"MACRO_EVENT_WINDOW","kind":"MACRO_CALENDAR","required":true,"description":"Fenêtre calendrier référencée par event_window_ref."}],
+      "enforcement_phase":"ENTRY_TRIGGER",
+      "stateful":false,
+      "backend_evaluator":"evaluate_event_blackout"
+    }
+  ],
+  "importance_values": ["HARD_BLOCKER", "MANDATORY", "PRIMARY", "SECONDARY", "OPTIONAL", "ADVISORY"],
+  "memory_policies": ["LATCH_UNTIL_TRIGGER", "LATEST_ONLY", "INVALIDATE_TERMINAL"],
+  "temporal_modes": ["LATEST_CLOSED", "ANY_SINCE_ARM", "CONSECUTIVE_CLOSED", "CROSS_AFTER_ARM"],
+  "hard_gates": [
+    {"code":"ANTI_LOOKAHEAD_FAILED","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"PLAN_COMPILE","pass_semantics":"FAILURE_ABSENT","description":"Une donnée postérieure au cutoff a influencé le plan."},
+    {"code":"SCOPE_CONTRACT_MISMATCH","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"PLAN_COMPILE","pass_semantics":"FAILURE_ABSENT","description":"Le scope ou les contrats épinglés ne correspondent pas au travail réclamé."},
+    {"code":"CANONICAL_TRIGGER_DATA_MISSING","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"ENTRY_TRIGGER","pass_semantics":"FAILURE_ABSENT","description":"La donnée canonique nécessaire au trigger déterministe est absente à l’entrée; le candidat peut exister avant cette phase."},
+    {"code":"GEOMETRY_INVALID","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"SETUP_ARM","pass_semantics":"FAILURE_ABSENT","description":"Entrée, stop ou objectifs sont incohérents avec la direction au moment d’armer."},
+    {"code":"RR_BELOW_MINIMUM","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"SETUP_ARM","pass_semantics":"FAILURE_ABSENT","description":"Le RR déterministe est inférieur à 2 au moment d’armer."},
+    {"code":"STOP_INVALID","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"SETUP_ARM","pass_semantics":"FAILURE_ABSENT","description":"Le stop est absent, non coté ou placé du mauvais côté au moment d’armer."},
+    {"code":"TARGET_INVALID","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"SETUP_ARM","pass_semantics":"FAILURE_ABSENT","description":"Le premier objectif est absent, non coté ou placé du mauvais côté au moment d’armer."},
+    {"code":"SETUP_EXPIRED_OR_TERMINAL","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"ENTRY_TRIGGER","pass_semantics":"FAILURE_ABSENT","description":"Le setup est expiré ou déjà terminal au trigger."},
+    {"code":"DETERMINISTIC_VETO_ACTIVE","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"ENTRY_TRIGGER","pass_semantics":"FAILURE_ABSENT","description":"Une condition VETO structurée est vraie selon sa règle temporelle au trigger."},
+    {"code":"BROKER_SAFETY_FAILED","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"BROKER_SUBMIT","pass_semantics":"FAILURE_ABSENT","description":"Un contrôle broker, compte, quantité ou duplication a échoué à la soumission; il ne bloque pas la création du candidat."},
+    {"code":"MAJOR_EVENT_ENTRY_BLOCK","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"ENTRY_TRIGGER","pass_semantics":"FAILURE_ABSENT","description":"La politique calendrier interdit l’entrée au trigger sans supprimer le candidat futur."},
+    {"code":"MANDATORY_INDICATOR_MISSING","severity":"HARD","effect":"BLOCK_ENTRY","enforcement_phase":"ENTRY_TRIGGER","pass_semantics":"FAILURE_ABSENT","description":"Un indicateur explicitement requis pour le trigger est absent à cette phase."}
+  ],
+  "soft_gates": [
+    {"code":"PACK_DEGRADED","severity":"SOFT","effect":"REQUIRE_CONFIRMATION","description":"Le pack est dégradé mais les données canoniques du setup restent évaluables."},
+    {"code":"MEGA_CAPS_MISSING_FOR_NQ","severity":"SOFT","effect":"REQUIRE_CONFIRMATION","description":"Le contexte mégacaps NQ est manquant sans supprimer la donnée de trigger canonique."},
+    {"code":"PRICE_MID_RANGE","severity":"SOFT","effect":"REQUIRE_CONFIRMATION","description":"Le prix est au milieu du range et exige une géométrie ou confirmation supérieure."},
+    {"code":"CROSS_ASSET_PARTIAL","severity":"SOFT","effect":"REDUCE_RISK","description":"Le cross-asset est partiel mais non invalidant."},
+    {"code":"MACRO_NEUTRAL","severity":"SOFT","effect":"REQUIRE_CONFIRMATION","description":"Le macro est neutre et exige une confirmation technique renforcée."},
+    {"code":"NQ_ES_DIVERGENCE","severity":"SOFT","effect":"REQUIRE_CONFIRMATION","description":"La divergence impose de sélectionner le leader ou d’attendre."},
+    {"code":"HIGH_VOLATILITY","severity":"SOFT","effect":"REDUCE_RISK","description":"La volatilité augmente la prudence sans veto automatique."},
+    {"code":"LEVEL_CONSUMED","severity":"SOFT","effect":"REQUIRE_CONFIRMATION","description":"Le niveau a été consommé et exige une confirmation supplémentaire."},
+    {"code":"CONTEXTUAL_DATA_GAP","severity":"SOFT","effect":"REQUIRE_CONFIRMATION","description":"Une donnée contextuelle non canonique est absente."},
+    {"code":"OPTIONAL_INDICATOR_MISSING","severity":"SOFT","effect":"INFORMATIONAL","description":"Un indicateur non requis pour le trigger est absent."}
+  ],
+  "setup_patterns": ["PULLBACK", "BREAKOUT_RETEST", "BREAKDOWN_RETEST", "REJECTION", "SWEEP_RECLAIM", "RANGE_ROTATION", "FAKEOUT_REVERSAL", "CONTINUATION"]
+}

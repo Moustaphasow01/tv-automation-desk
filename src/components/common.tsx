@@ -1,11 +1,13 @@
-import { useEffect, type ReactNode, type SVGProps } from "react";
+import { useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode, type SVGProps } from "react";
 
 export type IconName =
   | "menu" | "bell" | "live" | "master" | "monitor" | "timeline" | "audit"
   | "news" | "arrow" | "refresh" | "info" | "alert" | "brain" | "globe"
   | "change" | "check" | "x" | "minus" | "chevron" | "trendUp"
   | "trendDown" | "clock" | "layers" | "database" | "target" | "chart"
-  | "close" | "position" | "settings" | "calendar";
+  | "close" | "position" | "settings" | "calendar" | "search" | "filter"
+  | "sort" | "download" | "pause" | "play" | "retry" | "cancel"
+  | "expand" | "collapse";
 
 const paths: Record<IconName, ReactNode> = {
   menu: <path d="M4 7h16M4 12h16M4 17h16"/>,
@@ -37,7 +39,17 @@ const paths: Record<IconName, ReactNode> = {
   close: <path d="M6 6l12 12M18 6 6 18"/>,
   position: <><path d="M4 18h16M7 15l3-5 3 2 4-6"/><circle cx="17" cy="6" r="2"/></>,
   settings: <><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.4 1A7 7 0 0 0 15 6l-.3-2.5h-4L10.4 6A7 7 0 0 0 9 7L6.6 6 4.5 9.5l2 1.5a7 7 0 0 0 0 2l-2 1.5L6.6 18 9 17a7 7 0 0 0 1.4 1l.3 2.5h4L15 18a7 7 0 0 0 1.5-1l2.4 1 2-3.5-2-1.5a7 7 0 0 0 .1-1Z"/></>,
-  calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></>
+  calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></>,
+  search: <><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></>,
+  filter: <path d="M4 5h16l-6 7v6l-4 2v-8L4 5Z"/>,
+  sort: <><path d="m8 4-3 3 3 3M5 7h10M16 14l3 3-3 3M19 17H9"/></>,
+  download: <><path d="M12 3v12m-4-4 4 4 4-4"/><path d="M4 19h16"/></>,
+  pause: <path d="M8 5v14M16 5v14"/>,
+  play: <path d="m8 5 11 7-11 7V5Z"/>,
+  retry: <><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></>,
+  cancel: <><circle cx="12" cy="12" r="9"/><path d="m8 8 8 8M16 8l-8 8"/></>,
+  expand: <path d="m8 10 4 4 4-4"/>,
+  collapse: <path d="m15 6-6 6 6 6"/>
 };
 
 export function Icon({ name, size = 20, ...props }: { name: IconName; size?: number } & SVGProps<SVGSVGElement>) {
@@ -48,19 +60,36 @@ export function BrandMark({ large = false }: { large?: boolean }) {
   return <span className={`brand-mark ${large ? "brand-mark--large" : ""}`}><span/><span/><span/></span>;
 }
 
-export function HealthOrb({ score, label = "Santé" }: { score: number; label?: string }) {
-  const color = score < 40 ? "var(--negative)" : score < 70 ? "var(--warning)" : "var(--positive)";
-  return <div className="health-orb" style={{ "--score": score, "--orb-color": color } as React.CSSProperties}>
-    <div style={{ position: "relative", textAlign: "center" }}><div className="health-orb__value">{score}</div><div className="health-orb__label">{label}</div></div>
-  </div>;
+export type StatusTone = "critical" | "warning" | "positive" | "info" | "muted";
+
+/** Unique primitive for every compact state displayed by the Desk. */
+export function StatusPill({ children, tone = "info", status }: { children: ReactNode; tone?: StatusTone; status?: string }) {
+  const modifier = status ? `status-pill--${status.toLowerCase()}` : `status-pill--${tone}`;
+  return <span className={`status-pill ${modifier}`}>{children}</span>;
 }
 
-export function StatusBadge({ children, tone = "info" }: { children: ReactNode; tone?: "critical" | "warning" | "positive" | "info" | "muted" }) {
-  return <span className={`status-badge status-badge--${tone}`}>{children}</span>;
+/** Compatibility alias while feature pages migrate to the shared StatusPill API. */
+export function StatusBadge(props: { children: ReactNode; tone?: StatusTone }) {
+  return <StatusPill {...props}/>;
 }
 
-export function Card({ children, className = "", onClick }: { children: ReactNode; className?: string; onClick?: () => void }) {
-  return <article className={`card ${onClick ? "card--clickable" : ""} ${className}`} onClick={onClick}>{children}</article>;
+type CardProps = { children: ReactNode; className?: string; onClick?: () => void } & Omit<HTMLAttributes<HTMLElement>, "onClick">;
+
+export function Card({ children, className = "", onClick, onKeyDown, role, tabIndex, ...props }: CardProps) {
+  return <article
+    {...props}
+    className={`card ${onClick ? "card--clickable" : ""} ${className}`}
+    onClick={onClick}
+    role={onClick ? "button" : role}
+    tabIndex={onClick ? 0 : tabIndex}
+    onKeyDown={event => {
+      onKeyDown?.(event);
+      if (!event.defaultPrevented && onClick && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        onClick();
+      }
+    }}
+  >{children}</article>;
 }
 
 export function SectionTitle({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
@@ -68,40 +97,103 @@ export function SectionTitle({ title, subtitle, action }: { title: string; subti
 }
 
 export function Drawer({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    if (!open) return;
-    const fn = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.body.classList.add("overlay-open");
-    window.addEventListener("keydown", fn);
-    return () => { document.body.classList.remove("overlay-open"); window.removeEventListener("keydown", fn); };
-  }, [open, onClose]);
+  const ref = useDialogBehavior(open, onClose);
+  const titleId = useId();
   return <>
-    <button className={`scrim ${open ? "open" : ""}`} onClick={onClose} aria-label="Fermer"/>
-    <section className={`drawer ${open ? "open" : ""}`} aria-hidden={!open}>
+    <button className={`scrim ${open ? "open" : ""}`} onClick={onClose} aria-label="Fermer" tabIndex={open ? 0 : -1}/>
+    <section ref={ref} className={`drawer ${open ? "open" : ""}`} aria-hidden={!open} role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="drawer__grab"/>
-      <header className="drawer__header"><div><p className="eyebrow">Détail</p><h2>{title}</h2></div><button className="icon-btn" onClick={onClose}><Icon name="close"/></button></header>
+      <header className="drawer__header"><div><p className="eyebrow">Détail</p><h2 id={titleId}>{title}</h2></div><button className="icon-btn" onClick={onClose} aria-label="Fermer le panneau"><Icon name="close"/></button></header>
       <div className="drawer__content">{children}</div>
     </section>
   </>;
 }
 
 export function Modal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
+  const ref = useDialogBehavior(open, onClose);
+  const titleId = useId();
   return <>
-    <button className={`scrim ${open ? "open" : ""}`} onClick={onClose} aria-label="Fermer"/>
-    <section className={`modal ${open ? "open" : ""}`} aria-hidden={!open}>
+    <button className={`scrim ${open ? "open" : ""}`} onClick={onClose} aria-label="Fermer" tabIndex={open ? 0 : -1}/>
+    <section ref={ref} className={`modal ${open ? "open" : ""}`} aria-hidden={!open} role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="modal__card">
-        <button className="icon-btn modal__close" onClick={onClose}><Icon name="close"/></button>
+        <button className="icon-btn modal__close" onClick={onClose} aria-label="Fermer la confirmation"><Icon name="close"/></button>
         <div className="modal__icon"><Icon name="alert"/></div>
-        <h2>{title}</h2>{children}
+        <h2 id={titleId}>{title}</h2>{children}
       </div>
     </section>
   </>;
 }
 
-export function LoadingView() {
-  return <section className="view loading-view"><div className="skeleton loading-hero"/><div className="skeleton loading-row"/><div className="skeleton loading-row"/></section>;
+function useDialogBehavior(open: boolean, onClose: () => void) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.classList.add("overlay-open");
+    const frame = window.requestAnimationFrame(() => {
+      const first = ref.current?.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])");
+      first?.focus();
+    });
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
+      if (event.key !== "Tab" || !ref.current) return;
+      const focusable = [...ref.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])")].filter(node => node.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.body.classList.remove("overlay-open");
+      window.removeEventListener("keydown", keydown);
+      previous?.focus();
+    };
+  }, [open, onClose]);
+  return ref;
 }
 
-export function ErrorView({ message, retry }: { message: string; retry: () => void }) {
-  return <section className="view"><div className="card empty-state"><div className="empty-state__icon"><Icon name="alert"/></div><h3>Impossible de charger le Desk</h3><p>{message}</p><button className="primary-btn" onClick={retry}>Réessayer</button></div></section>;
+export function LoadingView({
+  title = "Chargement des données réelles",
+  message = "Le Desk rassemble les dernières informations disponibles.",
+  source = "Données du Desk"
+}: {
+  title?: string;
+  message?: string;
+  source?: string;
+}) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), 4_000);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return <section className="view loading-view" aria-live="polite">
+    <article className="card loading-panel">
+      <div>
+        <span className="eyebrow">Actualisation</span>
+        <h1>{title}</h1>
+        <p>{slow ? "Le backend met plus de temps que prévu. La page restera sur données réelles ou passera en erreur si le timeout client est atteint." : message}</p>
+      </div>
+      <DataSourceBadge label={source}/>
+    </article>
+    <div className="skeleton loading-hero"/>
+    <div className="skeleton loading-row"/>
+    <div className="skeleton loading-row"/>
+  </section>;
+}
+
+export function ErrorView({ title = "Impossible de charger le Desk", message, retry }: { title?: string; message: string; retry: () => void }) {
+  return <section className="view"><div className="card empty-state error-state"><div className="empty-state__icon"><Icon name="alert"/></div><h1>{title}</h1><p>{message}</p><button className="primary-btn" onClick={retry}>Réessayer</button></div></section>;
+}
+
+export function DataSourceBadge({ label = "POSTGRES", detail = "données réelles" }: { label?: string; detail?: string }) {
+  return <span className="data-source-badge"><Icon name="database" size={13}/><strong>{label}</strong><small>{detail}</small></span>;
+}
+
+export function InlineStateCard({ tone = "info", code: _code, title, text, action }: { tone?: StatusTone; code: string; title: string; text: string; action?: ReactNode }) {
+  return <Card className={`inline-state-card inline-state-card--${tone}`}>
+    <div><h3>{title}</h3><p>{text}</p></div>{action}
+  </Card>;
 }

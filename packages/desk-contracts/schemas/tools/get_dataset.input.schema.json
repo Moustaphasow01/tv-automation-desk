@@ -8,6 +8,8 @@
     "dataset": {
       "type": "string",
       "enum": [
+        "MNQ_M1",
+        "MES_M1",
         "MNQ_M5",
         "MES_M5",
         "NQ_M15",

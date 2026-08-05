@@ -6,6 +6,7 @@ import { datasetRef, replaySourceCoverage } from "./desk-pack-service.js";
 import { deskError } from "./desk-errors.js";
 import { stableVNextId } from "./desk-ids.js";
 import { normalizeUtcIso } from "./desk-time-utils.js";
+import { normalizeDeskInstrumentScopes } from "./data-availability-policy.js";
 
 export function normalizeOperationalQuery(args = {}, { requireMaster = false, requireThesis = false } = {}) {
   const required = ["strategy_id", "session", "mode", "trading_date", "run_id", "as_of_utc"];
@@ -104,55 +105,6 @@ export function selectTechnicalEvents(docs, { date, session = "asia_open", instr
     events,
     warning: events.length ? null : "technical_events_not_available_until_feature_engine_runs",
   };
-}
-
-export function selectCrossAssetDelta(docs, { timestamp_paris, window = "1h" }) {
-  const deltas = docs
-    .filter((doc) => !window || doc.window === window)
-    .filter((doc) => !timestamp_paris || String(doc.timestamp_paris || "") <= timestamp_paris)
-    .sort((left, right) => String(right.timestamp_paris || right.computed_at || "").localeCompare(String(left.timestamp_paris || left.computed_at || "")));
-  const selected = deltas[0] || null;
-  return crossAssetDeltaResult(selected, { timestamp_paris, window, count: deltas.length, source: "desk_cross_asset_deltas" });
-}
-
-export function crossAssetDeltaReady(result) {
-  return Boolean(result?.delta && result?.stale_check?.is_stale !== true);
-}
-
-export async function buildFreshCrossAssetDelta(store, { timestamp_paris, window = "1h", computed_at, raw_scope }) {
-  const rowsByAsset = await loadCrossAssetRowsFromRawWindows(store, timestamp_paris, raw_scope);
-  const deltas = buildCrossAssetDeltaDocs({
-    timestamp_paris,
-    rowsByAsset,
-    computed_at,
-  });
-  const selected = deltas.find((delta) => delta.window === window) || null;
-  return {
-    deltas,
-    result: crossAssetDeltaResult(selected, {
-      timestamp_paris,
-      window,
-      count: selected ? 1 : 0,
-      source: "computed_from_raw_market_feeds",
-    }),
-  };
-}
-
-export async function loadCrossAssetRowsFromRawWindows(store, cutoffParis, rawScope) {
-  const output = {};
-  if (!rawScope) return output;
-  for (const asset of ["DXY", "VIX", "US10Y", "US02Y", "GC", "CL"]) {
-    const raw = await safeRead(store.getRawWindow({
-      ...rawScope,
-      instrument: asset,
-      timeframe: "M5",
-      from: offsetIso(cutoffParis, -96 * 60 * 60 * 1000),
-      to: cutoffParis,
-      max_rows: 2000,
-    }), { rows: [] });
-    output[asset] = normalizeFeatureRows(raw.rows || [], { instrument: asset, timeframe: "5", rawRef: null });
-  }
-  return output;
 }
 
 export function crossAssetDeltaResult(delta, { timestamp_paris, window = "1h", count = 0, source = null } = {}) {
@@ -979,12 +931,19 @@ export function assertReplaySourceCoverage(run, pack, requiredCutoff) {
   const requiredMs = Date.parse(requiredCutoff || "");
   const coverageMs = Date.parse(coverage.end_utc || "");
   const coreToleranceMs = 10 * 60 * 1000;
-  const requiredDatasets = new Set((run.instruments || ["MNQ", "MES"]).map((instrument) => ({
-    MNQ: "MNQ_M5",
-    MES: "MES_M5",
-    NQ: "NQ_M15",
-    ES: "ES_M15",
-  })[instrument]).filter(Boolean));
+  const requiredDatasets = new Set(normalizeDeskInstrumentScopes(run).trading_instruments.map((instrument) => {
+    const canonicalM1 = {
+      MNQ: "MNQ_M1",
+      MES: "MES_M1",
+    }[instrument];
+    const legacyM5 = {
+      MNQ: "MNQ_M5",
+      MES: "MES_M5",
+    }[instrument];
+    if (canonicalM1 && pack.datasets?.[canonicalM1]) return canonicalM1;
+    if (legacyM5 && pack.datasets?.[legacyM5]) return legacyM5;
+    return canonicalM1 || legacyM5 || null;
+  }).filter(Boolean));
   const coreFailures = Object.entries(coverage.core_market_max_utc)
     .filter(([dataset]) => requiredDatasets.has(dataset))
     .filter(([, value]) => !Number.isFinite(Date.parse(value || "")) || (Number.isFinite(requiredMs) && Date.parse(value) < requiredMs - coreToleranceMs))
@@ -1335,10 +1294,8 @@ export const MARKET_FEATURE_ALGORITHMS = Object.freeze({
   buildConditionStatusDoc,
   buildCrossAssetDeltaDocs,
   buildDeterministicFeatureSet,
-  buildFreshCrossAssetDelta,
   buildScopedPackRawWindow,
   canonicalTimeframe,
-  crossAssetDeltaReady,
   datasetTimeframe,
   featureDatasetCandidates,
   featureRunCompleted,
@@ -1357,7 +1314,6 @@ export const MARKET_FEATURE_ALGORITHMS = Object.freeze({
   resolvePackForState,
   rowMatchesInstrument,
   selectConditionStatus,
-  selectCrossAssetDelta,
   selectLevelMap,
   selectSessionSnapshot,
   selectTechnicalEvents,

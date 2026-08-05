@@ -27,7 +27,8 @@ Exemple : `examples/decision-audit.example.json`. Tests de validation (ajv 2020-
 
 `registry.json` expose deux couches :
 
-- `active_contracts` : les contrats runtime actuellement exposés par le MCP (`DeskMasterAnalysisContract`, `DeskHourlyThesisMonitorContract`, `DeskFrontProjectionContract`) ;
+- `active_contracts` : la matrice runtime immuable Master `5.1.0`, Monitor `2.1.0`, Plan/Command/Catalog `1.1.0`, Policy `4.1.0` et FrontProjection `1.0.0` ;
+- `legacy_contracts` : les chaînes historiques complètes et hash-lockées, conservées en lecture sans réinterprétation par le runtime courant ;
 - `entity_contracts` : les contrats entité V2 définis dans le package, avec statut `active` lorsque leur schema, exemple et tests de validation sont branchés. `runtime_exposed: false` reste volontaire pour les entités : le package expose leurs schemas pour validation, pas des outils runtime d'execution.
 
 Contrats entité M7.2 :
@@ -48,9 +49,28 @@ séquence et sa révision avant de matérialiser l'état courant, un snapshot et
 événement. Les projections rejetées sont auditées séparément et ne remplacent
 jamais le dernier état courant valide.
 
-Les contrats entité actifs sont découvrables côté runtime package via `listActiveEntityContracts()` et `getEntityContractDefinition(...)`. Le check `node scripts/check_contracts_finalization.mjs` refuse tout contrat entité resté non promu, tout schema ou exemple manquant, et tout écart entre `registry.json` et `generated/runtime-data.js`.
+Les contrats entité actifs sont découvrables côté runtime package via `listActiveEntityContracts()` et `getEntityContractDefinition(...)`. Le check `node scripts/quality/check_contracts_finalization.mjs` refuse tout contrat entité resté non promu, tout schema ou exemple manquant, et tout écart entre `registry.json` et `generated/runtime-data.js`.
 
 La fondation contracts ne lance ni simulation, ni worker, ni dashboard runtime. Elle stabilise uniquement les formes de donnees et leur cycle de vie.
+
+## Protocole analytique progressif v1
+
+`DeskAnalyticalResearchProgressContract v1.0.0` formalise la projection de
+progrès backend du parcours analytique commun LIVE/REPLAY. Il épingle les dix
+phases ordonnées, leurs six états, la couverture, les evidence receipts
+backend, l'anti-lookahead, le scope du claim et l'allowlist d'outils de
+contexte read-only.
+
+- contrat : `contracts/DeskAnalyticalResearchProgressContract_v1_0_0.md` ;
+- schema : `schemas/entities/analytical-research-progress-v1.schema.json` ;
+- exemple : `examples/analytical-research-progress.example.json` ;
+- tests : `npm --prefix packages/desk-contracts run test:analytical-progress`.
+
+Le schema est inclus automatiquement dans `generated/runtime-data.js` et
+accessible via `getEntitySchema(...)`. Il reste volontairement hors
+`registry.entity_contracts` tant que le producteur worker, le validateur et le
+gate de finalisation ne sont pas promus ensemble. Cette absence du registry
+évite d'annoncer prématurément une surface runtime exécutable.
 
 ## Gate DecisionAudit M7.3
 

@@ -20,32 +20,23 @@ export class DeskMarketFeatureService {
   }
 
   async getTechnicalEvents({ date, session = "asia_open", instrument, from, to, event_type }) {
-    const docs = await this.persistence.listDocuments(COLLECTIONS.deskTechnicalEvents, 500).catch(() => []);
+    const filters = [
+      ...(date ? [{ field: "date", operator: "==", value: date }] : []),
+      ...(session ? [{ field: "session", operator: "==", value: session }] : []),
+      ...(instrument ? [{ field: "instrument", operator: "==", value: instrument }] : []),
+      ...(event_type ? [{ field: "event_type", operator: "==", value: event_type }] : []),
+      ...(from ? [{ field: "timestamp_paris", operator: ">=", value: from }] : []),
+      ...(to ? [{ field: "timestamp_paris", operator: "<=", value: to }] : []),
+    ];
+    const docs = typeof this.persistence.queryCollectionDocuments === "function"
+      ? await this.persistence.queryCollectionDocuments({
+          collection: COLLECTIONS.deskTechnicalEvents,
+          filters,
+          orderBy: [{ field: "timestamp_paris", direction: "desc" }],
+          limit: 500,
+        }).catch(() => [])
+      : await this.persistence.listDocuments(COLLECTIONS.deskTechnicalEvents).catch(() => []);
     return this.algorithms.selectTechnicalEvents(docs, { date, session, instrument, from, to, event_type });
-  }
-
-  async getCrossAssetDelta({ timestamp_paris, window = "1h" }) {
-    const docs = await this.persistence.listDocuments(COLLECTIONS.deskCrossAssetDeltas, 200).catch(() => []);
-    return this.algorithms.selectCrossAssetDelta(docs, { timestamp_paris, window });
-  }
-
-  async ensureCrossAssetDelta({ timestamp_paris, window = "1h", save = true, raw_scope } = {}) {
-    const tick = this.clock.now();
-    const checkpoint = timestamp_paris || tick.paris;
-    const existing = await this.getCrossAssetDelta({ timestamp_paris: checkpoint, window }).catch(() => null);
-    if (this.algorithms.crossAssetDeltaReady(existing)) return existing;
-    const fresh = await this.algorithms.buildFreshCrossAssetDelta(this.host, {
-      timestamp_paris: checkpoint,
-      window,
-      computed_at: tick.utc,
-      raw_scope,
-    });
-    if (save !== false) {
-      for (const delta of fresh.deltas) {
-        await this.persistence.setDocument(COLLECTIONS.deskCrossAssetDeltas, delta.delta_id, delta, { merge: true });
-      }
-    }
-    return fresh.result;
   }
 
   async getConditionStatus({ thesis_id, timestamp_paris }) {
@@ -119,9 +110,6 @@ export class DeskMarketFeatureService {
         computed_at: featureComputedAt,
       })) {
         result.cross_asset_deltas[delta.window] = this.algorithms.summarizeCrossAssetDelta(delta);
-        if (args.save !== false) {
-          await this.persistence.setDocument(COLLECTIONS.deskCrossAssetDeltas, delta.delta_id, delta, { merge: true });
-        }
       }
       if (activeThesis) {
         const conditionStatus = this.algorithms.buildConditionStatusDoc({

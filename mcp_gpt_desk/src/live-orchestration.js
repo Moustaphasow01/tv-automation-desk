@@ -5,6 +5,12 @@ import {
   resolveLiveMonitorJobInput,
 } from "./live-scope.js";
 import { buildAndPublishLiveRollingPack } from "./live-pack-builder.js";
+import { CANONICAL_M1_TO_M5_VERSION, CANONICAL_M5_MODE } from "./canonical-market-resampler.js";
+import {
+  V5_REPLAY_DATA_PROFILE_ID,
+  V5_REPLAY_DATA_PROFILE_VERSION,
+} from "./v5-replay-data-profile.js";
+import { ACTIVE_STRATEGY_RUNTIME_VERSIONS } from "./strategy-runtime-versioning.js";
 
 const CONTINUITY_REPLAN_ACTIONS = new Set([
   "REPLAN_FULL",
@@ -14,32 +20,116 @@ const CONTINUITY_REPLAN_ACTIONS = new Set([
   "EXPIRE_SETUP",
 ]);
 
-export async function prepareDueLiveMasterBundle(store, args = {}, { now = Date.now() } = {}) {
+export function resolveLiveMonitorReplanAction(monitor = {}) {
+  const compiled = compiledMonitorCommand(monitor);
+  const nativeReplan = compiled?.replan_request || null;
+  const nativeReplanType = String(nativeReplan?.type || nativeReplan?.command || "").trim().toUpperCase();
+  if (["REQUEST", "REPLAN", "REPLAN_FULL", "REPLAN_REQUIRED"].includes(nativeReplanType)) return "REPLAN_FULL";
+
+  const nativeThesisCommand = String(compiled?.thesis_command?.type || "").trim().toUpperCase();
+  if (nativeThesisCommand === "INVALIDATE") return "INVALIDATE_THESIS";
+  if (["REQUIRE_REPLAN", "SUPERSEDE", "EXPIRE"].includes(nativeThesisCommand)) return "REPLAN_FULL";
+  if (isMonitorV2(monitor)) return null;
+
+  const directAction = String(
+    monitor.monitor_decision?.action
+      || monitor.action
+      || monitor.decision
+      || "",
+  ).trim().toUpperCase();
+  if (CONTINUITY_REPLAN_ACTIONS.has(directAction)) return directAction;
+
+  const thesisStatus = String(
+    monitor.thesis_update?.status
+      || monitor.context_transmission?.thesis_status
+      || "",
+  ).trim().toUpperCase();
+  if (["THESIS_INVALIDATED", "INVALIDATED"].includes(thesisStatus)) return "INVALIDATE_THESIS";
+  if (["REPLAN_REQUIRED", "REPLAN_FULL", "NEW_MASTER_REQUIRED"].includes(thesisStatus)) {
+    return thesisStatus;
+  }
+
+  const setupAction = String(monitor.monitor_decision?.setup_action || "").trim().toUpperCase();
+  if (setupAction.includes("REPLAN")) return "REPLAN_REQUIRED";
+  if (monitor.thesis_update?.requires_replan_after) return "REPLAN_REQUIRED";
+
+  const decision = String(monitor.monitor_decision?.decision || "").trim().toUpperCase();
+  return CONTINUITY_REPLAN_ACTIONS.has(decision) ? decision : null;
+}
+export function resolveLiveMonitorReplanCheckpoint(monitor = {}, fallback = null) {
+  const monitorCheckpoint = monitor.timestamp_paris || monitor.checkpoint || monitor.cutoff_paris || fallback;
+  const compiledRequest = compiledMonitorCommand(monitor)?.replan_request;
+  const requestedCheckpoint = isMonitorV2(monitor)
+    ? compiledRequest?.requested_at_paris || monitorCheckpoint
+    : compiledRequest?.requested_at_paris
+      || monitor.replan_request?.requested_at_paris
+      || monitor.monitor_output?.command?.replan_request?.requested_at_paris
+      || monitor.thesis_update?.requires_replan_after
+      || monitor.context_transmission?.next_checkpoints?.[0]
+      || monitorCheckpoint;
+  const requestedMs = Date.parse(requestedCheckpoint || "");
+  const monitorMs = Date.parse(monitorCheckpoint || "");
+  if (!Number.isFinite(requestedMs)) return monitorCheckpoint || null;
+  if (Number.isFinite(monitorMs) && requestedMs < monitorMs) return monitorCheckpoint;
+  if (monitorCheckpoint && String(requestedCheckpoint).slice(0, 10) !== String(monitorCheckpoint).slice(0, 10)) {
+    return monitorCheckpoint;
+  }
+  return requestedCheckpoint;
+}
+function isMonitorV2(monitor = {}) {
+  return String(monitor.schema_version || monitor.contract_version || "") === ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract
+    || String(monitor.monitor_output?.contract?.version || "") === ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract;
+}
+
+function compiledMonitorCommand(monitor = {}) {
+  const compiled = monitor.deterministic_monitor_command;
+  if (compiled && typeof compiled === "object" && !Array.isArray(compiled)) return compiled;
+  if (isMonitorV2(monitor)) {
+    const error = new Error("live_monitor_v2_compiled_command_missing");
+    error.code = "LIVE_MONITOR_V2_COMPILED_COMMAND_MISSING";
+    throw error;
+  }
+  return null;
+}
+
+export async function prepareDueLiveMasterBundle(store, args = {}, {
+  now = Date.now(),
+  buildLiveRollingPack = buildAndPublishLiveRollingPack,
+} = {}) {
   const payload = resolveLiveMasterJobInput(args, now);
+  const livePack = await ensureLiveRollingPackCoverage(store, {
+    ...payload,
+    timestamp_paris: payload.cutoff_paris,
+  }, { buildLiveRollingPack });
   const result = await store.prepareMasterCutoffBundleJob(payload);
   return {
     ...result,
     workflow: args.workflow || null,
+    live_pack: livePack,
     resolved_job_input: payload,
   };
 }
 
 export async function prepareLiveReplanMasterAfterMonitor(store, monitor = {}) {
-  const action = String(
-    monitor.monitor_decision?.action
-      || monitor.monitor_decision?.decision
-      || monitor.action
-      || monitor.decision
-      || "",
-  ).toUpperCase();
-  if (!CONTINUITY_REPLAN_ACTIONS.has(action)) {
+  const action = resolveLiveMonitorReplanAction(monitor);
+  if (!action) {
     return { ok: true, status: "skipped", skipped: true, skipped_reason: "monitor_does_not_request_replan" };
   }
 
-  const cutoffParis = monitor.timestamp_paris || monitor.cutoff_paris;
+  const cutoffParis = resolveLiveMonitorReplanCheckpoint(monitor);
   const session = monitor.session;
   if (!cutoffParis || !["asia_open", "ny_open"].includes(session)) {
     return { ok: false, status: "failed", skipped: false, error: "LIVE_REPLAN_SCOPE_INCOMPLETE" };
+  }
+  if (Date.parse(cutoffParis) > Date.now()) {
+    return {
+      ok: true,
+      status: "pending",
+      skipped: false,
+      trigger_action: action,
+      replan_cutoff_paris: cutoffParis,
+      next_eligible_at_utc: new Date(cutoffParis).toISOString(),
+    };
   }
 
   const tradingDate = monitor.trading_date || monitor.date || String(cutoffParis).slice(0, 10);
@@ -119,6 +209,13 @@ export async function prepareDueLiveMonitorBundle(store, args = {}, {
     };
   }
   const livePack = await ensureLiveRollingPackCoverage(store, context.payload, { buildLiveRollingPack });
+  const paperExecution = typeof store?.reconcileLivePaperExecution === "function"
+    ? await store.reconcileLivePaperExecution({
+        ...context.payload,
+        pack_id: livePack.pack_id,
+        pack_build_id: livePack.pack_build_id,
+      })
+    : null;
   const result = await store.prepareM15MonitorBundleJob(context.payload);
   return {
     ...result,
@@ -127,6 +224,7 @@ export async function prepareDueLiveMonitorBundle(store, args = {}, {
     master_id: context.master_id,
     thesis_id: context.thesis_id,
     live_pack: livePack,
+    paper_execution: paperExecution,
     resolved_job_input: context.payload,
   };
 }
@@ -169,7 +267,8 @@ export async function reconcileLiveDeskContinuity(store, args = {}, { now = Date
     master_id: master.analysis_id,
     status: "active",
   }).then((result) => result.active_thesis).catch(() => null);
-  if (activeThesis?.thesis_id) {
+  const activeThesisExpired = liveThesisExpiredAt(activeThesis, scope.timestamp_paris || scope.as_of_utc || now);
+  if (activeThesis?.thesis_id && !activeThesisExpired) {
     return { ok: true, status: "healthy", recovery_mode: false, reason: "active_thesis_available" };
   }
 
@@ -189,7 +288,7 @@ export async function reconcileLiveDeskContinuity(store, args = {}, { now = Date
       return (!Number.isFinite(masterCutoffMs) || checkpointMs > masterCutoffMs)
         && CONTINUITY_REPLAN_ACTIONS.has(monitorAction(monitor));
     })
-    .sort((left, right) => Date.parse(left.timestamp_paris || left.created_at_paris || "") - Date.parse(right.timestamp_paris || right.created_at_paris || ""))[0] || null;
+    .sort((left, right) => Date.parse(right.timestamp_paris || right.created_at_paris || "") - Date.parse(left.timestamp_paris || left.created_at_paris || ""))[0] || null;
 
   if (replanMonitor) {
     const result = await prepareLiveReplanMasterAfterMonitor(store, replanMonitor);
@@ -201,12 +300,12 @@ export async function reconcileLiveDeskContinuity(store, args = {}, { now = Date
     });
   }
 
-  const masterCutoff = master.cutoff_paris || master.created_at_paris || scope.timestamp_paris;
+  const masterCutoff = scope.timestamp_paris || scope.cutoff_paris || scope.as_of_utc;
   const result = await prepareDueLiveMasterBundle(store, {
     workflow: scope.session === "ny_open" ? "ny_open" : "asia_open",
     trading_date: scope.trading_date,
     cutoff_paris: masterCutoff,
-    as_of_utc: new Date(master.as_of_utc || masterCutoff).toISOString(),
+    as_of_utc: new Date(masterCutoff).toISOString(),
     run_id: scope.run_id,
     mode: "live",
     include_raw_refs: true,
@@ -214,9 +313,27 @@ export async function reconcileLiveDeskContinuity(store, args = {}, { now = Date
     enqueue_agent_work: false,
   }, { now });
   return continuityRecoveryResult(result, {
-    reason: "master_without_active_thesis_reconciled",
+    reason: activeThesisExpired
+      ? "expired_thesis_replanned_at_current_checkpoint"
+      : "master_without_active_thesis_reconciled",
+    expired_thesis_id: activeThesisExpired ? activeThesis?.thesis_id || null : null,
     recovery_cutoff_paris: masterCutoff,
   });
+}
+
+function liveThesisExpiredAt(thesis, checkpoint) {
+  if (!thesis?.thesis_id) return false;
+  const expiry = thesis.valid_until_paris
+    || thesis.valid_until
+    || thesis.requires_replan_after_paris
+    || thesis.requires_replan_after
+    || thesis.setup_expiry_time
+    || null;
+  const expiryMs = Date.parse(expiry || "");
+  const checkpointMs = typeof checkpoint === "number" ? checkpoint : Date.parse(checkpoint || "");
+  return Number.isFinite(expiryMs)
+    && Number.isFinite(checkpointMs)
+    && checkpointMs >= expiryMs;
 }
 
 export async function ensureLiveRollingPackCoverage(store, scope, {
@@ -238,13 +355,18 @@ export async function ensureLiveRollingPackCoverage(store, scope, {
     });
   }
   if (isLiveRollingPack(existing) && existingCoverageMs >= requestedMs) {
-    return livePackSummary(existing, { reused: true, requestedMs });
+    if (hasStrictLiveFreshness(existing)) {
+      return livePackSummary(existing, { reused: true, requestedMs });
+    }
   }
 
   const buildCheckpoint = existingCoverageMs > requestedMs
     ? existing?.data_cutoff?.end_paris || existing?.source_coverage?.end_paris || scope.timestamp_paris
     : scope.timestamp_paris;
-  await buildLiveRollingPack({
+  const publisher = typeof store?.buildAndPublishLiveRollingPack === "function"
+    ? store.buildAndPublishLiveRollingPack.bind(store)
+    : buildLiveRollingPack;
+  await publisher({
     date: scope.trading_date,
     session: scope.session,
     checkpoint_paris: buildCheckpoint,
@@ -252,7 +374,7 @@ export async function ensureLiveRollingPackCoverage(store, scope, {
 
   const refreshed = await readActivePack(store, packId);
   const refreshedCoverageMs = packCoverageEndMs(refreshed);
-  if (!isLiveRollingPack(refreshed) || refreshedCoverageMs < requestedMs) {
+  if (!isLiveRollingPack(refreshed) || refreshedCoverageMs < requestedMs || !hasStrictLiveFreshness(refreshed)) {
     throw new Error(`LIVE_ROLLING_PACK_COVERAGE_INSUFFICIENT:${packId}:${scope.as_of_utc}`);
   }
   return livePackSummary(refreshed, { reused: false, requestedMs });
@@ -297,13 +419,7 @@ function continuityRecoveryResult(result, details = {}) {
 }
 
 function monitorAction(monitor) {
-  return String(
-    monitor?.monitor_decision?.action
-      || monitor?.monitor_decision?.decision
-      || monitor?.action
-      || monitor?.decision
-      || "",
-  ).toUpperCase();
+  return resolveLiveMonitorReplanAction(monitor);
 }
 
 async function readActivePack(store, packId) {
@@ -313,6 +429,35 @@ async function readActivePack(store, packId) {
 
 function isLiveRollingPack(pack) {
   return pack?.pack_purpose === "live_rolling" || pack?.source_coverage?.mode === "live_rolling_checkpoint";
+}
+
+function hasStrictLiveFreshness(pack) {
+  const quality = pack?.quality || {};
+  if (pack?.data_profile_id !== V5_REPLAY_DATA_PROFILE_ID
+    || pack?.data_profile_version !== V5_REPLAY_DATA_PROFILE_VERSION
+    || quality.freshness_policy_version !== "1.2.0"
+    || pack?.canonical_m5_mode !== CANONICAL_M5_MODE
+    || pack?.canonical_resampler_version !== CANONICAL_M1_TO_M5_VERSION) {
+    return false;
+  }
+  const freshness = quality.dataset_freshness || {};
+  const strictCanonical = ["MNQ_M1", "MES_M1", "MNQ_M5", "MES_M5"];
+  const requiredContext = ["NQ_H1", "ES_H1", "MNQ_H4", "MES_H4", "NQ_H4", "ES_H4"];
+  const derivedLineage = [
+    ["MNQ_M5", "MNQ_M1", "prod__tradingview__MNQ1!__1"],
+    ["MES_M5", "MES_M1", "prod__tradingview__MES1!__1"],
+  ];
+  return strictCanonical.every((dataset) => freshness[dataset]?.status === "fresh")
+    && requiredContext.every((dataset) => ["fresh", "stale"].includes(freshness[dataset]?.status))
+    && derivedLineage.every(([dataset, sourceDataset, sourceFeedId]) => {
+      const ref = pack?.datasets?.[dataset] || {};
+      return ref.source === "canonical_derived_m1"
+        && ref.source_dataset === sourceDataset
+        && ref.derivation_version === CANONICAL_M1_TO_M5_VERSION
+        && Array.isArray(ref.source_feed_ids)
+        && ref.source_feed_ids.length === 1
+        && ref.source_feed_ids[0] === sourceFeedId;
+    });
 }
 
 function packCoverageEndMs(pack) {
@@ -337,6 +482,8 @@ function livePackSummary(pack, { reused, requestedMs, publishingSkipped = false 
     source_coverage_end_utc: Number.isFinite(coverageMs) ? new Date(coverageMs).toISOString() : null,
     requested_as_of_utc: new Date(requestedMs).toISOString(),
     coverage_sufficient: coverageMs >= requestedMs,
+    freshness_policy_version: pack.quality?.freshness_policy_version || null,
+    strict_freshness_satisfied: hasStrictLiveFreshness(pack),
     publishing_skipped: publishingSkipped,
     reused,
   };

@@ -30,24 +30,130 @@ services:
       DESK_GPT_MCP_STORE: postgres
       DATABASE_URL: postgresql://${POSTGRES_USER:-desk}:${POSTGRES_PASSWORD:-desk_local_only}@postgres:5432/${POSTGRES_DB:-desk}
       DESK_OBJECT_ROOT: /app/runtime/objects
+      DESK_MCP_TOOL_PROFILE: ${DESK_MCP_TOOL_PROFILE:-autopilot_v4}
+      DESK_LOCAL_PACK_BUILDER_ENABLED: ${DESK_LOCAL_PACK_BUILDER_ENABLED:-true}
+      DESK_LIVE_EXECUTION_MODE: ${DESK_LIVE_EXECUTION_MODE:-shadow}
+      DESK_LIVE_PAPER_EXECUTION_ENABLED: ${DESK_LIVE_PAPER_EXECUTION_ENABLED:-true}
+      DESK_NEWS_ENABLED: ${DESK_NEWS_ENABLED:-true}
+      DESK_NEWS_GDELT_URL: ${DESK_NEWS_GDELT_URL:-https://api.gdeltproject.org/api/v2/doc/doc}
+      DESK_NEWS_REFRESH_MS: ${DESK_NEWS_REFRESH_MS:-900000}
+      DESK_NEWS_MIN_REFRESH_MS: ${DESK_NEWS_MIN_REFRESH_MS:-600000}
+      DESK_NEWS_TIMEOUT_MS: ${DESK_NEWS_TIMEOUT_MS:-35000}
+      DESK_NEWS_MAX_RECORDS: ${DESK_NEWS_MAX_RECORDS:-100}
+      DESK_NEWS_RETENTION_DAYS: ${DESK_NEWS_RETENTION_DAYS:-90}
+      DESK_BROKER_EXECUTION_ENABLED: ${DESK_BROKER_EXECUTION_ENABLED:-false}
+      DESK_BROKER_PROVIDER: ninjatrader
+      DESK_NINJA_BRIDGE_MODE: ${DESK_NINJA_BRIDGE_MODE:-disabled}
+      DESK_NINJA_REQUIRE_OPERATOR_APPROVAL: ${DESK_NINJA_REQUIRE_OPERATOR_APPROVAL:-true}
+      DESK_NINJA_DEFAULT_ACCOUNT: ninjatrader_paper_local
+      DESK_NINJA_ACCOUNT_ALLOWLIST: ninjatrader_paper_local
+      DESK_NINJA_MAX_CONTRACTS: ${DESK_NINJA_MAX_CONTRACTS:-0}
+      DESK_NINJA_ALLOWED_INSTRUMENTS: MNQ,MES
+      DESK_NINJA_KILL_SWITCH: ${DESK_NINJA_KILL_SWITCH:-true}
+      DESK_NINJA_ORDER_TTL_SECONDS: ${DESK_NINJA_ORDER_TTL_SECONDS:-60}
+      DESK_NINJA_ACCOUNT_SNAPSHOT_STALE_SECONDS: ${DESK_NINJA_ACCOUNT_SNAPSHOT_STALE_SECONDS:-60}
+      DESK_NINJA_ATM_STRATEGY_NAME: ${DESK_NINJA_ATM_STRATEGY_NAME:-}
+      DESK_NINJA_ADDON_SHARED_SECRET: ${DESK_NINJA_ADDON_SHARED_SECRET:-}
+      DESK_NINJA_STARTUP_CONTROL_ROOT: /app/runtime/ninjatrader-control
+      DESK_NINJA_STARTUP_CONNECTION_NAME: ${DESK_NINJA_STARTUP_CONNECTION_NAME:-Simulation}
+      DESK_NINJA_STARTUP_CONNECTION_PROVIDER: ${DESK_NINJA_STARTUP_CONNECTION_PROVIDER:-NinjaTrader}
+      DESK_NINJA_ALLOW_LIVE_ACCOUNT: "false"
       DESK_MCP_API_KEY: ${DESK_MCP_API_KEY:-local-preprod-key}
       DESK_REST_ALLOWED_ORIGINS: http://localhost:${FRONTEND_PORT:-8080},http://127.0.0.1:${FRONTEND_PORT:-8080}
       DESK_MCP_PUBLIC_BASE_URL: http://localhost:${FRONTEND_PORT:-8080}
       DESK_OAUTH_ADMIN_PIN: ${DESK_OAUTH_ADMIN_PIN:-12345678}
       DESK_OAUTH_TOKEN_SECRET: ${DESK_OAUTH_TOKEN_SECRET:-local-preprod-token-secret-change-me}
+      DESK_OPERATOR_ADMIN_PIN: ${DESK_OPERATOR_ADMIN_PIN:-12345678}
+      DESK_OPERATOR_SESSION_SECRET: ${DESK_OPERATOR_SESSION_SECRET:-local-operator-session-secret-change-me}
       TRADINGVIEW_WEBHOOK_SECRET: ${TRADINGVIEW_WEBHOOK_SECRET:-local-tradingview-secret}
+      DESK_REPLAY_PREPARATION_POLL_MS: "0"
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "127.0.0.1:${API_PORT:-8787}:8787"
     volumes:
-      - desk_objects:/app/runtime/objects
+      - ${DESK_OBJECT_HOST_ROOT:-./.local/desk_objects}:/app/runtime/objects
+      - ${DESK_NINJA_STARTUP_CONTROL_HOST_ROOT:-./.local/ninjatrader-control}:/app/runtime/ninjatrader-control
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/status').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
+
+  replay-preparation:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["node", "scripts/run_replay_preparation_worker.mjs"]
+    environment:
+      NODE_ENV: preproduction
+      DESK_ENVIRONMENT: preprod
+      DESK_GPT_MCP_STORE: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER:-desk}:${POSTGRES_PASSWORD:-desk_local_only}@postgres:5432/${POSTGRES_DB:-desk}
+      DESK_OBJECT_ROOT: /app/runtime/objects
+      DESK_LOCAL_PACK_BUILDER_ENABLED: ${DESK_LOCAL_PACK_BUILDER_ENABLED:-true}
+      DESK_REPLAY_PREPARATION_WORKER_POLL_MS: ${DESK_REPLAY_PREPARATION_WORKER_POLL_MS:-2000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${DESK_OBJECT_HOST_ROOT:-./.local/desk_objects}:/app/runtime/objects
+    restart: unless-stopped
+
+  broker-management:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["node", "scripts/run_broker_management_worker.mjs"]
+    environment:
+      NODE_ENV: preproduction
+      DESK_ENVIRONMENT: preprod
+      DESK_GPT_MCP_STORE: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER:-desk}:${POSTGRES_PASSWORD:-desk_local_only}@postgres:5432/${POSTGRES_DB:-desk}
+      DESK_OBJECT_ROOT: /app/runtime/objects
+      DESK_BROKER_EXECUTION_ENABLED: ${DESK_BROKER_EXECUTION_ENABLED:-false}
+      DESK_BROKER_PROVIDER: ninjatrader
+      DESK_NINJA_BRIDGE_MODE: ${DESK_NINJA_BRIDGE_MODE:-disabled}
+      DESK_NINJA_REQUIRE_OPERATOR_APPROVAL: ${DESK_NINJA_REQUIRE_OPERATOR_APPROVAL:-true}
+      DESK_NINJA_DEFAULT_ACCOUNT: ninjatrader_paper_local
+      DESK_NINJA_ACCOUNT_ALLOWLIST: ninjatrader_paper_local
+      DESK_NINJA_MAX_CONTRACTS: ${DESK_NINJA_MAX_CONTRACTS:-0}
+      DESK_NINJA_ALLOWED_INSTRUMENTS: MNQ,MES
+      DESK_NINJA_KILL_SWITCH: ${DESK_NINJA_KILL_SWITCH:-true}
+      DESK_NINJA_ACCOUNT_SNAPSHOT_STALE_SECONDS: ${DESK_NINJA_ACCOUNT_SNAPSHOT_STALE_SECONDS:-60}
+      DESK_NINJA_ALLOW_LIVE_ACCOUNT: "false"
+      DESK_BROKER_MANAGEMENT_POLL_MS: ${DESK_BROKER_MANAGEMENT_POLL_MS:-15000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${DESK_OBJECT_HOST_ROOT:-./.local/desk_objects}:/app/runtime/objects
+    restart: unless-stopped
+
+  telegram:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["node", "scripts/run_telegram_alert_worker.mjs"]
+    environment:
+      NODE_ENV: preproduction
+      DESK_ENVIRONMENT: preprod
+      DESK_GPT_MCP_STORE: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER:-desk}:${POSTGRES_PASSWORD:-desk_local_only}@postgres:5432/${POSTGRES_DB:-desk}
+      DESK_OBJECT_ROOT: /app/runtime/objects
+      DESK_TELEGRAM_ENABLED: ${DESK_TELEGRAM_ENABLED:-false}
+      DESK_TELEGRAM_COMMANDS_ENABLED: ${DESK_TELEGRAM_COMMANDS_ENABLED:-true}
+      DESK_TELEGRAM_POLL_MS: ${DESK_TELEGRAM_POLL_MS:-5000}
+      TELEGRAM_ADMIN_BOT_TOKEN: ${TELEGRAM_ADMIN_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_CHAT_ID: ${TELEGRAM_ADMIN_CHAT_ID:-}
+      TELEGRAM_ALERT_BOT_TOKEN: ${TELEGRAM_ALERT_BOT_TOKEN:-}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID:-}
+      TELEGRAM_LEGACY_FALLBACK: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -56,7 +162,7 @@ services:
       dockerfile: infra/docker/frontend.Dockerfile
       args:
         VITE_API_BASE_URL: /api/v1
-        VITE_DESK_API_KEY: ${DESK_MCP_API_KEY:-local-preprod-key}
+        VITE_DESK_API_KEY: ${VITE_DESK_API_KEY:-}
     depends_on:
       api:
         condition: service_healthy
@@ -66,4 +172,3 @@ services:
 
 volumes:
   postgres_data:
-  desk_objects:

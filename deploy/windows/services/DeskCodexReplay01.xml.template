@@ -1,0 +1,30 @@
+<service>
+  <id>DeskFuturesCodexReplay01</id>
+  <name>Desk Futures Codex Replay 01</name>
+  <description>Persistent Codex analytical worker restricted to the REPLAY claim lane.</description>
+  <executable>__NODE_EXE__</executable>
+  <arguments>--env-file="__ENV_FILE__" "__INSTALL_ROOT__\current\app\mcp_gpt_desk\scripts\run_desk_ai_worker.mjs"</arguments>
+  <workingdirectory>__INSTALL_ROOT__\current\app\mcp_gpt_desk</workingdirectory>
+  <env name="DESK_AI_SERVICE_ID" value="codex_replay_worker_01"/>
+  <env name="DESK_AI_WORKER_ID" value="codex-replay-01"/>
+  <env name="DESK_AI_WORKER_SCOPE" value="replay"/>
+  <env name="DESK_AI_WORKER_MODE" value="__AI_WORKER_MODE__"/>
+  <env name="DESK_CODEX_BIN" value="__CODEX_EXE__"/>
+  <env name="CODEX_HOME" value="__CODEX_HOME__"/>
+  <env name="DESK_CODEX_TEMP_PRINCIPAL" value="*S-1-5-18"/>
+  <env name="DESK_AI_WORKER_PROJECT_ROOT" value="__INSTALL_ROOT__\current\app\mcp_gpt_desk"/>
+  <priority>BelowNormal</priority>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>__POSTGRES_SERVICE__</depend>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+  <logpath>__LOG_ROOT__\codex-replay-01</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>10</keepFiles>
+  </log>
+</service>

@@ -6,7 +6,11 @@
       "enum": [
         "DeskMasterAnalysisContract",
         "DeskHourlyThesisMonitorContract",
-        "DeskFrontProjectionContract"
+        "DeskFrontProjectionContract",
+        "DeskDeterministicExecutionPolicy",
+        "DeskExecutionPlanContract",
+        "DeskMonitorCommandContract",
+        "DeskConditionCatalogContract"
       ]
     }
   },

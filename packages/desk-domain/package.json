@@ -13,7 +13,9 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "coverage:gate": "node ../../scripts/check_desk_domain_coverage.mjs"
+    "coverage:gate": "node ../../scripts/quality/check_desk_domain_coverage.mjs"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@tv-automation/desk-audit": "file:../desk-audit"
+  }
 }

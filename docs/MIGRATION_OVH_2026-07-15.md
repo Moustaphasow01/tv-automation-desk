@@ -1,8 +1,9 @@
 # Chantier separe — migration Firebase/Google Cloud vers OVH
 
-Date : 2026-07-15  
-Statut : cadrage uniquement  
-Execution : non commencee
+Date initiale : 2026-07-15
+Mise à jour : 2026-07-23
+Statut : préparation locale terminée, provisionnement VPS non commencé
+Exécution : kit Windows/PostgreSQL prêt ; aucun cutover externe
 
 ## 1. Principe de separation
 
@@ -12,9 +13,9 @@ La migration d'infrastructure est independante du chantier de nettoyage du Desk.
 - Pilotage : backlog, risques et validations propres.
 - Deploiement : aucune suppression Firebase/Google Cloud pendant le nettoyage applicatif.
 - Fonctionnel : aucune nouvelle logique de trading ou refonte d'interface pendant le basculement.
-- Retour arriere : Firebase/Google Cloud reste disponible en lecture ou en secours pendant la fenetre de validation.
+- Retour arriere : Firebase/Google Cloud reste disponible en lecture ou en secours pendant la fenêtre de validation.
 
-Le chantier de nettoyage est decrit dans `docs/AUDIT_ARCHITECTURE_NETTOYAGE_2026-07-15.md`.
+Le rapport initial du chantier de nettoyage est conservé dans `docs/archive/2026-07-15/AUDIT_ARCHITECTURE_NETTOYAGE_2026-07-15.md`.
 
 ## 2. Objectif
 
@@ -23,7 +24,7 @@ Sortir progressivement de Firebase et Google Cloud sans modifier le comportement
 - Firebase Hosting vers un frontend statique servi par Caddy ;
 - Firestore vers PostgreSQL, avec JSONB pour les contrats et projections ;
 - Firebase Function TradingView vers un endpoint webhook Node.js ;
-- Cloud Run MCP/BFF vers des conteneurs sur VPS ;
+- Cloud Run MCP/BFF vers des services Windows Node.js natifs sur le VPS ;
 - Cloud Run Jobs et Cloud Scheduler vers des workers et un scheduler controles ;
 - Firebase Storage vers OVH Object Storage compatible S3 ;
 - Firebase Auth, si utilise par le Desk cible, vers une authentification explicitement choisie ;
@@ -42,66 +43,76 @@ Ce chantier ne doit pas :
 - changer simultanement les contrats d'API et l'hebergeur ;
 - supprimer le projet Google avant la fin de la periode de retour arriere.
 
-## 4. Architecture cible de travail
+## 4. Architecture cible retenue
 
 ```text
 Internet
-  -> Caddy (TLS, routage, frontend statique)
-     -> API Node.js (Desk API, MCP, webhook TradingView)
-        -> PostgreSQL
-        -> file de travaux PostgreSQL ou Redis si justifie
-     -> workers Node/Python strictement conserves par le manifeste runtime
+  -> DNS
+  -> VPS Windows
+     -> Caddy (TLS, routage, frontend statique)
+        -> API/MCP Node.js sur loopback
+           -> PostgreSQL 16 natif sur loopback
+           -> packs immuables sur disque de données
+     -> services WinSW : API, LIVE runtime, broker management, Caddy
+     -> session Windows interactive : NinjaTrader 8 + AddOn en Sim101
+     -> tâches planifiées : health, sauvegarde et restauration de contrôle
 
-PostgreSQL et packs
-  -> sauvegardes chiffrees hors VPS
-  -> OVH Object Storage compatible S3
+Sauvegardes PostgreSQL
+  -> copie locale à rétention bornée
+  -> copie chiffrée hors VPS
 ```
 
 Un VPS unique ne constitue pas une sauvegarde. Les dumps PostgreSQL, packs indispensables et secrets de recuperation doivent etre stockes hors de la machine de production, avec des tests de restauration.
 
+Le runtime applicatif et PostgreSQL seront natifs Windows. Docker reste un outil
+de développement local et la source du dump initial ; il n'est pas requis sur le
+VPS.
+
 ## 5. Prerequis avant basculement
 
-1. Manifeste des services, jobs, schedulers et entrypoints reellement conserves.
-2. Decision documentee sur le moteur Python shadow.
-3. Baseline de tests et de sorties metier reproductible.
-4. Mesure des volumes Firestore, Storage, trafic et couts Google reels.
-5. Schema de correspondance Firestore vers PostgreSQL valide.
-6. Inventaire des identites, secrets, domaines, certificats et webhooks externes.
-7. Objectifs de disponibilite, sauvegarde et temps maximal de retour arriere.
+1. Manifeste des services, jobs, schedulers et entrypoints conservés : terminé.
+2. Runtime cible Node.js/PostgreSQL natif et moteur V4 : terminé.
+3. Baseline de tests et de sorties métier reproductible : terminé.
+4. Base Firestore utile importée et organisée dans PostgreSQL local : terminé.
+5. Schéma PostgreSQL et tables broker/trades : terminé.
+6. Packaging, installation, update, rollback et services Windows : terminé.
+7. Sécurité publique fail-closed et authentification opérateur serveur : terminé.
+8. Domaine, certificats, IP et stockage hors site : à fournir avec le VPS.
+9. Mesure finale de charge et coût sur la machine cible : à exécuter sur le VPS.
 
 La fin complete du nettoyage n'est pas obligatoire pour commencer le cadrage OVH. En revanche, aucun cutover ne doit etre fait avant d'avoir stabilise le runtime a migrer.
 
 ## 6. Phases propres au chantier OVH
 
-### M0 — cadrage et mesure
+### M0 — cadrage et préparation locale — terminé
 
-- exporter la facturation Google utile ;
-- mesurer les volumes de donnees et la charge maximale ;
-- choisir le dimensionnement VPS et le budget de sauvegarde ;
-- figer les criteres de performance, cout, disponibilite et rollback.
+- inventaire et nettoyage du runtime actif ;
+- migration Firestore vers PostgreSQL local ;
+- architecture Windows/NinjaTrader et règles de rollback ;
+- benchmark local et gates de sécurité.
 
-### M1 — socle OVH sans trafic production
+### M1 — socle OVH sans trafic production — en attente du VPS
 
 - provisionner le VPS et le stockage objet ;
-- durcir SSH, le pare-feu, les mises a jour et la gestion des secrets ;
-- installer le reverse proxy, PostgreSQL et les conteneurs ;
+- durcir RDP, le pare-feu, les mises à jour et la gestion des secrets ;
+- installer Caddy, PostgreSQL natif, Node.js et WinSW ;
 - mettre en place supervision, alertes et sauvegardes testees.
 
-### M2 — migration de donnees en miroir
+### M2 — migration de données — outillage prêt
 
-- creer le schema PostgreSQL ;
-- backfiller Firestore sans changer les lectures de production ;
-- comparer comptages, identifiants, horodatages et projections ;
-- documenter la procedure de reprise incrementale avant cutover.
+- exporter la base Docker au gel des écritures ;
+- restaurer dans PostgreSQL natif ;
+- comparer comptages et agrégats de clés avec le script fourni ;
+- appliquer les migrations ordonnées et tracer leurs SHA-256.
 
-### M3 — runtime OVH en shadow
+### M3 — runtime OVH en shadow — release prête
 
 - deployer frontend, API, MCP, webhook et workers sans trafic principal ;
 - rejouer les tests et checkpoints representatifs ;
 - verifier idempotence, concurrence, latence et consommation de ressources ;
 - plafonner les workers lourds pour proteger l'API et PostgreSQL.
 
-### M4 — cutover controle
+### M4 — cutover contrôlé — non autorisé avant M1 à M3
 
 - geler les changements de schema et de configuration ;
 - effectuer la synchronisation finale ;
@@ -109,27 +120,30 @@ La fin complete du nettoyage n'est pas obligatoire pour commencer le cadrage OVH
 - verifier le webhook TradingView, le MCP, le frontend et les jobs ;
 - revenir vers Google si un critere critique echoue.
 
-### M5 — observation et decommission
+### M5 — observation et décommission
 
 - conserver Google en secours pendant une fenetre definie, recommandee a 14 jours ;
 - effectuer un export final et tester une restauration OVH ;
 - desactiver puis supprimer les ressources Google par vagues ;
 - ne fermer le projet ou la facturation qu'apres preuve d'absence de dependances.
 
-## 7. Decisions encore ouvertes
+## 7. Décisions résolues et décisions externes
 
-- VPS-2 ou VPS-3 selon le nombre de workers conserves et les replays ;
-- PostgreSQL standard ou extension time-series ;
-- file de travaux dans PostgreSQL ou Redis ;
-- authentification applicative legere ou fournisseur auto-heberge ;
-- niveau de haute disponibilite attendu au-dela des sauvegardes ;
-- duree exacte de coexistence Google/OVH.
+- PostgreSQL standard 16 natif ; aucune extension time-series requise.
+- Coordination et file de travaux dans PostgreSQL ; aucun Redis requis.
+- Authentification opérateur serveur par cookie signé ; OAuth MCP conservé.
+- Caddy, API, workers et NinjaTrader sur le même VPS Windows.
+- NinjaTrader reste dans une session interactive et en Sim101 jusqu'aux gates.
+- Restent à choisir : offre VPS, domaine, stockage hors site, RPO/RTO et durée
+  exacte de coexistence Google/OVH.
 
-Ces decisions seront prises dans le chantier OVH sur la base des mesures M0, sans bloquer les suppressions a faible risque du chantier de nettoyage.
+Les commandes et critères sont détaillés dans
+`docs/VPS_WINDOWS_CUTOVER_RUNBOOK_2026-07-23.md`.
 
 ## 8. Gate de demarrage
 
-Statut actuel : `GO_CADRAGE`, `NO_GO_CUTOVER`.
+Statut actuel : `READY_FOR_VPS_PROVISIONING`, `NO_GO_CUTOVER`.
 
-- `GO` pour mesurer, concevoir le schema, estimer les couts et preparer une preuve de concept isolee.
-- `NO-GO` pour migrer les donnees de production, changer les DNS ou supprimer une ressource Google tant que les prerequis de la section 5 ne sont pas valides.
+- `GO` pour provisionner, installer, restaurer, exécuter le mode shadow et Sim101.
+- `NO-GO` pour changer les DNS, exécuter sur un compte broker LIVE ou supprimer
+  Google tant que les gates du runbook ne sont pas validées.

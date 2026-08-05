@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/deterministic-execution-setup-v2.schema.json",
+  "title": "DeskDeterministicExecutionSetupV2",
+  "version": "2.0.0",
+  "type": "object",
+  "required": [
+    "setup_id",
+    "instrument",
+    "direction",
+    "stop_loss",
+    "take_profit_1",
+    "conditions",
+    "valid_from_paris",
+    "expires_at_paris",
+    "trigger_policy",
+    "management_policy"
+  ],
+  "properties": {
+    "setup_id": { "type": "string", "minLength": 1 },
+    "setup_record_id": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["SETUP_CANDIDATE", "PRE_ARMED", "ARMED_CONDITIONAL", "CANCELLED", "EXPIRED"]
+    },
+    "instrument": { "type": "string", "enum": ["MNQ", "MES", "NQ", "ES"] },
+    "direction": { "type": "string", "enum": ["long", "short"] },
+    "entry_price": { "type": "number" },
+    "entry_zone": {
+      "type": "object",
+      "required": ["lower", "upper"],
+      "properties": {
+        "lower": { "type": "number" },
+        "upper": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "stop_loss": { "type": "number" },
+    "take_profit_1": { "type": "number" },
+    "conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["condition_id", "instrument", "operator", "threshold", "importance", "required_for_trigger"],
+        "properties": {
+          "condition_id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string" },
+          "instrument": { "type": "string", "minLength": 1 },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "CLOSE_ABOVE",
+              "CLOSE_BELOW",
+              "TOUCH_ABOVE",
+              "TOUCH_BELOW",
+              "REJECT_ABOVE",
+              "REJECT_BELOW",
+              "REJECT_RESISTANCE",
+              "REJECT_SUPPORT"
+            ]
+          },
+          "threshold": { "type": "number" },
+          "importance": {
+            "type": "string",
+            "enum": ["HARD_BLOCKER", "MANDATORY", "PRIMARY", "SECONDARY", "OPTIONAL", "ADVISORY"]
+          },
+          "required_for_trigger": { "type": "boolean" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "tolerance_points": { "type": "number", "minimum": 0 }
+        },
+        "additionalProperties": true
+      }
+    },
+    "valid_from_paris": { "type": "string", "format": "date-time" },
+    "expires_at_paris": { "type": "string", "format": "date-time" },
+    "trigger_policy": {
+      "type": "object",
+      "required": ["min_score", "allow_entry_only", "allow_same_bar_entry"],
+      "properties": {
+        "min_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "allow_entry_only": { "const": false },
+        "allow_same_bar_entry": { "const": false },
+        "ordered": { "type": "boolean" },
+        "threshold_tolerance_points": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "management_policy": {
+      "type": "object",
+      "required": ["break_even_at_r"],
+      "properties": {
+        "break_even_at_r": { "type": "number", "exclusiveMinimum": 0 },
+        "tp1_close_fraction": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": true
+    }
+  },
+  "oneOf": [
+    { "required": ["entry_price"] },
+    { "required": ["entry_zone"] }
+  ],
+  "additionalProperties": true
+}

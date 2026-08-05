@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { gptTelemetrySchema } from "./gpt-telemetry.js";
 
 const deskWorkflowSchema = z.enum([
   "LIVE_MASTER",
@@ -6,6 +7,21 @@ const deskWorkflowSchema = z.enum([
   "REPLAY_MASTER",
   "REPLAY_MONITOR",
 ]);
+
+export const claimNextLiveWorkSchema = z.object({
+  worker_id: z.string().min(3).max(120),
+  session: z.enum(["asia_open", "ny_open"]).optional(),
+  trading_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  lease_seconds: z.number().int().min(120).max(840).default(660),
+  retry_attempts: z.number().int().min(1).max(3).default(3),
+  retry_delay_seconds: z.number().int().min(30).max(60).default(60),
+}).strict();
+
+export const claimNextReplayWorkSchema = z.object({
+  worker_id: z.string().min(3).max(120),
+  backtest_id: z.string().min(3).optional(),
+  lease_seconds: z.number().int().min(120).max(1800).default(720),
+}).strict();
 
 export const claimNextDeskWorkSchema = z.object({
   worker_id: z.string().min(3).max(120),
@@ -51,10 +67,14 @@ export const heartbeatDeskWorkSchema = z.union([
 ]);
 
 export const completeDeskWorkSchema = z.union([
-  z.object({ ...liveLeaseShape }).strict(),
+  z.object({
+    ...liveLeaseShape,
+    telemetry: gptTelemetrySchema.optional(),
+  }).strict(),
   z.object({
     ...replayLeaseShape,
     output_ref: z.record(z.any()).optional(),
+    telemetry: gptTelemetrySchema.optional(),
   }).strict(),
 ]);
 

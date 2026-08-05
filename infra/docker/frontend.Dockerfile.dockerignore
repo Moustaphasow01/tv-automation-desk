@@ -1,0 +1,14 @@
+*
+!package.json
+!package-lock.json
+!index.html
+!tsconfig*.json
+!vite.config.*
+!vitest.config.*
+!public
+!public/**
+!src
+!src/**
+!infra
+!infra/nginx
+!infra/nginx/default.conf

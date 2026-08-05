@@ -13,6 +13,8 @@ const SOURCE_TYPE_ALIASES = Object.freeze({
   chatgpt: "gpt",
   chatgpt_desk: "gpt",
   gpt_desk: "gpt",
+  python: "strategy",
+  desk_python: "strategy",
   api_worker: "worker",
   dashboard_command: "dashboard",
   paper: "dashboard",

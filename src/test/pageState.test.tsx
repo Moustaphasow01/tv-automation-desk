@@ -33,7 +33,7 @@ describe("DeskPage", () => {
     };
 
     const html = renderToStaticMarkup(<DeskPage>{() => <p>Desk chargé</p>}</DeskPage>);
-    expect(html).toContain("Impossible de charger le Desk");
+    expect(html).toContain("Session Live indisponible");
     expect(html).toContain("live_desk_unavailable");
     expect(html).toContain("Réessayer");
     expect(refetch).not.toHaveBeenCalled();

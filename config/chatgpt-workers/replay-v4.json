@@ -1,0 +1,20 @@
+{
+  "worker_id": "chatgpt-replay-v4",
+  "worker_group": "replay-v4",
+  "lane": "replay",
+  "enabled": true,
+  "timezone": "Europe/Paris",
+  "schedule": {
+    "kind": "recurring",
+    "recommended_interval_minutes": 15
+  },
+  "dispatcher_tool": "start_or_resume_replay_autopilot",
+  "dispatcher_mode": "next_ready_config",
+  "claim_tool": "claim_next_replay_work",
+  "heartbeat_tool": "heartbeat_replay",
+  "complete_tool": "complete_replay",
+  "fail_tool": "fail_replay",
+  "max_claims_per_invocation": 1,
+  "fallback_lane": null,
+  "prompt_file": "docs/CHATGPT_REPLAY_WORKER_PROMPT.md"
+}

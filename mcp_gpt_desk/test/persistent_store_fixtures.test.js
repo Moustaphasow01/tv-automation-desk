@@ -319,7 +319,7 @@ test("PersistentDeskStore reads fixture packs and writes through memory persiste
 
   await assert.rejects(
     store.replayDeskSetups({ setup_record_id: "analysis_test_A" }),
-    (error) => error.code === "LEGACY_REPLAY_FORBIDDEN",
+    (error) => error.code === "READ_ONLY_REPLAY_FORBIDDEN",
   );
 
   const linkedDecision = await persistence.getDocument(DESK_COLLECTIONS.deskDecisions, "decision_from_analysis");

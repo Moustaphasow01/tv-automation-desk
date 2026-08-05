@@ -16,6 +16,7 @@ test("Replay compact view preserves decision evidence while removing duplicate s
   const before = decisionEvidence(source);
   const compact = projectReplayBundle(source, { view: "compact", include_raw_refs: false });
   const after = decisionEvidence(compact);
+  const canonical = canonicalizeReplayBundle(source);
 
   assert.deepEqual(after, before);
   assert.equal(compact.view, "compact");
@@ -29,6 +30,8 @@ test("Replay compact view preserves decision evidence while removing duplicate s
   assert.equal(findUndefinedPath(compact), null);
   assert.equal(compact.save_target.suggested_payload.idempotency_key, source.save_target.suggested_payload.idempotency_key);
   assert.equal(compact.section_manifest.pack.sha256.length, 64);
+  assert.equal(compact.transport.source_bytes, jsonBytes(source));
+  assert.equal(compact.transport.canonical_bytes, jsonBytes(canonical));
 });
 
 test("Replay canonical view losslessly dictionaries raw references", () => {
@@ -90,11 +93,98 @@ test("Replay manifest and section reads prove full-section equality", () => {
   assert.ok(jsonBytes(snapshot) < 16000);
 });
 
+test("Replay lineage exposes component and field fragments for oversized fixed objects", () => {
+  const source = largeReplayBundle("monitor");
+  source.replay_master_analysis = {
+    analysis_id: "master_current",
+    overview: "o".repeat(280_000),
+    details: "d".repeat(280_000),
+  };
+  const ref = {
+    ...replayRef({
+      step_id: source.step_id,
+      bundle_type: "monitor",
+      section: "replay_lineage",
+    }),
+    max_response_bytes: 512_000,
+  };
+
+  const section = getReplayBundleSectionView(source, ref);
+  assert.equal(section.complete, false);
+  assert.equal(section.budget_exceeded, true);
+  assert.equal(section.source_bundle_hash, canonicalizeReplayBundle(source).source_hash);
+  assert.equal(section.canonical_bundle_hash, canonicalizeReplayBundle(source).canonical_bundle_hash);
+  assert.equal(
+    section.component_manifest.replay_master_analysis.value_type,
+    "object",
+  );
+  assert.equal(
+    section.component_manifest.replay_master_analysis.sha256.length,
+    64,
+  );
+  assert.equal(
+    section.component_manifest.previous_replay_monitor.sha256.length,
+    64,
+  );
+
+  const component = getReplayBundleSectionView(source, {
+    ...ref,
+    component: "replay_master_analysis",
+  });
+  assert.equal(component.complete, false);
+  assert.equal(component.source_bundle_hash, section.source_bundle_hash);
+  assert.equal(component.section_sha256, section.section_sha256);
+  assert.equal(
+    component.component_sha256,
+    section.component_manifest.replay_master_analysis.sha256,
+  );
+  assert.deepEqual(
+    Object.keys(component.field_manifest).sort(),
+    ["analysis_id", "details", "overview"],
+  );
+
+  const overview = getReplayBundleSectionView(source, {
+    ...ref,
+    component: "replay_master_analysis",
+    field: "overview",
+  });
+  const details = getReplayBundleSectionView(source, {
+    ...ref,
+    component: "replay_master_analysis",
+    field: "details",
+  });
+  assert.equal(overview.complete, true);
+  assert.equal(details.complete, true);
+  assert.equal(overview.section_sha256, section.section_sha256);
+  assert.equal(overview.component_sha256, component.component_sha256);
+  assert.equal(
+    overview.field_sha256,
+    component.field_manifest.overview.sha256,
+  );
+  assert.equal(overview.data.replay_master_analysis.overview.length, 280_000);
+  assert.equal(details.data.replay_master_analysis.details.length, 280_000);
+
+  source.replay_setups = Array.from({ length: 5 }, (_, index) => ({
+    setup_id: `setup-${index}`,
+  }));
+  const setups = getReplayBundleSectionView(source, {
+    ...ref,
+    component: "replay_setups",
+    offset: 0,
+    limit: 2,
+  });
+  assert.equal(setups.complete, true);
+  assert.deepEqual(setups.pagination.path, ["replay_setups"]);
+  assert.equal(setups.pagination.total, 5);
+  assert.equal(setups.pagination.has_more, true);
+  assert.equal(setups.data.replay_setups.length, 2);
+});
+
 test("Replay response budget falls back explicitly to a lossless manifest", () => {
   const source = largeReplayBundle("master", { narrativeSize: 80000 });
   const response = projectReplayBundle(source, {
     view: "compact",
-    include_sections: ["contract", "save_target", "replan_context"],
+    include_sections: ["contract", "save_target", "rolling_snapshots", "replan_context"],
     max_response_bytes: 16000,
   });
 
@@ -105,6 +195,15 @@ test("Replay response budget falls back explicitly to a lossless manifest", () =
   assert.equal(response.transport.budget_exceeded, true);
   assert.equal(response.save_target.suggested_payload.expected_revision, 11);
   assert.equal(response.section_manifest.replan_context.sha256.length, 64);
+  assert.ok(response.required_followup_reads.length > 0);
+  assert.deepEqual(
+    response.required_followup_reads
+      .filter((read) => read.tool === "get_replay_snapshot")
+      .map((read) => read.arguments.window),
+    ["15m", "1h", "4h"],
+  );
+  assert.ok(response.required_followup_reads.every((read) => read.arguments.max_response_bytes === 512000));
+  assert.equal(response.required_followup_reads.some((read) => read.arguments.section === "raw_refs"), false);
 });
 
 test("Replay Monitor compact view keeps exact lineage and save contract", () => {
@@ -149,6 +248,9 @@ test("MCP success results use structured output without JSON text duplication", 
   assert.equal(result._meta["desk/transport"].double_serialized, false);
   assert.match(error.content[0].text, /failure/);
   assert.ok(tools.every((tool) => tool.outputSchema?.type === "object"));
+  const sectionTool = tools.find((tool) => tool.name === "get_replay_bundle_section");
+  assert.ok(sectionTool.inputSchema.properties.component.enum.includes("previous_replay_monitor"));
+  assert.equal(sectionTool.inputSchema.properties.field.maxLength, 160);
 });
 
 function replayRef(extra = {}) {

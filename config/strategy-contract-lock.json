@@ -1,0 +1,106 @@
+{
+  "schema_version": "strategy_contract_lock_v4",
+  "locked_at": "2026-08-03",
+  "reason": "V5.4/V2.4 are the only writable analytical contracts for scheduled M15 plus critical-event Monitors. V5.3/V2.3 and earlier contracts remain byte- and schema-locked for historical reads.",
+  "runtime_contract_root": "packages/desk-contracts/contracts",
+  "active_contracts": [
+    {
+      "registry_key": "master_contract",
+      "path": "packages/desk-contracts/contracts/DeskMasterAnalysisContract_v5_4_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/master-analysis-v5-4.schema.json",
+      "schema_version": "5.4.0",
+      "sha256": "000f5bf0ac0602f5c1fb298350b6a0ce2447abba8112202fef198d37f7e6da7d",
+      "schema_sha256": "a5f6995290cec351dc6094243cc922b04998efa9271a100dc7cbbde327ef54cd"
+    },
+    {
+      "registry_key": "monitor_contract",
+      "path": "packages/desk-contracts/contracts/DeskHourlyThesisMonitorContract_v2_4_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/hourly-monitor-v2-4.schema.json",
+      "schema_version": "2.4.0",
+      "sha256": "f3a57d05711d96bc1de73f84fc00e098c07468b7f3aaab279e9dc878d3961f17",
+      "schema_sha256": "f76a6d331fd7b407585905a525506f85ef67635bd4f9e481138b16b174966d8d"
+    }
+  ],
+  "legacy_contracts": [
+    {
+      "registry_key": "master_contract_v5_3",
+      "path": "packages/desk-contracts/contracts/DeskMasterAnalysisContract_v5_3_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/master-analysis-v5-3.schema.json",
+      "schema_version": "5.3.0",
+      "sha256": "dba0104015c09da8d3f95ee5e295efba17a88b224ff76c589be576b4e7036c86",
+      "schema_sha256": "f3890ee854f89523ab5f8f6b66852805103f460725323606367999ff4eaf9830"
+    },
+    {
+      "registry_key": "monitor_contract_v2_3",
+      "path": "packages/desk-contracts/contracts/DeskHourlyThesisMonitorContract_v2_3_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/hourly-monitor-v2-3.schema.json",
+      "schema_version": "2.3.0",
+      "sha256": "94001989fe1a91b69c26321c65f14bd957d51fee38875c4a2c4a0127ca57e743",
+      "schema_sha256": "c16a7784781871da85dbde3092cae852cc2f4bbefd3f4f19bb82154c4b46b44a"
+    },
+    {
+      "registry_key": "master_contract_v5_2",
+      "path": "packages/desk-contracts/contracts/DeskMasterAnalysisContract_v5_2_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/master-analysis-v5-2.schema.json",
+      "schema_version": "5.2.0",
+      "sha256": "186c15d03b1c83a9f03f9a1d87c39c3091645693c1ba26818f7691d7a0bcf883",
+      "schema_sha256": "0ca91f013349d2ea4f29e334beca3f926f6d0d5b4f686102e06372fc58616bc7"
+    },
+    {
+      "registry_key": "monitor_contract_v2_2",
+      "path": "packages/desk-contracts/contracts/DeskHourlyThesisMonitorContract_v2_2_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/hourly-monitor-v2-2.schema.json",
+      "schema_version": "2.2.0",
+      "sha256": "bfa857d69792f0d2291f24f7ed2f0bb363f727628d4e947a7b4d3899146989a6",
+      "schema_sha256": "c000e7248b4d3c55e321979991d0098652a52f6fb357de9a370a45721247c3e9"
+    },
+    {
+      "registry_key": "master_contract_v5_1",
+      "path": "packages/desk-contracts/contracts/DeskMasterAnalysisContract_v5_1_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/master-analysis-v5-1.schema.json",
+      "schema_version": "5.1.0",
+      "sha256": "772065b34de26ffaf9bafaf54bc87bbb73766551c64890444f7b9d6db7828a37",
+      "schema_sha256": "5e81ef543465e553865fab9f27f4b9b58c44d4eef61c008b81c7f93fca76303c"
+    },
+    {
+      "registry_key": "monitor_contract_v2_1",
+      "path": "packages/desk-contracts/contracts/DeskHourlyThesisMonitorContract_v2_1_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/hourly-monitor-v2-1.schema.json",
+      "schema_version": "2.1.0",
+      "sha256": "c0e66252286628a86c6bdd0f9c3323dadeacc76db1262b6bd053d7429bf778a5",
+      "schema_sha256": "027d379697f05d1c2e21c7be53b7bdc93adafe0ee7751dec79a4b5fa7ad1d28a"
+    },
+    {
+      "registry_key": "master_contract_v4",
+      "path": "packages/desk-contracts/contracts/DeskMasterAnalysisContract_v4_0_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/master-analysis.schema.json",
+      "schema_version": "4.0.0",
+      "sha256": "702f9fe325f61fdb53e913592da268b5a4aa2bafe5dd879ece915adc64d1c8e8",
+      "schema_sha256": "1d4554d007aae7c70c9217785379ad6c0f987b14b1840ad1b8433cc7318bb9b6"
+    },
+    {
+      "registry_key": "master_contract_v5_0",
+      "path": "packages/desk-contracts/contracts/DeskMasterAnalysisContract_v5_0_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/master-analysis-v5.schema.json",
+      "schema_version": "5.0.0",
+      "sha256": "0bbf5334c0e68559edd72f6f309d5fae8cb0a085ca26b4a8158d668e1fca5e6b",
+      "schema_sha256": "2553f3db67b1600786d04e4863220a5c573ca7d64ee4cab519fe846498680a83"
+    },
+    {
+      "registry_key": "monitor_contract_v1",
+      "path": "packages/desk-contracts/contracts/DeskHourlyThesisMonitorContract_v1_0_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/hourly-monitor.schema.json",
+      "schema_version": "1.0.0",
+      "sha256": "d190ae37f96a5fab1fb545c2477816e6f7f252e6e3500f96014b56f7117acc59",
+      "schema_sha256": "1c04528a6311a28febbc8e6d0591f30eb53bea9c86c19f74b8fd5a4f4f835a92"
+    },
+    {
+      "registry_key": "monitor_contract_v2_0",
+      "path": "packages/desk-contracts/contracts/DeskHourlyThesisMonitorContract_v2_0_0.md",
+      "schema_path": "packages/desk-contracts/schemas/entities/hourly-monitor-v2.schema.json",
+      "schema_version": "2.0.0",
+      "sha256": "8a4fb14b6e7b4bb19a7b3e0cb726b81861dfdc5f3a4fc889a9624c1b09b0ea8c",
+      "schema_sha256": "ad1c5cf2d701a444373162e973577e9f9b26dd2bcea3aca9c9c7c232640e03c0"
+    }
+  ]
+}

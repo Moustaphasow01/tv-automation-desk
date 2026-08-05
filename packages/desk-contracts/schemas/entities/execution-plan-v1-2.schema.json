@@ -1,0 +1,534 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/execution-plan-v1-2.schema.json",
+  "title": "DeskExecutionPlanContractV1_2",
+  "version": "1.2.0",
+  "description": "Intention analytique GPT structurée avant compilation déterministe backend.",
+  "type": "object",
+  "$comment": "Backend-only cross-field invariants: plan_id must equal the backend-pinned work value; setup_id values must be unique; primary_setup_id must reference one setup; validity timestamps and directional geometry must be ordered.",
+  "required": ["contract", "profile", "catalog_id", "plan_id", "source", "scope", "disposition", "primary_setup_id", "execution_authority", "validity", "gates", "risk", "setups", "no_setup_proof", "monitoring", "audit"],
+  "properties": {
+    "contract": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "DeskExecutionPlanContract" },
+        "version": { "const": "1.2.0" }
+      },
+      "additionalProperties": false
+    },
+    "profile": { "const": "OPPORTUNITY_SEEKING_CONTROLLED" },
+    "catalog_id": { "const": "condition_catalog_v1_2" },
+    "plan_id": {
+      "type": "string",
+      "minLength": 1,
+      "$comment": "Value is pinned by the backend and must be copied exactly; the JSON Schema validates shape only."
+    },
+    "source": {
+      "type": "object",
+      "required": ["master_analysis_id", "bundle_id", "pack_id", "pack_build_id"],
+      "properties": {
+        "master_analysis_id": { "type": "string", "minLength": 1 },
+        "bundle_id": { "type": "string", "minLength": 1 },
+        "pack_id": { "type": "string", "minLength": 1 },
+        "pack_build_id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "scope": { "$ref": "#/$defs/scope" },
+    "disposition": { "enum": ["SETUP_READY", "SETUP_CONDITIONAL", "WAIT_BETTER_PRICE", "WAIT_NO_SETUP", "MANAGEMENT_ONLY", "FORBIDDEN", "REPLAN_REQUIRED"] },
+    "primary_setup_id": {
+      "$comment": "Membership in setups[].setup_id is verified by the backend compiler because standard JSON Schema cannot express this join.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "execution_authority": { "const": "BACKEND_ONLY" },
+    "validity": {
+      "$comment": "The backend compiler verifies valid_from_paris < expires_at_paris.",
+      "type": "object",
+      "required": ["valid_from_paris", "expires_at_paris"],
+      "properties": {
+        "valid_from_paris": { "type": "string", "format": "date-time" },
+        "expires_at_paris": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "gates": {
+      "type": "object",
+      "required": ["hard", "soft"],
+      "properties": {
+        "hard": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "items": { "$ref": "#/$defs/hardGate" },
+          "allOf": [
+            { "contains": { "properties": { "code": { "const": "ANTI_LOOKAHEAD_FAILED" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "SCOPE_CONTRACT_MISMATCH" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "CANONICAL_TRIGGER_DATA_MISSING" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "GEOMETRY_INVALID" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "RR_BELOW_MINIMUM" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "STOP_INVALID" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "TARGET_INVALID" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "SETUP_EXPIRED_OR_TERMINAL" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "DETERMINISTIC_VETO_ACTIVE" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "BROKER_SAFETY_FAILED" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "MAJOR_EVENT_ENTRY_BLOCK" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "code": { "const": "MANDATORY_INDICATOR_MISSING" } }, "required": ["code"] }, "minContains": 1, "maxContains": 1 }
+          ]
+        },
+        "soft": {
+          "type": "array",
+          "maxItems": 10,
+          "items": { "$ref": "#/$defs/softGate" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "risk": {
+      "type": "object",
+      "required": ["capital_basis", "risk_pct_requested", "min_rr", "min_weighted_confirmation_ratio"],
+      "properties": {
+        "capital_basis": { "const": "NET_EQUITY" },
+        "risk_pct_requested": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.25 },
+        "min_rr": { "const": 2 },
+        "min_weighted_confirmation_ratio": { "const": 0.55 }
+      },
+      "additionalProperties": false
+    },
+    "setups": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "$comment": "uniqueItems rejects identical duplicate objects; uniqueness of setup_id across distinct objects is a backend invariant.",
+      "items": { "$ref": "#/$defs/setupProposal" }
+    },
+    "no_setup_proof": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/noSetupProof" }
+      ]
+    },
+    "monitoring": {
+      "type": "object",
+      "required": ["engine_cadence", "gpt_cadence", "next_checkpoint_paris", "watch_condition_ids"],
+      "properties": {
+        "engine_cadence": { "const": "M1" },
+        "gpt_cadence": { "const": "M5" },
+        "next_checkpoint_paris": { "type": "string", "format": "date-time" },
+        "watch_condition_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "audit": { "$ref": "#/$defs/audit" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "disposition": { "const": "WAIT_NO_SETUP" } }, "required": ["disposition"] },
+      "then": {
+        "properties": {
+          "setups": { "maxItems": 0 },
+          "primary_setup_id": { "type": "null" },
+          "no_setup_proof": { "$ref": "#/$defs/noSetupProof" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "disposition": { "enum": ["SETUP_READY", "SETUP_CONDITIONAL", "WAIT_BETTER_PRICE"] } }, "required": ["disposition"] },
+      "then": {
+        "properties": {
+          "setups": { "minItems": 1 },
+          "primary_setup_id": { "type": "string", "minLength": 1 },
+          "no_setup_proof": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "disposition": { "enum": ["MANAGEMENT_ONLY", "FORBIDDEN", "REPLAN_REQUIRED"] } }, "required": ["disposition"] },
+      "then": {
+        "properties": {
+          "setups": { "maxItems": 0 },
+          "primary_setup_id": { "type": "null" },
+          "no_setup_proof": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "FORBIDDEN" } }, "required": ["disposition"] },
+      "then": {
+        "properties": {
+          "gates": {
+            "properties": {
+              "hard": { "contains": { "properties": { "state": { "enum": ["FAIL", "UNKNOWN"] } }, "required": ["state"] } }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "nullableString": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "required": ["mode", "trading_date", "session", "run_id", "cutoff_paris", "timezone"],
+      "properties": {
+        "mode": { "enum": ["LIVE", "REPLAY", "BACK_FORWARD", "PAPER"] },
+        "trading_date": { "type": "string", "format": "date" },
+        "session": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "cutoff_paris": { "type": "string", "format": "date-time" },
+        "timezone": { "const": "Europe/Paris" }
+      },
+      "additionalProperties": false
+    },
+    "gateBase": {
+      "type": "object",
+      "required": ["code", "state", "reason", "evidence_refs"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["PASS", "FAIL", "UNKNOWN", "NOT_APPLICABLE"] },
+        "reason": { "$ref": "#/$defs/nullableString" },
+        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "enum": ["FAIL", "UNKNOWN"] } }, "required": ["state"] },
+          "then": { "properties": { "reason": { "type": "string", "minLength": 1 } } }
+        }
+      ]
+    },
+    "hardGate": {
+      "allOf": [
+        { "$ref": "#/$defs/gateBase" },
+        {
+          "type": "object",
+          "required": ["enforcement_phase", "pass_semantics"],
+          "properties": {
+            "code": { "enum": ["ANTI_LOOKAHEAD_FAILED", "SCOPE_CONTRACT_MISMATCH", "CANONICAL_TRIGGER_DATA_MISSING", "GEOMETRY_INVALID", "RR_BELOW_MINIMUM", "STOP_INVALID", "TARGET_INVALID", "SETUP_EXPIRED_OR_TERMINAL", "DETERMINISTIC_VETO_ACTIVE", "BROKER_SAFETY_FAILED", "MAJOR_EVENT_ENTRY_BLOCK", "MANDATORY_INDICATOR_MISSING"] },
+            "enforcement_phase": { "enum": ["PLAN_COMPILE", "SETUP_ARM", "ENTRY_TRIGGER", "BROKER_SUBMIT"] },
+            "pass_semantics": { "const": "FAILURE_ABSENT" }
+          }
+        },
+        {
+          "oneOf": [
+            { "properties": { "code": { "const": "ANTI_LOOKAHEAD_FAILED" }, "enforcement_phase": { "const": "PLAN_COMPILE" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "SCOPE_CONTRACT_MISMATCH" }, "enforcement_phase": { "const": "PLAN_COMPILE" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "CANONICAL_TRIGGER_DATA_MISSING" }, "enforcement_phase": { "const": "ENTRY_TRIGGER" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "GEOMETRY_INVALID" }, "enforcement_phase": { "const": "SETUP_ARM" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "RR_BELOW_MINIMUM" }, "enforcement_phase": { "const": "SETUP_ARM" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "STOP_INVALID" }, "enforcement_phase": { "const": "SETUP_ARM" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "TARGET_INVALID" }, "enforcement_phase": { "const": "SETUP_ARM" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "SETUP_EXPIRED_OR_TERMINAL" }, "enforcement_phase": { "const": "ENTRY_TRIGGER" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "DETERMINISTIC_VETO_ACTIVE" }, "enforcement_phase": { "const": "ENTRY_TRIGGER" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "BROKER_SAFETY_FAILED" }, "enforcement_phase": { "const": "BROKER_SUBMIT" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "MAJOR_EVENT_ENTRY_BLOCK" }, "enforcement_phase": { "const": "ENTRY_TRIGGER" } }, "required": ["code", "enforcement_phase"] },
+            { "properties": { "code": { "const": "MANDATORY_INDICATOR_MISSING" }, "enforcement_phase": { "const": "ENTRY_TRIGGER" } }, "required": ["code", "enforcement_phase"] }
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "softGate": {
+      "allOf": [
+        { "$ref": "#/$defs/gateBase" },
+        {
+          "type": "object",
+          "properties": {
+            "code": { "enum": ["PACK_DEGRADED", "MEGA_CAPS_MISSING_FOR_NQ", "PRICE_MID_RANGE", "CROSS_ASSET_PARTIAL", "MACRO_NEUTRAL", "NQ_ES_DIVERGENCE", "HIGH_VOLATILITY", "LEVEL_CONSUMED", "CONTEXTUAL_DATA_GAP", "OPTIONAL_INDICATOR_MISSING"] }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "entry": {
+      "type": "object",
+      "properties": {
+        "price": { "type": "number" },
+        "zone_lower": { "type": "number" },
+        "zone_upper": { "type": "number" },
+        "stop_price": { "type": "number" },
+        "limit_price": { "type": "number" }
+      },
+      "oneOf": [
+        { "required": ["price"], "not": { "anyOf": [{ "required": ["zone_lower"] }, { "required": ["zone_upper"] }, { "required": ["stop_price"] }, { "required": ["limit_price"] }] } },
+        { "required": ["zone_lower", "zone_upper"], "not": { "anyOf": [{ "required": ["price"] }, { "required": ["stop_price"] }, { "required": ["limit_price"] }] } },
+        { "required": ["stop_price", "limit_price"], "not": { "anyOf": [{ "required": ["price"] }, { "required": ["zone_lower"] }, { "required": ["zone_upper"] }] } }
+      ],
+      "additionalProperties": false
+    },
+    "predicateParameters": {
+      "type": "object",
+      "properties": {
+        "threshold": { "type": "number" },
+        "zone_lower": { "type": "number" },
+        "zone_upper": { "type": "number" },
+        "break_condition_id": { "type": "string", "minLength": 1 },
+        "retest_level": { "type": "number" },
+        "tolerance_points": { "type": "number", "minimum": 0 },
+        "max_bars": { "type": "integer", "minimum": 1 },
+        "require_rejection_confirmation": { "type": "boolean" },
+        "reference_code": { "type": "string", "minLength": 1 },
+        "indicator_period": { "type": "integer", "minimum": 1 },
+        "window_start_paris": { "type": "string", "minLength": 1 },
+        "window_end_paris": { "type": "string", "minLength": 1 },
+        "reference_instrument": { "type": "string", "minLength": 1 },
+        "event_window_ref": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "temporalRule": {
+      "type": "object",
+      "required": ["mode", "count"],
+      "properties": {
+        "mode": { "enum": ["LATEST_CLOSED", "ANY_SINCE_ARM", "CONSECUTIVE_CLOSED", "CROSS_AFTER_ARM"] },
+        "count": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "condition": {
+      "type": "object",
+      "required": ["condition_id", "label", "predicate_type", "role", "effect", "instrument", "timeframe", "operator", "parameters", "importance", "required_for_trigger", "memory_policy", "weight", "sequence", "temporal_rule", "evidence_refs"],
+      "properties": {
+        "condition_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "predicate_type": { "enum": ["PRICE_RELATION", "PRICE_CROSS", "ZONE_TOUCH", "BREAKOUT_CLOSE", "BREAK_RETEST_SEQUENCE", "REJECTION_PATTERN", "VWAP_RELATION", "RSI_THRESHOLD", "TIME_WINDOW", "INTERMARKET_CONFIRMATION", "EVENT_BLACKOUT"] },
+        "role": { "enum": ["ACTIVATION", "CONFIRMATION", "INVALIDATION", "VETO"] },
+        "effect": { "enum": ["REQUIRE_TRUE", "BLOCK_IF_TRUE"] },
+        "instrument": { "type": "string", "minLength": 1 },
+        "timeframe": { "enum": ["M1", "M5", "M15", "H1", "H4"] },
+        "operator": { "enum": ["CLOSE_ABOVE", "CLOSE_BELOW", "CROSS_ABOVE", "CROSS_BELOW", "TOUCH_ABOVE", "TOUCH_BELOW", "REJECT_ABOVE", "REJECT_BELOW", "REJECT_RESISTANCE", "REJECT_SUPPORT", "WITHIN_WINDOW", "OUTSIDE_WINDOW", "ALIGNS_WITH", "DIVERGES_FROM", "EVENT_ACTIVE", "EVENT_CLEAR"] },
+        "parameters": { "$ref": "#/$defs/predicateParameters" },
+        "importance": { "enum": ["HARD_BLOCKER", "MANDATORY", "PRIMARY", "SECONDARY", "OPTIONAL", "ADVISORY"] },
+        "required_for_trigger": { "type": "boolean" },
+        "memory_policy": { "enum": ["LATCH_UNTIL_TRIGGER", "LATEST_ONLY", "INVALIDATE_TERMINAL"] },
+        "weight": { "type": "number", "minimum": 0 },
+        "sequence": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "temporal_rule": { "$ref": "#/$defs/temporalRule" },
+        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "effect": { "const": "BLOCK_IF_TRUE" } }, "required": ["effect"] },
+          "then": { "properties": { "required_for_trigger": { "const": false }, "weight": { "const": 0 } } }
+        },
+        {
+          "if": { "properties": { "role": { "enum": ["ACTIVATION", "CONFIRMATION"] } }, "required": ["role"] },
+          "then": { "properties": { "effect": { "const": "REQUIRE_TRUE" } } }
+        },
+        {
+          "if": { "properties": { "role": { "enum": ["INVALIDATION", "VETO"] } }, "required": ["role"] },
+          "then": { "properties": { "effect": { "const": "BLOCK_IF_TRUE" }, "required_for_trigger": { "const": false }, "weight": { "const": 0 } } }
+        },
+        {
+          "if": { "properties": { "effect": { "const": "BLOCK_IF_TRUE" } }, "required": ["effect"] },
+          "then": { "properties": { "memory_policy": { "enum": ["LATEST_ONLY", "INVALIDATE_TERMINAL"] } } }
+        },
+        {
+          "if": { "properties": { "role": { "const": "VETO" } }, "required": ["role"] },
+          "then": { "properties": { "memory_policy": { "const": "LATEST_ONLY" } } }
+        },
+        {
+          "if": { "properties": { "role": { "const": "INVALIDATION" } }, "required": ["role"] },
+          "then": { "properties": { "memory_policy": { "const": "INVALIDATE_TERMINAL" } } }
+        },
+        {
+          "if": { "properties": { "importance": { "const": "HARD_BLOCKER" } }, "required": ["importance"] },
+          "then": { "properties": { "effect": { "const": "BLOCK_IF_TRUE" }, "required_for_trigger": { "const": false }, "weight": { "const": 0 } } }
+        },
+        {
+          "if": { "properties": { "importance": { "const": "MANDATORY" }, "role": { "enum": ["ACTIVATION", "CONFIRMATION"] } }, "required": ["importance", "role"] },
+          "then": { "properties": { "required_for_trigger": { "const": true } } }
+        },
+        {
+          "if": { "properties": { "predicate_type": { "enum": ["PRICE_RELATION", "PRICE_CROSS", "BREAKOUT_CLOSE"] } }, "required": ["predicate_type"] },
+          "then": { "properties": { "parameters": { "required": ["threshold"] }, "operator": { "enum": ["CLOSE_ABOVE", "CLOSE_BELOW", "CROSS_ABOVE", "CROSS_BELOW"] } } }
+        },
+        {
+          "if": { "properties": { "predicate_type": { "const": "ZONE_TOUCH" } }, "required": ["predicate_type"] },
+          "then": { "properties": { "parameters": { "required": ["zone_lower", "zone_upper"] }, "operator": { "enum": ["TOUCH_ABOVE", "TOUCH_BELOW"] } } }
+        },
+        {
+          "if": { "properties": { "predicate_type": { "const": "BREAK_RETEST_SEQUENCE" } }, "required": ["predicate_type"] },
+          "then": { "properties": { "parameters": { "required": ["break_condition_id", "retest_level", "tolerance_points", "max_bars", "require_rejection_confirmation"] }, "operator": { "enum": ["REJECT_ABOVE", "REJECT_BELOW", "REJECT_RESISTANCE", "REJECT_SUPPORT"] } } }
+        },
+        {
+          "if": { "properties": { "predicate_type": { "const": "REJECTION_PATTERN" } }, "required": ["predicate_type"] },
+          "then": { "properties": { "parameters": { "required": ["threshold", "tolerance_points"] }, "operator": { "enum": ["REJECT_ABOVE", "REJECT_BELOW", "REJECT_RESISTANCE", "REJECT_SUPPORT"] } } }
+        },
+        {
+          "if": { "properties": { "predicate_type": { "const": "VWAP_RELATION" } }, "required": ["predicate_type"] },
+          "then": { "properties": { "parameters": { "required": ["reference_code"] }, "operator": { "enum": ["CLOSE_ABOVE", "CLOSE_BELOW"] } } }
+        },
+        {
+          "if": { "properties": { "predicate_type": { "const": "RSI_THRESHOLD" } }, "required": ["predicate_type"] },
+          "then": { "properties": { "parameters": { "required": ["threshold", "indicator_period"] }, "operator": { "enum": ["CLOSE_ABOVE", "CLOSE_BELOW", "CROSS_ABOVE", "CROSS_BELOW"] } } }
+        },
+        {
+          "if": { "properties": { "predicate_type": { "const": "TIME_WINDOW" } }, "required": ["predicate_type"] },
+          "then": { "properties": { "parameters": { "required": ["window_start_paris", "window_end_paris"] }, "operator": { "enum": ["WITHIN_WINDOW", "OUTSIDE_WINDOW"] } } }
+        },
+        {
+          "if": { "properties": { "predicate_type": { "const": "INTERMARKET_CONFIRMATION" } }, "required": ["predicate_type"] },
+          "then": { "properties": { "parameters": { "required": ["reference_instrument"] }, "operator": { "enum": ["ALIGNS_WITH", "DIVERGES_FROM"] } } }
+        },
+        {
+          "if": { "properties": { "predicate_type": { "const": "EVENT_BLACKOUT" } }, "required": ["predicate_type"] },
+          "then": { "properties": { "parameters": { "required": ["event_window_ref"] }, "operator": { "enum": ["EVENT_ACTIVE", "EVENT_CLEAR"] } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["target_id", "price", "action", "close_fraction"],
+      "properties": {
+        "target_id": { "type": "string", "minLength": 1 },
+        "price": { "type": "number" },
+        "action": { "enum": ["PARTIAL_CLOSE", "MOVE_STOP_BE", "TRAIL", "FULL_CLOSE", "RUNNER"] },
+        "close_fraction": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "setupProposal": {
+      "$comment": "The backend validates entry-zone ordering, validity ordering, directional stop/target geometry and the computed RR against rr_expected.",
+      "type": "object",
+      "required": ["setup_id", "rank", "requested_state", "pattern", "instrument", "direction", "order_type", "entry_mode", "entry", "stop", "targets", "rr_expected", "conditions", "management", "validity", "rationale", "evidence_refs"],
+      "properties": {
+        "setup_id": { "type": "string", "minLength": 1 },
+        "rank": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "requested_state": { "enum": ["SETUP_CANDIDATE", "PRE_ARMED", "ARMED_CONDITIONAL"] },
+        "pattern": { "enum": ["PULLBACK", "BREAKOUT_RETEST", "BREAKDOWN_RETEST", "REJECTION", "SWEEP_RECLAIM", "RANGE_ROTATION", "FAKEOUT_REVERSAL", "CONTINUATION"] },
+        "instrument": { "type": "string", "minLength": 1 },
+        "direction": { "enum": ["long", "short"] },
+        "order_type": { "enum": ["MARKET", "LIMIT", "STOP", "STOP_LIMIT"] },
+        "entry_mode": { "enum": ["NEXT_BAR_MARKET_AFTER_CONFIRMATION", "RETEST_ZONE_AFTER_CONFIRMATION", "STOP_CROSS", "LIMIT_TOUCH"] },
+        "entry": { "$ref": "#/$defs/entry" },
+        "stop": {
+          "type": "object",
+          "required": ["type", "price"],
+          "properties": {
+            "type": { "enum": ["STRUCTURAL", "ATR", "HYBRID"] },
+            "price": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "targets": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/target" } },
+        "rr_expected": { "type": "number", "minimum": 2 },
+        "conditions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } },
+        "management": {
+          "type": "object",
+          "required": ["break_even_at_r", "tp1_close_fraction"],
+          "properties": {
+            "break_even_at_r": { "type": "number", "minimum": 0 },
+            "tp1_close_fraction": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "validity": {
+          "type": "object",
+          "required": ["valid_from_paris", "expires_at_paris"],
+          "properties": {
+            "valid_from_paris": { "type": "string", "format": "date-time" },
+            "expires_at_paris": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        },
+        "rationale": { "type": "string", "minLength": 1 },
+        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "entry_mode": { "const": "NEXT_BAR_MARKET_AFTER_CONFIRMATION" } }, "required": ["entry_mode"] },
+          "then": { "properties": { "order_type": { "const": "MARKET" } } }
+        },
+        {
+          "if": { "properties": { "entry_mode": { "const": "LIMIT_TOUCH" } }, "required": ["entry_mode"] },
+          "then": { "properties": { "order_type": { "const": "LIMIT" } } }
+        },
+        {
+          "if": { "properties": { "entry_mode": { "const": "STOP_CROSS" } }, "required": ["entry_mode"] },
+          "then": { "properties": { "order_type": { "enum": ["STOP", "STOP_LIMIT"] } } }
+        },
+        {
+          "if": { "properties": { "entry_mode": { "const": "RETEST_ZONE_AFTER_CONFIRMATION" } }, "required": ["entry_mode"] },
+          "then": { "properties": { "order_type": { "enum": ["MARKET", "LIMIT"] } } }
+        },
+        {
+          "if": { "properties": { "order_type": { "const": "STOP_LIMIT" } }, "required": ["order_type"] },
+          "then": {
+            "properties": {
+              "entry": { "required": ["stop_price", "limit_price"] }
+            }
+          },
+          "else": {
+            "properties": {
+              "entry": { "not": { "anyOf": [{ "required": ["stop_price"] }, { "required": ["limit_price"] }] } }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "rejectedCandidate": {
+      "type": "object",
+      "required": ["instrument", "pattern", "rejection_reasons", "revalidation_trigger"],
+      "properties": {
+        "instrument": { "type": "string", "minLength": 1 },
+        "pattern": { "enum": ["PULLBACK", "BREAKOUT_RETEST", "BREAKDOWN_RETEST", "REJECTION", "SWEEP_RECLAIM", "RANGE_ROTATION", "FAKEOUT_REVERSAL", "CONTINUATION"] },
+        "rejection_reasons": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "revalidation_trigger": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "noSetupProof": {
+      "type": "object",
+      "required": ["best_long", "best_short", "blocking_reasons", "wait_to_go_conditions", "revalidation_triggers"],
+      "properties": {
+        "best_long": { "$ref": "#/$defs/rejectedCandidate" },
+        "best_short": { "$ref": "#/$defs/rejectedCandidate" },
+        "blocking_reasons": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "wait_to_go_conditions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } },
+        "revalidation_triggers": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "audit": {
+      "type": "object",
+      "required": ["anti_lookahead_verified", "contract_context", "source_references"],
+      "properties": {
+        "anti_lookahead_verified": { "const": true },
+        "contract_context": {
+          "type": "object",
+          "required": ["master_contract", "execution_plan_contract", "execution_policy_contract", "condition_catalog_contract"],
+          "properties": {
+            "master_contract": { "const": "5.2.0" },
+            "execution_plan_contract": { "const": "1.2.0" },
+            "execution_policy_contract": { "const": "4.2.0" },
+            "condition_catalog_contract": { "const": "1.2.0" }
+          },
+          "additionalProperties": false
+        },
+        "source_references": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { gptTelemetrySchema } from "./gpt-telemetry.js";
 
 const replayWorkflowSchema = z.enum(["REPLAY_MASTER", "REPLAY_MONITOR"]);
 
@@ -23,6 +24,7 @@ export const heartbeatReplaySchema = z.object({
 export const completeReplaySchema = z.object({
   ...replayLeaseShape,
   output_ref: z.record(z.any()).optional(),
+  telemetry: gptTelemetrySchema.optional(),
 }).strict();
 
 export const failReplaySchema = z.object({

@@ -1,0 +1,21 @@
+<service>
+  <id>DeskFuturesReplayPreparation</id>
+  <name>Desk Futures Replay Preparation</name>
+  <description>Asynchronous immutable Replay pack preparation worker.</description>
+  <executable>__NODE_EXE__</executable>
+  <arguments>--env-file="__ENV_FILE__" "__INSTALL_ROOT__\current\app\mcp_gpt_desk\scripts\run_replay_preparation_worker.mjs"</arguments>
+  <workingdirectory>__INSTALL_ROOT__\current\app\mcp_gpt_desk</workingdirectory>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>__POSTGRES_SERVICE__</depend>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+  <logpath>__LOG_ROOT__\replay-preparation</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>10</keepFiles>
+  </log>
+</service>

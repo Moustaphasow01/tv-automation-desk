@@ -1,0 +1,21 @@
+<service>
+  <id>DeskFuturesApi</id>
+  <name>Desk Futures API MCP</name>
+  <description>Desk Futures API, MCP, OAuth and TradingView webhook.</description>
+  <executable>__NODE_EXE__</executable>
+  <arguments>--env-file="__ENV_FILE__" "__INSTALL_ROOT__\current\app\mcp_gpt_desk\src\server.js"</arguments>
+  <workingdirectory>__INSTALL_ROOT__\current\app\mcp_gpt_desk</workingdirectory>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>__POSTGRES_SERVICE__</depend>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+  <logpath>__LOG_ROOT__\api</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>10</keepFiles>
+  </log>
+</service>

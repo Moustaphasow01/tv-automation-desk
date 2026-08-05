@@ -6,13 +6,17 @@ import { stableVNextId } from "./desk-ids.js";
 import { normalizeUtcIso } from "./desk-time-utils.js";
 import { floorParisCheckpoint, isLiveMonitorCheckpointInWindow } from "./live-scope.js";
 import {
+  crossAssetDeltaResult,
+  deltaBlock,
   dedupeBy,
   numeric,
+  offsetIso,
   parisOffsetForDate,
   publicReplayError,
   resolvePackForState,
   roundNumber,
   safeRead,
+  summarizeAssetDeltas,
 } from "./desk-market-feature-algorithms.js";
 
 export const NY_OPEN_STRATEGY_ID = "ny_open_1530";
@@ -47,19 +51,123 @@ export function featureInstrument(activeThesis, latestMaster) {
   return ["MNQ", "MES", "NQ", "ES"].includes(value) ? value : "MNQ";
 }
 
-export async function readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris }) {
+const CANONICAL_CROSS_ASSET_INSTRUMENTS = Object.freeze(["DXY", "VIX", "US10Y", "US02Y", "GC", "CL"]);
+
+export async function readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris, raw_scope = null, computed_at = null }) {
   const instrument = featureInstrument(activeThesis, latestMaster);
-  const crossReader = typeof store.ensureCrossAssetDelta === "function" ? store.ensureCrossAssetDelta.bind(store) : store.getCrossAssetDelta.bind(store);
   const [level, technical, cross, snapshot, condition] = await Promise.all([
     safeRead(store.getLevelMap({ date, session, instrument }), { ok: true, count: 0, level_map: null, warning: "level_map_not_available_until_feature_engine_runs" }),
     safeRead(store.getTechnicalEvents({ date, session, instrument }), { ok: true, count: 0, events: [], warning: "technical_events_not_available_until_feature_engine_runs" }),
-    safeRead(crossReader({ timestamp_paris, window: crossAssetWindowForSession(session, timestamp_paris) }), { ok: true, count: 0, delta: null, stale_check: { is_stale: true, reason: "cross_asset_delta_not_available_until_feature_engine_runs" }, warning: "cross_asset_delta_not_available_until_feature_engine_runs" }),
+    safeRead(readCanonicalCrossAssetContext(store, { session, timestamp_paris, raw_scope, computed_at }), canonicalCrossAssetMissing(timestamp_paris, crossAssetWindowForSession(session, timestamp_paris), "canonical_cross_asset_read_failed")),
     safeRead(store.getSessionSnapshot({ date, session, instrument }), { ok: true, count: 0, session_snapshot: null, warning: "session_snapshot_not_available_until_feature_engine_runs" }),
     activeThesis?.thesis_id
       ? safeRead(store.getConditionStatus({ thesis_id: activeThesis.thesis_id, timestamp_paris }), { ok: true, count: 0, condition_status: null, warning: "condition_status_not_available_until_condition_engine_runs" })
       : Promise.resolve({ ok: true, count: 0, condition_status: null, warning: "active_thesis_not_found" }),
   ]);
   return { instrument, level, technical, cross, snapshot, condition };
+}
+
+export async function readCanonicalCrossAssetContext(store, { session = "asia_open", timestamp_paris, raw_scope = null, computed_at = null } = {}) {
+  const window = crossAssetWindowForSession(session, timestamp_paris);
+  if (!raw_scope) {
+    return canonicalCrossAssetMissing(timestamp_paris, window, "immutable_pack_scope_missing_for_cross_asset");
+  }
+  const minutes = { "15m": 15, "1h": 60, "4h": 240, session: 96 * 60 }[window] || 60;
+  const from = offsetIso(timestamp_paris, -minutes * 60 * 1000);
+  const assets = {};
+  const raw_refs = [];
+  const attempted_raw_refs = [];
+  const assetBlocks = await Promise.all(CANONICAL_CROSS_ASSET_INSTRUMENTS.map(async (asset) => {
+    const timeframe = window === "4h" || window === "session" ? "M15" : "M5";
+    const raw = await safeRead(store.getRawWindow({
+      ...raw_scope,
+      instrument: asset,
+      timeframe,
+      from,
+      to: timestamp_paris,
+      max_rows: Math.min(1000, Math.max(100, Math.ceil(minutes / 5) + 10)),
+    }), {
+      ok: false,
+      rows: [],
+      raw_refs: [],
+      attempted_raw_refs: [],
+      missing_reason: "immutable_cross_asset_raw_window_missing",
+    });
+    const block = {
+      ...deltaBlock(raw.rows || []),
+      raw_refs: raw.raw_refs || (raw.raw_ref ? [raw.raw_ref] : []),
+      attempted_raw_refs: raw.attempted_raw_refs || [],
+      missing_reason: (raw.rows || []).length ? null : raw.missing_reason || raw.warning || "immutable_cross_asset_raw_window_missing",
+      source: raw.source || "immutable_pack_raw_window",
+    };
+    return [asset, block];
+  }));
+  for (const [asset, block] of assetBlocks) {
+    assets[asset] = block;
+    raw_refs.push(...block.raw_refs);
+    attempted_raw_refs.push(...block.attempted_raw_refs);
+  }
+  const delta = {
+    delta_id: stableVNextId("cross_asset_context", timestamp_paris || raw_scope.as_of_utc || "unknown", window),
+    timestamp_paris,
+    window,
+    assets,
+    ...assets,
+    summary: summarizeAssetDeltas(assets),
+    source: "immutable_pack_raw_windows",
+    legacy_collection: false,
+    pack_id: raw_scope.pack_id || null,
+    pack_build_id: raw_scope.pack_build_id || null,
+    computed_with_cutoff: timestamp_paris,
+    anti_lookahead_compliant: true,
+    raw_refs: dedupeBy(raw_refs, (item) => JSON.stringify(item)),
+    attempted_raw_refs: dedupeBy(attempted_raw_refs, (item) => JSON.stringify(item)),
+    computed_at: computed_at || raw_scope.as_of_utc || normalizeUtcIso(timestamp_paris),
+  };
+  const result = crossAssetDeltaResult(delta, { timestamp_paris, window, count: 1, source: "immutable_pack_raw_windows" });
+  return {
+    ...result,
+    source: "immutable_pack_raw_windows",
+    legacy_collection: false,
+    raw_refs: delta.raw_refs,
+    attempted_raw_refs: delta.attempted_raw_refs,
+  };
+}
+
+function canonicalCrossAssetMissing(timestamp_paris, window, reason) {
+  return {
+    ok: true,
+    count: 0,
+    delta: null,
+    status: "missing",
+    warning: reason,
+    source: "immutable_pack_raw_windows",
+    legacy_collection: false,
+    stale_check: {
+      status: "missing",
+      is_stale: true,
+      requested_timestamp_paris: timestamp_paris || null,
+      delta_timestamp_paris: null,
+      returned_timestamp_paris: null,
+      max_lag_minutes: { "15m": 15, "1h": 60, "4h": 240, session: 1440 }[window] || 60,
+      max_allowed_lag_minutes: { "15m": 15, "1h": 60, "4h": 240, session: 1440 }[window] || 60,
+      age_minutes: null,
+      execution_allowed: false,
+      reason,
+    },
+  };
+}
+
+export function immutablePackRawScope(scope, pack) {
+  const packId = pack?.pack_id || pack?.pack?.pack_id || null;
+  const packBuildId = pack?.pack_build_id || pack?.pack?.pack_build_id || null;
+  if (!scope || !packId || !packBuildId) return null;
+  return {
+    ...operationalSelectorArgs(scope),
+    timezone: scope.timezone || "Europe/Paris",
+    pack_id: packId,
+    pack_build_id: packBuildId,
+  };
 }
 
 export function crossAssetWindowForSession(session, timestampParis) {
@@ -170,7 +278,25 @@ export async function buildAuditState(store, args = {}, featureDocs = {}, clock 
     safeRead(store.getLatestMasterAnalysis({ session, before_date: date }).then((result) => result.analysis), null),
     safeRead(store.listDeskJobs({ date, session, limit: 100 }).then((result) => result.jobs), []),
   ]);
-  const features = await readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris: tick.paris });
+  const auditScope = createDeskExecutionScope({
+    strategy_id: session === NY_OPEN_SESSION ? NY_OPEN_STRATEGY_ID : "asia_open",
+    session,
+    mode: args.mode || "live",
+    trading_date: date,
+    timezone: args.timezone || "Europe/Paris",
+    cutoff_paris: tick.paris,
+    cutoff_utc: tick.utc,
+    run_id: args.run_id || `front_audit_${date}_${session}`,
+  }, { requireRun: true });
+  const features = await readFeatureContext(store, {
+    date,
+    session,
+    activeThesis,
+    latestMaster,
+    timestamp_paris: tick.paris,
+    raw_scope: immutablePackRawScope({ ...auditScope, as_of_utc: tick.utc }, pack),
+    computed_at: tick.utc,
+  });
   return {
     ok: true,
     contracts: contractSummary(contracts),
@@ -222,7 +348,9 @@ export async function buildNyOpenStrategyState(store, args = {}, clock = new Sys
     store.getMasterCutoffBundle({ ...bundleScope, cutoff_paris }),
     missingMasterCutoffBundle({ ...bundleScope, date, cutoff_paris }),
   );
-  const stateSelector = operationalSelectorArgs(resolveOperationalReadScope(stateScope));
+  const resolvedStateScope = resolveOperationalReadScope(stateScope);
+  const resolvedBundleScope = resolveOperationalReadScope(bundleScope);
+  const stateSelector = operationalSelectorArgs(resolvedStateScope);
   const latestMasterCandidate = await safeRead(store.getLatestMasterAnalysis(stateSelector).then((result) => result.analysis), null);
   const latestMaster = (latestMasterCandidate?.trading_date || latestMasterCandidate?.date) === date && strategyDocMatches(latestMasterCandidate, strategy_id)
     ? latestMasterCandidate
@@ -254,7 +382,15 @@ export async function buildNyOpenStrategyState(store, args = {}, clock = new Sys
   const performance = await safeRead(store.getStrategyPerformance({ strategy_id, to_date: date, pricing_mode }), emptyStrategyPerformance(strategy_id, { to_date: date, pricing_mode }));
   const activeTrade = (day.trades || []).find((trade) => isActiveTradeStatus(trade.status)) || null;
   const currentSetup = (day.setups || []).find((setup) => setup.status && setup.status !== "cancelled") || (day.setups || [])[0] || null;
-  const features = await readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris: cutoff_paris });
+  const features = await readFeatureContext(store, {
+    date,
+    session,
+    activeThesis,
+    latestMaster,
+    timestamp_paris: cutoff_paris,
+    raw_scope: immutablePackRawScope(resolvedBundleScope, pack),
+    computed_at: resolvedBundleScope.as_of_utc,
+  });
   const jobs = await safeRead(store.listDeskJobs({ date, session, limit: 20 }).then((result) => result.jobs), []);
   const alerts = await safeRead(store.listAlerts({ date, thesis_id: activeThesis?.thesis_id, limit: 20 }).then((result) => result.alerts), []);
   const master_status = latestMaster ? "saved" : "not_launched";
@@ -422,12 +558,17 @@ export function compactPackHeaderForFront(pack) {
       status: pack.quality?.status || null,
       row_count_total: pack.quality?.row_count_total ?? null,
       missing_datasets: pack.quality?.missing_datasets || [],
+      stale_datasets: pack.quality?.stale_datasets || [],
       warnings: pack.quality?.warnings || [],
       source: pack.quality?.source || null,
+      freshness_policy_version: pack.quality?.freshness_policy_version || null,
+      dataset_freshness: pack.quality?.dataset_freshness || {},
     },
     datasets: Object.fromEntries(Object.entries(pack.datasets || {}).map(([name, ref]) => [name, {
       row_count: ref?.row_count ?? null,
       status: ref?.status || null,
+      availability: ref?.availability || null,
+      freshness: ref?.freshness || null,
       source: ref?.source || null,
       from_time: ref?.from_time || ref?.from_time_utc || null,
       to_time: ref?.to_time || ref?.to_time_utc || null,
@@ -1590,8 +1731,8 @@ export function buildNyOpenMasterPrompt({ strategy_id, date, cutoff_paris, bundl
     rules: [
       "Appeler get_active_contracts au debut du run et verifier le contrat Master actif.",
       "Utiliser uniquement les donnees visibles au cutoff_paris. Aucun lookahead.",
-      "Verifier que le pack immuable couvre as_of_utc; ne jamais reutiliser un ancien pack de cutoff pour un replan ulterieur.",
-      "Seul missing_unexpected est une panne. stale_market_closed et not_yet_open sont des etats normaux de session.",
+      "Verifier que le pack immuable couvre as_of_utc; ne jamais reutiliser un pack d'un cutoff precedent pour un replan ulterieur.",
+      "data_quality fait autorite: missing_unexpected contextuel est DEGRADED et non bloquant; seuls execution_allowed=false ou analysis_mode=blocked arretent l'analyse.",
       "Utiliser last_known/H4 comme contexte seulement, jamais comme confirmation fraiche ou trigger.",
       "Un gap technologique est non applicable avant la premiere cotation de session; un VIX cash ferme ne bloque pas seul l'analyse.",
       "Produire un Master NY Open 15:30 avec these, setup et position separes.",
@@ -1742,7 +1883,16 @@ export function firstArray(...values) {
 }
 
 export function hasReplayGeometry(setup) {
-  return Boolean(setup.entry_zone && setup.stop_loss != null && hasTakeProfitGeometry(setup.take_profits || setup.targets || setup.tp1 || setup.target));
+  const canonicalEntry = [
+    setup.entry_price,
+    setup.order_limit_price,
+    setup.order_stop_price,
+  ].some((value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)));
+  return Boolean(
+    (setup.entry_zone || canonicalEntry)
+    && setup.stop_loss != null
+    && hasTakeProfitGeometry(setup.take_profits || setup.targets || setup.tp1 || setup.target),
+  );
 }
 
 export function hasTakeProfitGeometry(value) {

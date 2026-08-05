@@ -1,0 +1,119 @@
+{
+  "schema_version": "desk_analytical_research_progress_v1",
+  "status": "IN_PROGRESS",
+  "current_phase": "MEGACAPS",
+  "started_at_utc": "2026-06-10T22:15:00.000Z",
+  "updated_at_utc": "2026-06-10T22:15:09.000Z",
+  "phases": [
+    {
+      "phase": "CONTINUITY",
+      "status": "COMPLETE",
+      "required": true,
+      "evidence_count": 1,
+      "tool_call_count": 1,
+      "started_at_utc": "2026-06-10T22:15:00.000Z",
+      "completed_at_utc": "2026-06-10T22:15:01.000Z",
+      "degraded_reasons": []
+    },
+    {
+      "phase": "CORE_MARKET",
+      "status": "COMPLETE",
+      "required": true,
+      "evidence_count": 1,
+      "tool_call_count": 1,
+      "started_at_utc": "2026-06-10T22:15:02.000Z",
+      "completed_at_utc": "2026-06-10T22:15:03.000Z",
+      "degraded_reasons": []
+    },
+    {
+      "phase": "INDEX_CONFIRMATION",
+      "status": "COMPLETE",
+      "required": true,
+      "evidence_count": 1,
+      "tool_call_count": 1,
+      "started_at_utc": "2026-06-10T22:15:04.000Z",
+      "completed_at_utc": "2026-06-10T22:15:05.000Z",
+      "degraded_reasons": []
+    },
+    {
+      "phase": "CROSS_ASSET",
+      "status": "DEGRADED",
+      "required": true,
+      "evidence_count": 1,
+      "tool_call_count": 1,
+      "started_at_utc": "2026-06-10T22:15:06.000Z",
+      "completed_at_utc": "2026-06-10T22:15:07.000Z",
+      "degraded_reasons": [
+        "VIX_CASH_NOT_YET_OPEN"
+      ]
+    },
+    {
+      "phase": "MEGACAPS",
+      "status": "IN_PROGRESS",
+      "required": true,
+      "evidence_count": 0,
+      "tool_call_count": 1,
+      "started_at_utc": "2026-06-10T22:15:08.000Z",
+      "completed_at_utc": null,
+      "degraded_reasons": []
+    },
+    {
+      "phase": "MACRO",
+      "status": "NOT_STARTED",
+      "required": true,
+      "evidence_count": 0,
+      "tool_call_count": 0,
+      "started_at_utc": null,
+      "completed_at_utc": null,
+      "degraded_reasons": []
+    },
+    {
+      "phase": "NEWS",
+      "status": "NOT_STARTED",
+      "required": true,
+      "evidence_count": 0,
+      "tool_call_count": 0,
+      "started_at_utc": null,
+      "completed_at_utc": null,
+      "degraded_reasons": []
+    },
+    {
+      "phase": "THESIS_EVOLUTION",
+      "status": "NOT_STARTED",
+      "required": true,
+      "evidence_count": 0,
+      "tool_call_count": 0,
+      "started_at_utc": null,
+      "completed_at_utc": null,
+      "degraded_reasons": []
+    },
+    {
+      "phase": "OPPORTUNITY",
+      "status": "NOT_STARTED",
+      "required": true,
+      "evidence_count": 0,
+      "tool_call_count": 0,
+      "started_at_utc": null,
+      "completed_at_utc": null,
+      "degraded_reasons": []
+    },
+    {
+      "phase": "CONCLUSION",
+      "status": "NOT_STARTED",
+      "required": true,
+      "evidence_count": 0,
+      "tool_call_count": 0,
+      "started_at_utc": null,
+      "completed_at_utc": null,
+      "degraded_reasons": []
+    }
+  ],
+  "coverage": {
+    "required": 10,
+    "total": 10,
+    "complete": 4,
+    "percent": 40
+  },
+  "tool_calls_count": 5,
+  "evidence_receipts_count": 4
+}

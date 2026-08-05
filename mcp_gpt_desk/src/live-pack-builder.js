@@ -16,7 +16,8 @@ export function liveRollingPackScriptArgs({ date, session, checkpoint_paris }) {
   ];
 }
 
-export async function buildAndPublishLiveRollingPack(input) {
+export async function buildAndPublishLiveRollingPack(input, { localPackBuilder } = {}) {
   liveRollingPackScriptArgs(input);
-  throw new Error("LOCAL_LIVE_PACK_BUILD_DISABLED");
+  if (!localPackBuilder?.buildLiveRollingPack) throw new Error("LOCAL_LIVE_PACK_BUILDER_REQUIRED");
+  return localPackBuilder.buildLiveRollingPack(input);
 }

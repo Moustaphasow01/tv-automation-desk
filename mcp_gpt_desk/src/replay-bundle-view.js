@@ -17,6 +17,13 @@ export const REPLAY_BUNDLE_SECTIONS = Object.freeze([
   "raw_refs",
   "instructions",
 ]);
+export const REPLAY_LINEAGE_COMPONENTS = Object.freeze([
+  "replay_master_analysis",
+  "replay_active_thesis",
+  "replay_setups",
+  "previous_replay_monitor",
+  "replay_position",
+]);
 
 const DEFAULT_RESPONSE_BUDGET_BYTES = 180_000;
 const MIN_RESPONSE_BUDGET_BYTES = 16_000;
@@ -47,7 +54,7 @@ export function replayTransportContract(bundleType = "master") {
       snapshot: "get_replay_snapshot",
     },
     save_rule: "Always use save_target.suggested_payload from the compact bundle as the immutable save base.",
-    budget_rule: "A budget fallback is not MCP_REQUIRED. Read the listed replay-scoped sections before deciding DATA_NOT_READY.",
+    budget_rule: "A budget fallback is not MCP_REQUIRED. Follow section, component and field manifests, verify their SHA-256 receipts, and reassemble replay-scoped evidence before deciding DATA_NOT_READY.",
   };
 }
 
@@ -191,17 +198,28 @@ export function getReplayBundleSectionView(bundle = {}, args = {}) {
   if (!REPLAY_BUNDLE_SECTIONS.includes(section)) {
     throw new Error(`invalid_replay_bundle_section:${section || "missing"}`);
   }
-  let data = replaySectionValue(canonical, section);
-  if (section === "rolling_snapshots") data = filterSnapshots(data, options);
-  if (section === "raw_refs" && args.include_raw_refs === false) data = [];
-  const paged = paginateSection(data, args.offset, args.limit, section);
+  let sectionData = replaySectionValue(canonical, section);
+  if (section === "rolling_snapshots") sectionData = filterSnapshots(sectionData, options);
+  if (section === "raw_refs" && args.include_raw_refs === false) sectionData = [];
+  const selection = replaySectionSelection(sectionData, section, args);
+  const paged = selection.selected
+    ? paginateSelectedValue(selection.value, args.offset, args.limit, selection.data_path)
+    : paginateSection(sectionData, args.offset, args.limit, section);
   const response = {
     ok: true,
     ...replayIdentity(canonical),
     view: "section",
     complete: true,
     section,
-    section_sha256: hashValue(data),
+    section_sha256: hashValue(sectionData),
+    ...(selection.component ? {
+      component: selection.component,
+      component_sha256: hashValue(selection.component_value),
+    } : {}),
+    ...(selection.field ? {
+      field: selection.field,
+      field_sha256: hashValue(selection.value),
+    } : {}),
     data: paged.data,
     pagination: paged.pagination,
     source_bundle_hash: canonical.source_hash || null,
@@ -216,11 +234,39 @@ export function getReplayBundleSectionView(bundle = {}, args = {}) {
     section,
     complete: false,
     budget_exceeded: true,
-    section_sha256: hashValue(data),
+    section_sha256: hashValue(sectionData),
+    ...(selection.component ? {
+      component: selection.component,
+      component_sha256: hashValue(selection.component_value),
+    } : {}),
+    ...(selection.field ? {
+      field: selection.field,
+      field_sha256: hashValue(selection.value),
+    } : {}),
+    source_bundle_hash: canonical.source_hash || null,
+    canonical_bundle_hash: canonical.canonical_bundle_hash,
+    ...(!selection.component && section === "replay_lineage"
+      ? {
+          component_manifest: replayLineageComponentManifest(
+            sectionData,
+            replayIdentity(canonical),
+          ),
+        }
+      : {}),
+    ...(selection.component && !selection.field
+      ? {
+          field_manifest: replayLineageFieldManifest(
+            selection.component_value,
+            replayIdentity(canonical),
+            selection.component,
+          ),
+        }
+      : {}),
     data: null,
-    recommended_action: section === "rolling_snapshots"
-      ? "Call get_replay_snapshot with one window and a smaller instruments list."
-      : "Retry get_replay_bundle_section with a smaller limit and an offset.",
+    recommended_action: replaySectionBudgetRecommendation({
+      section,
+      selection,
+    }),
   }, bundle, canonical, options, true);
 }
 
@@ -272,6 +318,9 @@ function composeReplayResponse(identity, canonical, manifest, options, selectedS
 }
 
 function manifestResponse(identity, canonical, manifest, options, extra = {}) {
+  const requiredFollowupReads = extra.budget_exceeded
+    ? replayRequiredFollowupReads(identity, manifest, extra.omitted_sections)
+    : [];
   return {
     ok: canonical.ok !== false,
     ...identity,
@@ -289,8 +338,44 @@ function manifestResponse(identity, canonical, manifest, options, extra = {}) {
     source_bundle_hash: canonical.source_hash || null,
     canonical_bundle_hash: canonical.canonical_bundle_hash,
     recommended_action: "Read only the required sections with get_replay_bundle_section or get_replay_snapshot.",
+    ...(requiredFollowupReads.length ? { required_followup_reads: requiredFollowupReads } : {}),
     ...extra,
   };
+}
+
+function replayRequiredFollowupReads(identity, manifest, omittedSections = []) {
+  const omitted = new Set(Array.isArray(omittedSections) ? omittedSections : []);
+  const sections = Object.keys(manifest.sections || {}).filter((section) => (
+    omitted.has(section)
+    && !["contract", "save_target", "quality", "raw_refs"].includes(section)
+  ));
+  const reads = [];
+  for (const section of sections) {
+    if (section === "rolling_snapshots") {
+      for (const window of ["15m", "1h", "4h"]) {
+        reads.push({
+          tool: "get_replay_snapshot",
+          arguments: {
+            ...identityRef(identity),
+            window,
+            include_raw_refs: false,
+            max_response_bytes: MAX_RESPONSE_BUDGET_BYTES,
+          },
+        });
+      }
+      continue;
+    }
+    reads.push({
+      tool: "get_replay_bundle_section",
+      arguments: {
+        ...identityRef(identity),
+        section,
+        include_raw_refs: false,
+        max_response_bytes: MAX_RESPONSE_BUDGET_BYTES,
+      },
+    });
+  }
+  return reads;
 }
 
 function replaySectionValue(bundle, section) {
@@ -372,9 +457,9 @@ function replayReadInstructions(bundle) {
     },
     deep_read_tools: ["get_replay_bundle_manifest", "get_replay_bundle_section", "get_replay_snapshot"],
     missing_section_rule: "Use a replay-scoped deep read before declaring DATA_NOT_READY. Never use live data as a fallback.",
-    budget_fallback_rule: "budget_exceeded is not MCP_REQUIRED; follow section_manifest read instructions.",
+    budget_fallback_rule: "budget_exceeded is not MCP_REQUIRED; follow section_manifest, component_manifest and field_manifest read instructions and verify every SHA-256.",
     source_coverage_rule: "Verify data_quality.source_coverage covers cutoff_paris. A coverage failure is DATA_NOT_READY and must block the save.",
-    market_availability_rule: "Only missing_unexpected means a source failure. stale_market_closed and not_yet_open are expected session states and must not trigger DATA_NOT_READY by themselves.",
+    market_availability_rule: "data_quality is authoritative. A context-only missing_unexpected is DEGRADED and must not trigger DATA_NOT_READY; block only when execution_allowed=false or analysis_mode=blocked.",
     stale_context_rule: "Use last_known and H4 fallback for regime/context only, never as a fresh trigger or current-session confirmation.",
     tech_gap_rule: "A tech gap marked not_yet_open is not applicable yet. Do not call it missing and do not invent a gap before a current-session quote exists.",
     vix_rule: "VIX cash may be stale outside US cash hours. State that fresh confirmation is unavailable, use last_known as context, and do not require fresh cash VIX before its session opens.",
@@ -429,15 +514,21 @@ function canonicalizeSnapshots(snapshots, references) {
 function createReferenceDictionary() {
   const values = [];
   const indexes = new Map();
+  const objectIndexes = new WeakMap();
   return {
     values,
     intern(value) {
+      if (value && typeof value === "object" && objectIndexes.has(value)) {
+        return objectIndexes.get(value);
+      }
       const key = stableJson(value);
       if (!indexes.has(key)) {
         indexes.set(key, values.length);
         values.push(value);
       }
-      return indexes.get(key);
+      const index = indexes.get(key);
+      if (value && typeof value === "object") objectIndexes.set(value, index);
+      return index;
     },
   };
 }
@@ -494,6 +585,144 @@ function filterSnapshots(snapshots, options) {
 function stripReferenceIndexes(block) {
   const { raw_ref_indexes: _raw, attempted_raw_ref_indexes: _attempted, ...rest } = block;
   return rest;
+}
+
+function replaySectionSelection(sectionData, section, args = {}) {
+  const component = String(args.component || "");
+  const field = String(args.field || "");
+  if (!component && !field) return { selected: false };
+  if (section !== "replay_lineage") {
+    throw new Error(`replay_section_component_unsupported:${section}`);
+  }
+  if (!REPLAY_LINEAGE_COMPONENTS.includes(component)) {
+    throw new Error(`invalid_replay_lineage_component:${component || "missing"}`);
+  }
+  const componentValue = sectionData?.[component] ?? null;
+  if (!field) {
+    return {
+      selected: true,
+      component,
+      field: null,
+      component_value: componentValue,
+      value: componentValue,
+      data_path: [component],
+    };
+  }
+  if (
+    !componentValue
+    || typeof componentValue !== "object"
+    || Array.isArray(componentValue)
+    || !Object.prototype.hasOwnProperty.call(componentValue, field)
+  ) {
+    throw new Error(`invalid_replay_lineage_field:${component}.${field || "missing"}`);
+  }
+  return {
+    selected: true,
+    component,
+    field,
+    component_value: componentValue,
+    value: componentValue[field],
+    data_path: [component, field],
+  };
+}
+
+function paginateSelectedValue(value, rawOffset, rawLimit, dataPath) {
+  const offset = Math.max(0, Number(rawOffset) || 0);
+  const limit = Math.max(1, Math.min(Number(rawLimit) || 100, 500));
+  const pagedValue = Array.isArray(value)
+    ? value.slice(offset, offset + limit)
+    : value;
+  return {
+    data: nestReplaySelection(dataPath, pagedValue),
+    pagination: Array.isArray(value)
+      ? {
+          field: dataPath.join("."),
+          path: dataPath,
+          offset,
+          limit,
+          total: value.length,
+          has_more: offset + limit < value.length,
+        }
+      : null,
+  };
+}
+
+function nestReplaySelection(path, value) {
+  return [...path].reverse().reduce(
+    (child, field) => ({ [field]: child }),
+    value,
+  );
+}
+
+function replayLineageComponentManifest(sectionData, identity) {
+  return Object.fromEntries(REPLAY_LINEAGE_COMPONENTS
+    .filter((component) => Object.prototype.hasOwnProperty.call(sectionData || {}, component))
+    .map((component) => {
+      const value = sectionData[component];
+      return [component, {
+        bytes: jsonBytes(value),
+        sha256: hashValue(value),
+        value_type: replayJsonType(value),
+        read: {
+          tool: "get_replay_bundle_section",
+          arguments: {
+            ...identityRef(identity),
+            section: "replay_lineage",
+            component,
+            include_raw_refs: false,
+            max_response_bytes: MAX_RESPONSE_BUDGET_BYTES,
+          },
+        },
+      }];
+    }));
+}
+
+function replayLineageFieldManifest(componentValue, identity, component) {
+  if (!componentValue || typeof componentValue !== "object" || Array.isArray(componentValue)) {
+    return null;
+  }
+  return Object.fromEntries(Object.entries(componentValue).map(([field, value]) => [
+    field,
+    {
+      bytes: jsonBytes(value),
+      sha256: hashValue(value),
+      value_type: replayJsonType(value),
+      read: {
+        tool: "get_replay_bundle_section",
+        arguments: {
+          ...identityRef(identity),
+          section: "replay_lineage",
+          component,
+          field,
+          include_raw_refs: false,
+          max_response_bytes: MAX_RESPONSE_BUDGET_BYTES,
+        },
+      },
+    },
+  ]));
+}
+
+function replayJsonType(value) {
+  if (Array.isArray(value)) return "array";
+  if (value === null) return "null";
+  return typeof value === "object" ? "object" : typeof value;
+}
+
+function replaySectionBudgetRecommendation({ section, selection }) {
+  if (section === "rolling_snapshots") {
+    return "Call get_replay_snapshot with one window and a smaller instruments list.";
+  }
+  if (section === "replay_lineage" && !selection.component) {
+    return "Read each component from component_manifest and reassemble replay_lineage after verifying every hash.";
+  }
+  if (section === "replay_lineage" && selection.component && !selection.field) {
+    return Array.isArray(selection.component_value)
+      ? "Retry this component with a smaller limit and consecutive offsets."
+      : "Read each field from field_manifest and reassemble the component after verifying every hash.";
+  }
+  return Array.isArray(selection.value)
+    ? "Retry this field with a smaller limit and consecutive offsets."
+    : "This scalar field exceeds the maximum response budget and cannot be fragmented further.";
 }
 
 function paginateSection(value, rawOffset, rawLimit, section) {
@@ -578,9 +807,33 @@ function hashValue(value) {
 }
 
 function stableJson(value) {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  const chunks = [];
+  appendStableJson(value, chunks);
+  return chunks.join("");
+}
+
+
+function appendStableJson(value, chunks) {
+  if (Array.isArray(value)) {
+    chunks.push("[");
+    for (let index = 0; index < value.length; index += 1) {
+      if (index) chunks.push(",");
+      appendStableJson(value[index], chunks);
+    }
+    chunks.push("]");
+    return;
   }
-  return JSON.stringify(value ?? null);
+  if (value && typeof value === "object") {
+    chunks.push("{");
+    const keys = Object.keys(value).sort();
+    for (let index = 0; index < keys.length; index += 1) {
+      if (index) chunks.push(",");
+      const key = keys[index];
+      chunks.push(JSON.stringify(key), ":");
+      appendStableJson(value[key], chunks);
+    }
+    chunks.push("}");
+    return;
+  }
+  chunks.push(JSON.stringify(value ?? null));
 }

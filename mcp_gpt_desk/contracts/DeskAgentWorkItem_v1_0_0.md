@@ -52,3 +52,26 @@ The work item, monitor bundle, save target, and work-event audit carry an option
 - `data_settlement_lag_seconds`
 
 The selected checkpoint and skipped list are derived from the first completion timestamp and remain stable on idempotent retries.
+
+## Live Monitor latest-wins
+
+When several closed M15 Monitor checkpoints are available and none is leased,
+the LIVE cursor claims only the most recent settled checkpoint. Older,
+unmaterialized Monitor checkpoints are never replayed one by one.
+
+The selected bundle carries `catchup_context` with the last materialized
+checkpoint, the selected checkpoint, the complete list of superseded
+checkpoints, and an analysis window. The rolling pack must cover that complete
+window. GPT must analyze the accumulated market-data delta and explicitly
+acknowledge the materialization gap.
+
+An active valid lease is never preempted by latest-wins. A pending
+`REPLAN_FULL` Master also remains prioritary over later Monitor checkpoints.
+
+## Bounded empty-claim retry
+
+`claim_next_live_work` may perform at most three server-side claim attempts,
+spaced by 60 seconds, when the state is transient (`DATA_NOT_READY`, an active
+lease, or a near-term eligibility boundary). Terminal, paused, closed, and
+genuinely up-to-date states return immediately. The response exposes a
+`claim_retry` audit; the GPT worker must not add a fourth client-side attempt.

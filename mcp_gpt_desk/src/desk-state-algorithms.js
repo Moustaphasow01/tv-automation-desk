@@ -22,6 +22,7 @@ import {
   contractSummary,
   datasetReadinessStatus,
   getLatestOperationalMonitor,
+  immutablePackRawScope,
   operationalSelectorArgs,
   readFeatureContext,
   resolveOperationalReadScope,
@@ -29,6 +30,8 @@ import {
 import { nextReplayAction } from "./desk-replay-orchestration-algorithms.js";
 import { documentTimestampUtc, isDocumentAtOrBefore } from "./desk-document-algorithms.js";
 import { resolveMonitorContext } from "./desk-live-bundle-algorithms.js";
+import { CADENCE_MINUTES, resolveTargetCheckpoint } from "./live-cursor.js";
+import { isDailyPhaseMasterCheckpoint } from "./daily-run-model.js";
 
 export function assertLiveStoreWriteScope(toolName, payload = {}) {
   if (["replay", "backtest"].includes(payload.mode)) {
@@ -71,8 +74,14 @@ export function assertLiveStoreWriteScope(toolName, payload = {}) {
 
 export function masterAnalysisVNextId(masterAnalysis) {
   const run = masterAnalysis.run_id || masterAnalysis.resolved_scope?.run_id || null;
-  const session = run ? `${masterAnalysis.session || "session"}_${run}` : masterAnalysis.session;
-  return stableVNextId("master", masterAnalysis.trading_date || masterAnalysis.date, session);
+  const session = masterAnalysis.session || "session";
+  const cutoff = masterAnalysis.cutoff_paris
+    || masterAnalysis.resolved_scope?.cutoff_paris
+    || masterAnalysis.created_at_paris
+    || null;
+  const cutoffKey = String(cutoff || "").slice(11, 16).replace(":", "") || null;
+  const lineage = [session, run, cutoffKey].filter(Boolean).join("_");
+  return stableVNextId("master", masterAnalysis.trading_date || masterAnalysis.date, lineage);
 }
 
 export function hourlyMonitorVNextId(monitor) {
@@ -312,15 +321,26 @@ export function selectAlerts(docs, { date, thesis_id, limit = 50 } = {}) {
 
 export function selectActivePosition(docs, { thesis_id } = {}) {
   const positions = (docs || [])
-    .filter((position) => !thesis_id || position.linked_thesis_id === thesis_id)
-    .filter((position) => ["active", "protected", "partial_taken"].includes(position.status))
+    .filter((position) => !thesis_id
+      || position.linked_thesis_id === thesis_id
+      || position.linked_active_thesis_id === thesis_id
+      || position.thesis_id === thesis_id)
+    .filter((position) => ["ACTIVE", "OPEN", "PENDING", "RUNNING", "PROTECTED", "PARTIAL_TAKEN"].includes(String(position.status || "").toUpperCase()))
     .sort((left, right) => String(right.updated_at || right.created_at || "").localeCompare(String(left.updated_at || left.created_at || "")));
   return { ok: true, position: positions[0] || null };
 }
 
 export function dataReadiness({ pack, level, technical, cross, condition, rawWindow }) {
+  const packQuality = pack?.quality || {};
+  const freshness = packQuality.dataset_freshness || {};
+  const triggerFeeds = ["MNQ_M5", "MES_M5"];
+  const strictTriggerFreshness = packQuality.freshness_policy_version
+    ? triggerFeeds.every((dataset) => freshness[dataset]?.status === "fresh")
+    : null;
   return {
-    pack: pack ? "ready" : "missing",
+    pack: pack ? packQuality.status || "ready" : "missing",
+    market_triggers: strictTriggerFreshness === null ? "unknown" : strictTriggerFreshness ? "ready" : "failing",
+    market_context: (packQuality.stale_datasets || []).length ? "last_known" : pack ? "ready" : "missing",
     level_map: level?.level_map ? "ready" : "missing",
     technical_events: technical?.events?.length ? "ready" : "missing",
     cross_asset_delta: cross?.delta ? "ready" : "missing",
@@ -378,8 +398,8 @@ export function keyLevels(activeThesis, levelMap, latestMaster) {
 }
 
 export function deriveDeskStatus({ activeThesis, latestMonitor, latestExpiredThesis, activePosition }) {
-  if (activePosition?.status === "active") return "POSITION_ACTIVE";
-  if (activePosition?.status === "protected") return "POSITION_PROTECTED";
+  if (["ACTIVE", "OPEN", "PENDING", "RUNNING"].includes(String(activePosition?.status || "").toUpperCase())) return "POSITION_ACTIVE";
+  if (["PROTECTED", "PARTIAL_TAKEN"].includes(String(activePosition?.status || "").toUpperCase())) return "POSITION_PROTECTED";
   if (!activeThesis) return latestExpiredThesis ? "EXPIRED" : "NO_ACTIVE_THESIS";
   const monitorAction = String(latestMonitor?.monitor_decision?.action || latestMonitor?.monitor_decision?.decision || "").toUpperCase();
   if (monitorAction.includes("REPLAN") || activeThesis.status === "REPLAN_REQUIRED") return "REPLAN_REQUIRED";
@@ -434,7 +454,100 @@ export function macroCrossAssetSummary(crossAssetDelta) {
     DXY: delta.DXY || delta.dxy || null,
     VIX: delta.VIX || delta.vix || null,
     US10Y: delta.US10Y || delta.us10y || null,
+    US02Y: delta.US02Y || delta.us02y || null,
+    GC: delta.GC || delta.gc || null,
+    CL: delta.CL || delta.cl || null,
     summary: delta.summary || null,
+  };
+}
+
+const LIVE_TASK_LATE_AFTER_MS = 2 * 60 * 1000;
+
+export function liveTaskState(cursor, tick) {
+  if (!cursor) return "UNAVAILABLE";
+  const cursorStatus = String(cursor.cursor_status || "").toUpperCase();
+  const attemptStatus = String(cursor.attempt?.status || "").toUpperCase();
+  if (cursorStatus === "LEASED" || attemptStatus === "LEASED") return "IN_PROGRESS";
+
+  const targetMs = Date.parse(cursor.target_checkpoint || "");
+  const completedMs = Date.parse(cursor.last_completed_checkpoint || "");
+  if (Number.isFinite(targetMs) && Number.isFinite(completedMs) && completedMs >= targetMs) {
+    return "EXECUTED";
+  }
+
+  const nowMs = Number(tick?.epochMs);
+  if (Number.isFinite(targetMs) && Number.isFinite(nowMs) && nowMs > targetMs + LIVE_TASK_LATE_AFTER_MS) {
+    return "LATE";
+  }
+  return "WAITING";
+}
+
+export function liveCheckpointSchedule(cursor, lastClaim, tick) {
+  if (!cursor) return null;
+  // The runtime cadence is release-owned; persisted cursors from a previous
+  // release must not keep projecting the retired M15 schedule.
+  const cadenceMinutes = CADENCE_MINUTES;
+  const cadenceMs = cadenceMinutes * 60_000;
+  let dueCheckpoint = cursor.target_checkpoint || null;
+  try {
+    dueCheckpoint = resolveTargetCheckpoint(cursor, tick);
+  } catch {
+    // Old cursor fixtures and records may predate the full-day window fields.
+  }
+  const dueMs = Date.parse(dueCheckpoint || "");
+  const completedMs = Date.parse(cursor.last_completed_checkpoint || "");
+  const closeMs = Date.parse(cursor.window?.close_paris || "");
+  const dueCompleted = Number.isFinite(dueMs) && Number.isFinite(completedMs) && completedMs >= dueMs;
+  const nextMs = Number.isFinite(dueMs)
+    ? dueMs + cadenceMs
+    : null;
+  const nextCheckpoint = Number.isFinite(nextMs) && Number.isFinite(closeMs) && nextMs <= closeMs
+    ? toParisIso(nextMs)
+    : null;
+  const attempt = cursor.attempt || {};
+  const lastClaimAt = lastClaim?.at_utc || cursor.last_claimed_at_utc || null;
+  const lastClaimCheckpoint = lastClaim?.checkpoint || cursor.last_claimed_checkpoint || null;
+  const dueAtUtc = lastClaimCheckpoint && Number.isFinite(Date.parse(lastClaimCheckpoint))
+    ? new Date(lastClaimCheckpoint).toISOString()
+    : null;
+  const bundleReadyAt = attempt.checkpoint === lastClaimCheckpoint
+    ? attempt.bundle_ready_at_utc || attempt.available_at_utc || null
+    : null;
+  const latencySeconds = dueAtUtc && lastClaimAt
+    ? Math.max(0, Math.round((Date.parse(lastClaimAt) - Date.parse(dueAtUtc)) / 1000))
+    : null;
+  const bundleClaimLatencySeconds = bundleReadyAt && lastClaimAt
+    ? Math.max(0, Math.round((Date.parse(lastClaimAt) - Date.parse(bundleReadyAt)) / 1000))
+    : null;
+  return {
+    cadence_minutes: cadenceMinutes,
+    last_completed_checkpoint: cursor.last_completed_checkpoint || null,
+    due_checkpoint: dueCheckpoint,
+    due_workflow: isDailyPhaseMasterCheckpoint(dueCheckpoint) ? "LIVE_MASTER" : "LIVE_M15_MONITOR",
+    due_completed: dueCompleted,
+    next_checkpoint: nextCheckpoint,
+    next_workflow: nextCheckpoint && isDailyPhaseMasterCheckpoint(nextCheckpoint) ? "LIVE_MASTER" : nextCheckpoint ? "LIVE_M15_MONITOR" : null,
+    next_monitor_checkpoint: nextCheckpoint && isDailyPhaseMasterCheckpoint(nextCheckpoint)
+      ? (Date.parse(nextCheckpoint) + cadenceMs <= closeMs ? toParisIso(Date.parse(nextCheckpoint) + cadenceMs) : null)
+      : nextCheckpoint,
+    ready_at_utc: dueAtUtc,
+    ready_at_paris: dueAtUtc ? toParisIso(Date.parse(dueAtUtc)) : null,
+    bundle_ready_at_utc: bundleReadyAt,
+    bundle_ready_at_paris: bundleReadyAt ? toParisIso(Date.parse(bundleReadyAt)) : null,
+    claimed_at_utc: lastClaimAt,
+    claim_latency_seconds: Number.isFinite(latencySeconds) ? latencySeconds : null,
+    claim_latency_target_seconds: 120,
+    claim_latency_status: !Number.isFinite(latencySeconds)
+      ? "unavailable"
+      : latencySeconds <= 120
+        ? "on_target"
+        : "late",
+    bundle_claim_latency_seconds: Number.isFinite(bundleClaimLatencySeconds) ? bundleClaimLatencySeconds : null,
+    bundle_claim_latency_status: !Number.isFinite(bundleClaimLatencySeconds)
+      ? "unavailable"
+      : bundleClaimLatencySeconds <= 120
+        ? "on_target"
+        : "late",
   };
 }
 
@@ -447,28 +560,68 @@ export async function buildLiveDeskState(store, args = {}, clock = new SystemClo
   const mode = resolvedScope.mode;
   const requested_cutoff = resolvedScope.cutoff_paris;
   const selector = operationalSelectorArgs(resolvedScope);
-  const contracts = await safeRead(store.getActiveContracts(), {});
-  const pack = await resolvePackForState(store, { date, session, timezone });
-  const latestMasterResult = await store.getLatestMasterAnalysis(selector);
+  const [contracts, pack, latestMasterResult, liveCursorResult] = await Promise.all([
+    safeRead(store.getActiveContracts(), {}),
+    resolvePackForState(store, { date, session, timezone }),
+    store.getLatestMasterAnalysis(selector),
+    typeof store.getLiveRunCursor === "function"
+      ? safeRead(store.getLiveRunCursor({ trading_date: date, session }), null)
+      : null,
+  ]);
   const latestMaster = latestMasterResult.analysis || null;
-  const activeResult = latestMaster?.analysis_id
-    ? await store.getActiveThesis({ ...selector, master_id: latestMaster.analysis_id, status: "active" })
-    : { active_thesis: null, theses: [] };
-  const anyTheses = latestMaster?.analysis_id
-    ? await store.getActiveThesis({ ...selector, master_id: latestMaster.analysis_id, status: "any" })
-    : { active_thesis: null, theses: [] };
+  const liveCursor = liveCursorResult?.cursor || null;
+  const lastLiveClaim = liveCursorResult?.last_claim || null;
+  const [activeResult, anyTheses] = latestMaster?.analysis_id
+    ? await Promise.all([
+      store.getActiveThesis({ ...selector, master_id: latestMaster.analysis_id, status: "active" }),
+      store.getActiveThesis({ ...selector, master_id: latestMaster.analysis_id, status: "any" }),
+    ])
+    : [
+      { active_thesis: null, theses: [] },
+      { active_thesis: null, theses: [] },
+    ];
   const activeThesis = activeResult.active_thesis || null;
   const latestExpiredThesis = selectExpiredTheses(anyTheses.theses || [], { session, now: tick })[0] || null;
-  const latestMonitor = activeThesis?.thesis_id
-    ? await getLatestOperationalMonitor(store, { ...selector, thesis_id: activeThesis.thesis_id, master_id: latestMaster.analysis_id, limit: 1 }).then((result) => result.latest_monitor)
-    : null;
-  const activePosition = activeThesis?.thesis_id
-    ? await safeRead(store.getActivePosition({ thesis_id: activeThesis.thesis_id }).then((result) => result.position), null)
-    : null;
-  const features = await readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris: requested_cutoff || tick.paris });
-  const jobs = await safeRead(store.listDeskJobs({ date, session, limit: 20 }).then((result) => result.jobs), []);
-  const alerts = await safeRead(store.listAlerts({ date, thesis_id: activeThesis?.thesis_id, limit: 20 }).then((result) => result.alerts), []);
+  const latestLineageThesis = activeThesis || latestExpiredThesis;
+  const [latestMonitor, activePosition] = await Promise.all([
+    latestLineageThesis?.thesis_id
+      ? getLatestOperationalMonitor(store, {
+        ...selector,
+        thesis_id: latestLineageThesis.thesis_id,
+        master_id: latestMaster.analysis_id,
+        limit: 1,
+      }).then((result) => result.latest_monitor)
+      : null,
+    activeThesis?.thesis_id
+      ? safeRead(store.getActivePosition({ thesis_id: activeThesis.thesis_id }).then((result) => result.position), null)
+      : null,
+  ]);
+  const featureCutoffParis = pack?.data_cutoff?.cutoff_paris
+    || pack?.cutoff_paris
+    || requested_cutoff
+    || tick.paris;
+  const featureAsOfUtc = pack?.data_cutoff?.cutoff_utc
+    || pack?.cutoff_utc
+    || new Date(featureCutoffParis).toISOString();
+  const raw_scope = immutablePackRawScope({
+    ...resolvedScope,
+    as_of_utc: featureAsOfUtc,
+  }, pack);
+  const [features, jobs, alerts] = await Promise.all([
+    readFeatureContext(store, {
+      date,
+      session,
+      activeThesis,
+      latestMaster,
+      timestamp_paris: featureCutoffParis,
+      raw_scope,
+      computed_at: featureAsOfUtc,
+    }),
+    safeRead(store.listDeskJobs({ date, session, limit: 20 }).then((result) => result.jobs), []),
+    safeRead(store.listAlerts({ date, thesis_id: activeThesis?.thesis_id, limit: 20 }).then((result) => result.alerts), []),
+  ]);
   const desk_status = deriveDeskStatus({ activeThesis, latestMonitor, latestExpiredThesis, activePosition });
+  const checkpointSchedule = liveCheckpointSchedule(liveCursor, lastLiveClaim, tick);
   return {
     ok: true,
     date,
@@ -477,6 +630,9 @@ export async function buildLiveDeskState(store, args = {}, clock = new SystemClo
     run_id: resolvedScope.run_id,
     session,
     mode,
+    execution_mode: store.liveExecutionMode || "shadow",
+    paper_execution_enabled: store.livePaperExecutionEnabled !== false,
+    broker_execution: false,
     timezone,
     as_of_utc: resolvedScope.as_of_utc,
     resolved_scope: resolvedScope,
@@ -489,6 +645,7 @@ export async function buildLiveDeskState(store, args = {}, clock = new SystemClo
     desk_color: deskColor(desk_status),
     action_now: deriveActionNow({ desk_status, activeThesis, latestMonitor }),
     active_thesis: activeThesis,
+    latest_thesis: latestLineageThesis,
     latest_master: compactMasterAnalysis(latestMaster),
     latest_monitor: compactMonitor(latestMonitor),
     conditions_go: conditionList(activeThesis, features.condition, latestMonitor, "conditions_go"),
@@ -501,7 +658,31 @@ export async function buildLiveDeskState(store, args = {}, clock = new SystemClo
     current_window: features.condition?.condition_status?.current_window || { status: activeThesis ? "yellow" : "grey", rule: activeThesis ? "monitor thesis conditions" : "no active thesis" },
     jobs,
     alerts,
-    next_revalidation_time: activeThesis?.requires_replan_after || activeThesis?.valid_until || null,
+    next_revalidation_time: checkpointSchedule?.next_monitor_checkpoint
+      || liveCursor?.target_checkpoint
+      || activeThesis?.requires_replan_after
+      || activeThesis?.valid_until
+      || null,
+    next_live_checkpoint: liveCursor ? {
+      cursor_id: liveCursor.cursor_id || null,
+      cursor_status: liveCursor.cursor_status || null,
+      workflow: liveCursor.attempt?.workflow || liveCursor.current_workflow || null,
+      attempt_status: liveCursor.attempt?.status || null,
+      target_checkpoint: liveCursor.target_checkpoint || null,
+      last_completed_checkpoint: liveCursor.last_completed_checkpoint || null,
+      task_status: liveTaskState({
+        ...liveCursor,
+        target_checkpoint: checkpointSchedule?.due_checkpoint || liveCursor.target_checkpoint,
+      }, tick),
+      last_claimed_at_utc: lastLiveClaim?.at_utc || null,
+      last_claimed_at_paris: lastLiveClaim?.at_utc
+        ? toParisIso(Date.parse(lastLiveClaim.at_utc))
+        : null,
+      last_claimed_checkpoint: lastLiveClaim?.checkpoint || null,
+      last_claimed_workflow: lastLiveClaim?.workflow || null,
+      last_claimed_worker_id: lastLiveClaim?.worker_id || null,
+    } : null,
+    live_checkpoint_schedule: checkpointSchedule,
     data_readiness: dataReadiness({ pack, level: features.level, technical: features.technical, cross: features.cross, condition: features.condition }),
   };
 }
@@ -524,7 +705,16 @@ export async function buildFrontMasterState(store, args = {}, clock = new System
   const activeThesis = latestMaster?.analysis_id
     ? await store.getActiveThesis({ ...selector, master_id: latestMaster.analysis_id, status: "active" }).then((result) => result.active_thesis)
     : null;
-  const features = await readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris: requested_cutoff || tick.paris });
+  const raw_scope = immutablePackRawScope(resolvedScope, pack);
+  const features = await readFeatureContext(store, {
+    date,
+    session,
+    activeThesis,
+    latestMaster,
+    timestamp_paris: requested_cutoff || tick.paris,
+    raw_scope,
+    computed_at: resolvedScope.as_of_utc,
+  });
   const jobs = await safeRead(store.listDeskJobs({ date, session, limit: 20 }).then((result) => result.jobs), []);
   const latestMasterJob = jobs.find((job) => job.job_type === "MASTER_ANALYSIS") || null;
   const setups = latestMaster?.analysis_id
@@ -600,11 +790,20 @@ export async function buildFrontMonitorState(store, args = {}, clock = new Syste
   if (Date.parse(checkpoint) !== Date.parse(resolvedScope.as_of_utc)) {
     throw deskError("INVALID_SCOPE", "timestamp_paris and as_of_utc must identify the same instant.", { timestamp_paris: checkpoint, as_of_utc: resolvedScope.as_of_utc });
   }
-  const features = await readFeatureContext(store, { date, session, activeThesis, latestMaster, timestamp_paris: checkpoint });
   const previewBundle = await store.getManualMonitorBundle({
     ...args,
     timestamp_paris: checkpoint,
     include_raw_refs: false,
+  });
+  const raw_scope = immutablePackRawScope(resolvedScope, previewBundle);
+  const features = await readFeatureContext(store, {
+    date,
+    session,
+    activeThesis,
+    latestMaster,
+    timestamp_paris: checkpoint,
+    raw_scope,
+    computed_at: resolvedScope.as_of_utc,
   });
   const jobs = await safeRead(store.listDeskJobs({ date, session, limit: 20 }).then((result) => result.jobs), []);
   const latestMonitorJob = jobs.find((job) => job.job_type === "HOURLY_MONITOR") || null;
@@ -673,17 +872,20 @@ export async function claimNextDeskWorkFacade(store, args, tick) {
 
   if (liveWorkflows.length) {
     const paris = tick.paris || toParisIso(tick.epochMs);
-    const parisTime = paris.slice(11, 16);
-    const session = args.session || (parisTime >= "15:30" ? "ny_open" : "asia_open");
     const tradingDate = args.trading_date || paris.slice(0, 10);
     const live = await store.claimNextLive({
       worker_id: args.worker_id,
-      session,
       trading_date: tradingDate,
       lease_seconds: Math.min(args.lease_seconds || 660, 840),
     });
-    attempts.push({ scope: "live", session, trading_date: tradingDate, status: live.status, reason: live.reason || null });
+    attempts.push({ scope: "live", run_scope: "full_day", trading_date: tradingDate, status: live.status, reason: live.reason || null });
     if (live.status === "WORK_CLAIMED") return unifiedClaimResponse(live, args.worker_id);
+    if (live.status === "DATA_NOT_READY") {
+      return {
+        ...live,
+        attempts,
+      };
+    }
   }
 
   if (replayWorkflows.length) {

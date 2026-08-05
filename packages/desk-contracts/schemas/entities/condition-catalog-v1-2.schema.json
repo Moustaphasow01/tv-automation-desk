@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/condition-catalog-v1-2.schema.json",
+  "title": "DeskConditionCatalogContractV1_2",
+  "version": "1.2.0",
+  "type": "object",
+  "required": ["contract_name", "schema_version", "catalog_id", "profile", "profile_defaults", "condition_roles", "condition_effects", "operators", "predicate_types", "importance_values", "memory_policies", "memory_policy_semantics", "temporal_modes", "hard_gates", "soft_gates", "setup_patterns"],
+  "properties": {
+    "contract_name": {"const": "DeskConditionCatalogContract"},
+    "schema_version": {"const": "1.2.0"},
+    "catalog_id": {"const": "condition_catalog_v1_2"},
+    "profile": {"const": "OPPORTUNITY_SEEKING_CONTROLLED"},
+    "profile_defaults": {
+      "type": "object",
+      "required": ["min_weighted_confirmation_ratio", "max_risk_pct", "min_rr", "hard_gate_policy", "contextual_gap_policy"],
+      "properties": {
+        "min_weighted_confirmation_ratio": {"const": 0.55},
+        "max_risk_pct": {"const": 0.25},
+        "min_rr": {"const": 2},
+        "hard_gate_policy": {"const": "FAIL_CLOSED"},
+        "contextual_gap_policy": {"const": "SOFT_REQUIRE_CONFIRMATION"}
+      },
+      "additionalProperties": false
+    },
+    "condition_roles": {"type": "array", "uniqueItems": true, "items": {"enum": ["ACTIVATION", "CONFIRMATION", "INVALIDATION", "VETO"]}},
+    "condition_effects": {"type": "array", "uniqueItems": true, "items": {"enum": ["REQUIRE_TRUE", "BLOCK_IF_TRUE"]}},
+    "operators": {
+      "type": "array", "minItems": 16, "maxItems": 16,
+      "items": {
+        "type": "object", "required": ["code", "field", "description"],
+        "properties": {
+          "code": {"enum": ["CLOSE_ABOVE", "CLOSE_BELOW", "CROSS_ABOVE", "CROSS_BELOW", "TOUCH_ABOVE", "TOUCH_BELOW", "REJECT_ABOVE", "REJECT_BELOW", "REJECT_RESISTANCE", "REJECT_SUPPORT", "WITHIN_WINDOW", "OUTSIDE_WINDOW", "ALIGNS_WITH", "DIVERGES_FROM", "EVENT_ACTIVE", "EVENT_CLEAR"]},
+          "field": {"enum": ["close", "high_low", "ohlc_pattern", "clock", "intermarket", "event"]},
+          "description": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "predicate_types": {
+      "type": "array", "minItems": 11, "maxItems": 11,
+      "items": {
+        "type": "object", "required": ["code", "required_parameters", "parameter_definitions", "allowed_operators", "evaluation_field", "source_requirements", "enforcement_phase", "stateful", "backend_evaluator"],
+        "properties": {
+          "code": {"enum": ["PRICE_RELATION", "PRICE_CROSS", "ZONE_TOUCH", "BREAKOUT_CLOSE", "BREAK_RETEST_SEQUENCE", "REJECTION_PATTERN", "VWAP_RELATION", "RSI_THRESHOLD", "TIME_WINDOW", "INTERMARKET_CONFIRMATION", "EVENT_BLACKOUT"]},
+          "required_parameters": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "parameter_definitions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["name", "type", "unit", "source", "description"],
+              "properties": {
+                "name": {"type": "string", "minLength": 1},
+                "type": {"enum": ["NUMBER", "POSITIVE_INTEGER", "BOOLEAN", "IDENTIFIER", "TIME_OF_DAY", "INSTRUMENT_REF"]},
+                "unit": {"enum": ["PRICE", "POINTS", "BARS", "PERIODS", "BOOLEAN", "IDENTIFIER", "TIME_PARIS", "SYMBOL", "NONE"]},
+                "source": {"enum": ["GPT_PINNED", "PACK_REFERENCE", "CONDITION_REFERENCE", "POLICY"]},
+                "description": {"type": "string", "minLength": 1}
+              },
+              "additionalProperties": false
+            }
+          },
+          "allowed_operators": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["CLOSE_ABOVE", "CLOSE_BELOW", "CROSS_ABOVE", "CROSS_BELOW", "TOUCH_ABOVE", "TOUCH_BELOW", "REJECT_ABOVE", "REJECT_BELOW", "REJECT_RESISTANCE", "REJECT_SUPPORT", "WITHIN_WINDOW", "OUTSIDE_WINDOW", "ALIGNS_WITH", "DIVERGES_FROM", "EVENT_ACTIVE", "EVENT_CLEAR"]}},
+          "evaluation_field": {"enum": ["close", "high_low", "ohlc_pattern", "indicator_value", "clock", "intermarket", "event"]},
+          "source_requirements": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["source_code", "kind", "required", "description"],
+              "properties": {
+                "source_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]+$"},
+                "kind": {"enum": ["OHLC_CANDLES", "SESSION_SNAPSHOT", "TECHNICAL_INDICATOR", "CLOCK", "INTERMARKET_SNAPSHOT", "MACRO_CALENDAR", "CONDITION_MEMORY"]},
+                "required": {"type": "boolean"},
+                "description": {"type": "string", "minLength": 1}
+              },
+              "additionalProperties": false
+            }
+          },
+          "enforcement_phase": {"const": "ENTRY_TRIGGER"},
+          "stateful": {"type": "boolean"},
+          "backend_evaluator": {"type": "string", "pattern": "^[a-z][a-z0-9_]+$"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "importance_values": {"type": "array", "uniqueItems": true, "items": {"enum": ["HARD_BLOCKER", "MANDATORY", "PRIMARY", "SECONDARY", "OPTIONAL", "ADVISORY"]}},
+    "memory_policies": {"type": "array", "uniqueItems": true, "items": {"enum": ["LATCH_UNTIL_TRIGGER", "LATEST_ONLY", "INVALIDATE_TERMINAL"]}},
+    "memory_policy_semantics": {
+      "type": "object",
+      "required": ["LATCH_UNTIL_TRIGGER", "LATEST_ONLY", "INVALIDATE_TERMINAL"],
+      "properties": {
+        "LATCH_UNTIL_TRIGGER": {"const": "REQUIRE_TRUE activation or confirmation only; forbidden for BLOCK_IF_TRUE."},
+        "LATEST_ONLY": {"const": "Temporary VETO and blackout/window/intermarket/volatility blocker; re-evaluated on each eligible closed M1 bar and cleared when false."},
+        "INVALIDATE_TERMINAL": {"const": "Explicit structural INVALIDATION only; terminal for the setup identity."}
+      },
+      "additionalProperties": false
+    },
+    "temporal_modes": {"type": "array", "uniqueItems": true, "items": {"enum": ["LATEST_CLOSED", "ANY_SINCE_ARM", "CONSECUTIVE_CLOSED", "CROSS_AFTER_ARM"]}},
+    "hard_gates": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": ["code", "severity", "effect", "enforcement_phase", "pass_semantics", "description"],
+        "properties": {
+          "code": {"enum": ["ANTI_LOOKAHEAD_FAILED", "SCOPE_CONTRACT_MISMATCH", "CANONICAL_TRIGGER_DATA_MISSING", "GEOMETRY_INVALID", "RR_BELOW_MINIMUM", "STOP_INVALID", "TARGET_INVALID", "SETUP_EXPIRED_OR_TERMINAL", "DETERMINISTIC_VETO_ACTIVE", "BROKER_SAFETY_FAILED", "MAJOR_EVENT_ENTRY_BLOCK", "MANDATORY_INDICATOR_MISSING"]},
+          "severity": {"const": "HARD"},
+          "effect": {"const": "BLOCK_ENTRY"},
+          "enforcement_phase": {"enum": ["PLAN_COMPILE", "SETUP_ARM", "ENTRY_TRIGGER", "BROKER_SUBMIT"]},
+          "pass_semantics": {"const": "FAILURE_ABSENT"},
+          "description": {"type": "string", "minLength": 1}
+        },
+        "oneOf": [
+          {"properties": {"code": {"const": "ANTI_LOOKAHEAD_FAILED"}, "enforcement_phase": {"const": "PLAN_COMPILE"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "SCOPE_CONTRACT_MISMATCH"}, "enforcement_phase": {"const": "PLAN_COMPILE"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "CANONICAL_TRIGGER_DATA_MISSING"}, "enforcement_phase": {"const": "ENTRY_TRIGGER"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "GEOMETRY_INVALID"}, "enforcement_phase": {"const": "SETUP_ARM"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "RR_BELOW_MINIMUM"}, "enforcement_phase": {"const": "SETUP_ARM"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "STOP_INVALID"}, "enforcement_phase": {"const": "SETUP_ARM"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "TARGET_INVALID"}, "enforcement_phase": {"const": "SETUP_ARM"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "SETUP_EXPIRED_OR_TERMINAL"}, "enforcement_phase": {"const": "ENTRY_TRIGGER"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "DETERMINISTIC_VETO_ACTIVE"}, "enforcement_phase": {"const": "ENTRY_TRIGGER"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "BROKER_SAFETY_FAILED"}, "enforcement_phase": {"const": "BROKER_SUBMIT"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "MAJOR_EVENT_ENTRY_BLOCK"}, "enforcement_phase": {"const": "ENTRY_TRIGGER"}}, "required": ["code", "enforcement_phase"]},
+          {"properties": {"code": {"const": "MANDATORY_INDICATOR_MISSING"}, "enforcement_phase": {"const": "ENTRY_TRIGGER"}}, "required": ["code", "enforcement_phase"]}
+        ],
+        "additionalProperties": false
+      }
+    },
+    "soft_gates": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"type": "object", "required": ["code", "severity", "effect", "description"], "properties": {"code": {"enum": ["PACK_DEGRADED", "MEGA_CAPS_MISSING_FOR_NQ", "PRICE_MID_RANGE", "CROSS_ASSET_PARTIAL", "MACRO_NEUTRAL", "NQ_ES_DIVERGENCE", "HIGH_VOLATILITY", "LEVEL_CONSUMED", "CONTEXTUAL_DATA_GAP", "OPTIONAL_INDICATOR_MISSING"]}, "severity": {"const": "SOFT"}, "effect": {"enum": ["REDUCE_RISK", "REQUIRE_CONFIRMATION", "INFORMATIONAL"]}, "description": {"type": "string", "minLength": 1}}, "additionalProperties": false}},
+    "setup_patterns": {"type": "array", "uniqueItems": true, "items": {"enum": ["PULLBACK", "BREAKOUT_RETEST", "BREAKDOWN_RETEST", "REJECTION", "SWEEP_RECLAIM", "RANGE_ROTATION", "FAKEOUT_REVERSAL", "CONTINUATION"]}}
+  },
+  "additionalProperties": false
+}

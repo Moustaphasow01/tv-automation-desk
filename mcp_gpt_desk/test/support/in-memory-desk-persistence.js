@@ -58,11 +58,12 @@ export class InMemoryDeskPersistence {
     return value;
   }
 
-  async listDocuments(collection) {
+  async listDocuments(collection, limit) {
     this.#hydrateCollection(collection);
-    return [...this.#bucket(collection).entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([, value]) => clone(value));
+    const entries = [...this.#bucket(collection).entries()]
+      .sort(([left], [right]) => left.localeCompare(right));
+    const bounded = limit === undefined || limit === null ? null : boundedLimit(limit);
+    return (bounded ? entries.slice(0, bounded) : entries).map(([, value]) => clone(value));
   }
 
   async queryDocuments({ parentPath, collectionId, fromUtc, toUtc, orderField = "timestamp_utc", limit = 500 }) {
@@ -90,6 +91,7 @@ export class InMemoryDeskPersistence {
     const bucket = this.#bucket(collection);
     const current = bucket.get(documentId);
     const next = merge && current ? { ...current, ...clone(data) } : clone(data);
+    assertImmutableSetupIdentity(collection, documentId, current, next, bucket);
     bucket.set(documentId, next);
     this.#registerObjectFixtures(next);
   }
@@ -128,6 +130,64 @@ export class InMemoryDeskPersistence {
         await this.setDocument(write.collection, write.documentId, write.data, { merge: write.merge === true });
       }
       return { ok: true, projection_write_count: projectionWrites.length };
+    });
+  }
+
+  async commitBrokerPositionProjection(input) {
+    return this.#exclusive(async () => {
+      const current = this.peek(input.positionCollection, input.positionId);
+      if (!current) return { applied: false, replayed: false, reason: "CANONICAL_POSITION_NOT_FOUND", position: null };
+      const currentBrokerRevision = Number(current.broker_projection_revision ?? -1);
+      const incomingBrokerRevision = Number(input.brokerRevision);
+      if (!Number.isInteger(incomingBrokerRevision) || incomingBrokerRevision < 0) {
+        throw persistenceError("BROKER_PROJECTION_REVISION_INVALID", "Broker projection revision must be a non-negative integer.");
+      }
+      if (currentBrokerRevision >= incomingBrokerRevision) {
+        return { applied: false, replayed: true, reason: "BROKER_PROJECTION_ALREADY_APPLIED", position: current };
+      }
+      const position = { ...current, ...clone(input.positionPatch || {}), broker_projection_revision: incomingBrokerRevision };
+      await this.setDocument(input.positionCollection, input.positionId, position);
+      if (input.auditWrite) await this.setDocument(input.auditWrite.collection, input.auditWrite.documentId, input.auditWrite.data);
+      return { applied: true, replayed: false, reason: "BROKER_ACK_PROJECTED", position: clone(position) };
+    });
+  }
+
+  async commitLiveMonitorMutation(input) {
+    return this.#exclusive(async () => {
+      const existingMonitor = this.peek(input.monitorCollection, input.monitorId);
+      if (existingMonitor) {
+        if (String(existingMonitor.monitor_command_hash || "") !== String(input.commandHash || "")) {
+          throw persistenceError("MONITOR_IDEMPOTENCY_CONFLICT", "Monitor identity already exists with different canonical command content.");
+        }
+        return { replayed: true, revision: Number(existingMonitor.applied_revision ?? existingMonitor.revision ?? 0), monitor: existingMonitor };
+      }
+      const state = this.peek(input.stateCollection, input.stateId);
+      const actualRevision = state === null ? null : Number(state.revision || 0);
+      if (state === null || actualRevision !== Number(input.expectedRevision)) {
+        throw persistenceError("MONITOR_REVISION_CONFLICT", "Monitor expected_revision no longer matches the canonical active thesis.");
+      }
+      if (input.frontStatePrecondition) {
+        const current = this.peek(input.frontStatePrecondition.collection, input.frontStatePrecondition.documentId);
+        const revisionMatches = input.frontStatePrecondition.expectedRevision === null
+          ? current === null
+          : current !== null && Number(current.revision) === Number(input.frontStatePrecondition.expectedRevision);
+        const hashMatches = input.frontStatePrecondition.expectedRevision === null
+          || String(current?.projection_hash || "") === String(input.frontStatePrecondition.expectedProjectionHash || "");
+        if (!revisionMatches || !hashMatches) {
+          throw persistenceError("FRONT_PROJECTION_REVISION_CONFLICT", "Front projection changed before Monitor save.");
+        }
+      }
+      const revision = actualRevision + 1;
+      const monitor = { ...clone(input.monitorDoc), expected_revision: actualRevision, applied_revision: revision };
+      const nextState = { ...state, ...clone(input.statePatch || {}), revision };
+      for (const write of input.writes || []) {
+        const data = write.collection === input.monitorCollection && write.documentId === input.monitorId
+          ? monitor
+          : write.data;
+        await this.setDocument(write.collection, write.documentId, data, { merge: write.merge === true });
+      }
+      await this.setDocument(input.stateCollection, input.stateId, nextState);
+      return { replayed: false, revision, monitor: clone(monitor), state: clone(nextState) };
     });
   }
 
@@ -376,6 +436,59 @@ function persistenceError(code, message, details = {}) {
   error.code = code;
   error.details = details;
   return error;
+}
+
+function assertImmutableSetupIdentity(collection, documentId, current, next, bucket) {
+  if (!["desk_setups", "desk_replay_setups"].includes(collection)) return;
+  const setupRecordId = String(next?.setup_record_id || "");
+  const setupId = String(next?.setup_id || "");
+  if (setupRecordId && setupRecordId !== String(documentId)) {
+    throw persistenceError(
+      "SETUP_RECORD_ID_IMMUTABLE",
+      "A canonical setup_record_id must equal its document identity.",
+      { collection, document_id: documentId, setup_record_id: setupRecordId },
+    );
+  }
+  if (current?.setup_record_id && String(current.setup_record_id) !== setupRecordId) {
+    throw persistenceError(
+      "SETUP_RECORD_ID_IMMUTABLE",
+      "The canonical setup_record_id cannot change after creation.",
+      {
+        collection,
+        document_id: documentId,
+        existing_setup_record_id: current.setup_record_id,
+        attempted_setup_record_id: setupRecordId || null,
+      },
+    );
+  }
+  if (current?.setup_id && String(current.setup_id) !== setupId) {
+    throw persistenceError(
+      "SETUP_ID_IMMUTABLE",
+      "The logical setup_id cannot change on an existing canonical setup record.",
+      {
+        collection,
+        document_id: documentId,
+        existing_setup_id: current.setup_id,
+        attempted_setup_id: setupId || null,
+      },
+    );
+  }
+  if (!setupId) return;
+  for (const [candidateDocumentId, candidate] of bucket.entries()) {
+    if (candidateDocumentId !== documentId && String(candidate?.setup_id || "") === setupId) {
+      throw persistenceError(
+        "SETUP_LOGICAL_ID_CONFLICT",
+        "A logical setup_id can belong to only one canonical setup record.",
+        {
+          collection,
+          setup_id: setupId,
+          document_id: documentId,
+          conflicting_document_id: candidateDocumentId,
+          conflicting_setup_record_id: candidate?.setup_record_id || null,
+        },
+      );
+    }
+  }
 }
 
 function canonicalHash(value) {

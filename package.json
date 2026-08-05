@@ -5,15 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit --pretty false && tsc -p tsconfig.node.json --noEmit --pretty false",
     "test:react": "vitest run --pool=threads --maxWorkers=1 --no-file-parallelism",
     "pretest:e2e": "VITE_DESK_API_KEY=e2e-operator-key vite build --mode development",
     "test:e2e": "playwright test",
-    "test:stack": "bash scripts/test_real_stack.sh",
+    "test:stack": "bash scripts/stack/test_real_stack.sh",
     "test:front": "npm run test:react && npm run test:e2e",
-    "handoff:claude": "node scripts/build_claude_front_handoff.mjs"
+    "handoff:claude": "node scripts/handoff/build_claude_front_handoff.mjs",
+    "db:schema:apply": "python3 scripts/db/apply_postgres_schema.py",
+    "guard:strategy-contracts": "node scripts/quality/check_strategy_contract_guard.mjs",
+    "guard:windows-deployment": "node scripts/quality/check_windows_deployment_kit.mjs",
+    "benchmark:local": "node scripts/quality/benchmark_local_readiness.mjs",
+    "certify:resilience": "node scripts/quality/certify_resilience.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.20",

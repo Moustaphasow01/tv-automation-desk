@@ -1,4 +1,5 @@
 export {
+  catalogs,
   commonSchemas,
   entitySchemas,
   enums,
@@ -7,6 +8,7 @@ export {
 } from "./generated/runtime-data.js";
 
 import {
+  catalogs,
   entitySchemas,
   registry,
   toolInputSchemasByFile,
@@ -38,6 +40,14 @@ export function getEntitySchema(fileName) {
     throw new Error(`entity_schema_not_found:${fileName}`);
   }
   return schema;
+}
+
+export function getCatalog(fileName) {
+  const catalog = catalogs[fileName];
+  if (!catalog) {
+    throw new Error(`catalog_not_found:${fileName}`);
+  }
+  return catalog;
 }
 
 function schemaFileName(schemaPath) {

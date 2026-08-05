@@ -1,6 +1,18 @@
 # Desk Replay Bundle Transport Contract v2.0.0
 
-This transport contract applies to Replay Master and Replay Monitor bundle reads. It does not change the pinned DeskMasterAnalysisContract v4.0.0 or DeskHourlyThesisMonitorContract v1.0.0 output schemas.
+The `v2.0.0` in this document title is the transport protocol version; it is
+independent from the active analytical Monitor contract version.
+
+This transport contract applies to Replay Master and Replay Monitor bundle
+reads. New runs pin Autopilot v5.1.0, DeskMasterAnalysisContract v5.1.0,
+DeskHourlyThesisMonitorContract v2.1.0, DeskExecutionPlanContract v1.1.0,
+DeskMonitorCommandContract v1.1.0, DeskDeterministicExecutionPolicy v4.1.0,
+DeskConditionCatalogContract v1.1.0, deterministic compiler v1.1.0 and condition
+engine v1.1.0.
+
+Historical V5.0/V2.0 and V4/V1 runs remain readable with their original
+hash-locked contracts, are read-only and are never converted or repinned
+implicitly.
 
 ## Required Read Flow
 
@@ -20,7 +32,7 @@ The compact view keeps all decision-critical fields and exposes SHA-256 hashes f
 - `get_replay_bundle_section`
 - `get_replay_snapshot`
 
-Every deep read requires the exact `backtest_id`, `step_id`, and `bundle_type`. A replay read must never fall back to live data.
+Every deep read requires the exact `backtest_id`, `step_id`, and `bundle_type`. A replay read must never fall back to live data. LIVE and Replay nevertheless share the same V5.1/V2.1 contracts, Policy V4.1, V1.1 machine contracts, compiler 1.1, condition engine 1.1, phase gates and state machines; only temporal acquisition differs. GPT analyzes closed M5 checkpoints while the deterministic engine evaluates every eligible closed M1 bar.
 
 ## Replay Source Coverage
 
@@ -56,4 +68,4 @@ The following values always come from `save_target.suggested_payload` and must n
 - `schema_version`
 - `contract_hash`
 
-The compact, manifest, and section reads are read-only and cannot advance the replay revision.
+The compact, manifest, and section reads are read-only and cannot advance the replay revision. `expected_revision` is a strict compare-and-swap copied from `suggested_payload`; the model never increments, repairs or guesses it. Executable intent uses only contract enums and typed parameters. Temporary VETO conditions are `LATEST_ONLY`; only structural INVALIDATION is terminal.

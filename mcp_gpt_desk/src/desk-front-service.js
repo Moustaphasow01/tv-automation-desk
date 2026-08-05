@@ -19,8 +19,15 @@ export class DeskFrontService {
     this.canonicalTimeframe = canonicalTimeframe;
   }
 
-  async getDailyMacroCalendar({ date, importance_min = "medium" } = {}) {
-    const events = await this.persistence.listDocuments(COLLECTIONS.macroCalendarEvents, 500).catch(() => []);
+  async getDailyMacroCalendar({ date, importance_min = "low" } = {}) {
+    const events = date
+      ? await this.persistence.queryCollectionDocuments({
+        collection: COLLECTIONS.macroCalendarEvents,
+        filters: [{ field: "date", operator: "==", value: date }],
+        orderBy: [{ field: "timestamp_utc", direction: "asc" }],
+        limit: 500,
+      }).catch(() => [])
+      : await this.persistence.listDocuments(COLLECTIONS.macroCalendarEvents, 500).catch(() => []);
     return frontDailyMacroCalendar(events, { date, importance_min });
   }
 
@@ -28,9 +35,9 @@ export class DeskFrontService {
     const tick = this.clock.now();
     const tradingDate = String(date || tick.paris).slice(0, 10);
     const specs = [
-      { instrument: "MNQ", symbol: "MNQ", timeframes: ["1", "5"], lookbackDays: 0 },
-      { instrument: "MES", symbol: "MES", timeframes: ["1", "5"], lookbackDays: 0 },
-      { instrument: "CL", symbol: "MCL", timeframes: ["1", "5"], lookbackDays: 0 },
+      { instrument: "MNQ", symbol: "MNQ", timeframes: ["1", "5"], lookbackDays: 8 },
+      { instrument: "MES", symbol: "MES", timeframes: ["1", "5"], lookbackDays: 8 },
+      { instrument: "CL", symbol: "MCL", timeframes: ["1", "5"], lookbackDays: 8 },
       { instrument: "NVDA", symbol: "NVDA", timeframes: ["1", "5"], lookbackDays: 7 },
       { instrument: "AAPL", symbol: "AAPL", timeframes: ["1", "5"], lookbackDays: 7 },
       { instrument: "MSFT", symbol: "MSFT", timeframes: ["1", "5"], lookbackDays: 7 },
@@ -38,8 +45,53 @@ export class DeskFrontService {
       { instrument: "SMH", symbol: "SMH", timeframes: ["1", "5"], lookbackDays: 7 },
       { instrument: "SOXX", symbol: "SOXX", timeframes: ["1", "5"], lookbackDays: 7 },
     ];
-    const values = await Promise.all(specs.map(async (spec) => {
+    const planned = specs.map((spec) => {
       const window = frontLiveMarketWindow(tradingDate, tick.utc, spec.lookbackDays);
+      const candidates = spec.timeframes.flatMap((timeframe) => (
+        this.marketFeedCandidates(spec.instrument, timeframe)
+          .slice(0, 4)
+          .map((feedId) => ({ timeframe, feedId }))
+      ));
+      return { spec, window, candidates };
+    });
+    let bulkRows = null;
+    if (typeof this.persistence.queryFrontMarketCandles === "function") {
+      const fromUtc = planned.map((item) => item.window.fromUtc).sort().at(0);
+      const toUtc = planned.map((item) => item.window.toUtc).sort().at(-1);
+      bulkRows = await this.persistence.queryFrontMarketCandles({
+        feed_ids: planned.flatMap((item) => item.candidates.map((candidate) => candidate.feedId)),
+        from_utc: fromUtc,
+        to_utc: toUtc,
+        limit_per_feed: 1500,
+      }).catch(() => null);
+    }
+    const rowsByFeed = bulkRows ? new Map() : null;
+    for (const item of bulkRows || []) {
+      const grouped = rowsByFeed.get(item.feed_id) || [];
+      grouped.push(item);
+      rowsByFeed.set(item.feed_id, grouped);
+    }
+    const values = await Promise.all(planned.map(async ({ spec, window, candidates }) => {
+      if (rowsByFeed) {
+        for (const { timeframe, feedId } of candidates) {
+          const rows = (rowsByFeed.get(feedId) || [])
+            .map((item) => item.data)
+            .filter((row) => {
+              const timestamp = Date.parse(row?.timestamp_utc || "");
+              return timestamp >= Date.parse(window.fromUtc) && timestamp <= Date.parse(window.toUtc);
+            });
+          if (!rows.length) continue;
+          const summary = summarizeFrontLiveMarketRows(rows, {
+            ...spec,
+            timeframe,
+            feedId,
+            requestedDate: tradingDate,
+            canonicalTimeframe: this.canonicalTimeframe,
+          });
+          if (summary) return summary;
+        }
+        return null;
+      }
       for (const timeframe of spec.timeframes) {
         for (const feedId of this.marketFeedCandidates(spec.instrument, timeframe).slice(0, 4)) {
           const rows = await this.persistence.queryDocuments({
@@ -48,6 +100,7 @@ export class DeskFrontService {
             fromUtc: window.fromUtc,
             toUtc: window.toUtc,
             orderField: "timestamp_utc",
+            direction: "desc",
             limit: 5000,
           }).catch(() => []);
           if (!rows.length) continue;
@@ -64,9 +117,17 @@ export class DeskFrontService {
       return null;
     }));
     const instruments = Object.fromEntries(values.filter(Boolean).map((value) => [value.symbol, value]));
+    const effectiveMarketDate = resolveEffectiveFrontMarketDate(instruments);
+    const marketClosed = Boolean(effectiveMarketDate && effectiveMarketDate < tradingDate);
     return {
       ok: Object.keys(instruments).length > 0,
       date: tradingDate,
+      requested_date: tradingDate,
+      effective_market_date: effectiveMarketDate,
+      market_closed: marketClosed,
+      availability: effectiveMarketDate
+        ? marketClosed ? "last_closed_session" : "live_postgres"
+        : "unavailable",
       timestamp_paris: latestFrontMarketTimestamp(instruments) || tick.paris,
       source: "postgres_market_feeds",
       instruments,
@@ -132,16 +193,17 @@ export class DeskFrontService {
     return prepareFrontProjectionMaterialization({ canonical, sourceType, sourceId, tick, existingCurrent });
   }
 
-  async commitProjection({ sourceWrite, plan }) {
+  async commitProjection({ sourceWrite, plan, additionalWrites = [] }) {
+    const projectionWrites = [...plan.writes, ...additionalWrites];
     if (typeof this.persistence.commitFrontProjectionMutation === "function") {
       return this.persistence.commitFrontProjectionMutation({
         sourceWrite,
-        projectionWrites: plan.writes,
+        projectionWrites,
         currentStatePrecondition: plan.currentStatePrecondition,
       });
     }
     await this.persistence.setDocument(sourceWrite.collection, sourceWrite.documentId, sourceWrite.data, { merge: sourceWrite.merge === true });
-    for (const write of plan.writes) {
+    for (const write of projectionWrites) {
       await this.persistence.setDocument(write.collection, write.documentId, write.data, { merge: write.merge === true });
     }
   }
@@ -236,7 +298,7 @@ function summarizeFrontLiveMarketRows(rows, { symbol, timeframe, feedId, request
     series_timeframe: normalizedTimeframe === "1" ? "M1" : "M5",
     intraday_series: intradaySeries,
     source: `market_feeds/${feedId}/candles`,
-    availability: "live_postgres",
+    availability: latestDate < requestedDate ? "last_closed_session" : "live_postgres",
   };
 }
 
@@ -253,6 +315,20 @@ function frontMarketNumber(value) {
 function latestFrontMarketTimestamp(instruments) {
   return Object.values(instruments || {})
     .map((value) => value?.latest_timestamp_paris)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || null;
+}
+
+function resolveEffectiveFrontMarketDate(instruments) {
+  const values = instruments || {};
+  const coreDates = ["MNQ", "MES"]
+    .map((symbol) => values[symbol]?.market_date)
+    .filter(Boolean)
+    .sort();
+  if (coreDates.length) return coreDates.at(-1);
+  return Object.values(values)
+    .map((value) => value?.market_date)
     .filter(Boolean)
     .sort()
     .at(-1) || null;

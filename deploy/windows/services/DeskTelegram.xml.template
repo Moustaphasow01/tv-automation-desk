@@ -1,0 +1,22 @@
+<service>
+  <id>DeskFuturesTelegram</id>
+  <name>Desk Futures Telegram Alerting</name>
+  <description>Persistent PostgreSQL-backed Telegram alert delivery and read-only administration worker.</description>
+  <executable>__NODE_EXE__</executable>
+  <arguments>--env-file="__ENV_FILE__" "__INSTALL_ROOT__\current\app\mcp_gpt_desk\scripts\run_telegram_alert_worker.mjs"</arguments>
+  <workingdirectory>__INSTALL_ROOT__\current\app\mcp_gpt_desk</workingdirectory>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>__POSTGRES_SERVICE__</depend>
+  <depend>DeskFuturesApi</depend>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+  <logpath>__LOG_ROOT__\telegram</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>10</keepFiles>
+  </log>
+</service>

@@ -9,7 +9,22 @@ TF = "60"
 CANONICAL_TF = "1H"
 BATCH_NAME = "TVA_BATCH_H1"
 RSI_LEN = 14
-ATR_LEN = 14
+ATR_10_LEN = 10
+ATR_14_LEN = 14
+
+type FeedPoint
+    int t
+    float o
+    float h
+    float l
+    float c
+    float v
+    float r
+    float a10
+    float a14
+
+f_feed_point() =>
+    FeedPoint.new(time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_10_LEN), ta.atr(ATR_14_LEN))
 
 f_num(x) =>
     na(x) ? "null" : str.tostring(x)
@@ -17,7 +32,16 @@ f_num(x) =>
 f_time(x) =>
     str.format_time(x, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
 
-f_candle(string asset, string symbol, string ticker, t, o, h, l, c, v, r, a) =>
+f_candle(string asset, string symbol, string ticker, FeedPoint point) =>
+    t = point.t
+    o = point.o
+    h = point.h
+    l = point.l
+    c = point.c
+    v = point.v
+    r = point.r
+    a10 = point.a10
+    a14 = point.a14
     string item = "{"
     item := item + '"source":"tradingview_webhook",'
     item := item + '"type":"market_feed_batch_item",'
@@ -44,17 +68,17 @@ f_candle(string asset, string symbol, string ticker, t, o, h, l, c, v, r, a) =>
     item := item + '},'
     item := item + '"studies":{'
     item := item + '"rsi_14":' + f_num(r) + ','
-    item := item + '"atr_10":' + f_num(a) + ','
-    item := item + '"atr_14":' + f_num(a)
+    item := item + '"atr_10":' + f_num(a10) + ','
+    item := item + '"atr_14":' + f_num(a14)
     item := item + '}'
     item := item + "}"
     item
 
-[s1t, s1o, s1h, s1l, s1c, s1v, s1r, s1a] = request.security("CME_MINI:NQ1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-c1 = f_candle("NQ", "NQ1!", "CME_MINI:NQ1!", s1t, s1o, s1h, s1l, s1c, s1v, s1r, s1a)
+s1 = request.security("CME_MINI:NQ1!", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c1 = f_candle("NQ", "NQ1!", "CME_MINI:NQ1!", s1)
 
-[s2t, s2o, s2h, s2l, s2c, s2v, s2r, s2a] = request.security("CME_MINI:ES1!", TF, [time, open, high, low, close, nz(volume), ta.rsi(close, RSI_LEN), ta.atr(ATR_LEN)], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-c2 = f_candle("ES", "ES1!", "CME_MINI:ES1!", s2t, s2o, s2h, s2l, s2c, s2v, s2r, s2a)
+s2 = request.security("CME_MINI:ES1!", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c2 = f_candle("ES", "ES1!", "CME_MINI:ES1!", s2)
 
 payload = "{"
 payload := payload + '"source":"tradingview_webhook",'

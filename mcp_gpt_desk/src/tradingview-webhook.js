@@ -3,12 +3,23 @@ import { DESK_COLLECTIONS } from "@tv-automation/desk-contracts/collections";
 
 const MAX_PAYLOAD_BYTES = 64_000;
 const SECRET_FIELDS = new Set(["secret", "sec", "token", "webhook_secret"]);
-const LOCAL_ENVIRONMENT = "preprod";
+const DEFAULT_ENVIRONMENT = "prod";
+const ALLOWED_ENVIRONMENTS = new Set(["prod", "preprod", "development", "test"]);
 
-export async function ingestTradingViewWebhook({ persistence, body, secret, requestIp = null, now = new Date() }) {
+export async function ingestTradingViewWebhook({
+  persistence,
+  body,
+  secret,
+  environment = DEFAULT_ENVIRONMENT,
+  requestIp = null,
+  now = new Date(),
+  maxAgeSeconds = process.env.TRADINGVIEW_WEBHOOK_MAX_AGE_SECONDS,
+  maxFutureSkewSeconds = process.env.TRADINGVIEW_WEBHOOK_MAX_FUTURE_SKEW_SECONDS,
+}) {
   if (!secret) return response(503, "webhook_secret_not_configured");
   if (!body || typeof body !== "object" || Array.isArray(body)) return response(400, "json_object_required");
   if (Buffer.byteLength(JSON.stringify(body), "utf8") > MAX_PAYLOAD_BYTES) return response(413, "payload_too_large");
+  const resolvedEnvironment = canonicalEnvironment(environment);
 
   const provided = String(body.token ?? body.secret ?? body.sec ?? body.webhook_secret ?? "").trim();
   if (!provided) return response(401, "webhook_secret_required");
@@ -26,7 +37,15 @@ export async function ingestTradingViewWebhook({ persistence, body, secret, requ
       results.push({ index, ok: false, error: validation });
       continue;
     }
-    const canonical = canonicalCandle(item, { now, requestIp });
+    const freshnessError = validateFreshness(item, now, {
+      maxAgeSeconds,
+      maxFutureSkewSeconds,
+    });
+    if (freshnessError) {
+      results.push({ index, ok: false, error: freshnessError });
+      continue;
+    }
+    const canonical = canonicalCandle(item, { now, requestIp, environment: resolvedEnvironment });
     writes.push(...canonical.writes);
     results.push({ index, ok: true, ...canonical.result });
   }
@@ -79,17 +98,14 @@ function validateCandle(candle) {
   return null;
 }
 
-function canonicalCandle(candle, { now, requestIp }) {
-  const feedId = safeId(LOCAL_ENVIRONMENT, "tradingview", candle.symbol, candle.timeframe);
+function canonicalCandle(candle, { now, requestIp, environment }) {
+  const feedId = safeId(environment, "tradingview", candle.symbol, candle.timeframe);
   const candleId = candle.timestamp_utc.replace(/\.\d{3}Z$/, "Z").replace(/[-:]/g, "");
   const eventId = `event_${createHash("sha256").update(stableStringify(candle.payload)).digest("hex")}`;
-  const queueId = candle.alert_id
-    ? `alert_${createHash("sha256").update(String(candle.alert_id)).digest("hex")}`
-    : eventId.replace("event_", "hash_");
   const timestamp = new Date(candle.timestamp_utc);
   const base = {
     schema_version: "market-candle-v2",
-    environment: LOCAL_ENVIRONMENT,
+    environment,
     provider: "tradingview",
     source_service: "local_tradingview_webhook",
     feed_id: feedId,
@@ -110,7 +126,7 @@ function canonicalCandle(candle, { now, requestIp }) {
   };
   const feed = {
     schema_version: "market-feed-v2",
-    environment: LOCAL_ENVIRONMENT,
+    environment,
     provider: "tradingview",
     source_service: "local_tradingview_webhook",
     feed_id: feedId,
@@ -137,29 +153,45 @@ function canonicalCandle(candle, { now, requestIp }) {
     feed_id: feedId,
     candle_id: candleId,
   };
-  const queue = {
-    queue_id: queueId,
-    status: "QUEUED",
-    attempts: 0,
-    source: "local_tradingview_webhook",
-    alert_id: candle.alert_id,
-    symbol: candle.symbol,
-    timeframe: candle.timeframe,
-    timestamp_utc: candle.timestamp_utc,
-    payload: candle.payload,
-    created_at_utc: now.toISOString(),
-    updated_at_utc: now.toISOString(),
-  };
   return {
     writes: [
       { collection: DESK_COLLECTIONS.marketFeeds, documentId: feedId, data: feed, merge: true },
       { collection: `${DESK_COLLECTIONS.marketFeeds}/${feedId}/${DESK_COLLECTIONS.marketFeedCandles}`, documentId: candleId, data: base, merge: true },
       { collection: DESK_COLLECTIONS.tradingviewWebhookEvents, documentId: eventId, data: event, merge: true },
-      { collection: "tradingview_alert_queue", documentId: queueId, data: queue, merge: true },
       { collection: DESK_COLLECTIONS.liveDataFeedStatus, documentId: feedId, data: { ...feed, latest_bar_age_seconds: Math.max(0, Math.floor((now.getTime() - timestamp.getTime()) / 1000)), status: "OK" }, merge: true },
     ],
     result: { market_feed_id: feedId, market_feed_candle_id: candleId, event_id: eventId },
   };
+}
+
+function validateFreshness(candle, now, options) {
+  const candleMs = Date.parse(candle.timestamp_utc);
+  const futureSkewSeconds = finitePositive(options.maxFutureSkewSeconds, 300);
+  const ageSeconds = (now.getTime() - candleMs) / 1000;
+  if (ageSeconds < -futureSkewSeconds) return "future_candle_timestamp";
+  const maximumAgeSeconds = finitePositive(
+    options.maxAgeSeconds,
+    defaultMaxAgeSeconds(candle.timeframe),
+  );
+  if (ageSeconds > maximumAgeSeconds) return "stale_candle_timestamp";
+  return null;
+}
+
+function defaultMaxAgeSeconds(timeframe) {
+  const seconds = ({
+    "1": 60,
+    "5": 5 * 60,
+    "15": 15 * 60,
+    "30": 30 * 60,
+    "1H": 60 * 60,
+    "4H": 4 * 60 * 60,
+  })[timeframe] || 15 * 60;
+  return Math.max(10 * 60, Math.min(seconds * 6, 24 * 60 * 60));
+}
+
+function finitePositive(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function canonicalSymbol(value) {
@@ -170,6 +202,12 @@ function canonicalSymbol(value) {
 function canonicalTimeframe(value) {
   const text = String(value || "").trim().toUpperCase().replace(/^M(?=\d+$)/, "");
   return ({ "60": "1H", H1: "1H", "240": "4H", H4: "4H" })[text] || text;
+}
+
+function canonicalEnvironment(value) {
+  const environment = String(value || DEFAULT_ENVIRONMENT).trim().toLowerCase();
+  if (!ALLOWED_ENVIRONMENTS.has(environment)) throw new Error("invalid_market_feed_environment");
+  return environment;
 }
 
 function canonicalUtc(value) {

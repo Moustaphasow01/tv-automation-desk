@@ -4,6 +4,11 @@ import { stableVNextId } from "./desk-ids.js";
 import { publicReplayError, roundNumber } from "./desk-market-feature-algorithms.js";
 import { sanitizeId } from "./desk-replay-orchestration-algorithms.js";
 import { hasReplayGeometry } from "./desk-strategy-audit-algorithms.js";
+import { deskError } from "./desk-errors.js";
+import {
+  ACTIVE_STRATEGY_RUNTIME_VERSIONS,
+  assertActiveStrategyRuntimePins,
+} from "./strategy-runtime-versioning.js";
 
 const COLLECTIONS = DESK_COLLECTIONS;
 
@@ -33,6 +38,38 @@ export function selectBacktestCandidateSetups(docs, {
 
 export function buildBacktestRunDoc(args, setups, tick) {
   const backtest_id = args.backtest_id || stableVNextId("backtest", `${args.date_from}_${args.date_to}`, `${args.session || "asia_open"}_${tick.utc}`);
+  const versionPins = {
+    strategy_version: args.strategy_version || ACTIVE_STRATEGY_RUNTIME_VERSIONS.strategy_version,
+    autopilot_version: args.autopilot_version || ACTIVE_STRATEGY_RUNTIME_VERSIONS.autopilot_version,
+    replay_execution_policy_version: args.replay_execution_policy_version || ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_policy,
+    execution_plan_version: args.execution_plan_version || ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_plan,
+    monitor_command_version: args.monitor_command_version || ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_command,
+    condition_catalog_version: args.condition_catalog_version || ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_catalog,
+    deterministic_compiler_version: args.deterministic_compiler_version || ACTIVE_STRATEGY_RUNTIME_VERSIONS.deterministic_compiler,
+    condition_engine_version: args.condition_engine_version || ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_engine,
+  };
+  assertActiveStrategyRuntimePins(versionPins, { operation: "build_backtest_run" });
+  const masterContract = args.master_contract || ACTIVE_STRATEGY_RUNTIME_VERSIONS.master_contract;
+  const monitorContract = args.monitor_contract || ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract;
+  if (masterContract !== ACTIVE_STRATEGY_RUNTIME_VERSIONS.master_contract
+    || monitorContract !== ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract) {
+    throw deskError(
+      "BACKTEST_CONTRACT_VERSION_MISMATCH",
+      "A new backtest must use the active deterministic strategy contracts.",
+      {
+        expected: {
+          master_contract: ACTIVE_STRATEGY_RUNTIME_VERSIONS.master_contract,
+          monitor_contract: ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract,
+        },
+        received: {
+          master_contract: masterContract,
+          monitor_contract: monitorContract,
+        },
+        historical_read_remains_available: true,
+        repin_forbidden: true,
+      },
+    );
+  }
   return {
     backtest_id,
     label: args.label || `${args.date_from} -> ${args.date_to} ${args.session || "asia_open"}`,
@@ -40,11 +77,12 @@ export function buildBacktestRunDoc(args, setups, tick) {
     date_to: args.date_to,
     session: args.session || "asia_open",
     instrument_mode: args.instrument_mode || "auto",
-    master_contract: args.master_contract || "4.0.0",
-    monitor_contract: args.monitor_contract || "1.0.0",
-    monitor_cadence: args.monitor_cadence || "1h",
+    master_contract: masterContract,
+    monitor_contract: monitorContract,
+    ...versionPins,
+    monitor_cadence: args.monitor_cadence || "15m",
     mode: args.mode || "backforward_strict",
-    risk_model: args.risk_model || "0.5pct_fixed",
+    risk_model: args.risk_model || "0.25pct_net_equity",
     status: setups.length ? "QUEUED" : "DONE",
     steps_total: setups.length,
     steps_done: 0,
@@ -242,6 +280,108 @@ export function summarizeBacktestTrades(trades, { backtest_id, tick } = {}) {
     updated_at_utc: updated.utc,
     updated_at_paris: updated.paris,
   };
+}
+
+export function replayPositionToSimulatedTrade(position = {}) {
+  if (!position?.position_id) return null;
+  const lifecycle = replayPositionLifecycleStatus(position);
+  const entry = numericOrNull(position.entry_price ?? position.entry);
+  const exit = numericOrNull(position.exit_price);
+  const initialStop = numericOrNull(
+    position.initial_stop_loss
+      ?? position.original_stop_loss
+      ?? position.stop_loss_at_entry
+      ?? position.initial_stop
+      ?? position.stop,
+  );
+  const direction = String(position.direction || "").toLowerCase();
+  const risk = entry !== null && initialStop !== null ? Math.abs(entry - initialStop) : null;
+  let rResult = null;
+  if (lifecycle === "CLOSED" && entry !== null && exit !== null) {
+    if (risk && risk > 0) {
+      rResult = direction === "short" ? (entry - exit) / risk : (exit - entry) / risk;
+    } else if (exit === entry) {
+      rResult = 0;
+    }
+  }
+  return {
+    trade_id: position.position_id,
+    position_id: position.position_id,
+    setup_record_id: position.setup_record_id || null,
+    setup_id: position.setup_id || null,
+    backtest_id: position.backtest_id || null,
+    replay_run_id: position.replay_run_id || position.backtest_id || null,
+    strategy_id: position.strategy_id || null,
+    trading_date: position.trading_date || null,
+    mode: "replay",
+    instrument: position.instrument || null,
+    direction: position.direction || null,
+    status: lifecycle,
+    entry_price: entry,
+    exit_price: exit,
+    stop_loss: numericOrNull(position.stop_loss),
+    initial_stop_loss: initialStop,
+    take_profit_1: numericOrNull(position.take_profit_1),
+    opened_at_paris: position.opened_at_paris || null,
+    opened_at_utc: position.opened_at_utc || null,
+    closed_at_paris: position.closed_at_paris || null,
+    closed_at_utc: position.closed_at_utc || null,
+    exit_reason: position.exit_reason || null,
+    r_result: rResult === null ? null : roundNumber(rResult, 4),
+    source_position_status: position.status || null,
+  };
+}
+
+export function summarizeReplayPositionTrades(trades, { backtest_id, tick } = {}) {
+  const list = trades || [];
+  const closed = list.filter((trade) => String(trade.status || "").toUpperCase() === "CLOSED");
+  const numericResults = closed
+    .map((trade) => numericOrNull(trade.r_result))
+    .filter((value) => value !== null);
+  const total_r = roundNumber(numericResults.reduce((sum, value) => sum + value, 0), 4);
+  const wins = numericResults.filter((value) => value > 0).length;
+  const losses = numericResults.filter((value) => value < 0).length;
+  const breakeven = numericResults.filter((value) => value === 0).length;
+  const updated = tick || new SystemClock().now();
+  return {
+    result_id: backtest_id ? `${backtest_id}_replay_v2_summary` : null,
+    backtest_id: backtest_id || list[0]?.backtest_id || null,
+    engine: "replay_v2_positions",
+    trades: list.length,
+    closed_trades: closed.length,
+    open_trades: list.length - closed.length,
+    wins,
+    losses,
+    breakeven,
+    no_fills: 0,
+    total_r,
+    avg_r: numericResults.length ? roundNumber(total_r / numericResults.length, 4) : 0,
+    win_rate: closed.length ? roundNumber(wins / closed.length, 4) : null,
+    summary_stats: {
+      total_r,
+      trades: list.length,
+      closed_trades: closed.length,
+      open_trades: list.length - closed.length,
+      win_rate: closed.length ? roundNumber(wins / closed.length, 4) : null,
+    },
+    updated_at: updated.utc,
+    updated_at_utc: updated.utc,
+    updated_at_paris: updated.paris,
+  };
+}
+
+function replayPositionLifecycleStatus(position = {}) {
+  const status = String(position.status || "").toUpperCase();
+  if (position.closed_at || position.closed_at_utc || position.closed_at_paris || position.exit_reason || (position.exit_price !== undefined && position.exit_price !== null)) {
+    return "CLOSED";
+  }
+  return status || "UNKNOWN";
+}
+
+function numericOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function selectBacktests(docs, { date_from, date_to, session, status, limit = 50 } = {}) {

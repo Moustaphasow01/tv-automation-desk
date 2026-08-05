@@ -12,7 +12,9 @@ import {
   claimNextReplaySchema,
   heartbeatReplaySchema,
 } from "../src/schemas.js";
+import { DeskLiveService } from "../src/desk-live-service.js";
 import { callDeskTool, createDeskToolRegistry } from "../src/tools.js";
+import { ACTIVE_STRATEGY_RUNTIME_VERSIONS } from "../src/strategy-runtime-versioning.js";
 
 const DATE = "2026-07-14";
 
@@ -50,6 +52,64 @@ test("shadow preparation mirrors LIVE work without acquiring a cursor lease", ()
   assert.equal(shadow.attempt.lease_token, null);
   assert.equal(shadow.master_state, "READY");
   assert.equal(shadow.thesis_state, "ACTIVE");
+});
+
+test("runtime prewarm prepares the next LIVE bundle without acquiring a lease", async () => {
+  const clock = new FixedClock(Date.parse("2026-07-14T11:00:00Z"));
+  const cursor = initLiveRunCursor({ trading_date: DATE }, clock.now());
+  const preparedBundle = {
+    bundle_id: "bundle-prewarmed-master",
+    bundle_type: "master_cutoff",
+    strategy_id: "asia_open",
+    session: "asia_open",
+    mode: "live",
+    trading_date: DATE,
+    date: DATE,
+    run_id: `front_live_${DATE}`,
+    cutoff_paris: "2026-07-14T00:15:00+02:00",
+    as_of_utc: "2026-07-13T22:15:00.000Z",
+    timezone: "Europe/Paris",
+    pack_build_id: "packbuild-live",
+    data_quality: { status: "ready" },
+    contract_context: activeContractContext("LIVE_MASTER"),
+    save_target: {
+      tool: "save_desk_analysis",
+      suggested_payload: {
+        ...activeSaveTarget("LIVE_MASTER"),
+        pack_build_id: "packbuild-live",
+      },
+    },
+  };
+  let prepareCalls = 0;
+  const service = new DeskLiveService({
+    clock,
+    persistence: {
+      async getDocument() {
+        return cursor;
+      },
+    },
+    host: {
+      livePackPublishingEnabled: false,
+      async prepareMasterCutoffBundleJob() {
+        prepareCalls += 1;
+        return {
+          ok: true,
+          status: "READY",
+          bundle_id: preparedBundle.bundle_id,
+          bundle: preparedBundle,
+        };
+      },
+    },
+  });
+
+  const result = await service.prewarmNext({ trading_date: DATE });
+
+  assert.equal(result.status, "PREWARMED");
+  assert.equal(result.workflow, "LIVE_MASTER");
+  assert.equal(result.bundle_id, preparedBundle.bundle_id);
+  assert.equal(prepareCalls, 1);
+  assert.equal(cursor.cursor_status, "IDLE");
+  assert.equal(cursor.attempt, null);
 });
 
 test("scenario 13 — two concurrent persistent LIVE claims produce one lease", async () => {
@@ -113,7 +173,9 @@ test("phase 3 persistent flow rolls a failed checkpoint forward instead of repla
 
   assert.equal(rolled.result.status, "WORK_CLAIMED");
   assert.equal(rolled.cursor.attempt.checkpoint, "2026-07-14T13:30:00+02:00");
-  assert.deepEqual(rolled.result.rolled_forward_from, ["2026-07-14T13:15:00+02:00"]);
+  assert.deepEqual(rolled.result.rolled_forward_from, [
+    "2026-07-14T13:15:00+02:00",
+  ]);
   assert.equal(rolled.cursor.gap_ledger.at(-1).reason, "stale_checkpoint_rolled_forward");
   assert.equal([...fake.docs.values()].some((doc) => doc.event_type === "CURSOR_ROLLED_FORWARD"), true);
 });
@@ -188,6 +250,8 @@ function readyCursor() {
     master_id: "master-1",
     thesis_state: "ACTIVE",
     thesis_id: "thesis-1",
+    phase_master_ids: { asia_open: "master-1" },
+    phase_thesis_ids: { asia_open: "thesis-1" },
   };
 }
 
@@ -201,7 +265,47 @@ function preparedMonitorWork(checkpoint) {
     bundle: { bundle_id: `bundle-${checkpoint}`, bundle_tool: "get_manual_monitor_bundle", bundle_args: { checkpoint } },
     execution_prompt: "Execute LIVE monitor",
     prompt_hash: "prompt-hash",
-    save_target: { tool: "save_manual_monitor" },
+    contract_context: activeContractContext("LIVE_M15_MONITOR"),
+    runtime_versions: ACTIVE_STRATEGY_RUNTIME_VERSIONS,
+    save_target: {
+      tool: "save_manual_monitor",
+      ...activeSaveTarget("LIVE_M15_MONITOR"),
+    },
+  };
+}
+
+function activeContractContext(workflow) {
+  const master = workflow === "LIVE_MASTER";
+  return {
+    contract_name: master
+      ? "DeskMasterAnalysisContract"
+      : "DeskHourlyThesisMonitorContract",
+    schema_version: master
+      ? ACTIVE_STRATEGY_RUNTIME_VERSIONS.master_contract
+      : ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract,
+    contract_hash: `contract-hash-${workflow}`,
+    execution_policy: { schema_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_policy },
+    execution_plan: { schema_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_plan },
+    monitor_command: { schema_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_command },
+    condition_catalog: { schema_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_catalog },
+  };
+}
+
+function activeSaveTarget(workflow) {
+  const master = workflow === "LIVE_MASTER";
+  return {
+    contract_name: master
+      ? "DeskMasterAnalysisContract"
+      : "DeskHourlyThesisMonitorContract",
+    schema_version: master
+      ? ACTIVE_STRATEGY_RUNTIME_VERSIONS.master_contract
+      : ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_contract,
+    execution_policy_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_policy,
+    execution_plan_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.execution_plan,
+    monitor_command_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.monitor_command,
+    condition_catalog_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_catalog,
+    deterministic_compiler_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.deterministic_compiler,
+    condition_engine_version: ACTIVE_STRATEGY_RUNTIME_VERSIONS.condition_engine,
   };
 }
 

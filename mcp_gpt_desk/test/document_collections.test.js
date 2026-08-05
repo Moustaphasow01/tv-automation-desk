@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import {
   CDC_TARGET_COLLECTIONS,
   DESK_COLLECTIONS,
 } from "@tv-automation/desk-contracts/collections";
 
-const ROOT = new URL("../", import.meta.url);
+const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 test("desk contracts expose provider-neutral document collections", () => {
   assert.equal(CDC_TARGET_COLLECTIONS.length, 14);
@@ -17,10 +18,12 @@ test("desk contracts expose provider-neutral document collections", () => {
   assert.equal(DESK_COLLECTIONS.deskFrontSnapshots, "desk_front_snapshots");
   assert.equal(DESK_COLLECTIONS.deskFrontEvents, "desk_front_events");
   assert.equal(DESK_COLLECTIONS.deskFrontProjectionErrors, "desk_front_projection_errors");
+  assert.equal(DESK_COLLECTIONS.deskObservabilityPolicies, "desk_observability_policies");
+  assert.equal(DESK_COLLECTIONS.deskAiRuntimeSettings, "desk_ai_runtime_settings");
 });
 
 test("PersistentDeskStore delegates I/O to the configured persistence port", () => {
-  const storeSource = readFileSync(join(ROOT.pathname, "src/store.js"), "utf8");
+  const storeSource = readFileSync(join(ROOT, "src/store.js"), "utf8");
   const persistentSection = storeSource.slice(storeSource.indexOf("export class PersistentDeskStore"));
 
   assert.match(storeSource, /PostgresDeskPersistence/);
@@ -29,7 +32,7 @@ test("PersistentDeskStore delegates I/O to the configured persistence port", () 
 });
 
 test("indexed document reads avoid collection-wide scans", () => {
-  const storeSource = readFileSync(join(ROOT.pathname, "src/store.js"), "utf8");
+  const storeSource = readFileSync(join(ROOT, "src/store.js"), "utf8");
   const persistentSection = storeSource.slice(storeSource.indexOf("export class PersistentDeskStore"));
 
   assert.match(persistentSection, /#queryCollectionDocuments/);

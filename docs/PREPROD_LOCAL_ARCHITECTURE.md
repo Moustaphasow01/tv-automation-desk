@@ -21,21 +21,23 @@ API/MCP
   -> PersistentDeskStore
      -> façade MCP, coordination de persistance et transactions transverses
      -> desk-state-algorithms.js : états Live/Front, sélections et façade de travail unifiée
-     -> desk-backtest-algorithms.js : runs, étapes, trades simulés et synthèses backtest
      -> desk-live-bundle-algorithms.js : bundles Master/Monitor et jobs de préparation
      -> desk-document-algorithms.js : timestamps, normalisations et filtres documentaires
      -> DeskContractService
         -> contrats embarqués ou persistance documentaire
      -> DeskPackService
         -> packs, datasets, intégrité, macro et news
+     -> LocalPackBuilder
+        -> requêtes sur market_candles PostgreSQL
+        -> objets immuables locaux et manifestes scellés
      -> DeskMarketFeatureService
         -> fenêtres brutes, snapshots de session, niveaux et événements techniques
-        -> deltas cross-asset, statuts de conditions et moteur de features déterministe
+        -> statuts de conditions et préparation marché V4
         -> lecture des bougies et préparation marché des setups Replay
         -> algorithmes purs dans desk-market-feature-algorithms.js
      -> DeskStrategyAuditService
-        -> état NY Open, calendrier, détail journalier et timeline Live
-        -> performance, événements opérateur audités et replay strict multi-pricing
+        -> calendrier, détail journalier et timeline Live
+        -> performance et événements opérateur audités
         -> état d'audit des contrats, données, features et erreurs backend
         -> algorithmes purs dans desk-strategy-audit-algorithms.js
      -> DeskReplayService
@@ -49,6 +51,8 @@ API/MCP
         -> projections, commandes opérateur, macro et snapshot marché
      -> PostgresDeskPersistence
         -> desk_documents (JSONB)
+        -> tables marché normalisées
+        -> desk_pack_objects (catalogue immuable)
 ```
 
 ## Services Docker
@@ -56,11 +60,13 @@ API/MCP
 - `postgres` : PostgreSQL 16, volume `postgres_data` ;
 - `api` : BFF, MCP, OAuth MCP et webhook TradingView ;
 - `frontend` : build React servi par Nginx ;
-- `desk_objects` : volume réservé aux objets locaux des packs.
+- `broker-management` : worker déterministe de gestion/réconciliation, désarmé par défaut ;
+- `.local/desk_objects` : bind mount local réservé aux objets immuables des packs.
 
 ## Frontend React
 
-Le frontend est une application React unique. Ses douze routes actives sont `live`, `sessions`, `master`, `monitors`, `thesis`, `setup`, `news`, `performance`, `timeline`, `audit`, `alerts` et `more`. Toutes sont rattachées à `src/App.tsx` et atteignables depuis la navigation principale ou secondaire.
+Le frontend est une application React unique. Ses routes Desk, Replay Lab et
+Operations sont rattachées à `src/App.tsx` et utilisent toutes l'API locale.
 
 La session affichée est choisie automatiquement selon l'heure de Paris : Asia avant 08:00, London de 08:00 à 15:30, puis New York. Le bandeau latéral montre les trois phases mais n'est plus un sélecteur manuel. Les pages métier lisent l'agrégat de session puis rafraîchissent séparément les ressources marché, position, macro, news, activité, alertes et audit.
 
@@ -68,13 +74,33 @@ Le runtime de production ne contient aucune donnée factice. Les scénarios Play
 
 ## Persistance
 
-La table `desk_documents` conserve le modèle documentaire du Desk pendant la transition : clé primaire `(collection, document_id)` et contenu JSONB indexé. Cette forme évite de réécrire simultanément toute la logique métier, tout en supprimant la dépendance à Firestore.
+La table `desk_documents` conserve les agrégats métier V4 : clé primaire
+`(collection, document_id)` et contenu JSONB indexé. Les flux de marché sont
+normalisés dans `market_feeds`, `market_candles`, `market_feed_status` et
+`tradingview_events`. Les objets de packs restent des fichiers immuables et
+leur identité physique est enregistrée dans `desk_pack_objects`.
 
 Les opérations sensibles — claims, leases, révisions, idempotence et mutations de projection — utilisent des transactions PostgreSQL avec verrou consultatif par ressource.
 
-Le runtime et les tests exercent désormais la même classe `PersistentDeskStore`. En test, un port `InMemoryDeskPersistence` remplace PostgreSQL sans modifier la logique métier : il charge au besoin les fixtures historiques en lecture, mais toutes les écritures restent en mémoire. L'ancien `LocalDeskStore` et son chemin d'exécution fichier ont été supprimés.
+Le runtime et les tests exercent désormais la même classe `PersistentDeskStore`. En test, un port `InMemoryDeskPersistence` remplace PostgreSQL sans modifier la logique métier : il charge au besoin les fixtures historiques en lecture, mais toutes les écritures restent en mémoire. `LocalDeskStore` et son chemin d'exécution fichier ont été supprimés.
 
-La modularisation du store est achevée. `DeskContractService` possède le chargement des contrats embarqués, leur versionnement, leur activation, leur archivage et leur audit. `DeskPackService` possède la résolution des packs logiques et immuables, la lecture des datasets, les contrôles d'intégrité ainsi que les datasets macro et news. `DeskMarketFeatureService` possède les fenêtres brutes immuables, les snapshots de session, les niveaux, les événements techniques, les deltas cross-asset, les statuts de conditions et les exécutions déterministes du moteur de features. Il fournit également les lectures de bougies nécessaires à la préparation des setups Replay. Ses algorithmes purs de sélection, normalisation et calcul résident dans `desk-market-feature-algorithms.js` et sont importés directement. `DeskStrategyAuditService` possède les lectures de stratégie NY Open, le calendrier, les détails journaliers, la timeline Live, le recalcul des performances, les mutations opérateur auditées, le replay strict et l'état d'audit backend. Ses projections et calculs purs résident dans `desk-strategy-audit-algorithms.js`, qui réutilise huit utilitaires génériques du module marché sans les dupliquer. `DeskReplayService` possède la file de travail Replay, les leases, l'autopilot et toute la séquence d'orchestration Master/Monitor, y compris les mutations révisionnées et idempotentes. Ses constructeurs de runs et de bundles, transitions, sélections et projections résident dans `desk-replay-orchestration-algorithms.js` et sont importés directement. Les trois anciens ports transitoires `marketFeaturePort`, `strategyAuditPort` et `replayOrchestrationPort` ont été supprimés. `DeskLiveService` possède le cycle de vie transactionnel des curseurs Live. `DeskFrontService` possède les projections courantes, les mutations opérateur et les lectures marché destinées au frontend. `PersistentDeskStore` ne contient plus d'algorithmes de premier niveau : il reste la façade compatible avec les outils MCP, délègue aux services et modules propriétaires, et coordonne uniquement les écritures ou workflows qui traversent plusieurs domaines.
+`DeskContractService` possède les contrats. `DeskPackService` résout et valide
+les packs. `LocalPackBuilder` fabrique les packs LIVE/replay depuis PostgreSQL.
+`DeskReplayService` possède la file, les leases et la séquence Master/Monitor.
+`DeskLiveService` utilise la même préparation V4 avec un curseur temps réel.
+Le LIVE suit la cadence M15 de Replay V4. Les triggers de marché sont soumis à
+une fraîcheur SQL stricte et le moteur shadow suit les setups/positions paper
+sur les bougies closes M5 entre deux Monitors. Le chemin broker déterministe
+est présent derrière des risk gates, approvals, outbox, réconciliation et kill
+switch. Il reste fail-closed, limité à Sim101 et désarmé par défaut. Le runbook détaillé est dans
+`docs/AUTOPILOT_V4_LIVE_PREPROD_READINESS_2026-07-20.md`.
+Le profil MCP `autopilot_v4` n'expose que ces capacités. Les agrégats importés
+de PROD portent `operational_visibility=history` : ils restent consultables,
+mais ne participent ni aux claims ni aux alertes PREPROD.
+
+Le champ historique `gcs_generation` reste présent dans le contrat des
+manifestes pour compatibilité. Pour un objet local, sa valeur désigne la
+génération immuable cataloguée ; aucune requête Google n'est faite au runtime.
 
 ## Sécurité locale
 
@@ -84,4 +110,14 @@ La modularisation du store est achevée. `DeskContractService` possède le charg
 - aucun fichier `.env` ou credential du projet source n'a été copié ;
 - les secrets fournis dans les payloads TradingView sont retirés avant persistance.
 
-Pour une future préproduction accessible sur le réseau, il faudra remplacer la clé compilée dans le frontend par une authentification serveur et ajouter TLS.
+Le frontend de production n'embarque plus de clé opérateur. Il utilise une
+session serveur signée obtenue avec le PIN opérateur. Le mode public et TLS ne
+sont pas activés dans Docker local, mais leur configuration fail-closed est
+prête sous `deploy/` pour le VPS Windows.
+
+## Cible VPS Windows
+
+Le runtime distant n'utilisera pas Docker : Caddy, Node.js, PostgreSQL 16 et les
+workers tourneront comme services natifs Windows. NinjaTrader et son AddOn
+tourneront sur la même machine dans une session interactive persistante. Voir
+`docs/VPS_WINDOWS_READINESS_2026-07-23.md`.

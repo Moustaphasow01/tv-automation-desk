@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { enums } from "@tv-automation/desk-contracts";
 import { evaluateAntiLookahead } from "@tv-automation/desk-domain";
+import {
+  hourlyMonitorV2SourceSchema,
+  masterAnalysisV5SourceSchema,
+} from "./native-strategy-transport-envelopes.js";
+export { hourlyMonitorV2SourceSchema, masterAnalysisV5SourceSchema } from "./native-strategy-transport-envelopes.js";
 export {
   claimNextLiveSchema,
   completeLiveSchema,
@@ -15,6 +20,8 @@ export {
 } from "./work-lifecycle-schemas.js";
 export {
   claimNextDeskWorkSchema,
+  claimNextLiveWorkSchema,
+  claimNextReplayWorkSchema,
   completeDeskWorkSchema,
   failDeskWorkSchema,
   heartbeatDeskWorkSchema,
@@ -28,6 +35,20 @@ export const TRADE_INSTRUMENTS = enums.TRADE_INSTRUMENTS;
 export const THESIS_STATUSES = enums.THESIS_STATUSES;
 export const ANALYSIS_TYPES = enums.ANALYSIS_TYPES;
 export const DATASETS = enums.DATASETS;
+const LIVE_BUNDLE_SECTION_VALUES = [
+  "contract",
+  "save_target",
+  "quality",
+  "pack",
+  "dataset_integrity",
+  "macro_calendar",
+  "news_digest",
+  "market_availability",
+  "rolling_snapshots",
+  "live_lineage",
+  "raw_refs",
+  "instructions",
+];
 
 export const FRONT_STATE_MODES = ["live", "paper"];
 export const JOB_TYPES = [
@@ -413,11 +434,17 @@ const manualMonitorBundleShape = {
   ...liveOperationalScopeShape,
   bundle_id: z.string().min(3).optional(),
   timestamp_paris: z.string().optional(),
-  cadence: z.enum(["15m", "M15"]).default("15m"),
+  cadence: z.enum(["5m", "M5", "15m", "M15"]).default("15m"),
   master_id: z.string().min(3),
   pack_id: z.string().min(3).optional(),
   thesis_id: z.string().min(3),
   include_raw_refs: z.boolean().default(true),
+  view: z.enum(["compact", "full"]).optional(),
+  include_sections: z.array(z.enum(LIVE_BUNDLE_SECTION_VALUES)).max(12).optional(),
+  exclude_sections: z.array(z.enum(LIVE_BUNDLE_SECTION_VALUES)).max(12).optional(),
+  snapshot_windows: z.array(z.enum(["15m", "1h", "4h"])).max(3).optional(),
+  snapshot_instruments: z.array(z.string().min(1)).max(30).optional(),
+  max_response_bytes: z.number().int().min(16000).max(512000).optional(),
 };
 
 export const manualMonitorBundleRequestSchema = z.object(manualMonitorBundleShape).superRefine(requireRegisteredStrategySession);
@@ -435,6 +462,12 @@ const masterCutoffBundleShape = {
   cutoff_paris: z.string().min(1).optional(),
   instruments: z.array(z.enum(["MNQ", "MES", "NQ", "ES"])).min(1).max(4).default(["MNQ", "MES", "NQ", "ES"]),
   include_raw_refs: z.boolean().default(true),
+  view: z.enum(["compact", "full"]).optional(),
+  include_sections: z.array(z.enum(LIVE_BUNDLE_SECTION_VALUES)).max(12).optional(),
+  exclude_sections: z.array(z.enum(LIVE_BUNDLE_SECTION_VALUES)).max(12).optional(),
+  snapshot_windows: z.array(z.enum(["15m", "1h", "4h"])).max(3).optional(),
+  snapshot_instruments: z.array(z.string().min(1)).max(30).optional(),
+  max_response_bytes: z.number().int().min(16000).max(512000).optional(),
 };
 
 export const masterCutoffBundleRequestSchema = z.object(masterCutoffBundleShape).superRefine(requireRegisteredStrategySession);
@@ -486,7 +519,7 @@ export const replayMonitorBundlesSchema = z.object({
   mode: z.enum(["replay", "backtest"]).default("replay"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   timestamps_paris: z.array(z.string().min(1)).min(1).max(96),
-  cadence: z.enum(["15m", "M15"]).default("15m"),
+  cadence: z.enum(["5m", "M5", "15m", "M15"]).default("15m"),
   analysis_id: z.string().min(3).optional(),
   pack_id: z.string().min(3).optional(),
   thesis_id: z.string().min(3).optional(),
@@ -582,7 +615,7 @@ export const frontProjectionSchema = z.object({
   }
 });
 
-export const manualMonitorSchema = z.object({
+const manualMonitorV1Schema = z.object({
   monitor_id: z.string().min(3).optional(),
   contract_name: z.literal("DeskHourlyThesisMonitorContract"),
   schema_version: z.literal("1.0.0"),
@@ -594,7 +627,7 @@ export const manualMonitorSchema = z.object({
   pack_id: z.string().min(3).optional(),
   session: z.enum(["asia_open", "london_session", "ny_open", "work_forward"]).default("asia_open"),
   timestamp_paris: z.string().min(1),
-  cadence: z.enum(["15m", "M15"]).default("15m"),
+  cadence: z.enum(["5m", "M5", "15m", "M15"]).default("5m"),
   mode: z.enum(["live", "paper", "replay", "backtest"]).default("live"),
   status: manualMonitorStatusSchema.default("SAVED"),
   monitor_decision: z.record(z.any()).default({}),
@@ -609,6 +642,28 @@ export const manualMonitorSchema = z.object({
   lease_token: z.string().min(8).optional(),
 }).passthrough();
 
+const manualMonitorV2Schema = z.object({
+  monitor_id: z.string().min(3),
+  contract_name: z.literal("DeskHourlyThesisMonitorContract"),
+  schema_version: z.literal("2.4.0"),
+  contract_hash: z.string().min(1),
+  bundle_id: z.string().min(3).optional(),
+  pack_id: z.string().min(3).optional(),
+  timestamp_paris: z.string().datetime({ offset: true }),
+  cadence: z.enum(["15m", "M15"]).default("M15"),
+  status: manualMonitorStatusSchema.default("SAVED"),
+  monitor_output: hourlyMonitorV2SourceSchema,
+  raw_chatgpt_output: z.union([z.string(), z.record(z.any())]).optional(),
+  operator_notes: z.string().optional(),
+  work_item_id: z.string().min(3).optional(),
+  worker_id: z.string().min(3).optional(),
+  lease_token: z.string().min(8).optional(),
+}).passthrough();
+
+// Historical Monitor V1/V2 documents remain readable from persistence. The
+// mutation boundary only accepts the active immutable Monitor contract.
+export const manualMonitorSchema = manualMonitorV2Schema;
+
 export const createOrchestratedReplayDaySchema = z.object({
   backtest_id: z.string().min(3),
   replay_run_id: z.string().min(3).optional(),
@@ -622,12 +677,12 @@ export const createOrchestratedReplayDaySchema = z.object({
   cutoff_utc: z.string().datetime({ offset: true }),
   start_time: z.string().min(1),
   end_time: z.string().min(1),
-  cadence: z.enum(["15m", "M15", "30m", "60m", "1h"]).default("15m"),
+  cadence: z.enum(["5m", "M5", "15m", "M15", "30m", "60m", "1h"]).default("15m"),
   timezone: z.literal("Europe/Paris").default("Europe/Paris"),
   initial_cutoff: z.string().min(1).optional(),
   idempotency_key: z.string().min(3),
   instruments: z.array(z.enum(["MNQ", "MES", "NQ", "ES"])).min(1).max(4).default(["MNQ", "MES", "NQ", "ES"]),
-  risk_model: z.string().default("0.5pct_fixed"),
+  risk_model: z.string().default("0.25pct_net_equity"),
   automation_enabled: z.boolean().default(true),
   automation_mode: z.literal("gpt_scheduled_task").default("gpt_scheduled_task"),
 }).passthrough();
@@ -647,28 +702,54 @@ export const upsertReplayAutopilotConfigSchema = z.object({
   initial_cutoff: z.string().min(1).optional(),
   start_time: z.string().min(1),
   end_time: z.string().min(1),
-  cadence: z.enum(["15m", "M15", "30m", "60m", "1h"]).default("60m"),
+  cadence: z.enum(["5m", "M5", "15m", "M15", "30m", "60m", "1h"]).default("15m"),
   timezone: z.literal("Europe/Paris").default("Europe/Paris"),
   instruments: z.array(z.enum(["MNQ", "MES", "NQ", "ES"])).min(1).max(4).default(["MNQ", "MES", "NQ", "ES"]),
-  risk_model: z.string().default("0.5pct_fixed"),
+  risk_model: z.string().default("0.25pct_net_equity"),
+  worker_group: z.string().min(1).max(120).default("default"),
+  priority: z.number().int().min(1).max(999).default(100),
+  max_transitions: z.number().int().min(1).max(12).default(6),
   notes: z.string().max(2000).optional(),
 }).passthrough();
+
+export const setReplayAutopilotWindowSchema = z.object({
+  worker_group: z.string().min(1).max(120).default("default"),
+  session: z.enum(["asia_open", "ny_open"]).optional(),
+  date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  pause_outside_window: z.boolean().default(true),
+  include_archived: z.boolean().default(false),
+  set_priority_by_date: z.boolean().default(true),
+  priority_base: z.number().int().min(1).max(999).default(10),
+  priority_step: z.number().int().min(1).max(100).default(10),
+  dry_run: z.boolean().default(false),
+  reason: z.string().max(1000).optional(),
+}).strict().superRefine((value, ctx) => {
+  if (value.date_from > value.date_to) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["date_to"],
+      message: "WINDOW_RANGE_INVALID: date_to must be >= date_from",
+    });
+  }
+});
 
 export const startOrResumeReplayAutopilotSchema = z.object({
   config_id: z.string().min(3).optional(),
   trading_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   session: z.enum(["asia_open", "ny_open"]).optional(),
-  mode: z.enum(["latest_ready_config"]).optional(),
+  mode: z.enum(["latest_ready_config", "next_ready_config"]).optional(),
+  worker_group: z.string().min(1).max(120).optional(),
   worker_id: z.string().min(3).max(120).default("gpt-replay-autopilot"),
   max_transitions: z.number().int().min(1).max(12).default(6),
   recover_failed: z.boolean().default(true),
 }).strict().superRefine((value, ctx) => {
-  if (value.config_id || value.mode === "latest_ready_config") return;
+  if (value.config_id || value.mode === "latest_ready_config" || value.mode === "next_ready_config") return;
   if (value.trading_date && value.session) return;
   ctx.addIssue({
     code: z.ZodIssueCode.custom,
     path: ["config_id"],
-    message: "CONFIG_SELECTOR_REQUIRED: provide config_id, mode=latest_ready_config, or trading_date+session",
+    message: "CONFIG_SELECTOR_REQUIRED: provide config_id, mode=latest_ready_config, mode=next_ready_config, or trading_date+session",
   });
 });
 
@@ -695,18 +776,26 @@ const replayBundleSectionSchema = z.enum([
   "dataset_integrity",
   "macro_calendar",
   "news_digest",
+  "market_availability",
   "rolling_snapshots",
   "replan_context",
   "replay_lineage",
   "raw_refs",
   "instructions",
 ]);
+const replayLineageComponentSchema = z.enum([
+  "replay_master_analysis",
+  "replay_active_thesis",
+  "replay_setups",
+  "previous_replay_monitor",
+  "replay_position",
+]);
 
 const replayBundleReadOptions = {
   bundle_type: z.enum(["master", "monitor"]).optional(),
   view: z.enum(["compact", "manifest", "full"]).default("compact"),
-  include_sections: z.array(replayBundleSectionSchema).max(12).optional(),
-  exclude_sections: z.array(replayBundleSectionSchema).max(12).optional(),
+  include_sections: z.array(replayBundleSectionSchema).max(13).optional(),
+  exclude_sections: z.array(replayBundleSectionSchema).max(13).optional(),
   snapshot_windows: z.array(z.enum(["15m", "1h", "4h"])).max(3).optional(),
   instruments: z.array(z.string().min(1)).max(30).optional(),
   include_raw_refs: z.boolean().default(false),
@@ -730,12 +819,29 @@ export const getReplayBundleManifestSchema = replayRefSchema.extend({
 export const getReplayBundleSectionSchema = replayRefSchema.extend({
   bundle_type: z.enum(["master", "monitor"]),
   section: replayBundleSectionSchema,
+  component: replayLineageComponentSchema.optional(),
+  field: z.string().min(1).max(160).optional(),
   snapshot_windows: z.array(z.enum(["15m", "1h", "4h"])).max(3).optional(),
   instruments: z.array(z.string().min(1)).max(30).optional(),
   include_raw_refs: z.boolean().default(false),
   offset: z.number().int().min(0).default(0),
   limit: z.number().int().min(1).max(500).default(100),
   max_response_bytes: z.number().int().min(16000).max(512000).optional(),
+}).superRefine((value, ctx) => {
+  if ((value.component || value.field) && value.section !== "replay_lineage") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["component"],
+      message: "REPLAY_LINEAGE_COMPONENT_SCOPE_REQUIRED",
+    });
+  }
+  if (value.field && !value.component) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["field"],
+      message: "REPLAY_LINEAGE_COMPONENT_REQUIRED_FOR_FIELD",
+    });
+  }
 });
 
 export const getReplaySnapshotSchema = replayRefSchema.extend({
@@ -746,7 +852,7 @@ export const getReplaySnapshotSchema = replayRefSchema.extend({
   max_response_bytes: z.number().int().min(16000).max(512000).optional(),
 });
 
-export const saveReplayMasterAnalysisSchema = replayMutationRefSchema.extend({
+const saveReplayMasterAnalysisV4Schema = replayMutationRefSchema.extend({
   contract_name: z.literal("DeskMasterAnalysisContract"),
   schema_version: z.literal("4.0.0"),
   contract_hash: z.string().min(1),
@@ -765,6 +871,23 @@ export const saveReplayMasterAnalysisSchema = replayMutationRefSchema.extend({
   lease_token: z.string().min(8).optional(),
 }).passthrough();
 
+const saveReplayMasterAnalysisV5Schema = replayMutationRefSchema.extend({
+  contract_name: z.literal("DeskMasterAnalysisContract"),
+  schema_version: z.literal("5.4.0"),
+  contract_hash: z.string().min(1),
+  analysis_id: z.string().min(3),
+  pack_build_id: z.string().min(3),
+  analysis_output: masterAnalysisV5SourceSchema,
+  raw_chatgpt_output: z.union([z.string(), z.record(z.any())]).optional(),
+  work_item_id: z.string().min(3).optional(),
+  worker_id: z.string().min(3).optional(),
+  lease_token: z.string().min(8).optional(),
+}).passthrough();
+
+// Legacy replay outputs are historical projections only and cannot be
+// materialized again under a new work item.
+export const saveReplayMasterAnalysisSchema = saveReplayMasterAnalysisV5Schema;
+
 export const advanceReplayClockSchema = z.object({
   backtest_id: z.string().min(3),
   expected_revision: z.number().int().min(0),
@@ -779,7 +902,7 @@ export const prepareReplayMonitorBundleSchema = replayMutationRefSchema.extend({
   force_rebuild: z.boolean().default(false),
 });
 
-export const saveReplayMonitorSchema = replayMutationRefSchema.extend({
+const saveReplayMonitorV1Schema = replayMutationRefSchema.extend({
   monitor_id: z.string().min(3),
   master_id: z.string().min(3),
   thesis_id: z.string().min(3),
@@ -791,7 +914,7 @@ export const saveReplayMonitorSchema = replayMutationRefSchema.extend({
   schema_version: z.literal("1.0.0"),
   contract_hash: z.string().min(1),
   timestamp_paris: z.string().optional(),
-  cadence: z.enum(["15m", "M15", "30m", "60m", "1h"]).default("15m"),
+  cadence: z.enum(["5m", "M5", "15m", "M15", "30m", "60m", "1h"]).default("5m"),
   manual_triggered: z.boolean().default(true),
   triggered_by: z.string().default("user_chatgpt"),
   monitor_decision: z.record(z.any()).default({}),
@@ -822,6 +945,30 @@ export const saveReplayMonitorSchema = replayMutationRefSchema.extend({
   lease_token: z.string().min(8).optional(),
 }).passthrough();
 
+
+const saveReplayMonitorV2Schema = replayMutationRefSchema.extend({
+  monitor_id: z.string().min(3),
+  master_id: z.string().min(3),
+  thesis_id: z.string().min(3),
+  sequence: z.number().int().min(1),
+  scheduled_for_utc: z.string().datetime({ offset: true }),
+  as_of_utc: z.string().datetime({ offset: true }),
+  pack_build_id: z.string().min(3),
+  contract_name: z.literal("DeskHourlyThesisMonitorContract"),
+  schema_version: z.literal("2.4.0"),
+  contract_hash: z.string().min(1),
+  timestamp_paris: z.string().datetime({ offset: true }).optional(),
+  cadence: z.enum(["15m", "M15"]).default("M15"),
+  manual_triggered: z.boolean().default(true),
+  triggered_by: z.string().default("gpt_worker"),
+  monitor_output: hourlyMonitorV2SourceSchema,
+  raw_chatgpt_output: z.union([z.string(), z.record(z.any())]).optional(),
+  work_item_id: z.string().min(3).optional(),
+  worker_id: z.string().min(3).optional(),
+  lease_token: z.string().min(8).optional(),
+}).passthrough();
+
+export const saveReplayMonitorSchema = saveReplayMonitorV2Schema;
 export const deskWorkItemReadSchema = z.object({
   work_item_id: z.string().min(3),
 }).strict();
@@ -907,11 +1054,11 @@ export const createBacktestRunSchema = z.object({
   date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   session: z.enum(VNEXT_SESSIONS).default("asia_open"),
   instrument_mode: z.enum(["auto", "MNQ", "MES", "NQ", "ES"]).default("auto"),
-  master_contract: z.string().default("4.0.0"),
-  monitor_contract: z.string().default("1.0.0"),
-  monitor_cadence: z.string().default("1h"),
+  master_contract: z.literal("5.4.0").default("5.4.0"),
+  monitor_contract: z.literal("2.4.0").default("2.4.0"),
+  monitor_cadence: z.string().default("15m"),
   mode: z.enum(["backforward_strict", "setup_replay"]).default("backforward_strict"),
-  risk_model: z.string().default("0.5pct_fixed"),
+  risk_model: z.string().default("0.25pct_net_equity"),
   limit: z.number().int().min(1).max(500).default(200),
 });
 
@@ -1075,7 +1222,7 @@ export const cancelDeskJobSchema = z.object({
   reason: z.string().optional(),
 });
 
-export const masterAnalysisSchema = z.object({
+const masterAnalysisV4Schema = z.object({
   analysis_id: z.string().min(3).optional(),
   contract_name: z.literal("DeskMasterAnalysisContract"),
   schema_version: z.literal("4.0.0"),
@@ -1097,10 +1244,30 @@ export const masterAnalysisSchema = z.object({
   lease_token: z.string().min(8).optional(),
 }).passthrough();
 
+const masterAnalysisV5TransportSchema = z.object({
+  analysis_id: z.string().min(3),
+  contract_name: z.literal("DeskMasterAnalysisContract"),
+  schema_version: z.literal("5.4.0"),
+  contract_hash: z.string().min(1),
+  pack_id: z.string().min(3),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  session: z.enum(VNEXT_SESSIONS),
+  status: z.enum(["ready", "archived"]).default("ready"),
+  created_at_paris: z.string().datetime({ offset: true }),
+  analysis_output: masterAnalysisV5SourceSchema,
+  raw_chatgpt_output: z.union([z.string(), z.record(z.any())]).optional(),
+  work_item_id: z.string().min(3).optional(),
+  worker_id: z.string().min(3).optional(),
+  lease_token: z.string().min(8).optional(),
+}).passthrough();
+
+export const masterAnalysisSchema = masterAnalysisV5TransportSchema;
+
 export const activeThesisSchema = z.object({
   thesis_id: z.string().min(3).optional(),
   linked_master_analysis_id: z.string().min(3),
   status: z.enum(THESIS_STATUSES),
+
   instrument: z.enum(DESK_INSTRUMENTS),
   direction: z.enum(["long", "short", "neutral", "wait"]),
   dominant_scenario: z.string().min(1),

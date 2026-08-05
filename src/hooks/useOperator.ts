@@ -72,7 +72,7 @@ export function useOperatorAuth() {
     void operatorAuthAvailable().then(async available => {
       if (!active) return;
       if (!available) {
-        setState({ status: "unavailable", email: null, message: "La clé opérateur locale n’est pas configurée." });
+        setState({ status: "unavailable", email: null, message: "Le service d’authentification opérateur est indisponible." });
         return;
       }
       unsubscribe = await listenToOperatorAuth(user => {

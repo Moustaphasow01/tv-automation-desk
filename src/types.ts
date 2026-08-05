@@ -15,6 +15,7 @@ export interface MarketItem {
   rsi?: string;
   atr?: string;
   seriesTimeframe?: string;
+  availability?: string;
   series?: Array<{
     time: string;
     open: number | null;
@@ -69,6 +70,20 @@ export interface TimelineEvent {
   sourceType: string;
 }
 
+export interface OperationalTimelineItem {
+  id: string;
+  type: "MASTER" | "MONITOR" | string;
+  label: string;
+  plannedAt: string | null;
+  actualAt: string | null;
+  plannedTime: string;
+  actualTime: string;
+  status: string;
+  latencySeconds: number | null;
+  summary: string;
+  detail: string;
+}
+
 export interface DeskSession {
   id: SessionId;
   strategyId: string;
@@ -80,13 +95,39 @@ export interface DeskSession {
   severity: Severity;
   lastDataAt: string;
   lastMonitorAt: string;
+  currentCheckpointAt: string;
+  lastCompletedCheckpointAt: string;
+  nextCheckpointAt: string;
   nextMonitorAt: string;
+  claim: {
+    lastClaimAt: string;
+    lastClaimAtUtc: string | null;
+    workerId: string | null;
+    nextTaskStatus: "waiting" | "in_progress" | "executed" | "late" | "unavailable";
+    nextTaskStatusLabel: string;
+    nextTaskWorkflow: string | null;
+    nextTaskLabel: string;
+    nextTaskCheckpoint: string;
+    followingTaskCheckpoint: string;
+    followingTaskWorkflow: string | null;
+    lastCompletedCheckpoint: string;
+    dueCheckpoint: string;
+    readyAt: string;
+    bundleReadyAt: string;
+    latencySeconds: number | null;
+    latencyTargetSeconds: number;
+    latencyStatus: "on_target" | "late" | "unavailable" | string;
+    bundleClaimLatencySeconds: number | null;
+    bundleClaimLatencyStatus: "on_target" | "late" | "unavailable" | string;
+  };
   nextMacro: string;
   dataQuality: {
     label: string;
     status: "ready" | "degraded" | string;
     antiLookahead: boolean;
     warnings: string[];
+    executionReady: boolean;
+    contextLimited: boolean;
   };
   automation: { status: string; worker: string; cadence: string };
   liveBrief: {
@@ -100,6 +141,11 @@ export interface DeskSession {
     scoreDriversPositive: string[]; scoreDriversNegative: string[];
   };
   marketBrief: { headline: string; text: string; verdict: string };
+  deskReading: {
+    facts: string[];
+    interpretation: string[];
+    thesisEvolution: string[];
+  };
   market: MarketItem[];
   crossAssetBrief: { headline: string; text: string; verdict: string };
   latestChange: {
@@ -115,16 +161,22 @@ export interface DeskSession {
   };
   setup: {
     id: string; label: string; instrument: string; direction: string; status: string; statusLabel: string;
-    entryFrom: number | null; entryTo: number | null; stop: number | null;
+    requestedStatus: string; geometryReady: boolean; backendCanTrigger: boolean; missingFields: string[];
+    entryFrom: number | null; entryTo: number | null;
+    entryLower: number | null; entryUpper: number | null;
+    executionEntry: number | null; executionRule: string; stop: number | null;
     tp1: number | null; tp2: number | null; tp3: number | null;
-    risk: number | null; confidence: number | null; rr: number | null; resultR?: number | null; reason: string;
+    risk: number | null; confidence: number | null; rr: number | null; minimumRr: number | null;
+    resultR?: number | null; reason: string;
   };
   position: {
     active: boolean; status: string; instrument: string; direction: string;
-    entry: number | null; current: number | null; unrealizedR: number | null; note: string;
+    entry: number | null; current: number | null; unrealizedR: number | null;
+    executionMode: string; brokerExecution: boolean; note: string;
   };
   monitors: MonitorItem[];
   timeline: TimelineEvent[];
+  operationalTimeline: OperationalTimelineItem[];
   activity: Array<{ time: string; title: string; detail: string; status: string }>;
   levels: Array<{ price: string; role: string; state: string }>;
   macro: Array<{
@@ -135,10 +187,14 @@ export interface DeskSession {
   news: {
     digestUpdatedAt: string;
     digest: string;
+    status: string;
+    provider: string;
+    freshness: { status: string; ageMinutes: number | null };
     headlines: Array<{
       time: string; title: string; source: string; impact: string;
       scheduledAt?: string; date?: string; currency?: string; importance?: string;
       previous?: string; forecast?: string; actual?: string; isNext?: boolean;
+      url?: string; provider?: string; publishedAt?: string; assets?: string[]; topics?: string[];
     }>;
   };
   alerts: Array<{ level: Severity; title: string; message: string; time: string }>;

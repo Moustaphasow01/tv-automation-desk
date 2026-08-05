@@ -2,15 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analysisSchema, decisionSchema, manualMonitorSchema } from "../src/schemas.js";
 import { validDecisionAudit } from "./fixtures/decision_audit_payloads.js";
+import { makeNativeMonitorV2 } from "./support/native-strategy-fixtures.js";
 
 test("manual monitor schema normalizes readiness status for persistence", () => {
+  const monitorOutput = makeNativeMonitorV2();
   const parsed = manualMonitorSchema.parse({
+    monitor_id: monitorOutput.source.monitor_id,
     contract_name: "DeskHourlyThesisMonitorContract",
-    schema_version: "1.0.0",
+    schema_version: "2.4.0",
     contract_hash: "monitor-contract-hash",
-    timestamp_paris: "2026-07-13T14:45:00+02:00",
+    timestamp_paris: monitorOutput.checkpoint.checkpoint_paris,
     status: "ready",
-    monitor_decision: { decision: "REPLAN_FULL" },
+    monitor_output: monitorOutput,
   });
 
   assert.equal(parsed.status, "SAVED");

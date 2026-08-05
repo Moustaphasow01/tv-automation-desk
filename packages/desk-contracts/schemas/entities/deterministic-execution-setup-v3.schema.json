@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/deterministic-execution-setup-v3.schema.json",
+  "title": "DeskDeterministicExecutionSetupV3",
+  "version": "3.0.0",
+  "type": "object",
+  "required": [
+    "setup_id",
+    "status",
+    "instrument",
+    "direction",
+    "entry_mode",
+    "stop_loss",
+    "take_profit_1",
+    "conditions",
+    "valid_from_paris",
+    "expires_at_paris",
+    "trigger_policy",
+    "management_policy"
+  ],
+  "properties": {
+    "setup_id": { "type": "string", "minLength": 1 },
+    "setup_record_id": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["SETUP_CANDIDATE", "PRE_ARMED", "ARMED_CONDITIONAL", "CANCELLED", "EXPIRED", "INVALIDATED"]
+    },
+    "instrument": { "type": "string", "enum": ["MNQ", "MES", "NQ", "ES"] },
+    "direction": { "type": "string", "enum": ["long", "short"] },
+    "entry_mode": {
+      "type": "string",
+      "enum": [
+        "NEXT_BAR_MARKET_AFTER_CONFIRMATION",
+        "RETEST_ZONE_AFTER_CONFIRMATION",
+        "STOP_CROSS",
+        "LIMIT_TOUCH"
+      ]
+    },
+    "entry_price": { "type": "number" },
+    "entry_zone": {
+      "type": "object",
+      "required": ["lower", "upper"],
+      "properties": {
+        "lower": { "type": "number" },
+        "upper": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "stop_loss": { "type": "number" },
+    "take_profit_1": { "type": "number" },
+    "rr_minimum": { "type": "number", "exclusiveMinimum": 0 },
+    "conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "condition_id",
+          "role",
+          "effect",
+          "instrument",
+          "timeframe",
+          "operator",
+          "threshold",
+          "importance",
+          "required_for_trigger",
+          "memory_policy"
+        ],
+        "properties": {
+          "condition_id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string" },
+          "role": {
+            "type": "string",
+            "enum": ["ACTIVATION", "CONFIRMATION", "INVALIDATION", "VETO"]
+          },
+          "effect": {
+            "type": "string",
+            "enum": ["REQUIRE_TRUE", "BLOCK_IF_TRUE"]
+          },
+          "instrument": { "type": "string", "minLength": 1 },
+          "timeframe": { "type": "string", "enum": ["M1", "M5", "M15", "H1", "H4"] },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "CLOSE_ABOVE",
+              "CLOSE_BELOW",
+              "TOUCH_ABOVE",
+              "TOUCH_BELOW",
+              "REJECT_ABOVE",
+              "REJECT_BELOW",
+              "REJECT_RESISTANCE",
+              "REJECT_SUPPORT"
+            ]
+          },
+          "threshold": { "type": "number" },
+          "importance": {
+            "type": "string",
+            "enum": ["HARD_BLOCKER", "MANDATORY", "PRIMARY", "SECONDARY", "OPTIONAL", "ADVISORY"]
+          },
+          "required_for_trigger": { "type": "boolean" },
+          "memory_policy": {
+            "type": "string",
+            "enum": ["LATCH_UNTIL_TRIGGER", "LATEST_ONLY", "INVALIDATE_TERMINAL"]
+          },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "tolerance_points": { "type": "number", "minimum": 0 },
+          "temporal_rule": {
+            "type": "object",
+            "required": ["mode"],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": ["LATEST_CLOSED", "ANY_SINCE_ARM", "CONSECUTIVE_CLOSED", "CROSS_AFTER_ARM"]
+              },
+              "count": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "importance": { "const": "HARD_BLOCKER" }
+              },
+              "required": ["importance"]
+            },
+            "then": {
+              "properties": {
+                "effect": { "const": "BLOCK_IF_TRUE" },
+                "required_for_trigger": { "const": false }
+              }
+            }
+          }
+        ],
+        "additionalProperties": true
+      }
+    },
+    "valid_from_paris": { "type": "string", "format": "date-time" },
+    "expires_at_paris": { "type": "string", "format": "date-time" },
+    "trigger_policy": {
+      "type": "object",
+      "required": ["min_score", "allow_entry_only", "backend_can_trigger"],
+      "properties": {
+        "min_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "allow_entry_only": { "const": false },
+        "backend_can_trigger": { "type": "boolean" },
+        "threshold_tolerance_points": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "management_policy": {
+      "type": "object",
+      "required": ["break_even_at_r"],
+      "properties": {
+        "break_even_at_r": { "type": "number", "exclusiveMinimum": 0 },
+        "tp1_close_fraction": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "replaces_setup_id": { "type": "string", "minLength": 1 }
+  },
+  "oneOf": [
+    { "required": ["entry_price"] },
+    { "required": ["entry_zone"] }
+  ],
+  "additionalProperties": true
+}

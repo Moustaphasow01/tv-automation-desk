@@ -11,7 +11,9 @@
   },
   "scripts": {
     "generate": "node codegen/generate.mjs",
-    "check:generated": "node codegen/generate.mjs && git diff --exit-code -- generated/ts generated/runtime-data.js"
+    "check:generated": "node codegen/check-generated.mjs && node codegen/check-strategy-v5.mjs",
+    "check:strategy-v5": "node codegen/check-strategy-v5.mjs",
+    "test:analytical-progress": "node --test test/analytical-research-progress-contract.test.js"
   },
   "dependencies": {}
 }

@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { deskApi } from "@/api/deskApi";
 import { refreshPolicyMs } from "@/api/endpoints";
-import { Card, Drawer, Icon, SectionTitle } from "@/components/common";
+import { Card, DataSourceBadge, Icon, InlineStateCard } from "@/components/common";
+import { PageHeading } from "@/components/operations";
 import { useDeskContext } from "@/context/DeskContext";
 import type { PerformanceCalendarDay, PerformancePricingMode, PerformanceSummary } from "@/types";
 
@@ -80,7 +81,7 @@ export default function PerformanceCalendarPage() {
   };
 
   return <section className="view performance-view">
-    <SectionTitle title="Calendrier des performances" subtitle="Résultat net quotidien en R · cliquez sur une date pour ouvrir la journée"/>
+    <PageHeading eyebrow="Performance" title="Calendrier des performances" subtitle="Résultat net quotidien en R · cliquez sur une date pour ouvrir la journée" actions={<DataSourceBadge label="POSTGRES"/>}/>
 
     <div className="performance-toolbar">
       <div className="performance-month-nav">
@@ -93,7 +94,7 @@ export default function PerformanceCalendarPage() {
       </div>
     </div>
 
-    {calendarQuery.isLoading ? <Card className="performance-loading">Chargement du calendrier…</Card> : calendarQuery.isError ? <Card className="performance-error"><Icon name="alert"/><div><strong>Calendrier indisponible</strong><p>{calendarQuery.error.message}</p></div><button className="text-btn" onClick={() => calendarQuery.refetch()}>Réessayer</button></Card> : <>
+    {calendarQuery.isLoading ? <InlineStateCard code="PERFORMANCE_CALENDAR_LOADING" title="Lecture du calendrier réel" text="Chargement des résultats journaliers depuis la base locale."/> : calendarQuery.isError ? <Card className="performance-error"><Icon name="alert"/><div><strong>Calendrier indisponible</strong><p>{calendarQuery.error.message}</p></div><button className="text-btn" onClick={() => calendarQuery.refetch()}>Réessayer</button></Card> : <>
       <DaySummary summary={calendarQuery.data?.calendar.summary}/>
       <Card className="performance-calendar-card">
         <div className="performance-weekdays">{weekDays.map(day => <span key={day}>{day}</span>)}</div>
@@ -104,9 +105,10 @@ export default function PerformanceCalendarPage() {
       </Card>
     </>}
 
-    <Drawer open={Boolean(selectedDate)} title={selectedDate ? new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${selectedDate}T12:00:00Z`)) : "Journée"} onClose={() => setSelectedDate(null)}>
+    {selectedDate && <Card className="performance-master-detail" aria-live="polite">
+      <header><div><p className="eyebrow">Détail de la journée</p><h2>{new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${selectedDate}T12:00:00Z`))}</h2></div><button className="icon-btn" onClick={() => setSelectedDate(null)} aria-label="Fermer le détail de la journée"><Icon name="close"/></button></header>
       {dayQuery.isLoading ? <div className="performance-day-loading">Chargement de la journée…</div> : dayQuery.isError ? <div className="performance-day-loading">Impossible de charger le détail.<button className="text-btn" onClick={() => dayQuery.refetch()}>Réessayer</button></div> : dayQuery.data ? <DayZoom day={dayQuery.data.day} calendarDay={selectedDay}/> : null}
-    </Drawer>
+    </Card>}
   </section>;
 }
 

@@ -23,8 +23,8 @@ export function resolveAutomaticSession(now: Date) {
   const hour = Number(parts.find(part => part.type === "hour")?.value || 0);
   const minute = Number(parts.find(part => part.type === "minute")?.value || 0);
   const minutes = hour * 60 + minute;
-  if (minutes < 8 * 60) return { sessionId: "asia_open" as const, phase: "asia" as const, phaseLabel: "Asia", nextPhaseAt: "08:00" };
-  if (minutes < 15 * 60 + 30) return { sessionId: "asia_open" as const, phase: "london" as const, phaseLabel: "London", nextPhaseAt: "15:30" };
+  if (minutes < 8 * 60) return { sessionId: "asia_open" as const, phase: "asia" as const, phaseLabel: "Asie", nextPhaseAt: "08:00" };
+  if (minutes < 15 * 60 + 30) return { sessionId: "asia_open" as const, phase: "london" as const, phaseLabel: "Londres", nextPhaseAt: "15:30" };
   return { sessionId: "ny_open" as const, phase: "ny" as const, phaseLabel: "New York", nextPhaseAt: "00:00" };
 }
 

@@ -1,12 +1,40 @@
 import { toParisIso, toUtcIso } from "@tv-automation/desk-time";
 import { buildWorkDeadLetter } from "./dead-letter.js";
-import { floorParisCheckpoint, parisWallTimeIso } from "./live-scope.js";
+import {
+  buildLiveMonitorRollForwardContext,
+  floorParisCheckpoint,
+  parisWallTimeIso,
+} from "./live-scope.js";
+import { normalizeGptTelemetry, sameGptTelemetry } from "./gpt-telemetry.js";
+import {
+  DAILY_END_TIME,
+  DAILY_NY_MASTER_TIME,
+  DAILY_PHASES,
+  DAILY_RUN_SCOPE,
+  DAILY_SCOPE_SESSION,
+  DAILY_START_TIME,
+  dailyCursorId,
+  dailyRunId,
+  dailyRunPhaseAt,
+  dailyRunStrategyAt,
+} from "./daily-run-model.js";
+import {
+  assertActiveStrategyContractContext,
+  assertActiveStrategySaveTarget,
+} from "./strategy-runtime-versioning.js";
+import {
+  GPT_MONITOR_CADENCE_MINUTES,
+  GPT_MONITOR_CADENCE_SECONDS,
+} from "./desk-monitor-cadence.js";
 
-export const LIVE_CURSOR_SCHEMA_VERSION = "2.0.0";
-export const CADENCE_MINUTES = 15;
-export const CADENCE_SECONDS = 900;
+export const LIVE_CURSOR_SCHEMA_VERSION = "3.0.0";
+export const CADENCE_MINUTES = GPT_MONITOR_CADENCE_MINUTES;
+export const CADENCE_SECONDS = GPT_MONITOR_CADENCE_SECONDS;
 export const LEASE_MARGIN_SECONDS = 120;
-export const LEASE_HARD_CAP_SECONDS = CADENCE_SECONDS - LEASE_MARGIN_SECONDS;
+// The GPT lease is intentionally decoupled from the analytical cadence.
+// A monitor can legitimately take several minutes to complete; the
+// latest-wins policy prevents a stale result from replacing a newer one.
+export const LEASE_HARD_CAP_SECONDS = 780;
 export const DEFAULT_LIVE_LEASE_SECONDS = 660;
 export const MAX_LIVE_ATTEMPTS = 6;
 export const RETRY_BACKOFF_BASE_SECONDS = 30;
@@ -14,6 +42,13 @@ export const RETRY_BACKOFF_MAX_SECONDS = 300;
 export const RETRY_JITTER_MAX_SECONDS = 15;
 export const LIVENESS_STALE_MINUTES = 20;
 export const LIVE_CURSOR_TTL_DAYS = 90;
+export const LIVE_REPLAN_ACTIONS = Object.freeze([
+  "REPLAN_FULL",
+  "REPLAN_REQUIRED",
+  "NEW_MASTER_REQUIRED",
+  "INVALIDATE_THESIS",
+]);
+const LIVE_REPLAN_ACTION_SET = new Set(LIVE_REPLAN_ACTIONS);
 
 export const LIVE_CURSOR_STATUSES = Object.freeze([
   "IDLE",
@@ -36,42 +71,48 @@ export const LIVE_CURSOR_EVENT_TYPES = Object.freeze([
   "CURSOR_DEAD_LETTER",
   "CURSOR_LIVENESS_ALERT",
   "CURSOR_LEASE_CAPPED",
+  "CURSOR_REPLAN_REQUESTED",
+  "CURSOR_EVENT_MONITOR_REQUESTED",
   "CURSOR_CLOSED",
 ]);
 
-const LIVE_WINDOWS = Object.freeze({
-  asia_open: { master_cutoff: "00:15:00", open: "00:30:00", close: "14:45:00", strategy_id: "asia_open" },
-  ny_open: { master_cutoff: "15:30:00", open: "15:45:00", close: "21:45:00", strategy_id: "ny_open_1530" },
-});
-
-export function liveRunCursorId(tradingDate, session) {
+export function liveRunCursorId(tradingDate) {
   assertTradingDate(tradingDate);
-  assertSession(session);
-  return `livecur__${tradingDate}__${session}`;
+  return dailyCursorId(tradingDate);
 }
 
-export function initLiveRunCursor({ trading_date, session }, tick) {
-  const windowConfig = LIVE_WINDOWS[assertSession(session)];
+export function initLiveRunCursor({ trading_date }, tick) {
   assertTradingDate(trading_date);
   const now = normalizeTick(tick);
-  const cursorId = liveRunCursorId(trading_date, session);
+  const cursorId = liveRunCursorId(trading_date);
   return {
     cursor_id: cursorId,
     schema_version: LIVE_CURSOR_SCHEMA_VERSION,
-    run_id: `front_live_${trading_date}_${session}`,
+    run_id: dailyRunId(trading_date),
     trading_date,
-    session,
-    strategy_id: windowConfig.strategy_id,
+    session: DAILY_SCOPE_SESSION,
+    strategy_id: "asia_open",
+    run_scope: DAILY_RUN_SCOPE,
+    phases: DAILY_PHASES,
+    current_phase: "asia_open",
+    phase_master_ids: {},
+    phase_thesis_ids: {},
     cadence_minutes: CADENCE_MINUTES,
     window: {
-      master_cutoff_paris: parisWallTimeIso(trading_date, windowConfig.master_cutoff),
-      open_paris: parisWallTimeIso(trading_date, windowConfig.open),
-      close_paris: parisWallTimeIso(trading_date, windowConfig.close),
+      master_cutoff_paris: parisWallTimeIso(trading_date, DAILY_START_TIME),
+      open_paris: parisWallTimeIso(trading_date, "00:30:00"),
+      close_paris: parisWallTimeIso(trading_date, DAILY_END_TIME),
+      ny_master_cutoff_paris: parisWallTimeIso(trading_date, DAILY_NY_MASTER_TIME),
     },
     master_state: "MISSING",
     master_id: null,
     thesis_state: "MISSING",
     thesis_id: null,
+    replan_checkpoint: null,
+    replan_action: null,
+    event_monitor_checkpoint: null,
+    event_monitor_reason: null,
+    event_monitor_event_types: [],
     target_checkpoint: null,
     last_completed_checkpoint: null,
     cursor_status: "IDLE",
@@ -79,6 +120,10 @@ export function initLiveRunCursor({ trading_date, session }, tick) {
     data_quality: null,
     gap_ledger: [],
     recovery_count: 0,
+    last_claimed_at_utc: null,
+    last_claimed_checkpoint: null,
+    last_claimed_workflow: null,
+    last_claimed_worker_id: null,
     dead_letter_ref: null,
     created_at_utc: now.utc,
     updated_at_utc: now.utc,
@@ -90,6 +135,7 @@ export function initLiveRunCursor({ trading_date, session }, tick) {
 export function shadowLiveCursorBundle(cursorValue, prepared, tick) {
   const cursor = cloneCursor(cursorValue);
   assertCursor(cursor);
+  cursor.cadence_minutes = CADENCE_MINUTES;
   const now = normalizeTick(tick);
   const workflow = prepared?.workflow;
   if (!LIVE_CURSOR_WORKFLOWS.includes(workflow)) throw new Error("LIVE_CURSOR_SHADOW_WORKFLOW_INVALID");
@@ -99,6 +145,7 @@ export function shadowLiveCursorBundle(cursorValue, prepared, tick) {
   const dataQuality = normalizeDataQuality(prepared?.data_quality);
   const workStatus = String(prepared?.work_status || "READY").toUpperCase();
   const completed = workStatus === "COMPLETED" || workStatus === "DONE";
+  const phase = prepared?.phase || dailyRunPhaseAt(checkpoint);
 
   if (workflow === "LIVE_M15_MONITOR") {
     if (prepared.master_id) {
@@ -120,11 +167,16 @@ export function shadowLiveCursorBundle(cursorValue, prepared, tick) {
       cursor.thesis_state = "ACTIVE";
       cursor.thesis_id = prepared.thesis_id;
     }
+    cursor.current_phase = phase;
+    cursor.phase_master_ids = { ...(cursor.phase_master_ids || {}), ...(prepared.master_id ? { [phase]: prepared.master_id } : {}) };
+    cursor.phase_thesis_ids = { ...(cursor.phase_thesis_ids || {}), ...(prepared.thesis_id ? { [phase]: prepared.thesis_id } : {}) };
+    cursor.last_completed_checkpoint = laterCheckpoint(cursor.last_completed_checkpoint, checkpoint);
   }
 
   if (!activeLease(cursor.attempt, now)) {
     cursor.attempt = {
       workflow,
+      phase,
       checkpoint,
       bundle_id: bundleId,
       status: completed ? "DONE" : "PENDING",
@@ -134,6 +186,7 @@ export function shadowLiveCursorBundle(cursorValue, prepared, tick) {
       lease_expires_at_utc: null,
       attempt_count: Number(cursor.attempt?.checkpoint === checkpoint ? cursor.attempt?.attempt_count || 0 : 0),
       available_at_utc: now.utc,
+      bundle_ready_at_utc: now.utc,
       last_error: cursor.attempt?.checkpoint === checkpoint ? cursor.attempt?.last_error || null : null,
     };
     cursor.cursor_status = completed ? "IDLE" : "DUE";
@@ -146,6 +199,8 @@ export function shadowLiveCursorBundle(cursorValue, prepared, tick) {
 export function resolveTargetCheckpoint(cursor, tick) {
   assertCursor(cursor);
   const now = normalizeTick(tick);
+  const eventCheckpoint = validEventMonitorCheckpoint(cursor, now);
+  if (eventCheckpoint) return eventCheckpoint;
   const floor = floorParisCheckpoint(now.epochMs, CADENCE_MINUTES);
   const floorMs = Date.parse(floor);
   const openMs = Date.parse(cursor.window.open_paris);
@@ -158,14 +213,19 @@ export function resolveTargetCheckpoint(cursor, tick) {
 export function claimLiveCursor(cursorValue, args, tick) {
   const cursor = cloneCursor(cursorValue);
   assertCursor(cursor);
+  cursor.cadence_minutes = CADENCE_MINUTES;
   const now = normalizeTick(tick);
   const target = resolveTargetCheckpoint(cursor, now);
   cursor.target_checkpoint = target;
+  const replanCheckpoint = validReplanCheckpoint(cursor);
+  const phase = dailyRunPhaseAt(replanCheckpoint || target);
+  const phaseMasterCutoff = phase === "ny_open"
+    ? cursor.window.ny_master_cutoff_paris
+    : cursor.window.master_cutoff_paris;
 
   if (now.paris.slice(0, 10) !== cursor.trading_date) {
     return transition(cursor, noWork(cursor, "trading_date_mismatch", null), []);
   }
-  const masterCutoffMs = Date.parse(cursor.window.master_cutoff_paris);
   const openMs = Date.parse(cursor.window.open_paris);
   const closeAfterCadenceMs = Date.parse(cursor.window.close_paris) + CADENCE_SECONDS * 1000;
   if (now.epochMs >= closeAfterCadenceMs) {
@@ -181,13 +241,19 @@ export function claimLiveCursor(cursorValue, args, tick) {
     return transition(cursor, noWork(cursor, "in_progress", cursor.attempt.lease_expires_at_utc), []);
   }
 
-  const expectedWorkflow = cursor.master_state === "MISSING" || cursor.thesis_state === "MISSING"
+  const phaseMasterMissing = !cursor.phase_master_ids?.[phase] || !cursor.phase_thesis_ids?.[phase];
+  const expectedWorkflow = phaseMasterMissing || replanCheckpoint
     ? "LIVE_MASTER"
     : "LIVE_M15_MONITOR";
-  if (expectedWorkflow === "LIVE_MASTER" && now.epochMs < masterCutoffMs) {
+  const eventMonitorContext = expectedWorkflow === "LIVE_M15_MONITOR"
+    ? eventMonitorContextFor(cursor, target)
+    : null;
+  const requiredMasterCheckpoint = replanCheckpoint || phaseMasterCutoff;
+  const requiredMasterMs = Date.parse(requiredMasterCheckpoint);
+  if (expectedWorkflow === "LIVE_MASTER" && now.epochMs < requiredMasterMs) {
     cursor.cursor_status = "BLOCKED";
     cursor.updated_at_utc = now.utc;
-    return transition(cursor, noWork(cursor, "master_not_due", toUtcIso(masterCutoffMs)), [
+    return transition(cursor, noWork(cursor, "master_not_due", toUtcIso(requiredMasterMs)), [
       liveCursorEvent(cursor, "CURSOR_BLOCKED", now, { reason: "master_not_due" }),
     ]);
   }
@@ -201,34 +267,66 @@ export function claimLiveCursor(cursorValue, args, tick) {
   }
 
   const claimCheckpoint = expectedWorkflow === "LIVE_MASTER"
-    ? cursor.window.master_cutoff_paris
+    ? requiredMasterCheckpoint
     : target;
 
   const previousAttempt = cursor.attempt;
   const previousCheckpoint = previousAttempt?.checkpoint || null;
+  const catchupContext = expectedWorkflow === "LIVE_M15_MONITOR"
+    ? buildLiveMonitorRollForwardContext({
+        session: phase,
+        tradingDate: cursor.trading_date,
+        lastCompletedCheckpoint: cursor.last_completed_checkpoint,
+        previousAttemptCheckpoint: previousCheckpoint,
+        previousAttemptStatus: previousAttempt?.status,
+        monitorCheckpointParis: claimCheckpoint,
+        cadenceMinutes: CADENCE_MINUTES,
+      })
+    : null;
+  const masterRecoveryPromptVersion = String(args?.recovery_prompt_version || "");
+  const recoversDegradedMasterAfterPromptUpgrade = cursor.cursor_status === "DEGRADED"
+    && expectedWorkflow === "LIVE_MASTER"
+    && previousAttempt?.workflow === "LIVE_MASTER"
+    && previousCheckpoint === claimCheckpoint
+    && Boolean(masterRecoveryPromptVersion)
+    && previousAttempt?.prompt_version !== masterRecoveryPromptVersion;
   const targetAdvanced = expectedWorkflow === "LIVE_M15_MONITOR"
     && previousAttempt?.workflow === "LIVE_M15_MONITOR"
     && previousAttempt?.status !== "DONE"
     && checkpointBefore(previousCheckpoint, claimCheckpoint);
   const events = [];
-  const rolledForwardFrom = [];
-  if (targetAdvanced) {
+  const rolledForwardFrom = catchupContext?.skipped_checkpoints?.length
+    ? [...catchupContext.skipped_checkpoints]
+    : [];
+  const rollForwardAlreadyAudited = catchupContext
+    ? cursor.gap_ledger.some((entry) => (
+        entry.to_checkpoint === claimCheckpoint
+        && sameCheckpointList(entry.skipped_checkpoints, catchupContext.skipped_checkpoints)
+      ))
+    : false;
+  if (catchupContext && !rollForwardAlreadyAudited) {
+    const reason = targetAdvanced ? "stale_checkpoint_rolled_forward" : "latest_monitor_wins";
     cursor.gap_ledger.push({
-      from_checkpoint: previousCheckpoint,
+      from_checkpoint: catchupContext.analysis_window.from_paris,
       to_checkpoint: claimCheckpoint,
-      reason: "stale_checkpoint_rolled_forward",
+      skipped_checkpoints: [...catchupContext.skipped_checkpoints],
+      skipped_checkpoint_count: catchupContext.skipped_checkpoint_count,
+      reason,
       at_utc: now.utc,
     });
     cursor.recovery_count = Number(cursor.recovery_count || 0) + 1;
-    rolledForwardFrom.push(previousCheckpoint);
     events.push(liveCursorEvent(cursor, "CURSOR_ROLLED_FORWARD", now, {
-      from_checkpoint: previousCheckpoint,
+      from_checkpoint: catchupContext.analysis_window.from_paris,
       to_checkpoint: claimCheckpoint,
+      skipped_checkpoints: [...catchupContext.skipped_checkpoints],
+      skipped_checkpoint_count: catchupContext.skipped_checkpoint_count,
+      policy: catchupContext.selected_checkpoint_policy,
+      reason,
     }));
   }
 
   if (!targetAdvanced && previousAttempt?.checkpoint === claimCheckpoint) {
-    if (cursor.cursor_status === "DEGRADED") {
+    if (cursor.cursor_status === "DEGRADED" && !recoversDegradedMasterAfterPromptUpgrade) {
       return transition(cursor, noWork(cursor, "in_progress", nextCheckpointUtc(claimCheckpoint)), events);
     }
     const availableAtMs = Date.parse(previousAttempt.available_at_utc || "");
@@ -243,20 +341,33 @@ export function claimLiveCursor(cursorValue, args, tick) {
       status: "WORK_DUE",
       scope: "live",
       workflow: expectedWorkflow,
+      phase,
+      strategy_id: dailyRunStrategyAt(claimCheckpoint),
+      run_id: cursor.run_id,
+      cursor_id: cursor.cursor_id,
+      trading_date: cursor.trading_date,
       checkpoint: claimCheckpoint,
       target_checkpoint: target,
+      catchup_context: catchupContext,
+      event_monitor_context: eventMonitorContext,
+      rolled_forward_from: rolledForwardFrom.length ? rolledForwardFrom : null,
     }, events);
   }
-  const work = normalizePreparedWork(args.work, expectedWorkflow, claimCheckpoint);
+  const work = normalizePreparedWork(args.work, expectedWorkflow, claimCheckpoint, phase);
   const requestedLeaseSeconds = boundedLeaseSeconds(args?.lease_seconds);
   const leaseSeconds = Math.min(requestedLeaseSeconds, LEASE_HARD_CAP_SECONDS);
   const leaseToken = requiredText(args?.lease_token, "LIVE_LEASE_TOKEN_REQUIRED");
   const workerId = requiredText(args?.worker_id, "LIVE_WORKER_ID_REQUIRED");
-  const sameCheckpoint = previousCheckpoint === claimCheckpoint;
+  const sameCheckpoint = previousCheckpoint === claimCheckpoint
+    && previousAttempt?.workflow === expectedWorkflow;
   const attemptCount = sameCheckpoint ? Number(previousAttempt?.attempt_count || 0) + 1 : 1;
   const leaseExpiresAtUtc = toUtcIso(now.epochMs + leaseSeconds * 1000);
+  const bundleReadyAtUtc = sameCheckpoint && previousAttempt?.bundle_id === work.bundle.bundle_id
+    ? previousAttempt.bundle_ready_at_utc || previousAttempt.available_at_utc || now.utc
+    : work.bundle_ready_at_utc || work.prepared_at_utc || now.utc;
   cursor.attempt = {
     workflow: expectedWorkflow,
+    phase,
     checkpoint: claimCheckpoint,
     bundle_id: work.bundle.bundle_id,
     status: "LEASED",
@@ -266,10 +377,18 @@ export function claimLiveCursor(cursorValue, args, tick) {
     lease_expires_at_utc: leaseExpiresAtUtc,
     attempt_count: attemptCount,
     available_at_utc: now.utc,
+    bundle_ready_at_utc: bundleReadyAtUtc,
     last_error: null,
+    prompt_version: work.prompt_version || masterRecoveryPromptVersion || null,
   };
   cursor.cursor_status = "LEASED";
+  cursor.current_phase = phase;
+  cursor.strategy_id = dailyRunStrategyAt(claimCheckpoint);
   cursor.data_quality = work.data_quality;
+  cursor.last_claimed_at_utc = now.utc;
+  cursor.last_claimed_checkpoint = claimCheckpoint;
+  cursor.last_claimed_workflow = expectedWorkflow;
+  cursor.last_claimed_worker_id = workerId;
   cursor.updated_at_utc = now.utc;
   cursor.closed_at_utc = null;
   cursor.expires_at_utc = null;
@@ -278,6 +397,9 @@ export function claimLiveCursor(cursorValue, args, tick) {
     workflow: expectedWorkflow,
     lease_expires_at_utc: leaseExpiresAtUtc,
     rolled_forward_from: rolledForwardFrom,
+    catchup_context: catchupContext,
+    event_monitor_context: eventMonitorContext,
+    recovery_reason: recoversDegradedMasterAfterPromptUpgrade ? "live_prompt_version_upgraded" : null,
   });
   events.push(claimedEvent);
   return transition(cursor, {
@@ -287,7 +409,8 @@ export function claimLiveCursor(cursorValue, args, tick) {
     claim_handle: {
       cursor_id: cursor.cursor_id,
       run_id: cursor.run_id,
-      session: cursor.session,
+      session: phase,
+      phase,
       trading_date: cursor.trading_date,
       workflow: expectedWorkflow,
       checkpoint: claimCheckpoint,
@@ -299,10 +422,15 @@ export function claimLiveCursor(cursorValue, args, tick) {
     thesis_id: work.thesis_id ?? cursor.thesis_id,
     data_quality: work.data_quality,
     rolled_forward_from: rolledForwardFrom.length ? rolledForwardFrom : null,
+    catchup_context: work.catchup_context || catchupContext,
+    event_monitor_context: eventMonitorContext,
+    recovery_reason: recoversDegradedMasterAfterPromptUpgrade ? "live_prompt_version_upgraded" : null,
     bundle: work.bundle,
     execution_prompt: work.execution_prompt,
     prompt_hash: work.prompt_hash,
     save_target: work.save_target,
+    contract_context: work.contract_context,
+    runtime_versions: work.runtime_versions,
   }, events);
 }
 
@@ -350,11 +478,44 @@ export function completeLiveCursor(cursorValue, args, tick, {
   outputMaterialized = false,
   materializedMasterId = null,
   materializedThesisId = null,
+  monitorAction = null,
+  monitorReplanCheckpoint = null,
 } = {}) {
   const cursor = cloneCursor(cursorValue);
   const now = normalizeTick(tick);
+  const telemetry = normalizeGptTelemetry(args?.telemetry);
   const alreadyCompletedAttempt = cursor.attempt?.status === "DONE" && cursor.attempt?.checkpoint === args?.checkpoint;
-  if (alreadyCompletedAttempt || checkpointAtOrAfter(cursor.last_completed_checkpoint, args?.checkpoint)) {
+  const completingLeasedAttempt = cursor.attempt?.status === "LEASED"
+    && cursor.attempt?.checkpoint === args?.checkpoint;
+  if (alreadyCompletedAttempt
+    || (!completingLeasedAttempt && checkpointAtOrAfter(cursor.last_completed_checkpoint, args?.checkpoint))) {
+    if (telemetry && cursor.attempt?.checkpoint === args?.checkpoint) {
+      if (cursor.attempt.gpt_telemetry) {
+        if (!sameGptTelemetry(cursor.attempt.gpt_telemetry, telemetry)) {
+          throw liveCursorError("GPT_TELEMETRY_CONFLICT", "GPT telemetry is immutable once recorded for a completed live cursor.");
+        }
+        return transition(cursor, {
+          ok: true,
+          status: "DONE",
+          scope: "live",
+          idempotent: true,
+          telemetry_recorded: true,
+          last_completed_checkpoint: cursor.last_completed_checkpoint,
+        }, []);
+      }
+      cursor.attempt.gpt_telemetry = telemetry;
+      cursor.attempt.telemetry_recorded_at_utc = now.utc;
+      cursor.updated_at_utc = now.utc;
+      const event = liveCursorEvent(cursor, "CURSOR_COMPLETED", now, { worker_id: args.worker_id, telemetry: cursor.attempt.gpt_telemetry, telemetry_only: true });
+      return transition(cursor, {
+        ok: true,
+        status: "DONE",
+        scope: "live",
+        idempotent: true,
+        telemetry_recorded: true,
+        last_completed_checkpoint: cursor.last_completed_checkpoint,
+      }, [event]);
+    }
     return transition(cursor, {
       ok: true,
       status: "DONE",
@@ -366,26 +527,155 @@ export function completeLiveCursor(cursorValue, args, tick, {
   assertLiveLease(cursor, args, now, { allowExpired: false });
   if (!outputMaterialized) throw liveCursorError("LIVE_OUTPUT_NOT_MATERIALIZED", "Live GPT output is not materialized.");
   if (cursor.attempt.workflow === "LIVE_MASTER") {
+    const phase = cursor.attempt.phase || dailyRunPhaseAt(args.checkpoint);
     cursor.master_id = requiredText(materializedMasterId, "LIVE_MASTER_ID_REQUIRED");
     cursor.master_state = "READY";
     cursor.thesis_id = requiredText(materializedThesisId, "LIVE_THESIS_ID_REQUIRED");
     cursor.thesis_state = "ACTIVE";
+    cursor.current_phase = phase;
+    cursor.strategy_id = dailyRunStrategyAt(args.checkpoint);
+    cursor.phase_master_ids = { ...(cursor.phase_master_ids || {}), [phase]: cursor.master_id };
+    cursor.phase_thesis_ids = { ...(cursor.phase_thesis_ids || {}), [phase]: cursor.thesis_id };
+    if (cursor.replan_checkpoint && Date.parse(cursor.replan_checkpoint) <= Date.parse(args.checkpoint)) {
+      cursor.replan_checkpoint = null;
+      cursor.replan_action = null;
+    }
+    cursor.last_completed_checkpoint = laterCheckpoint(cursor.last_completed_checkpoint, args.checkpoint);
   } else {
     cursor.last_completed_checkpoint = args.checkpoint;
+    if (cursor.event_monitor_checkpoint
+      && Date.parse(cursor.event_monitor_checkpoint) <= Date.parse(args.checkpoint)) {
+      cursor.event_monitor_checkpoint = null;
+      cursor.event_monitor_reason = null;
+      cursor.event_monitor_event_types = [];
+    }
+    const normalizedMonitorAction = normalizeLiveReplanAction(monitorAction);
+    if (normalizedMonitorAction) {
+      cursor.replan_checkpoint = validMonitorReplanCheckpoint(
+        monitorReplanCheckpoint,
+        args.checkpoint,
+        cursor.trading_date,
+      );
+      cursor.replan_action = normalizedMonitorAction;
+      cursor.master_state = "REPLAN_REQUIRED";
+      cursor.thesis_state = "REPLAN_REQUIRED";
+    }
   }
   cursor.attempt.status = "DONE";
+  cursor.attempt.completed_at_utc = now.utc;
+  cursor.attempt.gpt_telemetry = telemetry || cursor.attempt.gpt_telemetry || null;
+  cursor.attempt.telemetry_recorded_at_utc = telemetry ? now.utc : cursor.attempt.telemetry_recorded_at_utc || null;
   cursor.attempt.lease_token = null;
   cursor.attempt.lease_expires_at_utc = null;
-  cursor.cursor_status = "IDLE";
+  cursor.cursor_status = cursor.replan_checkpoint ? "DUE" : "IDLE";
   cursor.updated_at_utc = now.utc;
-  const event = liveCursorEvent(cursor, "CURSOR_COMPLETED", now, { worker_id: args.worker_id });
+  const event = liveCursorEvent(cursor, "CURSOR_COMPLETED", now, {
+    worker_id: args.worker_id,
+    telemetry: cursor.attempt.gpt_telemetry,
+    replan_checkpoint: cursor.replan_checkpoint,
+    replan_action: cursor.replan_action,
+  });
   return transition(cursor, {
     ok: true,
     status: "DONE",
     scope: "live",
     idempotent: false,
     last_completed_checkpoint: cursor.last_completed_checkpoint,
+    next_workflow: cursor.replan_checkpoint ? "LIVE_MASTER" : null,
   }, [event]);
+}
+
+export function armLiveCursorEventMonitor(cursorValue, {
+  checkpoint,
+  reason = "CRITICAL_ENGINE_EVENT",
+  event_types = [],
+} = {}, tick) {
+  const cursor = cloneCursor(cursorValue);
+  const now = normalizeTick(tick);
+  assertCursor(cursor);
+  const checkpointMs = Date.parse(checkpoint || "");
+  if (!Number.isFinite(checkpointMs)
+    || String(checkpoint).slice(0, 10) !== cursor.trading_date
+    || checkpointMs > now.epochMs) {
+    throw liveCursorError(
+      "LIVE_EVENT_MONITOR_CHECKPOINT_INVALID",
+      "Live event Monitor checkpoint is invalid.",
+    );
+  }
+  if (checkpointAtOrAfter(cursor.last_completed_checkpoint, checkpoint)) {
+    return transition(cursor, {
+      ok: true,
+      status: "EVENT_MONITOR_ALREADY_COVERED",
+      scope: "live",
+      checkpoint,
+    }, []);
+  }
+  if (cursor.event_monitor_checkpoint === checkpoint) {
+    return transition(cursor, {
+      ok: true,
+      status: "EVENT_MONITOR_ALREADY_ARMED",
+      scope: "live",
+      checkpoint,
+    }, []);
+  }
+  cursor.event_monitor_checkpoint = laterCheckpoint(cursor.event_monitor_checkpoint, checkpoint);
+  cursor.event_monitor_reason = requiredText(reason, "LIVE_EVENT_MONITOR_REASON_REQUIRED");
+  cursor.event_monitor_event_types = [...new Set(
+    (Array.isArray(event_types) ? event_types : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
+  )];
+  if (!activeLease(cursor.attempt, now)) cursor.cursor_status = "DUE";
+  cursor.updated_at_utc = now.utc;
+  return transition(cursor, {
+    ok: true,
+    status: "EVENT_MONITOR_ARMED",
+    scope: "live",
+    checkpoint: cursor.event_monitor_checkpoint,
+    reason: cursor.event_monitor_reason,
+    event_types: cursor.event_monitor_event_types,
+  }, [liveCursorEvent(cursor, "CURSOR_EVENT_MONITOR_REQUESTED", now, {
+    checkpoint: cursor.event_monitor_checkpoint,
+    reason: cursor.event_monitor_reason,
+    event_types: cursor.event_monitor_event_types,
+  })]);
+}
+
+export function armLiveCursorReplan(cursorValue, {
+  checkpoint,
+  action,
+} = {}, tick) {
+  const cursor = cloneCursor(cursorValue);
+  const now = normalizeTick(tick);
+  assertCursor(cursor);
+  const normalizedAction = normalizeLiveReplanAction(action);
+  if (!normalizedAction) return transition(cursor, { ok: true, status: "NO_REPLAN", scope: "live" }, []);
+  const checkpointMs = Date.parse(checkpoint || "");
+  if (!Number.isFinite(checkpointMs)) {
+    throw liveCursorError("LIVE_REPLAN_CHECKPOINT_INVALID", "Live replan checkpoint is invalid.");
+  }
+  if (!checkpointAtOrAfter(cursor.last_completed_checkpoint, checkpoint)) {
+    return transition(cursor, { ok: true, status: "REPLAN_NOT_COMPLETED", scope: "live" }, []);
+  }
+  if (cursor.replan_checkpoint === checkpoint && cursor.replan_action === normalizedAction) {
+    return transition(cursor, { ok: true, status: "REPLAN_ALREADY_ARMED", scope: "live" }, []);
+  }
+  cursor.replan_checkpoint = checkpoint;
+  cursor.replan_action = normalizedAction;
+  cursor.master_state = "REPLAN_REQUIRED";
+  cursor.thesis_state = "REPLAN_REQUIRED";
+  if (!activeLease(cursor.attempt, now)) cursor.cursor_status = "DUE";
+  cursor.updated_at_utc = now.utc;
+  return transition(cursor, {
+    ok: true,
+    status: "REPLAN_ARMED",
+    scope: "live",
+    checkpoint,
+    action: normalizedAction,
+  }, [liveCursorEvent(cursor, "CURSOR_REPLAN_REQUESTED", now, {
+    checkpoint,
+    action: normalizedAction,
+  })]);
 }
 
 export function failLiveCursor(cursorValue, args, tick, { jitterSeconds = 0, contextSnapshot = {} } = {}) {
@@ -525,7 +815,7 @@ export function liveCursorEvent(cursor, eventType, tick, details = {}) {
   };
 }
 
-function normalizePreparedWork(work, expectedWorkflow, target) {
+function normalizePreparedWork(work, expectedWorkflow, target, expectedPhase) {
   if (!work || typeof work !== "object") throw liveCursorError("LIVE_BUNDLE_REQUIRED", "A prepared live bundle is required for claim.");
   if (work.workflow !== expectedWorkflow) {
     throw liveCursorError("LIVE_WORKFLOW_MISMATCH", `Expected ${expectedWorkflow}, received ${work.workflow || "missing"}.`);
@@ -540,9 +830,29 @@ function normalizePreparedWork(work, expectedWorkflow, target) {
   if (!work.bundle?.bundle_id || !work.bundle?.bundle_args) {
     throw liveCursorError("LIVE_BUNDLE_INVALID", "Prepared live bundle is incomplete.");
   }
+  const scopedPhases = [
+    work.phase,
+    work.bundle?.bundle_args?.session,
+    work.save_target?.session,
+  ].filter(Boolean);
+  if (scopedPhases.some((phase) => phase !== expectedPhase)) {
+    throw liveCursorError(
+      "LIVE_WORK_PHASE_MISMATCH",
+      `Expected live phase ${expectedPhase}, received ${[...new Set(scopedPhases)].join(", ")}.`,
+    );
+  }
   if (!["ready", "stale", "degraded"].includes(work.data_quality)) {
     throw liveCursorError("LIVE_DATA_QUALITY_INVALID", "Live bundle data quality is invalid.");
   }
+  assertActiveStrategyContractContext(work.contract_context, {
+    workflow: expectedWorkflow,
+    operation: "claim_live_cursor",
+  });
+  assertActiveStrategySaveTarget(work.save_target, {
+    workflow: expectedWorkflow,
+    mode: "live",
+    operation: "claim_live_cursor",
+  });
   return {
     ...work,
     execution_prompt: requiredText(work.execution_prompt, "LIVE_EXECUTION_PROMPT_REQUIRED"),
@@ -552,6 +862,7 @@ function normalizePreparedWork(work, expectedWorkflow, target) {
 }
 
 function noWork(cursor, reason, nextEligibleAtUtc) {
+  const retryable = ["in_progress", "master_not_due", "outside_window"].includes(reason);
   return {
     ok: true,
     status: "NO_WORK",
@@ -561,6 +872,8 @@ function noWork(cursor, reason, nextEligibleAtUtc) {
     target_checkpoint: cursor.target_checkpoint,
     last_completed_checkpoint: cursor.last_completed_checkpoint,
     next_eligible_at_utc: nextEligibleAtUtc || null,
+    retryable,
+    retry_after_seconds: retryable ? 60 : null,
   };
 }
 
@@ -600,9 +913,63 @@ function checkpointBefore(left, right) {
   return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs < rightMs;
 }
 
+function sameCheckpointList(left, right) {
+  const normalizedLeft = Array.isArray(left) ? left : [];
+  const normalizedRight = Array.isArray(right) ? right : [];
+  return normalizedLeft.length === normalizedRight.length
+    && normalizedLeft.every((value, index) => value === normalizedRight[index]);
+}
+
 function targetAfterLastCompleted(lastCompleted, target) {
   if (!lastCompleted) return Boolean(target);
   return checkpointBefore(lastCompleted, target);
+}
+
+function validReplanCheckpoint(cursor) {
+  const checkpoint = cursor.replan_checkpoint;
+  if (!checkpoint || !Number.isFinite(Date.parse(checkpoint))) return null;
+  return checkpoint.slice(0, 10) === cursor.trading_date ? checkpoint : null;
+}
+
+function validEventMonitorCheckpoint(cursor, tick) {
+  const checkpoint = cursor.event_monitor_checkpoint;
+  const checkpointMs = Date.parse(checkpoint || "");
+  if (!Number.isFinite(checkpointMs)
+    || checkpointMs > tick.epochMs
+    || String(checkpoint).slice(0, 10) !== cursor.trading_date
+    || checkpointAtOrAfter(cursor.last_completed_checkpoint, checkpoint)) {
+    return null;
+  }
+  return checkpoint;
+}
+
+function eventMonitorContextFor(cursor, checkpoint) {
+  if (!checkpoint || cursor.event_monitor_checkpoint !== checkpoint) return null;
+  return {
+    trigger: "CRITICAL_ENGINE_EVENT",
+    checkpoint,
+    reason: cursor.event_monitor_reason || "CRITICAL_ENGINE_EVENT",
+    event_types: Array.isArray(cursor.event_monitor_event_types)
+      ? [...cursor.event_monitor_event_types]
+      : [],
+  };
+}
+
+function validMonitorReplanCheckpoint(value, completedCheckpoint, tradingDate) {
+  const completedMs = Date.parse(completedCheckpoint || "");
+  const requestedMs = Date.parse(value || "");
+  if (!Number.isFinite(requestedMs)
+    || !Number.isFinite(completedMs)
+    || requestedMs < completedMs
+    || String(value).slice(0, 10) !== tradingDate) {
+    return completedCheckpoint;
+  }
+  return value;
+}
+
+function normalizeLiveReplanAction(value) {
+  const action = String(value || "").trim().toUpperCase();
+  return LIVE_REPLAN_ACTION_SET.has(action) ? action : null;
 }
 
 function nextCheckpointUtc(checkpoint) {
@@ -637,15 +1004,10 @@ function boundedLeaseSeconds(value) {
 
 function assertCursor(cursor) {
   if (!cursor || cursor.schema_version !== LIVE_CURSOR_SCHEMA_VERSION) throw new Error("LIVE_CURSOR_SCHEMA_INVALID");
-  assertSession(cursor.session);
+  if (cursor.run_scope !== DAILY_RUN_SCOPE) throw new Error("LIVE_CURSOR_SCOPE_INVALID");
   assertTradingDate(cursor.trading_date);
   if (!LIVE_CURSOR_STATUSES.includes(cursor.cursor_status)) throw new Error("LIVE_CURSOR_STATUS_INVALID");
   if (cursor.attempt?.workflow && !LIVE_CURSOR_WORKFLOWS.includes(cursor.attempt.workflow)) throw new Error("LIVE_CURSOR_WORKFLOW_INVALID");
-}
-
-function assertSession(session) {
-  if (!LIVE_WINDOWS[session]) throw new Error(`LIVE_CURSOR_SESSION_INVALID:${session || "missing"}`);
-  return session;
 }
 
 function assertTradingDate(value) {

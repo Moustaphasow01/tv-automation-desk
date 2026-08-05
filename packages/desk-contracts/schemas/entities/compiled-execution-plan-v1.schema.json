@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/contracts/compiled-execution-plan-v1.schema.json",
+  "title": "DeskCompiledDeterministicExecutionPlan",
+  "version": "1.0.0",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "plan_id",
+    "compiler_version",
+    "source_reference",
+    "analytical_scope",
+    "policy",
+    "thesis_plan",
+    "ranked_setups",
+    "no_setup_proof",
+    "opportunity_diagnostic",
+    "diagnostics",
+    "canonical_hash",
+    "valid",
+    "transport_context"
+  ],
+  "properties": {
+    "schema_version": { "const": "deterministic_execution_plan_v1" },
+    "plan_id": { "type": "string", "minLength": 1 },
+    "compiler_version": { "const": "1.0.0" },
+    "source_reference": { "$ref": "#/$defs/sourceReference" },
+    "analytical_scope": { "$ref": "#/$defs/analyticalScope" },
+    "policy": { "$ref": "#/$defs/policy" },
+    "thesis_plan": { "$ref": "#/$defs/thesisPlan" },
+    "ranked_setups": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/canonicalSetup" },
+      "maxItems": 3
+    },
+    "no_setup_proof": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/noSetupProof" }
+      ]
+    },
+    "opportunity_diagnostic": {
+      "enum": [
+        "EXECUTABLE_OPPORTUNITIES_COMPILED",
+        "VALID_NO_OPPORTUNITY_PROOF",
+        "INVALID_NO_EXECUTABLE_SETUP"
+      ]
+    },
+    "diagnostics": { "$ref": "#/$defs/diagnostics" },
+    "canonical_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "valid": { "type": "boolean" },
+    "transport_context": {
+      "type": "object",
+      "required": ["source_mode"],
+      "properties": {
+        "source_mode": {
+          "oneOf": [
+            { "enum": ["LIVE", "REPLAY", "BACK_FORWARD", "PAPER"] },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "ranked_setups": { "maxItems": 0 } } },
+      "then": { "properties": { "no_setup_proof": { "$ref": "#/$defs/noSetupProof" } } }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "nullableString": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "nullableNumber": {
+      "oneOf": [
+        { "type": "number" },
+        { "type": "null" }
+      ]
+    },
+    "sourceReference": {
+      "type": "object",
+      "required": ["contract_name", "contract_version", "analysis_id", "decision_id", "timestamp_paris"],
+      "properties": {
+        "contract_name": { "const": "DeskMasterAnalysisContract" },
+        "contract_version": { "const": "5.0.0" },
+        "analysis_id": { "$ref": "#/$defs/nullableString" },
+        "decision_id": { "$ref": "#/$defs/nullableString" },
+        "timestamp_paris": { "$ref": "#/$defs/nullableString" }
+      },
+      "additionalProperties": false
+    },
+    "analyticalScope": {
+      "type": "object",
+      "required": ["strategy_id", "session", "trading_date", "timezone", "cutoff_paris", "pack_id", "pack_build_id"],
+      "properties": {
+        "strategy_id": { "$ref": "#/$defs/nullableString" },
+        "session": { "$ref": "#/$defs/nullableString" },
+        "trading_date": { "$ref": "#/$defs/nullableString" },
+        "timezone": { "const": "Europe/Paris" },
+        "cutoff_paris": { "$ref": "#/$defs/nullableString" },
+        "pack_id": { "$ref": "#/$defs/nullableString" },
+        "pack_build_id": { "$ref": "#/$defs/nullableString" }
+      },
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "required": ["policy_id", "policy_version", "weighted_confirmation_threshold", "max_risk_pct", "min_rr", "gpt_may_trigger"],
+      "properties": {
+        "policy_id": { "const": "OPPORTUNITY_SEEKING_CONTROLLED" },
+        "policy_version": { "const": "1.0.0" },
+        "weighted_confirmation_threshold": { "const": 0.55 },
+        "max_risk_pct": { "const": 0.25 },
+        "min_rr": { "const": 2 },
+        "gpt_may_trigger": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "thesisPlan": {
+      "type": "object",
+      "required": ["thesis_id", "plan_id", "primary_setup_id", "current_state", "command", "valid_from_paris", "valid_until_paris", "requires_replan_after_paris", "instrument", "direction"],
+      "properties": {
+        "thesis_id": { "$ref": "#/$defs/nullableString" },
+        "plan_id": { "type": "string", "minLength": 1 },
+        "primary_setup_id": { "$ref": "#/$defs/nullableString" },
+        "current_state": { "enum": ["NO_ACTIVE", "WAIT_MONITORED", "CONDITIONAL", "ACTIVE", "WEAKENED", "AT_RISK", "POST_EVENT", "INVALIDATED", "EXPIRED", "REPLAN_REQUIRED", "SUPERSEDED"] },
+        "command": { "enum": ["NOOP", "CREATE_WAIT", "MAKE_CONDITIONAL", "ACTIVATE", "REQUIRE_REPLAN"] },
+        "valid_from_paris": { "$ref": "#/$defs/nullableString" },
+        "valid_until_paris": { "$ref": "#/$defs/nullableString" },
+        "requires_replan_after_paris": { "$ref": "#/$defs/nullableString" },
+        "instrument": { "$ref": "#/$defs/nullableString" },
+        "direction": { "enum": ["long", "short", "neutral", "wait", "unknown"] }
+      },
+      "additionalProperties": false
+    },
+    "entryZone": {
+      "type": "object",
+      "required": ["lower", "upper"],
+      "properties": {
+        "lower": { "type": "number" },
+        "upper": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "temporalRule": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["LATEST_CLOSED", "ANY_SINCE_ARM", "CONSECUTIVE_CLOSED", "CROSS_AFTER_ARM"] },
+        "count": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "predicateParameters": {
+      "type": "object",
+      "properties": {
+        "threshold": { "type": "number" },
+        "zone_lower": { "type": "number" },
+        "zone_upper": { "type": "number" },
+        "break_condition_id": { "type": "string", "minLength": 1 },
+        "retest_level": { "type": "number" },
+        "tolerance_points": { "type": "number", "minimum": 0 },
+        "max_bars": { "type": "integer", "minimum": 1 },
+        "require_rejection_confirmation": { "type": "boolean" },
+        "reference_code": { "type": "string", "minLength": 1 },
+        "indicator_period": { "type": "integer", "minimum": 1 },
+        "window_start_paris": { "type": "string", "minLength": 1 },
+        "window_end_paris": { "type": "string", "minLength": 1 },
+        "reference_instrument": { "type": "string", "minLength": 1 },
+        "event_window_ref": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "condition": {
+      "type": "object",
+      "required": ["condition_id", "label", "predicate_type", "role", "effect", "instrument", "timeframe", "operator", "threshold", "parameters", "evidence_refs", "importance", "required_for_trigger", "memory_policy", "weight", "sequence", "tolerance_points", "temporal_rule", "break_condition_id", "max_bars", "policy_threshold"],
+      "properties": {
+        "condition_id": { "type": "string", "minLength": 1 },
+        "label": { "$ref": "#/$defs/nullableString" },
+        "predicate_type": { "enum": ["PRICE_RELATION", "PRICE_CROSS", "ZONE_TOUCH", "BREAKOUT_CLOSE", "BREAK_RETEST_SEQUENCE", "REJECTION_PATTERN", "VWAP_RELATION", "RSI_THRESHOLD", "TIME_WINDOW", "INTERMARKET_CONFIRMATION", "EVENT_BLACKOUT"] },
+        "role": { "enum": ["ACTIVATION", "CONFIRMATION", "INVALIDATION", "VETO"] },
+        "effect": { "enum": ["REQUIRE_TRUE", "BLOCK_IF_TRUE"] },
+        "instrument": { "$ref": "#/$defs/nullableString" },
+        "timeframe": { "enum": ["M1", "M5", "M15", "H1", "H4"] },
+        "operator": { "enum": ["CLOSE_ABOVE", "CLOSE_BELOW", "CROSS_ABOVE", "CROSS_BELOW", "TOUCH_ABOVE", "TOUCH_BELOW", "REJECT_ABOVE", "REJECT_BELOW", "REJECT_RESISTANCE", "REJECT_SUPPORT", "WITHIN_WINDOW", "OUTSIDE_WINDOW", "ALIGNS_WITH", "DIVERGES_FROM", "EVENT_ACTIVE", "EVENT_CLEAR"] },
+        "threshold": { "$ref": "#/$defs/nullableNumber" },
+        "parameters": { "$ref": "#/$defs/predicateParameters" },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "importance": { "enum": ["HARD_BLOCKER", "MANDATORY", "PRIMARY", "SECONDARY", "OPTIONAL", "ADVISORY"] },
+        "required_for_trigger": { "type": "boolean" },
+        "memory_policy": { "enum": ["LATCH_UNTIL_TRIGGER", "LATEST_ONLY", "INVALIDATE_TERMINAL"] },
+        "weight": { "type": "number", "minimum": 0 },
+        "sequence": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "tolerance_points": { "type": "number", "minimum": 0 },
+        "temporal_rule": { "$ref": "#/$defs/temporalRule" },
+        "break_condition_id": { "$ref": "#/$defs/nullableString" },
+        "max_bars": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "policy_threshold": { "const": 0.55 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "effect": { "const": "BLOCK_IF_TRUE" } }, "required": ["effect"] },
+          "then": { "properties": { "required_for_trigger": { "const": false }, "weight": { "const": 0 } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "geometryEvaluation": {
+      "type": "object",
+      "required": ["valid", "direction", "entry_price", "stop_loss", "take_profit_1", "risk_points", "reward_points", "computed_rr", "effective_rr", "risk_pct", "hard_failures"],
+      "properties": {
+        "valid": { "type": "boolean" },
+        "direction": { "enum": ["long", "short", "neutral", "wait", "unknown"] },
+        "entry_price": { "$ref": "#/$defs/nullableNumber" },
+        "stop_loss": { "$ref": "#/$defs/nullableNumber" },
+        "take_profit_1": { "$ref": "#/$defs/nullableNumber" },
+        "risk_points": { "$ref": "#/$defs/nullableNumber" },
+        "reward_points": { "$ref": "#/$defs/nullableNumber" },
+        "computed_rr": { "$ref": "#/$defs/nullableNumber" },
+        "effective_rr": { "$ref": "#/$defs/nullableNumber" },
+        "risk_pct": { "$ref": "#/$defs/nullableNumber" },
+        "hard_failures": { "type": "array", "items": { "$ref": "#/$defs/issue" } }
+      },
+      "additionalProperties": false
+    },
+    "issue": {
+      "type": "object",
+      "required": ["code", "evidence"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "evidence": {}
+      },
+      "additionalProperties": false
+    },
+    "gateEvaluation": {
+      "type": "object",
+      "required": ["schema_version", "policy_id", "policy_version", "evaluation_phase", "eligible", "trigger_eligible", "decision", "weighted_confirmation_score", "weighted_known_confirmation_score", "primary_confirmation_coverage_ready", "structural_conditions_ready", "weighted_confirmation_threshold", "max_risk_pct", "min_rr", "hard_failures", "deferred_hard_gates", "soft_gaps", "geometry"],
+      "properties": {
+        "schema_version": { "const": "opportunity_policy_evaluation_v1" },
+        "policy_id": { "const": "OPPORTUNITY_SEEKING_CONTROLLED" },
+        "policy_version": { "const": "1.0.0" },
+        "eligible": { "type": "boolean" },
+        "evaluation_phase": { "enum": ["PLAN_COMPILE", "SETUP_ARM", "ENTRY_TRIGGER", "BROKER_SUBMIT"] },
+        "decision": { "enum": ["ALLOW_CONDITIONAL_OPPORTUNITY", "BLOCK"] },
+        "trigger_eligible": { "type": "boolean" },
+        "weighted_confirmation_score": { "$ref": "#/$defs/nullableNumber" },
+        "weighted_confirmation_threshold": { "const": 0.55 },
+        "weighted_known_confirmation_score": { "$ref": "#/$defs/nullableNumber" },
+        "primary_confirmation_coverage_ready": { "type": "boolean" },
+        "structural_conditions_ready": { "type": "boolean" },
+        "max_risk_pct": { "const": 0.25 },
+        "min_rr": { "const": 2 },
+        "hard_failures": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+        "soft_gaps": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+        "deferred_hard_gates": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+        "geometry": { "$ref": "#/$defs/geometryEvaluation" }
+      },
+      "additionalProperties": false
+    },
+    "canonicalSetup": {
+      "type": "object",
+      "required": ["setup_id", "rank", "status", "instrument", "direction", "entry_mode", "stop_loss", "take_profit_1", "rr_minimum", "risk_pct", "valid_from_paris", "expires_at_paris", "conditions", "trigger_policy", "management_policy", "replaces_setup_id", "source_kind", "compile_status", "geometry_evaluation", "gate_evaluation"],
+      "properties": {
+        "setup_id": { "type": "string", "minLength": 1 },
+        "rank": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["SETUP_CANDIDATE", "PRE_ARMED", "ARMED_CONDITIONAL", "TRIGGERED", "CANCELLED", "EXPIRED", "INVALIDATED", "REPLACED"] },
+        "instrument": { "$ref": "#/$defs/nullableString" },
+        "direction": { "enum": ["long", "short", "neutral", "wait", "unknown"] },
+        "entry_mode": { "enum": ["NEXT_BAR_MARKET_AFTER_CONFIRMATION", "RETEST_ZONE_AFTER_CONFIRMATION", "STOP_CROSS", "LIMIT_TOUCH"] },
+        "entry_price": { "type": "number" },
+        "entry_zone": { "$ref": "#/$defs/entryZone" },
+        "stop_loss": { "$ref": "#/$defs/nullableNumber" },
+        "take_profit_1": { "$ref": "#/$defs/nullableNumber" },
+        "rr_minimum": { "type": "number", "minimum": 2 },
+        "risk_pct": { "$ref": "#/$defs/nullableNumber" },
+        "valid_from_paris": { "$ref": "#/$defs/nullableString" },
+        "expires_at_paris": { "$ref": "#/$defs/nullableString" },
+        "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" }, "minItems": 1 },
+        "trigger_policy": {
+          "type": "object",
+          "required": ["min_score", "allow_entry_only", "backend_can_trigger", "threshold_tolerance_points"],
+          "properties": {
+            "min_score": { "const": 0.55 },
+            "allow_entry_only": { "const": false },
+            "backend_can_trigger": { "type": "boolean" },
+            "threshold_tolerance_points": { "type": "number", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "management_policy": {
+          "type": "object",
+          "required": ["break_even_at_r", "tp1_close_fraction"],
+          "properties": {
+            "break_even_at_r": { "type": "number", "minimum": 0 },
+            "tp1_close_fraction": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "replaces_setup_id": { "$ref": "#/$defs/nullableString" },
+        "source_kind": { "enum": ["master", "monitor"] },
+        "compile_status": { "enum": ["COMPILED", "REJECTED"] },
+        "geometry_evaluation": { "$ref": "#/$defs/geometryEvaluation" },
+        "gate_evaluation": { "$ref": "#/$defs/gateEvaluation" }
+      },
+      "oneOf": [
+        { "required": ["entry_price"], "not": { "required": ["entry_zone"] } },
+        { "required": ["entry_zone"], "not": { "required": ["entry_price"] } },
+        { "not": { "anyOf": [{ "required": ["entry_price"] }, { "required": ["entry_zone"] }] } }
+      ],
+      "additionalProperties": false
+    },
+    "noSetupProof": {
+      "type": "object",
+      "required": ["best_long", "best_short", "blocking_reasons", "wait_to_go_conditions", "revalidation_triggers"],
+      "properties": {
+        "best_long": { "type": "object", "minProperties": 1, "additionalProperties": true },
+        "best_short": { "type": "object", "minProperties": 1, "additionalProperties": true },
+        "blocking_reasons": { "type": "array", "minItems": 1, "items": {} },
+        "wait_to_go_conditions": { "type": "array", "minItems": 1, "items": {} },
+        "revalidation_triggers": { "type": "array", "minItems": 1, "items": {} }
+      },
+      "additionalProperties": false
+    },
+    "diagnosticEntry": {
+      "type": "object",
+      "required": ["code", "evidence"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "evidence": {}
+      },
+      "additionalProperties": false
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": ["errors", "warnings", "normalizations"],
+      "properties": {
+        "errors": { "type": "array", "items": { "$ref": "#/$defs/diagnosticEntry" } },
+        "warnings": { "type": "array", "items": { "$ref": "#/$defs/diagnosticEntry" } },
+        "normalizations": { "type": "array", "items": { "$ref": "#/$defs/diagnosticEntry" } }
+      },
+      "additionalProperties": false
+    }
+  }
+}

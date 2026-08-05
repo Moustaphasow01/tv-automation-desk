@@ -62,14 +62,24 @@ export class DeskPackService {
       return { ...build, logical_pack: compactLogicalPack(logicalPack) };
     }
     if (["replay", "backtest"].includes(mode)) {
-      throw deskError("PACK_BUILD_MISMATCH", "Legacy packs cannot be used by replay/backtest.", { pack_id });
+      throw deskError("PACK_BUILD_MISMATCH", "Unverified source packs cannot be used by replay/backtest.", { pack_id });
     }
     if (!include_draft && logicalPack.status !== "ready") throw new Error("pack_not_ready");
-    return { ...logicalPack, legacy_unverified: true };
+    return { ...logicalPack, unverified_source_pack: true };
   }
 
-  async getDataset({ pack_id, pack_build_id, dataset, as_of_utc, mode = "live", format = "json", max_rows = 1000 }) {
+  async getDataset({
+    pack_id,
+    pack_build_id,
+    dataset,
+    as_of_utc,
+    mode = "live",
+    format = "json",
+    max_rows = 1000,
+    row_order = "oldest_first",
+  }) {
     assertDataset(dataset);
+    assertDatasetRowOrder(row_order);
     const pack = await this.getDeskPack({ pack_id, pack_build_id, mode });
     const ref = datasetRef(pack, dataset);
     if (!ref) throw new Error(`dataset_not_found:${dataset}`);
@@ -86,7 +96,16 @@ export class DeskPackService {
           cutoffUtc: pack.cutoff_utc || pack.resolved_scope?.cutoff_utc || ref.cutoff_utc,
           asOfUtc: pack.cutoff_utc || pack.resolved_scope?.cutoff_utc || ref.cutoff_utc,
         });
-        return validatedDatasetResponse({ pack, ref, integrity, dataset, format, max_rows, as_of_utc });
+        return validatedDatasetResponse({
+          pack,
+          ref,
+          integrity,
+          dataset,
+          format,
+          max_rows,
+          as_of_utc,
+          row_order,
+        });
       } catch (error) {
         await this.#markPackBuildInvalid(pack, error).catch(() => undefined);
         throw error;
@@ -95,23 +114,46 @@ export class DeskPackService {
 
     const text = await this.#readStorageText(ref.storage_path);
     if (format === "csv") {
+      if (row_order === "latest_first") {
+        const parsed = parseDatasetText(text, ref, { maxRows: Number.MAX_SAFE_INTEGER });
+        const rows = Array.isArray(parsed)
+          ? orderDatasetRows(parsed, { rowOrder: row_order }).slice(0, max_rows)
+          : parsed;
+        const columns = ref.columns?.length
+          ? ref.columns
+          : Array.isArray(rows) && rows[0] ? Object.keys(rows[0]) : [];
+        return {
+          pack_id,
+          dataset,
+          format,
+          row_order,
+          row_count: ref.row_count ?? null,
+          columns,
+          csv: Array.isArray(rows) ? serializeDatasetRows(columns, rows) : trimCsv(text, { maxRows: max_rows }),
+        };
+      }
       return {
         pack_id,
         dataset,
         format,
+        row_order,
         row_count: ref.row_count ?? null,
         columns: ref.columns ?? [],
         csv: trimCsv(text, { maxRows: max_rows }),
       };
     }
+    const parsed = parseDatasetText(text, ref, { maxRows: Number.MAX_SAFE_INTEGER });
     return {
       pack_id,
       dataset,
       format: "json",
+      row_order,
       row_count: ref.row_count ?? null,
       columns: ref.columns ?? [],
-      rows: parseDatasetText(text, ref, { maxRows: max_rows }),
-      integrity: { valid: null, legacy_unverified: true },
+      rows: Array.isArray(parsed)
+        ? orderDatasetRows(parsed, { rowOrder: row_order }).slice(0, max_rows)
+        : parsed,
+      integrity: { valid: null, unverified_source_pack: true },
     };
   }
 
@@ -222,6 +264,12 @@ function assertDataset(dataset) {
   if (!DATASETS.includes(dataset)) throw new Error(`dataset_not_allowed:${dataset}`);
 }
 
+function assertDatasetRowOrder(value) {
+  if (!["oldest_first", "latest_first"].includes(value)) {
+    throw new Error(`dataset_row_order_invalid:${value}`);
+  }
+}
+
 function resolveRequestedPackBuildId({ logicalPack, pack_build_id, mode }) {
   if (["replay", "backtest"].includes(mode) && !pack_build_id) {
     throw deskError("SCOPE_REQUIRED", "pack_build_id is required for replay/backtest.", { field: "pack_build_id", mode });
@@ -318,7 +366,16 @@ function compactLogicalPack(pack) {
   };
 }
 
-function validatedDatasetResponse({ pack, ref, integrity, dataset, format, max_rows, as_of_utc }) {
+function validatedDatasetResponse({
+  pack,
+  ref,
+  integrity,
+  dataset,
+  format,
+  max_rows,
+  as_of_utc,
+  row_order,
+}) {
   const analysis = integrity.analysis;
   const sourceCutoffUtc = resolvePackCutoffUtc(pack);
   const decisionCutoffUtc = as_of_utc || sourceCutoffUtc;
@@ -335,13 +392,15 @@ function validatedDatasetResponse({ pack, ref, integrity, dataset, format, max_r
     );
   }
   const visibleRows = filterDatasetRowsAtCutoff(analysis.rows, dataset, decisionCutoffUtc);
-  const limitedRows = visibleRows.slice(0, max_rows);
+  const orderedRows = orderDatasetRows(visibleRows, { rowOrder: row_order });
+  const limitedRows = orderedRows.slice(0, max_rows);
   const base = {
     ok: true,
     pack_id: pack.pack_id,
     pack_build_id: pack.pack_build_id,
     dataset,
     format,
+    row_order,
     row_count: visibleRows.length,
     source_row_count: analysis.row_count,
     columns: analysis.columns,
@@ -363,11 +422,57 @@ function validatedDatasetResponse({ pack, ref, integrity, dataset, format, max_r
   return { ...base, format: "json", rows: limitedRows };
 }
 
-function filterDatasetRowsAtCutoff(rows, dataset, cutoffUtc) {
+export function orderDatasetRows(rows, { rowOrder = "oldest_first" } = {}) {
+  assertDatasetRowOrder(rowOrder);
+  if (!Array.isArray(rows) || rows.length < 2) return Array.isArray(rows) ? [...rows] : [];
+  const direction = rowOrder === "latest_first" ? -1 : 1;
+  return rows
+    .map((row, index) => ({
+      row,
+      index,
+      timestamp: datasetRowTimestampMs(row),
+    }))
+    .sort((left, right) => {
+      const leftValid = Number.isFinite(left.timestamp);
+      const rightValid = Number.isFinite(right.timestamp);
+      if (leftValid && rightValid && left.timestamp !== right.timestamp) {
+        return (left.timestamp - right.timestamp) * direction;
+      }
+      if (leftValid !== rightValid) return leftValid ? -1 : 1;
+      return left.index - right.index;
+    })
+    .map((entry) => entry.row);
+}
+
+function datasetRowTimestampMs(row = {}) {
+  for (const value of [
+    row.bar_close_utc,
+    row.bar_close_paris,
+    row.close_timestamp_utc,
+    row.candle_close_utc,
+    row.timestamp_close_utc,
+    row.time_close,
+    row.timestamp_utc,
+    row.timestamp_paris,
+    row.knowledge_timestamp_utc,
+    row.source_snapshot_timestamp_utc,
+    row.published_at_utc,
+    row.published_at_paris,
+    row.scheduled_at_utc,
+    row.scheduled_at_paris,
+  ]) {
+    const parsed = parseTimestampMs(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Number.NaN;
+}
+
+export function filterDatasetRowsAtCutoff(rows, dataset, cutoffUtc) {
   if (!cutoffUtc) return rows || [];
   if (dataset === "macro_calendar") return sanitizeMacroActualsAtCutoff(rows || [], cutoffUtc);
   if (dataset === "news_digest") return filterNewsAtCutoff(rows || [], cutoffUtc);
-  const cutoffMs = Date.parse(cutoffUtc);
+  const cutoffMs = parseTimestampMs(cutoffUtc);
+  if (!Number.isFinite(cutoffMs)) return [];
   return (rows || []).filter((row) => {
     const timestamps = [
       row?.timestamp_utc,
@@ -375,23 +480,72 @@ function filterDatasetRowsAtCutoff(rows, dataset, cutoffUtc) {
       row?.bar_close_utc,
       row?.knowledge_timestamp_utc,
       row?.source_snapshot_timestamp_utc,
-    ].filter(Boolean).map((value) => Date.parse(value)).filter(Number.isFinite);
+    ].filter(Boolean).map(parseTimestampMs).filter(Number.isFinite);
     if (timestamps.length && !timestamps.every((value) => value <= cutoffMs)) return false;
-    const timeframeMinutes = datasetTimeframeMinutes(row?.timeframe);
-    const observationMs = Date.parse(row?.timestamp_utc || row?.timestamp_paris || "");
-    return !(timeframeMinutes >= 60
+
+    const explicitClose = explicitBarCloseMs(row);
+    if (explicitClose.present) {
+      return Number.isFinite(explicitClose.value) && explicitClose.value <= cutoffMs;
+    }
+
+    const observationMs = parseTimestampMs(row?.timestamp_utc || row?.timestamp_paris);
+    if (timestampRepresentsBarClose(row)) {
+      return Number.isFinite(observationMs) && observationMs <= cutoffMs;
+    }
+
+    const timeframeMinutes = datasetTimeframeMinutes(row?.timeframe)
+      || datasetTimeframeMinutes(dataset);
+    return !(timeframeMinutes > 0
       && Number.isFinite(observationMs)
       && observationMs + timeframeMinutes * 60 * 1000 > cutoffMs);
   });
 }
 
-function datasetTimeframeMinutes(value) {
+export function datasetTimeframeMinutes(value) {
   const text = String(value || "").toUpperCase();
-  if (["5", "5M", "M5"].includes(text)) return 5;
-  if (["15", "15M", "M15"].includes(text)) return 15;
-  if (["60", "1H", "H1"].includes(text)) return 60;
-  if (["240", "4H", "H4"].includes(text)) return 240;
+  if (["1", "1M", "M1"].includes(text) || /(?:^|_)M1(?:_|$)/.test(text)) return 1;
+  if (["5", "5M", "M5"].includes(text) || /(?:^|_)M5(?:_|$)/.test(text)) return 5;
+  if (["15", "15M", "M15"].includes(text) || /(?:^|_)M15(?:_|$)/.test(text)) return 15;
+  if (["60", "1H", "H1"].includes(text) || /(?:^|_)H1(?:_|$)/.test(text)) return 60;
+  if (["240", "4H", "H4"].includes(text) || /(?:^|_)H4(?:_|$)/.test(text)) return 240;
   return 0;
+}
+
+function explicitBarCloseMs(row = {}) {
+  const fields = [
+    "bar_close_utc",
+    "bar_close_paris",
+    "close_timestamp_utc",
+    "candle_close_utc",
+    "timestamp_close_utc",
+    "time_close",
+  ];
+  for (const field of fields) {
+    if (row[field] !== null && row[field] !== undefined && row[field] !== "") {
+      return { present: true, value: parseTimestampMs(row[field]) };
+    }
+  }
+  return { present: false, value: Number.NaN };
+}
+
+function timestampRepresentsBarClose(row = {}) {
+  if (row.timestamp_is_bar_close === true) return true;
+  const semantics = String(row.timestamp_semantics || row.timestamp_type || "").toUpperCase();
+  return ["BAR_CLOSE", "CLOSE", "CLOSING_TIME"].includes(semantics);
+}
+
+function parseTimestampMs(value) {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 10_000_000_000 ? value * 1000 : value;
+  }
+  const text = String(value ?? "").trim();
+  if (!text) return Number.NaN;
+  if (/^\d+(?:\.\d+)?$/.test(text)) {
+    const numeric = Number(text);
+    return numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+  }
+  return Date.parse(text);
 }
 
 function serializeDatasetRows(columns, rows) {
@@ -531,6 +685,8 @@ export function replaySourceCoverage(pack) {
     end_utc: source.end_utc || resolvePackCutoffUtc(pack),
     end_paris: source.end_paris || pack.cutoff_paris || pack.resolved_scope?.cutoff_paris || null,
     core_market_max_utc: {
+      MNQ_M1: datasets.MNQ_M1?.max_timestamp_utc || datasets.MNQ_M1?.to_time_utc || null,
+      MES_M1: datasets.MES_M1?.max_timestamp_utc || datasets.MES_M1?.to_time_utc || null,
       MNQ_M5: datasets.MNQ_M5?.max_timestamp_utc || datasets.MNQ_M5?.to_time_utc || null,
       MES_M5: datasets.MES_M5?.max_timestamp_utc || datasets.MES_M5?.to_time_utc || null,
       NQ_M15: datasets.NQ_M15?.max_timestamp_utc || datasets.NQ_M15?.to_time_utc || null,

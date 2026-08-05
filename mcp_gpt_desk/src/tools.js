@@ -2,7 +2,6 @@ import { z } from "zod";
 import { getToolInputSchema } from "@tv-automation/desk-contracts";
 import { createDeskExecutionScope } from "@tv-automation/desk-domain";
 import { toParisIso } from "@tv-automation/desk-time";
-import { getDeskMethodology } from "./methodology.js";
 import {
   DATASETS,
   DESK_INSTRUMENTS,
@@ -15,7 +14,9 @@ import {
   cancelBacktestRunSchema,
   cancelDeskJobSchema,
   claimNextDeskWorkSchema,
+  claimNextLiveWorkSchema,
   claimNextLiveSchema,
+  claimNextReplayWorkSchema,
   claimNextReplaySchema,
   completeDeskWorkSchema,
   completeLiveSchema,
@@ -81,6 +82,7 @@ import {
   saveReplayMasterAnalysisSchema,
   saveReplayMonitorSchema,
   setReplayAutomationSchema,
+  setReplayAutopilotWindowSchema,
   simulateReplayIntervalSchema,
   startOrResumeReplayAutopilotSchema,
   strategyCalendarRequestSchema,
@@ -96,6 +98,11 @@ import { assertAnalysisSetupPass } from "./domain_setup.js";
 import { assertActiveThesisSavePass, assertActiveThesisUpdatePass } from "./domain_thesis_state.js";
 import { publicError, resultTransportMetrics, toolResult } from "./result.js";
 import { projectActiveContracts } from "./replay-bundle-view.js";
+import {
+  LIVE_BUNDLE_SECTIONS,
+  liveBundleReceiptText,
+  liveClaimReceiptText,
+} from "./live-bundle-view.js";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const executionModeSchema = z.enum(["live", "paper", "replay", "backtest"]);
@@ -127,6 +134,7 @@ const getDatasetV2Schema = z.object({
   mode: executionModeSchema.default("replay"),
   format: z.enum(["json", "csv"]).default("json"),
   max_rows: z.number().int().min(1).max(5000).default(1000),
+  row_order: z.enum(["oldest_first", "latest_first"]).default("oldest_first"),
 });
 const operationalScopeFields = {
   strategy_id: z.enum(["ny_open_1530", "asia_open"]),
@@ -185,11 +193,17 @@ const manualMonitorBundleInputSchema = {
     ...liveOperationalScopeJson,
     bundle_id: { type: "string", minLength: 3 },
     timestamp_paris: { type: "string" },
-    cadence: { type: "string", enum: ["15m", "M15"], default: "15m" },
+    cadence: { type: "string", enum: ["5m", "M5", "15m", "M15"], default: "15m" },
     master_id: { type: "string", minLength: 3 },
     pack_id: { type: "string" },
     thesis_id: { type: "string", minLength: 3 },
     include_raw_refs: { type: "boolean", default: true },
+    view: { type: "string", enum: ["compact", "full"] },
+    include_sections: { type: "array", items: { type: "string", enum: LIVE_BUNDLE_SECTIONS }, maxItems: 12 },
+    exclude_sections: { type: "array", items: { type: "string", enum: LIVE_BUNDLE_SECTIONS }, maxItems: 12 },
+    snapshot_windows: { type: "array", items: { type: "string", enum: ["15m", "1h", "4h"] }, maxItems: 3 },
+    snapshot_instruments: { type: "array", items: { type: "string", minLength: 1 }, maxItems: 30 },
+    max_response_bytes: { type: "integer", minimum: 16000, maximum: 512000 },
   },
   required: [...operationalScopeRequired, "master_id", "thesis_id"],
   additionalProperties: false,
@@ -211,6 +225,12 @@ const masterCutoffBundleInputSchema = {
     cutoff_paris: { type: "string" },
     instruments: { type: "array", items: { type: "string", enum: ["MNQ", "MES", "NQ", "ES"] } },
     include_raw_refs: { type: "boolean", default: true },
+    view: { type: "string", enum: ["compact", "full"] },
+    include_sections: { type: "array", items: { type: "string", enum: LIVE_BUNDLE_SECTIONS }, maxItems: 12 },
+    exclude_sections: { type: "array", items: { type: "string", enum: LIVE_BUNDLE_SECTIONS }, maxItems: 12 },
+    snapshot_windows: { type: "array", items: { type: "string", enum: ["15m", "1h", "4h"] }, maxItems: 3 },
+    snapshot_instruments: { type: "array", items: { type: "string", minLength: 1 }, maxItems: 30 },
+    max_response_bytes: { type: "integer", minimum: 16000, maximum: 512000 },
   },
   required: operationalScopeRequired,
   additionalProperties: false,
@@ -241,7 +261,7 @@ const replayMonitorBundlesInputSchema = {
     mode: { type: "string", enum: ["replay", "backtest"], default: "replay" },
     date: { type: "string" },
     timestamps_paris: { type: "array", items: { type: "string" } },
-    cadence: { type: "string", enum: ["15m", "M15"], default: "15m" },
+    cadence: { type: "string", enum: ["5m", "M5", "15m", "M15"], default: "15m" },
     analysis_id: { type: "string" },
     pack_id: { type: "string" },
     thesis_id: { type: "string" },
@@ -250,7 +270,7 @@ const replayMonitorBundlesInputSchema = {
   required: ["timestamps_paris"],
   additionalProperties: false,
 };
-const saveManualMonitorInputSchema = {
+const saveManualMonitorV1InputSchema = {
   type: "object",
   properties: {
     monitor_id: { type: "string" },
@@ -263,7 +283,7 @@ const saveManualMonitorInputSchema = {
     pack_id: { type: "string" },
     session: { type: "string", enum: ["asia_open", "london_session", "ny_open", "work_forward"], default: "asia_open" },
     timestamp_paris: { type: "string" },
-    cadence: { type: "string", enum: ["15m", "M15"], default: "15m" },
+    cadence: { type: "string", enum: ["5m", "M5", "15m", "M15"], default: "5m" },
     mode: { type: "string", enum: ["live", "paper", "replay", "backtest"], default: "live" },
     status: { type: "string" },
     monitor_decision: { type: "object" },
@@ -286,6 +306,81 @@ const saveManualMonitorInputSchema = {
   required: ["contract_name", "schema_version", "contract_hash", "timestamp_paris"],
   additionalProperties: true,
 };
+
+const nativeMonitorOutputJsonSchema = {
+  type: "object",
+  description: "Unmodified DeskHourlyThesisMonitorContract 2.4.0 source document. Full normative validation occurs at the save boundary.",
+  properties: {
+    contract: {
+      type: "object",
+      properties: { name: { const: "DeskHourlyThesisMonitorContract" }, version: { const: "2.4.0" } },
+      required: ["name", "version"],
+      additionalProperties: false,
+    },
+    command: { type: "object", description: "Native DeskMonitorCommandContract 1.4.0 GPT intent." },
+  },
+  required: ["contract", "command"],
+  additionalProperties: true,
+};
+const saveManualMonitorV2InputSchema = {
+  type: "object",
+  properties: {
+    monitor_id: { type: "string", minLength: 3 },
+    contract_name: { type: "string", const: "DeskHourlyThesisMonitorContract" },
+    schema_version: { type: "string", const: "2.4.0" },
+    contract_hash: { type: "string", minLength: 1 },
+    bundle_id: { type: "string", minLength: 3 },
+    pack_id: { type: "string", minLength: 3 },
+    timestamp_paris: { type: "string", format: "date-time" },
+    cadence: { type: "string", enum: ["15m", "M15"], default: "M15" },
+    status: { type: "string" },
+    monitor_output: nativeMonitorOutputJsonSchema,
+    raw_chatgpt_output: {},
+    operator_notes: { type: "string" },
+  },
+  required: ["monitor_id", "contract_name", "schema_version", "contract_hash", "timestamp_paris", "monitor_output"],
+  additionalProperties: true,
+};
+function saveManualMonitorVersionedInputSchema() {
+  return augmentLiveWriterInputSchema(saveManualMonitorV2InputSchema, deskWorkLeaseJson);
+}
+
+const nativeMasterOutputJsonSchema = {
+  type: "object",
+  description: "Unmodified DeskMasterAnalysisContract 5.4.0 source document. Full normative validation occurs at the save boundary.",
+  properties: {
+    contract: {
+      type: "object",
+      properties: { name: { const: "DeskMasterAnalysisContract" }, version: { const: "5.4.0" } },
+      required: ["name", "version"],
+      additionalProperties: false,
+    },
+    execution_plan: { type: "object", description: "Native DeskExecutionPlanContract 1.4.0 GPT proposal." },
+  },
+  required: ["contract", "execution_plan"],
+  additionalProperties: true,
+};
+const saveMasterAnalysisV5InputSchema = {
+  type: "object",
+  properties: {
+    analysis_id: { type: "string", minLength: 3 },
+    contract_name: { type: "string", const: "DeskMasterAnalysisContract" },
+    schema_version: { type: "string", const: "5.4.0" },
+    contract_hash: { type: "string", minLength: 1 },
+    pack_id: { type: "string", minLength: 3 },
+    date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+    session: { type: "string", enum: ["asia_open", "london_session", "ny_open", "work_forward", "post_event_replan"] },
+    status: { type: "string", enum: ["ready", "archived"], default: "ready" },
+    created_at_paris: { type: "string", format: "date-time" },
+    analysis_output: nativeMasterOutputJsonSchema,
+    raw_chatgpt_output: {},
+  },
+  required: ["analysis_id", "contract_name", "schema_version", "contract_hash", "pack_id", "date", "session", "created_at_paris", "analysis_output"],
+  additionalProperties: true,
+};
+function saveMasterAnalysisVersionedInputSchema() {
+  return augmentLiveWriterInputSchema(saveMasterAnalysisV5InputSchema, deskWorkLeaseJson);
+}
 const orchestratedReplayRefInputSchema = {
   type: "object",
   properties: {
@@ -303,11 +398,19 @@ const replayBundleSections = [
   "dataset_integrity",
   "macro_calendar",
   "news_digest",
+  "market_availability",
   "rolling_snapshots",
   "replan_context",
   "replay_lineage",
   "raw_refs",
   "instructions",
+];
+const replayLineageComponents = [
+  "replay_master_analysis",
+  "replay_active_thesis",
+  "replay_setups",
+  "previous_replay_monitor",
+  "replay_position",
 ];
 const replayBundleReadInputSchema = {
   ...orchestratedReplayRefInputSchema,
@@ -337,6 +440,8 @@ const replayBundleSectionInputSchema = {
   properties: {
     ...replayBundleManifestInputSchema.properties,
     section: { type: "string", enum: replayBundleSections },
+    component: { type: "string", enum: replayLineageComponents },
+    field: { type: "string", minLength: 1, maxLength: 160 },
     snapshot_windows: { type: "array", items: { type: "string", enum: ["15m", "1h", "4h"] }, maxItems: 3 },
     instruments: { type: "array", items: { type: "string" }, maxItems: 30 },
     include_raw_refs: { type: "boolean", default: false },
@@ -379,7 +484,7 @@ const createOrchestratedReplayDayInputSchema = {
     cutoff_utc: { type: "string" },
     start_time: { type: "string" },
     end_time: { type: "string" },
-    cadence: { type: "string", enum: ["15m", "M15", "30m", "60m", "1h"], default: "15m" },
+    cadence: { type: "string", enum: ["5m", "M5", "15m", "M15", "30m", "60m", "1h"], default: "15m" },
     timezone: { type: "string", const: "Europe/Paris", default: "Europe/Paris" },
     initial_cutoff: { type: "string" },
     instruments: { type: "array", items: { type: "string", enum: ["MNQ", "MES", "NQ", "ES"] } },
@@ -397,7 +502,7 @@ const prepareReplayMasterBundleInputSchema = {
     force_rebuild: { type: "boolean", default: false },
   },
 };
-const saveReplayMasterAnalysisInputSchema = {
+const saveReplayMasterAnalysisV4InputSchema = {
   ...orchestratedReplayMutationRefInputSchema,
   properties: {
     ...orchestratedReplayMutationRefInputSchema.properties,
@@ -416,6 +521,27 @@ const saveReplayMasterAnalysisInputSchema = {
     raw_chatgpt_output: {},
   },
   required: ["backtest_id", "step_id", "expected_revision", "idempotency_key", "contract_name", "schema_version", "contract_hash", "analysis_id", "pack_build_id"],
+};
+
+const saveReplayMasterAnalysisV5InputSchema = {
+  ...orchestratedReplayMutationRefInputSchema,
+  properties: {
+    ...orchestratedReplayMutationRefInputSchema.properties,
+    contract_name: { type: "string", const: "DeskMasterAnalysisContract" },
+    schema_version: { type: "string", const: "5.4.0" },
+    contract_hash: { type: "string", minLength: 1 },
+    analysis_id: { type: "string", minLength: 3 },
+    pack_build_id: { type: "string", minLength: 3 },
+    analysis_output: nativeMasterOutputJsonSchema,
+    raw_chatgpt_output: {},
+    work_item_id: { type: "string", minLength: 3 },
+    worker_id: { type: "string", minLength: 3 },
+    lease_token: { type: "string", minLength: 8 },
+  },
+  required: ["backtest_id", "step_id", "expected_revision", "idempotency_key", "contract_name", "schema_version", "contract_hash", "analysis_id", "pack_build_id", "analysis_output"],
+};
+const saveReplayMasterAnalysisInputSchema = {
+  ...saveReplayMasterAnalysisV5InputSchema,
 };
 const advanceReplayClockInputSchema = {
   type: "object",
@@ -438,7 +564,7 @@ const prepareReplayMonitorBundleInputSchema = {
     force_rebuild: { type: "boolean", default: false },
   },
 };
-const saveReplayMonitorInputSchema = {
+const saveReplayMonitorV1InputSchema = {
   ...orchestratedReplayMutationRefInputSchema,
   properties: {
     ...orchestratedReplayMutationRefInputSchema.properties,
@@ -453,7 +579,7 @@ const saveReplayMonitorInputSchema = {
     schema_version: { type: "string", const: "1.0.0" },
     contract_hash: { type: "string", minLength: 1 },
     timestamp_paris: { type: "string" },
-    cadence: { type: "string", enum: ["15m", "M15", "30m", "60m", "1h"], default: "15m" },
+    cadence: { type: "string", enum: ["5m", "M5", "15m", "M15", "30m", "60m", "1h"], default: "5m" },
     manual_triggered: { type: "boolean", default: true },
     triggered_by: { type: "string", default: "user_chatgpt" },
     monitor_decision: { type: "object" },
@@ -482,7 +608,38 @@ const saveReplayMonitorInputSchema = {
   },
   required: ["backtest_id", "step_id", "expected_revision", "idempotency_key", "monitor_id", "master_id", "thesis_id", "sequence", "scheduled_for_utc", "as_of_utc", "pack_build_id", "contract_name", "schema_version", "contract_hash"],
 };
+
+const saveReplayMonitorV2InputSchema = {
+  ...orchestratedReplayMutationRefInputSchema,
+  properties: {
+    ...orchestratedReplayMutationRefInputSchema.properties,
+    monitor_id: { type: "string", minLength: 3 },
+    master_id: { type: "string", minLength: 3 },
+    thesis_id: { type: "string", minLength: 3 },
+    sequence: { type: "integer", minimum: 1 },
+    scheduled_for_utc: { type: "string", format: "date-time" },
+    as_of_utc: { type: "string", format: "date-time" },
+    pack_build_id: { type: "string", minLength: 3 },
+    contract_name: { type: "string", const: "DeskHourlyThesisMonitorContract" },
+    schema_version: { type: "string", const: "2.4.0" },
+    contract_hash: { type: "string", minLength: 1 },
+    timestamp_paris: { type: "string", format: "date-time" },
+    cadence: { type: "string", enum: ["15m", "M15"], default: "M15" },
+    manual_triggered: { type: "boolean", default: true },
+    triggered_by: { type: "string", default: "gpt_worker" },
+    monitor_output: nativeMonitorOutputJsonSchema,
+    raw_chatgpt_output: {},
+    work_item_id: { type: "string", minLength: 3 },
+    worker_id: { type: "string", minLength: 3 },
+    lease_token: { type: "string", minLength: 8 },
+  },
+  required: ["backtest_id", "step_id", "expected_revision", "idempotency_key", "monitor_id", "master_id", "thesis_id", "sequence", "scheduled_for_utc", "as_of_utc", "pack_build_id", "contract_name", "schema_version", "contract_hash", "monitor_output"],
+};
+const saveReplayMonitorInputSchema = {
+  ...saveReplayMonitorV2InputSchema,
+};
 const simulateReplayIntervalInputSchema = {
+
   type: "object",
   properties: {
     backtest_id: { type: "string" },
@@ -516,6 +673,25 @@ const liveCursorLeaseJson = {
   checkpoint: { type: "string", format: "date-time" },
   lease_token: { type: "string", minLength: 8 },
 };
+const gptTelemetryJson = {
+  type: "object",
+  properties: {
+    provider: { type: "string", minLength: 1, maxLength: 80 },
+    model: { type: "string", minLength: 1, maxLength: 160 },
+    request_id: { type: "string", minLength: 1, maxLength: 240 },
+    input_tokens: { type: "integer", minimum: 0 },
+    output_tokens: { type: "integer", minimum: 0 },
+    total_tokens: { type: "integer", minimum: 0 },
+    cached_input_tokens: { type: "integer", minimum: 0 },
+    reasoning_tokens: { type: "integer", minimum: 0 },
+    cost_usd: { type: "number", minimum: 0 },
+    api_latency_ms: { type: "integer", minimum: 0 },
+    started_at_utc: { type: "string", format: "date-time" },
+    completed_at_utc: { type: "string", format: "date-time" },
+  },
+  minProperties: 1,
+  additionalProperties: false,
+};
 const unifiedDeskWorkflowsJson = {
   type: "array",
   items: { type: "string", enum: ["LIVE_MASTER", "LIVE_M15_MONITOR", "REPLAY_MASTER", "REPLAY_MONITOR"] },
@@ -533,16 +709,6 @@ const replayOnlyWorkflowsJson = {
 
 export function createDeskToolRegistry(store) {
   return [
-    createTool(store, {
-      name: "get_desk_methodology",
-      title: "Get desk methodology",
-      description: "Mandatory first tool for ChatGPT backforward/backtest/live desk analysis. Returns the required market-funnel methodology, anti-lookahead rules, and DeskFuturesAnalysisContract v1.1.0 prompt before any pack is analysed.",
-      annotations: { readOnlyHint: true },
-      requiredScopes: [],
-      validator: z.object({}).strict(),
-      inputSchema: getToolInputSchema("get_desk_methodology"),
-      handler: () => getDeskMethodology(),
-    }),
     createTool(store, {
       name: "desk_ping",
       title: "Desk ping",
@@ -589,7 +755,7 @@ export function createDeskToolRegistry(store) {
     createTool(store, {
       name: "get_latest_asia_open_pack",
       title: "Get latest Asia Open pack",
-      description: "Use this when ChatGPT needs the latest ready Asia Open desk pack for a Paris trading date. For backforward/backtest/live analysis, ChatGPT must call get_desk_methodology first.",
+      description: "Returns the latest ready Asia Open desk pack for a Paris trading date. V4 workers validate the active contract before analysis.",
       annotations: { readOnlyHint: true },
       validator: z.object({
         date: dateSchema.optional(),
@@ -601,7 +767,7 @@ export function createDeskToolRegistry(store) {
     createTool(store, {
       name: "list_available_exports",
       title: "List available desk packs",
-      description: "Use this when ChatGPT needs to list available desk packs before selecting a specific backtest or Asia Open pack. For backforward workflows, call get_desk_methodology first.",
+      description: "Lists available desk packs before selecting a replay or Asia Open pack.",
       annotations: { readOnlyHint: true },
       validator: z.object({
         date_from: dateSchema.optional(),
@@ -616,7 +782,7 @@ export function createDeskToolRegistry(store) {
     createTool(store, {
       name: "get_desk_pack",
       title: "Get desk pack",
-      description: "Use this when ChatGPT needs the full metadata, summary, dataset refs, and quality report for one desk pack. For backforward/backtest/live analysis, get_desk_methodology is mandatory before this tool.",
+      description: "Returns metadata, summary, immutable dataset refs and quality for one desk pack.",
       annotations: { readOnlyHint: true },
       validator: getDeskPackV2Schema,
       inputSchema: {
@@ -671,7 +837,7 @@ export function createDeskToolRegistry(store) {
       }),
       inputSchema: getToolInputSchema("replay_desk_setups"),
       handler: () => {
-        throw codedToolError("LEGACY_REPLAY_FORBIDDEN", "replay_desk_setups is read-only legacy history and cannot write new replay results.");
+        throw codedToolError("READ_ONLY_REPLAY_FORBIDDEN", "replay_desk_setups is read-only history and cannot write new replay results.");
       },
     }),
     createTool(store, {
@@ -690,6 +856,11 @@ export function createDeskToolRegistry(store) {
           mode: { type: "string", enum: ["live", "paper", "replay", "backtest"], default: "replay" },
           format: { type: "string", enum: ["json", "csv"], default: "json" },
           max_rows: { type: "integer", minimum: 1, maximum: 5000, default: 1000 },
+          row_order: {
+            type: "string",
+            enum: ["oldest_first", "latest_first"],
+            default: "oldest_first",
+          },
         },
         required: ["pack_id", "pack_build_id", "dataset", "as_of_utc"],
         additionalProperties: false,
@@ -767,7 +938,7 @@ export function createDeskToolRegistry(store) {
     createTool(store, {
       name: "get_master_analysis_bundle",
       title: "Get Master Analysis context bundle",
-      description: "Returns the pack, active Master contract, macro/news, prior context, and deterministic feature placeholders needed to produce DeskMasterAnalysisContract v4.0.0.",
+      description: "Returns the pinned pack, active Master V5 contract, Execution Plan V1, Execution Policy V4, condition catalog, macro/news and prior context required for a native deterministic Master analysis.",
       annotations: { readOnlyHint: true },
       validator: masterCutoffBundleRequestSchema,
       inputSchema: masterCutoffBundleInputSchema,
@@ -817,6 +988,7 @@ export function createDeskToolRegistry(store) {
       validator: getMasterCutoffBundleSchema,
       inputSchema: getMasterCutoffBundleInputSchema,
       handler: (args) => store.getMasterCutoffBundle(args),
+      textResult: liveBundleReceiptText,
     }),
     createTool(store, {
       name: "get_monitor_context_bundle",
@@ -829,17 +1001,18 @@ export function createDeskToolRegistry(store) {
     }),
     createTool(store, {
       name: "get_manual_monitor_bundle",
-      title: "Get Manual ChatGPT M15 monitor bundle",
-      description: "Returns the deterministic M15 monitor bundle for manual ChatGPT review. The backend prepares data only; ChatGPT/human decides the monitor action.",
+      title: "Get GPT M15 monitor bundle",
+      description: "Returns the scheduled GPT M15 or critical-event monitor bundle with structural H4/H1/M15 context and deterministic M1 lifecycle events. The backend prepares data only.",
       annotations: { readOnlyHint: true },
       validator: manualMonitorBundleRequestSchema,
       inputSchema: manualMonitorBundleInputSchema,
       handler: (args) => store.getManualMonitorBundle(args),
+      textResult: liveBundleReceiptText,
     }),
     createTool(store, {
       name: "prepare_m15_monitor_bundle_job",
-      title: "Prepare idempotent M15 monitor bundle job",
-      description: "Creates or reuses an idempotent M15 prep job, stores the manual monitor bundle, rolling snapshots, and data-quality audit, without calling OpenAI automatically.",
+      title: "Prepare idempotent GPT M15 monitor job",
+      description: "Creates or reuses an idempotent scheduled GPT M15 or critical-event preparation job, stores the monitor bundle, structural snapshots and data-quality audit.",
       annotations: { readOnlyHint: false },
       validator: prepareM15MonitorBundleJobSchema,
       inputSchema: prepareM15MonitorBundleInputSchema,
@@ -847,8 +1020,8 @@ export function createDeskToolRegistry(store) {
     }),
     createTool(store, {
       name: "prepare_due_live_m15_bundle_job",
-      title: "Prepare due live M15 bundle",
-      description: "Scheduler-safe M15 entry point. Resolves the deterministic live run, latest exact-scope Master and its active thesis, then prepares the strict manual monitor bundle. Missing context returns a successful skipped result.",
+      title: "Prepare due live GPT M15 bundle",
+      description: "Scheduler-safe GPT M15 and critical-event entry point. Resolves the deterministic live run, latest exact-scope Master and its active thesis, then prepares the strict monitor bundle. Missing context returns a successful skipped result.",
       annotations: { readOnlyHint: false },
       validator: prepareDueLiveMonitorBundleSchema,
       inputSchema: {
@@ -873,8 +1046,8 @@ export function createDeskToolRegistry(store) {
     }),
     createTool(store, {
       name: "prepare_replay_monitor_bundles",
-      title: "Prepare replay M15 monitor bundles",
-      description: "Prepares manual M15 monitor bundles for replay/backtest timestamps without making automated GPT decisions.",
+      title: "Prepare replay GPT monitor bundles",
+      description: "Prepares GPT monitor bundles at the replay run cadence (M15 for new runs) without making automated decisions.",
       annotations: { readOnlyHint: false },
       validator: replayMonitorBundlesSchema,
       inputSchema: replayMonitorBundlesInputSchema,
@@ -1110,9 +1283,53 @@ export function createDeskToolRegistry(store) {
       handler: (args) => store.markNyOpenStrategyEvent(args),
     }),
     createTool(store, {
+      name: "claim_next_live_work",
+      title: "Claim next LIVE Desk work",
+      description: "Use this when a scheduled LIVE GPT worker needs its next analytical task. It creates only a short-lived, reversible lease inside the private Desk, never places broker orders, never publishes externally, never deletes analysis, and never falls back to REPLAY.",
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+      validator: claimNextLiveWorkSchema,
+      inputSchema: {
+        type: "object",
+        properties: {
+          worker_id: deskWorkerIdJson,
+          session: { type: "string", enum: ["asia_open", "ny_open"] },
+          trading_date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+          lease_seconds: { type: "integer", minimum: 120, maximum: 840, default: 660 },
+          retry_attempts: { type: "integer", minimum: 1, maximum: 3, default: 3 },
+          retry_delay_seconds: { type: "integer", minimum: 30, maximum: 60, default: 60 },
+        },
+        required: ["worker_id"],
+        additionalProperties: false,
+      },
+      handler: (args) => store.claimNextLiveWork(args),
+      textResult: liveClaimReceiptText,
+    }),
+    createTool(store, {
+      name: "claim_next_replay_work",
+      title: "Claim next REPLAY Desk work",
+      description: "Dedicated REPLAY lane. Claims only the next sequential REPLAY Master/Monitor work item and never inspects or falls back to LIVE.",
+      annotations: { readOnlyHint: false },
+      validator: claimNextReplayWorkSchema,
+      inputSchema: {
+        type: "object",
+        properties: {
+          worker_id: deskWorkerIdJson,
+          backtest_id: { type: "string", minLength: 3 },
+          lease_seconds: { type: "integer", minimum: 120, maximum: 1800, default: 720 },
+        },
+        required: ["worker_id"],
+        additionalProperties: false,
+      },
+      handler: (args) => store.claimNextReplayWork(args),
+    }),
+    createTool(store, {
       name: "claim_next_desk_work",
       title: "Claim next automated Desk work",
-      description: "Unified worker entry point. It claims fresh LIVE cursor work first for the current Paris session, then the next sequential REPLAY step. LIVE never falls back to a stale queued checkpoint.",
+      description: "Compatibility facade. New scheduled workers must use claim_next_live_work or claim_next_replay_work so the two lanes cannot consume each other.",
       annotations: { readOnlyHint: false },
       validator: claimNextDeskWorkSchema,
       inputSchema: {
@@ -1133,7 +1350,7 @@ export function createDeskToolRegistry(store) {
     createTool(store, {
       name: "claim_next_live",
       title: "Claim next LIVE Desk checkpoint",
-      description: "Atomically claims the current desired-state LIVE Master or M15 Monitor checkpoint with strict roll-forward freshness.",
+      description: "Atomically claims the current desired-state LIVE Master, scheduled GPT M15 Monitor or critical-event Monitor checkpoint with strict roll-forward freshness.",
       annotations: { readOnlyHint: false },
       validator: claimNextLiveSchema,
       inputSchema: {
@@ -1171,7 +1388,7 @@ export function createDeskToolRegistry(store) {
       validator: completeLiveSchema,
       inputSchema: {
         type: "object",
-        properties: liveCursorLeaseJson,
+        properties: { ...liveCursorLeaseJson, telemetry: gptTelemetryJson },
         required: ["worker_id", "cursor_id", "checkpoint", "lease_token"],
         additionalProperties: false,
       },
@@ -1237,7 +1454,7 @@ export function createDeskToolRegistry(store) {
       validator: completeReplaySchema,
       inputSchema: {
         type: "object",
-        properties: { ...deskWorkLeaseJson, output_ref: { type: "object" } },
+        properties: { ...deskWorkLeaseJson, output_ref: { type: "object" }, telemetry: gptTelemetryJson },
         required: ["work_item_id", "worker_id", "lease_token"],
         additionalProperties: false,
       },
@@ -1330,6 +1547,7 @@ export function createDeskToolRegistry(store) {
           cursor_id: { type: "string", minLength: 3 },
           checkpoint: { type: "string", format: "date-time" },
           output_ref: { type: "object" },
+          telemetry: gptTelemetryJson,
         },
         required: ["worker_id", "lease_token"],
         oneOf: [{ required: ["cursor_id", "checkpoint"] }, { required: ["work_item_id"] }],
@@ -1388,16 +1606,45 @@ export function createDeskToolRegistry(store) {
           initial_cutoff: { type: "string" },
           start_time: { type: "string" },
           end_time: { type: "string" },
-          cadence: { type: "string", enum: ["15m", "M15", "30m", "60m", "1h"], default: "60m" },
+          cadence: { type: "string", enum: ["5m", "M5", "15m", "M15", "30m", "60m", "1h"], default: "15m" },
           timezone: { type: "string", const: "Europe/Paris", default: "Europe/Paris" },
           instruments: { type: "array", items: { type: "string", enum: ["MNQ", "MES", "NQ", "ES"] }, minItems: 1, maxItems: 4 },
-          risk_model: { type: "string", default: "0.5pct_fixed" },
+          risk_model: { type: "string", default: "0.25pct_net_equity" },
+          worker_group: { type: "string", minLength: 1, maxLength: 120, default: "default" },
+          priority: { type: "integer", minimum: 1, maximum: 999, default: 100 },
+          max_transitions: { type: "integer", minimum: 1, maximum: 12, default: 6 },
           notes: { type: "string", maxLength: 2000 },
         },
         required: ["trading_date", "session", "pack_id", "pack_build_id", "start_time", "end_time"],
         additionalProperties: true,
       },
       handler: (args) => store.upsertReplayAutopilotConfig(args),
+    }),
+    createTool(store, {
+      name: "set_replay_autopilot_window",
+      title: "Activate a replay autopilot date window",
+      description: "Activates replay autopilot configs inside a date window for a worker group and optionally pauses configs outside the window.",
+      annotations: { readOnlyHint: false },
+      validator: setReplayAutopilotWindowSchema,
+      inputSchema: {
+        type: "object",
+        properties: {
+          worker_group: { type: "string", minLength: 1, maxLength: 120, default: "default" },
+          session: { type: "string", enum: ["asia_open", "ny_open"] },
+          date_from: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+          date_to: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+          pause_outside_window: { type: "boolean", default: true },
+          include_archived: { type: "boolean", default: false },
+          set_priority_by_date: { type: "boolean", default: true },
+          priority_base: { type: "integer", minimum: 1, maximum: 999, default: 10 },
+          priority_step: { type: "integer", minimum: 1, maximum: 100, default: 10 },
+          dry_run: { type: "boolean", default: false },
+          reason: { type: "string", maxLength: 1000 },
+        },
+        required: ["date_from", "date_to"],
+        additionalProperties: false,
+      },
+      handler: (args) => store.setReplayAutopilotWindow(args),
     }),
     createTool(store, {
       name: "start_or_resume_replay_autopilot",
@@ -1411,7 +1658,8 @@ export function createDeskToolRegistry(store) {
           config_id: { type: "string", minLength: 3 },
           trading_date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
           session: { type: "string", enum: ["asia_open", "ny_open"] },
-          mode: { type: "string", enum: ["latest_ready_config"] },
+          mode: { type: "string", enum: ["latest_ready_config", "next_ready_config"] },
+          worker_group: { type: "string", minLength: 1, maxLength: 120 },
           worker_id: deskWorkerIdJson,
           max_transitions: { type: "integer", minimum: 1, maximum: 12, default: 6 },
           recover_failed: { type: "boolean", default: true },
@@ -1484,8 +1732,8 @@ export function createDeskToolRegistry(store) {
     }),
     createTool(store, {
       name: "save_replay_master_analysis",
-      title: "Save replay Master analysis",
-      description: "Persists GPT's Master output inside the current backtest_id and materializes replay-scoped setups and active thesis only.",
+      title: "Save replay Master V5.4 source",
+      description: "Persists a native, unflattened Master V5.4 document in analysis_output, scoped by backtest, work item and lease. Historical versions are read-only.",
       annotations: { readOnlyHint: false },
       validator: saveReplayMasterAnalysisSchema,
       inputSchema: saveReplayMasterAnalysisInputSchema,
@@ -1547,8 +1795,8 @@ export function createDeskToolRegistry(store) {
     }),
     createTool(store, {
       name: "save_replay_monitor",
-      title: "Save replay Monitor result",
-      description: "Persists GPT's monitor output inside the current backtest_id and updates replay-scoped thesis state only.",
+      title: "Save replay Monitor V2.4 source",
+      description: "Persists a native, unflattened Monitor V2.4 document in monitor_output with its command, scoped by backtest, work item and lease. Historical versions are read-only.",
       annotations: { readOnlyHint: false },
       validator: saveReplayMonitorSchema,
       inputSchema: saveReplayMonitorInputSchema,
@@ -1665,7 +1913,7 @@ export function createDeskToolRegistry(store) {
     createTool(store, {
       name: "run_feature_engine",
       title: "Run deterministic desk Feature Engine",
-      description: "Computes deterministic level maps, technical events, session snapshots, cross-asset deltas, and condition status with raw refs and cutoff evidence. It never decides direction or risk.",
+      description: "Computes deterministic level maps, technical events, session snapshots, condition status, and compatibility cross-asset summaries with raw refs and cutoff evidence. Autopilot V4 consumes cross-asset context directly from immutable packs and bundles. It never decides direction or risk.",
       annotations: { readOnlyHint: false },
       validator: runFeatureEngineSchema,
       inputSchema: getToolInputSchema("run_feature_engine"),
@@ -1776,18 +2024,6 @@ export function createDeskToolRegistry(store) {
       }),
       inputSchema: getToolInputSchema("get_technical_events"),
       handler: (args) => store.getTechnicalEvents(args),
-    }),
-    createTool(store, {
-      name: "get_cross_asset_delta",
-      title: "Get deterministic cross-asset delta",
-      description: "Returns the latest deterministic cross-asset delta for 1h, 4h, or session windows once CrossAssetDeltaEngine has populated desk_cross_asset_deltas.",
-      annotations: { readOnlyHint: true },
-      validator: z.object({
-        timestamp_paris: z.string().optional(),
-        window: z.enum(["15m", "1h", "4h", "session"]).default("1h"),
-      }),
-      inputSchema: getToolInputSchema("get_cross_asset_delta"),
-      handler: (args) => store.getCrossAssetDelta(args),
     }),
     createTool(store, {
       name: "get_condition_status",
@@ -1947,11 +2183,11 @@ export function createDeskToolRegistry(store) {
     }),
     createTool(store, {
       name: "save_master_analysis",
-      title: "Save Master Analysis v4",
-      description: "Persists a DeskMasterAnalysisContract v4.0.0 output into desk_master_analyses and optional context/journal collections.",
+      title: "Save Master Analysis V5.4 source",
+      description: "Persists a native Master V5.4 source document in analysis_output without flattening it; work-item lease fields remain in the MCP envelope. Historical versions are read-only.",
       annotations: { readOnlyHint: false },
       validator: masterAnalysisSchema.and(liveWriterScopeSchema),
-      inputSchema: liveWriterInputSchema("save_master_analysis", deskWorkLeaseJson),
+      inputSchema: saveMasterAnalysisVersionedInputSchema(),
       handler: (args) => guardedLiveWrite(store, "save_master_analysis", args, () => store.saveMasterAnalysis(args)),
     }),
     createTool(store, {
@@ -1984,26 +2220,28 @@ export function createDeskToolRegistry(store) {
     }),
     createTool(store, {
       name: "save_hourly_monitor",
-      title: "Save hourly thesis monitor",
-      description: "Persists a DeskHourlyThesisMonitorContract v1.0.0 monitor output.",
+      title: "Legacy hourly monitor writer disabled",
+      description: "Historical DeskHourlyThesisMonitorContract documents remain readable, but legacy writers are disabled after the V5.4 cutover.",
       annotations: { readOnlyHint: false },
       validator: hourlyMonitorSchema.and(liveWriterScopeSchema),
       inputSchema: liveWriterInputSchema("save_hourly_monitor"),
-      handler: async (args) => guardedLiveWrite(store, "save_hourly_monitor", args, async () => {
-        await assertLiveThesisParent(store, args, args.linked_active_thesis_id, args.linked_master_analysis_id);
-        return store.saveHourlyMonitor(args);
-      }),
+      handler: async () => {
+        throw codedToolError(
+          "LEGACY_CONTRACT_WRITE_FORBIDDEN",
+          "DeskHourlyThesisMonitorContract v1.0.0 is historical and cannot be produced by a new LIVE run.",
+        );
+      },
     }),
     createTool(store, {
       name: "save_manual_monitor",
-      title: "Save manual ChatGPT M15 monitor",
-      description: "Persists a manual ChatGPT M15 monitor result, optional context transmission, alert, and thesis update. It never represents an automated OpenAI API decision.",
+      title: "Save GPT Monitor V2.4",
+      description: "Persists a native Monitor V2.4 source document in monitor_output, retaining its native command and the MCP work-item lease envelope. Historical versions are read-only.",
       annotations: { readOnlyHint: false },
       validator: manualMonitorSchema.and(liveWriterScopeSchema),
-      inputSchema: augmentLiveWriterInputSchema(saveManualMonitorInputSchema, deskWorkLeaseJson),
+      inputSchema: saveManualMonitorVersionedInputSchema(),
       handler: async (args) => {
         if (["replay", "backtest"].includes(args.mode)) {
-          throw codedToolError("LEGACY_REPLAY_FORBIDDEN", "Use save_replay_monitor for replay/backtest writes.");
+          throw codedToolError("READ_ONLY_REPLAY_FORBIDDEN", "Use save_replay_monitor for replay/backtest writes.");
         }
         return guardedLiveWrite(store, "save_manual_monitor", args, async () => {
           if (args.linked_active_thesis_id || args.linked_master_analysis_id) {
@@ -2079,10 +2317,18 @@ export function getToolRequiredScopes(tools, name) {
 }
 
 function createTool(store, { validator, handler, textResult, ...definition }) {
+  const readOnlyHint = definition.annotations?.readOnlyHint !== false;
+  const annotations = {
+    ...definition.annotations,
+    readOnlyHint,
+    destructiveHint: definition.annotations?.destructiveHint === true,
+    openWorldHint: definition.annotations?.openWorldHint === true,
+  };
   const requiredScopes = definition.requiredScopes ||
-    (definition.annotations?.readOnlyHint === false ? ["desk.write"] : ["desk.read"]);
+    (readOnlyHint ? ["desk.read"] : ["desk.write"]);
   return {
     ...definition,
+    annotations,
     outputSchema: definition.outputSchema || { type: "object", additionalProperties: true },
     requiredScopes,
     securitySchemes: definition.securitySchemes || [{ type: "oauth2", scopes: requiredScopes }],
