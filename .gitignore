@@ -10,6 +10,7 @@
 .tmp/
 .tmp_*/
 .local/
+.superpowers/
 
 # Runtime state
 logs/
