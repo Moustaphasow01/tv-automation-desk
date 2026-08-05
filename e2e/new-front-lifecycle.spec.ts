@@ -17,7 +17,7 @@ test("parcours V5 Master → Monitor → Setup → Position → clôture", async
   await expect(page.getByRole("heading", { name: "EXPIRE_SETUP" })).toBeVisible();
 
   await page.goto("/#/setup", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Setup & Position" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plan & exécution" })).toBeVisible();
   await expect(page.getByRole("main").getByText("Expiré · Résultat strict +0,89R", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Trade historique clôturé" })).toBeVisible();
 
@@ -119,9 +119,17 @@ test("les 36 routes restent directement accessibles dans le shell V5", async ({ 
   ];
   expect(routes).toHaveLength(36);
 
+  // /live, /thesis et /setup redirigent désormais vers la page fusionnée /live/thesis.
+  const redirectTargets: Record<string, string> = {
+    "/live": "/live/thesis",
+    "/thesis": "/live/thesis",
+    "/setup": "/live/thesis"
+  };
+
   for (const route of routes) {
     await page.goto(`/#${route}`, { waitUntil: "domcontentloaded" });
-    await expect(page).toHaveURL(new RegExp(`#${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+    const expectedPath = redirectTargets[route] ?? route;
+    await expect(page).toHaveURL(new RegExp(`#${expectedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
     await expect(page.getByRole("main")).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, `débordement global sur ${route}`).toBeLessThanOrEqual(0);
