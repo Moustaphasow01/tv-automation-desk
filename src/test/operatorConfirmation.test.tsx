@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { OperatorConfirmation, operatorConfirmationIsValid } from "@/pages/SetupPage";
+import { OperatorConfirmation, operatorConfirmationIsValid } from "@/components/OperatorCommandPanel";
 import type { DeskOperatorCapability } from "@/types";
 
 const capability: DeskOperatorCapability = {
