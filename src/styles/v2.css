@@ -406,7 +406,7 @@ body{font-size:var(--type-body);line-height:var(--type-body-line)}
 .session-context-card{order:2;margin:8px 12px 10px;padding:9px;gap:5px}
 .session-context-card>p,.phase-track span,.session-context-card>small,.session-context-card em{font-size:12px!important;line-height:16px!important}
 .phase-orb{width:22px;height:22px;font-size:12px}
-@media(max-height:700px) and (min-width:1024px){.session-context-card{display:none}.domain-nav__group a{min-height:34px}.app-sidebar__footer{padding-block:8px}}
+@media(max-height:700px) and (min-width:1024px){.domain-nav__group a{min-height:34px}.app-sidebar__footer{padding-block:8px}}
 .topbar-terminal-state,.terminal-market-tape{min-height:36px;height:36px}
 .topbar-terminal-state>span,.terminal-market-tape__quote,.terminal-market-tape__empty{font-size:12px!important;line-height:1!important}
 .terminal-market-tape__empty{justify-content:center;gap:12px}
@@ -818,11 +818,16 @@ p,.muted-copy,.empty-copy,.workspace-heading__main>div>p:last-child,.brief-card>
 .performance-breakdown-row>span,.performance-breakdown-row>small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 @media(max-height:820px) and (min-width:1024px){
-  .session-context-card{display:none!important}
+  .app-sidebar__brand{padding-block:6px}
   .domain-nav{padding-bottom:8px!important}
+  .domain-nav__spaces>a{min-height:28px!important}
+  .domain-nav__group a{min-height:30px!important}
   .domain-nav__group{margin-top:8px!important}
-  .app-sidebar__footer{padding:8px 10px!important;gap:6px!important}
-  .density-toggle button,.theme-toggle button{height:26px!important}
+  .session-context-card{margin:6px 10px!important;padding:6px!important;gap:3px!important}
+  .session-context-card>p,.phase-track span,.session-context-card>small,.session-context-card em{font-size:11px!important;line-height:13px!important}
+  .phase-orb{width:16px!important;height:16px!important;font-size:11px!important}
+  .app-sidebar__footer{padding:6px 10px!important;gap:5px!important}
+  .density-toggle button,.theme-toggle button{height:24px!important}
 }
 @media(max-height:640px) and (min-width:1024px){
   .app-sidebar__footer{position:sticky;bottom:0;z-index:2;background:var(--surface-1)}
