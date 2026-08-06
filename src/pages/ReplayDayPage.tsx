@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router-dom";
 import { Card, ErrorView, LoadingView } from "@/components/common";
 import { Breadcrumbs, MetricCard, MetricStrip, PageHeading, StatusTag } from "@/components/operations";
 import { useOperationsEvents, useReplayDay, useReplaySession } from "@/hooks/useOperations";
-import { replayLabel } from "@/lib/presentation";
 import type { OperationsEvent, ReplayDayDetail, WorkflowSummary } from "@/operationsTypes";
 
 type ReplayDayTab = "sessions" | "decisions" | "gpt" | "prix";
@@ -47,7 +46,8 @@ export default function ReplayDayPage() {
     <PageHeading eyebrow="Journée de test détaillée" title={day.date} subtitle={`${day.sessions.length} exécutions · ${day.variants.length} variantes · données PostgreSQL`} backTo="/replay" actions={<StatusTag status={day.status}/>}/>
 
     <MetricStrip className="metric-grid--compact replay-summary-strip">
-      <MetricCard label="Exécutions" value={day.metrics.sessionCount} detail={`${day.variants.length} variantes`}/>
+      <MetricCard label="Exécutions" value={day.metrics.sessionCount}/>
+      <MetricCard label="Variantes" value={day.variants.length}/>
       <MetricCard label="Progression moy." value={`${day.metrics.progress}%`}/>
       <MetricCard label={certifiedResult ? "Résultat certifié" : "Résultat provisoire"} value={displayedResult === null || displayedResult === undefined ? "En calcul" : `${displayedResult.toFixed(2)} R`} tone={displayedResult === null || displayedResult === undefined ? "neutral" : displayedResult >= 0 ? "positive" : "negative"}/>
       <MetricCard label="Processus GPT" value={day.metrics.gptProcesses || 0} detail={`${day.metrics.gptWaiting || 0} attente`}/>
