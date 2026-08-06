@@ -207,9 +207,7 @@ function ReplayPrixTab({ runId, query, selectedEvent, onSelectEvent }: { runId: 
   if (query.isLoading) return <LoadingView/>;
   if (query.isError || !query.data) return <ErrorView message={query.error?.message || "Session introuvable"} retry={() => query.refetch()}/>;
   const data = query.data;
-  return <div className="replay-session-workbench">
-    <ReplayChart prices={data.priceSeries} events={data.timeline} runId={runId} selectedId={selectedEvent?.id} onSelect={event => event && onSelectEvent(event)}/>
-  </div>;
+  return <ReplayChart prices={data.priceSeries} events={data.timeline} runId={runId} selectedId={selectedEvent?.id} onSelect={event => event && onSelectEvent(event)}/>;
 }
 
 function groupSessions(items: WorkflowSummary[]) {
