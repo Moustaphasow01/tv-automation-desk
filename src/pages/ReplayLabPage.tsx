@@ -5,8 +5,8 @@ import { operationsApi, type ReplayPreparationJob } from "@/api/operationsApi";
 import { Card, Drawer, ErrorView, Icon, LoadingView } from "@/components/common";
 import { formatDateTime, MetricCard, MetricStrip, PageHeading, PageTabs, ProgressBar, StatusTag } from "@/components/operations";
 import { operationsKeys, useOperationsEvents, useReplays } from "@/hooks/useOperations";
-import { replayLabel } from "@/lib/presentation";
-import type { ReplayDaySummary, WorkflowSummary } from "@/operationsTypes";
+import { findActiveReplayDay, findCertifiedReplayDay, replayLabel, replayPulseHeadline } from "@/lib/presentation";
+import type { ReplayDaySummary, ReplayList, WorkflowSummary } from "@/operationsTypes";
 
 type ReplayFilters = { q: string; status: string; session: string; strategyId: string; from: string; to: string; versionScope: string };
 
@@ -99,6 +99,8 @@ export default function ReplayLabPage() {
       </div>
     </Drawer>
 
+    <ReplayPulseCard summary={summary} days={days}/>
+
     <MetricStrip className="metric-grid--compact replay-summary-strip">
       <MetricCard label="Exécutions" value={summary.executions} detail={`${summary.days} journées · ${scopeLabel(filters.versionScope)}`}/>
       <MetricCard label="Actives" value={summary.active} detail={`${summary.waitingGpt} attente GPT`} tone={summary.active ? "info" : "neutral"}/>
@@ -166,6 +168,30 @@ function preparationStatus(status: ReplayPreparationJob["status"]) {
   if (status === "FAILED") return "failed";
   if (status === "CANCELLED") return "paused";
   return "running";
+}
+
+function ReplayPulseCard({ summary, days }: { summary: ReplayList["summary"]; days: ReplayDaySummary[] }) {
+  const headline = replayPulseHeadline(summary);
+  const certifiedDay = findCertifiedReplayDay(days);
+  const activeDay = findActiveReplayDay(days);
+  const context = certifiedDay
+    ? `Dernier résultat certifié : ${certifiedDay.totalR.toFixed(2)} R · ${certifiedDay.date}`
+    : "Aucun résultat certifié pour l’instant";
+
+  const actionTarget = activeDay || certifiedDay;
+  const actionParent = actionTarget ? (actionTarget.primaryRunId || actionTarget.sessions[0]?.sourceId || "") : "";
+  const actionHref = !actionTarget ? null
+    : activeDay
+      ? `/replay/runs/${encodeURIComponent(actionParent)}`
+      : `/replay/runs/${encodeURIComponent(actionParent)}/days/${actionTarget.date}`;
+  const actionLabel = activeDay ? "Voir le replay en cours →" : "Voir le dernier résultat →";
+
+  return <Card className="replay-pulse-card">
+    <p className="eyebrow">Pouls du Replay</p>
+    <h2>{headline}</h2>
+    <p>{context}</p>
+    {actionHref && <Link className="primary-btn" to={actionHref}>{actionLabel}</Link>}
+  </Card>;
 }
 
 function ReplayEvolution({ days }: { days: ReplayDaySummary[] }) {
