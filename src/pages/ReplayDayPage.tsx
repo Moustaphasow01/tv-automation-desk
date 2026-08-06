@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card, ErrorView, Icon, LoadingView } from "@/components/common";
-import { Breadcrumbs, EventTimeline, formatDateTime, formatTime, MetricCard, MetricStrip, PageHeading, StatusTag } from "@/components/operations";
+import { Breadcrumbs, EventTimeline, formatDateTime, formatTime, MetricCard, MetricStrip, PageHeading, ReplayChart, StatusTag } from "@/components/operations";
 import { useOperationsEvents, useReplayDay, useReplaySession } from "@/hooks/useOperations";
 import { shortReference } from "@/lib/presentation";
 import type { GptProcess, OperationsEvent, ReplayDayDetail, WorkflowSummary } from "@/operationsTypes";
@@ -204,7 +204,12 @@ function processSummary(process: GptProcess) {
 }
 
 function ReplayPrixTab({ runId, query, selectedEvent, onSelectEvent }: { runId: string; query: ReturnType<typeof useReplaySession>; selectedEvent: OperationsEvent | null; onSelectEvent: (event: OperationsEvent) => void }) {
-  return <p>PLACEHOLDER_TASK_5</p>;
+  if (query.isLoading) return <LoadingView/>;
+  if (query.isError || !query.data) return <ErrorView message={query.error?.message || "Session introuvable"} retry={() => query.refetch()}/>;
+  const data = query.data;
+  return <div className="replay-session-workbench">
+    <ReplayChart prices={data.priceSeries} events={data.timeline} runId={runId} selectedId={selectedEvent?.id} onSelect={event => event && onSelectEvent(event)}/>
+  </div>;
 }
 
 function groupSessions(items: WorkflowSummary[]) {
