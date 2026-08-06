@@ -15,29 +15,36 @@ journée ; la distinction n'a plus d'utilité opérationnelle.
 
 ## 1. Routage
 
-- **Route fusionnée** : `/replay/days/:date` remplace à la fois
-  `/replay/runs/:runId` et `/replay/runs/:runId/days/:date`.
-- **Détail process GPT** : `/replay/days/:date/gpt/:processId` (déplacé
-  depuis `/replay/runs/:runId/gpt/:processId` ; contenu inchangé, reste une
-  route à part car son contenu — manifest, lease, télémétrie — est
-  réellement distinct des quatre onglets).
-- **Redirections statiques** (le paramètre nécessaire est déjà dans l'URL,
+**Correction technique actée après le premier passage de ce document** :
+l'API backend (`getReplayDay(runId, date)`) exige à la fois le `runId` et la
+`date` — il n'existe pas d'endpoint "par date seule". Le `runId` primaire
+reste donc dans l'URL ; ce qui disparaît, c'est la page "Run" comme étape de
+navigation séparée, pas le paramètre lui-même.
+
+- **Route fusionnée** : `/replay/runs/:runId/days/:date` — URL inchangée,
+  mais pointe désormais vers la nouvelle page fusionnée (hero + onglets) au
+  lieu de l'actuel `ReplayDayPage`.
+- **Détail process GPT** : `/replay/runs/:runId/gpt/:processId` — URL et
+  contenu inchangés (le `runId` restant dans l'URL, aucun déplacement de
+  route n'est nécessaire ici).
+- **Redirection statique** (le paramètre nécessaire est déjà dans l'URL,
   pas d'appel réseau requis) :
-  - `/replay/runs/:runId/days/:date` → `/replay/days/:date`
-  - `/replay/runs/:runId/days/:date/sessions/:sessionExecutionId` →
-    `/replay/days/:date` (la session redevient un état sélectionné dans la
-    page, pas un segment d'URL)
+  `/replay/runs/:runId/days/:date/sessions/:sessionExecutionId` →
+  `/replay/runs/:runId/days/:date` (la session redevient un état sélectionné
+  dans la page, pas un segment d'URL).
 - **Redirection résolue** : `/replay/runs/:runId` (sans date dans l'URL)
   devient une page "résolveur" — charge le run via l'API existante
   (`getReplay(runId)`), lit `data.run.tradingDate`, puis navigue vers
-  `/replay/days/:tradingDate`. Nécessaire car cette route est encore ciblée
-  par d'anciens favoris/liens externes qui ne portent que le `runId`.
-- **Liens internes mis à jour directement** (pas de redirection) : le
-  tableau "Journées de backtest" et le graphique d'évolution sur
-  `/replay` (`ReplayLabPage.tsx`), le tableau de comparaison
-  (`ReplayComparePage.tsx`) pointent tous désormais directement vers
-  `/replay/days/:date` en utilisant le champ `tradingDate`/`date` déjà
-  présent dans leurs données.
+  `/replay/runs/:runId/days/:tradingDate`. Nécessaire car cette route est
+  encore ciblée par d'anciens favoris/liens externes qui ne portent que le
+  `runId`.
+- **Liens internes déjà corrects, aucun changement requis** : le tableau
+  "Journées de backtest" et le graphique d'évolution sur `/replay`
+  (`ReplayLabPage.tsx`), le tableau de comparaison (`ReplayComparePage.tsx`)
+  pointent déjà vers `/replay/runs/:parent/days/:date` (via
+  `day.primaryRunId || day.sessions[0]?.sourceId`) — ces liens continuent de
+  fonctionner tels quels puisque l'URL de la page fusionnée est identique à
+  celle de l'ancien `ReplayDayPage`.
 
 ## 2. Hero
 
@@ -74,7 +81,8 @@ redondance de données, juste deux points d'entrée vers la même sélection.
 
 Le clic sur un processus GPT (dans l'onglet GPT, dans le ledger de
 décisions, ou dans le graphique) navigue vers
-`/replay/days/:date/gpt/:processId`, inchangé par rapport à l'existant.
+`/replay/runs/:runId/gpt/:processId`, strictement inchangé par rapport à
+l'existant.
 
 ## 4. Sort des anciennes pages
 
@@ -86,13 +94,14 @@ décisions, ou dans le graphique) navigue vers
   (chart + ledger + GPT rail + timeline) se répartit dans les onglets
   Décisions/GPT/Prix de la nouvelle page, filtré sur la session
   sélectionnée.
-- `GptProcessPage.tsx` ne change pas de contenu, seulement son URL parente.
+- `GptProcessPage.tsx` ne change pas du tout (ni contenu, ni URL — le
+  `runId` restant dans l'URL parente, aucune migration n'est nécessaire).
 
 ## 5. Hors périmètre
 
 - `/replay/compare` (chantier 3c).
-- Le contenu de `GptProcessPage.tsx` lui-même (chantier 3c) — seule son URL
-  parente change ici.
+- Le contenu de `GptProcessPage.tsx` (chantier 3c — dé-jargonnage prévu ;
+  cette page n'est touchée d'aucune façon par 3b, ni contenu ni URL).
 - Toute nouveauté visuelle (palette, typographie) — chantier 1 non rouvert.
 - La bande de sélection de session ne devient pas un F-key global comme sur
   `/live` (pas de raccourci clavier prévu) ; c'est une simple rangée de
