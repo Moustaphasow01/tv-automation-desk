@@ -3,13 +3,17 @@ import { activeNavigationSpace, navigationCatalog, navigationSpaces } from "@/na
 import {
   deskStatusText,
   dataQualityLabel,
+  findActiveReplayDay,
+  findCertifiedReplayDay,
   gptProcessLabel,
   incidentLabel,
   replayLabel,
+  replayPulseHeadline,
   sessionLabel,
   shortReference,
   workflowLabel,
 } from "@/lib/presentation";
+import type { ReplayDaySummary, ReplayList } from "@/operationsTypes";
 
 describe("information architecture V3", () => {
   it("expose exactement six espaces principaux stables", () => {
@@ -125,5 +129,125 @@ describe("traduction des sessions, de la qualité et des statuts", () => {
     expect(deskStatusText(null)).toBe("");
     expect(deskStatusText("SOME_UNKNOWN_STATUS")).toBe("SOME_UNKNOWN_STATUS");
     expect(deskStatusText("Desk: NO_SETUP right now")).toBe("Desk: Aucun setup right now");
+  });
+});
+
+function buildReplaySummary(overrides: Partial<ReplayList["summary"]> = {}): ReplayList["summary"] {
+  return {
+    executions: 0,
+    days: 0,
+    active: 0,
+    running: 0,
+    waitingGpt: 0,
+    blocked: 0,
+    failed: 0,
+    completed: 0,
+    averageProgress: 0,
+    totalR: 0,
+    gptProcesses: 0,
+    ...overrides,
+  };
+}
+
+function buildReplayDay(overrides: Partial<ReplayDaySummary> = {}): ReplayDaySummary {
+  return {
+    date: "2026-08-01",
+    status: "completed",
+    sessionCount: 0,
+    running: 0,
+    failed: 0,
+    totalProgress: 0,
+    totalR: 0,
+    sessions: [],
+    ...overrides,
+  };
+}
+
+describe("pouls du Replay", () => {
+  it("signale un échec unique au singulier", () => {
+    expect(replayPulseHeadline(buildReplaySummary({ failed: 1 }))).toBe("1 échec");
+  });
+
+  it("signale plusieurs échecs au pluriel", () => {
+    expect(replayPulseHeadline(buildReplaySummary({ failed: 3 }))).toBe("3 échecs");
+  });
+
+  it("signale un blocage unique au singulier", () => {
+    expect(replayPulseHeadline(buildReplaySummary({ blocked: 1 }))).toBe("1 bloqué");
+  });
+
+  it("signale plusieurs blocages au pluriel", () => {
+    expect(replayPulseHeadline(buildReplaySummary({ blocked: 2 }))).toBe("2 bloqués");
+  });
+
+  it("cumule échecs et blocages et priorise ce cas sur les replays actifs", () => {
+    const headline = replayPulseHeadline(buildReplaySummary({ failed: 2, blocked: 1, active: 5 }));
+    expect(headline).toBe("2 échecs · 1 bloqué");
+    expect(headline).not.toContain("actif");
+  });
+
+  it("signale un replay actif unique sans blocage", () => {
+    expect(replayPulseHeadline(buildReplaySummary({ active: 1 }))).toBe("1 replay actif · aucun blocage");
+  });
+
+  it("signale plusieurs replays actifs sans blocage", () => {
+    expect(replayPulseHeadline(buildReplaySummary({ active: 4 }))).toBe("4 replays actifs · aucun blocage");
+  });
+
+  it("retombe sur le message par défaut quand tout est à zéro", () => {
+    expect(replayPulseHeadline(buildReplaySummary())).toBe("Aucun replay en cours");
+  });
+});
+
+describe("recherche du jour de Replay certifié", () => {
+  it("retrouve l'unique jour avec des sessions éligibles au résultat", () => {
+    const eligible = buildReplayDay({ date: "2026-08-02", resultEligibleSessions: 2 });
+    const days = [
+      buildReplayDay({ date: "2026-08-01", resultEligibleSessions: 0 }),
+      eligible,
+      buildReplayDay({ date: "2026-08-03", resultEligibleSessions: 0 }),
+    ];
+    expect(findCertifiedReplayDay(days)).toEqual(eligible);
+  });
+
+  it("choisit le jour éligible le plus récent, pas le premier du tableau", () => {
+    const earlier = buildReplayDay({ date: "2026-08-01", resultEligibleSessions: 5 });
+    const later = buildReplayDay({ date: "2026-08-05", resultEligibleSessions: 2 });
+    expect(findCertifiedReplayDay([earlier, later])).toEqual(later);
+  });
+
+  it("retourne null si aucun jour n'a de session éligible", () => {
+    const days = [
+      buildReplayDay({ date: "2026-08-01", resultEligibleSessions: 0 }),
+      buildReplayDay({ date: "2026-08-02" }),
+      buildReplayDay({ date: "2026-08-03", resultEligibleSessions: undefined }),
+    ];
+    expect(findCertifiedReplayDay(days)).toBeNull();
+  });
+
+  it("retourne null sur un tableau vide", () => {
+    expect(findCertifiedReplayDay([])).toBeNull();
+  });
+});
+
+describe("recherche du jour de Replay actif", () => {
+  it("ignore les statuts terminaux et retient le jour non terminal le plus récent", () => {
+    const completed = buildReplayDay({ date: "2026-08-01", status: "completed" });
+    const cancelled = buildReplayDay({ date: "2026-08-02", status: "cancelled" });
+    const runningEarly = buildReplayDay({ date: "2026-08-03", status: "running" });
+    const waitingLater = buildReplayDay({ date: "2026-08-04", status: "waiting_gpt" });
+    expect(findActiveReplayDay([completed, cancelled, runningEarly, waitingLater])).toEqual(waitingLater);
+  });
+
+  it("retourne null si tous les jours sont terminés ou annulés", () => {
+    const days = [
+      buildReplayDay({ date: "2026-08-01", status: "completed" }),
+      buildReplayDay({ date: "2026-08-02", status: "cancelled" }),
+    ];
+    expect(findActiveReplayDay(days)).toBeNull();
+  });
+
+  it("retourne null sur un tableau vide", () => {
+    expect(findActiveReplayDay([])).toBeNull();
   });
 });
