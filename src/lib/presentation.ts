@@ -1,3 +1,5 @@
+import type { ReplayDaySummary, ReplayList } from "@/operationsTypes";
+
 const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
 export function entityLabel(reference: string | null | undefined, kind = "Élément") {
@@ -105,4 +107,29 @@ export function deskStatusText(value: string | null | undefined) {
     if (code === "WAIT" || code === "wait") return text;
     return text.replaceAll(code, label);
   }, value);
+}
+
+export function replayPulseHeadline(summary: ReplayList["summary"]) {
+  if (summary.failed > 0 || summary.blocked > 0) {
+    return [
+      summary.failed > 0 ? `${summary.failed} échec${summary.failed > 1 ? "s" : ""}` : null,
+      summary.blocked > 0 ? `${summary.blocked} bloqué${summary.blocked > 1 ? "s" : ""}` : null,
+    ].filter(Boolean).join(" · ");
+  }
+  if (summary.active > 0) {
+    return `${summary.active} replay${summary.active > 1 ? "s" : ""} actif${summary.active > 1 ? "s" : ""} · aucun blocage`;
+  }
+  return "Aucun replay en cours";
+}
+
+export function findCertifiedReplayDay(days: ReplayDaySummary[]) {
+  return [...days]
+    .sort((left, right) => right.date.localeCompare(left.date))
+    .find(day => Number(day.resultEligibleSessions || 0) > 0) || null;
+}
+
+export function findActiveReplayDay(days: ReplayDaySummary[]) {
+  return [...days]
+    .sort((left, right) => right.date.localeCompare(left.date))
+    .find(day => !["completed", "cancelled"].includes(day.status)) || null;
 }
