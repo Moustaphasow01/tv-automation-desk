@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Card, ErrorView, LoadingView } from "@/components/common";
 import { Breadcrumbs, MetricCard, MetricStrip, PageHeading, StatusTag } from "@/components/operations";
 import { useOperationsEvents, useReplayDay, useReplaySession } from "@/hooks/useOperations";
+import { shortReference } from "@/lib/presentation";
 import type { OperationsEvent, ReplayDayDetail, WorkflowSummary } from "@/operationsTypes";
 
 type ReplayDayTab = "sessions" | "decisions" | "gpt" | "prix";
@@ -100,7 +101,34 @@ function sessionLabel(value: string) {
 }
 
 function ReplaySessionsTab({ day, activeSession, onSelectSession }: { day: ReplayDayDetail; activeSession: WorkflowSummary | null; onSelectSession: (key: string) => void }) {
-  return <p>PLACEHOLDER_TASK_2</p>;
+  const lanes = groupSessions(day.sessions);
+  const variantStats = buildVariantStats(day.sessions);
+  return <>
+    <section className="replay-terminal-section replay-day-map-section">
+      <header><div><p className="eyebrow">Carte des exécutions</p><h2>Sessions et tentatives</h2></div><span>{day.sessions.length} exécutions</span></header>
+      <div className="replay-session-lanes" aria-label="Carte multi-sessions de la journée">
+        {Object.entries(lanes).map(([session, items]) => <div className="replay-session-lane" key={session}>
+          <div><strong>{sessionLabel(session)}</strong><small>{items.length} tentative{items.length > 1 ? "s" : ""}</small></div>
+          <div className="replay-session-lane__track">{items.map(item => <button type="button" key={item.id} className={activeSession && sessionKey(activeSession) === sessionKey(item) ? "is-selected" : ""} data-status={item.status} onClick={() => onSelectSession(sessionKey(item))} title={`${item.sourceId} · ${item.status}`}>
+            <span>#{item.attempt || 1}</span><i aria-hidden="true"/><small>{item.variantId || "default"}</small>
+          </button>)}</div>
+          <div className="replay-session-lane__result"><strong>{formatReplayLaneResult(items)}</strong><small>{Math.round(items.reduce((total, item) => total + item.progress, 0) / Math.max(1, items.length))}%</small></div>
+        </div>)}
+      </div>
+    </section>
+    <section className="replay-terminal-section replay-variant-matrix-section">
+      <header><div><p className="eyebrow">Comparaison locale</p><h2>Variantes, tentatives et résultat</h2></div><span>{variantStats.length} variantes · calcul front depuis contrat backend</span></header>
+      <div className="replay-variant-matrix">
+        {variantStats.map(stat => <article key={stat.variantId}>
+          <header><div><strong>{stat.variantId || "default"}</strong><small>{stat.sessions.length} tentative{stat.sessions.length > 1 ? "s" : ""}</small></div><span className={stat.totalR >= 0 ? "positive" : "negative"}>{stat.totalR.toFixed(2)} R</span></header>
+          <div className="replay-variant-ruler"><i style={{ width: `${Math.max(4, Math.min(100, Math.abs(stat.totalR) * 40))}%` }} data-tone={stat.totalR >= 0 ? "positive" : "negative"}/></div>
+          <footer>{stat.sessions.map(session => <button type="button" key={session.id} className={activeSession && sessionKey(activeSession) === sessionKey(session) ? "is-selected" : ""} data-status={session.status} onClick={() => onSelectSession(sessionKey(session))}>
+            <span>#{session.attempt || 1}</span><i aria-hidden="true"/><strong>{Number(session.metrics.totalR || 0).toFixed(2)} R</strong><small>{shortReference(session.sourceId)}</small>
+          </button>)}</footer>
+        </article>)}
+      </div>
+    </section>
+  </>;
 }
 
 function ReplayDecisionsTab({ runId, query, selectedEvent, onSelectEvent }: { runId: string; query: ReturnType<typeof useReplaySession>; selectedEvent: OperationsEvent | null; onSelectEvent: (event: OperationsEvent) => void }) {
@@ -113,4 +141,39 @@ function ReplayGptTab({ runId, query }: { runId: string; query: ReturnType<typeo
 
 function ReplayPrixTab({ runId, query, selectedEvent, onSelectEvent }: { runId: string; query: ReturnType<typeof useReplaySession>; selectedEvent: OperationsEvent | null; onSelectEvent: (event: OperationsEvent) => void }) {
   return <p>PLACEHOLDER_TASK_5</p>;
+}
+
+function groupSessions(items: WorkflowSummary[]) {
+  return items.reduce<Record<string, WorkflowSummary[]>>((output, item) => {
+    const key = item.session || "globale";
+    (output[key] ||= []).push(item);
+    return output;
+  }, {});
+}
+
+type VariantStat = {
+  variantId: string;
+  sessions: WorkflowSummary[];
+  totalR: number;
+};
+
+function buildVariantStats(items: WorkflowSummary[]): VariantStat[] {
+  const grouped = items.reduce<Record<string, WorkflowSummary[]>>((output, item) => {
+    const key = item.variantId || "default";
+    (output[key] ||= []).push(item);
+    return output;
+  }, {});
+  return Object.entries(grouped).map(([variantId, sessions]) => ({
+    variantId,
+    sessions,
+    totalR: sessions.reduce((total, item) => total + Number(item.metrics.totalR || 0), 0),
+  })).sort((left, right) => right.totalR - left.totalR);
+}
+
+function formatReplayLaneResult(items: WorkflowSummary[]) {
+  const values = items
+    .map((item) => item.metrics.totalR)
+    .filter((value): value is number => value !== null && value !== undefined && Number.isFinite(Number(value)))
+    .map(Number);
+  return values.length ? `${values.reduce((total, value) => total + value, 0).toFixed(2)} R` : "En calcul";
 }
