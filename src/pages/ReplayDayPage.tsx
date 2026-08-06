@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Card, ErrorView, LoadingView } from "@/components/common";
-import { Breadcrumbs, MetricCard, MetricStrip, PageHeading, StatusTag } from "@/components/operations";
+import { Card, ErrorView, Icon, LoadingView } from "@/components/common";
+import { Breadcrumbs, EventTimeline, formatDateTime, formatTime, MetricCard, MetricStrip, PageHeading, StatusTag } from "@/components/operations";
 import { useOperationsEvents, useReplayDay, useReplaySession } from "@/hooks/useOperations";
 import { shortReference } from "@/lib/presentation";
 import type { OperationsEvent, ReplayDayDetail, WorkflowSummary } from "@/operationsTypes";
@@ -132,7 +132,47 @@ function ReplaySessionsTab({ day, activeSession, onSelectSession }: { day: Repla
 }
 
 function ReplayDecisionsTab({ runId, query, selectedEvent, onSelectEvent }: { runId: string; query: ReturnType<typeof useReplaySession>; selectedEvent: OperationsEvent | null; onSelectEvent: (event: OperationsEvent) => void }) {
-  return <p>PLACEHOLDER_TASK_3</p>;
+  if (query.isLoading) return <LoadingView/>;
+  if (query.isError || !query.data) return <ErrorView message={query.error?.message || "Session introuvable"} retry={() => query.refetch()}/>;
+  const data = query.data;
+  const activeEvent = selectedEvent && data.timeline.some(event => event.id === selectedEvent.id) ? selectedEvent : data.timeline.at(-1) || null;
+  const decisionEvents = data.timeline.filter(isDecisionRelevantEvent);
+  const gptById = new Map(data.gptProcesses.map(process => [process.id, process]));
+  return <>
+    <Card className="replay-event-tape" aria-label="Timeline compacte des décisions replay">
+      <header><div><p className="eyebrow">Event tape</p><h2>Décisions, étapes et GPT</h2></div><span>{data.timeline.length} points</span></header>
+      <div className="replay-event-tape__track">
+        {data.timeline.map((event, index) => <button type="button" key={event.id} className={activeEvent?.id === event.id ? "is-selected" : ""} data-layer={event.layer || "event"} data-status={event.status} onClick={() => onSelectEvent(event)}>
+          <i aria-hidden="true"/><span>{String(index + 1).padStart(2, "0")} · {formatTime(event.at)}</span><strong>{event.title || event.type}</strong><small>{event.decision || event.conclusion || event.status}</small>
+        </button>)}
+      </div>
+    </Card>
+    <section className="replay-terminal-section replay-decision-ledger">
+      <header><div><p className="eyebrow">Ledger synchronisé</p><h2>Décisions, GPT et conclusions</h2></div><span>{decisionEvents.length} lignes reliées au graphe</span></header>
+      {!decisionEvents.length ? <Card><div className="terminal-empty-state"><span>NO_DECISION_EVENT</span><small>Aucune décision exploitable pour cette session.</small></div></Card> : <div className="data-table-wrap"><table className="data-table replay-decision-table">
+        <thead><tr><th>Focus</th><th>Couche</th><th>Décision</th><th>Prix</th><th>Processus GPT</th><th>Conclusion</th></tr></thead>
+        <tbody>{decisionEvents.map(event => {
+          const process = event.processId ? gptById.get(event.processId) || null : null;
+          return <tr key={event.id} className={activeEvent?.id === event.id ? "is-selected" : ""}>
+            <td data-label="Focus"><button type="button" className="ledger-focus-btn" onClick={() => onSelectEvent(event)}>{formatTime(event.at)}</button><small>{formatDateTime(event.at)}</small></td>
+            <td data-label="Couche"><span className="terminal-code">{event.layer || event.type}</span><StatusTag status={event.status}/></td>
+            <td data-label="Décision"><strong>{event.decision || event.title || "—"}</strong><small>{event.detail || event.type}</small></td>
+            <td data-label="Prix" className="mono">{event.price ?? "—"}</td>
+            <td data-label="Processus GPT">{process ? <Link className="row-link" to={`/replay/runs/${encodeURIComponent(runId)}/gpt/${encodeURIComponent(process.id)}`}>{process.workflow}<Icon name="arrow" size={13}/></Link> : "—"}<small>{process ? `${process.worker || "worker —"} · tentative ${process.attempt}/${process.maxAttempts || "—"}` : "Aucun process lié"}</small></td>
+            <td data-label="Conclusion"><span>{event.conclusion || process?.conclusion || process?.decision || "—"}</span></td>
+          </tr>;
+        })}</tbody>
+      </table></div>}
+    </section>
+    <section id="timeline-events" className="replay-terminal-section">
+      <header><div><p className="eyebrow">Journal synchronisé</p><h2>Décisions horodatées</h2></div><span>{data.timeline.length} événements · prix, étapes et GPT</span></header>
+      <EventTimeline events={data.timeline} runId={runId} selectedId={activeEvent?.id} onSelect={onSelectEvent}/>
+    </section>
+  </>;
+}
+
+function isDecisionRelevantEvent(event: OperationsEvent) {
+  return event.layer === "decision" || Boolean(event.decision || event.conclusion || event.processId || event.price != null);
 }
 
 function ReplayGptTab({ runId, query }: { runId: string; query: ReturnType<typeof useReplaySession> }) {
