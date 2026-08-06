@@ -112,7 +112,7 @@ function ReplayComparisonWorkbench({ data }: { data: ReplayComparison }) {
 
 function ReplayCompareRow({ row }: { row: ReplayComparisonItem }) {
   return <tr className={row.baseline ? "is-baseline" : ""}>
-    <td data-label="Run"><div className="replay-compare-run-cell"><strong title={row.id}>{compactId(row.id, 46)}</strong><small>{row.run.tradingDate || "—"} · {row.run.variantId || "default"}</small><div className="replay-compare-inline-actions"><Link className="row-link" to={`/replay/runs/${encodeURIComponent(row.id)}`}>Run <Icon name="arrow" size={13}/></Link>{row.run.tradingDate && <Link className="row-link" to={`/replay/runs/${encodeURIComponent(row.id)}/days/${row.run.tradingDate}/sessions/${encodeURIComponent(row.run.sessionExecutionId || row.run.sourceId)}`}>Session <Icon name="arrow" size={13}/></Link>}</div></div></td>
+    <td data-label="Run"><div className="replay-compare-run-cell"><strong title={row.id}>{compactId(row.id, 46)}</strong><small>{row.run.tradingDate || "—"} · {row.run.variantId || "default"}</small><div className="replay-compare-inline-actions"><Link className="row-link" to={`/replay/runs/${encodeURIComponent(row.id)}`}>Run <Icon name="arrow" size={13}/></Link></div></div></td>
     <td data-label="Rang"><span className="terminal-code">#{row.rank || "—"}</span></td>
     <td data-label="État"><StatusTag status={row.run.status}/></td>
     <td data-label="Progression"><ProgressBar value={row.metrics.progress} status={row.run.status}/></td>

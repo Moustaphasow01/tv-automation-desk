@@ -120,7 +120,9 @@ test("les 36 routes restent directement accessibles dans le shell V5", async ({ 
   expect(routes).toHaveLength(36);
 
   // /live, /thesis et /setup redirigent vers la page fusionnée /live/thesis ;
-  // /sessions, /master, /monitors, /timeline et /news redirigent vers leur onglet /live/<tab> respectif.
+  // /sessions, /master, /monitors, /timeline et /news redirigent vers leur onglet /live/<tab> respectif ;
+  // /replay/runs/:runId/days/:date/sessions/:id redirige vers la page journée fusionnée (chantier 3b —
+  // la session redevient un état sélectionné dans la page, plus un segment d'URL).
   const redirectTargets: Record<string, string> = {
     "/live": "/live/thesis",
     "/thesis": "/live/thesis",
@@ -129,7 +131,8 @@ test("les 36 routes restent directement accessibles dans le shell V5", async ({ 
     "/master": "/live/master",
     "/monitors": "/live/monitors",
     "/timeline": "/live/timeline",
-    "/news": "/live/news"
+    "/news": "/live/news",
+    "/replay/runs/run-e2e/days/2026-07-13/sessions/session-e2e": "/replay/runs/run-e2e/days/2026-07-13"
   };
 
   for (const route of routes) {
