@@ -139,14 +139,14 @@ function ReplayDecisionsTab({ runId, query, selectedEvent, onSelectEvent }: { ru
   const decisionEvents = data.timeline.filter(isDecisionRelevantEvent);
   const gptById = new Map(data.gptProcesses.map(process => [process.id, process]));
   return <>
-    <Card className="replay-event-tape" aria-label="Timeline compacte des décisions replay">
+    {data.timeline.length > 0 && <Card className="replay-event-tape" aria-label="Timeline compacte des décisions replay">
       <header><div><p className="eyebrow">Event tape</p><h2>Décisions, étapes et GPT</h2></div><span>{data.timeline.length} points</span></header>
       <div className="replay-event-tape__track">
         {data.timeline.map((event, index) => <button type="button" key={event.id} className={activeEvent?.id === event.id ? "is-selected" : ""} data-layer={event.layer || "event"} data-status={event.status} onClick={() => onSelectEvent(event)}>
           <i aria-hidden="true"/><span>{String(index + 1).padStart(2, "0")} · {formatTime(event.at)}</span><strong>{event.title || event.type}</strong><small>{event.decision || event.conclusion || event.status}</small>
         </button>)}
       </div>
-    </Card>
+    </Card>}
     <section className="replay-terminal-section replay-decision-ledger">
       <header><div><p className="eyebrow">Ledger synchronisé</p><h2>Décisions, GPT et conclusions</h2></div><span>{decisionEvents.length} lignes reliées au graphe</span></header>
       {!decisionEvents.length ? <Card><div className="terminal-empty-state"><span>NO_DECISION_EVENT</span><small>Aucune décision exploitable pour cette session.</small></div></Card> : <div className="data-table-wrap"><table className="data-table replay-decision-table">
