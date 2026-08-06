@@ -4,7 +4,7 @@ import { Card, ErrorView, Icon, LoadingView } from "@/components/common";
 import { Breadcrumbs, EventTimeline, formatDateTime, formatTime, MetricCard, MetricStrip, PageHeading, StatusTag } from "@/components/operations";
 import { useOperationsEvents, useReplayDay, useReplaySession } from "@/hooks/useOperations";
 import { shortReference } from "@/lib/presentation";
-import type { OperationsEvent, ReplayDayDetail, WorkflowSummary } from "@/operationsTypes";
+import type { GptProcess, OperationsEvent, ReplayDayDetail, WorkflowSummary } from "@/operationsTypes";
 
 type ReplayDayTab = "sessions" | "decisions" | "gpt" | "prix";
 
@@ -176,7 +176,31 @@ function isDecisionRelevantEvent(event: OperationsEvent) {
 }
 
 function ReplayGptTab({ runId, query }: { runId: string; query: ReturnType<typeof useReplaySession> }) {
-  return <p>PLACEHOLDER_TASK_4</p>;
+  if (query.isLoading) return <LoadingView/>;
+  if (query.isError || !query.data) return <ErrorView message={query.error?.message || "Session introuvable"} retry={() => query.refetch()}/>;
+  const data = query.data;
+  return <>
+    <Card className="replay-gpt-rail">
+      <header><div><p className="eyebrow">Orchestration IA</p><h2>Processus GPT de la session</h2></div><span className="terminal-counter">{data.gptProcesses.length}</span></header>
+      {!data.gptProcesses.length ? <div className="terminal-empty-state"><span>NO_GPT_PROCESS</span><small>Aucun processus GPT lié à cette session.</small></div> : <div className="replay-gpt-process-list">{data.gptProcesses.map(process => <Link key={process.id} to={`/replay/runs/${encodeURIComponent(runId)}/gpt/${encodeURIComponent(process.id)}`}>
+        <span className="replay-gpt-process-list__index">{String(process.attempt).padStart(2, "0")}</span>
+        <div><strong>{process.workflow}</strong><small>{processSummary(process)}</small></div>
+        <StatusTag status={process.status}/>
+      </Link>)}</div>}
+    </Card>
+    <Card className="replay-conclusion-rail">
+      <header><p className="eyebrow">Conclusions matérialisées</p><span className="terminal-counter">{data.conclusions.length}</span></header>
+      {!data.conclusions.length ? <p className="muted-copy">Aucune conclusion enregistrée.</p> : data.conclusions.map(item => <blockquote key={item.processId}><span>{formatTime(item.at)}</span>{item.conclusion}</blockquote>)}
+    </Card>
+  </>;
+}
+
+function processSummary(process: GptProcess) {
+  const telemetry = process.telemetry?.available
+    ? `${process.telemetry.model || "model"} · ${process.telemetry.totalTokens ?? "—"} tok`
+    : "télémétrie absente";
+  const lease = process.leaseExpiresAt ? `lease ${formatTime(process.leaseExpiresAt)}` : "sans lease";
+  return `${process.decision || process.conclusion || process.rawStatus} · ${lease} · ${telemetry}`;
 }
 
 function ReplayPrixTab({ runId, query, selectedEvent, onSelectEvent }: { runId: string; query: ReturnType<typeof useReplaySession>; selectedEvent: OperationsEvent | null; onSelectEvent: (event: OperationsEvent) => void }) {
