@@ -1,0 +1,334 @@
+# implementation-backlog.yaml
+# Backlog machine-readable. Phases -1/0/1: détail fichier/fonction complet
+# (source de vérité: 17-EXECUTABLE-BACKLOG.md, lui-même dérivé de
+# docs/audit-2026-08-07/05-CODEX-HANDOFF.md v2). Phases 2-12: niveau
+# architecture cible uniquement (pas de détail fichier), conformément à la
+# consigne explicite du prompt maître de ne pas préparer l'implémentation
+# détaillée des phases lointaines au niveau fichier.
+
+version: 1.0.0
+last_updated: "2026-08-07"
+
+tickets:
+  # ---- Phase -1 ----
+  - id: "-1.1"
+    phase: -1
+    title: "Capture de l'état exact"
+    files_touched: []
+    files_forbidden: ["tout — lecture seule"]
+    tests_before_change: []
+    pass_criteria:
+      - "Tag Git posé"
+      - "État réel des 9 services consigné (OP-1)"
+      - "get_active_contracts exécuté et consigné (OP-2)"
+      - "pg_dump --schema-only produit"
+    depends_on: []
+    blocked_by_operator_decisions: ["OP-1", "OP-2"]
+    risk: "aucun"
+    rollback: "sans objet"
+
+  - id: "-1.2"
+    phase: -1
+    title: "Baseline de tests et fixtures"
+    files_touched: ["nouvelles fixtures uniquement"]
+    files_forbidden: ["tout code de production"]
+    tests_before_change: []
+    pass_criteria:
+      - "Suite CI complète exécutée, pass/fail consigné"
+      - "Fixtures committées (deux sessions, strategy_id legacy renseigné sur au moins une ligne)"
+    depends_on: ["-1.1"]
+    risk: "aucun"
+    rollback: "suppression des fixtures"
+
+  - id: "-1.3"
+    phase: -1
+    title: "Tests de caractérisation de bout en bout"
+    files_touched: ["nouveaux tests uniquement"]
+    files_read_only: ["desk-ai-worker-service.js", "deterministic-compiler-entry-v1.js", "live-paper-execution.js", "broker-execution-repository.js"]
+    files_forbidden: ["desk-ai-worker-service.js", "deterministic-compiler-entry-v1.js", "live-paper-execution.js", "broker-execution-repository.js"]
+    tests_before_change: []
+    pass_criteria:
+      - "CodexExecAdapter.analyze() et transport NinjaTrader stubbés, aucun vrai appel réseau"
+      - "Deux tests de parcours passants avec horodatage explicite de chaque étape (fill -> protection -> clôture)"
+    depends_on: ["-1.2"]
+    risk: "un stub mal conçu masquerait un vrai appel réseau — vérifier l'isolation"
+    rollback: "suppression des tests"
+
+  # ---- Phase 0 ----
+  - id: "0.1"
+    phase: 0
+    title: "Relancer la capture de données"
+    files_touched: ["configuration du job d'ingestion existant"]
+    files_forbidden: ["tradingview-m1-backfill-importer.js (logique inchangée)"]
+    tests_before_change: ["idempotence de la reprise (ON CONFLICT DO NOTHING, lignes 451-478)"]
+    pass_criteria: ["bougies fraîches, retard mesuré et alerté", "test d'idempotence passe"]
+    depends_on: ["-1.3"]
+    risk: "duplication si mal configuré"
+    rollback: "arrêt du job, aucune perte"
+
+  - id: "0.2"
+    phase: 0
+    title: "Importer les 33103 lignes déjà capturées"
+    files_touched: ["importeur déjà existant"]
+    files_forbidden: ["aucun fichier de logique de production"]
+    tests_before_change: ["dry-run par buckets avant commit réel"]
+    pass_criteria: ["lignes importées, dry-run exact, second passage idempotent"]
+    depends_on: ["0.1"]
+    risk: "faible"
+    rollback: "suppression par import_id"
+
+  - id: "0.3"
+    phase: 0
+    title: "Brancher PROTECTION_CONFIRMED (définition corrigée)"
+    definition_non_negotiable: >
+      Un ordre protecteur accepté côté broker et observé dans un état
+      valide via une lecture positive de l'état réel chez NinjaTrader —
+      jamais une inférence depuis une valeur enregistrée localement.
+    files_touched:
+      - "broker-execution-repository.js (persistEntryFillAndTrade, lignes 1010-1055)"
+      - "point d'exposition AddOn existant pour lire l'état réel de l'ordre protecteur"
+    files_read_only: ["position-state-machine-v1.js (lignes 12-91, invoquée, pas réécrite)"]
+    files_forbidden: ["position-state-machine-v1.js — ne pas altérer, uniquement invoquer"]
+    tests_before_change:
+      - "mise à jour du test de caractérisation -1.3"
+      - "fill sans stop attaché -> fermeture d'urgence + alerte, jamais status='open' silencieux"
+      - "fill avec stop localement enregistré mais jamais confirmé côté broker -> PAS de PROTECTION_CONFIRMED"
+      - "fill avec stop confirmé par lecture positive côté broker -> PROTECTION_CONFIRMED émis"
+    pass_criteria: ["les 4 tests passent", "-1.3 mis à jour"]
+    depends_on: ["0.2"]
+    risk: "faux négatif de fermeture d'urgence — tester explicitement le cas 3"
+    rollback: "feature flag, retour au comportement -1.3 en cas de faux positifs excessifs en shadow"
+
+  - id: "0.4"
+    phase: 0
+    title: "Corriger la collision Map (précède 0.5)"
+    must_complete_before: ["0.5", "toute la Phase 1"]
+    files_touched: ["broker-execution-service.js (fonction compareSnapshots uniquement)"]
+    files_forbidden:
+      - "reconciliationSnapshot(accountId) côté repository (scope compte déjà correct en amont)"
+      - "ne pas introduire de dépendance à strategy_id ou strategy_instance_id dans ce ticket"
+    blocked_by_operator_decisions: ["OP-4"]
+    default_if_op4_unresolved: "rejet explicite (pas de position nette silencieuse)"
+    tests_before_change:
+      - "deux trades ouverts, même compte/instrument, strategy_id différents, même sens -> somme signée correcte, pas de faux mismatch"
+      - "sens opposés -> rejet explicite conforme à OP-4"
+      - "écriture concurrente dans la fenêtre de tolérance -> pas de faux mismatch"
+      - "instrument connu du broker, absent de desk.trades -> non-régression"
+      - "invariant continu: quantité signée consolidée desk = somme signée des quantity_open ouverts"
+      - "fill confirmé côté broker mais pas encore écrit côté desk (ou l'inverse), dans la fenêtre de tolérance -> pas de mismatch dur"
+    pass_criteria: ["les 6 tests passent", "le test de caractérisation -1.3 ne régresse pas"]
+    depends_on: ["0.3"]
+    risk: "fenêtre de tolérance mal calibrée (trop large masque une vraie divergence, trop courte réintroduit des faux positifs)"
+    rollback: "comportement actuel derrière un flag"
+
+  - id: "0.5"
+    phase: 0
+    title: "Déclencher la réconciliation périodique (bloqué tant que 0.4 n'est pas terminé)"
+    files_touched:
+      - "run_broker_management_worker.mjs (point d'accroche)"
+      - "broker-execution-service.js (reconcile(), appelée, pas réécrite)"
+    files_forbidden: ["compareSnapshots elle-même — déjà corrigée par 0.4"]
+    tests_before_change:
+      - "divergence artificiellement introduite en base de test détectée et verrouille le compte dans un délai mesuré, sans intervention manuelle, exécuté contre la version corrigée de compareSnapshots"
+    pass_criteria: ["le test ci-dessus passe", "cadence de déclenchement documentée"]
+    depends_on: ["0.4"]
+    blocked_by_operator_decisions: ["OP-10"]
+    risk: "activer avant 0.4 transformerait le bug latent en verrouillages automatiques"
+    rollback: "désactiver le déclenchement planifié, mécanisme manuel disponible"
+
+  - id: "0.6"
+    phase: 0
+    title: "Corrections ponctuelles (atr_14 et hash sous nouvelle version)"
+    constraint_non_negotiable: "toute nouvelle sémantique sous nouvelle version de contrat/schéma, jamais redéfinition silencieuse"
+    files_touched: ["desk-market-feature-algorithms.js (recentAverageRange, lignes 780-783)"]
+    files_left_unchanged: ["poc_vah_val (ligne 394) — correctement documenté comme non calculable"]
+    files_forbidden: ["tout consommateur de atr_14 non recensé au préalable"]
+    tests_before_change:
+      - "non-régression sur chaque consommateur identifié de l'ancienne clé"
+      - "artefact produit sous l'ancienne version reste lisible et inchangé après introduction de la nouvelle version"
+    pass_criteria: ["nouvelle sémantique disponible sous version distincte", "tous les consommateurs recensés migrés explicitement"]
+    depends_on: ["0.5"]
+    risk: "consommateur non recensé casserait silencieusement"
+    rollback: "trivial, additif"
+
+  # ---- Phase 1 ----
+  - id: "1.1"
+    phase: 1
+    title: "Strategy Definition (schéma)"
+    mechanism_resolved: "DSL déclarative sérialisée JSON, validée JSON Schema (OP-5, résolu)"
+    files_touched: ["nouveau schéma, sur le modèle de packages/desk-contracts/schemas/entities/*.schema.json"]
+    files_forbidden: ["strategy-runtime-versioning.js — ni ce ticket ni aucun ticket de Phase 1"]
+    tests_before_change: ["validation contre au moins 2 exemples dont BREAKOUT_RETEST"]
+    pass_criteria: ["schéma existe, validé, un exemple passe"]
+    depends_on: ["0.6"]
+    risk: "faible"
+    rollback: "suppression du schéma, additif"
+
+  - id: "1.2"
+    phase: 1
+    title: "Strategy Version (schéma, statut propre)"
+    files_touched: ["nouveau schéma référençant une Strategy Definition par id, champ statut propre DRAFT/VALIDATED/DEPRECATED distinct de tout état d'exécution"]
+    files_forbidden: ["strategy-runtime-versioning.js"]
+    tests_before_change: ["deux Strategy Versions distinctes référençant la même Definition, statuts différents"]
+    pass_criteria: ["schéma existe et est validé"]
+    depends_on: ["1.1"]
+    risk: "faible"
+    rollback: "additif"
+
+  - id: "1.3"
+    phase: 1
+    title: "Strategy Instance (schéma, deux axes distincts, garde technique LIVE)"
+    supersedes: "ancienne recommandation de remplacer ACTIVE_STRATEGY_RUNTIME_VERSIONS par un ensemble — retirée, voir ADR-0001"
+    files_touched: ["nouveau schéma: strategy_version_id, scope compte/instrument/session/mode, état runtime ET mode d'exécution comme deux champs jamais fusionnés"]
+    files_forbidden: ["strategy-runtime-versioning.js"]
+    technical_guard_non_negotiable: >
+      Le mode ne peut passer à LIVE en présence d'une autre Strategy
+      Instance déjà LIVE sur le même compte que si un drapeau explicite
+      "triple verrou validé" (Portfolio Arbitration + Global Risk + Broker
+      Netting, Phase 7, hors périmètre de ce ticket) est positionné.
+      Implémenté comme garde de code active, pas comme absence de
+      développement.
+    tests_before_change:
+      - "deux Strategy Instances actives simultanément SHADOW/PAPER, Versions différentes, sous le même Runtime Contract Bundle inchangé"
+      - "tentative de passage d'une deuxième instance en LIVE sans drapeau triple verrou -> rejet explicite testé positivement"
+    pass_criteria: ["les deux tests passent"]
+    depends_on: ["1.2"]
+    risk: "erreur de portée sur la garde technique = risque le plus élevé de ce ticket"
+    rollback: "additif, flag"
+
+  - id: "1.4"
+    phase: 1
+    title: "trades.strategy_instance_id, sans réinterprétation du strategy_id legacy"
+    files_touched: ["migration additive sur trades (nouvelle colonne strategy_instance_id, FK nullable)"]
+    files_forbidden: ["strategy_id existante — inchangée, en lecture, jamais réécrite ni mappée automatiquement"]
+    constraint_non_negotiable: "aucun script de backfill ne doit déduire strategy_instance_id à partir de strategy_id historique — toutes les lignes existantes gardent strategy_instance_id IS NULL indéfiniment"
+    tests_before_change:
+      - "ligne trades historique reste lisible, inchangée, strategy_instance_id IS NULL après migration"
+      - "nouvelle ligne avec Strategy Instance valide porte strategy_instance_id renseigné, sans confusion avec strategy_id dans aucune requête existante"
+    pass_criteria: ["les deux tests passent", "aucune requête existante lisant strategy_id n'est modifiée"]
+    depends_on: ["1.3"]
+    risk: "tentation d'un backfill pratique — explicitement interdit, point de vigilance en revue de code"
+    rollback: "colonne additive, retrait trivial (préférer flag désactivant l'usage plutôt que DROP COLUMN, discipline expand/migrate/contract ADR-0019)"
+
+  - id: "1.5"
+    phase: 1
+    title: "Peupler strategy_catalog/desk_strategy_versions"
+    files_touched: ["nouveau chemin d'écriture"]
+    files_read_only: ["front-operations-service.js (lignes 1288-1341)"]
+    files_forbidden: ["code de lecture frontend existant — ne doit nécessiter aucune modification"]
+    tests_before_change: ["une Strategy créée via 1.1-1.4 apparaît dans ces tables et est lisible par le frontend existant sans modification"]
+    pass_criteria: ["le test passe"]
+    depends_on: ["1.4"]
+    risk: "faible"
+    rollback: "additif"
+
+  - id: "1.6"
+    phase: 1
+    title: "Concurrence positionnelle paper/shadow uniquement (portée fortement restreinte)"
+    scope_correction_non_negotiable: "touche UNIQUEMENT la comptabilité desk-side paper/shadow — ne rend JAMAIS le broker ou l'AddOn NinjaTrader conscients de plusieurs stratégies"
+    files_touched:
+      - "live-paper-execution.js (max_simultaneous_positions: 1, lignes 87-95)"
+      - "vue d'allocation interne par stratégie (comptabilité virtuelle uniquement, s'appuie sur trades.strategy_instance_id du Ticket 1.4)"
+    files_forbidden:
+      - "packages/desk-domain/src/broker-execution.js (NO_DUPLICATE_POSITION, lignes 439-442) — confirmé évalué en phase BROKER_SUBMIT réelle"
+      - "gate AddOn exigeant le broker flat avant toute entrée (broker-execution-service.js, ~862-865)"
+      - "marks de gestion exigeant correspondance de quantité exacte (broker-execution-service.js, ~826-833)"
+      - "CLOSEPOSITION instrument-wide (packages/desk-domain/src/broker-position-management.js, lignes 333-337)"
+      - "position-state-machine-v1.js — consommée, pas altérée"
+    scope_note: "ces 4 points restent strictement inchangés jusqu'à la livraison du Broker Netting Engine (Phase 7)"
+    tests_before_change:
+      - "deux Strategy Instances PAPER, même instrument, coexistent sans déclencher max_simultaneous_positions: 1"
+      - "test négatif explicite: tentative de passage LIVE d'une instance alors qu'une autre est active sur le même compte échoue (garde du Ticket 1.3)"
+      - "les 4 points exclus testés en non-régression stricte sur le chemin BROKER_SUBMIT réel"
+      - "vue d'allocation interne agrège correctement par (compte, instrument, strategy_instance_id), distincte de l'agrégation pure par instrument du Ticket 0.4"
+    pass_criteria: ["les 4 tests passent, en particulier le test négatif et la non-régression des 4 points exclus"]
+    depends_on: ["1.5"]
+    risk: "ticket à l'impact le plus grave en cas d'erreur de portée (activation prématurée d'exécution réelle multi-stratégies non gouvernée) — revue doit vérifier explicitement qu'aucun des 4 fichiers exclus n'apparaît dans le diff"
+    rollback: "chaque changement derrière son propre flag, désactivable indépendamment"
+
+  - id: "1.7"
+    phase: 1
+    title: "Cycle de vie minimal, trois axes"
+    files_touched: ["état runtime et mode d'exécution du schéma 1.3, transition DRAFT -> PAPER -> ACTIVE -> RETIRED pour l'état runtime, indépendante du statut Version (1.2) et du mode d'exécution (1.3)"]
+    tests_before_change:
+      - "chaque transition d'état runtime valide et invalide testée explicitement"
+      - "confirmation que l'état runtime ACTIVE n'implique jamais automatiquement le mode d'exécution LIVE"
+    pass_criteria:
+      - "une Strategy Instance peut être créée en DRAFT, promue PAPER, sans qu'aucun ordre réel ne soit jamais soumis avant ACTIVE ET avant que le triple verrou (Phase 7) ne soit validé pour LIVE — vérifié par test"
+    depends_on: ["1.6"]
+    risk: "faible, garde déjà posée par 1.3"
+    rollback: "additif"
+
+  # ---- Phases 2-12 : niveau architecture cible uniquement, pas de détail fichier ----
+  - id: "phase-2"
+    phase: 2
+    title: "Data Foundation and Provenance"
+    detail_level: "architecture cible uniquement — voir 06-DATA-ACQUISITION-FEATURES-AND-PROVENANCE.md"
+    depends_on: ["1.7"]
+
+  - id: "phase-3"
+    phase: 3
+    title: "Strategy DSL, Canonical Runtime, Simulation Engine"
+    detail_level: "architecture cible uniquement — voir 07-STRATEGY-DSL-AND-CANONICAL-RUNTIME.md, 08-SIMULATION-AND-EXPERIMENT-PLATFORM.md"
+    depends_on: ["phase-2"]
+
+  - id: "phase-4"
+    phase: 4
+    title: "Experiment Registry and Research Lab"
+    detail_level: "architecture cible uniquement — voir 08-SIMULATION-AND-EXPERIMENT-PLATFORM.md, 09-RESEARCH-LAB-AND-MULTI-AGENT-RUNTIME.md"
+    depends_on: ["phase-3"]
+
+  - id: "phase-5"
+    phase: 5
+    title: "Generalized Multi-Agent Runtime"
+    detail_level: "architecture cible uniquement — voir 09-RESEARCH-LAB-AND-MULTI-AGENT-RUNTIME.md"
+    depends_on: ["phase-4"]
+
+  - id: "phase-6"
+    phase: 6
+    title: "Live Strategy Runtime (SHADOW/PAPER)"
+    detail_level: "architecture cible uniquement — voir 10-LIVE-STRATEGY-RUNTIME.md"
+    depends_on: ["phase-5"]
+
+  - id: "phase-7"
+    phase: 7
+    title: "Portfolio Arbitration, Global Risk, Broker Netting"
+    detail_level: "architecture cible uniquement — voir 11-PORTFOLIO-ARBITRATION-GLOBAL-RISK-AND-NETTING.md"
+    depends_on: ["phase-6"]
+    note: "verrou bloquant avant toute activation LIVE multi-stratégie, ADR-0008"
+
+  - id: "phase-8"
+    phase: 8
+    title: "AI Context Gate (SHADOW/ADVISORY)"
+    detail_level: "architecture cible uniquement — voir 12-AI-CONTEXT-GATE.md"
+    depends_on: ["phase-7"]
+
+  - id: "phase-9"
+    phase: 9
+    title: "Execution Gateway and NinjaTrader Adapter"
+    detail_level: "architecture cible uniquement — voir 13-EXECUTION-GATEWAY-PROVIDERS-AND-RECONCILIATION.md"
+    depends_on: ["phase-8"]
+
+  - id: "phase-10"
+    phase: 10
+    title: "PickMyTrade Due Diligence and Pilot"
+    detail_level: "due diligence uniquement, pas de code d'intégration — voir 13-EXECUTION-GATEWAY-PROVIDERS-AND-RECONCILIATION.md#4"
+    depends_on: ["phase-9"]
+    optional: true
+
+  - id: "phase-11"
+    phase: 11
+    title: "Production Cutover"
+    detail_level: "trajectoire et gates uniquement — voir 21-CUTOVER-AND-GPT-FIRST-DECOMMISSION.md"
+    depends_on: ["phase-9"]
+
+  - id: "phase-12"
+    phase: 12
+    title: "GPT-First Decommission"
+    detail_level: "trajectoire et gates uniquement — voir 21-CUTOVER-AND-GPT-FIRST-DECOMMISSION.md"
+    depends_on: ["phase-11"]
+
+summary:
+  total_tickets_detailed: 17
+  total_phase_stubs: 11
+  first_executable_ticket: "-1.1"

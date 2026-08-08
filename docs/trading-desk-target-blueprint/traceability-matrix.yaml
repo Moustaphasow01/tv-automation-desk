@@ -1,0 +1,103 @@
+# traceability-matrix.yaml
+# Version machine-readable de la matrice de traçabilité. La version
+# narrative complète et le calcul de complétude vivent dans
+# 23-TRACEABILITY-AND-COMPLETENESS-MATRIX.md. Ce fichier liste, pour
+# chaque exigence de la North Star (invariants + critères de succès),
+# les documents/ADR/tickets qui la couvrent — utilisable par un script
+# de vérification automatique de non-orphelinage.
+
+version: 1.0.0
+last_updated: "2026-08-07"
+
+invariants:
+  - id: INV-1
+    description: "Aucune décision d'exécution réelle par appel LLM synchrone"
+    covered_by:
+      adrs: ["ADR-0009"]
+      documents: ["04-TARGET-SYSTEM-ARCHITECTURE.md#2", "10-LIVE-STRATEGY-RUNTIME.md#4", "12-AI-CONTEXT-GATE.md#3"]
+      tests: ["18-TEST-AND-VALIDATION-STRATEGY.md — AI Context Gate isolation test"]
+
+  - id: INV-2
+    description: "Gates broker-facing réels (NO_DUPLICATE_POSITION, BRIDGE_HEALTHY) restent actifs"
+    covered_by:
+      adrs: ["ADR-0016"]
+      documents: ["04-TARGET-SYSTEM-ARCHITECTURE.md#4"]
+      tickets: ["1.6"]
+
+  - id: INV-3
+    description: "Pas de migration destructrice sans expand/contract et validation opérateur"
+    covered_by:
+      adrs: ["ADR-0004", "ADR-0019"]
+      documents: []
+      tickets: ["1.4"]
+
+  - id: INV-4
+    description: "Système opérable à chaque étape intermédiaire (pipeline GPT-first non coupé unilatéralement)"
+    covered_by:
+      adrs: ["ADR-0020"]
+      documents: ["21-CUTOVER-AND-GPT-FIRST-DECOMMISSION.md"]
+
+  - id: INV-5
+    description: "Nouvelle capacité d'exécution automatique protégée par feature flag désactivé par défaut + décision opérateur"
+    covered_by:
+      adrs: ["ADR-0007", "ADR-0018"]
+      documents: ["phase-gates.yaml"]
+
+  - id: INV-6
+    description: "Aucun secret/identifiant réel/environnement de production contacté sans action humaine explicite"
+    covered_by:
+      documents: ["15-SECURITY-OBSERVABILITY-AND-SCALABILITY.md#1", "22-GPT-CODEX-IMPLEMENTATION-RUNBOOK.md"]
+
+  - id: INV-7
+    description: "ACTIVE_STRATEGY_RUNTIME_VERSIONS reste un verrou singulier, jamais mécanisme de sélection de stratégie"
+    covered_by:
+      adrs: ["ADR-0001"]
+      documents: ["05-DOMAIN-MODEL-AND-STATE-MACHINES.md#9"]
+      tickets: ["1.1", "1.2", "1.3"]
+
+  - id: INV-8
+    description: "Toute agrégation de position déclarée source de vérité prouvée par test de concurrence avant connexion réelle"
+    covered_by:
+      adrs: ["ADR-0003", "ADR-0005"]
+      tickets: ["0.4", "0.5"]
+
+success_criteria:
+  - id: SC-1
+    description: "100% des soumissions d'ordres réels passent par evaluateBrokerPolicy"
+    covered_by: { documents: ["13-EXECUTION-GATEWAY-PROVIDERS-AND-RECONCILIATION.md#2.1"] }
+  - id: SC-2
+    description: "Catalogue de conditions comme source unique, pas de duplication"
+    covered_by: { documents: ["04-TARGET-SYSTEM-ARCHITECTURE.md#4"] }
+  - id: SC-3
+    description: "Reproductibilité bit-à-bit du Simulation Engine"
+    covered_by: { adrs: ["ADR-0006", "ADR-0010", "ADR-0022", "ADR-0023"], documents: ["08-SIMULATION-AND-EXPERIMENT-PLATFORM.md#2.5"] }
+  - id: SC-4
+    description: "SHADOW puis PAPER obligatoires avant LIVE"
+    covered_by: { adrs: ["ADR-0002"], documents: ["05-DOMAIN-MODEL-AND-STATE-MACHINES.md#2.3"] }
+  - id: SC-5
+    description: "Portfolio Arbitration + Global Risk bloquants avant multi-stratégie LIVE"
+    covered_by: { adrs: ["ADR-0008"], documents: ["11-PORTFOLIO-ARBITRATION-GLOBAL-RISK-AND-NETTING.md#7"] }
+  - id: SC-6
+    description: "AI Context Gate strictement SHADOW/ADVISORY"
+    covered_by: { adrs: ["ADR-0009"], documents: ["12-AI-CONTEXT-GATE.md#3-4"] }
+  - id: SC-7
+    description: "Traçabilité causale complète via correlation_id/causation_id"
+    covered_by: { adrs: ["ADR-0012"], documents: ["14-EVENTS-APIS-AND-MCP-SURFACE.md#3"] }
+  - id: SC-8
+    description: "Coupure du pipeline GPT-first sans perte de capacité, rollback testé"
+    covered_by: { adrs: ["ADR-0020"], documents: ["21-CUTOVER-AND-GPT-FIRST-DECOMMISSION.md"] }
+  - id: SC-9
+    description: "Réduction mesurable du coût par décision migrée"
+    covered_by: { adrs: ["ADR-0013", "ADR-0014"], documents: ["09-RESEARCH-LAB-AND-MULTI-AGENT-RUNTIME.md#3"] }
+  - id: SC-10
+    description: "Aucune régression sur les 12 hard gates / 10 soft gates existants"
+    covered_by: { documents: ["04-TARGET-SYSTEM-ARCHITECTURE.md#4"], tests: ["18-TEST-AND-VALIDATION-STRATEGY.md — suite de non-régression catalogue"] }
+
+open_items_requiring_operator_input:
+  - "OP-1 à OP-12 — voir operator-decisions.yaml pour le détail complet"
+
+completeness_check_method: >
+  23-TRACEABILITY-AND-COMPLETENESS-MATRIX.md recalcule cette liste de
+  façon narrative et vérifie explicitement qu'aucun invariant (INV-1 à
+  INV-8) ni critère de succès (SC-1 à SC-10) n'a une liste "covered_by"
+  vide.

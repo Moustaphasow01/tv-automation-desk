@@ -1,0 +1,200 @@
+# phase-gates.yaml
+# Portes de sortie machine-readable pour chaque phase de 16-END-TO-END-MIGRATION-ROADMAP.md.
+# "status" par phase: NOT_STARTED | IN_PROGRESS | PASSED | BLOCKED.
+# Ce fichier est mis à jour au fil de l'implémentation réelle — il ne
+# reflète, à la date de production de ce dossier, que l'état de planification.
+
+version: 1.0.0
+last_updated: "2026-08-07"
+
+phases:
+  - id: -1
+    name: "Baseline et caractérisation"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: []
+    note_2026_08_07: >
+      OP-1 (services arrêtés) et OP-2 (contrat v5.4.0) résolus par
+      l'opérateur. OP-12 (état runtime du hold) n'est plus un pré-requis
+      bloquant : sa vérification est le contenu même du Ticket -1.1,
+      exécutée par Codex au démarrage — pas par la session de
+      planification, qui n'exécute aucun code.
+    exit_criteria:
+      - "Tag Git posé sur le commit socle"
+      - "État réel des 9 services WinSW confirmé (OP-1)"
+      - "Version de contrat active confirmée (OP-2)"
+      - "Suite CI complète exécutée, résultat consigné"
+      - "Deux tests de caractérisation de bout en bout passants (fill -> protection -> clôture, horodatage explicite)"
+    feature_flags: []
+    depends_on_phases: []
+
+  - id: 0
+    name: "Sûreté immédiate et fondations de données"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: ["OP-4"]
+    exit_criteria:
+      - "Ingestion de données réactivée, idempotence prouvée par test"
+      - "33103 lignes historiques importées, dry-run puis import réel idempotent"
+      - "PROTECTION_CONFIRMED corrigé selon la définition non négociable (lecture positive côté broker), 4 tests passants"
+      - "Ticket 0.4 (fix Map) terminé et fusionné AVANT le Ticket 0.5 (ADR-0005) — 6 tests passants"
+      - "Ticket 0.5 (réconciliation périodique) actif seulement après 0.4, test de divergence détectée passant"
+      - "atr_14 et hash versionnés sous nouveau schéma additif, non-régression sur tous les consommateurs recensés"
+    feature_flags:
+      - name: "reconciliation.scheduled_trigger"
+        default: false
+        gated_by_ticket: "0.5"
+    depends_on_phases: [-1]
+
+  - id: 1
+    name: "Strategy Definition / Version / Instance"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: []
+    exit_criteria:
+      - "Schéma Strategy Definition validé (Ticket 1.1)"
+      - "Schéma Strategy Version avec statut propre validé (Ticket 1.2)"
+      - "Schéma Strategy Instance à deux axes indépendants + garde technique LIVE active et testée positivement (Ticket 1.3)"
+      - "trades.strategy_instance_id ajouté sans backfill, 2 tests passants (Ticket 1.4)"
+      - "strategy_catalog/desk_strategy_versions peuplés, lisibles par le frontend existant sans modification (Ticket 1.5)"
+      - "Concurrence positionnelle paper/shadow uniquement, 4 fichiers broker-facing réels non modifiés (vérifié par diff), 4 tests passants dont le test négatif LIVE (Ticket 1.6)"
+      - "Cycle de vie runtime à trois axes minimal opérationnel, ACTIVE n'implique jamais LIVE automatiquement (Ticket 1.7)"
+    feature_flags:
+      - name: "strategy_instance.paper_concurrency"
+        default: false
+        gated_by_ticket: "1.6"
+    depends_on_phases: [0]
+    note: "ACTIVE_STRATEGY_RUNTIME_VERSIONS (strategy-runtime-versioning.js) explicitement exclu du périmètre de cette phase — voir ADR-0001."
+
+  - id: 2
+    name: "Data Foundation and Provenance"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: []
+    exit_criteria:
+      - "Au moins une Data Source ingérée avec provenance tracée de bout en bout"
+      - "Dataset reproductible: même provenance_hash sur deux reconstructions identiques"
+      - "Au moins une Feature Definition migrée, validée par non-régression contre le calcul actuel"
+    feature_flags: []
+    depends_on_phases: [1]
+
+  - id: 3
+    name: "Strategy DSL, Canonical Runtime, Simulation Engine"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: []
+    exit_criteria:
+      - "Stratégie simple écrite en DSL compilée et exécutée par le moteur M1 existant sans le modifier"
+      - "Rejet propre d'un DSL référençant un prédicat inexistant"
+      - "Run Registry: deux Run avec mêmes paramètres et seed produisent des métriques identiques bit-à-bit (SC-3)"
+    feature_flags: []
+    depends_on_phases: [2]
+
+  - id: 4
+    name: "Experiment Registry and Research Lab"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: ["OP-11"]
+    exit_criteria:
+      - "Pipeline orchestration de replay migré vers le Multi-Agent Runtime, résultats équivalents, traçabilité correlation_id présente"
+      - "Un Experiment comparant au moins 2 Run, sélection de gagnant selon critère approuvé par l'opérateur"
+    feature_flags: []
+    depends_on_phases: [3]
+
+  - id: 5
+    name: "Generalized Multi-Agent Runtime"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: []
+    exit_criteria:
+      - "3 pipelines LLM migrés (analyse horaire, moniteur de thèse, orchestration replay), métrique de valeur ajoutée mesurée avant/après pour chacun"
+      - "Aucune régression de résultat métier sur jeu de scénarios de non-régression dédié par pipeline"
+      - "Event Envelope (correlation_id/causation_id) présent sur tout événement émis par les nouveaux composants"
+    feature_flags: []
+    depends_on_phases: [4]
+
+  - id: 6
+    name: "Live Strategy Runtime (SHADOW/PAPER)"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: []
+    exit_criteria:
+      - "Au moins une Strategy Instance en SHADOW calculant en continu, observable via dashboard opérateur"
+      - "Une Strategy Instance en PAPER exécutant sur compte simulé, isolation des pannes prouvée par test"
+      - "Test négatif de la garde technique PAPER->LIVE passant (ADR-0007)"
+    feature_flags:
+      - name: "live_strategy_runtime.enabled"
+        default: false
+    depends_on_phases: [5]
+
+  - id: 7
+    name: "Portfolio Arbitration, Global Risk, Broker Netting"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: ["OP-8"]
+    exit_criteria:
+      - "Test d'intégration: deux Strategy Instances LIVE simultanées, conformes individuellement, ne dépassent pas l'exposition nette de portefeuille (SC-5)"
+      - "Broker Netting Engine produit une Target Position correcte sous accès concurrent, sans collision"
+      - "Aucune régression sur evaluateBrokerPolicy et ses gates existants"
+    feature_flags:
+      - name: "portfolio_arbitration.multi_strategy_live"
+        default: false
+    depends_on_phases: [6]
+    note: "VERROU BLOQUANT (ADR-0008) — aucune deuxième Strategy Instance ne peut passer LIVE aux côtés d'une autre déjà LIVE avant que cette phase ne soit PASSED."
+
+  - id: 8
+    name: "AI Context Gate (SHADOW/ADVISORY)"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: ["OP-9"]
+    exit_criteria:
+      - "Test d'intégration prouvant qu'aucune combinaison de réponses de l'AI Context Gate ne peut produire un Order Intent directement"
+      - "AI Context Advisory consultables par l'opérateur, distinctement des décisions réelles"
+    feature_flags:
+      - name: "ai_context_gate.enabled"
+        default: false
+    depends_on_phases: [7]
+
+  - id: 9
+    name: "Execution Gateway and NinjaTrader Adapter"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: ["OP-10"]
+    exit_criteria:
+      - "Execution Gateway opérationnel avec provider NinjaTrader unique"
+      - "Tests de non-régression prouvant l'absence de changement de comportement réel observable"
+    feature_flags:
+      - name: "execution_gateway.enabled"
+        default: false
+    depends_on_phases: [8]
+
+  - id: 10
+    name: "PickMyTrade Due Diligence and Pilot"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: ["OP-7"]
+    exit_criteria:
+      - "Due diligence sécurité/fiabilité/coût documentée et présentée à l'opérateur"
+      - "Si approuvé: pilote SHADOW/PAPER uniquement, jamais LIVE sans décision distincte"
+    feature_flags:
+      - name: "execution_gateway.pickmytrade_provider"
+        default: false
+    depends_on_phases: [9]
+    optional: true
+    note: "Phase non bloquante pour les phases 11/12 — voir ADR-0017."
+
+  - id: 11
+    name: "Production Cutover"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: []
+    exit_criteria:
+      - "Exercice de bascule/rollback chronométré en environnement de simulation, sous le délai fixé par l'opérateur"
+      - "Toutes les phases 1-9 PASSED"
+    feature_flags:
+      - name: "cutover.gpt_first_disabled"
+        default: false
+    depends_on_phases: [9]
+
+  - id: 12
+    name: "GPT-First Decommission"
+    status: NOT_STARTED
+    blocked_by_operator_decisions: []
+    exit_criteria:
+      - "Pipeline GPT-first legacy retiré, aucune perte de capacité de trading observée"
+      - "Plan de rollback vers legacy testé et documenté avant retrait définitif"
+    feature_flags: []
+    depends_on_phases: [11]
+
+summary:
+  total_phases: 14
+  passed: 0
+  in_progress: 0
+  not_started: 14

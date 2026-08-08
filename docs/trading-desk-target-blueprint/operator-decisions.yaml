@@ -1,0 +1,233 @@
+# operator-decisions.yaml
+# Registre canonique des décisions bloquantes réservées à l'opérateur.
+# Statut: EN CONSTRUCTION -> mis à jour au fil des tickets.
+# Toute entrée "status: open" bloque les tickets listés dans "blocks"
+# jusqu'à ce qu'un opérateur humain renseigne "decision" et "decided_at".
+# Ce fichier est la source de vérité unique pour ces décisions — ne pas
+# dupliquer leur contenu de façon divergente dans un document markdown.
+
+version: 1.0.0
+last_updated: "2026-08-07"
+source_documents:
+  - docs/audit-2026-08-07/05-CODEX-HANDOFF.md
+  - docs/trading-desk-target-blueprint/01-NORTH-STAR-AND-SUCCESS-CRITERIA.md
+  - docs/trading-desk-target-blueprint/19-ARCHITECTURE-DECISION-RECORDS.md
+
+decisions:
+  - id: OP-1
+    title: "État réel actuel des 9 services WinSW"
+    description: >
+      Confirmer quels services Windows (WinSW) sont effectivement démarrés,
+      lesquels sont sous le hold ENGINE_V5_VALIDATION_HOLD, avant tout
+      ticket de Phase -1.
+    status: resolved
+    decision: "Arrêtés (les 9 services WinSW sont à l'arrêt à la date du 2026-08-07)."
+    decided_at: "2026-08-07 (déclaration opérateur directe, non re-vérifiée techniquement — voir OP-12 pour la vérification croisée du mécanisme de hold sous-jacent)"
+    blocks: []
+    referenced_in:
+      - "02-VERIFIED-AS-IS-SUMMARY.md#8"
+      - "17-EXECUTABLE-BACKLOG.md#ticket--11-capture-de-letat-exact"
+
+  - id: OP-2
+    title: "Version de contrat réellement active (5.4.0 vs 5.1.0)"
+    description: >
+      Trancher par vérification directe en production (get_active_contracts
+      ou équivalent) quelle version des contrats packages/desk-contracts
+      est réellement active, l'audit ayant trouvé les deux références
+      selon la source consultée.
+    status: resolved
+    decision: >
+      5.4.0. Corroboré par lecture directe de
+      mcp_gpt_desk/scripts/verify_v5_frozen_state.mjs:14 (EXPECTED_CONTRACTS.master_contract
+      = ["DeskMasterAnalysisContract_v5_4_0", "5.4.0"]) — la version 5.4.0 est
+      celle que le code lui-même attend comme canonique. La branche 5.1.0
+      trouvée pendant l'audit provient d'une source non re-confirmée comme
+      active (probablement une doc/contrat antérieur au cutover du
+      2026-08-01) ; elle est donc traitée comme obsolète, pas comme une
+      version concurrente encore valide.
+    decided_at: "2026-08-07 (déclaration opérateur directe + corroboration code)"
+    blocks: []
+    referenced_in:
+      - "02-VERIFIED-AS-IS-SUMMARY.md#3"
+      - "adr/0021-contract-version-ambiguity-resolved-by-operator.md"
+
+  - id: OP-3
+    title: "Mode d'authentification Codex CLI en production"
+    description: >
+      Confirmer le mode d'authentification réellement utilisé par
+      CodexExecAdapter en production (clé API vs session interactive vs
+      autre), question soulevée pendant l'audit mais non bloquante pour
+      les Phases -1/0/1.
+    status: open
+    default_if_unresolved: "non bloquant pour Phases -1/0/1"
+    blocks: []
+    referenced_in:
+      - "docs/audit-2026-08-07/02-REPONSES-SECTION-31.md"
+
+  - id: OP-4
+    title: "Politique de netting pour positions opposées inter-stratégies"
+    description: >
+      Définir le comportement attendu quand deux Strategy Instances
+      signalent des directions opposées sur le même instrument au moment
+      de l'agrégation de position (Ticket 0.4).
+    status: open
+    default_if_unresolved: "rejet explicite (aucune position nette silencieuse)"
+    blocks: []
+    note: >
+      Non bloquant grâce à la valeur par défaut sûre (rejet explicite) —
+      le Ticket 0.4 peut avancer avec ce défaut si OP-4 n'est pas tranchée
+      à temps, mais la décision reste ouverte pour la politique définitive.
+    referenced_in:
+      - "17-EXECUTABLE-BACKLOG.md#ticket-04"
+
+  - id: OP-5
+    title: "Portée exacte du vocabulaire de la DSL de Strategy Specification"
+    description: >
+      Portée du vocabulaire couvert par la DSL déclarative de Ticket 1.1.
+    status: resolved
+    decision: >
+      Résolu par l'errata de sûreté (ADR-02 historique) : DSL déclarative
+      sérialisée en JSON, validée par JSON Schema. Le mécanisme lui-même
+      n'est plus une question ouverte ; seule l'extension progressive du
+      vocabulaire au fil des phases reste à raffiner ticket par ticket,
+      non bloquant.
+    decided_at: "2026-08-07 (par errata, avant ce dossier)"
+    blocks: []
+    referenced_in:
+      - "docs/audit-2026-08-07/05-CODEX-HANDOFF.md#ticket-11"
+
+  - id: OP-6
+    title: "Source canonique de sémantique JS vs Python (ADR-07 historique)"
+    description: >
+      Si une réimplémentation ou une portabilité multi-langage d'une
+      partie du moteur est un jour envisagée, quelle implémentation fait
+      foi sémantiquement. Non bloquant pour les Phases -1/0/1.
+    status: open
+    default_if_unresolved: "non bloquant avant Phase 2/3"
+    blocks: []
+    referenced_in:
+      - "docs/audit-2026-08-07/05-CODEX-HANDOFF.md#0-décisions-opérateur-bloquantes"
+
+  - id: OP-7
+    title: "Choix/négociation d'un nouveau broker réel — PickMyTrade (Phase 10)"
+    description: >
+      Approuver ou non la due diligence PickMyTrade, puis (décision
+      distincte et postérieure) l'éventuel pilote SHADOW/PAPER, puis
+      (décision distincte et postérieure encore) toute considération LIVE.
+    status: open
+    default_if_unresolved: "Phase 10 reste optionnelle et non bloquante pour les autres phases"
+    blocks: ["Phase 10 uniquement"]
+    referenced_in:
+      - "adr/0017-pickmytrade-due-diligence-not-committed.md"
+      - "13-EXECUTION-GATEWAY-PROVIDERS-AND-RECONCILIATION.md#4"
+      - "01-NORTH-STAR-AND-SUCCESS-CRITERIA.md#7"
+
+  - id: OP-8
+    title: "Valeurs numériques des limites du Global Risk Engine (Phase 7)"
+    description: >
+      Exposition nette max par instrument/secteur, perte max journalière/
+      hebdomadaire consolidée, nombre max de positions simultanées —
+      valeurs dépendantes du capital réel et de l'appétit au risque de
+      l'opérateur, non déductibles du code.
+    status: open
+    default_if_unresolved: "aucun — bloquant pour l'activation réelle de la Phase 7"
+    blocks: ["Phase 7 — activation LIVE multi-stratégie"]
+    referenced_in:
+      - "11-PORTFOLIO-ARBITRATION-GLOBAL-RISK-AND-NETTING.md#3.1"
+
+  - id: OP-9
+    title: "Politique de consommation des AI Context Advisory (Phase 8)"
+    description: >
+      L'AI Context Gate reste consultatif par défaut au lancement ; si et
+      quand une politique plus contraignante (ex. bloquante après période
+      d'observation prouvée) est souhaitée, c'est une décision opérateur
+      distincte, jamais un défaut implicite.
+    status: open
+    default_if_unresolved: "consultative uniquement, jamais bloquante"
+    blocks: []
+    referenced_in:
+      - "12-AI-CONTEXT-GATE.md#7"
+      - "adr/0009-ai-context-gate-advisory-only.md"
+
+  - id: OP-10
+    title: "Fréquence de réconciliation périodique et comportement en cas de désynchronisation (Phase 9)"
+    description: >
+      Cadence du déclenchement automatique de reconcile() une fois activé,
+      et comportement en cas d'écart détecté (alerte seule vs correction
+      automatique).
+    status: open
+    default_if_unresolved: "alerte seule, jamais de correction automatique de position"
+    blocks: ["activation du déclenchement SCHEDULED en Phase 9, au-delà du Ticket 0.5 déjà spécifié"]
+    referenced_in:
+      - "13-EXECUTION-GATEWAY-PROVIDERS-AND-RECONCILIATION.md#5.2"
+
+  - id: OP-11
+    title: "Critères de sélection du gagnant dans l'Experiment Registry (Phase 4)"
+    description: >
+      Quelle métrique composite prime pour désigner un winner_run_id au
+      sein d'un Experiment.
+    status: open
+    default_if_unresolved: "métrique composite proposée par défaut par l'équipe d'implémentation, à documenter et valider avant Phase 4"
+    blocks: ["Phase 4 — sélection automatique de gagnant"]
+    referenced_in:
+      - "08-SIMULATION-AND-EXPERIMENT-PLATFORM.md#3.2"
+
+  - id: OP-12
+    title: "État du hold ENGINE_V5_VALIDATION_HOLD à la date de démarrage effective"
+    description: >
+      L'état constaté le 2026-08-07 (hold actif depuis 2026-08-01) est
+      daté — à revérifier explicitement avant toute planification
+      d'activation, la date de démarrage réel de l'implémentation pouvant
+      différer de la date de cet audit.
+    status: open
+    code_inspection_finding: >
+      Mécanisme localisé par LECTURE STATIQUE du code (pas d'exécution) :
+      le hold est porté par des documents desk_claim_lane_controls (champs
+      enabled/status/reason) en base, pour les lanes "live" et "replay",
+      avec reason="ENGINE_V5_VALIDATION_HOLD" (mcp_gpt_desk/src/v5-frozen-quiesce.js:3,
+      mcp_gpt_desk/scripts/verify_v5_frozen_state.mjs:44-58). Ce n'est PAS
+      un flag statique dans un fichier de config — l'état vit en base de
+      données, il change dans le temps indépendamment du code.
+    environment_note: >
+      Confirmé par l'opérateur (2026-08-07) : le checkout preprod local et
+      le VPS de production tournent le même code — la préprod est le
+      stade de développement/test qui est ensuite déployé tel quel sur le
+      VPS. Le mécanisme ci-dessus est donc valide dans les deux
+      environnements. Ce qui reste distinct entre les deux, c'est l'ÉTAT
+      RUNTIME (le contenu réel de desk_claim_lane_controls à un instant
+      donné), qui peut différer d'un environnement à l'autre.
+    why_not_resolved_by_the_planning_agent: >
+      Hors de portée du rôle de planification (cette session ne fait que
+      documenter et préparer le terrain — elle n'exécute aucun code, ce
+      qui relève exclusivement de l'agent d'implémentation Codex). La
+      vérification de cet état runtime fait déjà partie intégrante du
+      contenu du Ticket -1.1 lui-même ("état réel des 9 services", 17-EXECUTABLE-BACKLOG.md)
+      — c'est Codex qui l'exécutera concrètement au moment de démarrer
+      l'implémentation, pas cette session de planification.
+    default_if_unresolved: "ne jamais supposer le hold levé sans vérification"
+    blocks: []
+    note: >
+      Retiré de la liste bloquante avant Ticket -1.1 : la vérification de
+      OP-12 est désormais traitée comme faisant partie de l'exécution du
+      Ticket -1.1 lui-même (capturée par Codex au moment T, avec
+      `node mcp_gpt_desk/scripts/verify_v5_frozen_state.mjs --freeze-only`
+      ou équivalent), plutôt que comme un pré-requis à trancher avant que
+      Codex ne commence.
+    referenced_in:
+      - "02-VERIFIED-AS-IS-SUMMARY.md#8"
+
+summary:
+  total: 12
+  open: 9
+  resolved: 3
+  blocking_phase_minus1: []
+  last_review: >
+    2026-08-07 — OP-1 et OP-2 résolus par déclaration opérateur directe
+    (OP-2 corroboré par lecture statique de code). OP-12 reste
+    juridiquement "open" (l'état runtime du hold n'est pas confirmé) mais
+    n'est plus listé comme bloquant en amont du Ticket -1.1 : sa
+    vérification fait partie du contenu même de ce ticket, à exécuter par
+    Codex — pas une pré-condition à trancher par la session de
+    planification, qui n'exécute aucun code (préprod et VPS de production
+    tournent le même code, confirmé par l'opérateur, mais seul l'agent
+    d'implémentation est mandaté à l'exécuter).
