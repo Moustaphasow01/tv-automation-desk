@@ -1,9 +1,9 @@
 # 24 — Backlog d'implémentation corrigé V2
 
 - **Statut** : `CANONIQUE — PRÊT POUR BASELINE`
-- **Version** : `2.1.0`
+- **Version** : `2.2.0`
 - **Date** : 2026-08-08
-- **Source** : audit Codex du code local, de la documentation cible et du runtime VPS, décisions opérateur du 2026-08-08 et plan directeur initial consolidé dans `25-DIRECTOR-PLAN-CONVERGENCE-ADDENDUM.md`
+- **Source** : audit Codex du code local, de la documentation cible et du runtime VPS, décisions opérateur du 2026-08-08, plan directeur initial, standards Nakili adaptés dans `docs/engineering/` et Prompt Registry décrit dans `26-PROMPT-AND-INSTRUCTION-REGISTRY.md`
 - **Machine-readable** : `implementation-backlog-v2.yaml`
 - **Supersède pour l'ordre d'exécution** : `16-END-TO-END-MIGRATION-ROADMAP.md`, `17-EXECUTABLE-BACKLOG.md`, `22-GPT-CODEX-IMPLEMENTATION-RUNBOOK.md` et `implementation-backlog.yaml`
 
@@ -115,6 +115,26 @@ Le Research Lab ne se limite pas à lancer des backtests. Il porte une taxonomie
 
 ## 4. Roadmap exécutable V2
 
+### P-1 — Engineering Foundation obligatoire
+
+**Objectif** : rendre les règles d'architecture, de nommage, de placement et de qualité obligatoires avant toute nouvelle évolution fonctionnelle.
+
+- `TD2-ARCH-001` — Publier `AGENTS.md` et les standards d'ingénierie adaptés au desk.
+- `TD2-ARCH-002` — Publier le catalogue des bounded contexts et le glossaire canonique.
+- `TD2-ARCH-003` — Capturer la baseline des violations historiques et interdire leur aggravation.
+- `TD2-ARCH-004` — Ajouter les tests automatiques de frontières, cycles et imports interdits.
+- `TD2-ARCH-005` — Ajouter les guards taille, complexité, paramètres, duplication et code mort.
+- `TD2-ARCH-006` — Décomposer progressivement le host MCP plat en modules par vertical slices.
+- `TD2-ARCH-007` — Unifier taxonomie d'erreurs, codes stables et Problem Details.
+- `TD2-ARCH-008` — Automatiser standards SQL, migrations, ownership, contraintes et index.
+- `TD2-ARCH-009` — Auditer horloge, timezone, idempotence, optimistic locking et concurrence.
+- `TD2-ARCH-010` — Faire converger le front vers features/data-access/ViewModels et gates a11y/visual/real-data.
+- `TD2-ARCH-011` — Ajouter scans secrets, dépendances, licences, SBOM et images.
+- `TD2-ARCH-012` — Automatiser le registre de dérogations, expirations et burn-down.
+- `TD2-ARCH-013` — Ajouter CODEOWNERS, template de PR et compte rendu architectural obligatoire.
+
+**Gate P-1** : standards versionnés et lus par les agents ; catalogue et baseline présents ; toute règle non automatisée possède un ticket ; aucune nouvelle violation de blocage n'est acceptée.
+
 ### P0 — Baseline, gouvernance et import Jira
 
 **Objectif** : rendre l'état de départ reproductible et la cible versionnée.
@@ -153,6 +173,21 @@ Le Research Lab ne se limite pas à lancer des backtests. Il porte une taxonomie
 - `TD2-106` — Compiler une première Strategy Version `BREAKOUT_RETEST` vers le plan déterministe existant.
 
 **Gate P2** : une version immuable est publiée, instanciée en SHADOW et visible depuis le front sans affecter V5.
+
+### P2A — Prompt & Instruction Registry
+
+**Objectif** : centraliser et versionner tous les prompts et instructions avant la généralisation des agents, sans modifier silencieusement le comportement Live/Replay existant.
+
+- `TD2-PRM-001` — Inventorier prompts, instructions, contrats, versions, hashes et consommateurs existants.
+- `TD2-PRM-002` — Créer les migrations PostgreSQL du catalogue, des versions immuables, compositions, bindings, déploiements et évaluations.
+- `TD2-PRM-003` — Construire le renderer/composer déterministe et les schémas de variables.
+- `TD2-PRM-004` — Implémenter bindings par agent/mission/environnement, canary, last-known-good et rollback.
+- `TD2-PRM-005` — Créer les seeds Git et migrer les prompts Live/Replay `2.4.0` avec parité octet/hash.
+- `TD2-PRM-006` — Ajouter évaluations de non-régression, sécurité, qualité, coût et latence.
+- `TD2-PRM-007` — Exposer API contrôlée et écran opérateur de consultation, comparaison et déploiement.
+- `TD2-PRM-008` — Appliquer permissions, audit, interdiction des secrets et guard contre les prompts hors registre.
+
+**Gate P2A** : Live et Replay résolvent la même composition que l'existant avec parité prouvée ; version publiée immuable ; run épinglé ; rollback last-known-good testé ; aucun futur agent ne peut contourner le registre.
 
 ### P3 — Data Foundation et Feature Registry
 
@@ -300,11 +335,13 @@ Un ticket n'est `DONE` que si :
 5. l'API et la projection front sont mises à jour lorsque le ticket change un comportement visible ;
 6. aucun secret ni donnée sensible n'est ajouté au dépôt ou au ticket ;
 7. la documentation et, après connexion, le ticket Jira `TD2-*` sont synchronisés ;
-8. aucune activation réelle n'est déduite du simple fait que le code est terminé.
+8. aucune activation réelle n'est déduite du simple fait que le code est terminé ;
+9. les standards d'ingénierie, le catalogue de modules, le glossaire et le registre de dérogations ont été respectés ;
+10. tout prompt ou instruction d'agent est versionné et résolu par le Prompt Registry dès que le gate P2A est actif.
 
 ## 6. Règles de synchronisation Jira futures
 
-- Un Epic Jira par phase `P0` à `P12`.
+- Un Epic Jira pour `P-1`, `P0` à `P12` et `P2A`.
 - La clé externe est le champ `external_id: TD2-*` du YAML ; elle garantit un import idempotent.
 - Les descriptions Jira sont générées depuis le Markdown/YAML, jamais l'inverse.
 - Statuts recommandés : `Backlog`, `Ready`, `In Progress`, `In Review`, `Validated`, `Blocked`, `Done`.
@@ -316,10 +353,14 @@ Un ticket n'est `DONE` que si :
 
 L'ordre de démarrage est :
 
+`TD2-ARCH-001 → TD2-ARCH-002 → TD2-ARCH-003`, puis automatisation progressive `TD2-ARCH-004` à `TD2-ARCH-013` sans aggraver la baseline.
+
+Le gate P-1 autorise ensuite :
+
 `TD2-000 → TD2-001 → TD2-002 → TD2-003`, avec `TD2-004` en parallèle dès que le MCP Jira est installé.
 
 Ensuite seulement :
 
 `TD2-010 → TD2-011 → TD2-012 → TD2-013 → TD2-014 → TD2-015`.
 
-La construction du Strategy Kernel (`P2`) ne commence qu'après passage du gate P1. Aucun changement de lane, service Windows, Replay actif, verrou broker ou déploiement n'est autorisé par ce document seul.
+La construction du Strategy Kernel (`P2`) ne commence qu'après passage du gate P1. Le Prompt Registry (`P2A`) démarre après P1 et doit franchir son gate avant le noyau Multi-Agent (`P5`). Aucun changement de lane, service Windows, Replay actif, verrou broker ou déploiement n'est autorisé par ce document seul.

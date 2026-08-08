@@ -1,9 +1,11 @@
-schema_version: "2.1.0"
+schema_version: "2.2.0"
 backlog_id: trading-desk-target-v2
 status: canonical_ready_for_baseline
 updated_at: "2026-08-08"
 source_document: 24-CORRECTED-IMPLEMENTATION-BACKLOG-V2.md
 convergence_document: 25-DIRECTOR-PLAN-CONVERGENCE-ADDENDUM.md
+engineering_standard: ../engineering/TRADING_DESK_ENGINEERING_STANDARDS.md
+prompt_registry_document: 26-PROMPT-AND-INSTRUCTION-REGISTRY.md
 jira:
   sync_status: pending_connector
   project_key: null
@@ -19,15 +21,36 @@ global_rules:
   - explicit_operator_action_for_live
   - broker_protection_must_be_confirmed
   - api_and_transition_front_follow_each_vertical_slice
+  - engineering_standards_are_mandatory
+  - legacy_violations_must_not_increase
+  - all_agents_use_versioned_prompt_registry
 ticket_defaults:
   status: Backlog
   issue_type: Story
 epics:
+  - key: P-1
+    summary: Engineering Foundation obligatoire
+    depends_on: []
+    gate: standards_catalog_baseline_and_enforcement_backlog_present
+    tickets:
+      - { external_id: TD2-ARCH-001, summary: Publier AGENTS et les standards adaptés au desk, depends_on: [], status: Done }
+      - { external_id: TD2-ARCH-002, summary: Publier catalogue des modules et glossaire canonique, depends_on: [TD2-ARCH-001], status: Done }
+      - { external_id: TD2-ARCH-003, summary: Capturer la baseline legacy et interdire son aggravation, depends_on: [TD2-ARCH-001, TD2-ARCH-002], status: Done }
+      - { external_id: TD2-ARCH-004, summary: Ajouter tests de frontières cycles et imports interdits, depends_on: [TD2-ARCH-002, TD2-ARCH-003] }
+      - { external_id: TD2-ARCH-005, summary: Ajouter guards taille complexité duplication et code mort, depends_on: [TD2-ARCH-003] }
+      - { external_id: TD2-ARCH-006, summary: Décomposer le host MCP par vertical slices, depends_on: [TD2-ARCH-004, TD2-ARCH-005] }
+      - { external_id: TD2-ARCH-007, summary: Unifier erreurs codes stables et Problem Details, depends_on: [TD2-ARCH-002] }
+      - { external_id: TD2-ARCH-008, summary: Automatiser standards SQL migrations ownership contraintes index, depends_on: [TD2-ARCH-002, TD2-ARCH-003] }
+      - { external_id: TD2-ARCH-009, summary: Auditer temps idempotence locking et concurrence, depends_on: [TD2-ARCH-002, TD2-ARCH-003] }
+      - { external_id: TD2-ARCH-010, summary: Faire converger le front vers features data access et ViewModels, depends_on: [TD2-ARCH-002, TD2-ARCH-003] }
+      - { external_id: TD2-ARCH-011, summary: Ajouter scans secrets dépendances licences SBOM et images, depends_on: [TD2-ARCH-001] }
+      - { external_id: TD2-ARCH-012, summary: Automatiser dérogations expirations et burn-down, depends_on: [TD2-ARCH-003, TD2-ARCH-005] }
+      - { external_id: TD2-ARCH-013, summary: Ajouter CODEOWNERS template PR et rapport architectural, depends_on: [TD2-ARCH-001, TD2-ARCH-002] }
   - key: P0
     summary: Baseline, gouvernance et import Jira
-    depends_on: []
+    depends_on: [P-1]
     tickets:
-      - { external_id: TD2-000, summary: Versionner le blueprint V2 et ses décisions, depends_on: [], status: Done }
+      - { external_id: TD2-000, summary: Versionner le blueprint V2 et ses décisions, depends_on: [TD2-ARCH-003], status: Done }
       - { external_id: TD2-001, summary: Capturer la baseline locale et VPS, depends_on: [TD2-000] }
       - { external_id: TD2-002, summary: Exécuter CI Docker E2E et publier le rapport, depends_on: [TD2-001] }
       - { external_id: TD2-003, summary: Classifier scripts legacy et dépendances vulnérables, depends_on: [TD2-001] }
@@ -53,6 +76,19 @@ epics:
       - { external_id: TD2-104, summary: Ajouter projection BFF et écrans Strategy transitoires, depends_on: [TD2-103] }
       - { external_id: TD2-105, summary: Ajouter trades strategy_instance_id nullable, depends_on: [TD2-100] }
       - { external_id: TD2-106, summary: Compiler BREAKOUT_RETEST vers le moteur existant, depends_on: [TD2-101, TD2-102] }
+  - key: P2A
+    summary: Prompt et Instruction Registry
+    depends_on: [P1]
+    gate: live_replay_parity_immutable_versions_and_rollback_proven
+    tickets:
+      - { external_id: TD2-PRM-001, summary: Inventorier prompts instructions contrats versions hashes consommateurs, depends_on: [TD2-015] }
+      - { external_id: TD2-PRM-002, summary: Créer le schéma PostgreSQL du Prompt Registry, depends_on: [TD2-PRM-001, TD2-ARCH-008] }
+      - { external_id: TD2-PRM-003, summary: Construire renderer composer déterministe et schémas de variables, depends_on: [TD2-PRM-002] }
+      - { external_id: TD2-PRM-004, summary: Implémenter bindings canary last-known-good et rollback, depends_on: [TD2-PRM-002, TD2-PRM-003] }
+      - { external_id: TD2-PRM-005, summary: Migrer les prompts Live Replay 2.4.0 avec parité octet hash, depends_on: [TD2-PRM-003, TD2-PRM-004] }
+      - { external_id: TD2-PRM-006, summary: Ajouter évaluations qualité sécurité coût latence et non-régression, depends_on: [TD2-PRM-005] }
+      - { external_id: TD2-PRM-007, summary: Exposer API et écran opérateur du Prompt Registry, depends_on: [TD2-PRM-004, TD2-PRM-006] }
+      - { external_id: TD2-PRM-008, summary: Appliquer permissions audit secrets guard et interdiction de contournement, depends_on: [TD2-PRM-004, TD2-PRM-006, TD2-ARCH-011] }
   - key: P3
     summary: Data Foundation et Feature Registry
     depends_on: [P2]
@@ -82,9 +118,9 @@ epics:
       - { external_id: TD2-309, summary: Ajouter le compute worker Python contractuel, depends_on: [TD2-301] }
   - key: P5
     summary: Noyau Multi-Agent durable et model routing
-    depends_on: [P4]
+    depends_on: [P4, P2A]
     tickets:
-      - { external_id: TD2-400, summary: Créer Agent Mission Conversation Task Lease Event, depends_on: [TD2-303, TD2-307, TD2-308] }
+      - { external_id: TD2-400, summary: Créer Agent Mission Conversation Task Lease Event, depends_on: [TD2-303, TD2-307, TD2-308, TD2-PRM-008] }
       - { external_id: TD2-401, summary: Créer le superviseur Windows event-driven, depends_on: [TD2-400] }
       - { external_id: TD2-402, summary: Implémenter affinité et rotation de conversation, depends_on: [TD2-400, TD2-401] }
       - { external_id: TD2-403, summary: Implémenter Agent Execution Policy et model routing, depends_on: [TD2-400] }

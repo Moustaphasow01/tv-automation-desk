@@ -10,7 +10,7 @@
 - **Dernière vérification code** : 2026-08-07 (voir `02-VERIFIED-AS-IS-SUMMARY.md` pour le détail des vérifications ciblées et leur date)
 - **Portée** : ce document est le point d'entrée unique du dossier `docs/trading-desk-target-blueprint/`. Aucun code fonctionnel n'a été modifié pour produire ce dossier.
 
-> **Addendum canonique V2.1 — 2026-08-08** : l'audit de reprise Codex, les décisions opérateur et le plan directeur initial sont consolidés dans `24-CORRECTED-IMPLEMENTATION-BACKLOG-V2.md`, `25-DIRECTOR-PLAN-CONVERGENCE-ADDENDUM.md` et `implementation-backlog-v2.yaml`. Ces fichiers supersèdent `16`, `17`, `22` et `implementation-backlog.yaml` pour l'ordre d'exécution, les dépendances, les états Strategy, les workers IA durables, le routage modèle/raisonnement, le Research Lab scientifique, la trajectoire PickMyTrade/provider-neutral et la préparation du Front V3.
+> **Addendum canonique V2.2 — 2026-08-08** : l'audit de reprise Codex, les décisions opérateur et le plan directeur initial sont consolidés dans `24-CORRECTED-IMPLEMENTATION-BACKLOG-V2.md`, `25-DIRECTOR-PLAN-CONVERGENCE-ADDENDUM.md` et `implementation-backlog-v2.yaml`. Le socle obligatoire est défini par `AGENTS.md`, `docs/engineering/TRADING_DESK_ENGINEERING_STANDARDS.md` et les documents associés. Le registre cible des prompts est décrit dans `26-PROMPT-AND-INSTRUCTION-REGISTRY.md`. Ces fichiers supersèdent `16`, `17`, `22` et `implementation-backlog.yaml` pour l'ordre d'exécution, les dépendances, les états Strategy, les workers IA durables, le routage modèle/raisonnement, le Research Lab scientifique, la trajectoire PickMyTrade/provider-neutral et la préparation du Front V3.
 
 ---
 
@@ -31,6 +31,10 @@
 13. `21-CUTOVER-AND-GPT-FIRST-DECOMMISSION.md` — la sortie du pipeline GPT-first.
 14. `22-GPT-CODEX-IMPLEMENTATION-RUNBOOK.md` — le protocole autonome pour l'agent d'implémentation.
 15. `23-TRACEABILITY-AND-COMPLETENESS-MATRIX.md` — la preuve qu'aucune exigence de la North Star ne reste orpheline.
+16. `24-CORRECTED-IMPLEMENTATION-BACKLOG-V2.md` + `implementation-backlog-v2.yaml` — le backlog V2.2 exécutable, précédé de l'Engineering Foundation.
+17. `26-PROMPT-AND-INSTRUCTION-REGISTRY.md` — le registre versionné des prompts, instructions, bindings, évaluations et rollbacks.
+
+Avant toute implémentation, lire également `AGENTS.md`, `docs/engineering/TRADING_DESK_ENGINEERING_STANDARDS.md`, `docs/engineering/module-catalog.md` et `docs/engineering/naming-glossary.md`.
 
 **Pour démarrer immédiatement l'implémentation** : `22-GPT-CODEX-IMPLEMENTATION-RUNBOOK.md` renvoie directement au premier ticket exécutable (Phase -1, Ticket -1.1), déjà spécifié au niveau fichier dans `17-EXECUTABLE-BACKLOG.md`.
 
@@ -100,9 +104,9 @@ Lorsque deux sources se contredisent, la source la plus haute dans cette liste l
 | Comprendre la destination finale en 5 minutes | `01-NORTH-STAR-AND-SUCCESS-CRITERIA.md` |
 | Savoir ce qui existe réellement aujourd'hui | `02-VERIFIED-AS-IS-SUMMARY.md` |
 | Savoir ce qu'il reste à construire | `03-AS-IS-TO-TARGET-GAP-MAP.md` |
-| Commencer à coder maintenant | `22-GPT-CODEX-IMPLEMENTATION-RUNBOOK.md` → `17-EXECUTABLE-BACKLOG.md`, Ticket -1.1 |
+| Commencer à coder maintenant | `AGENTS.md` → `docs/engineering/TRADING_DESK_ENGINEERING_STANDARDS.md` → `24-CORRECTED-IMPLEMENTATION-BACKLOG-V2.md`, phase P-1 |
 | Comprendre pourquoi une décision d'architecture a été prise | `19-ARCHITECTURE-DECISION-RECORDS.md` |
-| Savoir si mon ticket est prêt à démarrer | `implementation-backlog.yaml` + `operator-decisions.yaml` |
+| Savoir si mon ticket est prêt à démarrer | `implementation-backlog-v2.yaml` + `operator-decisions.yaml` |
 | Savoir quand une phase est terminée | `phase-gates.yaml` |
 | Vérifier qu'aucune exigence n'est oubliée | `23-TRACEABILITY-AND-COMPLETENESS-MATRIX.md` |
 | Comprendre le plan de sortie du pipeline GPT-first | `21-CUTOVER-AND-GPT-FIRST-DECOMMISSION.md` |
