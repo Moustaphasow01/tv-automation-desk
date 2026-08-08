@@ -1,8 +1,9 @@
-schema_version: "2.0.0"
+schema_version: "2.1.0"
 backlog_id: trading-desk-target-v2
 status: canonical_ready_for_baseline
 updated_at: "2026-08-08"
 source_document: 24-CORRECTED-IMPLEMENTATION-BACKLOG-V2.md
+convergence_document: 25-DIRECTOR-PLAN-CONVERGENCE-ADDENDUM.md
 jira:
   sync_status: pending_connector
   project_key: null
@@ -18,12 +19,15 @@ global_rules:
   - explicit_operator_action_for_live
   - broker_protection_must_be_confirmed
   - api_and_transition_front_follow_each_vertical_slice
+ticket_defaults:
+  status: Backlog
+  issue_type: Story
 epics:
   - key: P0
     summary: Baseline, gouvernance et import Jira
     depends_on: []
     tickets:
-      - { external_id: TD2-000, summary: Versionner le blueprint V2 et ses décisions, depends_on: [] }
+      - { external_id: TD2-000, summary: Versionner le blueprint V2 et ses décisions, depends_on: [], status: Done }
       - { external_id: TD2-001, summary: Capturer la baseline locale et VPS, depends_on: [TD2-000] }
       - { external_id: TD2-002, summary: Exécuter CI Docker E2E et publier le rapport, depends_on: [TD2-001] }
       - { external_id: TD2-003, summary: Classifier scripts legacy et dépendances vulnérables, depends_on: [TD2-001] }
@@ -58,7 +62,10 @@ epics:
       - { external_id: TD2-202, summary: Créer Feature Definition et Feature Version, depends_on: [TD2-201] }
       - { external_id: TD2-203, summary: Normaliser calendrier timezone sessions et rollover, depends_on: [TD2-201] }
       - { external_id: TD2-204, summary: Exposer une API data feature contrôlée, depends_on: [TD2-202, TD2-203] }
-      - { external_id: TD2-205, summary: Ajouter couverture et lineage au front transitoire, depends_on: [TD2-204] }
+      - { external_id: TD2-205, summary: Ajouter couverture et lineage au front transitoire, depends_on: [TD2-204, TD2-207, TD2-208] }
+      - { external_id: TD2-206, summary: Profiler historique ticks bid ask open interest et granularités, depends_on: [TD2-200] }
+      - { external_id: TD2-207, summary: Définir stockage brut Parquet object storage et séries chaudes, depends_on: [TD2-201, TD2-206] }
+      - { external_id: TD2-208, summary: Construire le catalogue initial de features point-in-time, depends_on: [TD2-202, TD2-203, TD2-206] }
   - key: P4
     summary: DSL Simulation Engine et Run Registry
     depends_on: [P3]
@@ -68,27 +75,43 @@ epics:
       - { external_id: TD2-302, summary: Construire Run Registry et artifacts, depends_on: [TD2-301] }
       - { external_id: TD2-303, summary: Prouver reproductibilité et anti-lookahead, depends_on: [TD2-302] }
       - { external_id: TD2-304, summary: Exposer runs compare artifacts et adapter Replay Lab, depends_on: [TD2-302] }
+      - { external_id: TD2-305, summary: Construire un Order Simulator réaliste et intrabar, depends_on: [TD2-301] }
+      - { external_id: TD2-306, summary: Versionner métriques et segmentations de performance, depends_on: [TD2-301] }
+      - { external_id: TD2-307, summary: Construire le Robustness Engine, depends_on: [TD2-303, TD2-306, TD2-309] }
+      - { external_id: TD2-308, summary: Gérer train validation out-of-sample sans fuite, depends_on: [TD2-201, TD2-303] }
+      - { external_id: TD2-309, summary: Ajouter le compute worker Python contractuel, depends_on: [TD2-301] }
   - key: P5
     summary: Noyau Multi-Agent durable et model routing
     depends_on: [P4]
     tickets:
-      - { external_id: TD2-400, summary: Créer Agent Mission Conversation Task Lease Event, depends_on: [TD2-303] }
+      - { external_id: TD2-400, summary: Créer Agent Mission Conversation Task Lease Event, depends_on: [TD2-303, TD2-307, TD2-308] }
       - { external_id: TD2-401, summary: Créer le superviseur Windows event-driven, depends_on: [TD2-400] }
       - { external_id: TD2-402, summary: Implémenter affinité et rotation de conversation, depends_on: [TD2-400, TD2-401] }
       - { external_id: TD2-403, summary: Implémenter Agent Execution Policy et model routing, depends_on: [TD2-400] }
       - { external_id: TD2-404, summary: Implémenter idempotence retries DLQ et reprise, depends_on: [TD2-401] }
       - { external_id: TD2-405, summary: Mesurer coût latence tokens conversation résultat, depends_on: [TD2-402, TD2-403, TD2-404] }
       - { external_id: TD2-406, summary: Exposer API MCP d'administration contrôlée, depends_on: [TD2-404] }
-      - { external_id: TD2-407, summary: Ajouter le cockpit Agents au front transitoire, depends_on: [TD2-405, TD2-406] }
+      - { external_id: TD2-407, summary: Ajouter le cockpit Agents au front transitoire, depends_on: [TD2-405, TD2-406, TD2-408, TD2-410, TD2-411] }
+      - { external_id: TD2-408, summary: Créer scheduler compute quotas et priorité live, depends_on: [TD2-400, TD2-309] }
+      - { external_id: TD2-409, summary: Implémenter les politiques de jointure Batch, depends_on: [TD2-400] }
+      - { external_id: TD2-410, summary: Isoler les pools de workers par responsabilité, depends_on: [TD2-401, TD2-408, TD2-409] }
+      - { external_id: TD2-411, summary: Rendre le Supervisor indépendant de l'OS, depends_on: [TD2-401] }
   - key: P6
     summary: Experiment Registry et Research Lab
     depends_on: [P5]
     tickets:
       - { external_id: TD2-500, summary: Créer Experiment Hypothesis Candidate Evaluation, depends_on: [TD2-407] }
-      - { external_id: TD2-501, summary: Créer le workflow de génération de stratégie, depends_on: [TD2-500] }
-      - { external_id: TD2-502, summary: Créer le workflow contradictoire de validation, depends_on: [TD2-501] }
-      - { external_id: TD2-503, summary: Créer la matrice de promotion avec approbation, depends_on: [TD2-502] }
-      - { external_id: TD2-504, summary: Ajouter Research Experiments au front transitoire, depends_on: [TD2-503] }
+      - { external_id: TD2-501, summary: Créer le workflow de génération de stratégie, depends_on: [TD2-500, TD2-505, TD2-506, TD2-510] }
+      - { external_id: TD2-502, summary: Créer le workflow contradictoire de validation, depends_on: [TD2-501, TD2-507, TD2-508] }
+      - { external_id: TD2-503, summary: Créer la matrice de promotion avec approbation, depends_on: [TD2-502, TD2-511] }
+      - { external_id: TD2-504, summary: Ajouter Research Experiments au front transitoire, depends_on: [TD2-503, TD2-509] }
+      - { external_id: TD2-505, summary: Créer le catalogue des neuf rôles de recherche, depends_on: [TD2-500, TD2-403] }
+      - { external_id: TD2-506, summary: Formaliser le processus scientifique et les budgets, depends_on: [TD2-500, TD2-505] }
+      - { external_id: TD2-507, summary: Créer génome taxonomie nouveauté et déduplication, depends_on: [TD2-500, TD2-506] }
+      - { external_id: TD2-508, summary: Construire la mémoire des échecs, depends_on: [TD2-500, TD2-507] }
+      - { external_id: TD2-509, summary: Construire le graphe logique de connaissances, depends_on: [TD2-507, TD2-508] }
+      - { external_id: TD2-510, summary: Créer le lifecycle des candidates de recherche, depends_on: [TD2-500, TD2-506] }
+      - { external_id: TD2-511, summary: Mesurer couverture et priorité des recherches, depends_on: [TD2-507, TD2-509] }
   - key: P7
     summary: Live Strategy Runtime SHADOW PAPER
     depends_on: [P6]
@@ -98,16 +121,19 @@ epics:
       - { external_id: TD2-602, summary: Prouver la parité Simulation SHADOW, depends_on: [TD2-601] }
       - { external_id: TD2-603, summary: Implémenter promotion manuelle SHADOW PAPER, depends_on: [TD2-602] }
       - { external_id: TD2-604, summary: Ajouter Instances et Signals au front transitoire, depends_on: [TD2-603] }
+      - { external_id: TD2-605, summary: Détecter la dérive de performance live, depends_on: [TD2-604, TD2-306] }
   - key: P8
     summary: Portfolio Global Risk et Broker Netting
     depends_on: [P7]
     tickets:
-      - { external_id: TD2-700, summary: Créer Candidate Allocation et portefeuille virtuel, depends_on: [TD2-604] }
+      - { external_id: TD2-700, summary: Créer Candidate Allocation et portefeuille virtuel, depends_on: [TD2-605] }
       - { external_id: TD2-701, summary: Créer les budgets de risque globaux, depends_on: [TD2-700] }
       - { external_id: TD2-702, summary: Résoudre conflits et Target Position nette, depends_on: [TD2-701] }
       - { external_id: TD2-703, summary: Créer Broker Netting et OrderIntent déterministe, depends_on: [TD2-702] }
       - { external_id: TD2-704, summary: Tester concurrence fills redémarrage divergence, depends_on: [TD2-703] }
-      - { external_id: TD2-705, summary: Ajouter cockpit Portfolio Risk au front transitoire, depends_on: [TD2-704] }
+      - { external_id: TD2-705, summary: Ajouter cockpit Portfolio Risk au front transitoire, depends_on: [TD2-704, TD2-706, TD2-707] }
+      - { external_id: TD2-706, summary: Attribuer le PnL virtuel et mesurer la similarité, depends_on: [TD2-704, TD2-605, TD2-507] }
+      - { external_id: TD2-707, summary: Gérer prop firms trailing drawdown et multi-compte, depends_on: [TD2-701, TD2-704] }
   - key: P9
     summary: AI Context Decision Gate
     depends_on: [P5, P8]
@@ -124,11 +150,12 @@ epics:
     tickets:
       - { external_id: TD2-900, summary: Créer le port provider-neutral et les événements broker, depends_on: [TD2-704] }
       - { external_id: TD2-901, summary: Envelopper NinjaTrader dans un adaptateur, depends_on: [TD2-900] }
-      - { external_id: TD2-902, summary: Auditer TARGET_API_PROVIDER_TBD et décider Go No-Go, depends_on: [TD2-900], operator_decision: true }
-      - { external_id: TD2-903, summary: Créer l'adaptateur paper du provider choisi, depends_on: [TD2-902] }
+      - { external_id: TD2-902, summary: Auditer PickMyTrade Rithmic Tradovate Apex et décider Go No-Go, depends_on: [TD2-900], operator_decision: true }
+      - { external_id: TD2-903, summary: Créer l'adaptateur PickMyTrade PAPER si approuvé, depends_on: [TD2-902] }
       - { external_id: TD2-904, summary: Exécuter les tests de contrat multi-provider, depends_on: [TD2-901, TD2-903] }
-      - { external_id: TD2-905, summary: Réconcilier en shadow puis basculer avec rollback, depends_on: [TD2-904] }
+      - { external_id: TD2-905, summary: Réconcilier en shadow puis basculer avec rollback, depends_on: [TD2-907] }
       - { external_id: TD2-906, summary: Retirer NinjaTrader après certification, depends_on: [TD2-905], operator_decision: true }
+      - { external_id: TD2-907, summary: Garantir circuit breaker et fallback sans double envoi, depends_on: [TD2-904] }
   - key: P11
     summary: API stable et préparation Front V3
     depends_on: [P7]
@@ -136,9 +163,10 @@ epics:
       - { external_id: TD2-1000, summary: Stabiliser le catalogue OpenAPI v2, depends_on: [TD2-604] }
       - { external_id: TD2-1001, summary: Définir SSE WebSocket et reprise par cursor, depends_on: [TD2-1000] }
       - { external_id: TD2-1002, summary: Définir scopes opérateur lecture automation, depends_on: [TD2-1000] }
-      - { external_id: TD2-1003, summary: Tester compatibilité et dépréciation API, depends_on: [TD2-1000, TD2-1001, TD2-1002] }
+      - { external_id: TD2-1003, summary: Tester compatibilité et dépréciation API, depends_on: [TD2-1000, TD2-1001, TD2-1002, TD2-1006] }
       - { external_id: TD2-1004, summary: Rédiger le cahier de refonte Front V3, depends_on: [TD2-1003] }
       - { external_id: TD2-1005, summary: Définir la coexistence et migration des écrans, depends_on: [TD2-1004] }
+      - { external_id: TD2-1006, summary: Créer les surfaces MCP strictes par rôle, depends_on: [TD2-1000, TD2-1002] }
   - key: P12
     summary: Cutover et décommission
     depends_on: [P9, P10, P11]

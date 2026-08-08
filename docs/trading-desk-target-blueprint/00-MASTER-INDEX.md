@@ -10,7 +10,7 @@
 - **Dernière vérification code** : 2026-08-07 (voir `02-VERIFIED-AS-IS-SUMMARY.md` pour le détail des vérifications ciblées et leur date)
 - **Portée** : ce document est le point d'entrée unique du dossier `docs/trading-desk-target-blueprint/`. Aucun code fonctionnel n'a été modifié pour produire ce dossier.
 
-> **Addendum canonique V2 — 2026-08-08** : l'audit de reprise Codex et les décisions opérateur postérieures à la clôture Claude sont consolidés dans `24-CORRECTED-IMPLEMENTATION-BACKLOG-V2.md` et `implementation-backlog-v2.yaml`. Ces deux fichiers supersèdent `16`, `17`, `22` et `implementation-backlog.yaml` pour l'ordre d'exécution, les dépendances, les états Strategy, les workers IA durables, le routage modèle/raisonnement, la trajectoire provider-neutral et la préparation du Front V3.
+> **Addendum canonique V2.1 — 2026-08-08** : l'audit de reprise Codex, les décisions opérateur et le plan directeur initial sont consolidés dans `24-CORRECTED-IMPLEMENTATION-BACKLOG-V2.md`, `25-DIRECTOR-PLAN-CONVERGENCE-ADDENDUM.md` et `implementation-backlog-v2.yaml`. Ces fichiers supersèdent `16`, `17`, `22` et `implementation-backlog.yaml` pour l'ordre d'exécution, les dépendances, les états Strategy, les workers IA durables, le routage modèle/raisonnement, le Research Lab scientifique, la trajectoire PickMyTrade/provider-neutral et la préparation du Front V3.
 
 ---
 

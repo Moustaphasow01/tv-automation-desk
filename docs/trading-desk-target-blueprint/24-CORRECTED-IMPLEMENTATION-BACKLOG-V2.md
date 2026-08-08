@@ -1,9 +1,9 @@
 # 24 — Backlog d'implémentation corrigé V2
 
 - **Statut** : `CANONIQUE — PRÊT POUR BASELINE`
-- **Version** : `2.0.0`
+- **Version** : `2.1.0`
 - **Date** : 2026-08-08
-- **Source** : audit Codex du code local, de la documentation cible et du runtime VPS, complété par les décisions opérateur du 2026-08-08
+- **Source** : audit Codex du code local, de la documentation cible et du runtime VPS, décisions opérateur du 2026-08-08 et plan directeur initial consolidé dans `25-DIRECTOR-PLAN-CONVERGENCE-ADDENDUM.md`
 - **Machine-readable** : `implementation-backlog-v2.yaml`
 - **Supersède pour l'ordre d'exécution** : `16-END-TO-END-MIGRATION-ROADMAP.md`, `17-EXECUTABLE-BACKLOG.md`, `22-GPT-CODEX-IMPLEMENTATION-RUNBOOK.md` et `implementation-backlog.yaml`
 
@@ -46,11 +46,13 @@ Le nom exact des modèles reste une configuration opérateur afin de ne pas coup
 
 Le gate commence en `SHADOW`, puis peut devenir bloquant après validation. Il ne crée jamais d'`OrderIntent`. Le Global Risk Engine conserve un veto supérieur et le sizing final reste déterministe.
 
-### D5 — NinjaTrader est un provider transitoire
+### D5 — NinjaTrader est un provider transitoire ; PickMyTrade est le candidat cloud identifié
 
 Le domaine ne dépend plus directement de NinjaTrader. Un `Execution Provider Port` reçoit les `OrderIntent` et normalise acknowledgements, fills, protections, positions et erreurs. L'adaptateur NinjaTrader reste utilisé pendant la transition.
 
-Le fournisseur API futur cité oralement par l'opérateur doit encore être identifié juridiquement et techniquement avant d'être nommé dans le code. Il est représenté par `TARGET_API_PROVIDER_TBD`. Son intégration exige une due diligence documentée : authentification, ordres supportés, données de marché, paper/live, rate limits, webhooks, idempotence, protection serveur, réconciliation, conditions commerciales et compatibilité avec la copie de comptes.
+Le fournisseur candidat est **PickMyTrade**, comme passerelle potentielle vers Rithmic et/ou Tradovate, notamment pour le multi-compte et la réduction de la dépendance Windows. PickMyTrade reste un candidat soumis à due diligence, pas encore le provider principal certifié. Son intégration exige : authentification backend-to-backend officielle, fonctionnement sans TradingView, ordres et brackets supportés, callbacks/statuts, rate limits, idempotence, protection serveur, partial fills, symbol mapping, rollover, sessions Rithmic, compatibilité Apex/prop firms, copie de comptes, SLA, coûts et réconciliation.
+
+La cible long terme conserve aussi un `FutureDirectBrokerProvider` : l'Execution Gateway ne doit pas remplacer une dépendance NinjaTrader par une dépendance irréversible à PickMyTrade.
 
 ### D6 — Le front actuel accompagne la migration ; le futur front dépend d'API stables
 
@@ -61,6 +63,18 @@ En parallèle, les capacités métier sont exposées sous des contrats REST vers
 ### D7 — Git est la source de vérité ; Jira sera la vue de pilotage
 
 Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas installé et vérifié, aucun projet Jira n'est créé. Après connexion, les Epics et tickets sont importés depuis `implementation-backlog-v2.yaml`. Toute transition de ticket doit être synchronisée avec le changement Git correspondant, sans stocker de secret dans Jira.
+
+### D8 — Architecture technique hybride sans réécriture prématurée
+
+Le backend Node.js/PostgreSQL actuel reste le **control plane** : API, contrats, identité Strategy, orchestration, audit, risque, événements et exécution. Il n'est pas réécrit en Spring Boot sans preuve qu'une limite réelle l'exige.
+
+Un **compute plane Python** isolé est ajouté pour les traitements quantitatifs lourds : préparation Parquet, recherche statistique, batches, walk-forward, bootstrap, Monte-Carlo et optimisation. Il consomme des contrats versionnés et ne possède pas une seconde interprétation autonome de la stratégie. La sémantique de décision reste celle du Canonical Runtime partagé.
+
+Le transport initial reste PostgreSQL outbox + `LISTEN/NOTIFY` avec polling durable. RabbitMQ, Kafka ou Redis Streams ne sont introduits qu'après mesure d'un besoin de débit, de rétention ou de distribution que PostgreSQL ne satisfait plus. TimescaleDB, Redis, object storage et Parquet sont des options ciblées, pas des prérequis imposés à tout le desk.
+
+### D9 — Le Research Lab suit un processus scientifique explicite
+
+Le Research Lab ne se limite pas à lancer des backtests. Il porte une taxonomie d'agents, des hypothèses falsifiables, une baseline, des itérations contrôlées, des datasets train/validation/out-of-sample, des tests de robustesse, une mémoire des échecs, une détection de doublons et des budgets tokens/CPU/temps. Le cycle `IDEA → ... → REJECTED/RETIRED` appartient aux **candidates de recherche** et ne remplace pas les trois axes d'état Definition/Version/Instance.
 
 ---
 
@@ -77,6 +91,9 @@ Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas ins
 6. L'AI Context Gate est optionnel dans l'arbitrage tant que sa phase n'est pas livrée ; sa dépendance est explicite.
 7. La correction d'agrégation broker précède toute concurrence multi-stratégie et toute réconciliation planifiée.
 8. Les API métier sont conçues provider-neutral et front-neutral dès le premier vertical slice.
+9. Le Simulation Engine cible étend les primitives déterministes existantes, mais le package `desk-replay-engine` actuel n'est pas considéré comme un simulateur de portefeuille complet : il fournit surtout un outcome replayer réutilisable.
+10. Les conversations persistantes et le routage du raisonnement déjà présents sont généralisés ; ils ne sont pas réécrits sans raison.
+11. La priorité des ressources est codée : `Execution > Risk > Live Signals > Monitoring > Validation > Research`.
 
 ---
 
@@ -145,6 +162,9 @@ Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas ins
 - `TD2-203` — Calendrier, timezone, sessions et rollover futures.
 - `TD2-204` — API data/feature en lecture contrôlée pour simulation et agents.
 - `TD2-205` — Écrans de couverture et lineage dans le front actuel.
+- `TD2-206` — Profiler profondeur historique, OHLCV, ticks, bid/ask, open interest et granularités réellement disponibles.
+- `TD2-207` — Définir les tiers de stockage brut immuable, Parquet/object storage et séries chaudes sur preuve de besoin.
+- `TD2-208` — Construire le catalogue initial VWAP/POC/VAH/VAL/IB/overnight/intermarket/macro point-in-time.
 
 **Gate P3** : le même Dataset scellé produit les mêmes Features et le même hash.
 
@@ -155,6 +175,11 @@ Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas ins
 - `TD2-302` — Run Registry, artifacts, métriques, signaux, rejets et trades.
 - `TD2-303` — Tests de reproductibilité bit-à-bit et anti-lookahead.
 - `TD2-304` — API runs/compare/artifacts et évolution du Replay Lab actuel.
+- `TD2-305` — Simuler market/limit/stop/stop-limit, spread, slippage, commissions, latence, gaps, partial fills, cancel/replace et ambiguïtés intrabar.
+- `TD2-306` — Versionner les métriques R, PF, drawdown, Sharpe, Sortino, Calmar, MAE, MFE, exposition et segmentations.
+- `TD2-307` — Ajouter walk-forward, bootstrap, Monte-Carlo, stress coûts/slippage et perturbation de paramètres.
+- `TD2-308` — Gérer les splits train/validation/out-of-sample sans fuite temporelle.
+- `TD2-309` — Ajouter le compute worker Python contractuel pour les calculs lourds, sans dupliquer la sémantique Strategy.
 
 **Gate P4** : deux exécutions identiques produisent les mêmes résultats et preuves.
 
@@ -168,6 +193,10 @@ Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas ins
 - `TD2-405` — Observabilité coût, latence, tokens, conversation et résultat.
 - `TD2-406` — API/MCP d'administration sans accès SQL libre ni secrets.
 - `TD2-407` — Écran Opérations Agents dans le front actuel.
+- `TD2-408` — Scheduler de ressources CPU/RAM/stockage/GPU, quotas et priorité live absolue.
+- `TD2-409` — Batch joins `ALL`, `ANY`, `FIRST_SUCCESS`, `QUORUM`, `TIMEOUT_WITH_PARTIAL_RESULTS`.
+- `TD2-410` — Pools isolés research/backtest/robustness/reviewer/live/context/execution/monitoring.
+- `TD2-411` — Port superviseur indépendant de l'OS et adaptateur Windows initial.
 
 **Gate P5** : une mission survit à un redémarrage Windows, reprend sa conversation et ne double pas ses effets.
 
@@ -178,6 +207,13 @@ Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas ins
 - `TD2-502` — Workflow contradictoire critique/validation.
 - `TD2-503` — Matrice de promotion quantitative et approbation opérateur.
 - `TD2-504` — API et espace Research/Experiments du front actuel.
+- `TD2-505` — Catalogue Research Planner, Pattern Miner, Strategy Builder, Experiment Agent, Validator, Robustness Auditor, Regime Analyst, Reviewer et Live Performance Monitor.
+- `TD2-506` — Processus hypothèse/baseline/itération contrôlée/budget/arrêt.
+- `TD2-507` — Génome, taxonomie, score de nouveauté et détection de doublons structurels/comportementaux.
+- `TD2-508` — Mémoire des échecs et connaissance négative requêtable.
+- `TD2-509` — Graphe logique de relations patterns/features/régimes/instruments/expériences sans imposer une graph DB.
+- `TD2-510` — Cycle de vie des candidates de recherche, distinct des états Strategy Version/Instance.
+- `TD2-511` — Score de couverture et priorisation des zones de recherche.
 
 **Gate P6** : l'IA peut produire une candidate reproductible, mais ne peut ni la publier ni la promouvoir seule en LIVE.
 
@@ -188,6 +224,7 @@ Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas ins
 - `TD2-602` — Parité Simulation/SHADOW sur données équivalentes.
 - `TD2-603` — Promotion manuelle SHADOW → PAPER et rollback.
 - `TD2-604` — API temps réel et écran Instances/Signals dans le front actuel.
+- `TD2-605` — Live Performance Monitor et détection de dérive, recommandant réduction/suspension/retraite.
 
 **Gate P7** : une instance PAPER tourne plusieurs séances sans intervention et reste explicable signal par signal.
 
@@ -199,6 +236,8 @@ Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas ins
 - `TD2-703` — Broker Netting et génération déterministe d'OrderIntent.
 - `TD2-704` — tests concurrence, partial fills, redémarrage et divergence.
 - `TD2-705` — cockpit Portfolio/Risk dans le front actuel.
+- `TD2-706` — Attribution du PnL virtuel par stratégie et similarité comportementale/corrélation.
+- `TD2-707` — Contraintes prop firm, trailing drawdown, multi-compte et groupes de comptes.
 
 **Gate P8** : plusieurs stratégies PAPER concurrentes convergent vers une position broker nette auditable.
 
@@ -217,11 +256,12 @@ Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas ins
 
 - `TD2-900` — interface provider-neutral et modèle normalisé des événements broker.
 - `TD2-901` — envelopper l'AddOn NinjaTrader existant dans l'adaptateur.
-- `TD2-902` — due diligence `TARGET_API_PROVIDER_TBD` et décision Go/No-Go.
-- `TD2-903` — adaptateur paper du fournisseur API choisi.
+- `TD2-902` — Due diligence PickMyTrade/Rithmic/Tradovate/Apex et décision Go/No-Go.
+- `TD2-903` — Adaptateur PickMyTrade PAPER si la due diligence est approuvée.
 - `TD2-904` — tests de contrat communs aux providers.
 - `TD2-905` — shadow reconciliation et bascule provider avec rollback.
 - `TD2-906` — retrait de NinjaTrader uniquement après certification du remplacement.
+- `TD2-907` — Circuit breaker et fallback provider sans double envoi, après réconciliation certaine.
 
 **Gate P10** : changer de provider ne modifie ni stratégie, ni risque, ni OrderIntent.
 
@@ -233,6 +273,7 @@ Les identifiants `TD2-*` sont stables. Tant que le connecteur Jira n'est pas ins
 - `TD2-1003` — tests de compatibilité et politique de dépréciation.
 - `TD2-1004` — cahier de refonte complète du Front V3 fondé sur les API, sans réutilisation obligatoire de l'IA actuelle.
 - `TD2-1005` — stratégie de coexistence et migration écran par écran.
+- `TD2-1006` — Surface MCP par rôle : recherche, data, live, exécution et administration, avec scopes stricts.
 
 **Gate P11** : un client neuf peut piloter le desk sans accès à `desk_documents` ni connaissance de V4/V5.
 
