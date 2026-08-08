@@ -1,4 +1,4 @@
-schema_version: "2.2.0"
+schema_version: "2.2.1"
 backlog_id: trading-desk-target-v2
 status: canonical_ready_for_baseline
 updated_at: "2026-08-08"
@@ -23,6 +23,8 @@ global_rules:
   - api_and_transition_front_follow_each_vertical_slice
   - engineering_standards_are_mandatory
   - legacy_violations_must_not_increase
+  - touched_legacy_debt_must_decrease
+  - all_architecture_exceptions_closed_before_program_completion
   - all_agents_use_versioned_prompt_registry
 ticket_defaults:
   status: Backlog
@@ -46,6 +48,7 @@ epics:
       - { external_id: TD2-ARCH-011, summary: Ajouter scans secrets dépendances licences SBOM et images, depends_on: [TD2-ARCH-001] }
       - { external_id: TD2-ARCH-012, summary: Automatiser dérogations expirations et burn-down, depends_on: [TD2-ARCH-003, TD2-ARCH-005] }
       - { external_id: TD2-ARCH-013, summary: Ajouter CODEOWNERS template PR et rapport architectural, depends_on: [TD2-ARCH-001, TD2-ARCH-002] }
+      - { external_id: TD2-ARCH-014, summary: Maintenir scorecard conformité touch-and-improve et burn-down par phase, depends_on: [TD2-ARCH-003, TD2-ARCH-004, TD2-ARCH-005, TD2-ARCH-012] }
   - key: P0
     summary: Baseline, gouvernance et import Jira
     depends_on: [P-1]
@@ -206,9 +209,11 @@ epics:
   - key: P12
     summary: Cutover et décommission
     depends_on: [P9, P10, P11]
+    gate: zero_active_exceptions_zero_blocking_violations_and_full_repository_compliance
     tickets:
       - { external_id: TD2-1100, summary: Comparer ancien et nouveau runtime, depends_on: [TD2-805, TD2-905, TD2-1005] }
       - { external_id: TD2-1101, summary: Cutover progressif par Strategy Instance, depends_on: [TD2-1100] }
       - { external_id: TD2-1102, summary: Autoriser séparément toute activation LIVE, depends_on: [TD2-1101], operator_decision: true }
       - { external_id: TD2-1103, summary: Retirer GPT-first et legacy après observation, depends_on: [TD2-1102] }
       - { external_id: TD2-1104, summary: Lancer la refonte Front V3 séparée, depends_on: [TD2-1005, TD2-1101] }
+      - { external_id: TD2-1105, summary: Auditer et atteindre la conformité architecturale complète, depends_on: [TD2-1103, TD2-1104, TD2-ARCH-006, TD2-ARCH-007, TD2-ARCH-008, TD2-ARCH-009, TD2-ARCH-010, TD2-ARCH-011, TD2-ARCH-013, TD2-ARCH-014, TD2-PRM-008] }

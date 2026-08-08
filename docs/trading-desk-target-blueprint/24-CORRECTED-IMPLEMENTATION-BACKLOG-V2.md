@@ -1,7 +1,7 @@
 # 24 — Backlog d'implémentation corrigé V2
 
 - **Statut** : `CANONIQUE — PRÊT POUR BASELINE`
-- **Version** : `2.2.0`
+- **Version** : `2.2.1`
 - **Date** : 2026-08-08
 - **Source** : audit Codex du code local, de la documentation cible et du runtime VPS, décisions opérateur du 2026-08-08, plan directeur initial, standards Nakili adaptés dans `docs/engineering/` et Prompt Registry décrit dans `26-PROMPT-AND-INSTRUCTION-REGISTRY.md`
 - **Machine-readable** : `implementation-backlog-v2.yaml`
@@ -132,6 +132,7 @@ Le Research Lab ne se limite pas à lancer des backtests. Il porte une taxonomie
 - `TD2-ARCH-011` — Ajouter scans secrets, dépendances, licences, SBOM et images.
 - `TD2-ARCH-012` — Automatiser le registre de dérogations, expirations et burn-down.
 - `TD2-ARCH-013` — Ajouter CODEOWNERS, template de PR et compte rendu architectural obligatoire.
+- `TD2-ARCH-014` — Maintenir une scorecard de conformité, imposer `touch-and-improve` et publier le burn-down à chaque phase.
 
 **Gate P-1** : standards versionnés et lus par les agents ; catalogue et baseline présents ; toute règle non automatisée possède un ticket ; aucune nouvelle violation de blocage n'est acceptée.
 
@@ -319,8 +320,9 @@ Le Research Lab ne se limite pas à lancer des backtests. Il porte une taxonomie
 - `TD2-1102` — validation opérateur distincte pour toute activation LIVE.
 - `TD2-1103` — retrait GPT-first, collections et scripts legacy après période d'observation.
 - `TD2-1104` — lancement de la refonte Front V3 comme chantier séparé.
+- `TD2-1105` — audit final automatisé et résorption de toute violation ou dérogation restante.
 
-**Gate P12** : aucun consommateur actif ne dépend du pipeline retiré et le rollback de la dernière release reste vérifié.
+**Gate P12** : aucun consommateur actif ne dépend du pipeline retiré ; rollback vérifié ; zéro dérogation active ; zéro violation de blocage ; frontières, cycles, nommage, tailles, complexité, sécurité, tests et structure entièrement conformes ; baseline legacy fermée.
 
 ---
 
@@ -337,7 +339,8 @@ Un ticket n'est `DONE` que si :
 7. la documentation et, après connexion, le ticket Jira `TD2-*` sont synchronisés ;
 8. aucune activation réelle n'est déduite du simple fait que le code est terminé ;
 9. les standards d'ingénierie, le catalogue de modules, le glossaire et le registre de dérogations ont été respectés ;
-10. tout prompt ou instruction d'agent est versionné et résolu par le Prompt Registry dès que le gate P2A est actif.
+10. toute zone legacy touchée présente une réduction mesurée avant/après et la baseline est mise à jour ;
+11. tout prompt ou instruction d'agent est versionné et résolu par le Prompt Registry dès que le gate P2A est actif.
 
 ## 6. Règles de synchronisation Jira futures
 

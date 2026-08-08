@@ -50,7 +50,11 @@ Interdits sans dérogation approuvée :
 - `desk_documents`/JSONB utilisé pour un modèle métier relationnel connu ;
 - TODO sans ticket, propriétaire et échéance.
 
-Les violations historiques listées dans `docs/engineering/exception-register.md` sont tolérées temporairement, mais ne doivent jamais être aggravées. Tout fichier legacy touché doit rester stable ou converger vers les seuils.
+Les violations historiques listées dans `docs/engineering/exception-register.md` sont tolérées uniquement pendant leur résorption. Elles ne constituent jamais un état cible.
+
+Tout chantier doit appliquer la règle **touch-and-improve** : lorsqu'il touche une zone legacy, il réduit au moins une dette mesurable de cette zone — taille, complexité, responsabilité, duplication, nommage, frontière, typage ou couverture — sans en dégrader une autre. Une exception n'est admise que pour un correctif urgent de sûreté ou d'incident, avec justification, mesure compensatoire et ticket de résorption prioritaire.
+
+La baseline et le registre de dérogations sont mis à jour au fil des tickets. Le dernier ticket de clôture du programme est bloqué tant que le dépôt n'est pas entièrement conforme aux standards ou qu'une dérogation reste ouverte.
 
 ## Validation minimale
 
@@ -81,6 +85,7 @@ Ajouter les guards d'architecture, sécurité, migrations, contrats et déploiem
 - tests exécutés et résultats ;
 - observabilité, sécurité et rollback ;
 - limites ou dette restante ;
+- réduction de dette obtenue avec mesure avant/après ;
 - ADR ou dérogation créée.
 
 Une tâche n'est pas terminée sans preuve de validation.

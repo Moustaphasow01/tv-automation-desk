@@ -1,6 +1,6 @@
 # Baseline de dette architecturale — 2026-08-08
 
-Cette baseline autorise une migration progressive ; elle n'autorise aucune aggravation.
+Cette baseline autorise une migration progressive ; elle n'autorise ni aggravation ni maintien permanent de la dette.
 
 ## Taille actuelle
 
@@ -57,5 +57,8 @@ Cette baseline autorise une migration progressive ; elle n'autorise aucune aggra
 1. Aucun nouveau god file.
 2. Toute nouvelle capacité cible va dans son bounded context.
 3. Un fichier legacy touché ne gagne pas une nouvelle responsabilité.
-4. Extraction par vertical slice avec tests de parité, pas par déplacement massif.
-5. Chaque réduction de dette met à jour cette baseline et ferme la dérogation correspondante.
+4. Tout fichier ou flux legacy touché réduit une dette mesurable, sauf correctif urgent formellement justifié.
+5. Extraction par vertical slice avec tests de parité, pas par déplacement massif.
+6. Chaque réduction de dette met à jour cette baseline et ferme ou réduit la dérogation correspondante.
+7. Chaque phase publie son delta de conformité avant/après.
+8. Le ticket final de clôture exige une baseline vide et zéro dérogation active.

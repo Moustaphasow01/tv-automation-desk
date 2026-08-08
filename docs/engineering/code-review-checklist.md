@@ -41,7 +41,8 @@
 
 ## Qualité et exploitation
 
-- [ ] Seuils taille/complexité respectés ou dette legacy réduite.
+- [ ] La dette legacy touchée est réduite avec mesure avant/après, sans déplacement de dette.
+- [ ] La baseline et la dérogation concernées sont mises à jour ou fermées.
 - [ ] Tests déterministes au bon niveau, cas d'échec compris.
 - [ ] Health, timeout, rollback et runbook pour capacité critique.
 - [ ] Documentation, ADR, dérogation et ticket Jira synchronisés.

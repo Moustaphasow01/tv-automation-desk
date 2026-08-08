@@ -9,7 +9,7 @@ Le host MCP a grandi jusqu'à concentrer plusieurs responsabilités dans des fic
 
 ## Décision
 
-Adopter `docs/engineering/TRADING_DESK_ENGINEERING_STANDARDS.md` et le `AGENTS.md` racine. Le backend converge vers un monolithe modulaire par bounded contexts, architecture hexagonale et API publiques minimales. Les règles nouvelles s'appliquent immédiatement ; les violations historiques sont enregistrées et résorbées progressivement sans refactor big-bang.
+Adopter `docs/engineering/TRADING_DESK_ENGINEERING_STANDARDS.md` et le `AGENTS.md` racine. Le backend converge vers un monolithe modulaire par bounded contexts, architecture hexagonale et API publiques minimales. Les règles nouvelles s'appliquent immédiatement ; les violations historiques sont enregistrées et résorbées progressivement sans refactor big-bang. Toute zone legacy touchée réduit une dette mesurable et la clôture du programme exige la conformité complète du dépôt.
 
 ## Alternatives écartées
 
@@ -22,4 +22,6 @@ Adopter `docs/engineering/TRADING_DESK_ENGINEERING_STANDARDS.md` et le `AGENTS.m
 - phase Engineering Foundation avant toute nouvelle feature ;
 - tests automatiques de frontières et complexité ;
 - vertical slices domaine/application/adapter/front ;
-- registre de dérogations temporaire pour le legacy.
+- registre de dérogations temporaire pour le legacy ;
+- suivi du burn-down à chaque phase ;
+- gate final bloqué tant qu'une dérogation ou violation de blocage subsiste.

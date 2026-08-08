@@ -201,7 +201,13 @@ Interdits : `doIt`, `processData`, `manage`, `runLogic`, `updateStuff`, `handleD
 
 Exceptions : code généré identifié, migration, DSL lisible, mapping mécanique ou algorithme documenté/testé.
 
-Les fichiers legacy dépassant les seuils sont enregistrés dans `legacy-baseline-2026-08-08.md` et `exception-register.md`. Toute modification doit réduire ou ne pas augmenter lignes, complexité et responsabilités. Une feature nouvelle ne doit pas être ajoutée dans un god file si une extraction sûre est possible.
+Les fichiers legacy dépassant les seuils sont enregistrés dans `legacy-baseline-2026-08-08.md` et `exception-register.md`. Cette tolérance sert uniquement à permettre leur résorption progressive ; elle n'autorise pas leur maintien jusqu'à la clôture du programme.
+
+La règle **touch-and-improve** est obligatoire : toute modification d'une zone legacy réduit au moins une dette mesurable — lignes, complexité, responsabilités, duplication, nommage, frontières, typage ou couverture — sans dégrader les autres. Le diff ou le rapport de ticket fournit la mesure avant/après et met à jour la baseline. Une feature nouvelle ne doit pas être ajoutée dans un god file si une extraction sûre est possible.
+
+Seul un correctif urgent de sûreté, sécurité ou incident peut exceptionnellement ne pas réduire la dette adjacente. Il exige une justification explicite, une mesure compensatoire et un ticket prioritaire de résorption. Cette exception opérationnelle ne prolonge pas automatiquement la dérogation architecturale.
+
+Chaque phase réserve et réalise un burn-down proportionné de la dette qu'elle traverse. Le gate final du programme exige : zéro dérogation active, zéro violation de blocage, frontières et cycles conformes, quality gates verts et baseline legacy entièrement fermée.
 
 Interdit de contourner les seuils par fonctions d'une ligne sans intention, classes internes, renommage, suppression de règles ou `eslint-disable` large.
 
@@ -386,6 +392,8 @@ Refactorer immédiatement : violation de frontière, invariant dupliqué, sécur
 
 Créer un ticket séparé : dette large hors scope, migration progressive ou optimisation non mesurée. Boy Scout uniquement petit, testé et sans comportement caché.
 
+Un ticket séparé n'autorise pas à ignorer indéfiniment la dette : il possède un propriétaire, une échéance, une dépendance de phase et contribue au burn-down suivi dans la baseline. Une dette bloquante découverte devient un prérequis du gate concerné.
+
 ## 23. Git, documentation et ADR
 
 - commit cohérent, sans secret/code commenté/génération inutile ;
@@ -415,11 +423,12 @@ Une capacité est terminée lorsque :
 - observabilité, sécurité, health et rollback ;
 - tests au bon niveau et CI verte ;
 - documentation/ADR/dérogation/Jira synchronisés ;
+- dette legacy touchée réduite et baseline mise à jour avec mesure avant/après ;
 - aucune activation LIVE implicite.
 
 ## 26. Dérogations
 
-Une dérogation contient règle, fichiers, justification, risque, mesure compensatoire, propriétaire, expiration, ticket et approbation. Elle n'est jamais implicite ou permanente et ne devient pas un précédent.
+Une dérogation contient règle, fichiers, justification, risque, mesure compensatoire, propriétaire, expiration, ticket et approbation. Elle n'est jamais implicite ou permanente et ne devient pas un précédent. Son expiration calendaire est une borne maximale, pas une permission de la conserver : elle doit être fermée dès que son contexte est touché et, dans tous les cas, avant le gate final du programme.
 
 ## 27. Checklist courte
 
@@ -434,7 +443,7 @@ Une dérogation contient règle, fichiers, justification, risque, mesure compens
 [ ] Loading/error/empty/stale/conflict + accessibilité
 [ ] Logs/métriques/traces sans secret
 [ ] Tests déterministes au bon niveau
-[ ] Taille/complexité et dette non aggravées
+[ ] Dette touchée réduite, mesure avant/après et baseline mise à jour
 [ ] ADR/dérogation/rollback/Jira
 ```
 
