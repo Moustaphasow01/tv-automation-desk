@@ -16,6 +16,7 @@ import {
   object,
   requiredText,
   researchStrategyIterationGeneratorSlug,
+  semverBuildHash,
   sha256Text,
   text,
 } from "./research-strategy-iteration-common.js";
@@ -138,7 +139,7 @@ async function registerVersion(store, seed, command) {
   return store.strategyKernel.registerVersion({
     strategy_version_id: seed.ids.versionId,
     strategy_definition_id: seed.ids.definitionId,
-    version_label: `${seed.variant.iteration_index}.${variantOrdinal(seed.variant.variant_label)}.0`,
+    version_label: strategyIterationVersionLabel(seed.variant),
     status: "VALIDATED",
     dsl_source_hash: sha256Text(seed.dslText),
     compiled_artifact_ref: `strategy://demo-paper/${seed.ids.versionId}/compiled-artifact`,
@@ -153,6 +154,18 @@ async function registerVersion(store, seed, command) {
     created_at: seed.timestamp,
     updated_at: seed.timestamp,
   }, command);
+}
+
+export function strategyIterationVersionLabel(variant = {}) {
+  return [
+    `${variant.iteration_index}.${variantOrdinal(variant.variant_label)}.0`,
+    semverBuildHash({
+      variant_id: variant.variant_id,
+      source_research_candidate_id: variant.source_research_candidate_id,
+      dataset_key: variant.dataset_key,
+      generator_version: RESEARCH_STRATEGY_ITERATION_GENERATOR_VERSION,
+    }, 12),
+  ].join("+");
 }
 
 async function compileVersion(store, seed, command, runtimeBindings = seed.runtimeBindings, scope = compileScope(seed)) {

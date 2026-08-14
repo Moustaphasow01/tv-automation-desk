@@ -7,6 +7,9 @@ import {
   buildResearchStrategyIterationPlan,
 } from "../src/research/research-strategy-iteration-runner.js";
 import {
+  strategyIterationVersionLabel,
+} from "../src/research/research-strategy-iteration-materializer.js";
+import {
   researchStrategyIterationGeneratorSlug,
 } from "../src/research/research-strategy-iteration-common.js";
 
@@ -74,6 +77,34 @@ describe("research strategy iteration runner", () => {
     assert.equal(retry.generated_at_utc, task.created_at_utc);
     assert.deepEqual(first.variants.map((variant) => variant.variant_id), retry.variants.map((variant) => variant.variant_id));
     assert.deepEqual(first.variants.map((variant) => variant.created_at_utc), retry.variants.map((variant) => variant.created_at_utc));
+  });
+
+  it("separates branch identities and semver labels for same iteration variants from different source candidates", () => {
+    const sourceA = candidateFixture();
+    const sourceB = {
+      ...candidateFixture(),
+      research_candidate_id: "11111111-2222-4333-8444-555555555555",
+    };
+    const first = buildResearchStrategyIterationPlan({
+      task: taskFixture(),
+      payload: taskFixture().payload,
+      sourceCandidate: sourceA,
+      context: contextFixture(),
+      nowUtc: "2026-08-13T08:00:00.000Z",
+    });
+    const second = buildResearchStrategyIterationPlan({
+      task: taskFixture(),
+      payload: { ...taskFixture().payload, research_candidate_id: sourceB.research_candidate_id },
+      sourceCandidate: sourceB,
+      context: contextFixture(),
+      nowUtc: "2026-08-13T08:00:00.000Z",
+    });
+
+    assert.equal(first.variants[0].strategy_definition_id, second.variants[0].strategy_definition_id);
+    assert.notEqual(first.variants[0].variant_id, second.variants[0].variant_id);
+    assert.notEqual(first.variants[0].strategy_version_id, second.variants[0].strategy_version_id);
+    assert.match(strategyIterationVersionLabel(first.variants[0]), /^1\.1\.0\+[0-9a-f]{12}$/);
+    assert.notEqual(strategyIterationVersionLabel(first.variants[0]), strategyIterationVersionLabel(second.variants[0]));
   });
 
   it("produces executable variant geometry for the canonical simulator", () => {

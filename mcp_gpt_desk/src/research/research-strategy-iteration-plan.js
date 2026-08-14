@@ -7,6 +7,7 @@ import {
   requiredText,
   researchStrategyIterationGeneratorSlug,
   roundPrice,
+  semverBuildHash,
   stableUuid,
   text,
 } from "./research-strategy-iteration-common.js";
@@ -95,11 +96,14 @@ function variantSeed({ item, index, scope, rows, range, iterationIndex, sourceCa
     sourceCandidate.strategy_definition_id || payload.strategy_definition_id || payload.strategyDefinitionId,
     null,
   );
+  const sourceCandidateId = requiredText(sourceCandidate.research_candidate_id, "research_candidate_id");
   const variantKey = [
     "demo-paper",
     scope.instrument.toLowerCase(),
     "m5",
     sourceStrategyDefinitionId ? "catalog-preserving" : "standalone",
+    "source",
+    semverBuildHash(sourceCandidateId, 12),
     "iteration",
     iterationIndex,
     researchStrategyIterationGeneratorSlug(),
@@ -118,7 +122,7 @@ function variantSeed({ item, index, scope, rows, range, iterationIndex, sourceCa
     research_evaluation_report_id: ids.reportId,
     research_experiment_id: requiredText(sourceCandidate.research_experiment_id, "research_experiment_id"),
     research_hypothesis_id: requiredText(sourceCandidate.research_hypothesis_id, "research_hypothesis_id"),
-    source_research_candidate_id: requiredText(sourceCandidate.research_candidate_id, "research_candidate_id"),
+    source_research_candidate_id: sourceCandidateId,
     dataset_key: scope.dataset_key,
     iteration_index: iterationIndex,
     created_at_utc: nowUtc,

@@ -43,6 +43,13 @@ export function sha256Text(value) {
   return `sha256:${createHash("sha256").update(String(value ?? "")).digest("hex")}`;
 }
 
+export function semverBuildHash(value, length = 12) {
+  const hash = value && typeof value === "object"
+    ? canonicalSha256(value)
+    : sha256Text(value);
+  return hash.replace(/^sha256:/, "").slice(0, Math.max(1, length));
+}
+
 export function roundPrice(value) {
   return Math.round(Number(value) * 4) / 4;
 }
