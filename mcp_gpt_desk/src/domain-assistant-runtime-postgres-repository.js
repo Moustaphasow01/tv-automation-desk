@@ -18,6 +18,7 @@ import {
   normalizeAnswer,
   normalizeDeadLetter,
   normalizeMessage,
+  normalizeProfile,
   normalizeSnapshot,
   nowIso,
   one,
