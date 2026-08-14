@@ -311,3 +311,113 @@ Recommended Jira state:
 - add this report as evidence of the implemented certification gate;
 - keep Done blocked by the actual VPS dress rehearsal artifacts.
 
+## VPS rehearsal attempt — 2026-08-15 update
+
+Status: **NO-GO — rehearsal not certifiable yet**.
+
+Release built and locally verified:
+
+- `preprod-v2-convergence-20260814.12-td2-420-output-ref-fix`
+- archive: `C:\Users\CES\Desktop\TV_Automation_PREPROD\.local\releases\preprod-v2-convergence-20260814.12-td2-420-output-ref-fix.zip`
+- SHA-256: `9428861be8ce9aa495e70a59ee2c86e0a4ce1217b588ba7239ed0afa4931a513`
+- local release verification:
+
+```text
+Release verified: preprod-v2-convergence-20260814.12-td2-420-output-ref-fix (5017 files)
+```
+
+The `.12` release contains the runtime fix for branch-safe research iteration output references. The local backend regression suite and guards passed before this release was built:
+
+```text
+research_strategy_iteration_runner + strategy_kernel_service: 18 pass / 0 fail
+mcp_gpt_desk full suite: 1124 pass / 0 fail
+guard:architecture: OK
+guard:runtime-safety: OK
+guard:mcp-slices: OK
+guard:windows-deployment: OK
+guard:sql-migrations: OK
+```
+
+VPS pre-deploy observation from the previous `.11` runtime:
+
+- active release observed before `.12` deploy attempt: `preprod-v2-convergence-20260814.11-td2-420-research-candidate-key-fix`
+- real Strategy_ID inventory on VPS: **1** existing strategy definition only:
+  - `demo-paper.mnq.opening-range-breakout-retest`
+- this is insufficient for the strict TD2-420 requirement to rehearse **10 to 20 existing Strategy_IDs from multiple families**.
+
+Broker/provider safety counts captured before the VPS rehearsal attempt:
+
+```text
+broker_provider_commands: 0
+broker_provider_events: 0
+broker_execution_outbox: 8
+broker_management_outbox: 10
+broker_orders: 15
+trade_order_intents: 8
+portfolio_order_intent_lineage: 0
+```
+
+The `.11` runtime rehearsal bootstrap completed all observed research tasks without creating broker provider commands/events:
+
+```text
+research tasks since freeze: 85 DONE / 0 active
+research candidates since freeze: 85
+broker_provider_commands: 0
+broker_provider_events: 0
+```
+
+The imported TD2-420 certifier returned:
+
+```text
+verdict: NO-GO
+total checks: 25
+pass: 12
+fail: 11
+blocked_external: 2
+mandatory_failures: 9
+```
+
+Main mandatory failures observed:
+
+- `research.strategy_sample_size`: only 1 Strategy_ID available on the VPS.
+- `research.pipeline_artifacts`: robust pipeline artifacts incomplete for TD2-420 certification.
+- `research.gates_audited`: missing `G0_DATA_READY`, `G3_ROBUST`, `G4_PORTFOLIO_FIT`.
+- `strategy.artifact_lineage`: no immutable published version / SHADOW instance proof.
+- `live_runtime.scheduler_observed`: closed-market window; last evaluation did not progress.
+- `front.realtime_resume`: browser reopen truth not proved.
+- `chaos.worker_recovery`: duplicate result protection not fully proved under `.11`.
+- `chaos.backend_restart_recovery`: not proved.
+- `restart.full_restart_recovered`: not proved.
+
+External blockers observed:
+
+- Telegram runtime authorization/proof unavailable in the rehearsal window.
+- Sim101/PAPER provider proof unavailable and intentionally not armed for automatic execution.
+
+The attempt to deploy `.12` to the VPS could not be completed because the Windows host entered an operationally degraded administration state:
+
+- SSH initially reset during key exchange until the client forced `KexAlgorithms=curve25519-sha256`.
+- `cmd.exe` could still execute briefly.
+- starting `powershell.exe` over SSH returned `Thread failed to start`.
+- `tasklist` showed a runaway `powershell.exe` process, PID `18120`, using about `17,802,012 K` memory.
+- attempts to inspect/kill that PID over SSH reset or timed out.
+- ports `22`, `80` and `443` remained open; this indicates the VPS itself was reachable but remote administration was not reliable enough to continue a certified dress rehearsal.
+
+Conclusion:
+
+- TD2-420 remains **NO-GO**.
+- Do not mark TD2-420 Done.
+- Do not activate AUTO_EXECUTION or LIVE.
+- Do not infer production readiness from the partial `.11` rehearsal.
+
+Required next actions before resuming TD2-420:
+
+1. Human/admin action on the VPS via RDP/KVM or console:
+   - terminate runaway `powershell.exe` PID `18120` if still present;
+   - restart `sshd` if needed;
+   - verify memory pressure is cleared.
+2. Deploy `.12` successfully.
+3. Re-freeze `REHEARSAL_START` after `.12` is active.
+4. Re-run broker/provider before-count capture.
+5. Launch a bounded campaign that actually uses 10–20 existing Strategy_IDs from multiple families, or explicitly mark this requirement blocked until the Strategy_ID catalog is present on the VPS.
+6. Re-run the TD2-420 certifier and accept only the allowed verdicts.
