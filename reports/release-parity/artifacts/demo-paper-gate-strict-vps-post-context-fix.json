@@ -1,0 +1,1455 @@
+{
+  "ok": true,
+  "profile": "demo-paper",
+  "checked_at_utc": "2026-08-14T13:35:39.331Z",
+  "status_url": "https://vps-6d6969db.vps.ovh.net/status",
+  "blockers": [],
+  "warnings": [],
+  "checks": [
+    {
+      "id": "api.ready",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "ready": true,
+        "ok": true,
+        "mode": "postgres"
+      }
+    },
+    {
+      "id": "api.postgres_mode",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "mode": "postgres"
+      }
+    },
+    {
+      "id": "operations.no_missing_services",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "missing_services": []
+      }
+    },
+    {
+      "id": "service.broker_management.present",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "service_kind": "broker_management"
+      }
+    },
+    {
+      "id": "service.broker_management.healthy",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "service_id": "broker_management",
+        "status": "healthy",
+        "healthy": true,
+        "details": {
+          "result": {
+            "ok": true,
+            "status": "NO_ACTIONABLE_WORK",
+            "entries": {
+              "ok": true,
+              "count": 0,
+              "items": [],
+              "reason": "LEGACY_POSITION_EXECUTION_DISABLED",
+              "status": "SKIPPED",
+              "autoQueued": 0,
+              "evaluations": [],
+              "pendingOperatorApproval": 0
+            },
+            "management": {
+              "ok": true,
+              "count": 0,
+              "items": [
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                },
+                {
+                  "ok": true,
+                  "reason": "NO_OPEN_BROKER_TRADE",
+                  "status": "SKIPPED"
+                }
+              ],
+              "status": "NO_ACTIONABLE_MONITOR"
+            },
+            "theoretical": {
+              "ok": true,
+              "exits": [],
+              "status": "NO_THEORETICAL_FILL",
+              "entries": [],
+              "materialized": 0
+            },
+            "paper_safety": {
+              "bridge_mode": "disabled",
+              "account_name": "Sim101",
+              "max_contracts": 10,
+              "sim101_account": true,
+              "addon_connected": false,
+              "command_enabled": false,
+              "connection_ready": false,
+              "execution_enabled": false,
+              "addon_bridge_status": "degraded",
+              "submission_possible": false,
+              "kill_switch_released": false,
+              "live_account_allowed": false,
+              "addon_heartbeat_fresh": true,
+              "execution_authority_mode": "semi_auto",
+              "entry_operator_approval_required": true,
+              "manual_telegram_execution_enabled": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "service.live_runtime_scheduler.present",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "service_kind": "live_runtime_scheduler"
+      }
+    },
+    {
+      "id": "service.live_runtime_scheduler.healthy",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "service_id": "live_runtime_scheduler",
+        "status": "healthy",
+        "healthy": true,
+        "details": {
+          "news": {
+            "error": "news_fetch_failed:429",
+            "status": "FETCH_FAILED",
+            "updated_count": 0,
+            "fetched_at_utc": "2026-08-14T13:21:32.000Z",
+            "inserted_count": 0,
+            "received_count": 0,
+            "discarded_count": 0,
+            "normalized_count": null
+          },
+          "cycle_ms": 3,
+          "data_state": "ready",
+          "data_blocker": null,
+          "last_gpt_key": "ny_open:2026-08-14T15:30:00+02:00",
+          "live_cursors": null,
+          "live_prewarm": {
+            "reason": null,
+            "status": "LANE_PAUSED",
+            "workflow": null,
+            "bundle_id": null,
+            "checkpoint": null,
+            "target_checkpoint": null
+          },
+          "trading_date": "2026-08-14",
+          "macro_calendar": {
+            "error": null,
+            "status": "PARTIAL",
+            "events_written": 74,
+            "fetched_at_utc": "2026-08-14T13:35:19.828Z",
+            "events_received": 74,
+            "next_trading_date": "2026-08-17",
+            "missing_required_dates": [
+              "2026-08-17"
+            ],
+            "next_trading_date_ready": false
+          },
+          "last_engine_key": "ny_open:2026-08-14T15:35:00+02:00",
+          "gpt_cadence_seconds": 900,
+          "engine_cadence_seconds": 60,
+          "engine_late_after_seconds": 120,
+          "optional_dependency_warnings": [
+            "macro_calendar_provider_degraded_cached_coverage_ready",
+            "news_provider_degraded"
+          ]
+        }
+      }
+    },
+    {
+      "id": "service.replay_preparation.present",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "service_kind": "replay_preparation"
+      }
+    },
+    {
+      "id": "service.replay_preparation.healthy",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "service_id": "replay_preparation_worker",
+        "status": "healthy",
+        "healthy": true,
+        "details": {
+          "last_status": "NO_PREPARATION_WORK",
+          "preparation_id": null
+        }
+      }
+    },
+    {
+      "id": "data.live_fresh",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "state": "ready",
+        "market_closed": false,
+        "market_session": {
+          "timestamp_paris": "2026-08-14T15:35:39.329+02:00",
+          "timestamp_new_york": "2026-08-14T09:35:39",
+          "trading_date": "2026-08-14",
+          "weekday": "Fri",
+          "new_york_weekday": "Fri",
+          "market_closed": false,
+          "state": "trading_day",
+          "reason": "inside_cme_globex_session",
+          "market_profile": "cme_equity_index_futures_globex",
+          "next_transition_hint": "weekly_close_at_17_00_new_york"
+        },
+        "freshness_policy": {
+          "max_age_seconds": 900,
+          "reason": "inside_cme_globex_session"
+        },
+        "core_age_seconds": 339,
+        "requested_trading_date": "2026-08-14",
+        "effective_market_date": "2026-08-14",
+        "core_feeds": [
+          {
+            "instrument": "MES",
+            "timeframe": "1",
+            "feed_id": "prod__tradingview__MES1!__1",
+            "provider": "tradingview",
+            "source_service": "local_tradingview_webhook",
+            "latest_timestamp_utc": "2026-08-14T13:34:00.000Z",
+            "latest_market_date": "2026-08-14",
+            "latest_imported_at_utc": "2026-08-14T13:35:04.119Z",
+            "latest_received_at_utc": "2026-08-14T13:35:04.116Z",
+            "latest_source_collection": "market_feeds/prod__tradingview__MES1!__1/candles",
+            "latest_source": "tradingview_webhook",
+            "latest_alert_id": "MES1!_1_1786714440000",
+            "provenance": {
+              "classification": "durable_alert",
+              "durable": true,
+              "source": "tradingview_webhook",
+              "source_service": "local_tradingview_webhook",
+              "received_at_utc": "2026-08-14T13:35:04.116Z",
+              "alert_id": "MES1!_1_1786714440000",
+              "source_collection": "market_feeds/prod__tradingview__MES1!__1/candles"
+            }
+          },
+          {
+            "instrument": "MES",
+            "timeframe": "5",
+            "feed_id": "prod__tradingview__MES1!__5",
+            "provider": "tradingview",
+            "source_service": "local_tradingview_webhook",
+            "latest_timestamp_utc": "2026-08-14T13:30:00.000Z",
+            "latest_market_date": "2026-08-14",
+            "latest_imported_at_utc": "2026-08-14T13:35:03.545Z",
+            "latest_received_at_utc": "2026-08-14T13:35:03.539Z",
+            "latest_source_collection": "market_feeds/prod__tradingview__MES1!__5/candles",
+            "latest_source": "tradingview_webhook",
+            "latest_alert_id": "MES1!_5_1786714200000",
+            "provenance": {
+              "classification": "durable_alert",
+              "durable": true,
+              "source": "tradingview_webhook",
+              "source_service": "local_tradingview_webhook",
+              "received_at_utc": "2026-08-14T13:35:03.539Z",
+              "alert_id": "MES1!_5_1786714200000",
+              "source_collection": "market_feeds/prod__tradingview__MES1!__5/candles"
+            }
+          },
+          {
+            "instrument": "MNQ",
+            "timeframe": "1",
+            "feed_id": "prod__tradingview__MNQ1!__1",
+            "provider": "tradingview",
+            "source_service": "local_tradingview_webhook",
+            "latest_timestamp_utc": "2026-08-14T13:34:00.000Z",
+            "latest_market_date": "2026-08-14",
+            "latest_imported_at_utc": "2026-08-14T13:35:04.119Z",
+            "latest_received_at_utc": "2026-08-14T13:35:04.116Z",
+            "latest_source_collection": "market_feeds/prod__tradingview__MNQ1!__1/candles",
+            "latest_source": "tradingview_webhook",
+            "latest_alert_id": "MNQ1!_1_1786714440000",
+            "provenance": {
+              "classification": "durable_alert",
+              "durable": true,
+              "source": "tradingview_webhook",
+              "source_service": "local_tradingview_webhook",
+              "received_at_utc": "2026-08-14T13:35:04.116Z",
+              "alert_id": "MNQ1!_1_1786714440000",
+              "source_collection": "market_feeds/prod__tradingview__MNQ1!__1/candles"
+            }
+          },
+          {
+            "instrument": "MNQ",
+            "timeframe": "5",
+            "feed_id": "prod__tradingview__MNQ1!__5",
+            "provider": "tradingview",
+            "source_service": "local_tradingview_webhook",
+            "latest_timestamp_utc": "2026-08-14T13:30:00.000Z",
+            "latest_market_date": "2026-08-14",
+            "latest_imported_at_utc": "2026-08-14T13:35:03.545Z",
+            "latest_received_at_utc": "2026-08-14T13:35:03.539Z",
+            "latest_source_collection": "market_feeds/prod__tradingview__MNQ1!__5/candles",
+            "latest_source": "tradingview_webhook",
+            "latest_alert_id": "MNQ1!_5_1786714200000",
+            "provenance": {
+              "classification": "durable_alert",
+              "durable": true,
+              "source": "tradingview_webhook",
+              "source_service": "local_tradingview_webhook",
+              "received_at_utc": "2026-08-14T13:35:03.539Z",
+              "alert_id": "MNQ1!_5_1786714200000",
+              "source_collection": "market_feeds/prod__tradingview__MNQ1!__5/candles"
+            }
+          }
+        ],
+        "scheduler": {
+          "status": "healthy",
+          "heartbeat_at_utc": "2026-08-14T13:35:35.742Z",
+          "release_version": "preprod-v2-convergence-20260814.2",
+          "data_state": "ready",
+          "data_blocker": null
+        }
+      }
+    },
+    {
+      "id": "data.source_durable",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "source_health": {
+          "required": true,
+          "durable": true,
+          "durable_count": 4,
+          "total_count": 4,
+          "non_durable_feeds": []
+        },
+        "core_feeds": [
+          {
+            "instrument": "MES",
+            "timeframe": "1",
+            "feed_id": "prod__tradingview__MES1!__1",
+            "latest_timestamp_utc": "2026-08-14T13:34:00.000Z",
+            "latest_received_at_utc": "2026-08-14T13:35:04.116Z",
+            "provenance": {
+              "classification": "durable_alert",
+              "durable": true,
+              "source": "tradingview_webhook",
+              "source_service": "local_tradingview_webhook",
+              "received_at_utc": "2026-08-14T13:35:04.116Z",
+              "alert_id": "MES1!_1_1786714440000",
+              "source_collection": "market_feeds/prod__tradingview__MES1!__1/candles"
+            }
+          },
+          {
+            "instrument": "MES",
+            "timeframe": "5",
+            "feed_id": "prod__tradingview__MES1!__5",
+            "latest_timestamp_utc": "2026-08-14T13:30:00.000Z",
+            "latest_received_at_utc": "2026-08-14T13:35:03.539Z",
+            "provenance": {
+              "classification": "durable_alert",
+              "durable": true,
+              "source": "tradingview_webhook",
+              "source_service": "local_tradingview_webhook",
+              "received_at_utc": "2026-08-14T13:35:03.539Z",
+              "alert_id": "MES1!_5_1786714200000",
+              "source_collection": "market_feeds/prod__tradingview__MES1!__5/candles"
+            }
+          },
+          {
+            "instrument": "MNQ",
+            "timeframe": "1",
+            "feed_id": "prod__tradingview__MNQ1!__1",
+            "latest_timestamp_utc": "2026-08-14T13:34:00.000Z",
+            "latest_received_at_utc": "2026-08-14T13:35:04.116Z",
+            "provenance": {
+              "classification": "durable_alert",
+              "durable": true,
+              "source": "tradingview_webhook",
+              "source_service": "local_tradingview_webhook",
+              "received_at_utc": "2026-08-14T13:35:04.116Z",
+              "alert_id": "MNQ1!_1_1786714440000",
+              "source_collection": "market_feeds/prod__tradingview__MNQ1!__1/candles"
+            }
+          },
+          {
+            "instrument": "MNQ",
+            "timeframe": "5",
+            "feed_id": "prod__tradingview__MNQ1!__5",
+            "latest_timestamp_utc": "2026-08-14T13:30:00.000Z",
+            "latest_received_at_utc": "2026-08-14T13:35:03.539Z",
+            "provenance": {
+              "classification": "durable_alert",
+              "durable": true,
+              "source": "tradingview_webhook",
+              "source_service": "local_tradingview_webhook",
+              "received_at_utc": "2026-08-14T13:35:03.539Z",
+              "alert_id": "MNQ1!_5_1786714200000",
+              "source_collection": "market_feeds/prod__tradingview__MNQ1!__5/candles"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "live_runtime.no_data_blocker",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "data_state": "ready",
+        "data_blocker": null,
+        "trading_date": "2026-08-14"
+      }
+    },
+    {
+      "id": "broker.paper_armed",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "status": "NO_ACTIONABLE_WORK",
+        "reason": null,
+        "count": null
+      }
+    },
+    {
+      "id": "broker.paper_environment_safe",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "execution_enabled": false,
+        "manual_telegram_execution_enabled": true,
+        "bridge_mode": "disabled",
+        "kill_switch_released": false,
+        "max_contracts": 10,
+        "execution_authority_mode": "semi_auto",
+        "entry_operator_approval_required": true,
+        "submission_possible": false,
+        "live_account_allowed": false
+      }
+    },
+    {
+      "id": "execution.manual_telegram_ready",
+      "ok": true,
+      "severity": "blocker",
+      "detail": {
+        "service_id": "telegram_alert_worker",
+        "status": "healthy",
+        "healthy": true,
+        "environment": {
+          "pollMs": 5000,
+          "workerEnabled": true,
+          "adminConfigured": true,
+          "commandsRequested": true,
+          "tradingConfigured": true
+        },
+        "deliveries": [
+          {
+            "status": "idle"
+          }
+        ]
+      }
+    }
+  ]
+}

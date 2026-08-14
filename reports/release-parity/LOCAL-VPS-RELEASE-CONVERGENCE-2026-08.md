@@ -410,3 +410,138 @@ Mode exploitation = SEMI_MANUAL / SHADOW
 Demo PAPER strict open = BLOQUÉ par live_runtime_scheduler degraded
 TD2-418 / TD2-419 / TD2-420 = ne pas lancer avant résolution du dernier gate strict
 ```
+
+## Micro-release contexte live — 2026-08-14
+
+Version déployée :
+
+```text
+preprod-v2-convergence-20260814.2
+git_commit=dd3f9689f4f99169fb62116850eb61e16c514917
+archive_sha256=444a88255cf0d4f5f77191e75ee5d31cc1d61365566c3d5132f869f1bf535490
+```
+
+Objet de la micro-release :
+
+- le `live_runtime_scheduler` ne passe plus `degraded` lorsque les données marché sont prêtes et que seules les dépendances optionnelles `news` / `macro_calendar` sont dégradées ;
+- le gate `demo-paper` accepte ce cas uniquement si `data_state=ready`, `data_blocker=null`, `consecutive_failures=0` et aucune erreur runtime réelle n'est présente ;
+- les erreurs `news_fetch_failed:429` / calendrier partiel restent visibles dans `optional_dependency_warnings`, mais ne bloquent plus l'ouverture demo-paper.
+
+Tests locaux avant build :
+
+```text
+node --test scripts/stack/check_demo_paper_gate.test.mjs scripts/stack/diagnose_demo_paper_readiness.test.mjs
+18 pass / 0 fail
+
+npm run guard:windows-deployment
+OK
+
+npm run guard:runtime-safety
+OK
+```
+
+Build release :
+
+```text
+Release directory: .local/releases/preprod-v2-convergence-20260814.2
+Release archive: .local/releases/preprod-v2-convergence-20260814.2.zip
+SHA256: 444a88255cf0d4f5f77191e75ee5d31cc1d61365566c3d5132f869f1bf535490
+```
+
+Vérification VPS avant installation :
+
+```text
+Release verified: preprod-v2-convergence-20260814.2 (4999 files)
+```
+
+Premier déploiement :
+
+```text
+status=rolled_back
+reason=Release archive checksum is missing: C:\ProgramData\DeskFutures\incoming\preprod-v2-convergence-20260814.2.zip.sha256
+```
+
+Interprétation : rollback de sécurité attendu, dû au sidecar `.zip.sha256` manquant, pas à une erreur applicative.
+
+Deuxième déploiement après transfert du sidecar `.zip.sha256` :
+
+```text
+Desk PostgreSQL schema is current.
+Canary passed on loopback port 18787.
+Desk local health passed.
+PASS front 200
+PASS health 200
+PASS readiness 200
+PASS oauth-resource 200
+PASS oauth-server 200
+PASS webhook rejects missing secret
+Desk public deployment smoke test passed.
+Deployment deploy-20260814T133254Z-65708f1c completed as verified; previous claim and execution controls restored.
+Desk update preprod-v2-convergence-20260814.2 verified and reopened.
+```
+
+État VPS post-déploiement :
+
+```text
+DESK_RELEASE_VERSION=preprod-v2-convergence-20260814.2
+DESK_AI_WORKER_MODE=shadow
+DeskFuturesAgentRuntimeResearch=Running
+DeskFuturesAgentRuntimeSupervisor=Running
+DeskFuturesApi=Running
+DeskFuturesBrokerManagement=Running
+DeskFuturesCaddy=Running
+DeskFuturesCodexLive01=Running
+DeskFuturesCodexLive02=Running
+DeskFuturesCodexReplay01=Running
+DeskFuturesLiveRuntime=Running
+DeskFuturesReplayPreparation=Running
+DeskFuturesTelegram=Running
+```
+
+Artifacts post-déploiement :
+
+```text
+reports/release-parity/artifacts/demo-paper-gate-strict-vps-post-context-fix.json
+reports/release-parity/artifacts/demo-paper-release-gate-vps-post-context-fix.json
+```
+
+Résultats post-déploiement :
+
+| Gate | Statut | Décision |
+|---|---|---|
+| `check_demo_paper_gate --profile=demo-paper` | PASS | strict demo-paper prêt |
+| `check_demo_paper_release_gate` | PASS | release gate opérateur prêt |
+
+État strict gate observé :
+
+```text
+ok=true
+blockers=[]
+warnings=[]
+live_runtime_scheduler.status=healthy
+live_runtime_scheduler.details.data_state=ready
+live_runtime_scheduler.details.data_blocker=null
+live_runtime_scheduler.details.optional_dependency_warnings=[
+  "macro_calendar_provider_degraded_cached_coverage_ready",
+  "news_provider_degraded"
+]
+broker.paper_environment_safe.execution_enabled=false
+broker.paper_environment_safe.manual_telegram_execution_enabled=true
+broker.paper_environment_safe.execution_authority_mode=semi_auto
+broker.paper_environment_safe.entry_operator_approval_required=true
+broker.paper_environment_safe.submission_possible=false
+execution.manual_telegram_ready.ok=true
+```
+
+Décision actualisée :
+
+```text
+TD2-422 convergence release = FAIT / déployé VPS
+VPS parity code/schema/services = FAIT
+VNext operator E2E = FAIT
+AUTO_EXECUTION = OFF / non activé
+LIVE broker = OFF / non activé
+Mode exploitation = SEMI_MANUAL / SHADOW
+Demo PAPER strict open = FAIT
+TD2-418 / TD2-419 / TD2-420 = peuvent être repris dans l'ordre
+```

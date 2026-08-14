@@ -1,0 +1,55 @@
+{
+  "ok": true,
+  "status": "READY",
+  "checked_at_utc": "2026-08-14T13:35:56.331Z",
+  "status_url": "http://127.0.0.1:8787/status",
+  "vnext_base_url": "http://127.0.0.1:8787",
+  "blockers": [],
+  "warnings": [],
+  "actions": [],
+  "components": {
+    "demo_paper": {
+      "ok": true,
+      "status": "READY",
+      "blockers": [],
+      "warnings": [],
+      "actions": []
+    },
+    "vnext_operator": {
+      "ok": true,
+      "status": "READY",
+      "blockers": [],
+      "checks": [
+        {
+          "id": "operator.pin_configured",
+          "ok": true
+        },
+        {
+          "id": "operator.login",
+          "ok": true
+        },
+        {
+          "id": "operator.cookie_path_front_api",
+          "ok": true
+        },
+        {
+          "id": "operator.auth_projection_active",
+          "ok": true
+        },
+        {
+          "id": "operator.command_accepted_persisted",
+          "ok": true
+        },
+        {
+          "id": "operator.command_idempotent_replay",
+          "ok": true
+        },
+        {
+          "id": "operator.command_terminal_audited",
+          "ok": true
+        }
+      ]
+    }
+  },
+  "final_decision": "OPEN_DEMO_PAPER_AGENTS_ALLOWED"
+}
