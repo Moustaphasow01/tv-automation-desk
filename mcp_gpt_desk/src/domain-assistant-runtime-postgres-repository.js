@@ -18,6 +18,7 @@ import {
   normalizeAnswer,
   normalizeDeadLetter,
   normalizeMessage,
+  normalizeSnapshot,
   nowIso,
   one,
   outboxFromEvent,
@@ -173,6 +174,26 @@ export class PostgresDomainAssistantRuntimeRepository {
     } finally {
       client.release();
     }
+  }
+
+  async getTaskContext({ taskId } = {}) {
+    await this.ready();
+    const task = await one(this.pool, "SELECT * FROM assistant_tasks WHERE assistant_task_id = $1", [taskId]);
+    if (!task) return null;
+    const snapshot = await one(this.pool, "SELECT * FROM assistant_context_snapshots WHERE assistant_context_snapshot_id = $1", [task.input_snapshot_id]);
+    const conversation = await one(this.pool, "SELECT * FROM assistant_conversations WHERE assistant_conversation_id = $1", [task.assistant_conversation_id]);
+    const messages = await rows(this.pool, `
+      SELECT *
+        FROM assistant_messages
+       WHERE assistant_conversation_id = $1
+       ORDER BY created_at_utc, assistant_message_id
+       LIMIT 20`, [task.assistant_conversation_id]);
+    return {
+      task: projectTaskRow(task),
+      snapshot: snapshot ? normalizeSnapshot(snapshot) : null,
+      conversation: conversation ? projectConversationRow(conversation) : null,
+      messages: messages.map(projectMessageRow),
+    };
   }
 
   async publishAnswer(input = {}) {

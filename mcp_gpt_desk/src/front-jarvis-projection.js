@@ -28,7 +28,7 @@ export function jarvisWorkspace(input = {}) {
     missions,
     morningBrief: brief,
     suggestions,
-    conversation: jarvisConversation({ ai: source.ai, nowIso: source.nowIso, sourceIncidents }),
+    conversation: jarvisConversation({ ai: source.ai, assistantRuntime: source.assistantRuntime, nowIso: source.nowIso, sourceIncidents }),
     citations,
     deskSnapshot: {
       liveSignals: signals.length,
@@ -76,6 +76,7 @@ function jarvisSources(input) {
     strategy,
     risk: input.risk,
     health: input.health,
+    assistantRuntime: input.assistantRuntime,
     nowIso: input.nowIso,
     researchExperiments: research.experiments,
     researchCandidates: research.candidates,
@@ -182,11 +183,26 @@ function jarvisSuggestions({ candidates, datasets, providers, reports, sourceInc
   return suggestions.slice(0, 6);
 }
 
-function jarvisConversation({ ai, nowIso, sourceIncidents }) {
+function jarvisConversation({ ai, assistantRuntime, nowIso, sourceIncidents }) {
+  const persisted = rows(object(assistantRuntime).messages).map(jarvisPersistedMessage).filter(Boolean);
   return [
     { messageId: "msg_jarvis_system_read_only", role: "system", at: nowIso, text: "TD2-419 : Jarvis est un superviseur read-only. Il passe par le BFF, cite ses sources et ne contourne jamais Risk, Portfolio, Human Gate ou Execution.", citationIds: ["src_portfolio_risk", "src_execution_gateway"] },
     { messageId: "msg_jarvis_brief_current", role: "jarvis", at: nowIso, text: `Snapshot opérateur disponible : ${sourceIncidents.length} incident(s) ouvert(s), AI Context ${text(ai?.summary?.status, "consultatif")}.`, citationIds: ["src_live_trading", "src_operations_incidents"] },
-  ];
+    ...persisted,
+  ].slice(-20);
+}
+
+function jarvisPersistedMessage(message) {
+  const role = lower(message.role) === "operator" ? "operator" : lower(message.role) === "assistant" ? "jarvis" : "system";
+  const textValue = text(message.text || message.content);
+  if (!textValue) return null;
+  return {
+    messageId: text(message.messageId || message.assistant_message_id, `msg_${hash(textValue).slice(0, 12)}`),
+    role,
+    at: text(message.at || message.created_at_utc),
+    text: textValue,
+    citationIds: rows(message.citationIds || message.citation_refs).map((item) => text(item)).filter(Boolean),
+  };
 }
 
 function jarvisDomainMissions({ sourceAgents, experiments, signals, providers, datasets, risk }) {
@@ -230,4 +246,5 @@ function severity(value) { const normalized = upper(value); if (normalized === "
 function text(value, fallback = "") { const normalized = String(value ?? "").trim(); return normalized || fallback; }
 function object(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
 function upper(value) { return String(value ?? "").toUpperCase(); }
+function lower(value) { return String(value ?? "").toLowerCase(); }
 function hash(value) { return canonicalSha256(value); }

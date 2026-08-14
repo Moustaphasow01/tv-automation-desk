@@ -4,6 +4,8 @@ import { createDomainAssistantRuntimeRepository } from "./domain-assistant-runti
 
 const ASSISTANT_SERVICE_CLOCK = new SystemClock();
 
+export { DomainAssistantWorkerService, buildReadOnlyAssistantAnswer } from "./domain-assistant-worker-service.js";
+
 export const DEFAULT_DOMAIN_ASSISTANT_PROFILES = Object.freeze([
   profile("assistant_research", "RESEARCH", "Research Assistant", "research.snapshot.v1", ["research.read", "simulation.read", "agent_runtime.read"]),
   profile("assistant_live_runtime", "LIVE_RUNTIME", "Live / Strategy Runtime Assistant", "live-runtime.snapshot.v1", ["strategy.read", "signal_bus.read", "ai_context.read"]),
@@ -134,6 +136,11 @@ export class DomainAssistantRuntimeService {
 
   async claimNextTask(input = {}) {
     return this.repository.claimNextTask(input);
+  }
+
+  async getTaskContext(input = {}) {
+    if (typeof this.repository.getTaskContext !== "function") return null;
+    return this.repository.getTaskContext(input);
   }
 
   async publishAnswer(input = {}) {

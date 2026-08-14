@@ -92,6 +92,20 @@ export class InMemoryDomainAssistantRuntimeRepository {
     return { status: "CLAIMED", task: clone(task), lease: clone(lease) };
   }
 
+  async getTaskContext({ taskId } = {}) {
+    const task = this.tasks.get(taskId);
+    if (!task) return null;
+    const messages = [...this.messages.values()]
+      .filter((message) => message.assistant_conversation_id === task.assistant_conversation_id)
+      .sort((a, b) => a.created_at_utc.localeCompare(b.created_at_utc) || a.assistant_message_id.localeCompare(b.assistant_message_id));
+    return {
+      task: clone(task),
+      snapshot: clone(this.snapshots.get(task.input_snapshot_id)) || null,
+      conversation: clone(this.conversations.get(task.assistant_conversation_id)) || null,
+      messages: clone(messages),
+    };
+  }
+
   async publishAnswer(input = {}) {
     const task = this.tasks.get(input.taskId);
     assertLease(task, input);

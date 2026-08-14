@@ -35,7 +35,7 @@ export async function handleFrontControlPlaneHttp({
   clientIp = null,
 }) {
   if (pathname === FRONT_CONTROL_PLANE_EVENTS_PATH) {
-    writeFrontControlPlaneEvents(req, res, query, corsHeaders);
+    writeFrontControlPlaneEvents(store, req, res, query, corsHeaders);
     return;
   }
 

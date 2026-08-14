@@ -6,7 +6,14 @@ import { buildDemoPaperReadiness, demoPaperLaunchGate, liveMarketDataStatus, pub
 import { acceptControlPlaneCommand, FRONT_COMMAND_CATALOG } from "./front-control-plane-command.js";
 import { authSession } from "./front-control-plane-auth.js";
 import { jarvisWorkspace } from "./front-jarvis-projection.js";
+import { loadFrontAssistantRuntime } from "./front-assistant-runtime-source.js";
 import { codedError, currentTick, currentUtc, hash, text } from "./front-control-plane-common.js";
+
+export {
+  frontControlPlaneSseFrame,
+  loadFrontControlPlaneRealtimeEvents,
+  writeFrontControlPlaneEvents,
+} from "./front-control-plane-realtime.js";
 
 export const FRONT_CONTROL_PLANE_PREFIX = "/front-api/v1";
 export const FRONT_CONTROL_PLANE_COMMANDS_PATH = `${FRONT_CONTROL_PLANE_PREFIX}/commands`;
@@ -114,7 +121,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "execution-providers": ["execution", "incidents"],
   "execution-incidents": ["execution", "incidents"],
   portfolio: ["execution", "portfolio-risk"],
-  "jarvis-workspace": ["ai-context", "incidents", "agent-runtime", "research", "data-foundation", "execution", "strategy", "portfolio-risk", "health"],
+  "jarvis-workspace": ["ai-context", "incidents", "agent-runtime", "assistant-runtime", "research", "data-foundation", "execution", "strategy", "portfolio-risk", "health"],
   sessions: ["sessions"],
   "live-plan": ["live-session"],
   "live-news": ["live-session", "front-macro", "front-news"],
@@ -216,49 +223,6 @@ function normalizeCommandStatus(value) {
     : "FAILED";
 }
 
-export function writeFrontControlPlaneEvents(req, res, input = {}, corsHeaders = {}) {
-  const firstTick = currentTick(input.clock);
-  const now = firstTick.utc;
-  const event = {
-    eventId: `evt_front_control_plane_heartbeat_${hash(`${now}:${input.cursor || ""}`).slice(0, 16)}`,
-    eventType: "desk.snapshot.updated",
-    occurredAt: now,
-    correlationId: input.cursor || `corr_front_control_plane_${hash(now).slice(0, 12)}`,
-    schemaVersion: "1.0.0",
-    sequence: firstTick.epochMs,
-    payload: {
-      source: "front-control-plane-bff",
-      freshness: "heartbeat",
-    },
-  };
-
-  res.writeHead(200, {
-    ...corsHeaders,
-    "content-type": "text/event-stream; charset=utf-8",
-    "cache-control": "no-cache, no-transform",
-    connection: "keep-alive",
-    "x-accel-buffering": "no",
-  });
-  res.write(`id: ${event.eventId}\n`);
-  res.write(`event: message\n`);
-  res.write(`data: ${JSON.stringify(event)}\n\n`);
-
-  const timer = setInterval(() => {
-    const heartbeatTick = currentTick(input.clock);
-    const heartbeatAt = heartbeatTick.utc;
-    const heartbeat = {
-      ...event,
-      eventId: `evt_front_control_plane_heartbeat_${hash(heartbeatAt).slice(0, 16)}`,
-      occurredAt: heartbeatAt,
-      sequence: heartbeatTick.epochMs,
-    };
-    res.write(`id: ${heartbeat.eventId}\n`);
-    res.write(`data: ${JSON.stringify(heartbeat)}\n\n`);
-  }, 15_000);
-  timer.unref?.();
-  req.on("close", () => clearInterval(timer));
-}
-
 async function loadControlPlaneView(store, viewName, query, actor = {}) {
   const started = currentTick(store?.clock);
   const warnings = [];
@@ -296,6 +260,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     "front-macro": () => source("front-macro", () => loadFrontMacroResource(store, { ...query, front_cache: true })),
     "front-news": () => source("front-news", () => loadFrontNewsHeadlinesResource(store, { ...query, front_cache: true })),
     observability: () => source("observability", () => call(store, "getOperationsObservability", { ...query, limit: 100 })),
+    "assistant-runtime": () => source("assistant-runtime", () => loadFrontAssistantRuntime(store, { ...query, limit: 20 })),
     replays: () => source("replays", () => call(store, "listOperationsReplays", { ...query, limit: 200 })),
     "replay-detail": () => loadFrontReplayDetail(store, query),
     "replay-comparison": () => source("replay-comparison", () => {
@@ -329,6 +294,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     macro: loaded["front-macro"] ?? null,
     news: loaded["front-news"] ?? null,
     observability: loaded.observability ?? null,
+    assistantRuntime: loaded["assistant-runtime"] ?? null,
     replays: loaded.replays ?? null,
     replayDetail: loaded["replay-detail"] ?? null,
     replayComparison: loaded["replay-comparison"] ?? null,

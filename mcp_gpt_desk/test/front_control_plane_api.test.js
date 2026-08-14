@@ -8,6 +8,8 @@ import {
   isFrontControlPlaneMethodAllowed,
   isFrontControlPlanePath,
   isFrontControlPlaneWriteRequest,
+  frontControlPlaneSseFrame,
+  loadFrontControlPlaneRealtimeEvents,
 } from "../src/front-control-plane-api.js";
 import { DomainAssistantRuntimeService } from "../src/domain-assistant-runtime-service.js";
 import { InMemoryDomainAssistantRuntimeRepository } from "../src/domain-assistant-runtime-repository.js";
@@ -104,12 +106,13 @@ test("front control plane Jarvis workspace is a grounded read-only supervisor", 
 
   assert.equal(envelope.meta.warnings.some((warning) => warning.includes("jarvis-workspace:NOT_IMPLEMENTED")), false);
   assert.deepEqual(envelope.meta.sources, [
-    { source: "ai-context", state: "AVAILABLE" },
-    { source: "incidents", state: "AVAILABLE" },
-    { source: "agent-runtime", state: "AVAILABLE" },
-    { source: "research", state: "AVAILABLE" },
-    { source: "data-foundation", state: "AVAILABLE" },
-    { source: "execution", state: "AVAILABLE" },
+      { source: "ai-context", state: "AVAILABLE" },
+      { source: "incidents", state: "AVAILABLE" },
+      { source: "agent-runtime", state: "AVAILABLE" },
+      { source: "assistant-runtime", state: "AVAILABLE" },
+      { source: "research", state: "AVAILABLE" },
+      { source: "data-foundation", state: "AVAILABLE" },
+      { source: "execution", state: "AVAILABLE" },
     { source: "strategy", state: "AVAILABLE" },
     { source: "portfolio-risk", state: "AVAILABLE" },
     { source: "health", state: "AVAILABLE" },
@@ -133,6 +136,73 @@ test("front control plane Jarvis workspace is a grounded read-only supervisor", 
   assert.equal(envelope.data.morningBrief.some((section) => section.domain === "Risk" && section.detail.includes("Jarvis ne publie ni Target Position ni OrderIntent")), true);
   assert.equal(envelope.data.conversation[0]?.role, "system");
   assert.equal(envelope.data.conversation[0]?.text.includes("ne contourne jamais Risk, Portfolio, Human Gate ou Execution"), true);
+});
+
+test("front control plane Jarvis view restores persisted assistant conversation messages", async () => {
+  const envelope = await handleFrontControlPlane(frontControlPlaneStore({
+    assistantRuntime: {
+      messages: [
+        { messageId: "asst_msg_operator", role: "operator", at: "2026-08-11T08:01:00.000Z", text: "Explique le risque.", citationIds: ["src_portfolio_risk"] },
+        { messageId: "asst_msg_answer", role: "assistant", at: "2026-08-11T08:01:05.000Z", text: "Risque lu en lecture seule, aucun ordre créé.", citationIds: ["src_portfolio_risk"] },
+      ],
+    },
+  }), {
+    pathname: "/front-api/v1/views/jarvis-workspace",
+    method: "GET",
+    query: { trading_date: "2026-08-11", session: "ny_open", mode: "paper" },
+    actor: { kind: "operator_session", scopes: ["desk.read", "desk.write"] },
+  });
+
+  assert.equal(envelope.data.conversation.at(-2).role, "operator");
+  assert.equal(envelope.data.conversation.at(-1).role, "jarvis");
+  assert.equal(envelope.data.conversation.at(-1).text, "Risque lu en lecture seule, aucun ordre créé.");
+});
+
+test("front control plane realtime maps assistant FRONT_REALTIME outbox to Jarvis message events with cursor recovery", async () => {
+  const store = {
+    async listFrontRealtimeEvents({ cursor }) {
+      const events = [
+        {
+          eventId: "asst_evt_1",
+          aggregateId: "asst_conv_1",
+          aggregateType: "assistant_conversation",
+          eventType: "jarvis.message.created",
+          occurredAt: "2026-08-11T08:01:05.000Z",
+          source: "domain-assistant-runtime",
+          correlationId: "asst_task_1",
+          causationId: "asst_task_1",
+          schemaVersion: "1.0.0",
+          sequence: 1,
+          payload: { brokerExecution: false, orderSubmissionEnabled: false },
+        },
+        {
+          eventId: "asst_evt_2",
+          aggregateId: "asst_conv_1",
+          aggregateType: "assistant_conversation",
+          eventType: "jarvis.message.created",
+          occurredAt: "2026-08-11T08:02:05.000Z",
+          source: "domain-assistant-runtime",
+          correlationId: "asst_task_2",
+          causationId: "asst_task_2",
+          schemaVersion: "1.0.0",
+          sequence: 2,
+          payload: { brokerExecution: false, orderSubmissionEnabled: false },
+        },
+      ];
+      const index = events.findIndex((event) => event.eventId === cursor);
+      return index >= 0 ? events.slice(index + 1) : events;
+    },
+  };
+
+  const first = await loadFrontControlPlaneRealtimeEvents(store, { cursor: "", limit: 10 });
+  const resumed = await loadFrontControlPlaneRealtimeEvents(store, { cursor: "asst_evt_1", limit: 10 });
+  const frame = frontControlPlaneSseFrame(first[0]);
+
+  assert.equal(first.length, 2);
+  assert.equal(resumed.length, 1);
+  assert.equal(resumed[0].eventId, "asst_evt_2");
+  assert.match(frame, /^id: asst_evt_1\nevent: message\ndata: /);
+  assert.equal(first[0].payload.brokerExecution, false);
 });
 
 test("front control plane P0 operational views preserve empty-state and reconciliation truth", async () => {
@@ -974,6 +1044,7 @@ function frontControlPlaneStore(overrides = {}) {
     async listAgentRuntimeTasks() { return runtimeTasks; },
     async listAgentRuntimeMetrics() { return { items: [] }; },
     async listAgentRuntimeDeadLetters() { return { items: [] }; },
+    async getFrontAssistantRuntime() { return overrides.assistantRuntime || { conversations: [], messages: [] }; },
     async getResearchLabOverview() { return research; },
     async listDataFoundationDatasets() { return datasets; },
     operations: {

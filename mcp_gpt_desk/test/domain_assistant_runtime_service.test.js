@@ -4,6 +4,7 @@ import {
   DEFAULT_DOMAIN_ASSISTANT_PROFILES,
   DomainAssistantRuntimeService,
 } from "../src/domain-assistant-runtime-service.js";
+import { DomainAssistantWorkerService } from "../src/domain-assistant-worker-service.js";
 import { InMemoryDomainAssistantRuntimeRepository } from "../src/domain-assistant-runtime-repository.js";
 
 test("TD2-419 assistant profiles are explicit, read-only and model-policy driven", async () => {
@@ -107,6 +108,44 @@ test("TD2-419 assistant task can be claimed, answered, audited and restored afte
   assert.equal(restored.messages[0].role, "operator");
   assert.equal(restored.messages[1].role, "assistant");
   assert.equal([...repository.leases.values()][0].status, "RELEASED");
+});
+
+test("TD2-419 domain assistant worker processes one queued question without broker authority", async () => {
+  const repository = new InMemoryDomainAssistantRuntimeRepository();
+  const service = new DomainAssistantRuntimeService({ repository });
+  await service.bootstrapProfiles();
+  await service.submitQuestion({
+    assistantId: "assistant_portfolio_risk",
+    operatorId: "operator-1",
+    question: "Quel est l'état du risque ?",
+    idempotencyKey: "td2-419:worker:portfolio-risk",
+    domainSnapshot: { riskUsedPct: 12, providerCommands: 0 },
+    sourceRefs: ["portfolio-risk.summary"],
+    nowUtc: "2026-08-14T12:07:00.000Z",
+  });
+
+  const worker = new DomainAssistantWorkerService({
+    service,
+    clock: { now: () => ({ utc: "2026-08-14T12:07:05.000Z" }) },
+  });
+  const result = await worker.runOnce({
+    assistantId: "assistant_portfolio_risk",
+    workerId: "assistant-worker-test",
+    leaseSeconds: 120,
+    nowUtc: "2026-08-14T12:07:03.000Z",
+  });
+
+  const task = repository.tasks.get(result.assistant_task_id);
+  const restored = await service.getConversation({ conversationId: result.assistant_conversation_id });
+
+  assert.equal(result.status, "ANSWER_PERSISTED");
+  assert.equal(result.broker_execution, false);
+  assert.equal(result.order_submission_enabled, false);
+  assert.equal(task.status, "DONE");
+  assert.equal([...repository.leases.values()][0].status, "RELEASED");
+  assert.equal(repository.outbox.at(-1).channel, "FRONT_REALTIME");
+  assert.equal(restored.messages.at(-1).role, "assistant");
+  assert.match(restored.messages.at(-1).content, /lecture seule/);
 });
 
 test("TD2-419 assistants reject sensitive actions and cannot publish forbidden broker instructions", async () => {
