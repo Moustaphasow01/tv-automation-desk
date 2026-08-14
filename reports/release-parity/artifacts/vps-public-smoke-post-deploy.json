@@ -1,0 +1,89 @@
+{
+  "checkedAtUtc": "2026-08-14T13:04:23.214Z",
+  "base": "https://vps-6d6969db.vps.ovh.net",
+  "endpoints": [
+    {
+      "path": "/healthz",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 794
+    },
+    {
+      "path": "/readyz",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 738
+    },
+    {
+      "path": "/status",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 469
+    },
+    {
+      "path": "/front-api/v1/capabilities",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 74
+    },
+    {
+      "path": "/front-api/v1/views/command-center",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 696
+    },
+    {
+      "path": "/api/v1/execution/overview",
+      "status": 200,
+      "ok": true,
+      "latencyMs": 297
+    }
+  ],
+  "release": null,
+  "mode": "postgres",
+  "ready": true,
+  "commandAllowed": null,
+  "executionSafety": {
+    "executionEnabled": false,
+    "bridgeMode": "disabled",
+    "killSwitchEnv": true,
+    "databaseLocked": true,
+    "executionAuthorityMode": "semi_auto",
+    "entryOperatorApprovalRequired": true,
+    "manualTelegramExecutionEnabled": true,
+    "submissionPossible": false,
+    "liveAccountAllowed": false
+  },
+  "policy": {
+    "policy_profile_id": "ninjatrader_sim101_local",
+    "enabled": true,
+    "execution_authority_mode": "semi_auto",
+    "require_operator_approval": true,
+    "revision": 2,
+    "max_contracts": 10,
+    "risk_per_trade_pct": "0.25"
+  },
+  "policyAudit": {
+    "broker_policy_audit_event_id": "broker_policy_audit_3bafcbcac04d4a23898586d986cf623a",
+    "action": "configure_execution_authority",
+    "expected_revision": 1,
+    "applied_revision": 2,
+    "actor": "operator@desk.local",
+    "idempotency_key": "td2-422-vps-semi-auto-20260814",
+    "created_at": "2026-08-14T13:01:06.328Z"
+  },
+  "liveRuntime": {
+    "service_id": "live_runtime_scheduler",
+    "status": "degraded",
+    "healthy": false,
+    "data_state": "ready",
+    "data_blocker": null,
+    "optional_dependency_warnings": [
+      "news_provider_degraded"
+    ],
+    "news_status": "FETCH_FAILED",
+    "news_error": "news_fetch_failed:429",
+    "macro_calendar_status": "PARTIAL",
+    "macro_calendar_error": null
+  }
+}

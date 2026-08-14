@@ -1,0 +1,114 @@
+{
+  "ok": false,
+  "status": "BLOCKED",
+  "checked_at_utc": "2026-08-14T13:01:36.441Z",
+  "status_url": "http://127.0.0.1:8787/status",
+  "vnext_base_url": "http://127.0.0.1:8787",
+  "blockers": [
+    {
+      "component": "demo-paper",
+      "id": "service.live_runtime_scheduler.healthy",
+      "detail": {
+        "service_id": "live_runtime_scheduler",
+        "status": "degraded",
+        "healthy": false,
+        "details": {
+          "news": {
+            "error": "news_fetch_failed:429",
+            "status": "FETCH_FAILED",
+            "updated_count": 0,
+            "fetched_at_utc": "2026-08-14T11:11:35.000Z",
+            "inserted_count": 0,
+            "received_count": 0,
+            "discarded_count": 0,
+            "normalized_count": null
+          },
+          "cycle_ms": 115,
+          "data_state": "ready",
+          "data_blocker": null,
+          "last_gpt_key": "asia_open:2026-08-14T15:00:00+02:00",
+          "live_cursors": {
+            "reconciled": 2
+          },
+          "live_prewarm": {
+            "reason": null,
+            "status": "LANE_PAUSED",
+            "workflow": null,
+            "bundle_id": null,
+            "checkpoint": null,
+            "target_checkpoint": null
+          },
+          "trading_date": "2026-08-14",
+          "macro_calendar": {
+            "error": "macro_calendar_fetch_failed:429",
+            "status": "FETCH_FAILED",
+            "events_written": 0,
+            "fetched_at_utc": "2026-08-14T13:01:28.526Z",
+            "events_received": 0,
+            "next_trading_date": "2026-08-17",
+            "missing_required_dates": [
+              "2026-08-17"
+            ],
+            "next_trading_date_ready": false
+          },
+          "last_engine_key": "asia_open:2026-08-14T15:01:00+02:00",
+          "gpt_cadence_seconds": 900,
+          "engine_cadence_seconds": 60,
+          "engine_late_after_seconds": 120,
+          "optional_dependency_warnings": [
+            "news_provider_degraded"
+          ]
+        }
+      }
+    }
+  ],
+  "warnings": [],
+  "actions": [],
+  "components": {
+    "demo_paper": {
+      "ok": false,
+      "status": "BLOCKED",
+      "blockers": [
+        "service.live_runtime_scheduler.healthy"
+      ],
+      "warnings": [],
+      "actions": []
+    },
+    "vnext_operator": {
+      "ok": true,
+      "status": "READY",
+      "blockers": [],
+      "checks": [
+        {
+          "id": "operator.pin_configured",
+          "ok": true
+        },
+        {
+          "id": "operator.login",
+          "ok": true
+        },
+        {
+          "id": "operator.cookie_path_front_api",
+          "ok": true
+        },
+        {
+          "id": "operator.auth_projection_active",
+          "ok": true
+        },
+        {
+          "id": "operator.command_accepted_persisted",
+          "ok": true
+        },
+        {
+          "id": "operator.command_idempotent_replay",
+          "ok": true
+        },
+        {
+          "id": "operator.command_terminal_audited",
+          "ok": true
+        }
+      ]
+    }
+  },
+  "final_decision": "KEEP_AGENTS_CLOSED_OR_SHADOW"
+}

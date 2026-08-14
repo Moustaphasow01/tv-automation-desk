@@ -244,3 +244,169 @@ AUTO_EXECUTION = inchangé / doit rester OFF
 LIVE = inchangé / doit rester OFF
 Mode cible = SEMI_MANUAL / SHADOW jusqu'à validation R1→R6
 ```
+
+## Déploiement VPS contrôlé — 2026-08-14
+
+Le RC propre a été copié, vérifié puis déployé sur le VPS OVH.
+
+Artefact déployé :
+
+```text
+preprod-v2-convergence-20260814.1.zip
+SHA256 80795359315f7174cf8e8f404e29285f5a83391dc35b54c8dad6f5238a769153
+source commit a17a5e6a6f6c5af537955ac2dbbf1894897476e4
+```
+
+Preuves R0 avant mutation :
+
+| Élément | Preuve |
+|---|---|
+| Baseline VPS avant mutation | `reports/release-parity/artifacts/environment-baseline-td2-422-r0-before-mutation.json` |
+| Backup PostgreSQL | `C:\ProgramData\DeskFutures\backups\desk-native-20260814T123327Z.dump` |
+| SHA backup PostgreSQL | `99739122fdd3a8d36cd9eec0853964b63e8355a1e5419f1358b35d4970f6fefa` |
+| Backup object store | `C:\ProgramData\DeskFutures\backups\desk-objects-20260814T123450Z.tar.gz` |
+| SHA backup object store | `d7ab089c51d35b5b9f80e4596cf51dea768f2942deb30466981bde07cde1dab4` |
+| Vérification backup | restore DB isolé OK : `desk_documents=803713`, `market_candles=219465`, `schema_migrations=47` |
+| Rollback code pré-déploiement | `C:\DeskFutures\releases\preprod-robustness-oos-20260813.101000` |
+
+Résultat de déploiement :
+
+- release vérifiée par `Test-DeskRelease.ps1` ;
+- claims pausés et broker execution verrouillé pendant l'update ;
+- services drainés puis relancés ;
+- migrations `001→047` déjà présentes, migrations `048→054` appliquées ;
+- `Desk PostgreSQL schema is current` ;
+- canary loopback port `18787` OK ;
+- smoke public : front, health, readiness, OAuth metadata et webhook guard OK ;
+- claims/execution controls restaurés après validation.
+
+État VPS final observé :
+
+| Élément | Valeur |
+|---|---|
+| Release active | `preprod-v2-convergence-20260814.1` |
+| Commit release actif | `a17a5e6a6f6c5af537955ac2dbbf1894897476e4` |
+| Manifest dirty | `false` |
+| Fichiers release | `4999` |
+| Migrations DB | `54` |
+| Dernière migration | `054_data_engine_extended_point_in_time_features` |
+| Services Desk Futures | 11/11 `Running`, `Automatic` |
+| Mode AI worker | `shadow` |
+| Release rollback | `preprod-robustness-oos-20260813.101000` |
+| Baseline post-déploiement | `reports/release-parity/artifacts/environment-baseline-td2-422-post-deploy.json` |
+| Baseline finale après policy | `reports/release-parity/artifacts/environment-baseline-td2-422-final-after-policy.json` |
+
+Endpoints publics vérifiés après déploiement :
+
+| Endpoint | Résultat |
+|---|---|
+| `/healthz` | `200` |
+| `/readyz` | `200` |
+| `/status` | `200` |
+| `/front-api/v1/capabilities` | `200` |
+| `/front-api/v1/views/command-center` | `200` |
+| `/api/v1/execution/overview` | `200` |
+
+Preuve détaillée :
+
+```text
+reports/release-parity/artifacts/vps-public-smoke-post-deploy.json
+```
+
+## Correction policy semi-manuelle post-déploiement
+
+Le gate strict a détecté une incohérence de policy : l'exécution était encore projetée en `auto` avec `require_operator_approval=false`, alors que la consigne de release impose `SEMI_MANUAL / SHADOW`.
+
+Correction effectuée par le chemin officiel backend :
+
+```text
+POST /api/v1/execution/actions
+action=configure_execution_mode
+policyProfileId=ninjatrader_sim101_local
+mode=semi_auto
+idempotencyKey=td2-422-vps-semi-auto-20260814
+confirmationPhrase=CONFIRM_SIM101_EXECUTION_MODE
+```
+
+La correction est auditée côté backend :
+
+| Élément | Avant | Après |
+|---|---:|---:|
+| `execution_authority_mode` | `auto` | `semi_auto` |
+| `require_operator_approval` | `false` | `true` |
+| policy revision | `1` | `2` |
+| audit id |  | `broker_policy_audit_3bafcbcac04d4a23898586d986cf623a` |
+
+Cette correction ne libère pas le kill switch, ne connecte pas NinjaTrader et ne rend pas la soumission broker possible.
+
+Projection finale execution safety :
+
+```text
+executionEnabled=false
+bridgeMode=disabled
+killSwitchEnv=true
+databaseLocked=true
+executionAuthorityMode=semi_auto
+entryOperatorApprovalRequired=true
+manualTelegramExecutionEnabled=true
+submissionPossible=false
+liveAccountAllowed=false
+```
+
+## Gates d'acceptance VPS après convergence
+
+Artifacts :
+
+```text
+reports/release-parity/artifacts/demo-paper-gate-stack-vps-post-deploy.json
+reports/release-parity/artifacts/demo-paper-gate-strict-vps-post-deploy.json
+reports/release-parity/artifacts/demo-paper-release-gate-vps-post-deploy.json
+```
+
+Résultats :
+
+| Gate | Statut | Décision |
+|---|---|---|
+| `check_demo_paper_gate --profile=stack` | PASS | infra/runtime stack acceptable |
+| `check_vnext_operator_e2e` via release gate | PASS | login opérateur, session, commande auditée et idempotence OK |
+| `check_demo_paper_gate --profile=demo-paper` | BLOCKED | live runtime encore `degraded` |
+| `check_demo_paper_release_gate` | BLOCKED | `KEEP_AGENTS_CLOSED_OR_SHADOW` |
+
+Blocage restant :
+
+```text
+service.live_runtime_scheduler.healthy
+```
+
+Détail observé :
+
+```text
+live_runtime_scheduler.status=degraded
+live_runtime_scheduler.healthy=false
+data_state=ready
+data_blocker=null
+optional_dependency_warnings=["news_provider_degraded"]
+news_status=FETCH_FAILED
+news_error=news_fetch_failed:429
+macro_calendar_status=PARTIAL
+```
+
+Interprétation :
+
+- le déploiement et la parité technique Local↔VPS sont démontrés ;
+- le BFF VNext et les commandes opérateur sont prouvés ;
+- la policy semi-manuelle est corrigée et auditée ;
+- le desk reste volontairement fermé pour `demo-paper` tant que le live runtime ne repasse pas `healthy` ou tant que le gate strict n'est pas explicitement ajusté pour classer les providers news/calendar 429 comme dépendances dégradées non bloquantes.
+
+## Décision TD2-422
+
+```text
+TD2-422 convergence release = TECHNIQUEMENT FAIT
+VPS parity code/schema/services = FAIT
+VNext operator E2E = FAIT
+AUTO_EXECUTION = OFF / non activé
+LIVE = OFF / non activé
+Mode exploitation = SEMI_MANUAL / SHADOW
+Demo PAPER strict open = BLOQUÉ par live_runtime_scheduler degraded
+TD2-418 / TD2-419 / TD2-420 = ne pas lancer avant résolution du dernier gate strict
+```
