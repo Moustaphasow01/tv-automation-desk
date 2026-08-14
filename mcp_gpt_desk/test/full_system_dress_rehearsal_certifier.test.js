@@ -56,6 +56,39 @@ test("TD2-420 runtime snapshot builder normalizes strategy ids and service field
   assert.equal(evidence.services[0].service_kind, "worker");
 });
 
+test("TD2-420 data lineage accepts explicitly non-synthetic historical datasets", () => {
+  const report = evaluateFullSystemDressRehearsalEvidence(completeEvidence({
+    data: {
+      ready_datasets: 10,
+      lineage_complete_datasets: 10,
+      no_lookahead_declared: true,
+      synthetic_data_declared: false,
+      no_synthetic_data_detected: true,
+      undeclared_synthetic_datasets: 0,
+    },
+  }));
+
+  assert.equal(report.checks.find((item) => item.id === "data.historical_lineage").status, "PASS");
+});
+
+test("TD2-420 strategy lineage accepts validated SHADOW versions with compiled simulation artifacts", () => {
+  const report = evaluateFullSystemDressRehearsalEvidence(completeEvidence({
+    strategy: {
+      immutable_versions: 0,
+      published_versions: 0,
+      validated_versions: 10,
+      compiled_artifacts: 10,
+      compiled_artifacts_from_versions: 0,
+      compiled_artifacts_from_simulation_runs: 10,
+      shadow_instances: 1,
+    },
+  }));
+
+  const check = report.checks.find((item) => item.id === "strategy.artifact_lineage");
+  assert.equal(check.status, "PASS");
+  assert.equal(check.detail.lineage_mode, "validated_shadow_runtime");
+});
+
 function completeEvidence(overrides = {}) {
   const strategyIds = Array.from({ length: 10 }, (_, index) => `TD2_STRATEGY_${String(index + 1).padStart(2, "0")}`);
   return {
@@ -115,13 +148,13 @@ function completeEvidence(overrides = {}) {
         G4_PORTFOLIO_FIT: 10,
       },
     },
-    data: {
+    data: overrides.data || {
       ready_datasets: 10,
       lineage_complete_datasets: 10,
       no_lookahead_declared: true,
       synthetic_data_declared: true,
     },
-    strategy: {
+    strategy: overrides.strategy || {
       immutable_versions: 10,
       compiled_artifacts: 10,
       shadow_instances: 2,

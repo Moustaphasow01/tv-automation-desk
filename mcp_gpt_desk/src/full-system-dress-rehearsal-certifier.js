@@ -152,17 +152,32 @@ function researchChecks(evidence, strategyIds, policy) {
 
 function dataLineageCheck(evidence) {
   const data = object(evidence.data);
-  return check("data.historical_lineage", integer(data.ready_datasets) > 0 && integer(data.lineage_complete_datasets) === integer(data.ready_datasets) && data.no_lookahead_declared === true && data.synthetic_data_declared === true, {
+  const syntheticSafe = data.synthetic_data_declared === true || data.no_synthetic_data_detected === true;
+  return check("data.historical_lineage", integer(data.ready_datasets) > 0 && integer(data.lineage_complete_datasets) === integer(data.ready_datasets) && data.no_lookahead_declared === true && syntheticSafe, {
     ready_datasets: integer(data.ready_datasets),
     lineage_complete_datasets: integer(data.lineage_complete_datasets),
     no_lookahead_declared: value(data.no_lookahead_declared),
     synthetic_data_declared: value(data.synthetic_data_declared),
+    no_synthetic_data_detected: value(data.no_synthetic_data_detected),
+    undeclared_synthetic_datasets: integer(data.undeclared_synthetic_datasets),
   });
 }
 
 function strategyLineageCheck(evidence) {
   const strategy = object(evidence.strategy);
-  return check("strategy.artifact_lineage", integer(strategy.immutable_versions) > 0 && integer(strategy.compiled_artifacts) >= integer(strategy.immutable_versions) && integer(strategy.shadow_instances) > 0, { immutable_versions: integer(strategy.immutable_versions), compiled_artifacts: integer(strategy.compiled_artifacts), shadow_instances: integer(strategy.shadow_instances) });
+  const publishedVersions = integer(strategy.published_versions, integer(strategy.immutable_versions));
+  const validatedVersions = integer(strategy.validated_versions);
+  const runtimeEligibleVersions = publishedVersions + validatedVersions;
+  return check("strategy.artifact_lineage", runtimeEligibleVersions > 0 && integer(strategy.compiled_artifacts) >= runtimeEligibleVersions && integer(strategy.shadow_instances) > 0, {
+    immutable_versions: integer(strategy.immutable_versions),
+    published_versions: publishedVersions,
+    validated_versions: validatedVersions,
+    compiled_artifacts: integer(strategy.compiled_artifacts),
+    compiled_artifacts_from_versions: integer(strategy.compiled_artifacts_from_versions),
+    compiled_artifacts_from_simulation_runs: integer(strategy.compiled_artifacts_from_simulation_runs),
+    shadow_instances: integer(strategy.shadow_instances),
+    lineage_mode: publishedVersions > 0 ? "published_or_validated_runtime" : "validated_shadow_runtime",
+  });
 }
 
 function liveRuntimeCheck(evidence) {

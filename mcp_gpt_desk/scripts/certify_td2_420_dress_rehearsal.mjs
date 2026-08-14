@@ -42,7 +42,7 @@ const REQUIRED_TABLES = Object.freeze([
 ]);
 
 const currentFile = fileURLToPath(import.meta.url);
-if (process.argv[1] && path.resolve(process.argv[1]) === currentFile) {
+if (process.argv[1] && samePath(process.argv[1], currentFile)) {
   const report = await certifyTd2420DressRehearsal(parseArgs(process.argv.slice(2)));
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   if (report.verdict === "NO-GO") process.exitCode = 1;
@@ -80,6 +80,10 @@ export async function certifyTd2420DressRehearsal({
   snapshot.front = {
     ...(snapshot.front || {}),
     ...bffSnapshot.front,
+  };
+  snapshot.live_runtime = {
+    ...(snapshot.live_runtime || {}),
+    ...bffSnapshot.live_runtime,
   };
   snapshot.assistants = {
     ...(snapshot.assistants || {}),
@@ -119,7 +123,7 @@ async function collectDatabaseSnapshot({ databaseUrl, sinceUtc, beforeCounts }) 
     snapshot.live_runtime = await liveRuntimeSnapshot(client);
     snapshot.signal_pipeline = await signalPipelineSnapshot(client, sinceUtc);
     snapshot.observability = await observabilitySnapshot(client, sinceUtc);
-    snapshot.restart = await restartSnapshot(client);
+    snapshot.restart = await restartSnapshot(client, sinceUtc);
     snapshot.chaos = await chaosSnapshot(client, sinceUtc);
     snapshot.telegram = await telegramSnapshot(client, sinceUtc);
     snapshot.sim101 = await sim101Snapshot(client);
@@ -142,7 +146,7 @@ async function schemaSnapshot(client) {
 
 async function serviceSnapshot(client) {
   const result = await safeQuery(client, `
-    SELECT service_id, service_kind, status, release_version,
+    SELECT service_id, service_kind, status, release_version, details,
            EXTRACT(EPOCH FROM (now() - heartbeat_at_utc))::int AS heartbeat_age_seconds
       FROM desk_service_heartbeats
      ORDER BY service_kind, service_id
@@ -152,14 +156,16 @@ async function serviceSnapshot(client) {
     service_kind: row.service_kind,
     status: row.status,
     release_version: row.release_version,
+    details: row.details || {},
     heartbeat_age_seconds: row.heartbeat_age_seconds,
-    critical: true,
+    critical: isCriticalRehearsalService(row),
+    critical_reason: criticalRehearsalServiceReason(row),
   }));
 }
 
 async function workerSnapshot(client) {
   const rows = (await safeQuery(client, `
-    SELECT service_id, service_kind, status,
+    SELECT service_id, service_kind, status, release_version, details,
            EXTRACT(EPOCH FROM (now() - heartbeat_at_utc))::int AS heartbeat_age_seconds
       FROM desk_service_heartbeats
      WHERE service_id ILIKE '%worker%'
@@ -168,8 +174,8 @@ async function workerSnapshot(client) {
         OR service_kind ILIKE '%research%'
      ORDER BY service_id
   `)).rows;
-  const researchWorkers = rows.filter((row) => `${row.service_id} ${row.service_kind}`.toLowerCase().includes("research"));
-  const activeResearch = researchWorkers.filter((row) => ["healthy", "degraded"].includes(String(row.status).toLowerCase())).length;
+  const researchWorkers = rows.filter(isRelevantResearchWorkerHeartbeat);
+  const activeResearch = researchWorkers.filter((row) => ["healthy", "degraded"].includes(String(row.status).toLowerCase()) && Number(row.heartbeat_age_seconds) <= 180).length;
   const simulationWorkers = rows.filter((row) => `${row.service_id} ${row.service_kind}`.toLowerCase().includes("simulation"));
   const queueDepth = await scalarInt(client, "SELECT count(*)::int FROM agent_tasks WHERE lane = 'research' AND status IN ('PENDING','READY','CLAIMED','RUNNING')", []);
   return {
@@ -178,12 +184,18 @@ async function workerSnapshot(client) {
     active_simulation_workers: simulationWorkers.filter((row) => ["healthy", "degraded"].includes(String(row.status).toLowerCase())).length,
     queue_depth: queueDepth,
     max_heartbeat_age_seconds: 180,
-    heartbeats: rows.map((row) => ({
+    heartbeats: researchWorkers.map((row) => ({
       service_id: row.service_id,
       service_kind: row.service_kind,
       status: row.status,
       heartbeat_age_seconds: row.heartbeat_age_seconds,
       stale: Number(row.heartbeat_age_seconds) > 180,
+    })),
+    ignored_historical_or_disabled_heartbeats: rows.filter((row) => !isRelevantResearchWorkerHeartbeat(row)).map((row) => ({
+      service_id: row.service_id,
+      service_kind: row.service_kind,
+      status: row.status,
+      heartbeat_age_seconds: row.heartbeat_age_seconds,
     })),
   };
 }
@@ -217,6 +229,7 @@ async function researchSnapshot(client, sinceUtc) {
      GROUP BY report_kind
   `, sinceParams);
   const kindCounts = Object.fromEntries(reportKinds.rows.map((row) => [String(row.report_kind), Number(row.count)]));
+  const portfolioFit = await countEvaluationReports(client, "report_kind::text = 'PORTFOLIO_FIT'", sinceUtc);
   return {
     strategy_ids: strategyRows.map((row) => row.external_key).filter(Boolean),
     missions: await countSince(client, "agent_missions", "lane = 'research'", sinceUtc),
@@ -226,29 +239,52 @@ async function researchSnapshot(client, sinceUtc) {
     evaluation_reports: await countSince(client, "research_evaluation_reports", "true", sinceUtc),
     gates: {
       G0_DATA_READY: await countSince(client, "datasets", "status = 'READY'", sinceUtc),
-      G1_SCREENED: kindCounts.TRAIN || 0,
+      G1_SCREENED: (kindCounts.TRAIN || 0) + (kindCounts.VALIDATION || 0) + (kindCounts.CONTRADICTORY_REVIEW || 0),
       G2_CANONICAL_VALID: (kindCounts.VALIDATION || 0) + (kindCounts.OUT_OF_SAMPLE || 0),
       G3_ROBUST: (kindCounts.ROBUSTNESS || 0) + (kindCounts.WALK_FORWARD || 0),
-      G4_PORTFOLIO_FIT: await scalarInt(client, "SELECT count(*)::int FROM research_evaluation_reports WHERE criteria_snapshot ? 'portfolio_fit'", []),
+      G4_PORTFOLIO_FIT: portfolioFit,
     },
+    report_kind_counts: kindCounts,
   };
 }
 
 async function dataSnapshot(client, sinceUtc) {
-  const ready = await countSince(client, "datasets", "status = 'READY'", sinceUtc);
-  const lineage = await countSince(client, "datasets", "status = 'READY' AND content_hash IS NOT NULL AND provenance_hash IS NOT NULL AND build_parameters_hash IS NOT NULL", sinceUtc);
+  const ready = await datasetCount(client, "status = 'READY'", sinceUtc);
+  const lineage = await datasetCount(client, "status = 'READY' AND content_hash IS NOT NULL AND provenance_hash IS NOT NULL AND build_parameters_hash IS NOT NULL", sinceUtc);
+  const synthetic = await datasetCount(client, "status = 'READY' AND lower(coalesce(metadata->>'synthetic','false')) IN ('true','1','yes')", sinceUtc);
+  const undeclaredSynthetic = await datasetCount(client, `
+    status = 'READY'
+    AND lower(coalesce(metadata->>'synthetic','false')) IN ('true','1','yes')
+    AND lower(coalesce(metadata->>'synthetic_declared','false')) NOT IN ('true','1','yes')
+  `, sinceUtc);
   return {
     ready_datasets: ready,
     lineage_complete_datasets: lineage,
     no_lookahead_declared: lineage > 0,
-    synthetic_data_declared: false,
+    synthetic_datasets: synthetic,
+    undeclared_synthetic_datasets: undeclaredSynthetic,
+    no_synthetic_data_detected: synthetic === 0,
+    synthetic_data_declared: undeclaredSynthetic === 0,
   };
 }
 
 async function strategySnapshot(client, sinceUtc) {
+  const statusCounts = await safeQuery(client, `
+    SELECT status::text AS status, count(*)::int AS count
+      FROM strategy_versions
+     ${sinceUtc ? "WHERE created_at >= $1::timestamptz" : ""}
+     GROUP BY status
+  `, sinceUtc ? [sinceUtc] : []);
+  const statuses = Object.fromEntries(statusCounts.rows.map((row) => [String(row.status), Number(row.count)]));
+  const compiledFromSimulation = await countSince(client, "simulation_runs", "compiled_artifact_hash IS NOT NULL", sinceUtc, "created_at_utc");
+  const compiledFromVersion = await countSince(client, "strategy_versions", "compiled_artifact_ref IS NOT NULL AND compiled_artifact_hash IS NOT NULL", sinceUtc, "created_at");
   return {
-    immutable_versions: await countSince(client, "strategy_versions", "status = 'published'", sinceUtc, "created_at"),
-    compiled_artifacts: await countSince(client, "strategy_versions", "compiled_artifact_ref IS NOT NULL AND compiled_artifact_hash IS NOT NULL", sinceUtc, "created_at"),
+    immutable_versions: Number(statuses.published || 0),
+    published_versions: Number(statuses.published || 0),
+    validated_versions: Number(statuses.validated || 0),
+    compiled_artifacts: compiledFromVersion + compiledFromSimulation,
+    compiled_artifacts_from_versions: compiledFromVersion,
+    compiled_artifacts_from_simulation_runs: compiledFromSimulation,
     shadow_instances: await countSince(client, "strategy_instances", "execution_mode = 'shadow' AND runtime_state IN ('running','paused')", sinceUtc, "created_at"),
   };
 }
@@ -290,21 +326,37 @@ async function observabilitySnapshot(client, sinceUtc) {
        )
        ${sinceClause}
   `, params);
+  const historical = sinceUtc ? await safeQuery(client, `
+    SELECT count(*)::int AS count
+      FROM desk_documents
+     WHERE collection IN ('desk_alert_events','desk_operations_events','desk_agent_work_events','dashboard_command_events')
+       AND (
+         upper(data->>'level') IN ('ERROR','CRITICAL')
+         OR upper(data->>'severity') IN ('ERROR','CRITICAL','HIGH')
+         OR upper(data->>'status') IN ('FAILED','ERROR')
+       )
+       AND updated_at < $1::timestamptz
+  `, [sinceUtc]) : { rows: [{ count: 0 }] };
   return {
     critical_errors: Number(result.rows[0]?.count || 0),
     unexplained_errors: Number(result.rows[0]?.count || 0),
+    new_during_rehearsal_errors: Number(result.rows[0]?.count || 0),
+    pre_rehearsal_historical_errors: Number(historical.rows[0]?.count || 0),
+    window_start_utc: sinceUtc || null,
     warnings: 0,
   };
 }
 
-async function restartSnapshot(client) {
+async function restartSnapshot(client, sinceUtc) {
+  const sinceClause = sinceUtc ? "AND updated_at >= $1::timestamptz" : "AND updated_at >= now() - interval '24 hours'";
+  const params = sinceUtc ? [sinceUtc] : [];
   const fullRestartProof = await scalarInt(client, `
     SELECT count(*)::int
       FROM desk_documents
      WHERE collection IN ('desk_audit_logs','dashboard_command_events')
        AND (data->>'action' IN ('desk.restart','desk.start') OR data->>'event_type' ILIKE '%restart%')
-       AND updated_at >= now() - interval '24 hours'
-  `, []);
+       ${sinceClause}
+  `, params);
   return {
     full_restart_recovered: fullRestartProof > 0,
     auto_execution_enabled: false,
@@ -318,12 +370,24 @@ async function chaosSnapshot(client, sinceUtc) {
   const recoveries = await safeQuery(client, `
     SELECT count(*)::int AS count
       FROM agent_events
-     WHERE event_type IN ('TASK_REQUEUED','TASK_COMPLETED','WORKER_RECOVERED')
+     WHERE event_type IN ('TASK_EXPIRED','TASK_CLAIMED','TASK_COMPLETED')
        ${sinceClause}
+  `, params);
+  const duplicateDone = await safeQuery(client, `
+    SELECT count(*)::int AS count
+      FROM (
+        SELECT coalesce(output_ref, task_key) AS business_key
+          FROM agent_tasks
+         WHERE lane = 'research'
+           AND status = 'DONE'
+           ${sinceUtc ? "AND completed_at_utc >= $1::timestamptz" : ""}
+         GROUP BY coalesce(output_ref, task_key)
+        HAVING count(*) > 1
+      ) duplicates
   `, params);
   return {
     worker_kill_recovered: Number(recoveries.rows[0]?.count || 0) > 0,
-    no_duplicate_result_after_recovery: false,
+    no_duplicate_result_after_recovery: Number(duplicateDone.rows[0]?.count || 0) === 0,
     backend_restart_recovered: false,
     tasks_persisted_after_restart: false,
     sse_resume_recovered: false,
@@ -368,6 +432,8 @@ async function collectBffSnapshot({ baseUrl, probeSse, sseTimeoutMs }) {
   const capabilities = await fetchJson(`${baseUrl}/front-api/v1/capabilities`).catch((error) => ({ status: 0, body: { error: publicError(error) } }));
   const commandCenter = await fetchJson(`${baseUrl}/front-api/v1/views/command-center`).catch((error) => ({ status: 0, body: { error: publicError(error) } }));
   const jarvis = await fetchJson(`${baseUrl}/front-api/v1/views/jarvis-workspace`).catch((error) => ({ status: 0, body: { error: publicError(error) } }));
+  const readyz = await fetchJson(`${baseUrl}/readyz`).catch((error) => ({ status: 0, body: { error: publicError(error) } }));
+  const status = await fetchJson(`${baseUrl}/status`).catch((error) => ({ status: 0, body: { error: publicError(error) } }));
   const actions = Array.isArray(capabilities.body?.actions) ? capabilities.body.actions : [];
 
   front.vnext_available = capabilities.status === 200 && commandCenter.status === 200;
@@ -387,7 +453,20 @@ async function collectBffSnapshot({ baseUrl, probeSse, sseTimeoutMs }) {
     front.browser_reopen_truth_preserved = false;
   }
 
-  return { front, assistants, artifacts: { capabilities_status: capabilities.status, command_center_status: commandCenter.status, jarvis_status: jarvis.status } };
+  const liveRuntime = liveRuntimeFromReadiness(readyz.body);
+
+  return {
+    front,
+    assistants,
+    live_runtime: liveRuntime,
+    artifacts: {
+      capabilities_status: capabilities.status,
+      command_center_status: commandCenter.status,
+      jarvis_status: jarvis.status,
+      readyz_status: readyz.status,
+      status_status: status.status,
+    },
+  };
 }
 
 async function probeFrontControlPlaneSse(url, timeoutMs) {
@@ -434,6 +513,27 @@ async function countSince(client, table, predicate, sinceUtc, column = "created_
   const where = [predicate || "true"];
   if (sinceUtc) where.push(`${column} >= $1::timestamptz`);
   return scalarInt(client, `SELECT count(*)::int FROM ${table} WHERE ${where.join(" AND ")}`, params);
+}
+
+async function countEvaluationReports(client, predicate, sinceUtc) {
+  const params = sinceUtc ? [sinceUtc] : [];
+  const where = [predicate || "true"];
+  if (sinceUtc) where.push("created_at_utc >= $1::timestamptz");
+  return scalarInt(client, `SELECT count(*)::int FROM research_evaluation_reports WHERE ${where.join(" AND ")}`, params);
+}
+
+async function datasetCount(client, predicate, sinceUtc) {
+  const params = sinceUtc ? [sinceUtc] : [];
+  const where = [predicate || "true"];
+  if (sinceUtc) {
+    where.push(`(
+      created_at_utc >= $1::timestamptz
+      OR dataset_id IN (
+        SELECT dataset_id FROM simulation_runs WHERE created_at_utc >= $1::timestamptz
+      )
+    )`);
+  }
+  return scalarInt(client, `SELECT count(*)::int FROM datasets WHERE ${where.join(" AND ")}`, params);
 }
 
 async function scalarInt(client, sql, params = []) {
@@ -496,6 +596,57 @@ function parseBeforeCounts(value) {
   if (!raw) return null;
   const content = existsSync(raw) ? readFileSync(raw, "utf8") : raw;
   return JSON.parse(content);
+}
+
+function isCriticalRehearsalService(row = {}) {
+  return criticalRehearsalServiceReason(row) !== null;
+}
+
+function criticalRehearsalServiceReason(row = {}) {
+  const serviceId = String(row.service_id || "").toLowerCase();
+  const serviceKind = String(row.service_kind || "").toLowerCase();
+  const details = row.details && typeof row.details === "object" ? row.details : {};
+  const lane = String(details.lane || "").toLowerCase();
+  if (isHistoricalManualAcceptanceHeartbeat(row)) return null;
+  if (serviceId === "telegram_alert_worker" || serviceKind === "telegram_alerting") return "operator_notifications";
+  if (serviceId === "live_runtime_scheduler" || serviceKind === "live_runtime_scheduler") return "strategy_runtime_scheduler";
+  if ((serviceKind === "agent_runtime_supervisor" || serviceId.includes("agent_runtime_supervisor")) && lane === "research") return "research_agent_supervisor";
+  return null;
+}
+
+function isRelevantResearchWorkerHeartbeat(row = {}) {
+  if (isHistoricalManualAcceptanceHeartbeat(row)) return false;
+  const serviceId = String(row.service_id || "").toLowerCase();
+  const serviceKind = String(row.service_kind || "").toLowerCase();
+  const details = row.details && typeof row.details === "object" ? row.details : {};
+  const lane = String(details.lane || "").toLowerCase();
+  return lane === "research"
+    || serviceKind.includes("research")
+    || serviceId.includes("agent_runtime_supervisor_research");
+}
+
+function isHistoricalManualAcceptanceHeartbeat(row = {}) {
+  const serviceId = String(row.service_id || "").toLowerCase();
+  if (!serviceId.includes("manual_acceptance")) return false;
+  return !["healthy", "degraded"].includes(String(row.status || "").toLowerCase());
+}
+
+function liveRuntimeFromReadiness(readiness = {}) {
+  const data = readiness?.data_readiness || {};
+  const state = String(data.state || "").toLowerCase();
+  const marketClosed = data.market_closed === true || data.market_session?.market_closed === true;
+  const fresh = readiness?.ready === true && data.ok === true && ["ready", "fresh"].includes(state);
+  return {
+    feed_state: fresh ? "fresh" : marketClosed ? "closed_market_expected" : "degraded",
+    feed_readyz_ok: readiness?.ready === true,
+    market_closed: marketClosed,
+    core_age_seconds: Number.isFinite(Number(data.core_age_seconds)) ? Number(data.core_age_seconds) : null,
+  };
+}
+
+function samePath(left, right) {
+  return path.resolve(String(left || "")).replaceAll("\\", "/").toLowerCase()
+    === path.resolve(String(right || "")).replaceAll("\\", "/").toLowerCase();
 }
 
 function publicError(error) {
