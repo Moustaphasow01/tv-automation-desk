@@ -154,7 +154,7 @@ critical_findings_count = 0
 | Vague | État | Décision |
 |---|---|---|
 | R0 baseline/rollback | PARTIEL | Baseline auditée ; backup DB/objects non encore exécuté |
-| R0 RC clean | NON FAIT | Rehearsal OK, RC final bloqué par dirty/untracked à normaliser |
+| R0 RC clean | FAIT | Artefact final `dirty=false` produit et testé localement/Windows |
 | R1 DB migrations | NON DÉMARRÉ | Attendre backup + RC |
 | R2 API/BFF | NON DÉMARRÉ | Attendre R1/RC |
 | R3 Runtime/workers | NON DÉMARRÉ | Attendre R2 |
@@ -174,8 +174,73 @@ critical_findings_count = 0
 
 ## Blocker actuel
 
-Le blocker n'est pas technique runtime ; il est de gouvernance release :
+Le blocker initial de gouvernance release est levé pour le périmètre source/artefact :
 
-> Impossible de déployer proprement tant que le périmètre dirty/untracked n'est pas normalisé et qu'un artefact `dirty=false` n'est pas produit.
+> Le périmètre dirty/untracked a été normalisé et un artefact `dirty=false` a été produit.
 
-Ce blocage est volontairement fail-closed.
+Le blocker restant avant mutation VPS est opérationnel :
+
+> Backup/rollback VPS et ordre de déploiement R1→R6 doivent être exécutés avant toute bascule `current`.
+
+Ce blocage reste volontairement fail-closed.
+
+## RC final propre — 2026-08-14
+
+Commit local de release convergence :
+
+```text
+a17a5e6a6f6c5af537955ac2dbbf1894897476e4
+```
+
+Artefacts produits :
+
+```text
+.local/releases/preprod-v2-convergence-20260814.1
+.local/releases/preprod-v2-convergence-20260814.1.zip
+SHA256 80795359315f7174cf8e8f404e29285f5a83391dc35b54c8dad6f5238a769153
+```
+
+Manifest RC :
+
+| Champ | Valeur |
+|---|---:|
+| `schema` | `desk_windows_release_v1` |
+| `version` | `preprod-v2-convergence-20260814.1` |
+| `created_at_utc` | `2026-08-14T12:27:27.7553202Z` |
+| `git_commit` | `a17a5e6a6f6c5af537955ac2dbbf1894897476e4` |
+| `dirty` | `false` |
+| fichiers | `4999` |
+| migrations SQL | `54` |
+| dernière migration | `infra/postgres/init/054_data_engine_extended_point_in_time_features.sql` |
+| assets front | `38` |
+| `.pyc` / `__pycache__` inclus | `false` |
+
+Corrections nécessaires découvertes par le build Windows :
+
+- suppression d'un verrou local `node_modules/@tv-automation/*` régénérable, qui bloquait `npm ci` avec `EPERM` ;
+- alignement du fichier généré `packages/desk-contracts/generated/ts/index.ts` avec le générateur ;
+- correction portable Windows/Linux de 19 tests SQL schema : remplacement de `URL.pathname` par `fileURLToPath()`, afin d'éviter les chemins invalides `C:\C:\...`.
+
+Tests exécutés par le build RC :
+
+```text
+contracts generate/check: OK
+strategy-contract guard: OK
+npm ci release: OK
+legacy front typecheck: OK
+legacy front tests: 75 pass / 0 fail
+VNext control-plane tests: 161 pass / 0 fail
+mcp_gpt_desk tests: 1085 pass / 0 fail / 1 skip
+VNext production build: OK
+release zip + sha256: OK
+```
+
+Décision :
+
+```text
+R0 RC clean = FAIT
+Déploiement VPS = NON EFFECTUÉ dans cette étape
+AUTO_EXECUTION = inchangé / doit rester OFF
+LIVE = inchangé / doit rester OFF
+Mode cible = SEMI_MANUAL / SHADOW jusqu'à validation R1→R6
+```
