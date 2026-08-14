@@ -5,6 +5,7 @@ import {
 } from "@tv-automation/desk-replay-engine";
 import {
   buildResearchStrategyIterationPlan,
+  researchIterationOutputRef,
 } from "../src/research/research-strategy-iteration-runner.js";
 import {
   candidateKey,
@@ -108,6 +109,12 @@ describe("research strategy iteration runner", () => {
     assert.notEqual(strategyIterationVersionLabel(first.variants[0]), strategyIterationVersionLabel(second.variants[0]));
     assert.notEqual(candidateKey(seedFromVariant(first.variants[0])), candidateKey(seedFromVariant(second.variants[0])));
     assert.match(candidateKey(seedFromVariant(first.variants[0])), /:branch:[0-9a-f]{12}:iter-1:/);
+    assert.match(researchIterationOutputRef(first), /^research-iteration:\/\/demo-paper\.mnq\.m5\.2026-06-01_2026-07-01\/1\/[0-9a-f]{12}$/);
+    assert.notEqual(researchIterationOutputRef(first), researchIterationOutputRef(second));
+    assert.equal(researchIterationOutputRef(first), researchIterationOutputRef({
+      ...first,
+      generated_at_utc: "2026-08-13T09:15:00.000Z",
+    }));
   });
 
   it("produces executable variant geometry for the canonical simulator", () => {

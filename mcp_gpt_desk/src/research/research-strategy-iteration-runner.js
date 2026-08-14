@@ -7,6 +7,7 @@ import {
   coded,
   conversationFromRunnerInput,
   requiredText,
+  semverBuildHash,
   text,
 } from "./research-strategy-iteration-common.js";
 import { loadResearchStrategyIterationContext } from "./research-strategy-iteration-context.js";
@@ -48,7 +49,7 @@ function buildIterationRunnerOutput({ plan, created, runnerInput = {} }) {
     ok: true,
     status: created.length ? "ITERATION_CREATED" : "NO_VARIANT_CREATED",
     schema_version: RESEARCH_STRATEGY_ITERATION_OUTPUT_SCHEMA_VERSION,
-    output_ref: `research-iteration://${plan.dataset_key}/${plan.iteration_index}`,
+    output_ref: researchIterationOutputRef(plan),
     source_research_candidate_id: plan.source_research_candidate_id,
     source_simulation_run_id: plan.source_simulation_run_id,
     dataset_id: plan.dataset_id,
@@ -64,6 +65,16 @@ function buildIterationRunnerOutput({ plan, created, runnerInput = {} }) {
       token_consuming: false,
     },
   };
+}
+
+export function researchIterationOutputRef(plan = {}) {
+  return `research-iteration://${requiredText(plan.dataset_key, "dataset_key")}/${requiredText(String(plan.iteration_index ?? ""), "iteration_index")}/${semverBuildHash({
+    dataset_key: plan.dataset_key,
+    iteration_index: plan.iteration_index,
+    source_research_candidate_id: plan.source_research_candidate_id || null,
+    source_simulation_run_id: plan.source_simulation_run_id || null,
+    variants: Array.isArray(plan.variants) ? plan.variants.map((variant) => variant.variant_id || variant.research_candidate_id || variant.variant_label || "").filter(Boolean) : [],
+  }, 12)}`;
 }
 
 function researchRegistry(store) {
