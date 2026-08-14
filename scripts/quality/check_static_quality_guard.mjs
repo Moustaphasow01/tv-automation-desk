@@ -15,6 +15,7 @@ const cliDrivenEntrypoints = new Set([
   "mcp_gpt_desk/src/agent-runtime-postgres-repository.js",
   "mcp_gpt_desk/src/agent-runtime-supervisor.js",
   "mcp_gpt_desk/src/agent-runtime-supervisor-host.js",
+  "mcp_gpt_desk/src/full-system-dress-rehearsal-certifier.js",
 ]);
 const standards = {
   max_file_lines: 600,

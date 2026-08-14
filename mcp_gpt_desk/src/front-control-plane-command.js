@@ -1,4 +1,6 @@
 import { codedError, currentUtc, hash, safeIdPart, text } from "./front-control-plane-common.js";
+import { executeDeskOperationalControl } from "./desk-operational-control-service.js";
+import { DomainAssistantRuntimeService } from "./domain-assistant-runtime-service.js";
 
 export const FRONT_COMMAND_CATALOG = Object.freeze({
   "control_plane.verify": Object.freeze({
@@ -7,10 +9,46 @@ export const FRONT_COMMAND_CATALOG = Object.freeze({
     mutation: "control_plane.verify",
     brokerExecution: false,
   }),
+  "desk.status": Object.freeze({
+    capability: "front.command",
+    environments: Object.freeze(["MOCK", "PAPER"]),
+    mutation: "desk.status",
+    brokerExecution: false,
+  }),
+  "desk.doctor": Object.freeze({
+    capability: "front.command",
+    environments: Object.freeze(["MOCK", "PAPER"]),
+    mutation: "desk.doctor",
+    brokerExecution: false,
+  }),
+  "desk.start": Object.freeze({
+    capability: "front.command",
+    environments: Object.freeze(["MOCK", "PAPER"]),
+    mutation: "desk.start",
+    brokerExecution: false,
+  }),
+  "desk.stop": Object.freeze({
+    capability: "front.command",
+    environments: Object.freeze(["MOCK", "PAPER"]),
+    mutation: "desk.stop",
+    brokerExecution: false,
+  }),
+  "desk.restart": Object.freeze({
+    capability: "front.command",
+    environments: Object.freeze(["MOCK", "PAPER"]),
+    mutation: "desk.restart",
+    brokerExecution: false,
+  }),
   "research.bootstrap_demo_paper": Object.freeze({
     capability: "research.command",
     environments: Object.freeze(["MOCK", "PAPER"]),
     mutation: "research.bootstrap_demo_paper",
+    brokerExecution: false,
+  }),
+  "assistant.question.submit": Object.freeze({
+    capability: "front.command",
+    environments: Object.freeze(["MOCK", "PAPER"]),
+    mutation: "assistant.question.submit",
     brokerExecution: false,
   }),
   "execution.order_intent.confirm": Object.freeze({
@@ -123,7 +161,9 @@ function frontCommandActor(actor = {}) {
 
 function runtimeMutationPlan(context) {
   if (context.commandType === "control_plane.verify") return { kind: "control_plane.verify", broker_execution: false };
+  if (context.commandType.startsWith("desk.")) return { kind: context.commandType, broker_execution: false };
   if (context.commandType === "research.bootstrap_demo_paper") return { kind: "research.bootstrap_demo_paper", broker_execution: false };
+  if (context.commandType === "assistant.question.submit") return { kind: "assistant.question.submit", broker_execution: false };
   if (context.commandType === "execution.order_intent.confirm") return { kind: "execution.order_intent.confirm", broker_execution: false };
   if (context.commandType === "execution.order_intent.reject") return { kind: "execution.order_intent.reject", broker_execution: false };
   return null;
@@ -134,8 +174,21 @@ async function executeRuntimeMutation(store, context) {
   if (context.mutationPlan.kind === "control_plane.verify") {
     return { status: "VERIFIED", verified_at_utc: currentUtc(store?.clock), broker_execution: false };
   }
+  if (context.mutationPlan.kind.startsWith("desk.")) {
+    return executeDeskOperationalControl({
+      store,
+      command: context.mutationPlan.kind,
+      environment: context.environment,
+      idempotencyKey: context.idempotencyKey,
+      correlationId: context.correlationId,
+      actor: context.actor,
+    });
+  }
   if (context.mutationPlan.kind === "execution.order_intent.confirm" || context.mutationPlan.kind === "execution.order_intent.reject") {
     return executeOrderIntentHumanGateMutation(store, context);
+  }
+  if (context.mutationPlan.kind === "assistant.question.submit") {
+    return executeAssistantQuestionMutation(store, context);
   }
   if (typeof store?.executeResearchLabAction !== "function") {
     throw codedError("RESEARCH_BOOTSTRAP_ACTION_UNAVAILABLE", "Research Lab bootstrap action is unavailable.", 503);
@@ -150,6 +203,46 @@ async function executeRuntimeMutation(store, context) {
     },
     actor: context.actor,
   });
+}
+
+async function executeAssistantQuestionMutation(store, context) {
+  if (typeof store?.executeDomainAssistantAction === "function") {
+    return store.executeDomainAssistantAction({
+      action: "submit_question",
+      input: assistantQuestionInput(context),
+      actor: context.actor,
+    });
+  }
+  const service = store?.domainAssistantRuntimeService || new DomainAssistantRuntimeService({ persistence: store?.persistence });
+  await service.bootstrapProfiles();
+  const result = await service.submitQuestion(assistantQuestionInput(context));
+  return {
+    status: result.status,
+    assistant_profile_id: result.task?.assistant_profile_id,
+    assistant_conversation_id: result.conversation?.assistant_conversation_id,
+    assistant_task_id: result.task?.assistant_task_id,
+    wake_type: result.task?.wake_type,
+    broker_execution: false,
+    order_submission_enabled: false,
+  };
+}
+
+function assistantQuestionInput(context) {
+  const payload = object(context.body.payload);
+  const assistantId = payloadText(payload, ["assistantId", "assistant_id"]);
+  const question = payloadText(payload, ["question"]);
+  if (!assistantId) throw codedError("ASSISTANT_ID_REQUIRED", "assistantId is required.", 400);
+  if (!question) throw codedError("ASSISTANT_QUESTION_REQUIRED", "question is required.", 400);
+  return {
+    assistantId,
+    conversationId: payloadText(payload, ["conversationId", "conversation_id"]),
+    operatorId: operatorIdentity(context.actor),
+    question,
+    idempotencyKey: context.idempotencyKey,
+    sourceRefs: payloadArray(payload, ["sourceRefs", "source_refs"]),
+    domainSnapshot: object(firstDefined([payload.domainSnapshot, payload.domain_snapshot], {})),
+    nowUtc: context.acceptedAt,
+  };
 }
 
 async function executeOrderIntentHumanGateMutation(store, context) {
@@ -236,11 +329,38 @@ function controlPlaneCommandRequestHash({ body, commandType, environment }) {
   return hash(JSON.stringify({ commandType, environment, payload: body.payload || {}, reason: text(body.reason, ""), expectedVersion: body.expectedVersion || null }));
 }
 
+function payloadText(payload, keys, fallback = "") {
+  return text(firstDefined(keys.map((key) => payload[key]), fallback), fallback);
+}
+
+function payloadArray(payload, keys) {
+  const value = firstDefined(keys.map((key) => payload[key]), []);
+  return Array.isArray(value) ? value : [];
+}
+
+function operatorIdentity(actor = {}) {
+  return text(firstDefined([actor.uid, actor.email, actor.kind], "operator"), "operator");
+}
+
+function firstDefined(values, fallback = undefined) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return fallback;
+}
+
+function object(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value;
+}
+
 function commandAggregateId(commandType, body = {}) {
   const payload = body.payload || {};
   if (commandType.startsWith("execution.order_intent.")) {
     return text(payload.portfolioOrderIntentId || payload.portfolio_order_intent_id, "portfolio_order_intent:UNKNOWN");
   }
+  if (commandType.startsWith("desk.")) return "desk:operational-control";
   if (commandType.startsWith("research.")) return text(payload.missionId || payload.mission_id || payload.dataset_key, "research:control-plane");
+  if (commandType.startsWith("assistant.")) return text(payload.assistantId || payload.assistant_id, "assistant:control-plane");
   return "front-control-plane";
 }

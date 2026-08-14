@@ -91,7 +91,8 @@
         "^agent_task_run_metrics$",
         "^prompt_",
         "^instruction_",
-        "^agent_prompt_"
+        "^agent_prompt_",
+        "^assistant_"
       ]
     },
     {

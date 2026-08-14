@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FaBolt,
@@ -6,17 +7,48 @@ import {
   FaClock,
   FaExclamationTriangle,
   FaFlask,
-  FaShieldAlt
+  FaPlay,
+  FaRedo,
+  FaShieldAlt,
+  FaStethoscope,
+  FaStop,
+  FaSyncAlt
 } from "react-icons/fa";
 import { DataTable, MobileDataList } from "@/design-system/data";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
-import { useFrontView } from "@/domains/front-api/repositories";
+import { useCapabilityCatalog, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
+import type { CommandSnapshot } from "@/domains/realtime/commandRuntime";
 import type { CommandCenterActivity } from "@/domains/front-api/viewModels";
 
 export function CommandCenterPage() {
   const query = useFrontView("command-center");
+  const capabilityCatalog = useCapabilityCatalog();
+  const repository = useFrontViewRepository();
+  const [submittingCommand, setSubmittingCommand] = useState<DeskControlCommand | null>(null);
+  const [lastCommand, setLastCommand] = useState<CommandSnapshot | null>(null);
+  const [commandError, setCommandError] = useState<string | null>(null);
+
+  const submitDeskControl = async (commandType: DeskControlCommand) => {
+    setSubmittingCommand(commandType);
+    setCommandError(null);
+    try {
+      const accepted = await repository.submitCommand({
+        commandType,
+        environment: "PAPER",
+        reason: deskControlReason(commandType),
+        payload: { source: "command-center", requestedMode: "semi_manual_paper" }
+      });
+      const terminal = await repository.getCommand(accepted.commandId).catch(() => null);
+      setLastCommand(terminal ?? { ...accepted, updatedAt: accepted.acceptedAt });
+      await Promise.all([query.refetch(), capabilityCatalog.refetch()]);
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : "DESK_CONTROL_COMMAND_FAILED");
+    } finally {
+      setSubmittingCommand(null);
+    }
+  };
 
   if (query.isLoading) {
     return <CommandCenterLoading />;
@@ -63,6 +95,15 @@ export function CommandCenterPage() {
         <KpiCard label="COMMANDES EN ATTENTE" value={`${data.summary.pendingCommands}`} delta={data.summary.pendingCommands ? "Commandes non terminales" : "Aucune commande en attente"} tone={data.summary.pendingCommands ? "warning" : "success"} />
         <KpiCard label="LATENCE DE PROJECTION" value={`${meta.latencyMs ?? 0} ms`} delta={`Schéma ${meta.schemaVersion} · ${meta.availability ?? (meta.stale ? "STALE" : "AVAILABLE")}`} tone={meta.stale ? "warning" : "info"} />
       </section>
+
+      <DeskColdStartPanel
+        actions={capabilityCatalog.data?.actions ?? []}
+        disabled={capabilityCatalog.isLoading || capabilityCatalog.isError}
+        submittingCommand={submittingCommand}
+        lastCommand={lastCommand}
+        error={commandError}
+        onSubmit={submitDeskControl}
+      />
 
       <section className="operator-grid operator-grid--top" aria-label="Supervision globale">
         <Card title="Santé des systèmes" actions={<InlineAction>Observabilité</InlineAction>} density="compact">
@@ -153,6 +194,121 @@ export function CommandCenterPage() {
       </section>
     </div>
   );
+}
+
+type DeskControlCommand = "desk.status" | "desk.doctor" | "desk.start" | "desk.stop" | "desk.restart";
+
+type DeskControlCapability = {
+  commandType: string;
+  allowed: boolean;
+  brokerExecution: boolean;
+};
+
+const DESK_CONTROL_ACTIONS: readonly {
+  commandType: DeskControlCommand;
+  label: string;
+  detail: string;
+  icon: JSX.Element;
+  tone: "neutral" | "accent" | "warning" | "danger";
+}[] = [
+  { commandType: "desk.status", label: "Status", detail: "Lire l’état opérationnel", icon: <FaSyncAlt />, tone: "accent" },
+  { commandType: "desk.doctor", label: "Doctor", detail: "Diagnostiquer blockers", icon: <FaStethoscope />, tone: "neutral" },
+  { commandType: "desk.start", label: "Start plan", detail: "Préparer le démarrage", icon: <FaPlay />, tone: "accent" },
+  { commandType: "desk.stop", label: "Stop plan", detail: "Planifier l’arrêt sûr", icon: <FaStop />, tone: "warning" },
+  { commandType: "desk.restart", label: "Restart plan", detail: "Planifier un restart", icon: <FaRedo />, tone: "warning" }
+];
+
+function DeskColdStartPanel({
+  actions,
+  disabled,
+  submittingCommand,
+  lastCommand,
+  error,
+  onSubmit
+}: {
+  actions: readonly DeskControlCapability[];
+  disabled: boolean;
+  submittingCommand: DeskControlCommand | null;
+  lastCommand: CommandSnapshot | null;
+  error: string | null;
+  onSubmit(commandType: DeskControlCommand): void;
+}) {
+  const result = operationalMutationResult(lastCommand?.result);
+  const state = stringFromPath(result, ["state", "state"]) || "—";
+  const outcome = stringFromPath(result, ["plan", "outcome"]) || lastCommand?.status || "En attente";
+  const blockers = arrayLengthFromPath(result, ["state", "blockers"]);
+  const warnings = arrayLengthFromPath(result, ["state", "warnings"]);
+
+  return (
+    <Card
+      title="Contrôle du desk"
+      eyebrow="Cold start fail-closed"
+      density="compact"
+      tone={error ? "danger" : state === "PAPER_READY" ? "success" : state === "DEGRADED" ? "warning" : "neutral"}
+      actions={<StatusBadge tone={state === "PAPER_READY" ? "success" : state === "FAILED" ? "danger" : "warning"}>{state}</StatusBadge>}
+    >
+      <div className="desk-control-panel">
+        <div className="desk-control-panel__actions">
+          {DESK_CONTROL_ACTIONS.map((action) => {
+            const capability = actions.find((item) => item.commandType === action.commandType);
+            const allowed = capability?.allowed === true && capability.brokerExecution === false;
+            const busy = submittingCommand === action.commandType;
+            return (
+              <button
+                key={action.commandType}
+                type="button"
+                className={`desk-control-action desk-control-action--${action.tone}`}
+                disabled={disabled || !allowed || Boolean(submittingCommand)}
+                onClick={() => onSubmit(action.commandType)}
+              >
+                <span>{busy ? <FaClock /> : action.icon}</span>
+                <strong>{busy ? "Envoi…" : action.label}</strong>
+                <small>{action.detail}</small>
+              </button>
+            );
+          })}
+        </div>
+        <div className="desk-control-panel__result">
+          <MetricBox label="Dernière commande" value={lastCommand?.commandId ?? "—"} />
+          <MetricBox label="Résultat" value={outcome} />
+          <MetricBox label="Blockers" value={String(blockers)} />
+          <MetricBox label="Warnings" value={String(warnings)} />
+          {error ? <p className="desk-control-panel__error">{error}</p> : null}
+          {result ? <small>Broker/live/auto restent fermés par contrat control-plane.</small> : <small>Les commandes sont publiées par le BFF selon les capabilities réelles.</small>}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function deskControlReason(commandType: DeskControlCommand) {
+  const label = DESK_CONTROL_ACTIONS.find((item) => item.commandType === commandType)?.label || commandType;
+  return `Operator requested ${label} from VNext Command Center; broker/live/auto execution must remain fail-closed.`;
+}
+
+function operationalMutationResult(result: unknown): Record<string, unknown> | null {
+  if (!isRecord(result)) return null;
+  const mutation = result.mutation_result;
+  if (isRecord(mutation)) return mutation;
+  return isRecord(result.state) ? result : null;
+}
+
+function stringFromPath(source: Record<string, unknown> | null, path: readonly string[]) {
+  const value = valueFromPath(source, path);
+  return typeof value === "string" ? value : "";
+}
+
+function arrayLengthFromPath(source: Record<string, unknown> | null, path: readonly string[]) {
+  const value = valueFromPath(source, path);
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function valueFromPath(source: Record<string, unknown> | null, path: readonly string[]) {
+  return path.reduce<unknown>((current, key) => (isRecord(current) ? current[key] : undefined), source);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 const activityColumns = [

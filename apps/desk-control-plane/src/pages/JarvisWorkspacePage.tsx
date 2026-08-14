@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   FaBell,
@@ -26,6 +26,8 @@ export function JarvisWorkspacePage() {
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
+  const [selectedAssistantId, setSelectedAssistantId] = useState("assistant_research");
+  const [assistantQuestion, setAssistantQuestion] = useState("");
 
   if (query.isLoading) {
     return <JarvisLoading />;
@@ -48,6 +50,10 @@ export function JarvisWorkspacePage() {
   }
 
   const { data, meta } = query.data;
+  const assistantOptions = data.missions.map((mission) => ({ assistantId: mission.missionId, label: mission.title }));
+  const activeAssistantId = assistantOptions.some((item) => item.assistantId === selectedAssistantId)
+    ? selectedAssistantId
+    : assistantOptions[0]?.assistantId ?? "assistant_research";
 
   const confirmAction = async (action: PendingAction) => {
     setSubmittingActionId(action.actionId);
@@ -63,6 +69,39 @@ export function JarvisWorkspacePage() {
       setCommand(accepted);
     } catch (error) {
       setCommandError(error instanceof Error ? error.message : "JARVIS_COMMAND_FAILED");
+    } finally {
+      setSubmittingActionId(null);
+    }
+  };
+
+  const submitAssistantQuestion = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const question = assistantQuestion.trim();
+    if (!question) return;
+    setSubmittingActionId("assistant-question");
+    setCommandError(null);
+    try {
+      const accepted = await repository.submitCommand({
+        commandType: "assistant.question.submit",
+        environment: "PAPER",
+        reason: `Jarvis domain assistant question: ${activeAssistantId}`,
+        payload: {
+          assistantId: activeAssistantId,
+          question,
+          sourceRefs: data.citations.map((citation) => citation.citationId),
+          domainSnapshot: {
+            riskUsedPct: data.deskSnapshot.riskUsedPct,
+            liveSignals: data.deskSnapshot.liveSignals,
+            researchExperiments: data.deskSnapshot.researchExperiments,
+            openIncidents: data.deskSnapshot.openIncidents
+          }
+        }
+      });
+      setCommand(accepted);
+      setAssistantQuestion("");
+      void query.refetch();
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : "JARVIS_QUESTION_FAILED");
     } finally {
       setSubmittingActionId(null);
     }
@@ -114,6 +153,28 @@ export function JarvisWorkspacePage() {
         </Card>
 
         <Card title="Conversation & réponses citées" actions={<InlineAction>Historique</InlineAction>} density="compact">
+          <form className="jarvis-question-box" onSubmit={submitAssistantQuestion}>
+            <label>
+              <span>Assistant</span>
+              <select value={activeAssistantId} onChange={(event) => setSelectedAssistantId(event.target.value)}>
+                {assistantOptions.map((option) => (
+                  <option key={option.assistantId} value={option.assistantId}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Question opérateur</span>
+              <textarea
+                value={assistantQuestion}
+                onChange={(event) => setAssistantQuestion(event.target.value)}
+                placeholder="Pose une question read-only : état research, signal, risk, provider, data…"
+                rows={3}
+              />
+            </label>
+            <DeskButton variant="primary" type="submit" disabled={!assistantQuestion.trim() || submittingActionId === "assistant-question"}>
+              {submittingActionId === "assistant-question" ? "Envoi…" : "Demander"}
+            </DeskButton>
+          </form>
           <div className="jarvis-conversation">
             {data.conversation.map((message) => (
               <article key={message.messageId} className={`jarvis-message jarvis-message--${message.role}`}>

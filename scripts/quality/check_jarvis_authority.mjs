@@ -14,10 +14,14 @@ export function checkJarvisAuthority({
   commandCatalog = FRONT_COMMAND_CATALOG,
   mcpSlices = MCP_TOOL_SLICES,
   bffSource = readIfExists(path.join(repoRoot, "mcp_gpt_desk/src/front-control-plane-api.js")),
+  jarvisProjectionSource = readIfExists(path.join(repoRoot, "mcp_gpt_desk/src/front-jarvis-projection.js")),
+  assistantRuntimeSource = readIfExists(path.join(repoRoot, "mcp_gpt_desk/src/domain-assistant-runtime-service.js")),
+  assistantSqlSource = readIfExists(path.join(repoRoot, "infra/postgres/init/055_domain_assistant_runtime.sql")),
   mockJarvisSource = readJarvisFixture(repoRoot),
 } = {}) {
   const violations = [];
   const matrix = [];
+  const jarvisAuthority = bffJarvisAuthorityStatus({ bffSource, jarvisProjectionSource, assistantRuntimeSource, assistantSqlSource });
 
   matrix.push({
     tool: "front-api:/views/jarvis-workspace",
@@ -28,14 +32,14 @@ export function checkJarvisAuthority({
     humanGate: false,
     stepUp: false,
     brokerEffect: false,
-    status: bffJarvisIsReadOnlyNotImplemented(bffSource) ? "READ_ONLY_NOT_IMPLEMENTED" : "UNVERIFIED",
+    status: jarvisAuthority.status,
   });
 
-  if (!bffJarvisIsReadOnlyNotImplemented(bffSource)) {
+  if (!jarvisAuthority.ok) {
     violations.push({
       area: "bff",
-      reason: "JARVIS_BFF_VIEW_NOT_READ_ONLY_NOT_IMPLEMENTED",
-      detail: "jarvisWorkspace must remain read-only with empty pendingActions/commands until a certified supervisor backend exists.",
+      reason: "JARVIS_BFF_VIEW_NOT_CERTIFIED_READ_ONLY",
+      detail: jarvisAuthority.reason,
     });
   }
 
@@ -132,11 +136,72 @@ export function checkJarvisAuthority({
   };
 }
 
-function bffJarvisIsReadOnlyNotImplemented(source) {
-  return source.includes("function jarvisWorkspace")
-    && source.includes('warnings.push("jarvis-workspace:NOT_IMPLEMENTED")')
-    && /pendingActions:\s*\[\]/.test(source)
-    && /commands:\s*\[\]/.test(source);
+function bffJarvisAuthorityStatus({ bffSource, jarvisProjectionSource, assistantRuntimeSource, assistantSqlSource }) {
+  const projectionSource = jarvisProjectionSource || bffSource;
+  if (!projectionSource.includes("function jarvisWorkspace")) {
+    return { ok: false, status: "MISSING", reason: "jarvisWorkspace projection is missing from the certified BFF projection source." };
+  }
+
+  const readOnlyView = /pendingActions:\s*\[\]/.test(projectionSource)
+    && /commands:\s*\[\]/.test(projectionSource)
+    && /voice:\s*\{[\s\S]*?serviceStatus:\s*"OFF"/.test(projectionSource);
+
+  if (!readOnlyView) {
+    return { ok: false, status: "WRITE_SURFACE_EXPOSED", reason: "jarvisWorkspace must expose empty pendingActions/commands and disabled voice until sensitive actions are certified." };
+  }
+
+  if (bffSource.includes('warnings.push("jarvis-workspace:NOT_IMPLEMENTED")')) {
+    return { ok: true, status: "READ_ONLY_NOT_IMPLEMENTED", reason: "" };
+  }
+
+  if (!bffSource.includes("jarvisWorkspace")) {
+    return { ok: false, status: "BFF_ROUTE_NOT_WIRED", reason: "BFF source does not wire the certified jarvisWorkspace projection." };
+  }
+
+  const requiredProfiles = [
+    "assistant_research",
+    "assistant_live_runtime",
+    "assistant_portfolio_risk",
+    "assistant_execution",
+    "assistant_data",
+    "assistant_platform_ops",
+  ];
+  const missingBffProfiles = requiredProfiles.filter((profileId) => !projectionSource.includes(profileId));
+  const missingRuntimeProfiles = requiredProfiles.filter((profileId) => !assistantRuntimeSource.includes(profileId));
+
+  if (missingBffProfiles.length || missingRuntimeProfiles.length) {
+    return {
+      ok: false,
+      status: "ASSISTANT_PROFILE_DRIFT",
+      reason: `Jarvis BFF/runtime profile mismatch. Missing in BFF: ${missingBffProfiles.join(",") || "none"}; missing in runtime: ${missingRuntimeProfiles.join(",") || "none"}.`,
+    };
+  }
+
+  const runtimeReadOnly = assistantRuntimeSource.includes("DEFAULT_DOMAIN_ASSISTANT_PROFILES")
+    && assistantRuntimeSource.includes("requireReadOnlyProfile")
+    && assistantRuntimeSource.includes("forbiddenActionCodes")
+    && assistantRuntimeSource.includes("forbidden_actions")
+    && assistantRuntimeSource.includes("can_create_provider_command: false")
+    && assistantRuntimeSource.includes("can_confirm_human_gate: false")
+    && assistantRuntimeSource.includes("can_activate_live: false")
+    && assistantRuntimeSource.includes("can_activate_auto_execution: false");
+
+  if (!runtimeReadOnly) {
+    return { ok: false, status: "ASSISTANT_RUNTIME_NOT_READ_ONLY", reason: "DomainAssistantRuntimeService does not prove read-only profiles and forbidden sensitive actions." };
+  }
+
+  const sqlReadOnly = assistantSqlSource.includes("assistant_profiles_read_only_default")
+    && assistantSqlSource.includes("assistant_tasks_no_sensitive_bypass")
+    && assistantSqlSource.includes("can_create_provider_command")
+    && assistantSqlSource.includes("can_confirm_human_gate")
+    && assistantSqlSource.includes("activate_live")
+    && assistantSqlSource.includes("activate_auto_execution");
+
+  if (!sqlReadOnly) {
+    return { ok: false, status: "ASSISTANT_SQL_NOT_READ_ONLY", reason: "Assistant SQL migration does not prove read-only and no sensitive bypass constraints." };
+  }
+
+  return { ok: true, status: "READ_ONLY_CERTIFIED", reason: "" };
 }
 
 function jarvisFixtureCommandTypes(source) {

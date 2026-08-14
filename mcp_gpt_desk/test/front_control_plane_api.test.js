@@ -9,6 +9,8 @@ import {
   isFrontControlPlanePath,
   isFrontControlPlaneWriteRequest,
 } from "../src/front-control-plane-api.js";
+import { DomainAssistantRuntimeService } from "../src/domain-assistant-runtime-service.js";
+import { InMemoryDomainAssistantRuntimeRepository } from "../src/domain-assistant-runtime-repository.js";
 
 const viewNames = [
   "auth-session", "operator-settings", "admin-access", "command-center", "demo-paper-readiness", "events-audit",
@@ -44,7 +46,13 @@ test("front control plane publishes only executable catalogued actions", async (
   const readOnly = await handleFrontControlPlane({}, { pathname: FRONT_CONTROL_PLANE_CAPABILITIES_PATH, actor: { kind: "rest_read", scopes: ["desk.read"] } });
   const operator = await handleFrontControlPlane({}, { pathname: FRONT_CONTROL_PLANE_CAPABILITIES_PATH, actor: { kind: "operator_session", scopes: ["desk.read", "desk.write"] } });
   assert.deepEqual(readOnly.actions.map((item) => item.commandType).sort(), [
+    "assistant.question.submit",
     "control_plane.verify",
+    "desk.doctor",
+    "desk.restart",
+    "desk.start",
+    "desk.status",
+    "desk.stop",
     "execution.order_intent.confirm",
     "execution.order_intent.reject",
     "research.bootstrap_demo_paper",
@@ -84,6 +92,47 @@ test("front control plane returns stable envelopes for every VNext view", async 
     assert.equal(Array.isArray(envelope.permissions), true);
     assert.equal(typeof envelope.data, "object", viewName);
   }
+});
+
+test("front control plane Jarvis workspace is a grounded read-only supervisor", async () => {
+  const envelope = await handleFrontControlPlane(frontControlPlaneStore(), {
+    pathname: "/front-api/v1/views/jarvis-workspace",
+    method: "GET",
+    query: { trading_date: "2026-08-11", session: "ny_open", mode: "paper" },
+    actor: { kind: "operator_session", scopes: ["desk.read", "desk.write"] },
+  });
+
+  assert.equal(envelope.meta.warnings.some((warning) => warning.includes("jarvis-workspace:NOT_IMPLEMENTED")), false);
+  assert.deepEqual(envelope.meta.sources, [
+    { source: "ai-context", state: "AVAILABLE" },
+    { source: "incidents", state: "AVAILABLE" },
+    { source: "agent-runtime", state: "AVAILABLE" },
+    { source: "research", state: "AVAILABLE" },
+    { source: "data-foundation", state: "AVAILABLE" },
+    { source: "execution", state: "AVAILABLE" },
+    { source: "strategy", state: "AVAILABLE" },
+    { source: "portfolio-risk", state: "AVAILABLE" },
+    { source: "health", state: "AVAILABLE" },
+  ]);
+  assert.equal(envelope.data.summary.activeAgents, 6);
+  assert.deepEqual(envelope.data.missions.map((mission) => mission.missionId), [
+    "assistant_research",
+    "assistant_live_runtime",
+    "assistant_portfolio_risk",
+    "assistant_execution",
+    "assistant_data",
+    "assistant_platform_ops",
+  ]);
+  assert.equal(envelope.data.deskSnapshot.liveSignals, 1);
+  assert.equal(envelope.data.deskSnapshot.researchExperiments, 1);
+  assert.equal(envelope.data.deskSnapshot.providersTotal, 1);
+  assert.equal(envelope.data.deskSnapshot.openIncidents, 1);
+  assert.equal(envelope.data.pendingActions.length, 0);
+  assert.equal(envelope.data.commands.length, 0);
+  assert.equal(envelope.data.voice.serviceStatus, "OFF");
+  assert.equal(envelope.data.morningBrief.some((section) => section.domain === "Risk" && section.detail.includes("Jarvis ne publie ni Target Position ni OrderIntent")), true);
+  assert.equal(envelope.data.conversation[0]?.role, "system");
+  assert.equal(envelope.data.conversation[0]?.text.includes("ne contourne jamais Risk, Portfolio, Human Gate ou Execution"), true);
 });
 
 test("front control plane P0 operational views preserve empty-state and reconciliation truth", async () => {
@@ -381,6 +430,75 @@ test("front control plane persists catalogued commands as audited idempotent rec
   assert.equal(commits[0].auditDoc.performed_by, "operator@example.com");
 });
 
+test("front control plane executes desk status and start through audited fail-closed operational control", async () => {
+  const commands = new Map();
+  const completed = [];
+  const store = {
+    ...frontControlPlaneStore({
+      health: coldStartReadyHealth(),
+    }),
+    async commitFrontOperatorCommandMutation(plan) {
+      const existing = commands.get(plan.commandId);
+      if (existing) return { replayed: true, command: existing.commandDoc, result: existing.result };
+      commands.set(plan.commandId, plan);
+      return { replayed: false, command: plan.commandDoc, result: plan.result };
+    },
+    async completeFrontOperatorCommand(result) {
+      completed.push(result);
+      return { ok: true };
+    },
+  };
+
+  const status = await handleFrontControlPlane(store, {
+    pathname: FRONT_CONTROL_PLANE_COMMANDS_PATH,
+    method: "POST",
+    body: {
+      commandType: "desk.status",
+      environment: "PAPER",
+      reason: "operator checks cold-start state before demo-paper run",
+    },
+    headers: {
+      "idempotency-key": "idem-desk-status-001",
+      "x-correlation-id": "corr-desk-status-001",
+    },
+    actor: { kind: "test-operator", authorized: true, email: "operator@example.com" },
+  });
+
+  assert.equal(status.runtimeMutation, "EXECUTED");
+  assert.equal(status.aggregateId, "desk:operational-control");
+  assert.equal(status.mutationResult.status, "SUCCEEDED");
+  assert.equal(status.mutationResult.state.state, "PAPER_READY");
+  assert.equal(status.mutationResult.broker_execution, false);
+  assert.equal(status.mutationResult.live_execution, false);
+  assert.equal(status.mutationResult.auto_execution, false);
+
+  const start = await handleFrontControlPlane(store, {
+    pathname: FRONT_CONTROL_PLANE_COMMANDS_PATH,
+    method: "POST",
+    body: {
+      commandType: "desk.start",
+      environment: "PAPER",
+      reason: "operator requests audited start plan",
+    },
+    headers: {
+      "idempotency-key": "idem-desk-start-001",
+      "x-correlation-id": "corr-desk-start-001",
+    },
+    actor: { kind: "test-operator", authorized: true, email: "operator@example.com" },
+  });
+
+  assert.equal(start.runtimeMutation, "EXECUTED");
+  assert.equal(start.aggregateId, "desk:operational-control");
+  assert.equal(start.mutationResult.status, "PLAN_ONLY");
+  assert.equal(start.mutationResult.plan.outcome, "PLAN_ONLY_FAIL_CLOSED");
+  assert.equal(start.mutationResult.plan.sideEffectsEnabled, false);
+  assert.equal(start.mutationResult.plan.broker_execution, false);
+  assert.equal(start.mutationResult.state.allowed_actions.includes("desk.restart"), true);
+  assert.equal(completed.length, 2);
+  assert.equal([...commands.values()].every((item) => item.commandDoc.broker_execution === false), true);
+  assert.equal([...commands.values()].every((item) => item.commandDoc.order_submission_enabled === false), true);
+});
+
 test("front control plane research bootstrap command executes the audited runtime mutation", async () => {
   const commands = new Map();
   const mutations = [];
@@ -434,6 +552,63 @@ test("front control plane research bootstrap command executes the audited runtim
   assert.equal(mutations[0].input.idempotency_key, "idem-research-bootstrap-001");
   assert.equal(commands.values().next().value.commandDoc.runtime_mutation, true);
   assert.equal(commands.values().next().value.commandDoc.broker_execution, false);
+});
+
+test("front control plane assistant question command persists a read-only assistant task", async () => {
+  const commands = new Map();
+  const completed = [];
+  const repository = new InMemoryDomainAssistantRuntimeRepository();
+  const domainAssistantRuntimeService = new DomainAssistantRuntimeService({ repository });
+  await domainAssistantRuntimeService.bootstrapProfiles();
+  const store = {
+    ...frontControlPlaneStore(),
+    domainAssistantRuntimeService,
+    async commitFrontOperatorCommandMutation(plan) {
+      const existing = commands.get(plan.commandId);
+      if (existing) return { replayed: true, command: existing.commandDoc, result: existing.result };
+      commands.set(plan.commandId, plan);
+      return { replayed: false, command: plan.commandDoc, result: plan.result };
+    },
+    async completeFrontOperatorCommand(result) {
+      completed.push(result);
+      return { ok: true };
+    },
+  };
+
+  const accepted = await handleFrontControlPlane(store, {
+    pathname: FRONT_CONTROL_PLANE_COMMANDS_PATH,
+    method: "POST",
+    body: {
+      commandType: "assistant.question.submit",
+      environment: "PAPER",
+      payload: {
+        assistantId: "assistant_execution",
+        question: "Pourquoi OI-812 est bloqué ?",
+        sourceRefs: ["execution.order_intents"],
+        domainSnapshot: { orderIntentId: "OI-812", providerCommands: 0 },
+      },
+      reason: "operator asks domain assistant",
+    },
+    headers: {
+      "idempotency-key": "idem-assistant-question-001",
+      "x-correlation-id": "corr-assistant-question-001",
+    },
+    actor: { kind: "test-operator", authorized: true, uid: "operator-1", email: "operator@example.com" },
+  });
+
+  assert.equal(accepted.status, "ACCEPTED");
+  assert.equal(accepted.runtimeMutation, "EXECUTED");
+  assert.equal(accepted.aggregateId, "assistant_execution");
+  assert.equal(accepted.mutationResult.status, "RECORDED");
+  assert.equal(accepted.mutationResult.assistant_profile_id, "assistant_execution");
+  assert.equal(repository.tasks.size, 1);
+  assert.equal(repository.messages.size, 1);
+  assert.equal(repository.outbox[0].channel, "ASSISTANT_RUNTIME");
+  assert.equal([...repository.tasks.values()][0].payload.authority, "READ_ONLY");
+  assert.equal([...commands.values()][0].commandDoc.broker_execution, false);
+  assert.equal([...commands.values()][0].commandDoc.order_submission_enabled, false);
+  assert.equal(completed[0].result.mutation_result.broker_execution, false);
+  assert.equal(completed[0].result.mutation_result.order_submission_enabled, false);
 });
 
 test("front control plane Human Gate confirm routes through broker service without direct provider execution", async () => {
@@ -803,6 +978,75 @@ function frontControlPlaneStore(overrides = {}) {
     async listDataFoundationDatasets() { return datasets; },
     operations: {
       async listSimulationRuns() { return simulations; },
+    },
+  };
+}
+
+function coldStartReadyHealth() {
+  return {
+    ready: true,
+    ok: true,
+    mode: "postgres",
+    data_readiness: {
+      ok: true,
+      state: "fresh",
+      core_age_seconds: 20,
+      effective_market_date: "2026-08-11",
+      source_health: { durable: true, non_durable_feeds: [] },
+      core_feeds: [
+        { instrument: "MNQ", timeframe: "1", provenance: { durable: true, classification: "durable_alert" } },
+        { instrument: "MNQ", timeframe: "5", provenance: { durable: true, classification: "durable_alert" } },
+        { instrument: "MES", timeframe: "1", provenance: { durable: true, classification: "durable_alert" } },
+        { instrument: "MES", timeframe: "5", provenance: { durable: true, classification: "durable_alert" } },
+      ],
+    },
+    operations: {
+      services: [
+        {
+          service_id: "live_runtime_scheduler",
+          service_kind: "live_runtime_scheduler",
+          status: "healthy",
+          healthy: true,
+          heartbeat_at_utc: "2026-08-11T08:00:00.000Z",
+          details: { data_state: "fresh" },
+        },
+        {
+          service_id: "broker_management",
+          service_kind: "broker_management",
+          status: "healthy",
+          healthy: true,
+          heartbeat_at_utc: "2026-08-11T08:00:00.000Z",
+          details: {
+            result: {
+              paper_safety: {
+                execution_enabled: false,
+                bridge_mode: "telegram_manual_theoretical",
+                kill_switch_released: true,
+                max_contracts: 2,
+                execution_authority_mode: "semi_auto",
+                entry_operator_approval_required: true,
+                manual_telegram_execution_enabled: true,
+                submission_possible: false,
+                live_account_allowed: false,
+                addon_heartbeat_fresh: false,
+                addon_connected: false,
+                connection_ready: false,
+                command_enabled: false,
+                account_name: "Sim101",
+                sim101_account: true,
+              },
+            },
+          },
+        },
+        {
+          service_id: "telegram_alerting",
+          service_kind: "telegram_alerting",
+          status: "healthy",
+          healthy: true,
+          heartbeat_at_utc: "2026-08-11T08:00:00.000Z",
+          details: { environment: { workerEnabled: true, tradingConfigured: true } },
+        },
+      ],
     },
   };
 }

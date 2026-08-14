@@ -5,6 +5,7 @@ import { loadFrontMacroResource, loadFrontNewsHeadlinesResource } from "./front-
 import { buildDemoPaperReadiness, demoPaperLaunchGate, liveMarketDataStatus, publicLaunchGate, launchGatePipelineDetail, launchGatePipelineStatus } from "./front-control-plane-demo-paper.js";
 import { acceptControlPlaneCommand, FRONT_COMMAND_CATALOG } from "./front-control-plane-command.js";
 import { authSession } from "./front-control-plane-auth.js";
+import { jarvisWorkspace } from "./front-jarvis-projection.js";
 import { codedError, currentTick, currentUtc, hash, text } from "./front-control-plane-common.js";
 
 export const FRONT_CONTROL_PLANE_PREFIX = "/front-api/v1";
@@ -113,7 +114,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "execution-providers": ["execution", "incidents"],
   "execution-incidents": ["execution", "incidents"],
   portfolio: ["execution", "portfolio-risk"],
-  "jarvis-workspace": ["ai-context", "incidents"],
+  "jarvis-workspace": ["ai-context", "incidents", "agent-runtime", "research", "data-foundation", "execution", "strategy", "portfolio-risk", "health"],
   sessions: ["sessions"],
   "live-plan": ["live-session"],
   "live-news": ["live-session", "front-macro", "front-news"],
@@ -1577,7 +1578,6 @@ function strategyCenter({ strategy }) {
 
 function operatorSettings({ warnings }) { warnings.push("operator-settings-store:NOT_IMPLEMENTED"); return { summary: { theme: "dark", density: "compact", language: "fr", timezone: "Europe/Paris", notificationsEnabled: false, voiceState: "OFF", activeDevices: 0, activeSessions: 0, privacyMode: "STRICT" }, cockpitPreferences: [], widgets: [], notificationRules: [], jarvis: { pushToTalkEnabled: false, wakeWordEnabled: false, voiceState: "OFF", lastVoiceCheckAt: "unavailable", transcriptRetention: "NONE" }, shortcuts: [], devices: [], privacy: [], guardrails: [], commandActions: [] }; }
 function adminAccess({ actor, warnings }) { warnings.push("admin-directory:NOT_IMPLEMENTED"); const writeAllowed = permissions(actor).some((item) => item.capability === "front.command" && item.allowed); return { summary: { accessMode: writeAllowed ? "FULL_ADMIN" : "READ_ONLY", users: 0, activeUsers: 0, roles: rows(actor?.roles).length, capabilities: permissions(actor).length, accountGroups: 0, pendingChanges: 0, auditEvents: 0 }, currentAccess: { userId: text(actor?.uid || actor?.email, "anonymous"), roles: rows(actor?.roles), canMutate: writeAllowed, readOnlyReason: writeAllowed ? "" : "Session desk.write requise", stepUpReady: writeAllowed }, users: [], roles: [], capabilities: permissions(actor), accountGroups: [], policies: [], providerAccess: [], auditEvents: [], commandActions: [] }; }
-function jarvisWorkspace({ ai, warnings }) { warnings.push("jarvis-workspace:NOT_IMPLEMENTED"); return { summary: { activeAgents: 0, openSuggestions: 0, pendingActions: 0, freshnessSeconds: 0, morningBriefStatus: "MISSING", voiceStatus: "OFF" }, missions: [], morningBrief: [], suggestions: [], conversation: [], citations: [], deskSnapshot: { liveSignals: 0, riskUsedPct: 0, providersOk: 0, providersTotal: 0, researchExperiments: 0 }, pendingActions: [], alerts: [], voice: { serviceStatus: "OFF", pushToTalkAvailable: false, lastTranscript: "", degradationReason: ai?.summary?.status || "Capacité Jarvis non implémentée" }, commands: [] }; }
 function liveSignalDetail({ strategy, execution, risk, ai, query, nowIso }) {
   const source = selectById(rows(strategy?.signals), query.signalId, (item) => item.signal_outbox_id || item.signal_id, "LIVE_SIGNAL_NOT_FOUND");
   const signal = signalRow(source);
