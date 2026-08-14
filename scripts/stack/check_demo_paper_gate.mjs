@@ -91,6 +91,15 @@ export function evaluateDemoPaperGate(status, { profile = "demo-paper" } = {}) {
   const brokerResult = brokerManagement?.details?.result || {};
   const brokerSafety = brokerResult.paper_safety || {};
   const manualTelegramMode = brokerSafety.manual_telegram_execution_enabled === true;
+  if (liveRuntimeContextOnlyDegraded(liveRuntime)) {
+    pushCheck("live_runtime.context_optional_degraded", false, {
+      status: liveRuntime?.status || null,
+      data_state: liveDetails.data_state || null,
+      optional_dependency_warnings: liveDetails.optional_dependency_warnings || [],
+      macro_calendar: liveDetails.macro_calendar || null,
+      news: liveDetails.news || null,
+    }, "warning");
+  }
 
   if (profile === "demo-paper") {
     pushCheck("data.live_fresh", dataReadiness.ok === true, {
@@ -187,10 +196,31 @@ function isServiceAcceptableForProfile(serviceKind, service, profile) {
   if (service.healthy === true && service.status === "healthy") {
     return true;
   }
+  if (serviceKind === "live_runtime_scheduler" && liveRuntimeContextOnlyDegraded(service)) {
+    return true;
+  }
   if (profile === "stack" && serviceKind === "live_runtime_scheduler") {
     return service.status === "degraded" && Number(service.consecutive_failures || 0) === 0;
   }
   return false;
+}
+
+function liveRuntimeContextOnlyDegraded(service = {}) {
+  if (service.status !== "degraded") return false;
+  if (Number(service.consecutive_failures || 0) > 0) return false;
+  const details = service.details || {};
+  if (details.error) return false;
+  if (details.data_blocker) return false;
+  if (!["ready", "market_closed"].includes(String(details.data_state || "").toLowerCase())) return false;
+  const optionalWarnings = Array.isArray(details.optional_dependency_warnings)
+    ? details.optional_dependency_warnings
+    : [];
+  const macroStatus = String(details.macro_calendar?.status || "").toUpperCase();
+  const newsStatus = String(details.news?.status || "").toUpperCase();
+  const hasContextDependencyWarning = optionalWarnings.length > 0
+    || (macroStatus && !["READY", "DISABLED"].includes(macroStatus))
+    || (newsStatus && !["READY", "DISABLED"].includes(newsStatus));
+  return hasContextDependencyWarning;
 }
 
 function brokerPaperEnvironmentSafe(safety = {}) {

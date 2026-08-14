@@ -51,14 +51,14 @@ try {
     const tickStarted = Date.now();
     try {
       const outcome = await runDueWork(new Date());
-      const macroBlocking = macroCalendarBlocksRuntime(outcome.macro_calendar);
       const macroWarning = macroCalendarWarnsOnly(outcome.macro_calendar);
       const newsDegraded = outcome.news
         && !["READY", "DISABLED"].includes(outcome.news.status);
-      // Editorial news is an optional, last-known-capable dependency. A provider
-      // throttle must remain visible without taking the live scheduler out of
-      // service while prices, packs and the macro calendar are ready.
-      await heartbeat(outcome.data_state === "data_not_ready" || macroBlocking ? "degraded" : "healthy", {
+      // Macro/news are context enrichments. Provider throttling or partial
+      // coverage must remain visible to the analyst and operator, but it must
+      // not take the live scheduler out of service while canonical MNQ/MES
+      // data, packs and deterministic engine state are ready.
+      await heartbeat(outcome.data_state === "data_not_ready" ? "degraded" : "healthy", {
         last_engine_key: lastEngineM1Key || null,
         last_gpt_key: lastGptMonitorKey || null,
         engine_cadence_seconds: DETERMINISTIC_ENGINE_CADENCE_SECONDS,
@@ -352,19 +352,9 @@ function isDataNotReady(error) {
   ].includes(error?.code || String(error?.message || error).split(":")[0]);
 }
 
-function macroCalendarBlocksRuntime(macroCalendar) {
-  if (!macroCalendar || ["READY", "DISABLED"].includes(macroCalendar.status)) return false;
-  if (macroCalendar.next_trading_date_ready === true
-    && Array.isArray(macroCalendar.missing_required_dates)
-    && macroCalendar.missing_required_dates.length === 0) {
-    return false;
-  }
-  return true;
-}
-
 function macroCalendarWarnsOnly(macroCalendar) {
   if (!macroCalendar || ["READY", "DISABLED"].includes(macroCalendar.status)) return false;
-  return !macroCalendarBlocksRuntime(macroCalendar);
+  return true;
 }
 
 function projectPrewarmOutcome(prewarm = {}) {

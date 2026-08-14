@@ -111,6 +111,42 @@ describe("demo paper launch gate", () => {
     assert.ok(gate.blockers.some((blocker) => blocker.id === "broker.paper_environment_safe"));
   });
 
+  it("does not block demo-paper when live runtime is degraded only by optional macro/news providers", () => {
+    const status = readyStatus();
+    const live = status.operations.services.find((service) => service.service_kind === "live_runtime_scheduler");
+    live.status = "degraded";
+    live.healthy = false;
+    live.consecutive_failures = 0;
+    live.details.data_state = "ready";
+    live.details.data_blocker = null;
+    live.details.optional_dependency_warnings = ["news_provider_degraded"];
+    live.details.news = { status: "FETCH_FAILED", error: "news_fetch_failed:429" };
+    live.details.macro_calendar = { status: "PARTIAL", error: "macro_calendar_fetch_failed:429" };
+
+    const gate = evaluateDemoPaperGate(status, { profile: "demo-paper" });
+
+    assert.equal(gate.ok, true, JSON.stringify(gate.blockers));
+    assert.ok(gate.checks.some((check) => check.id === "service.live_runtime_scheduler.healthy" && check.ok === true));
+    assert.ok(gate.warnings.some((warning) => warning.id === "live_runtime.context_optional_degraded"));
+  });
+
+  it("still blocks demo-paper when degraded live runtime has a real runtime error", () => {
+    const status = readyStatus();
+    const live = status.operations.services.find((service) => service.service_kind === "live_runtime_scheduler");
+    live.status = "degraded";
+    live.healthy = false;
+    live.consecutive_failures = 0;
+    live.details.data_state = "ready";
+    live.details.data_blocker = null;
+    live.details.error = "LIVE_RUNTIME_CYCLE_FAILED";
+    live.details.optional_dependency_warnings = ["news_provider_degraded"];
+
+    const gate = evaluateDemoPaperGate(status, { profile: "demo-paper" });
+
+    assert.equal(gate.ok, false);
+    assert.ok(gate.blockers.some((blocker) => blocker.id === "service.live_runtime_scheduler.healthy"));
+  });
+
   it("keeps stale data as a warning for the stack profile", () => {
     const status = readyStatus();
     status.data_readiness.ok = false;
