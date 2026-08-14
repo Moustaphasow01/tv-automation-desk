@@ -169,12 +169,15 @@ stateDiagram-v2
 
 - Attributs : `id`, `signal_id` (FK, nullable — peut aussi s'appliquer à une position existante), `recommendation` (`TAKE`/`TAKE_REDUCED`/`WAIT`/`REJECT`), `rationale`, `model_ref`, `issued_at`.
 - Invariant SC-6 (`01`) : cette entité n'a jamais de champ ni de relation lui permettant de créer directement un `Order Intent` — elle est consommée en lecture seule par le Portfolio Arbitration Engine, jamais en écriture directe sur l'exécution.
+- Addendum TD2-800 : la forme exécutable `ai_context_advisory_v1` remplace `id` par `advisory_id`, ajoute un `subject` typé (`SIGNAL`, `POSITION`, `CANDIDATE_ALLOCATION` déjà existante), `confidence`, `evidence_refs`, `effect=READ_ONLY_ADVISORY` et `advisory_hash`.
+- Addendum TD2-800 : `ai_context_advisory_isolation_proof_v1` prouve qu'un advisory ne contient aucun champ ordre/broker/quantité/provider et ne peut produire ni `OrderIntent`, ni `TargetPosition`, ni nouvelle `CandidateAllocation`.
 
 ## 6. Axe Arbitrage Portefeuille
 
 ### 6.1 Candidate Allocation
 
 - Sortie du Portfolio Arbitration Engine avant application du risque global. Attributs : `id`, `signal_ids[]`, `instrument`, `net_direction`, `proposed_size`.
+- Addendum TD2-700 : `long_size`, `short_size`, `net_size`, `status` et `contributing_signals[]` rendent la neutralisation des signaux opposés auditée.
 
 ### 6.2 Risk Decision
 
@@ -184,12 +187,14 @@ stateDiagram-v2
 
 - Sortie du Broker Netting Engine — la position nette cible par instrument, tous comptes/stratégies confondus. Attributs : `id`, `instrument`, `account_id`, `net_target_size`, `derived_from_risk_decision_ids[]`.
 - C'est cette entité qui remplace, de façon prouvée par test (voir `03` §5, `17` Ticket 0.4), l'agrégation actuelle par clé `instrument` seul.
+- Addendum TD2-702 : la clé de calcul est `account_id + instrument`, avec `current_net_size`, `delta_size` et `strategy_breakdown[]`.
 
 ## 7. Axe Exécution (existant, étendu — pas remplacé)
 
 ### 7.1 Order Intent
 
 - Entité déjà existante dans le flux actuel (`createOrderIntent`). Cible : reste produite uniquement à partir d'une `Target Position`, jamais directement d'un `Signal` ou d'une `AI Context Advisory`.
+- Addendum TD2-703 : le nouveau contrat `portfolio_order_intent_v1` matérialise cette règle. Il porte `target_position_id`, `idempotency_key`, `lifecycle_action`, protections requises et audit `direct_llm_order=false`.
 
 ```mermaid
 stateDiagram-v2
@@ -212,6 +217,13 @@ stateDiagram-v2
 ```
 
 - Ce cycle de vie est **cohérent avec, et ne remplace pas**, l'évaluation `evaluateBrokerPolicy` existante en phase `BROKER_SUBMIT` — la transition `QUEUED → SUBMITTED` est la matérialisation de cette évaluation, inchangée.
+
+### 7.2 Execution Provider Command / Broker Provider Event
+
+- Addendum TD2-900 : le contrat `execution_provider_port_v1` introduit la frontière provider-neutral après `OrderIntent`.
+- `ExecutionProviderCommand` est produit uniquement depuis un `OrderIntent` autorisé et reste idempotent.
+- `BrokerProviderEvent` normalise les ack, rejets, fills, positions et erreurs provenant des adapters.
+- Les adapters traduisent cette commande canonique vers leur protocole ; le domaine ne dépend donc plus d'un provider précis.
 
 ### 7.2 Position (existant — `position-state-machine-v1.js`)
 
@@ -251,11 +263,13 @@ stateDiagram-v2
 | 23 | Risk Decision | Arbitrage | Non |
 | 24 | Target Position | Arbitrage | Recalculée, pas transitionnée |
 | 25 | Order Intent | Exécution | Oui (§7.1, existant) |
-| 26 | Position | Exécution | Oui (§7.2, existant, non modifié) |
-| 27 | Reconciliation Snapshot | Exécution | Non (immuable) |
-| 28 | Execution Provider Config | Exécution | `ACTIVE`/`DISABLED` |
-| 29 | Broker Account | Exécution | `ACTIVE`/`SUSPENDED` (existant) |
-| 30 | Risk Budget | Arbitrage | Versionné, pas transitionné |
+| 26 | Execution Provider Command | Exécution | Oui (§7.2) |
+| 27 | Broker Provider Event | Exécution | Non (immuable) |
+| 28 | Position | Exécution | Oui (existant, non modifié) |
+| 29 | Reconciliation Snapshot | Exécution | Non (immuable) |
+| 30 | Execution Provider Config | Exécution | `ACTIVE`/`DISABLED` |
+| 31 | Broker Account | Exécution | `ACTIVE`/`SUSPENDED` (existant) |
+| 32 | Risk Budget | Arbitrage | Versionné, pas transitionné |
 | 31 | Runtime Contract Bundle (`ACTIVE_STRATEGY_RUNTIME_VERSIONS`) | Canonical Runtime | Non modifié — voir §9 |
 | 32 | Phase Gate Record | Gouvernance | `OPEN`/`PASSED`/`BLOCKED` (voir `phase-gates.yaml`) |
 

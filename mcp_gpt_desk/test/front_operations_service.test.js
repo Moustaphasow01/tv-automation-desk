@@ -3,6 +3,10 @@ import test from "node:test";
 import { DESK_COLLECTIONS } from "@tv-automation/desk-contracts/collections";
 import { FixedClock } from "@tv-automation/desk-time";
 import { PersistentDeskStore } from "../src/store.js";
+import {
+  InMemorySimulationRunRegistryRepository,
+  SimulationRunRegistryService,
+} from "../src/simulation-run-registry-service.js";
 import { ACTIVE_STRATEGY_RUNTIME_VERSIONS } from "../src/strategy-runtime-versioning.js";
 import { InMemoryDeskPersistence } from "./support/in-memory-desk-persistence.js";
 
@@ -33,6 +37,29 @@ function createStore() {
   const persistence = new InMemoryDeskPersistence();
   const store = new PersistentDeskStore(clock, persistence);
   return { store, persistence };
+}
+
+function canonicalSimulationResult(overrides = {}) {
+  return {
+    schema_version: "canonical_simulation_result_v1",
+    simulation_engine: "desk-replay-engine",
+    simulation_engine_version: "1.0.0",
+    run_id: "run-sim-a",
+    strategy_version_id: "33333333-3333-4333-8333-333333333333",
+    dataset_id: "44444444-4444-4444-8444-444444444444",
+    dataset_hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    parameters_hash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    reproducibility_seed: "seed-front-simulation",
+    cutoff: "2026-07-16T21:45:00+02:00",
+    run_started_at_utc: clock.now().utc,
+    status: "COMPLETED",
+    metrics: { schema_version: "canonical_simulation_metrics_v1", trade_count: 1, total_r: 1.5 },
+    metrics_hash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    positions: [{ position_id: "p1", status: "CLOSED", r_result: 1.5 }],
+    events: [{ type: "POSITION_CLOSED" }],
+    content_hash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    ...overrides,
+  };
 }
 
 test("operations summary exposes only Autopilot V4 replay runs and GPT work", async () => {
@@ -474,6 +501,50 @@ test("replay day keeps multiple session executions, variants and attempts", asyn
   assert.equal(comparison.summary.telemetryCoveragePct, 100);
   assert.equal(comparison.items.find((item) => item.id === "run-a2").metrics.deltaR, 1);
   assert.equal(comparison.items.find((item) => item.id === "run-ny").rank, 3);
+});
+
+test("Replay Compare exposes canonical Simulation Run proofs and artifacts", async () => {
+  const { store, persistence } = createStore();
+  store.simulationRuns = new SimulationRunRegistryService({
+    repository: new InMemorySimulationRunRegistryRepository(),
+    clock: { now: () => ({ utc: clock.now().utc }) },
+  });
+  for (const [runId, simulationRunId, totalR] of [
+    ["run-sim-a", "11111111-1111-4111-8111-111111111111", 1.5],
+    ["run-sim-b", "22222222-2222-4222-8222-222222222222", 1.5],
+  ]) {
+    await persistence.setDocument(C.deskReplayRuns, runId, {
+      ...V4_REPLAY_CONTRACT,
+      backtest_id: runId, replay_run_id: runId, replay_mode: "orchestrated_gpt_in_the_loop",
+      status: "COMPLETED", strategy_version: "autopilot_v4", autopilot_version: "4.0.0",
+      revision: 1, strategy_id: "asia_open", session: "asia_open", trading_date: "2026-07-16",
+      steps_done: 4, steps_total: 4, summary: { total_R: totalR },
+      created_at_utc: "2026-07-16T00:00:00.000Z", updated_at_utc: "2026-07-16T01:00:00.000Z",
+    });
+    await store.simulationRuns.recordSimulationResult({
+      simulation_run_id: simulationRunId,
+      result: canonicalSimulationResult({ run_id: runId }),
+      metadata: { backtest_id: runId },
+    }, { actor: "codex", idempotency_key: `record-${runId}` });
+  }
+
+  const listResult = await store.operations.listSimulationRuns();
+  const detail = await store.operations.getSimulationRun("11111111-1111-4111-8111-111111111111");
+  const simulationComparison = await store.operations.compareSimulationRuns([
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222",
+  ]);
+  const replayComparison = await store.operations.compareReplays(["run-sim-a", "run-sim-b"]);
+
+  assert.equal(listResult.available, true);
+  assert.equal(listResult.count, 2);
+  assert.equal(detail.artifactCount, 6);
+  assert.equal(detail.artifacts.some((artifact) => artifact.artifactKind === "ORDER_SIMULATION_POLICY"), true);
+  assert.equal(simulationComparison.summary.reproducible, 2);
+  assert.equal(simulationComparison.items[1].proof.ok, true);
+  assert.equal(replayComparison.summary.simulationProofs, 2);
+  assert.equal(replayComparison.items[0].simulationEvidence.count, 1);
+  assert.equal(replayComparison.items[0].simulationEvidence.artifacts.some((artifact) => artifact.artifactKind === "METRICS"), true);
 });
 
 test("Replay Lab projects the primary full-day clock instead of averaging a legacy comparison", async () => {

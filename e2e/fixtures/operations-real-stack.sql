@@ -1,8 +1,8 @@
 INSERT INTO desk_documents (collection, document_id, data) VALUES
 ('desk_jobs', 'acceptance_job_live', '{"job_id":"acceptance_job_live","job_type":"LIVE_MONITOR","status":"RUNNING","revision":2,"trading_date":"2026-07-16","session":"ny_open","strategy_id":"ny_open_1530","progress":0.42,"created_at_utc":"2026-07-16T12:30:00.000Z","updated_at_utc":"2026-07-16T13:00:00.000Z"}'::jsonb),
-('desk_replay_runs', 'acceptance_replay_a1', '{"backtest_id":"acceptance_replay_a1","replay_run_id":"acceptance_replay_a1","run_id":"acceptance_replay_a1","replay_mode":"orchestrated_gpt_in_the_loop","replay_schema_version":"2.0.0","strategy_version":"autopilot_v4","autopilot_version":"4.0.0","status":"WAITING_GPT_MONITOR","revision":7,"strategy_id":"asia_open","session":"asia_open","trading_date":"2026-07-16","date":"2026-07-16","cadence":"15m","steps_done":2,"steps_total":4,"automation_enabled":true,"current_step_id":"acceptance_step_2","current_work_item_id":"acceptance_work_gpt","created_at_utc":"2026-07-16T00:00:00.000Z","updated_at_utc":"2026-07-16T01:15:00.000Z"}'::jsonb),
-('desk_replay_runs', 'acceptance_replay_a2', '{"backtest_id":"acceptance_replay_a2","replay_run_id":"acceptance_replay_a2","run_id":"acceptance_replay_a2","replay_mode":"orchestrated_gpt_in_the_loop","replay_schema_version":"2.0.0","strategy_version":"autopilot_v4","autopilot_version":"4.0.0","status":"COMPLETED","revision":9,"strategy_id":"asia_open","session":"asia_open","trading_date":"2026-07-16","date":"2026-07-16","cadence":"15m","steps_done":4,"steps_total":4,"summary":{"total_R":1.25},"automation_enabled":true,"created_at_utc":"2026-07-16T00:05:00.000Z","updated_at_utc":"2026-07-16T02:00:00.000Z"}'::jsonb),
-('desk_replay_runs', 'acceptance_replay_ny', '{"backtest_id":"acceptance_replay_ny","replay_run_id":"acceptance_replay_ny","run_id":"acceptance_replay_ny","replay_mode":"orchestrated_gpt_in_the_loop","replay_schema_version":"2.0.0","strategy_version":"autopilot_v4","autopilot_version":"4.0.0","status":"FAILED","revision":4,"strategy_id":"ny_open_1530","session":"ny_open","trading_date":"2026-07-16","date":"2026-07-16","cadence":"30m","steps_done":1,"steps_total":4,"last_automation_error":{"code":"DATA_NOT_READY","message":"Le snapshot de marché est incomplet.","retryable":true},"automation_enabled":false,"created_at_utc":"2026-07-16T13:30:00.000Z","updated_at_utc":"2026-07-16T14:00:00.000Z"}'::jsonb),
+('desk_replay_runs', 'acceptance_replay_a1', '{"backtest_id":"acceptance_replay_a1","replay_run_id":"acceptance_replay_a1","run_id":"acceptance_replay_a1","replay_mode":"orchestrated_gpt_in_the_loop","replay_schema_version":"2.0.0","strategy_version":"autopilot_v5","autopilot_version":"5.2.0","result_certification_status":"CERTIFIED","pinned_contracts":{"master_contract":{"contract_id":"DeskMasterAnalysisContract_v5_2_0","schema_version":"5.2.0"}},"status":"WAITING_GPT_MONITOR","revision":7,"strategy_id":"asia_open","session":"asia_open","trading_date":"2026-07-16","date":"2026-07-16","cadence":"15m","steps_done":2,"steps_total":4,"automation_enabled":true,"current_step_id":"acceptance_step_2","current_work_item_id":"acceptance_work_gpt","created_at_utc":"2026-07-16T00:00:00.000Z","updated_at_utc":"2026-07-16T01:15:00.000Z"}'::jsonb),
+('desk_replay_runs', 'acceptance_replay_a2', '{"backtest_id":"acceptance_replay_a2","replay_run_id":"acceptance_replay_a2","run_id":"acceptance_replay_a2","replay_mode":"orchestrated_gpt_in_the_loop","replay_schema_version":"2.0.0","strategy_version":"autopilot_v5","autopilot_version":"5.2.0","result_certification_status":"CERTIFIED","pinned_contracts":{"master_contract":{"contract_id":"DeskMasterAnalysisContract_v5_2_0","schema_version":"5.2.0"}},"status":"COMPLETED","revision":9,"strategy_id":"asia_open","session":"asia_open","trading_date":"2026-07-16","date":"2026-07-16","cadence":"15m","steps_done":4,"steps_total":4,"summary":{"total_R":1.25},"automation_enabled":true,"created_at_utc":"2026-07-16T00:05:00.000Z","updated_at_utc":"2026-07-16T02:00:00.000Z"}'::jsonb),
+('desk_replay_runs', 'acceptance_replay_ny', '{"backtest_id":"acceptance_replay_ny","replay_run_id":"acceptance_replay_ny","run_id":"acceptance_replay_ny","replay_mode":"orchestrated_gpt_in_the_loop","replay_schema_version":"2.0.0","strategy_version":"autopilot_v5","autopilot_version":"5.2.0","result_certification_status":"CERTIFIED","pinned_contracts":{"master_contract":{"contract_id":"DeskMasterAnalysisContract_v5_2_0","schema_version":"5.2.0"}},"status":"FAILED","revision":4,"strategy_id":"ny_open_1530","session":"ny_open","trading_date":"2026-07-16","date":"2026-07-16","cadence":"15m","steps_done":1,"steps_total":4,"last_automation_error":{"code":"DATA_NOT_READY","message":"Le snapshot de marché est incomplet.","retryable":true},"automation_enabled":false,"created_at_utc":"2026-07-16T13:30:00.000Z","updated_at_utc":"2026-07-16T14:00:00.000Z"}'::jsonb),
 ('desk_replay_steps', 'acceptance_step_1', '{"step_id":"acceptance_step_1","backtest_id":"acceptance_replay_a1","sequence":1,"step_type":"MASTER","status":"MASTER_MATERIALIZED","timestamp_paris":"2026-07-16T02:00:00+02:00","created_at_utc":"2026-07-16T00:00:00.000Z","updated_at_utc":"2026-07-16T00:10:00.000Z"}'::jsonb),
 ('desk_replay_steps', 'acceptance_step_2', '{"step_id":"acceptance_step_2","backtest_id":"acceptance_replay_a1","sequence":2,"step_type":"MONITOR","status":"WAITING_GPT_MONITOR","timestamp_paris":"2026-07-16T03:15:00+02:00","created_at_utc":"2026-07-16T01:15:00.000Z","updated_at_utc":"2026-07-16T01:15:00.000Z"}'::jsonb),
 ('desk_replay_timeline', 'acceptance_event_created', '{"event_id":"acceptance_event_created","backtest_id":"acceptance_replay_a1","step_id":"acceptance_step_1","event_type":"RUN_CREATED","action":"START_REPLAY_DAY","status":"MASTER_DATA_PREPARING","note":"Journée replay créée.","timestamp_paris":"2026-07-16T02:00:00+02:00","created_at_utc":"2026-07-16T00:00:00.000Z"}'::jsonb),
@@ -25,3 +25,186 @@ INSERT INTO desk_documents (collection, document_id, data) VALUES
 ('desk_strategy_versions', 'acceptance_strategy_v1', '{"version_id":"acceptance_strategy_v1","strategy_id":"acceptance_strategy","strategy_version":"autopilot_v4","autopilot_version":"4.0.0","version":"1.0.0","status":"ARCHIVED","config":{"cadence":"30m"},"updated_at_utc":"2026-07-15T12:00:00.000Z"}'::jsonb),
 ('desk_strategy_versions', 'acceptance_strategy_v2', '{"version_id":"acceptance_strategy_v2","strategy_id":"acceptance_strategy","strategy_version":"autopilot_v4","autopilot_version":"4.0.0","version":"2.0.0","status":"ACTIVE","config":{"cadence":"15m"},"updated_at_utc":"2026-07-16T12:00:00.000Z"}'::jsonb)
 ON CONFLICT (collection, document_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now();
+
+INSERT INTO strategy_definitions (
+  strategy_definition_id,
+  external_key,
+  name,
+  description,
+  owner,
+  asset_class,
+  default_instruments,
+  tags,
+  metadata,
+  created_at,
+  updated_at
+) VALUES (
+  '11111111-1111-4111-8111-111111111111',
+  'acceptance_strategy',
+  'Acceptance Momentum',
+  'Stratégie de validation E2E pour vérifier le pont front VNext, gouvernance Strategy Kernel V2 et performance historique.',
+  'codex-acceptance',
+  'futures',
+  ARRAY['MNQ','MES'],
+  ARRAY['acceptance','paper-ready'],
+  '{"acceptance_fixture":true,"risk_profile":"demo_paper"}'::jsonb,
+  '2026-07-16T11:45:00.000Z',
+  '2026-07-16T12:00:00.000Z'
+)
+ON CONFLICT (strategy_definition_id) DO UPDATE SET
+  external_key = EXCLUDED.external_key,
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  owner = EXCLUDED.owner,
+  asset_class = EXCLUDED.asset_class,
+  default_instruments = EXCLUDED.default_instruments,
+  tags = EXCLUDED.tags,
+  metadata = EXCLUDED.metadata,
+  updated_at = EXCLUDED.updated_at;
+
+INSERT INTO strategy_versions (
+  strategy_version_id,
+  strategy_definition_id,
+  version_label,
+  status,
+  dsl_source_hash,
+  compiled_artifact_ref,
+  compiled_artifact_hash,
+  validated_metrics_ref,
+  runtime_contract_bundle_version,
+  published_at,
+  deprecated_at,
+  metadata,
+  created_at,
+  updated_at
+) VALUES
+(
+  '22222222-2222-4222-8222-222222222221',
+  '11111111-1111-4111-8111-111111111111',
+  '1.0.0',
+  'deprecated',
+  'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+  'acceptance://strategy/artifacts/v1',
+  'sha256:1212121212121212121212121212121212121212121212121212121212121212',
+  'acceptance://metrics/v1',
+  'desk-contracts@5.1.0',
+  '2026-07-15T12:00:00.000Z',
+  '2026-07-16T11:59:00.000Z',
+  '{"acceptance_fixture":true,"config":{"cadence":"30m"},"validated_metrics":{"total_r":0.25,"trade_count":1,"max_drawdown_r":-0.5}}'::jsonb,
+  '2026-07-15T11:45:00.000Z',
+  '2026-07-16T11:59:00.000Z'
+),
+(
+  '22222222-2222-4222-8222-222222222222',
+  '11111111-1111-4111-8111-111111111111',
+  '2.0.0',
+  'published',
+  'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+  'acceptance://strategy/artifacts/v2',
+  'sha256:2323232323232323232323232323232323232323232323232323232323232323',
+  'acceptance://metrics/v2',
+  'desk-contracts@5.2.0',
+  '2026-07-16T12:00:00.000Z',
+  NULL,
+  '{"acceptance_fixture":true,"config":{"cadence":"15m"},"validated_metrics":{"total_r":1.25,"trade_count":3,"expectancy_r":0.42,"max_drawdown_r":-0.5},"performance_baseline":{"total_r":1.25,"trade_count":3,"expectancy_r":0.42,"max_drawdown_r":-0.5}}'::jsonb,
+  '2026-07-16T11:55:00.000Z',
+  '2026-07-16T12:00:00.000Z'
+)
+ON CONFLICT (strategy_version_id) DO UPDATE SET
+  strategy_definition_id = EXCLUDED.strategy_definition_id,
+  version_label = EXCLUDED.version_label,
+  status = EXCLUDED.status,
+  dsl_source_hash = EXCLUDED.dsl_source_hash,
+  compiled_artifact_ref = EXCLUDED.compiled_artifact_ref,
+  compiled_artifact_hash = EXCLUDED.compiled_artifact_hash,
+  validated_metrics_ref = EXCLUDED.validated_metrics_ref,
+  runtime_contract_bundle_version = EXCLUDED.runtime_contract_bundle_version,
+  published_at = EXCLUDED.published_at,
+  deprecated_at = EXCLUDED.deprecated_at,
+  metadata = EXCLUDED.metadata,
+  updated_at = EXCLUDED.updated_at;
+
+INSERT INTO strategy_instances (
+  strategy_instance_id,
+  strategy_version_id,
+  runtime_state,
+  execution_mode,
+  account_scope,
+  instrument_scope,
+  session_scope,
+  risk_budget_ref,
+  triple_lock_validated,
+  last_heartbeat_at,
+  started_at,
+  metadata,
+  created_at,
+  updated_at
+) VALUES (
+  '33333333-3333-4333-8333-333333333333',
+  '22222222-2222-4222-8222-222222222222',
+  'running',
+  'shadow',
+  NULL,
+  ARRAY['MNQ','MES'],
+  ARRAY['asia_open','ny_open'],
+  'acceptance-risk-demo',
+  false,
+  '2026-07-16T12:05:00.000Z',
+  '2026-07-16T12:00:00.000Z',
+  '{"acceptance_fixture":true,"performance_observed":{"total_r":1.25,"trade_count":3,"expectancy_r":0.42,"max_drawdown_r":-0.5},"performance_drift":{"status":"OK","severity":"info","reasons":[{"code":"ACCEPTANCE_BASELINE_ALIGNED"}]}}'::jsonb,
+  '2026-07-16T12:00:00.000Z',
+  '2026-07-16T12:05:00.000Z'
+)
+ON CONFLICT (strategy_instance_id) DO UPDATE SET
+  strategy_version_id = EXCLUDED.strategy_version_id,
+  runtime_state = EXCLUDED.runtime_state,
+  execution_mode = EXCLUDED.execution_mode,
+  account_scope = EXCLUDED.account_scope,
+  instrument_scope = EXCLUDED.instrument_scope,
+  session_scope = EXCLUDED.session_scope,
+  risk_budget_ref = EXCLUDED.risk_budget_ref,
+  triple_lock_validated = EXCLUDED.triple_lock_validated,
+  last_heartbeat_at = EXCLUDED.last_heartbeat_at,
+  started_at = EXCLUDED.started_at,
+  metadata = EXCLUDED.metadata,
+  updated_at = EXCLUDED.updated_at;
+
+INSERT INTO strategy_kernel_audit_events (
+  strategy_kernel_audit_event_id,
+  aggregate_type,
+  aggregate_id,
+  event_type,
+  idempotency_key,
+  actor,
+  reason,
+  previous_hash,
+  next_hash,
+  previous_status,
+  next_status,
+  payload,
+  created_at
+) VALUES (
+  '44444444-4444-4444-8444-444444444444',
+  'strategy_version',
+  '22222222-2222-4222-8222-222222222222',
+  'STRATEGY_VERSION_TRANSITIONED',
+  'acceptance-strategy-v2-publish',
+  'codex-acceptance',
+  'Validation E2E de la publication Strategy Kernel V2.',
+  'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+  'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+  'VALIDATED',
+  'PUBLISHED',
+  '{"acceptance_fixture":true,"from_cadence":"30m","to_cadence":"15m"}'::jsonb,
+  '2026-07-16T12:00:00.000Z'
+)
+ON CONFLICT (strategy_kernel_audit_event_id) DO UPDATE SET
+  event_type = EXCLUDED.event_type,
+  actor = EXCLUDED.actor,
+  reason = EXCLUDED.reason,
+  previous_hash = EXCLUDED.previous_hash,
+  next_hash = EXCLUDED.next_hash,
+  previous_status = EXCLUDED.previous_status,
+  next_status = EXCLUDED.next_status,
+  payload = EXCLUDED.payload,
+  created_at = EXCLUDED.created_at;

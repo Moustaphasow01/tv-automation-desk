@@ -2,11 +2,19 @@ import { getOperatorIdToken } from "@/api/operatorAuth";
 import { researchProgressFromCarrier, withResearchProgress } from "@/api/researchProgress";
 import { fetchJsonWithTimeout } from "@/api/request";
 import type {
+  AgentRuntimeDeadLetterList, AgentRuntimeMetricList, AgentRuntimeMutationInput, AgentRuntimeOverview, AgentRuntimePoolOverview, AgentRuntimeSchedulerPlan, AgentRuntimeTaskList,
+} from "@/features/agent-runtime/types";
+import type { AiContextOverview } from "@/features/ai-context/types";
+import type { PortfolioRiskOverview } from "@/features/portfolio-risk/types";
+import type {
   AiRuntimeSettingsActionInput, AiRuntimeSettingsResponse, DeskHistory, GptProcessDetail, GptProcessList, HistorySessionDetail, IncidentList, ObservabilityOverview,
+  DataFoundationDataset, DataFoundationEnvelope, DataFoundationFeature, DataFoundationHotSeriesWindow, DataFoundationMarketProfile, DataFoundationStorageObject,
   NotificationActionInput, NotificationList, NotificationSync, ObservabilityIncidentSync, ObservabilityPolicyActionInput,
   ObservabilityPolicyResponse, OperationsCommandInput, OperationsSummary,
-  PerformanceOverview, ReplayComparison, ReplayDayDetail, ReplayList, ReplayRunDetail, ReplaySessionDetail, RunbookDetail, RunbookList, StrategyList,
-  StrategyVersionComparison, TelegramActionInput, TelegramStatus, WorkflowDetail, WorkflowList
+  PerformanceOverview, PromptRegistryOverview, ReplayComparison, ReplayDayDetail, ReplayList, ReplayRunDetail, ReplaySessionDetail, ResearchCandidateDetail,
+  ResearchCandidateRow, ResearchEvaluationReportRow, ResearchExperimentDetail, ResearchExperimentRow, ResearchLabOverview, ResearchListEnvelope, RunbookDetail, RunbookList,
+  SimulationRunArtifactList, SimulationRunComparison, SimulationRunDetail, SimulationRunList, StrategyList,
+  StrategyV2Overview, StrategyV2SignalConsumeResult, StrategyV2SignalPollResult, StrategyVersionComparison, TelegramActionInput, TelegramStatus, WorkflowDetail, WorkflowList
 } from "@/operationsTypes";
 
 const apiBase = String(import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(/\/+$/, "");
@@ -157,6 +165,24 @@ export const operationsApi = {
   getClaimLanes: () => request<ClaimLanesOverview>("/claim-lanes"),
   executeClaimLaneAction: (lane: "live" | "replay", input: { action: "pause" | "resume"; expected_revision: number; reason: string }) =>
     post<{ ok: true; status: string; control: ClaimLaneState }>(`/claim-lanes/${lane}/actions`, input),
+  getAgentRuntimeOverview: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<AgentRuntimeOverview>(`/agent-runtime/overview${query(withDefaultLimit(filters, 50))}`),
+  listAgentRuntimeTasks: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<AgentRuntimeTaskList>(`/agent-runtime/tasks${query(withDefaultLimit(filters, 100))}`),
+  getAgentRuntimePoolOverview: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<AgentRuntimePoolOverview>(`/agent-runtime/pools${query({ metrics_window_minutes: 60, ...filters })}`),
+  getAgentRuntimeSchedulerPlan: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<AgentRuntimeSchedulerPlan>(`/agent-runtime/scheduler-plan${query(withDefaultLimit(filters, 120))}`),
+  listAgentRuntimeMetrics: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<AgentRuntimeMetricList>(`/agent-runtime/metrics${query(withDefaultLimit(filters, 100))}`),
+  listAgentRuntimeDeadLetters: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<AgentRuntimeDeadLetterList>(`/agent-runtime/dead-letters${query(withDefaultLimit(filters, 100))}`),
+  getAiContextOverview: () => request<AiContextOverview>("/ai-context/overview"),
+  getPortfolioRiskOverview: () => request<PortfolioRiskOverview>("/portfolio-risk/overview"),
+  requeueAgentRuntimeDeadLetter: (deadLetterId: string, input: AgentRuntimeMutationInput) =>
+    post<{ ok: true; action: string; result: Record<string, unknown> }>(`/agent-runtime/dead-letters/${part(deadLetterId)}/requeue`, input),
+  cancelAgentRuntimeTask: (taskId: string, input: AgentRuntimeMutationInput) =>
+    post<{ ok: true; action: string; result: Record<string, unknown> }>(`/agent-runtime/tasks/${part(taskId)}/cancel`, input),
   getReplay: (id: string) => request<ReplayRunDetail>(`/replays/${part(id)}`),
   getReplayDay: (id: string, date: string) => request<ReplayDayDetail>(`/replays/${part(id)}/days/${part(date)}`),
   getReplaySession: (id: string, sessionExecutionId: string) => request<ReplaySessionDetail>(`/replays/${part(id)}/sessions/${part(sessionExecutionId)}`),
@@ -177,6 +203,10 @@ export const operationsApi = {
   evaluateObservabilityIncidents: (input: { autoResolve?: boolean; syncNotifications?: boolean; reason?: string } = {}) => post<ObservabilityIncidentSync>("/observability/incidents/evaluate", input),
   getPerformance: (filters: Record<string, string | null | undefined> = {}) => request<PerformanceOverview>(`/performance/overview${query(filters)}`),
   compareReplays: (ids: string[]) => request<ReplayComparison>(`/replays/compare${query({ ids: ids.join(",") })}`),
+  listSimulationRuns: (filters: Record<string, string | number | null | undefined> = {}) => request<SimulationRunList>(`/simulation-runs${query(filters)}`),
+  getSimulationRun: (id: string) => request<SimulationRunDetail>(`/simulation-runs/${part(id)}`),
+  listSimulationRunArtifacts: (id: string) => request<SimulationRunArtifactList>(`/simulation-runs/${part(id)}/artifacts`),
+  compareSimulationRuns: (ids: string[]) => request<SimulationRunComparison>(`/simulation-runs/compare${query({ ids: ids.join(",") })}`),
   listIncidents: (filters: Record<string, string | number | null | undefined> = {}) => request<IncidentList>(`/incidents${query(withDefaultLimit(filters, 300))}`),
   executeIncidentAction: (id: string, input: OperationsCommandInput) => post(`/incidents/${part(id)}/actions`, input),
   listNotifications: (filters: Record<string, string | number | null | undefined> = {}) => request<NotificationList>(`/notifications${query(withDefaultLimit(filters, 300))}`),
@@ -188,7 +218,31 @@ export const operationsApi = {
   getRunbook: (id: string) => request<RunbookDetail>(`/runbooks/${part(id)}`),
   getHistory: (filters: Record<string, string | number | null | undefined> = {}) => request<DeskHistory>(`/history/sessions${query(filters)}`),
   getHistorySession: (id: string) => request<HistorySessionDetail>(`/history/sessions/${part(id)}`),
+  getStrategyV2Overview: (filters: Record<string, string | number | null | undefined> = {}) => request<StrategyV2Overview>(`/strategy-v2/overview${query(filters)}`),
+  listStrategyV2Signals: (filters: Record<string, string | number | null | undefined> = {}) => request<StrategyV2SignalPollResult>(`/strategy-v2/signals${query(withDefaultLimit(filters, 50))}`),
+  consumeStrategyV2Signal: (signalOutboxId: string, input: { consumerId: string; idempotencyKey: string; reason: string }) =>
+    post<StrategyV2SignalConsumeResult>(`/strategy-v2/signals/${part(signalOutboxId)}/actions`, { action: "consume", ...input }),
+  getPromptRegistryOverview: () => request<PromptRegistryOverview>("/prompt-registry/overview"),
+  getDataFoundationOverview: () => request<DataFoundationEnvelope>("/data-foundation/overview"),
+  listDataFoundationDatasets: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<DataFoundationEnvelope<DataFoundationDataset>>(`/data-foundation/datasets${query(filters)}`),
+  listDataFoundationFeatures: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<DataFoundationEnvelope<DataFoundationFeature>>(`/data-foundation/features${query(filters)}`),
+  listDataFoundationMarketProfiles: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<DataFoundationEnvelope<DataFoundationMarketProfile>>(`/data-foundation/market-data-profiles${query(filters)}`),
+  listDataFoundationStorageObjects: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<DataFoundationEnvelope<DataFoundationStorageObject>>(`/data-foundation/storage-objects${query(filters)}`),
+  listDataFoundationHotSeriesWindows: (filters: Record<string, string | number | null | undefined> = {}) =>
+    request<DataFoundationEnvelope<DataFoundationHotSeriesWindow>>(`/data-foundation/hot-series-windows${query(filters)}`),
+  getResearchLabOverview: (filters: Record<string, string | number | null | undefined> = {}) => request<ResearchLabOverview>(`/research/overview${query(filters)}`),
+  executeResearchLabAction: (input: Record<string, unknown>) => post<Record<string, unknown>>("/research/actions", input),
+  listResearchExperiments: (filters: Record<string, string | number | null | undefined> = {}) => request<ResearchListEnvelope<ResearchExperimentRow>>(`/research/experiments${query(filters)}`),
+  getResearchExperiment: (id: string) => request<ResearchExperimentDetail>(`/research/experiments/${part(id)}`),
+  listResearchCandidates: (filters: Record<string, string | number | null | undefined> = {}) => request<ResearchListEnvelope<ResearchCandidateRow>>(`/research/candidates${query(filters)}`),
+  getResearchCandidate: (id: string) => request<ResearchCandidateDetail>(`/research/candidates/${part(id)}`),
+  listResearchEvaluationReports: (filters: Record<string, string | number | null | undefined> = {}) => request<ResearchListEnvelope<ResearchEvaluationReportRow>>(`/research/evaluation-reports${query(filters)}`),
   listStrategies: () => request<StrategyList>("/strategies"),
   compareStrategyVersions: (id: string, left: string, right: string) => request<StrategyVersionComparison>(`/strategies/${part(id)}/versions/compare${query({ left, right })}`),
-  eventsUrl: `${apiBase}/events`
+  eventsUrl: `${apiBase}/events`,
+  eventsUrlForCursor: (cursor?: string | null) => `${apiBase}/events${query({ cursor })}`
 };

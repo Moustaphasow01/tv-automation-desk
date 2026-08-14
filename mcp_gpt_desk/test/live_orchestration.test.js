@@ -181,6 +181,33 @@ test("live coverage accepts stale NQ/ES confirmations when MNQ/MES triggers are 
   assert.equal(result.strict_freshness_satisfied, true);
 });
 
+test("live coverage accepts missing context datasets when MNQ/MES canonical execution data is fresh", async () => {
+  let buildCount = 0;
+  const pack = liveRollingPack("2026-07-13T13:00:00+02:00", "packbuild-1300-core-only");
+  for (const dataset of ["NQ_M15", "NQ_H1", "ES_M15", "ES_H1", "MNQ_H4", "MES_H4", "NQ_H4", "ES_H4"]) {
+    delete pack.quality.dataset_freshness[dataset];
+  }
+
+  const result = await ensureLiveRollingPackCoverage({
+    async getDeskPack() {
+      return pack;
+    },
+  }, {
+    trading_date: "2026-07-13",
+    session: "asia_open",
+    timestamp_paris: "2026-07-13T12:45:00+02:00",
+    as_of_utc: "2026-07-13T10:45:00.000Z",
+  }, {
+    buildLiveRollingPack: async () => {
+      buildCount += 1;
+    },
+  });
+
+  assert.equal(buildCount, 0);
+  assert.equal(result.reused, true);
+  assert.equal(result.strict_freshness_satisfied, true);
+});
+
 test("stores with live publishing disabled never publish packs during orchestration", async () => {
   let buildCount = 0;
   const result = await ensureLiveRollingPackCoverage({

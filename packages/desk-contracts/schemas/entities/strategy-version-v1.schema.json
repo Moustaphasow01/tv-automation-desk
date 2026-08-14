@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tv-automation.local/schemas/entities/strategy-version-v1.schema.json",
+  "title": "DeskStrategyVersion",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "strategy_version_id",
+    "strategy_definition_id",
+    "version_label",
+    "status",
+    "dsl_source_hash",
+    "compiled_artifact_ref",
+    "runtime_contract_bundle_version",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "strategy_version_v1" },
+    "strategy_version_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    },
+    "strategy_definition_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    },
+    "version_label": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["DRAFT", "IN_SIMULATION", "VALIDATED", "PUBLISHED", "DEPRECATED"]
+    },
+    "dsl_source_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "compiled_artifact_ref": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "compiled_artifact_hash": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "validated_metrics_ref": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    },
+    "runtime_contract_bundle_version": { "type": "string", "minLength": 1, "maxLength": 180 },
+    "metadata": { "type": "object", "additionalProperties": true },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": ["string", "null"], "format": "date-time" },
+    "published_at": { "type": ["string", "null"], "format": "date-time" },
+    "deprecated_at": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

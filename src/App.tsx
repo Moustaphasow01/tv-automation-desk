@@ -44,7 +44,19 @@ const RunbookZoomPage = lazy(() =>
   import("@/pages/RunbooksPage").then((module) => ({ default: module.RunbookZoomPage })),
 );
 const ExecutionConsolePage = lazy(() => import("@/pages/ExecutionConsolePage"));
+const PortfolioRiskPage = lazy(() => import("@/pages/PortfolioRiskPage"));
+const AiContextPage = lazy(() => import("@/pages/AiContextPage"));
 const ClaimLanesPage = lazy(() => import("@/pages/ClaimLanesPage"));
+const AgentRuntimePage = lazy(() => import("@/pages/AgentRuntimePage"));
+const DataFoundationPage = lazy(() => import("@/pages/DataFoundationPage"));
+const PromptRegistryPage = lazy(() => import("@/pages/PromptRegistryPage"));
+const ResearchLabPage = lazy(() => import("@/pages/ResearchLabPage"));
+const ResearchExperimentZoomPage = lazy(() =>
+  import("@/pages/ResearchLabPage").then((module) => ({ default: module.ResearchExperimentZoomPage })),
+);
+const ResearchCandidateZoomPage = lazy(() =>
+  import("@/pages/ResearchLabPage").then((module) => ({ default: module.ResearchCandidateZoomPage })),
+);
 
 function RouteFallback() {
   return (
@@ -92,7 +104,11 @@ export default function App() {
       <Route path="/operations/runbooks" element={routeElement(RunbooksPage)}/>
       <Route path="/operations/runbooks/:runbookId" element={routeElement(RunbookZoomPage)}/>
       <Route path="/operations/execution" element={routeElement(ExecutionConsolePage)}/>
+      <Route path="/operations/portfolio-risk" element={routeElement(PortfolioRiskPage)}/>
+      <Route path="/operations/portfolio-risk/:sectionId" element={routeElement(PortfolioRiskPage)}/>
+      <Route path="/operations/ai-context" element={routeElement(AiContextPage)}/>
       <Route path="/operations/claim-lanes" element={routeElement(ClaimLanesPage)}/>
+      <Route path="/operations/agents" element={routeElement(AgentRuntimePage)}/>
       <Route path="/operations/workflows/:workflowId" element={routeElement(WorkflowDetailPage)}/>
       <Route path="/operations/workflows/:workflowId/events/:eventId" element={routeElement(WorkflowEventPage)}/>
       <Route path="/replay" element={routeElement(ReplayLabPage)}/>
@@ -106,6 +122,11 @@ export default function App() {
       <Route path="/history/sessions/:sessionId" element={routeElement(HistorySessionPage)}/>
       <Route path="/strategies" element={routeElement(StrategiesPage)}/>
       <Route path="/strategies/:strategyId" element={routeElement(StrategyDetailPage)}/>
+      <Route path="/prompt-registry" element={routeElement(PromptRegistryPage)}/>
+      <Route path="/data-foundation" element={routeElement(DataFoundationPage)}/>
+      <Route path="/research" element={routeElement(ResearchLabPage)}/>
+      <Route path="/research/experiments/:experimentId" element={routeElement(ResearchExperimentZoomPage)}/>
+      <Route path="/research/candidates/:candidateId" element={routeElement(ResearchCandidateZoomPage)}/>
       <Route path="/more" element={routeElement(MorePage)}/>
     </Route>
     <Route path="*" element={<Navigate to="/live" replace/>}/>

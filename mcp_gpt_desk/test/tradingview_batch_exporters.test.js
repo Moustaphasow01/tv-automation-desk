@@ -15,7 +15,7 @@ const exporters = [
   },
   {
     file: "market_feed_batch_m5_exporter.pine",
-    securityCalls: 18,
+    securityCalls: 22,
     symbols: [
       "CME_MINI:MNQ1!",
       "CME_MINI:MES1!",
@@ -32,6 +32,10 @@ const exporters = [
       "NASDAQ:NVDA",
       "NASDAQ:AAPL",
       "NASDAQ:MSFT",
+      "NASDAQ:AMZN",
+      "NASDAQ:META",
+      "NASDAQ:GOOGL",
+      "NASDAQ:AVGO",
       "NASDAQ:TSLA",
       "NASDAQ:SMH",
       "NASDAQ:SOXX",
@@ -49,7 +53,7 @@ const exporters = [
   },
   {
     file: "market_feed_batch_h4_exporter.pine",
-    securityCalls: 20,
+    securityCalls: 24,
     symbols: [
       "CME_MINI:MNQ1!",
       "CME_MINI:MES1!",
@@ -68,6 +72,10 @@ const exporters = [
       "NASDAQ:NVDA",
       "NASDAQ:AAPL",
       "NASDAQ:MSFT",
+      "NASDAQ:AMZN",
+      "NASDAQ:META",
+      "NASDAQ:GOOGL",
+      "NASDAQ:AVGO",
       "NASDAQ:TSLA",
       "NASDAQ:SMH",
       "NASDAQ:SOXX",

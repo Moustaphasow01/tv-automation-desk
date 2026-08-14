@@ -1,0 +1,5 @@
+DO $$
+BEGIN
+  ALTER TYPE simulation_run_artifact_kind ADD VALUE IF NOT EXISTS 'ORDER_SIMULATION_POLICY';
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;

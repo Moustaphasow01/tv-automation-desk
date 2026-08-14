@@ -14,6 +14,7 @@ const env = {
 test("operator session uses a signed HttpOnly cookie and validates its issuer", () => {
   const session = createOperatorSession("operator-123456", "https://desk.example.test", env, 1_000);
   assert.match(session.cookie, /HttpOnly/);
+  assert.match(session.cookie, /Path=\//);
   assert.match(session.cookie, /SameSite=Strict/);
   assert.match(session.cookie, /Secure/);
   const auth = verifyOperatorSession(session.cookie, "https://desk.example.test", env, 2_000);

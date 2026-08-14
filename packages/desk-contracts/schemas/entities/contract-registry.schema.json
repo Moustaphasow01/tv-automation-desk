@@ -55,14 +55,17 @@
     },
     "entity_contracts": {
       "type": "object",
-      "required": ["decision_audit_contract", "simulation_run_contract", "simulation_step_contract", "worker_mission_contract", "dashboard_state_contract", "front_projection_contract"],
+      "required": ["decision_audit_contract", "simulation_run_contract", "simulation_step_contract", "worker_mission_contract", "dashboard_state_contract", "front_projection_contract", "strategy_definition_contract", "strategy_version_contract", "strategy_instance_contract"],
       "properties": {
         "decision_audit_contract": { "$ref": "#/$defs/entityEntry" },
         "simulation_run_contract": { "$ref": "#/$defs/entityEntry" },
         "simulation_step_contract": { "$ref": "#/$defs/entityEntry" },
         "worker_mission_contract": { "$ref": "#/$defs/entityEntry" },
         "dashboard_state_contract": { "$ref": "#/$defs/entityEntry" },
-        "front_projection_contract": { "$ref": "#/$defs/entityEntry" }
+        "front_projection_contract": { "$ref": "#/$defs/entityEntry" },
+        "strategy_definition_contract": { "$ref": "#/$defs/entityEntry" },
+        "strategy_version_contract": { "$ref": "#/$defs/entityEntry" },
+        "strategy_instance_contract": { "$ref": "#/$defs/entityEntry" }
       },
       "additionalProperties": false
     },

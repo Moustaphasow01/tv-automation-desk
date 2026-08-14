@@ -26,6 +26,7 @@ import {
   loadFrontDetailResource,
 } from "./front-api-details.js";
 import { FRONT_OPENAPI_PATH, frontApiOpenApiDocument } from "./front-api-openapi.js";
+import { FRONT_API_V2_CATALOG_PATH, buildFrontApiV2Catalog } from "./front-api-catalog-v2.js";
 import {
   executeFrontOperatorCommand,
   FRONT_OPERATOR_COMMANDS_PATH,
@@ -45,6 +46,13 @@ import {
   isFrontOperationsPath,
   isFrontOperationsWriteRequest,
 } from "./front-operations-api.js";
+import {
+  handleFrontControlPlaneHttp,
+  handleFrontOperationsEvents,
+  isFrontControlPlaneMethodAllowed,
+  isFrontControlPlanePath,
+  isFrontControlPlaneWriteRequest,
+} from "./front-api-server-adapter.js";
 import { createDeskStoreFromEnv } from "./store.js";
 import { callDeskTool, createDeskToolRegistry, getToolRequiredScopes, listDeskTools } from "./tools.js";
 import { filterMcpTools, normalizeMcpToolProfile } from "./mcp-tool-profile.js";
@@ -219,7 +227,8 @@ const httpServer = createHttpServer(async (req, res) => {
           front_gpt_processes: "/api/v1/gpt-processes/:processId",
           front_events: FRONT_OPERATIONS_EVENTS_PATH,
           front_execution: "/api/v1/execution/overview, /api/v1/execution/actions, /api/v1/execution/bridge/*",
-          front_openapi: FRONT_OPENAPI_PATH,
+          front_control_plane: "/front-api/v1/views/:view, /front-api/v1/commands, /front-api/v1/events",
+          front_openapi: FRONT_OPENAPI_PATH, front_api_v2_catalog: FRONT_API_V2_CATALOG_PATH,
         } : {}),
         health: "/status",
       },
@@ -522,8 +531,12 @@ async function handleFrontApiRequest(req, res, url, baseUrl) {
     return;
   }
 
-  const operatorWrite = url.pathname === FRONT_OPERATOR_COMMANDS_PATH || isFrontOperationsWriteRequest(url.pathname, req.method);
-  const methodAllowed = isFrontOperationsPath(url.pathname)
+  const operatorWrite = url.pathname === FRONT_OPERATOR_COMMANDS_PATH ||
+    isFrontOperationsWriteRequest(url.pathname, req.method) ||
+    isFrontControlPlaneWriteRequest(url.pathname, req.method);
+  const methodAllowed = isFrontControlPlanePath(url.pathname)
+    ? isFrontControlPlaneMethodAllowed(url.pathname, req.method)
+    : isFrontOperationsPath(url.pathname)
     ? isFrontOperationsMethodAllowed(url.pathname, req.method)
     : req.method === (operatorWrite ? "POST" : "GET");
   if (!methodAllowed) {
@@ -559,8 +572,26 @@ async function handleFrontApiRequest(req, res, url, baseUrl) {
 
   const input = Object.fromEntries(url.searchParams.entries());
   try {
+    if (isFrontControlPlanePath(url.pathname)) {
+      await handleFrontControlPlaneHttp({
+        store,
+        req,
+        res,
+        pathname: url.pathname,
+        query: input,
+        corsHeaders,
+        auth,
+        operatorWrite,
+        readJsonBody,
+        sendJson,
+        sendFrontResource,
+        clientIp: clientIpFromRequest(req),
+      });
+      return;
+    }
+
     if (url.pathname === FRONT_OPERATIONS_EVENTS_PATH) {
-      await handleFrontOperationsEvents(req, res, input, corsHeaders);
+      await handleFrontOperationsEvents(store, req, res, input, corsHeaders);
       return;
     }
 
@@ -621,9 +652,8 @@ async function handleFrontApiRequest(req, res, url, baseUrl) {
       return;
     }
 
-    if (url.pathname === FRONT_OPENAPI_PATH) {
-      sendFrontResource(req, res, frontApiOpenApiDocument(), corsHeaders, 300);
-      return;
+    if (url.pathname === FRONT_OPENAPI_PATH || url.pathname === FRONT_API_V2_CATALOG_PATH) {
+      sendFrontResource(req, res, url.pathname === FRONT_OPENAPI_PATH ? frontApiOpenApiDocument() : buildFrontApiV2Catalog(), corsHeaders, 300); return;
     }
 
     if (FRONT_RESOURCE_PATHS.has(url.pathname)) {
@@ -1005,9 +1035,10 @@ function isFrontApiPath(pathname) {
     pathname === "/api/v1/sessions" ||
     pathname === FRONT_OPERATOR_STATE_PATH ||
     pathname === FRONT_OPERATOR_COMMANDS_PATH ||
-    pathname === FRONT_OPENAPI_PATH ||
+    pathname === FRONT_OPENAPI_PATH || pathname === FRONT_API_V2_CATALOG_PATH ||
     FRONT_RESOURCE_PATHS.has(pathname) ||
     isFrontDetailPath(pathname) ||
+    isFrontControlPlanePath(pathname) ||
     isFrontOperationsPath(pathname);
 }
 
@@ -1017,42 +1048,6 @@ function frontOperatorErrorStatus(code) {
   if (["WORKFLOW_NOT_FOUND", "REPLAY_NOT_FOUND", "REPLAY_DAY_NOT_FOUND", "REPLAY_PREPARATION_NOT_FOUND", "GPT_PROCESS_NOT_FOUND", "INCIDENT_NOT_FOUND", "STRATEGY_NOT_FOUND", "NOT_FOUND"].includes(code)) return 404;
   if (code === "WORK_FAILED_REQUIRES_OPERATOR") return 409;
   return 0;
-}
-
-async function handleFrontOperationsEvents(req, res, input, corsHeaders) {
-  res.writeHead(200, {
-    ...corsHeaders,
-    "content-type": "text/event-stream; charset=utf-8",
-    "cache-control": "no-cache, no-transform",
-    connection: "keep-alive",
-    "x-accel-buffering": "no",
-  });
-  let lastPayload = "";
-  let closed = false;
-  let busy = false;
-  const emit = async () => {
-    if (closed || res.writableEnded || busy) return;
-    busy = true;
-    try {
-      const payload = JSON.stringify(await store.getOperationsSummary(input));
-      if (payload !== lastPayload) {
-        lastPayload = payload;
-        res.write(`event: operations\ndata: ${payload}\n\n`);
-      } else {
-        res.write(`event: heartbeat\ndata: {"at":"${new Date().toISOString()}"}\n\n`);
-      }
-    } catch (error) {
-      res.write(`event: error\ndata: ${JSON.stringify({ error: error.message || String(error) })}\n\n`);
-    } finally {
-      busy = false;
-    }
-  };
-  await emit();
-  const interval = setInterval(emit, 10_000);
-  req.on("close", () => {
-    closed = true;
-    clearInterval(interval);
-  });
 }
 
 function clientIpFromRequest(req) {
@@ -1103,7 +1098,7 @@ function restCorsHeaders(req) {
   const origin = String(req.headers.origin || "");
   const headers = {
     "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-allow-headers": "content-type, authorization, x-desk-api-key, x-desk-addon-id, x-desk-addon-timestamp, x-desk-addon-nonce, x-desk-addon-signature, if-none-match",
+    "access-control-allow-headers": "content-type, authorization, x-desk-api-key, x-desk-addon-id, x-desk-addon-timestamp, x-desk-addon-nonce, x-desk-addon-signature, if-none-match, if-match, idempotency-key, x-correlation-id, x-desk-environment",
     "access-control-expose-headers": "etag, cache-control",
     "access-control-allow-credentials": "true",
     "access-control-max-age": "3600",

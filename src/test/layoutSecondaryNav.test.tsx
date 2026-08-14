@@ -44,4 +44,11 @@ describe("secondary nav active-state matching", () => {
     expect(liveTag).not.toContain('aria-current="page"');
     expect(thesisTag).toContain('aria-current="page"');
   });
+
+  it("range Data Foundation dans l’espace Réglages", () => {
+    const settings = navigationSpaces.find(space => space.id === "settings")!;
+
+    expect(settings.matches("/data-foundation")).toBe(true);
+    expect(settings.items.map(item => item.to)).toContain("/data-foundation");
+  });
 });

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import pg from "pg";
+import { buildPostgresDataHealth } from "./postgres-data-health.js";
 
 const { Pool } = pg;
 
@@ -10,6 +11,11 @@ const MARKET_FEED_CANDLES_COLLECTION = "candles";
 const LIVE_DATA_FEED_STATUS_COLLECTION = "live_data_feed_status";
 const TRADINGVIEW_EVENTS_COLLECTION = "tradingview_webhook_events";
 const MARKET_CANDLE_COLLECTION_RE = /^market_feeds\/([^/]+)\/candles$/;
+const POSTGRES_TRANSIENT_STARTUP_CODES = new Set([
+  "08000", "08001", "08003", "08004", "08006", "08007", "08P01",
+  "53300", "57P01", "57P02", "57P03",
+  "ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "ETIMEDOUT",
+]);
 
 export class PostgresDeskPersistence {
   constructor(options = {}) {
@@ -23,9 +29,15 @@ export class PostgresDeskPersistence {
     }));
     this.objectRoot = resolve(options.objectRoot || process.env.DESK_OBJECT_ROOT || "./local_data/objects");
     this.schemaMode = resolveSchemaMode(options.schemaMode);
-    this.initialized = this.schemaMode === "validate"
+    const initializeSchema = () => this.schemaMode === "validate"
       ? this.#validateSchema()
       : this.#initialize();
+    this.initialized = retryPostgresInitialization(initializeSchema, {
+      maxAttempts: options.initializationAttempts,
+      baseDelayMs: options.initializationRetryBaseMs,
+      maxDelayMs: options.initializationRetryMaxMs,
+      sleep: options.initializationSleep,
+    });
   }
 
   async health() {
@@ -101,70 +113,7 @@ export class PostgresDeskPersistence {
 
   async dataHealth({ nowUtc = new Date().toISOString() } = {}) {
     await this.initialized;
-    const [marketResult, schedulerResult] = await Promise.all([
-      this.pool.query(
-        `SELECT mf.instrument_code,
-                mf.timeframe,
-                max(mc.timestamp_utc) AS latest_timestamp_utc,
-                (max(mc.timestamp_utc) AT TIME ZONE 'Europe/Paris')::date::text AS latest_market_date
-         FROM market_feeds mf
-         LEFT JOIN market_candles mc
-           ON mc.feed_id = mf.feed_id
-          AND mc.is_closed = true
-         WHERE mf.enabled = true
-           AND mf.environment = 'prod'
-           AND mf.instrument_code IN ('MNQ', 'MES')
-           AND mf.timeframe IN ('1', '5')
-         GROUP BY mf.instrument_code, mf.timeframe
-         ORDER BY mf.instrument_code, mf.timeframe`,
-      ),
-      this.pool.query(
-        `SELECT service_id, status, details, heartbeat_at_utc, release_version
-         FROM desk_service_heartbeats
-         WHERE service_id = 'live_runtime_scheduler'
-         LIMIT 1`,
-      ),
-    ]);
-    const timestampMs = Date.parse(nowUtc);
-    const tradingDate = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Paris",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(timestampMs));
-    const weekday = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Europe/Paris",
-      weekday: "short",
-    }).format(new Date(timestampMs));
-    const marketClosed = weekday === "Sat" || weekday === "Sun";
-    const feeds = marketResult.rows.map((row) => ({
-      instrument: row.instrument_code,
-      timeframe: row.timeframe,
-      latest_timestamp_utc: row.latest_timestamp_utc,
-      latest_market_date: row.latest_market_date,
-    }));
-    const effectiveMarketDate = feeds.map((feed) => feed.latest_market_date).filter(Boolean).sort().at(-1) || null;
-    const coreReady = feeds.length >= 4 && feeds.every((feed) => Boolean(feed.latest_timestamp_utc));
-    const currentTradingDayReady = coreReady && effectiveMarketDate === tradingDate;
-    const state = marketClosed
-      ? coreReady ? "market_closed" : "missing"
-      : currentTradingDayReady ? "ready" : coreReady ? "stale" : "missing";
-    const scheduler = schedulerResult.rows[0] || null;
-    return {
-      ok: marketClosed ? coreReady : currentTradingDayReady,
-      state,
-      market_closed: marketClosed,
-      requested_trading_date: tradingDate,
-      effective_market_date: effectiveMarketDate,
-      core_feeds: feeds,
-      scheduler: scheduler && {
-        status: scheduler.status,
-        heartbeat_at_utc: scheduler.heartbeat_at_utc,
-        release_version: scheduler.release_version,
-        data_state: scheduler.details?.data_state || null,
-        data_blocker: scheduler.details?.data_blocker || null,
-      },
-    };
+    return buildPostgresDataHealth(this.pool, { nowUtc });
   }
 
   async close() {
@@ -2117,6 +2066,28 @@ export function postgresPoolOptions(options = {}, env = process.env) {
     ),
     application_name: String(options.applicationName || env.DESK_DATABASE_APPLICATION_NAME || "desk-api").slice(0, 63),
   };
+}
+
+export async function retryPostgresInitialization(operation, options = {}, env = process.env) {
+  const maxAttempts = boundedInteger(options.maxAttempts ?? env.DESK_DATABASE_INITIALIZATION_ATTEMPTS, 30, 1, 120);
+  const baseDelayMs = boundedInteger(options.baseDelayMs ?? env.DESK_DATABASE_INITIALIZATION_RETRY_BASE_MS, 250, 0, 30_000);
+  const maxDelayMs = boundedInteger(options.maxDelayMs ?? env.DESK_DATABASE_INITIALIZATION_RETRY_MAX_MS, 2_000, baseDelayMs, 60_000);
+  const sleep = options.sleep || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isTransientPostgresStartupError(error) || attempt === maxAttempts) throw error;
+      await sleep(Math.min(maxDelayMs, baseDelayMs * (2 ** (attempt - 1))));
+    }
+  }
+  throw new Error("POSTGRES_INITIALIZATION_RETRY_EXHAUSTED");
+}
+
+function isTransientPostgresStartupError(error) {
+  const code = String(error?.code || "").toUpperCase();
+  if (POSTGRES_TRANSIENT_STARTUP_CODES.has(code) || code.startsWith("08")) return true;
+  return /(database system is starting up|connection terminated unexpectedly|connection refused|timeout expired)/i.test(String(error?.message || ""));
 }
 
 function boundedInteger(value, fallback, minimum, maximum) {

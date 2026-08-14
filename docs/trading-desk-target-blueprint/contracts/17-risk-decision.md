@@ -15,6 +15,17 @@
 | `limits_applied` | array[string] | oui | Limites de risque effectivement appliquées |
 | `decided_at` | timestamp | oui | Horodatage de décision |
 
+## Précurseur TD2-701
+
+Avant la création complète de `Risk Decision`, le domaine `portfolio_risk_budget_evaluation_v1` produit une évaluation budgétaire déterministe :
+
+- `PASS` : taille demandée possible ;
+- `REDUCE` : taille approuvable inférieure à la taille demandée ;
+- `BLOCK` : taille approuvée `0` ;
+- `CONFIG_MISSING` : aucun budget numérique configuré, fail-closed.
+
+Cette évaluation alimente le futur Global Risk Engine sans créer encore de `Target Position` ni d’`OrderIntent`.
+
 ## Exemple JSON
 
 ```json

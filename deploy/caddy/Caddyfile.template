@@ -31,7 +31,7 @@
 		Content-Security-Policy "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://chatgpt.com"
 	}
 
-	@backend path /status /readyz /api/* /mcp /oauth/* /.well-known/* /sse /messages
+	@backend path /status /readyz /healthz /api/* /front-api/* /mcp /oauth/* /.well-known/* /sse /messages
 	handle @backend {
 		reverse_proxy 127.0.0.1:8787 {
 			transport http {

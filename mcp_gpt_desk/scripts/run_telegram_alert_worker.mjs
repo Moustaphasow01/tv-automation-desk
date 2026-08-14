@@ -24,7 +24,7 @@ try {
   await service.identifyBots().catch((error) => heartbeat("degraded", { phase: "identify_bots", error: safeError(error) }));
 
   do {
-    const cycle = { synced: null, deliveries: [], commands: null };
+    const cycle = { environment: service.envStatus(), synced: null, deliveries: [], commands: null };
     try {
       cycle.synced = await service.syncSources();
       for (let index = 0; index < 20; index += 1) {

@@ -442,13 +442,11 @@ function hasStrictLiveFreshness(pack) {
   }
   const freshness = quality.dataset_freshness || {};
   const strictCanonical = ["MNQ_M1", "MES_M1", "MNQ_M5", "MES_M5"];
-  const requiredContext = ["NQ_H1", "ES_H1", "MNQ_H4", "MES_H4", "NQ_H4", "ES_H4"];
   const derivedLineage = [
     ["MNQ_M5", "MNQ_M1", "prod__tradingview__MNQ1!__1"],
     ["MES_M5", "MES_M1", "prod__tradingview__MES1!__1"],
   ];
   return strictCanonical.every((dataset) => freshness[dataset]?.status === "fresh")
-    && requiredContext.every((dataset) => ["fresh", "stale"].includes(freshness[dataset]?.status))
     && derivedLineage.every(([dataset, sourceDataset, sourceFeedId]) => {
       const ref = pack?.datasets?.[dataset] || {};
       return ref.source === "canonical_derived_m1"

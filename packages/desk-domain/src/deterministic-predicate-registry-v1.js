@@ -201,7 +201,7 @@ export function evaluateDeterministicConditionSetV1({
   const requiredUnknown = required.filter((result) => result.state === PREDICATE_STATES_V1.UNKNOWN);
   const requiredNotStarted = required.filter((result) => result.state === PREDICATE_STATES_V1.NOT_STARTED);
   const requiredPending = required.filter((result) => result.state === PREDICATE_STATES_V1.PENDING);
-  const scoreable = results.filter((result) => ["PRIMARY", "SECONDARY"].includes(result.importance));
+  const scoreable = results.filter((result) => ["PRIMARY", "SECONDARY"].includes(result.importance) && Number(result.weight || 0) > 0);
   const scoreableKnown = scoreable.filter((result) => result.state !== PREDICATE_STATES_V1.UNKNOWN);
   const configuredWeight = scoreable.reduce((sum, result) => sum + result.weight, 0);
   const knownWeight = scoreableKnown.reduce((sum, result) => sum + result.weight, 0);

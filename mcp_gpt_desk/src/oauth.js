@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { DESK_OAUTH_SCOPES, hasOperatorScopes } from "./operator-access-policy-v1.js";
 
-export const OAUTH_SCOPES = ["desk.read", "desk.write"];
+export const OAUTH_SCOPES = DESK_OAUTH_SCOPES;
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 const AUTH_CODE_TTL_SECONDS = 5 * 60;
@@ -223,8 +224,7 @@ export function hasScopes(auth, requiredScopes = []) {
   if (auth?.kind === "api_key") {
     return true;
   }
-  const granted = new Set(auth?.scopes || []);
-  return requiredScopes.every((scope) => granted.has(scope));
+  return hasOperatorScopes(auth?.scopes || [], requiredScopes);
 }
 
 export class OAuthError extends Error {

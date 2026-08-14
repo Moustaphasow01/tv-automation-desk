@@ -59,7 +59,7 @@
 ### Tests négatifs (gardes de sécurité — les plus critiques du dossier)
 
 27. **Aucune combinaison de métriques ne peut déclencher seule une promotion PAPER→LIVE** (ADR-0007) — Phase 6.
-28. **Aucune combinaison de réponses de l'AI Context Gate ne peut produire un `Order Intent` directement** (ADR-0009) — Phase 8.
+28. **Aucune combinaison de réponses de l'AI Context Gate ne peut produire un `Order Intent` directement** (ADR-0009) — Phase 8. TD2-800 couvre le premier niveau par `packages/desk-domain/test/ai-context-advisory-v1.test.js`, incluant les champs broker/ordre/quantité et la preuve `ai_context_advisory_isolation_proof_v1`.
 29. **Tentative de passage LIVE d'une Strategy Instance en présence d'une autre déjà LIVE sans triple verrou → rejet testé positivement** (Ticket 1.3, renforcé Phase 7).
 30. **Deux Strategy Instances LIVE conformes individuellement ne peuvent dépasser collectivement une limite de portefeuille** (SC-5) — Phase 7.
 

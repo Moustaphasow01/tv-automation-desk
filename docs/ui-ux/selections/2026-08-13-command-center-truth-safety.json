@@ -1,0 +1,1202 @@
+{
+  "metadata": {
+    "rulebook_version": "1.0.0",
+    "query": "Front V2 Phase 0 vertical slice Command Center truth and safety: valeurs inconnues indisponibles partielles ou obsolètes, données API réelles, capability et permission réelles, cycle terminal des commandes avec audit receipt, drill-down paramétré, états loading empty error forbidden conflict disconnected, accessibilité, responsive et tests end-to-end",
+    "priorities": [
+      "P0",
+      "P1"
+    ],
+    "chapters": [],
+    "limit": 60,
+    "selected_count": 60
+  },
+  "rules": [
+    {
+      "id": "UXR-0621",
+      "number": 621,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Toute action dangereuse doit être liée à un command type backend réellement implémenté.",
+      "evidence": "Le capability catalog annonce support, permission et lifecycle.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 202
+    },
+    {
+      "id": "UXR-0481",
+      "number": 481,
+      "chapter": 25,
+      "chapter_title": "Chargement, vide, données partielles, stale, offline et indisponibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Chaque source de données doit distinguer loading, ready, empty, partial, stale, disconnected, forbidden et error lorsque pertinents.",
+      "evidence": "Le type de vue ou la query expose ces états sans ambiguïté.",
+      "sources": [
+        "S06",
+        "S09",
+        "S21",
+        "S22",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 199
+    },
+    {
+      "id": "UXR-0637",
+      "number": 637,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les paramètres sensibles d'une commande doivent être affichés dans le preview mais masqués selon les permissions.",
+      "evidence": "Aucun secret ne fuit dans l'UI, l'URL ou l'audit.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 175
+    },
+    {
+      "id": "UXR-0626",
+      "number": 626,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "L'interface doit distinguer SUBMITTED, ACCEPTED, RUNNING, SUCCEEDED, FAILED, CANCELLED et TIMED_OUT selon le contrat réel.",
+      "evidence": "Le statut terminal vient du backend et non d'un timeout UI.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 169
+    },
+    {
+      "id": "UXR-0627",
+      "number": 627,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Un succès ne doit être affiché qu'après état terminal et relecture cohérente de la ressource.",
+      "evidence": "Le test E2E compare résultat attendu et projection.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 169
+    },
+    {
+      "id": "UXR-0630",
+      "number": 630,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Toute action dangereuse doit produire un audit receipt consultable.",
+      "evidence": "Le receipt contient command ID, acteur, objet, raison, timestamps, résultat et corrélation.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 163
+    },
+    {
+      "id": "UXR-0623",
+      "number": 623,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "La confirmation doit demander une raison lorsque l'audit ou la politique l'exige.",
+      "evidence": "La raison est validée, persistée et visible dans le receipt.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 157
+    },
+    {
+      "id": "UXR-0625",
+      "number": 625,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Chaque commande doit utiliser une clé d'idempotence et une version attendue lorsque la concurrence est possible.",
+      "evidence": "Les doublons et conflits sont testés.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 157
+    },
+    {
+      "id": "UXR-0622",
+      "number": 622,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Une action dangereuse doit présenter un preview d'impact avant confirmation.",
+      "evidence": "Le preview nomme objets, portée, conséquences et dépendances.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 154
+    },
+    {
+      "id": "UXR-0830",
+      "number": 830,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les parcours E2E doivent couvrir au minimum succès, erreur, permission refusée, données partielles et reprise.",
+      "evidence": "Chaque flow critique possède ces variantes ou une justification.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 151
+    },
+    {
+      "id": "UXR-0831",
+      "number": 831,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les actions sensibles doivent être testées jusqu'à l'état terminal backend et l'audit.",
+      "evidence": "Le test ne s'arrête pas au reçu ACCEPTED.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 151
+    },
+    {
+      "id": "UXR-0966",
+      "number": 966,
+      "chapter": 49,
+      "chapter_title": "Definition of Done, release, feature flags et amélioration continue",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les états loading, empty, partial, stale, disconnected, forbidden, conflict, error et ready applicables doivent être implémentés et testés.",
+      "evidence": "Le catalogue de stories ou fixtures couvre la matrice.",
+      "sources": [
+        "S01",
+        "S19",
+        "S24",
+        "S25",
+        "S26",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 145
+    },
+    {
+      "id": "UXR-0628",
+      "number": 628,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Une commande non implémentée doit être absente, désactivée avec raison ou rejetée explicitement.",
+      "evidence": "Elle ne produit jamais un faux reçu de succès.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 142
+    },
+    {
+      "id": "UXR-0629",
+      "number": 629,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les retries de commande doivent vérifier le statut existant avant de créer une nouvelle intention.",
+      "evidence": "Le système évite les doubles effets après rupture réseau.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 142
+    },
+    {
+      "id": "UXR-0602",
+      "number": 602,
+      "chapter": 31,
+      "chapter_title": "SaaS enterprise, rôles, permissions et multi-contexte",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Le backend doit revalider toute permission, même lorsque le frontend masque ou désactive l'action.",
+      "evidence": "Les tests d'autorisation appellent directement l'API avec un rôle insuffisant.",
+      "sources": [
+        "S04",
+        "S06",
+        "S13",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 139
+    },
+    {
+      "id": "UXR-0624",
+      "number": 624,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les opérations les plus critiques doivent utiliser une confirmation renforcée comme phrase, re-authentification ou quatre yeux.",
+      "evidence": "Le niveau de confirmation est défini par policy, pas par la page.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 139
+    },
+    {
+      "id": "UXR-0633",
+      "number": 633,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les actions de kill, cutover, promotion LIVE, override et modification de policy doivent être isolées dans un workflow dédié.",
+      "evidence": "Elles ne sont pas déclenchables depuis une simple carte overview.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 139
+    },
+    {
+      "id": "UXR-0640",
+      "number": 640,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "SEMI",
+      "statement": "Aucune action à haut risque ne peut être libérée sans revue sécurité, test E2E réel, feature flag et rollback de release.",
+      "evidence": "La Definition of Done contient les quatre preuves.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 139
+    },
+    {
+      "id": "UXR-0840",
+      "number": 840,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "SEMI",
+      "statement": "Une page n'est pas Done tant que ses états, responsive, accessibilité, interactions et E2E principaux ne sont pas prouvés.",
+      "evidence": "La checklist de release contient les preuves exécutées.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 139
+    },
+    {
+      "id": "UXR-0635",
+      "number": 635,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "L'utilisateur doit pouvoir annuler une commande seulement si l'autorité confirme qu'elle est encore annulable.",
+      "evidence": "Le bouton se base sur capability et état courant.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 137
+    },
+    {
+      "id": "UXR-0491",
+      "number": 491,
+      "chapter": 25,
+      "chapter_title": "Chargement, vide, données partielles, stale, offline et indisponibilité",
+      "level": "MUST NOT",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Une mutation sensible ne doit pas être automatiquement rejouée après une incertitude réseau sans garantie d'idempotence.",
+      "evidence": "Le lifecycle vérifie le statut de commande avant toute reprise.",
+      "sources": [
+        "S06",
+        "S09",
+        "S21",
+        "S22",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 136
+    },
+    {
+      "id": "UXR-0500",
+      "number": 500,
+      "chapter": 25,
+      "chapter_title": "Chargement, vide, données partielles, stale, offline et indisponibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Le frontend ne doit jamais déduire le succès ou l'état nominal de l'absence d'erreur.",
+      "evidence": "Seul un statut ou une donnée autoritaire peut établir le résultat.",
+      "sources": [
+        "S06",
+        "S09",
+        "S21",
+        "S22",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 136
+    },
+    {
+      "id": "UXR-0985",
+      "number": 985,
+      "chapter": 50,
+      "chapter_title": "Protocole d’exécution Codex et auto-audit obligatoire",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "MANUAL",
+      "statement": "L'agent ne doit pas inventer une donnée, une capability, une permission ou un résultat de commande absent du code ou du contrat.",
+      "evidence": "L'inconnu est déclaré et un besoin backend est ouvert si nécessaire.",
+      "sources": [
+        "S01",
+        "S21",
+        "S23",
+        "S24",
+        "S25",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 133
+    },
+    {
+      "id": "UXR-0634",
+      "number": 634,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "La progression d'une commande doit rester consultable après navigation ou reconnexion.",
+      "evidence": "Un centre global de commandes et l'audit restaurent l'état.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 131
+    },
+    {
+      "id": "UXR-0760",
+      "number": 760,
+      "chapter": 38,
+      "chapter_title": "Architecture frontend par feature et séparation des couches",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les frontières frontend doivent être vérifiées automatiquement dans la CI.",
+      "evidence": "Un outil d'architecture contrôle cycles, imports, taille et placement des appels réseau.",
+      "sources": [
+        "S21",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 130
+    },
+    {
+      "id": "UXR-0057",
+      "number": 57,
+      "chapter": 3,
+      "chapter_title": "Objectif produit, tâche et contrat d'exploitation de page",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "SEMI",
+      "statement": "Chaque écran doit définir ses états loading, empty, partial, stale, disconnected, forbidden, conflict, error et ready lorsqu'ils sont applicables.",
+      "evidence": "La matrice de page et les stories couvrent ces états.",
+      "sources": [
+        "S04",
+        "S06",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 128
+    },
+    {
+      "id": "UXR-0636",
+      "number": 636,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "SEMI",
+      "statement": "Une commande concurrente ou superseded doit expliquer quelle intention fait autorité.",
+      "evidence": "Le détail montre la relation entre commandes et résultat final.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 128
+    },
+    {
+      "id": "UXR-0741",
+      "number": 741,
+      "chapter": 38,
+      "chapter_title": "Architecture frontend par feature et séparation des couches",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Le frontend doit être organisé par feature ou domaine métier, non par dossiers globaux de tous les composants et services.",
+      "evidence": "La structure contient features/<domain> avec routes, pages, components, api et model.",
+      "sources": [
+        "S21",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 127
+    },
+    {
+      "id": "UXR-0482",
+      "number": 482,
+      "chapter": 25,
+      "chapter_title": "Chargement, vide, données partielles, stale, offline et indisponibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Un état empty ne doit être utilisé que lorsque l'absence de données est confirmée.",
+      "evidence": "Une source indisponible ou non chargée n'affiche jamais « aucun résultat ».",
+      "sources": [
+        "S06",
+        "S09",
+        "S21",
+        "S22",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 124
+    },
+    {
+      "id": "UXR-0821",
+      "number": 821,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Chaque mapper doit être testé avec DTO complet, partiel, inconnu, nul et invalide.",
+      "evidence": "Les tests vérifient états de vérité et absence de faux fallbacks.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 124
+    },
+    {
+      "id": "UXR-0638",
+      "number": 638,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Le résultat partiel d'une commande de masse doit détailler chaque objet et permettre une reprise ciblée.",
+      "evidence": "Le produit ne résume pas tout par un succès global.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 122
+    },
+    {
+      "id": "UXR-0639",
+      "number": 639,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Les écrans de commande doivent être testés avec 403, 409, 422, 501, 503, timeout et reconnexion.",
+      "evidence": "Chaque cas possède un message et une récupération distincts.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 122
+    },
+    {
+      "id": "UXR-0601",
+      "number": 601,
+      "chapter": 31,
+      "chapter_title": "SaaS enterprise, rôles, permissions et multi-contexte",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "La visibilité d'une route et d'une action doit être dérivée des capabilities et permissions réelles de session.",
+      "evidence": "Le frontend ne contient pas d'allowlist statique qui simule le RBAC.",
+      "sources": [
+        "S04",
+        "S06",
+        "S13",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 121
+    },
+    {
+      "id": "UXR-0769",
+      "number": 769,
+      "chapter": 39,
+      "chapter_title": "Contrats API, DTO, modèles de domaine UI et provenance",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Le frontend ne doit pas recalculer un statut officiel, une permission, un risque ou un PnL canonique.",
+      "evidence": "La valeur autoritaire vient du backend avec version de règle si nécessaire.",
+      "sources": [
+        "S21",
+        "S22",
+        "S26",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 121
+    },
+    {
+      "id": "UXR-0631",
+      "number": 631,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "MANUAL",
+      "statement": "Le rollback doit être proposé lorsque techniquement et métierment possible.",
+      "evidence": "Le preview explique ce qui est réversible et ce qui ne l'est pas.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 119
+    },
+    {
+      "id": "UXR-0632",
+      "number": 632,
+      "chapter": 32,
+      "chapter_title": "Actions dangereuses, commandes, audit et réversibilité",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "MANUAL",
+      "statement": "Une action destructive doit préférer une désactivation, archive ou période de grâce lorsque le métier le permet.",
+      "evidence": "Le choix de suppression définitive est justifié.",
+      "sources": [
+        "S26",
+        "S27",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 119
+    },
+    {
+      "id": "UXR-0753",
+      "number": 753,
+      "chapter": 38,
+      "chapter_title": "Architecture frontend par feature et séparation des couches",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Le lifecycle de commande doit être une capacité transverse réutilisée par toutes les actions sensibles.",
+      "evidence": "Les features fournissent command type et payload, pas un faux succès local.",
+      "sources": [
+        "S21",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 119
+    },
+    {
+      "id": "UXR-0833",
+      "number": 833,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Les tests de contenu doivent inclure chaînes longues, langues, chiffres extrêmes et absence de données.",
+      "evidence": "Le layout ne dépend pas des exemples courts.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 119
+    },
+    {
+      "id": "UXR-0982",
+      "number": 982,
+      "chapter": 50,
+      "chapter_title": "Protocole d’exécution Codex et auto-audit obligatoire",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "SEMI",
+      "statement": "L'agent doit inspecter le repository, les routes, composants, styles, contrats API, données et tests avant de proposer une architecture.",
+      "evidence": "Le rapport cite les fichiers réellement observés.",
+      "sources": [
+        "S01",
+        "S21",
+        "S23",
+        "S24",
+        "S25",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 118
+    },
+    {
+      "id": "UXR-0983",
+      "number": 983,
+      "chapter": 50,
+      "chapter_title": "Protocole d’exécution Codex et auto-audit obligatoire",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "MANUAL",
+      "statement": "L'agent doit définir objectif, utilisateurs, questions, informations, actions, états, permissions et responsive avant de modifier un écran non spécifié.",
+      "evidence": "Une fiche minimale est produite ou l'absence bloque le développement.",
+      "sources": [
+        "S01",
+        "S21",
+        "S23",
+        "S24",
+        "S25",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 118
+    },
+    {
+      "id": "UXR-0989",
+      "number": 989,
+      "chapter": 50,
+      "chapter_title": "Protocole d’exécution Codex et auto-audit obligatoire",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "SEMI",
+      "statement": "L'agent doit implémenter les états de vérité et d'erreur avant de polir le happy path.",
+      "evidence": "Les fixtures et tests couvrent partial, stale, forbidden et erreur dès la première tranche.",
+      "sources": [
+        "S01",
+        "S21",
+        "S23",
+        "S24",
+        "S25",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 118
+    },
+    {
+      "id": "UXR-0485",
+      "number": 485,
+      "chapter": 25,
+      "chapter_title": "Chargement, vide, données partielles, stale, offline et indisponibilité",
+      "level": "MUST NOT",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Un spinner global ne doit pas bloquer toute une page lorsque des sections peuvent se charger indépendamment.",
+      "evidence": "Les requêtes et états sont localisés par section.",
+      "sources": [
+        "S06",
+        "S09",
+        "S21",
+        "S22",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 116
+    },
+    {
+      "id": "UXR-0742",
+      "number": 742,
+      "chapter": 38,
+      "chapter_title": "Architecture frontend par feature et séparation des couches",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Le dossier core doit contenir uniquement les capacités transverses uniques comme auth, HTTP, query, realtime, commands et errors.",
+      "evidence": "Aucune logique métier spécifique n'est placée dans core.",
+      "sources": [
+        "S21",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 116
+    },
+    {
+      "id": "UXR-0960",
+      "number": 960,
+      "chapter": 48,
+      "chapter_title": "Anti-patterns UI/UX explicitement interdits",
+      "level": "MUST NOT",
+      "priority": "P0",
+      "automation": "SEMI",
+      "statement": "Ne pas déclarer une page terminée sur la seule base d'une capture desktop happy path.",
+      "evidence": "États, clavier, responsive, données réelles, permissions, actions et erreurs sont vérifiés.",
+      "sources": [
+        "S01",
+        "S02",
+        "S05",
+        "S10",
+        "S16",
+        "S28",
+        "S29",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 115
+    },
+    {
+      "id": "UXR-0779",
+      "number": 779,
+      "chapter": 39,
+      "chapter_title": "Contrats API, DTO, modèles de domaine UI et provenance",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Les fixtures de contrat doivent inclure données complètes, partielles, inconnues, extrêmes et invalides.",
+      "evidence": "Les tests de mapper couvrent chaque catégorie.",
+      "sources": [
+        "S21",
+        "S22",
+        "S26",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 113
+    },
+    {
+      "id": "UXR-0990",
+      "number": 990,
+      "chapter": 50,
+      "chapter_title": "Protocole d’exécution Codex et auto-audit obligatoire",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "L'agent doit exécuter le linter UI/UX, les tests, l'accessibilité et les contrôles visuels applicables avant de conclure.",
+      "evidence": "Le rapport donne commandes, résultats et limites.",
+      "sources": [
+        "S01",
+        "S21",
+        "S23",
+        "S24",
+        "S25",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 113
+    },
+    {
+      "id": "UXR-0761",
+      "number": 761,
+      "chapter": 39,
+      "chapter_title": "Contrats API, DTO, modèles de domaine UI et provenance",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Le frontend doit consommer un contrat API documenté et versionné.",
+      "evidence": "Le client est généré ou fortement typé depuis OpenAPI ou schéma équivalent.",
+      "sources": [
+        "S21",
+        "S22",
+        "S26",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 109
+    },
+    {
+      "id": "UXR-0823",
+      "number": 823,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les composants interactifs doivent avoir des tests clavier et focus.",
+      "evidence": "Les scénarios utilisent des rôles et noms accessibles.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 109
+    },
+    {
+      "id": "UXR-0825",
+      "number": 825,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "MANUAL",
+      "statement": "Les scans automatisés ne remplacent pas les tests manuels avec lecteurs d'écran et utilisateurs.",
+      "evidence": "La Definition of Done distingue les deux preuves.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 109
+    },
+    {
+      "id": "UXR-0110",
+      "number": 110,
+      "chapter": 6,
+      "chapter_title": "Profondeur de page, drill-down, drawers et sous-pages",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "SEMI",
+      "statement": "Le niveau de drill-down doit être déterminé avant l'implémentation du composant.",
+      "evidence": "La Screen Specification décrit destination, données et comportement du retour.",
+      "sources": [
+        "S06",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 107
+    },
+    {
+      "id": "UXR-0499",
+      "number": 499,
+      "chapter": 25,
+      "chapter_title": "Chargement, vide, données partielles, stale, offline et indisponibilité",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Tous les états de données doivent être documentés dans les stories et testés au niveau mapper et écran.",
+      "evidence": "La matrice d'états est complète avant fusion.",
+      "sources": [
+        "S06",
+        "S09",
+        "S21",
+        "S22",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 107
+    },
+    {
+      "id": "UXR-0487",
+      "number": 487,
+      "chapter": 25,
+      "chapter_title": "Chargement, vide, données partielles, stale, offline et indisponibilité",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Une dernière valeur connue doit être clairement distinguée d'une valeur actuelle.",
+      "evidence": "Le label, timestamp et source indiquent le caractère historique.",
+      "sources": [
+        "S06",
+        "S09",
+        "S21",
+        "S22",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 106
+    },
+    {
+      "id": "UXR-0746",
+      "number": 746,
+      "chapter": 38,
+      "chapter_title": "Architecture frontend par feature et séparation des couches",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Le registre de routes, navigation, breadcrumbs et recherche doit être une source de vérité unique enrichie par capabilities.",
+      "evidence": "Aucune sidebar parallèle n'est codée en dur.",
+      "sources": [
+        "S21",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 106
+    },
+    {
+      "id": "UXR-0824",
+      "number": 824,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "AUTO",
+      "statement": "Les scans axe ou équivalents doivent être exécutés sur composants et pages critiques.",
+      "evidence": "Les violations nouvelles P0/P1 bloquent la CI.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 106
+    },
+    {
+      "id": "UXR-0101",
+      "number": 101,
+      "chapter": 6,
+      "chapter_title": "Profondeur de page, drill-down, drawers et sous-pages",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "MANUAL",
+      "statement": "Une vue L0 doit répondre à « que se passe-t-il et où regarder » sans prétendre contenir toute l'analyse.",
+      "evidence": "Le contenu priorise état, exceptions, tendances et accès aux domaines propriétaires.",
+      "sources": [
+        "S06",
+        "S30"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 104
+    },
+    {
+      "id": "UXR-0743",
+      "number": 743,
+      "chapter": 38,
+      "chapter_title": "Architecture frontend par feature et séparation des couches",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Le shell doit gérer navigation, contexte et chrome sans calculer les données des domaines.",
+      "evidence": "Les widgets métier restent dans les features ou un endpoint composé explicite.",
+      "sources": [
+        "S21",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 104
+    },
+    {
+      "id": "UXR-0759",
+      "number": 759,
+      "chapter": 38,
+      "chapter_title": "Architecture frontend par feature et séparation des couches",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Chaque feature doit inclure ses tests, fixtures et stories à proximité.",
+      "evidence": "Le déplacement ou la suppression de la feature ne laisse pas de tests orphelins.",
+      "sources": [
+        "S21",
+        "S30",
+        "S31"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 104
+    },
+    {
+      "id": "UXR-0832",
+      "number": 832,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Les tests de responsive doivent couvrir les viewports et densités contractuels.",
+      "evidence": "Les captures vérifient overflow, contenu masqué et navigation.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 104
+    },
+    {
+      "id": "UXR-0836",
+      "number": 836,
+      "chapter": 42,
+      "chapter_title": "Tests UI, accessibilité, interaction, visuel et E2E",
+      "level": "MUST",
+      "priority": "P1",
+      "automation": "AUTO",
+      "statement": "Les tests de sécurité UI doivent couvrir redaction, URLs, exports, permissions et contenus non fiables.",
+      "evidence": "Aucune donnée sensible ne fuit dans le DOM ou les logs.",
+      "sources": [
+        "S01",
+        "S24",
+        "S25"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 104
+    },
+    {
+      "id": "UXR-0263",
+      "number": 263,
+      "chapter": 14,
+      "chapter_title": "Fondations d'accessibilité et conception inclusive",
+      "level": "MUST",
+      "priority": "P0",
+      "automation": "SEMI",
+      "statement": "L'utilisation de composants accessibles ne dispense pas de tester le parcours complet.",
+      "evidence": "Les tests E2E couvrent ordre, messages, focus et états combinés.",
+      "sources": [
+        "S01",
+        "S02",
+        "S17"
+      ],
+      "status": "active",
+      "version_introduced": "1.0.0",
+      "relevance_score": 103
+    }
+  ]
+}

@@ -198,7 +198,7 @@ function Set-DeskCurrentJunction {
 }
 
 function Stop-DeskServices {
-    foreach ($name in @("DeskFuturesCaddy", "DeskFuturesCodexReplay01", "DeskFuturesCodexLive02", "DeskFuturesCodexLive01", "DeskFuturesTelegram", "DeskFuturesBrokerManagement", "DeskFuturesReplayPreparation", "DeskFuturesLiveRuntime", "DeskFuturesApi")) {
+    foreach ($name in @("DeskFuturesCaddy", "DeskFuturesCodexReplay01", "DeskFuturesCodexLive02", "DeskFuturesCodexLive01", "DeskFuturesAgentRuntimeResearch", "DeskFuturesAgentRuntimeSupervisor", "DeskFuturesTelegram", "DeskFuturesBrokerManagement", "DeskFuturesReplayPreparation", "DeskFuturesLiveRuntime", "DeskFuturesApi")) {
         $service = Get-Service -Name $name -ErrorAction SilentlyContinue
         if ($service -and $service.Status -ne "Stopped") {
             Stop-Service -Name $name -Force
@@ -212,6 +212,8 @@ function Get-DeskFrozenProducerServiceNames {
         "DeskFuturesLiveRuntime",
         "DeskFuturesReplayPreparation",
         "DeskFuturesBrokerManagement",
+        "DeskFuturesAgentRuntimeSupervisor",
+        "DeskFuturesAgentRuntimeResearch",
         "DeskFuturesCodexLive01",
         "DeskFuturesCodexLive02",
         "DeskFuturesCodexReplay01"
@@ -244,7 +246,7 @@ function Assert-DeskFrozenProducerServices {
 
 
 function Stop-DeskProducerServices {
-    foreach ($name in @("DeskFuturesCodexReplay01", "DeskFuturesCodexLive02", "DeskFuturesCodexLive01", "DeskFuturesTelegram", "DeskFuturesBrokerManagement", "DeskFuturesReplayPreparation", "DeskFuturesLiveRuntime")) {
+    foreach ($name in @("DeskFuturesCodexReplay01", "DeskFuturesCodexLive02", "DeskFuturesCodexLive01", "DeskFuturesAgentRuntimeResearch", "DeskFuturesAgentRuntimeSupervisor", "DeskFuturesTelegram", "DeskFuturesBrokerManagement", "DeskFuturesReplayPreparation", "DeskFuturesLiveRuntime")) {
         $service = Get-Service -Name $name -ErrorAction SilentlyContinue
         if ($service -and $service.Status -ne "Stopped") {
             Stop-Service -Name $name
@@ -254,7 +256,7 @@ function Stop-DeskProducerServices {
 }
 
 function Start-DeskServices {
-    foreach ($name in @("DeskFuturesApi", "DeskFuturesLiveRuntime", "DeskFuturesReplayPreparation", "DeskFuturesBrokerManagement", "DeskFuturesTelegram", "DeskFuturesCodexLive01", "DeskFuturesCodexLive02", "DeskFuturesCodexReplay01", "DeskFuturesCaddy")) {
+    foreach ($name in @("DeskFuturesApi", "DeskFuturesLiveRuntime", "DeskFuturesReplayPreparation", "DeskFuturesBrokerManagement", "DeskFuturesTelegram", "DeskFuturesAgentRuntimeSupervisor", "DeskFuturesAgentRuntimeResearch", "DeskFuturesCodexLive01", "DeskFuturesCodexLive02", "DeskFuturesCodexReplay01", "DeskFuturesCaddy")) {
         $service = Get-Service -Name $name -ErrorAction SilentlyContinue
         if ($service -and $service.Status -ne "Running" -and $service.StartType -ne "Disabled") {
             Start-Service -Name $name

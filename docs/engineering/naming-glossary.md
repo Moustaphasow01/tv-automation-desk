@@ -18,11 +18,14 @@
 | définition de prompt | `PromptDefinition` | `PromptConfig` |
 | version de prompt | `PromptVersion` | prompt texte modifiable |
 | signal de stratégie | `StrategySignal` | `Trade` avant arbitrage |
+| avis contextuel IA | `AiContextAdvisory` | `AiDecision`, `TradeDecision`, `OrderAdvice` |
 | allocation candidate | `CandidateAllocation` | `Position` avant autorisation |
 | décision risque | `RiskDecision` | `AiDecision` |
 | position cible nette | `TargetPosition` | `Signal` |
 | intention d'ordre | `OrderIntent` | `Order` avant soumission |
+| commande provider-neutral | `ExecutionProviderCommand` | commande NinjaTrader directe dans le domaine |
 | ordre broker | `BrokerOrder` | `OrderIntent` |
+| événement provider | `BrokerProviderEvent` | événement adapter brut |
 | exécution/remplissage | `BrokerFill` | `TradeResult` |
 | position interne | `TradePosition` | `Setup` |
 | rapprochement broker | `ReconciliationRun` | `Sync` générique |

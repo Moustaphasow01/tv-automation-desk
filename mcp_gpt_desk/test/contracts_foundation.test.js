@@ -71,6 +71,27 @@ const foundationContracts = [
     status: "active",
     runtimeExposed: true,
   },
+  {
+    key: "strategy_definition_contract",
+    schemaFile: "strategy-definition-v1.schema.json",
+    exampleFile: "strategy-definition.example.json",
+    status: "active",
+    runtimeExposed: false,
+  },
+  {
+    key: "strategy_version_contract",
+    schemaFile: "strategy-version-v1.schema.json",
+    exampleFile: "strategy-version.example.json",
+    status: "active",
+    runtimeExposed: false,
+  },
+  {
+    key: "strategy_instance_contract",
+    schemaFile: "strategy-instance-v1.schema.json",
+    exampleFile: "strategy-instance.example.json",
+    status: "active",
+    runtimeExposed: false,
+  },
 ];
 
 function compile(schemaFile) {

@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useOverlay } from "@/context/OverlayContext";
 import { useDeskContext } from "@/context/DeskContext";
+import { useExecutionOverview } from "@/hooks/useExecution";
 import { DeskPage } from "@/pages/pageState";
 import { MasterTabContainer } from "@/pages/live/MasterTabContainer";
 import { MonitorsTabContainer } from "@/pages/live/MonitorsTabContainer";
@@ -37,6 +38,7 @@ export default function LiveDeskPage() {
   const { phaseLabel } = useDeskContext();
   const { tab } = useParams<{ tab?: string }>();
   const activeTab = tab || "thesis";
+  const executionOverview = useExecutionOverview();
 
   const openTimelineEvent = (event: TimelineEvent) => {
     overlay.openModal(event.title, <div>
@@ -55,9 +57,10 @@ export default function LiveDeskPage() {
   return <DeskPage>{(data, meta) => <LiveDeskScreen
     data={data}
     phaseLabel={phaseLabel}
-    refreshing={meta.isFetching}
-    dataUpdatedAt={meta.dataUpdatedAt}
-    onRefresh={() => void meta.refetch()}
+    refreshing={meta.isFetching || executionOverview.isFetching}
+    dataUpdatedAt={Math.max(meta.dataUpdatedAt, executionOverview.dataUpdatedAt)}
+    executionOverview={executionOverview.data}
+    onRefresh={() => void Promise.all([meta.refetch(), executionOverview.refetch()])}
     tabs={liveTabs}
     activeTab={activeTab}
     activeTabContent={activeTabContentFor(activeTab, data, openTimelineEvent)}

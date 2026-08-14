@@ -3069,6 +3069,36 @@ export const registry = {
       "status": "active",
       "runtime_exposed": true,
       "owner_milestone": "New React front Lot 1"
+    },
+    "strategy_definition_contract": {
+      "contract_id": "DeskStrategyDefinition_v1_0_0",
+      "contract_name": "DeskStrategyDefinition",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/strategy-definition-v1.schema.json",
+      "example_path": "examples/strategy-definition.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "TD2-101 Strategy Kernel"
+    },
+    "strategy_version_contract": {
+      "contract_id": "DeskStrategyVersion_v1_0_0",
+      "contract_name": "DeskStrategyVersion",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/strategy-version-v1.schema.json",
+      "example_path": "examples/strategy-version.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "TD2-101 Strategy Kernel"
+    },
+    "strategy_instance_contract": {
+      "contract_id": "DeskStrategyInstance_v1_0_0",
+      "contract_name": "DeskStrategyInstance",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/strategy-instance-v1.schema.json",
+      "example_path": "examples/strategy-instance.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "TD2-101 Strategy Kernel"
     }
   },
   "lifecycle_policy": {
@@ -18310,7 +18340,10 @@ export const entitySchemas = {
           "simulation_step_contract",
           "worker_mission_contract",
           "dashboard_state_contract",
-          "front_projection_contract"
+          "front_projection_contract",
+          "strategy_definition_contract",
+          "strategy_version_contract",
+          "strategy_instance_contract"
         ],
         "properties": {
           "decision_audit_contract": {
@@ -18329,6 +18362,15 @@ export const entitySchemas = {
             "$ref": "#/$defs/entityEntry"
           },
           "front_projection_contract": {
+            "$ref": "#/$defs/entityEntry"
+          },
+          "strategy_definition_contract": {
+            "$ref": "#/$defs/entityEntry"
+          },
+          "strategy_version_contract": {
+            "$ref": "#/$defs/entityEntry"
+          },
+          "strategy_instance_contract": {
             "$ref": "#/$defs/entityEntry"
           }
         },
@@ -43827,6 +43869,331 @@ export const entitySchemas = {
       "action"
     ],
     "additionalProperties": false
+  },
+  "strategy-definition-v1.schema.json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://tv-automation.local/schemas/entities/strategy-definition-v1.schema.json",
+    "title": "DeskStrategyDefinition",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "strategy_definition_id",
+      "name",
+      "owner",
+      "created_at"
+    ],
+    "properties": {
+      "schema_version": {
+        "const": "strategy_definition_v1"
+      },
+      "strategy_definition_id": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+      },
+      "external_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "pattern": "^[a-z0-9][a-z0-9_.:-]{1,126}[a-z0-9]$"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 180
+      },
+      "description": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 4000
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 180
+      },
+      "asset_class": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1,
+        "maxLength": 80
+      },
+      "default_instruments": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "uniqueItems": true
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "uniqueItems": true
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated_at": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      }
+    }
+  },
+  "strategy-instance-v1.schema.json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://tv-automation.local/schemas/entities/strategy-instance-v1.schema.json",
+    "title": "DeskStrategyInstance",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "strategy_instance_id",
+      "strategy_version_id",
+      "runtime_state",
+      "execution_mode",
+      "triple_lock_validated",
+      "created_at"
+    ],
+    "properties": {
+      "schema_version": {
+        "const": "strategy_instance_v1"
+      },
+      "strategy_instance_id": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+      },
+      "strategy_version_id": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+      },
+      "runtime_state": {
+        "type": "string",
+        "enum": [
+          "CREATED",
+          "STARTING",
+          "RUNNING",
+          "PAUSED",
+          "STOPPING",
+          "STOPPED",
+          "FAILED_TO_START",
+          "ERRORED"
+        ]
+      },
+      "execution_mode": {
+        "type": "string",
+        "enum": [
+          "SHADOW",
+          "PAPER",
+          "LIVE"
+        ]
+      },
+      "account_scope": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 180
+      },
+      "instrument_scope": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "uniqueItems": true
+      },
+      "session_scope": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "uniqueItems": true
+      },
+      "risk_budget_ref": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+      },
+      "triple_lock_validated": {
+        "type": "boolean"
+      },
+      "operator_approval_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 180
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated_at": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "last_heartbeat_at": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "started_at": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "stopped_at": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "failed_at": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      }
+    }
+  },
+  "strategy-version-v1.schema.json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://tv-automation.local/schemas/entities/strategy-version-v1.schema.json",
+    "title": "DeskStrategyVersion",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "strategy_version_id",
+      "strategy_definition_id",
+      "version_label",
+      "status",
+      "dsl_source_hash",
+      "compiled_artifact_ref",
+      "runtime_contract_bundle_version",
+      "created_at"
+    ],
+    "properties": {
+      "schema_version": {
+        "const": "strategy_version_v1"
+      },
+      "strategy_version_id": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+      },
+      "strategy_definition_id": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+      },
+      "version_label": {
+        "type": "string",
+        "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "DRAFT",
+          "IN_SIMULATION",
+          "VALIDATED",
+          "PUBLISHED",
+          "DEPRECATED"
+        ]
+      },
+      "dsl_source_hash": {
+        "type": "string",
+        "pattern": "^sha256:[a-f0-9]{64}$"
+      },
+      "compiled_artifact_ref": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "compiled_artifact_hash": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "pattern": "^sha256:[a-f0-9]{64}$"
+      },
+      "validated_metrics_ref": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+      },
+      "runtime_contract_bundle_version": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 180
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated_at": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "published_at": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "deprecated_at": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      }
+    }
   },
   "worker-mission.schema.json": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",

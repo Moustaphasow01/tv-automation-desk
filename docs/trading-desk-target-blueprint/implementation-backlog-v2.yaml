@@ -7,9 +7,10 @@ convergence_document: 25-DIRECTOR-PLAN-CONVERGENCE-ADDENDUM.md
 engineering_standard: ../engineering/TRADING_DESK_ENGINEERING_STANDARDS.md
 prompt_registry_document: 26-PROMPT-AND-INSTRUCTION-REGISTRY.md
 jira:
-  sync_status: pending_connector
-  project_key: null
-  external_id_field: external_id
+  sync_status: connected
+  project_key: TD2
+  cloud_id: 05299685-b351-4195-8efc-62d322636fd6
+  external_id_field: summary_prefix
   source_of_truth: git
   statuses: [Backlog, Ready, In Progress, In Review, Validated, Blocked, Done]
 global_rules:
@@ -38,182 +39,186 @@ epics:
       - { external_id: TD2-ARCH-001, summary: Publier AGENTS et les standards adaptés au desk, depends_on: [], status: Done }
       - { external_id: TD2-ARCH-002, summary: Publier catalogue des modules et glossaire canonique, depends_on: [TD2-ARCH-001], status: Done }
       - { external_id: TD2-ARCH-003, summary: Capturer la baseline legacy et interdire son aggravation, depends_on: [TD2-ARCH-001, TD2-ARCH-002], status: Done }
-      - { external_id: TD2-ARCH-004, summary: Ajouter tests de frontières cycles et imports interdits, depends_on: [TD2-ARCH-002, TD2-ARCH-003] }
-      - { external_id: TD2-ARCH-005, summary: Ajouter guards taille complexité duplication et code mort, depends_on: [TD2-ARCH-003] }
-      - { external_id: TD2-ARCH-006, summary: Décomposer le host MCP par vertical slices, depends_on: [TD2-ARCH-004, TD2-ARCH-005] }
-      - { external_id: TD2-ARCH-007, summary: Unifier erreurs codes stables et Problem Details, depends_on: [TD2-ARCH-002] }
-      - { external_id: TD2-ARCH-008, summary: Automatiser standards SQL migrations ownership contraintes index, depends_on: [TD2-ARCH-002, TD2-ARCH-003] }
-      - { external_id: TD2-ARCH-009, summary: Auditer temps idempotence locking et concurrence, depends_on: [TD2-ARCH-002, TD2-ARCH-003] }
-      - { external_id: TD2-ARCH-010, summary: Faire converger le front vers features data access et ViewModels, depends_on: [TD2-ARCH-002, TD2-ARCH-003] }
-      - { external_id: TD2-ARCH-011, summary: Ajouter scans secrets dépendances licences SBOM et images, depends_on: [TD2-ARCH-001] }
-      - { external_id: TD2-ARCH-012, summary: Automatiser dérogations expirations et burn-down, depends_on: [TD2-ARCH-003, TD2-ARCH-005] }
-      - { external_id: TD2-ARCH-013, summary: Ajouter CODEOWNERS template PR et rapport architectural, depends_on: [TD2-ARCH-001, TD2-ARCH-002] }
-      - { external_id: TD2-ARCH-014, summary: Maintenir scorecard conformité touch-and-improve et burn-down par phase, depends_on: [TD2-ARCH-003, TD2-ARCH-004, TD2-ARCH-005, TD2-ARCH-012] }
+      - { external_id: TD2-ARCH-004, summary: Ajouter tests de frontières cycles et imports interdits, depends_on: [TD2-ARCH-002, TD2-ARCH-003], status: Done }
+      - { external_id: TD2-ARCH-005, summary: Ajouter guards taille complexité duplication et code mort, depends_on: [TD2-ARCH-003], status: Done }
+      - { external_id: TD2-ARCH-006, summary: Décomposer le host MCP par vertical slices, depends_on: [TD2-ARCH-004, TD2-ARCH-005], status: Done }
+      - { external_id: TD2-ARCH-007, summary: Unifier erreurs codes stables et Problem Details, depends_on: [TD2-ARCH-002], status: Done }
+      - { external_id: TD2-ARCH-008, summary: Automatiser standards SQL migrations ownership contraintes index, depends_on: [TD2-ARCH-002, TD2-ARCH-003], status: Done }
+      - { external_id: TD2-ARCH-009, summary: Auditer temps idempotence locking et concurrence, depends_on: [TD2-ARCH-002, TD2-ARCH-003], status: Done }
+      - { external_id: TD2-ARCH-010, summary: Faire converger le front vers features data access et ViewModels, depends_on: [TD2-ARCH-002, TD2-ARCH-003], status: Done }
+      - { external_id: TD2-ARCH-011, summary: Ajouter scans secrets dépendances licences SBOM et images, depends_on: [TD2-ARCH-001], status: Done }
+      - { external_id: TD2-ARCH-012, summary: Automatiser dérogations expirations et burn-down, depends_on: [TD2-ARCH-003, TD2-ARCH-005], status: Done }
+      - { external_id: TD2-ARCH-013, summary: Ajouter CODEOWNERS template PR et rapport architectural, depends_on: [TD2-ARCH-001, TD2-ARCH-002], status: Done }
+      - { external_id: TD2-ARCH-014, summary: Maintenir scorecard conformité touch-and-improve et burn-down par phase, depends_on: [TD2-ARCH-003, TD2-ARCH-004, TD2-ARCH-005, TD2-ARCH-012], status: Done }
+      - { external_id: TD2-ARCH-015, jira_key: TD2-149, summary: Corriger le garde runtime-safety pour compter uniquement les horloges implicites, depends_on: [TD2-ARCH-009, TD2-205], status: Done }
+      - { external_id: TD2-ARCH-016, jira_key: TD2-150, summary: Rebaseliner static-quality après les vertical slices Data Foundation, depends_on: [TD2-ARCH-005, TD2-204, TD2-205, TD2-206, TD2-207, TD2-208], status: Done }
   - key: P0
     summary: Baseline, gouvernance et import Jira
     depends_on: [P-1]
     tickets:
       - { external_id: TD2-000, summary: Versionner le blueprint V2 et ses décisions, depends_on: [TD2-ARCH-003], status: Done }
-      - { external_id: TD2-001, summary: Capturer la baseline locale et VPS, depends_on: [TD2-000] }
-      - { external_id: TD2-002, summary: Exécuter CI Docker E2E et publier le rapport, depends_on: [TD2-001] }
-      - { external_id: TD2-003, summary: Classifier scripts legacy et dépendances vulnérables, depends_on: [TD2-001] }
-      - { external_id: TD2-004, summary: Connecter Jira et importer le backlog de façon idempotente, depends_on: [TD2-000], blocked_by: jira_connector }
+      - { external_id: TD2-001, summary: Capturer la baseline locale et VPS, depends_on: [TD2-000], status: Done }
+      - { external_id: TD2-002, summary: Exécuter CI Docker E2E et publier le rapport, depends_on: [TD2-001], status: Done }
+      - { external_id: TD2-003, summary: Classifier scripts legacy et dépendances vulnérables, depends_on: [TD2-001], status: Done }
+      - { external_id: TD2-SEC-001, jira_key: TD2-140, summary: Migrer React Router v7 pour fermer les vulnérabilités open redirect, depends_on: [TD2-003, TD2-ARCH-011], issue_type: Bug, status: Done }
+      - { external_id: TD2-004, jira_key: TD2-34, summary: Connecter Jira et importer le backlog de façon idempotente, depends_on: [TD2-000], status: Done }
   - key: P1
     summary: Sûreté broker et restauration des données
     depends_on: [P0]
     tickets:
-      - { external_id: TD2-010, summary: Restaurer l'acquisition et vérifier la couverture, depends_on: [TD2-002] }
-      - { external_id: TD2-011, summary: Corriger l'agrégation signée compte instrument, depends_on: [TD2-002] }
-      - { external_id: TD2-012, summary: Confirmer la protection broker après fill, depends_on: [TD2-011] }
-      - { external_id: TD2-013, summary: Planifier la réconciliation progressive, depends_on: [TD2-011, TD2-012] }
-      - { external_id: TD2-014, summary: Versionner le vrai ATR et renommer average range, depends_on: [TD2-002] }
-      - { external_id: TD2-015, summary: Projeter fraîcheur divergence et protection dans le front, depends_on: [TD2-010, TD2-013, TD2-014] }
+      - { external_id: TD2-010, jira_key: TD2-36, summary: Restaurer l'acquisition et vérifier la couverture, depends_on: [TD2-002], status: Done }
+      - { external_id: TD2-011, jira_key: TD2-35, summary: Corriger l'agrégation signée compte instrument, depends_on: [TD2-002], status: Done }
+      - { external_id: TD2-012, jira_key: TD2-37, summary: Confirmer la protection broker après fill, depends_on: [TD2-011], status: Done }
+      - { external_id: TD2-013, jira_key: TD2-38, summary: Planifier la réconciliation progressive, depends_on: [TD2-011, TD2-012], status: Done }
+      - { external_id: TD2-014, jira_key: TD2-39, summary: Versionner le vrai ATR et renommer average range, depends_on: [TD2-002], status: Done }
+      - { external_id: TD2-015, jira_key: TD2-40, summary: Projeter fraîcheur divergence et protection dans le front, depends_on: [TD2-010, TD2-013, TD2-014], status: Done }
   - key: P2
     summary: Strategy Kernel et premier vertical slice
     depends_on: [P1]
     tickets:
-      - { external_id: TD2-100, summary: Créer les tables Strategy Definition Version Instance, depends_on: [TD2-015] }
-      - { external_id: TD2-101, summary: Créer les schémas et validateurs Strategy, depends_on: [TD2-100] }
-      - { external_id: TD2-102, summary: Créer repositories services et audit des transitions, depends_on: [TD2-100, TD2-101] }
-      - { external_id: TD2-103, summary: Exposer les API REST Strategy v2, depends_on: [TD2-102] }
-      - { external_id: TD2-104, summary: Ajouter projection BFF et écrans Strategy transitoires, depends_on: [TD2-103] }
-      - { external_id: TD2-105, summary: Ajouter trades strategy_instance_id nullable, depends_on: [TD2-100] }
-      - { external_id: TD2-106, summary: Compiler BREAKOUT_RETEST vers le moteur existant, depends_on: [TD2-101, TD2-102] }
+      - { external_id: TD2-100, jira_key: TD2-41, summary: Créer les tables Strategy Definition Version Instance, depends_on: [TD2-015], status: Done }
+      - { external_id: TD2-101, jira_key: TD2-42, summary: Créer les schémas et validateurs Strategy, depends_on: [TD2-100], status: Done }
+      - { external_id: TD2-102, jira_key: TD2-43, summary: Créer repositories services et audit des transitions, depends_on: [TD2-100, TD2-101], status: Done }
+      - { external_id: TD2-103, jira_key: TD2-141, summary: Exposer les API REST Strategy v2, depends_on: [TD2-102], status: Done }
+      - { external_id: TD2-104, jira_key: TD2-142, summary: Ajouter projection BFF et écrans Strategy transitoires, depends_on: [TD2-103], status: Done }
+      - { external_id: TD2-105, jira_key: TD2-143, summary: Ajouter trades strategy_instance_id nullable, depends_on: [TD2-100], status: Done }
+      - { external_id: TD2-106, jira_key: TD2-144, summary: Compiler BREAKOUT_RETEST vers le moteur existant, depends_on: [TD2-101, TD2-102], status: Done }
   - key: P2A
     summary: Prompt et Instruction Registry
     depends_on: [P1]
     gate: live_replay_parity_immutable_versions_and_rollback_proven
     tickets:
-      - { external_id: TD2-PRM-001, summary: Inventorier prompts instructions contrats versions hashes consommateurs, depends_on: [TD2-015] }
-      - { external_id: TD2-PRM-002, summary: Créer le schéma PostgreSQL du Prompt Registry, depends_on: [TD2-PRM-001, TD2-ARCH-008] }
-      - { external_id: TD2-PRM-003, summary: Construire renderer composer déterministe et schémas de variables, depends_on: [TD2-PRM-002] }
-      - { external_id: TD2-PRM-004, summary: Implémenter bindings canary last-known-good et rollback, depends_on: [TD2-PRM-002, TD2-PRM-003] }
-      - { external_id: TD2-PRM-005, summary: Migrer les prompts Live Replay 2.4.0 avec parité octet hash, depends_on: [TD2-PRM-003, TD2-PRM-004] }
-      - { external_id: TD2-PRM-006, summary: Ajouter évaluations qualité sécurité coût latence et non-régression, depends_on: [TD2-PRM-005] }
-      - { external_id: TD2-PRM-007, summary: Exposer API et écran opérateur du Prompt Registry, depends_on: [TD2-PRM-004, TD2-PRM-006] }
-      - { external_id: TD2-PRM-008, summary: Appliquer permissions audit secrets guard et interdiction de contournement, depends_on: [TD2-PRM-004, TD2-PRM-006, TD2-ARCH-011] }
+      - { external_id: TD2-PRM-001, jira_key: TD2-48, summary: Inventorier prompts instructions contrats versions hashes consommateurs, depends_on: [TD2-015], status: Done }
+      - { external_id: TD2-PRM-002, jira_key: TD2-49, summary: Créer le schéma PostgreSQL du Prompt Registry, depends_on: [TD2-PRM-001, TD2-ARCH-008], status: Done }
+      - { external_id: TD2-PRM-003, jira_key: TD2-50, summary: Construire renderer composer déterministe et schémas de variables, depends_on: [TD2-PRM-002], status: Done }
+      - { external_id: TD2-PRM-004, jira_key: TD2-51, summary: Implémenter bindings canary last-known-good et rollback, depends_on: [TD2-PRM-002, TD2-PRM-003], status: Done }
+      - { external_id: TD2-PRM-005, jira_key: TD2-52, summary: Migrer les prompts Live Replay 2.4.0 avec parité octet hash, depends_on: [TD2-PRM-003, TD2-PRM-004], status: Done }
+      - { external_id: TD2-PRM-006, jira_key: TD2-53, summary: Ajouter évaluations qualité sécurité coût latence et non-régression, depends_on: [TD2-PRM-005], status: Done }
+      - { external_id: TD2-PRM-007, jira_key: TD2-54, summary: Exposer API et écran opérateur du Prompt Registry, depends_on: [TD2-PRM-004, TD2-PRM-006], status: Done }
+      - { external_id: TD2-PRM-008, jira_key: TD2-55, summary: Appliquer permissions audit secrets guard et interdiction de contournement, depends_on: [TD2-PRM-004, TD2-PRM-006, TD2-ARCH-011], status: Done }
   - key: P3
     summary: Data Foundation et Feature Registry
     depends_on: [P2]
     tickets:
-      - { external_id: TD2-200, summary: Modéliser Data Source et Ingestion Batch, depends_on: [TD2-106] }
-      - { external_id: TD2-201, summary: Créer Dataset Registry cutoff hash provenance, depends_on: [TD2-200] }
-      - { external_id: TD2-202, summary: Créer Feature Definition et Feature Version, depends_on: [TD2-201] }
-      - { external_id: TD2-203, summary: Normaliser calendrier timezone sessions et rollover, depends_on: [TD2-201] }
-      - { external_id: TD2-204, summary: Exposer une API data feature contrôlée, depends_on: [TD2-202, TD2-203] }
-      - { external_id: TD2-205, summary: Ajouter couverture et lineage au front transitoire, depends_on: [TD2-204, TD2-207, TD2-208] }
-      - { external_id: TD2-206, summary: Profiler historique ticks bid ask open interest et granularités, depends_on: [TD2-200] }
-      - { external_id: TD2-207, summary: Définir stockage brut Parquet object storage et séries chaudes, depends_on: [TD2-201, TD2-206] }
-      - { external_id: TD2-208, summary: Construire le catalogue initial de features point-in-time, depends_on: [TD2-202, TD2-203, TD2-206] }
+      - { external_id: TD2-200, jira_key: TD2-145, summary: Modéliser Data Source et Ingestion Batch, depends_on: [TD2-106], status: Done }
+      - { external_id: TD2-201, jira_key: TD2-146, summary: Créer Dataset Registry cutoff hash provenance, depends_on: [TD2-200], status: Done }
+      - { external_id: TD2-202, jira_key: TD2-147, summary: Créer Feature Definition et Feature Version, depends_on: [TD2-201], status: Done }
+      - { external_id: TD2-203, jira_key: TD2-148, summary: Normaliser calendrier timezone sessions et rollover, depends_on: [TD2-201], status: Done }
+      - { external_id: TD2-204, jira_key: TD2-60, summary: Exposer une API data feature contrôlée, depends_on: [TD2-202, TD2-203], status: Done }
+      - { external_id: TD2-205, jira_key: TD2-61, summary: Ajouter couverture et lineage au front transitoire, depends_on: [TD2-204, TD2-207, TD2-208], status: Done }
+      - { external_id: TD2-206, jira_key: TD2-62, summary: Profiler historique ticks bid ask open interest et granularités, depends_on: [TD2-200], status: Done }
+      - { external_id: TD2-207, jira_key: TD2-63, summary: Définir stockage brut Parquet object storage et séries chaudes, depends_on: [TD2-201, TD2-206], status: Done }
+      - { external_id: TD2-208, jira_key: TD2-64, summary: Construire le catalogue initial de features point-in-time, depends_on: [TD2-202, TD2-203, TD2-206], status: Done }
   - key: P4
     summary: DSL Simulation Engine et Run Registry
     depends_on: [P3]
     tickets:
-      - { external_id: TD2-300, summary: Compiler le Strategy DSL vers le moteur canonique, depends_on: [TD2-205] }
-      - { external_id: TD2-301, summary: Construire la simulation canonique, depends_on: [TD2-300] }
-      - { external_id: TD2-302, summary: Construire Run Registry et artifacts, depends_on: [TD2-301] }
-      - { external_id: TD2-303, summary: Prouver reproductibilité et anti-lookahead, depends_on: [TD2-302] }
-      - { external_id: TD2-304, summary: Exposer runs compare artifacts et adapter Replay Lab, depends_on: [TD2-302] }
-      - { external_id: TD2-305, summary: Construire un Order Simulator réaliste et intrabar, depends_on: [TD2-301] }
-      - { external_id: TD2-306, summary: Versionner métriques et segmentations de performance, depends_on: [TD2-301] }
-      - { external_id: TD2-307, summary: Construire le Robustness Engine, depends_on: [TD2-303, TD2-306, TD2-309] }
-      - { external_id: TD2-308, summary: Gérer train validation out-of-sample sans fuite, depends_on: [TD2-201, TD2-303] }
-      - { external_id: TD2-309, summary: Ajouter le compute worker Python contractuel, depends_on: [TD2-301] }
+      - { external_id: TD2-300, jira_key: TD2-65, summary: Compiler le Strategy DSL vers le moteur canonique, depends_on: [TD2-205], status: Done }
+      - { external_id: TD2-301, jira_key: TD2-66, summary: Construire la simulation canonique, depends_on: [TD2-300], status: Done }
+      - { external_id: TD2-302, jira_key: TD2-67, summary: Construire Run Registry et artifacts, depends_on: [TD2-301], status: Done }
+      - { external_id: TD2-303, jira_key: TD2-68, summary: Prouver reproductibilité et anti-lookahead, depends_on: [TD2-302], status: Done }
+      - { external_id: TD2-304, jira_key: TD2-69, summary: Exposer runs compare artifacts et adapter Replay Lab, depends_on: [TD2-302], status: Done }
+      - { external_id: TD2-305, jira_key: TD2-70, summary: Construire un Order Simulator réaliste et intrabar, depends_on: [TD2-301], status: Done }
+      - { external_id: TD2-306, jira_key: TD2-71, summary: Versionner métriques et segmentations de performance, depends_on: [TD2-301], status: Done }
+      - { external_id: TD2-307, jira_key: TD2-72, summary: Construire le Robustness Engine, depends_on: [TD2-303, TD2-306, TD2-309], status: Done }
+      - { external_id: TD2-308, jira_key: TD2-73, summary: Gérer train validation out-of-sample sans fuite, depends_on: [TD2-201, TD2-303], status: Done }
+      - { external_id: TD2-309, jira_key: TD2-74, summary: Ajouter le compute worker Python contractuel, depends_on: [TD2-301], status: Done }
   - key: P5
     summary: Noyau Multi-Agent durable et model routing
     depends_on: [P4, P2A]
     tickets:
-      - { external_id: TD2-400, summary: Créer Agent Mission Conversation Task Lease Event, depends_on: [TD2-303, TD2-307, TD2-308, TD2-PRM-008] }
-      - { external_id: TD2-401, summary: Créer le superviseur Windows event-driven, depends_on: [TD2-400] }
-      - { external_id: TD2-402, summary: Implémenter affinité et rotation de conversation, depends_on: [TD2-400, TD2-401] }
-      - { external_id: TD2-403, summary: Implémenter Agent Execution Policy et model routing, depends_on: [TD2-400] }
-      - { external_id: TD2-404, summary: Implémenter idempotence retries DLQ et reprise, depends_on: [TD2-401] }
-      - { external_id: TD2-405, summary: Mesurer coût latence tokens conversation résultat, depends_on: [TD2-402, TD2-403, TD2-404] }
-      - { external_id: TD2-406, summary: Exposer API MCP d'administration contrôlée, depends_on: [TD2-404] }
-      - { external_id: TD2-407, summary: Ajouter le cockpit Agents au front transitoire, depends_on: [TD2-405, TD2-406, TD2-408, TD2-410, TD2-411] }
-      - { external_id: TD2-408, summary: Créer scheduler compute quotas et priorité live, depends_on: [TD2-400, TD2-309] }
-      - { external_id: TD2-409, summary: Implémenter les politiques de jointure Batch, depends_on: [TD2-400] }
-      - { external_id: TD2-410, summary: Isoler les pools de workers par responsabilité, depends_on: [TD2-401, TD2-408, TD2-409] }
-      - { external_id: TD2-411, summary: Rendre le Supervisor indépendant de l'OS, depends_on: [TD2-401] }
+      - { external_id: TD2-400, jira_key: TD2-75, summary: Créer Agent Mission Conversation Task Lease Event, depends_on: [TD2-303, TD2-307, TD2-308, TD2-PRM-008], status: Done }
+      - { external_id: TD2-401, jira_key: TD2-76, summary: Créer le superviseur Windows event-driven, depends_on: [TD2-400], status: Done }
+      - { external_id: TD2-402, jira_key: TD2-151, summary: Implémenter affinité et rotation de conversation, depends_on: [TD2-400, TD2-401], status: Done }
+      - { external_id: TD2-403, jira_key: TD2-152, summary: Implémenter Agent Execution Policy et model routing, depends_on: [TD2-400], status: Done }
+      - { external_id: TD2-404, jira_key: TD2-153, summary: Implémenter idempotence retries DLQ et reprise, depends_on: [TD2-401], status: Done }
+      - { external_id: TD2-405, jira_key: TD2-154, summary: Mesurer coût latence tokens conversation résultat, depends_on: [TD2-402, TD2-403, TD2-404], status: Done }
+      - { external_id: TD2-406, jira_key: TD2-155, summary: Exposer API MCP d'administration contrôlée, depends_on: [TD2-404], status: Done }
+      - { external_id: TD2-407, jira_key: TD2-82, summary: Ajouter le cockpit Agents au front transitoire, depends_on: [TD2-405, TD2-406, TD2-408, TD2-410, TD2-411], status: Done }
+      - { external_id: TD2-408, jira_key: TD2-156, summary: Créer scheduler compute quotas et priorité live, depends_on: [TD2-400, TD2-309], status: Done }
+      - { external_id: TD2-409, jira_key: TD2-157, summary: Implémenter les politiques de jointure Batch, depends_on: [TD2-400], status: Done }
+      - { external_id: TD2-410, jira_key: TD2-85, summary: Isoler les pools de workers par responsabilité, depends_on: [TD2-401, TD2-408, TD2-409], status: Done }
+      - { external_id: TD2-411, jira_key: TD2-86, summary: Rendre le Supervisor indépendant de l'OS, depends_on: [TD2-401], status: Done }
   - key: P6
     summary: Experiment Registry et Research Lab
     depends_on: [P5]
     tickets:
-      - { external_id: TD2-500, summary: Créer Experiment Hypothesis Candidate Evaluation, depends_on: [TD2-407] }
-      - { external_id: TD2-501, summary: Créer le workflow de génération de stratégie, depends_on: [TD2-500, TD2-505, TD2-506, TD2-510] }
-      - { external_id: TD2-502, summary: Créer le workflow contradictoire de validation, depends_on: [TD2-501, TD2-507, TD2-508] }
-      - { external_id: TD2-503, summary: Créer la matrice de promotion avec approbation, depends_on: [TD2-502, TD2-511] }
-      - { external_id: TD2-504, summary: Ajouter Research Experiments au front transitoire, depends_on: [TD2-503, TD2-509] }
-      - { external_id: TD2-505, summary: Créer le catalogue des neuf rôles de recherche, depends_on: [TD2-500, TD2-403] }
-      - { external_id: TD2-506, summary: Formaliser le processus scientifique et les budgets, depends_on: [TD2-500, TD2-505] }
-      - { external_id: TD2-507, summary: Créer génome taxonomie nouveauté et déduplication, depends_on: [TD2-500, TD2-506] }
-      - { external_id: TD2-508, summary: Construire la mémoire des échecs, depends_on: [TD2-500, TD2-507] }
-      - { external_id: TD2-509, summary: Construire le graphe logique de connaissances, depends_on: [TD2-507, TD2-508] }
-      - { external_id: TD2-510, summary: Créer le lifecycle des candidates de recherche, depends_on: [TD2-500, TD2-506] }
-      - { external_id: TD2-511, summary: Mesurer couverture et priorité des recherches, depends_on: [TD2-507, TD2-509] }
+      - { external_id: TD2-500, jira_key: TD2-158, summary: Créer Experiment Hypothesis Candidate Evaluation, depends_on: [TD2-407], status: Done }
+      - { external_id: TD2-501, jira_key: TD2-88, summary: Créer le workflow de génération de stratégie, depends_on: [TD2-500, TD2-505, TD2-506, TD2-510], status: Done }
+      - { external_id: TD2-502, jira_key: TD2-89, summary: Créer le workflow contradictoire de validation, depends_on: [TD2-501, TD2-507, TD2-508], status: Done }
+      - { external_id: TD2-503, jira_key: TD2-90, summary: Créer la matrice de promotion avec approbation, depends_on: [TD2-502, TD2-511], status: Done }
+      - { external_id: TD2-504, jira_key: TD2-91, summary: Ajouter Research Experiments au front transitoire, depends_on: [TD2-503, TD2-509], status: Done }
+      - { external_id: TD2-505, jira_key: TD2-159, summary: Créer le catalogue des neuf rôles de recherche, depends_on: [TD2-500, TD2-403], status: Done }
+      - { external_id: TD2-506, jira_key: TD2-93, summary: Formaliser le processus scientifique et les budgets, depends_on: [TD2-500, TD2-505], status: Done }
+      - { external_id: TD2-507, jira_key: TD2-94, summary: Créer génome taxonomie nouveauté et déduplication, depends_on: [TD2-500, TD2-506], status: Done }
+      - { external_id: TD2-508, jira_key: TD2-95, summary: Construire la mémoire des échecs, depends_on: [TD2-500, TD2-507], status: Done }
+      - { external_id: TD2-509, jira_key: TD2-96, summary: Construire le graphe logique de connaissances, depends_on: [TD2-507, TD2-508], status: Done }
+      - { external_id: TD2-510, jira_key: TD2-97, summary: Créer le lifecycle des candidates de recherche, depends_on: [TD2-500, TD2-506], status: Done }
+      - { external_id: TD2-511, jira_key: TD2-98, summary: Mesurer couverture et priorité des recherches, depends_on: [TD2-507, TD2-509], status: Done }
   - key: P7
     summary: Live Strategy Runtime SHADOW PAPER
     depends_on: [P6]
     tickets:
-      - { external_id: TD2-600, summary: Créer le scheduler par Strategy Instance, depends_on: [TD2-504] }
-      - { external_id: TD2-601, summary: Créer Signal Bus outbox notify et polling, depends_on: [TD2-600] }
-      - { external_id: TD2-602, summary: Prouver la parité Simulation SHADOW, depends_on: [TD2-601] }
-      - { external_id: TD2-603, summary: Implémenter promotion manuelle SHADOW PAPER, depends_on: [TD2-602] }
-      - { external_id: TD2-604, summary: Ajouter Instances et Signals au front transitoire, depends_on: [TD2-603] }
-      - { external_id: TD2-605, summary: Détecter la dérive de performance live, depends_on: [TD2-604, TD2-306] }
+      - { external_id: TD2-600, jira_key: TD2-99, summary: Créer le scheduler par Strategy Instance, depends_on: [TD2-504], status: Done }
+      - { external_id: TD2-601, jira_key: TD2-100, summary: Créer Signal Bus outbox notify et polling, depends_on: [TD2-600], status: Done }
+      - { external_id: TD2-602, jira_key: TD2-160, summary: Prouver la parité Simulation SHADOW, depends_on: [TD2-601], status: Done }
+      - { external_id: TD2-603, jira_key: TD2-161, summary: Implémenter promotion manuelle SHADOW PAPER, depends_on: [TD2-602], status: Done }
+      - { external_id: TD2-604, jira_key: TD2-162, summary: Ajouter Instances et Signals au front transitoire, depends_on: [TD2-603], status: Done }
+      - { external_id: TD2-605, jira_key: TD2-163, summary: Détecter la dérive de performance live, depends_on: [TD2-604, TD2-306], status: Done }
   - key: P8
     summary: Portfolio Global Risk et Broker Netting
     depends_on: [P7]
     tickets:
-      - { external_id: TD2-700, summary: Créer Candidate Allocation et portefeuille virtuel, depends_on: [TD2-605] }
-      - { external_id: TD2-701, summary: Créer les budgets de risque globaux, depends_on: [TD2-700] }
-      - { external_id: TD2-702, summary: Résoudre conflits et Target Position nette, depends_on: [TD2-701] }
-      - { external_id: TD2-703, summary: Créer Broker Netting et OrderIntent déterministe, depends_on: [TD2-702] }
-      - { external_id: TD2-704, summary: Tester concurrence fills redémarrage divergence, depends_on: [TD2-703] }
-      - { external_id: TD2-705, summary: Ajouter cockpit Portfolio Risk au front transitoire, depends_on: [TD2-704, TD2-706, TD2-707] }
-      - { external_id: TD2-706, summary: Attribuer le PnL virtuel et mesurer la similarité, depends_on: [TD2-704, TD2-605, TD2-507] }
-      - { external_id: TD2-707, summary: Gérer prop firms trailing drawdown et multi-compte, depends_on: [TD2-701, TD2-704] }
+      - { external_id: TD2-700, jira_key: TD2-105, summary: Créer Candidate Allocation et portefeuille virtuel, depends_on: [TD2-605], status: Done }
+      - { external_id: TD2-701, jira_key: TD2-106, summary: Créer les budgets de risque globaux, depends_on: [TD2-700], status: Done }
+      - { external_id: TD2-702, jira_key: TD2-107, summary: Résoudre conflits et Target Position nette, depends_on: [TD2-701], status: Done }
+      - { external_id: TD2-703, jira_key: TD2-108, summary: Créer Broker Netting et OrderIntent déterministe, depends_on: [TD2-702], status: Done }
+      - { external_id: TD2-704, jira_key: TD2-109, summary: Tester concurrence fills redémarrage divergence, depends_on: [TD2-703], status: Done }
+      - { external_id: TD2-705, jira_key: TD2-110, summary: Ajouter cockpit Portfolio Risk au front transitoire, depends_on: [TD2-704, TD2-706, TD2-707], status: Done }
+      - { external_id: TD2-706, jira_key: TD2-111, summary: Attribuer le PnL virtuel et mesurer la similarité, depends_on: [TD2-704, TD2-605, TD2-507], status: Done }
+      - { external_id: TD2-707, jira_key: TD2-112, summary: Gérer prop firms trailing drawdown et multi-compte, depends_on: [TD2-701, TD2-704], status: Done }
   - key: P9
     summary: AI Context Decision Gate
     depends_on: [P5, P8]
     tickets:
-      - { external_id: TD2-800, summary: Définir contrat et preuves AI Context, depends_on: [TD2-705] }
-      - { external_id: TD2-801, summary: Ajouter le profil CONTEXT_DECISION au router, depends_on: [TD2-800, TD2-403] }
-      - { external_id: TD2-802, summary: Exécuter le Context Gate en SHADOW, depends_on: [TD2-801] }
-      - { external_id: TD2-803, summary: Configurer les décisions contraignantes validées, depends_on: [TD2-802] }
-      - { external_id: TD2-804, summary: Implémenter timeout et fallback explicite, depends_on: [TD2-801] }
-      - { external_id: TD2-805, summary: Afficher décisions et explications dans le front, depends_on: [TD2-802, TD2-804] }
+      - { external_id: TD2-800, jira_key: TD2-113, summary: Définir contrat et preuves AI Context, depends_on: [TD2-705], status: Done }
+      - { external_id: TD2-801, jira_key: TD2-114, summary: Ajouter le profil CONTEXT_DECISION au router, depends_on: [TD2-800, TD2-403], status: Done }
+      - { external_id: TD2-802, jira_key: TD2-115, summary: Exécuter le Context Gate en SHADOW, depends_on: [TD2-801], status: Done }
+      - { external_id: TD2-803, jira_key: TD2-116, summary: Configurer les décisions contraignantes validées, depends_on: [TD2-802], status: Done }
+      - { external_id: TD2-804, jira_key: TD2-117, summary: Implémenter timeout et fallback explicite, depends_on: [TD2-801], status: Done }
+      - { external_id: TD2-805, jira_key: TD2-118, summary: Afficher décisions et explications dans le front, depends_on: [TD2-802, TD2-804], status: Done }
   - key: P10
     summary: Execution Gateway et remplacement progressif de NinjaTrader
     depends_on: [P8]
     tickets:
-      - { external_id: TD2-900, summary: Créer le port provider-neutral et les événements broker, depends_on: [TD2-704] }
-      - { external_id: TD2-901, summary: Envelopper NinjaTrader dans un adaptateur, depends_on: [TD2-900] }
-      - { external_id: TD2-902, summary: Auditer PickMyTrade Rithmic Tradovate Apex et décider Go No-Go, depends_on: [TD2-900], operator_decision: true }
-      - { external_id: TD2-903, summary: Créer l'adaptateur PickMyTrade PAPER si approuvé, depends_on: [TD2-902] }
-      - { external_id: TD2-904, summary: Exécuter les tests de contrat multi-provider, depends_on: [TD2-901, TD2-903] }
-      - { external_id: TD2-905, summary: Réconcilier en shadow puis basculer avec rollback, depends_on: [TD2-907] }
-      - { external_id: TD2-906, summary: Retirer NinjaTrader après certification, depends_on: [TD2-905], operator_decision: true }
-      - { external_id: TD2-907, summary: Garantir circuit breaker et fallback sans double envoi, depends_on: [TD2-904] }
+      - { external_id: TD2-900, jira_key: TD2-119, summary: Créer le port provider-neutral et les événements broker, depends_on: [TD2-704], status: Done }
+      - { external_id: TD2-901, jira_key: TD2-120, summary: Envelopper NinjaTrader dans un adaptateur, depends_on: [TD2-900], status: Done }
+      - { external_id: TD2-902, jira_key: TD2-121, summary: Auditer PickMyTrade Rithmic Tradovate Apex et décider Go No-Go, depends_on: [TD2-900], operator_decision: true, status: Done }
+      - { external_id: TD2-908, jira_key: TD2-164, summary: Réaligner la trajectoire provider P10 après due diligence, depends_on: [TD2-902], operator_decision: true, status: Done }
+      - { external_id: TD2-903, jira_key: TD2-122, summary: Créer l'adaptateur PickMyTrade bridge PAPER approuvé, depends_on: [TD2-908], status: Done }
+      - { external_id: TD2-904, jira_key: TD2-123, summary: Exécuter les tests de contrat multi-provider, depends_on: [TD2-901, TD2-903], status: Done }
+      - { external_id: TD2-905, jira_key: TD2-124, summary: Réconcilier en shadow puis basculer avec rollback, depends_on: [TD2-907], status: Done }
+      - { external_id: TD2-906, jira_key: TD2-125, summary: Retirer NinjaTrader après certification, depends_on: [TD2-905], operator_decision: true, status: Blocked }
+      - { external_id: TD2-907, jira_key: TD2-126, summary: Garantir circuit breaker et fallback sans double envoi, depends_on: [TD2-904], status: Done }
   - key: P11
     summary: API stable et préparation Front V3
     depends_on: [P7]
     tickets:
-      - { external_id: TD2-1000, summary: Stabiliser le catalogue OpenAPI v2, depends_on: [TD2-604] }
-      - { external_id: TD2-1001, summary: Définir SSE WebSocket et reprise par cursor, depends_on: [TD2-1000] }
-      - { external_id: TD2-1002, summary: Définir scopes opérateur lecture automation, depends_on: [TD2-1000] }
-      - { external_id: TD2-1003, summary: Tester compatibilité et dépréciation API, depends_on: [TD2-1000, TD2-1001, TD2-1002, TD2-1006] }
-      - { external_id: TD2-1004, summary: Rédiger le cahier de refonte Front V3, depends_on: [TD2-1003] }
-      - { external_id: TD2-1005, summary: Définir la coexistence et migration des écrans, depends_on: [TD2-1004] }
-      - { external_id: TD2-1006, summary: Créer les surfaces MCP strictes par rôle, depends_on: [TD2-1000, TD2-1002] }
+      - { external_id: TD2-1000, jira_key: TD2-127, summary: Stabiliser le catalogue OpenAPI v2, depends_on: [TD2-604], status: Done }
+      - { external_id: TD2-1001, jira_key: TD2-128, summary: Définir SSE WebSocket et reprise par cursor, depends_on: [TD2-1000], status: Done }
+      - { external_id: TD2-1002, jira_key: TD2-129, summary: Définir scopes opérateur lecture automation, depends_on: [TD2-1000], status: Done }
+      - { external_id: TD2-1003, jira_key: TD2-130, summary: Tester compatibilité et dépréciation API, depends_on: [TD2-1000, TD2-1001, TD2-1002, TD2-1006], status: Done }
+      - { external_id: TD2-1004, jira_key: TD2-131, summary: Rédiger le cahier de refonte Front V3, depends_on: [TD2-1003], status: Done }
+      - { external_id: TD2-1005, jira_key: TD2-132, summary: Définir la coexistence et migration des écrans, depends_on: [TD2-1004], status: Done }
+      - { external_id: TD2-1006, jira_key: TD2-133, summary: Créer les surfaces MCP strictes par rôle, depends_on: [TD2-1000, TD2-1002], status: Done }
   - key: P12
     summary: Cutover et décommission
     depends_on: [P9, P10, P11]
     gate: zero_active_exceptions_zero_blocking_violations_and_full_repository_compliance
     tickets:
-      - { external_id: TD2-1100, summary: Comparer ancien et nouveau runtime, depends_on: [TD2-805, TD2-905, TD2-1005] }
-      - { external_id: TD2-1101, summary: Cutover progressif par Strategy Instance, depends_on: [TD2-1100] }
-      - { external_id: TD2-1102, summary: Autoriser séparément toute activation LIVE, depends_on: [TD2-1101], operator_decision: true }
-      - { external_id: TD2-1103, summary: Retirer GPT-first et legacy après observation, depends_on: [TD2-1102] }
-      - { external_id: TD2-1104, summary: Lancer la refonte Front V3 séparée, depends_on: [TD2-1005, TD2-1101] }
-      - { external_id: TD2-1105, summary: Auditer et atteindre la conformité architecturale complète, depends_on: [TD2-1103, TD2-1104, TD2-ARCH-006, TD2-ARCH-007, TD2-ARCH-008, TD2-ARCH-009, TD2-ARCH-010, TD2-ARCH-011, TD2-ARCH-013, TD2-ARCH-014, TD2-PRM-008] }
+      - { external_id: TD2-1100, jira_key: TD2-134, summary: Comparer ancien et nouveau runtime, depends_on: [TD2-805, TD2-905, TD2-1005], status: Done }
+      - { external_id: TD2-1101, jira_key: TD2-135, summary: Cutover progressif par Strategy Instance, depends_on: [TD2-1100], status: Done }
+      - { external_id: TD2-1102, jira_key: TD2-136, summary: Autoriser séparément toute activation LIVE, depends_on: [TD2-1101], operator_decision: true, status: Done }
+      - { external_id: TD2-1103, jira_key: TD2-137, summary: Retirer GPT-first et legacy après observation, depends_on: [TD2-1102], status: Blocked }
+      - { external_id: TD2-1104, jira_key: TD2-165, summary: Lancer la refonte Front V3 séparée, depends_on: [TD2-1005, TD2-1101], status: Done }
+      - { external_id: TD2-1105, jira_key: TD2-139, summary: Auditer et atteindre la conformité architecturale complète, depends_on: [TD2-1103, TD2-1104, TD2-ARCH-006, TD2-ARCH-007, TD2-ARCH-008, TD2-ARCH-009, TD2-ARCH-010, TD2-ARCH-011, TD2-ARCH-012, TD2-ARCH-013, TD2-ARCH-014, TD2-PRM-008], status: Blocked }

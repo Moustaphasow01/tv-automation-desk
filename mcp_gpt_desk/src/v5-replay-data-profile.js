@@ -38,8 +38,8 @@ const DATASET_SPECS = [
   { dataset: "DXY_CL_GC_VIX_H4", symbols: ["DXY", "CL1!", "CL", "GC1!", "GC", "VIX"], timeframe: "4H", outputTimeframe: "H4", required: false, freshnessRole: "context" },
   { dataset: "indices_asie_europe", symbols: ["DAX", "DAX1!", "NKY", "NIKKEI", "NI225", "HSI", "FTSE", "CAC40", "SX5E"], timeframe: "5", outputTimeframe: "M5", required: false, freshnessRole: "context" },
   { dataset: "indices_asie_europe_H4", symbols: ["DAX", "DAX1!", "NKY", "NIKKEI", "NI225", "HSI", "FTSE", "CAC40", "SX5E"], timeframe: "4H", outputTimeframe: "H4", required: false, freshnessRole: "context" },
-  { dataset: "mega_caps_premarket", symbols: ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA"], timeframe: "5", outputTimeframe: "M5", required: false, freshnessRole: "context" },
-  { dataset: "mega_caps_premarket_H4", symbols: ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA"], timeframe: "4H", outputTimeframe: "H4", required: false, freshnessRole: "context" },
+  { dataset: "mega_caps_premarket", symbols: ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "AVGO", "TSLA", "SMH", "SOXX"], timeframe: "5", outputTimeframe: "M5", required: false, freshnessRole: "context" },
+  { dataset: "mega_caps_premarket_H4", symbols: ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "AVGO", "TSLA", "SMH", "SOXX"], timeframe: "4H", outputTimeframe: "H4", required: false, freshnessRole: "context" },
 ];
 
 export const V5_REPLAY_DATA_PROFILE = Object.freeze({

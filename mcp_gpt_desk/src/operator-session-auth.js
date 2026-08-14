@@ -78,7 +78,7 @@ function parseCookies(header) {
 
 function serializeCookie(value, baseUrl, maxAge) {
   const secure = String(baseUrl || "").startsWith("https:") ? "; Secure" : "";
-  return `${COOKIE_NAME}=${value}; Path=/api/v1; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
+  return `${COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
 }
 
 function canonicalBaseUrl(value) {

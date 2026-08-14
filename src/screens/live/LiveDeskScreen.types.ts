@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { ExecutionOverview } from "@/executionTypes";
 import type { DeskSession, TimelineEvent } from "@/types";
 
 export interface LiveTabDefinition {
@@ -20,6 +21,7 @@ export interface LiveDeskScreenProps {
   phaseLabel: string;
   refreshing: boolean;
   dataUpdatedAt: number;
+  executionOverview?: ExecutionOverview | null;
   onRefresh: () => void;
   actions: LiveDeskScreenActions;
   tabs: LiveTabDefinition[];

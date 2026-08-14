@@ -120,7 +120,7 @@ WHERE broker_provider_code = 'ninjatrader'
   AND expiry_date >= current_date;
 
 UPDATE trade_policy_profiles
-SET display_name = 'NinjaTrader Sim101 - AUTO',
+SET display_name = 'NinjaTrader Sim101 - SEMI_AUTO',
     enabled = true,
     max_contracts = $MaxContracts,
     max_daily_loss = $MaxDailyLoss,
@@ -129,8 +129,8 @@ SET display_name = 'NinjaTrader Sim101 - AUTO',
     min_reward_risk = 2,
     fallback_capital_enabled = false,
     fallback_capital = NULL,
-    execution_authority_mode = 'auto',
-    require_operator_approval = false,
+    execution_authority_mode = 'semi_auto',
+    require_operator_approval = true,
     metadata = metadata || jsonb_build_object(
       'live_forbidden', true,
       'account_name_allowlist', jsonb_build_array('Sim101'),

@@ -18,6 +18,16 @@ Rappel du raisonnement (ADR-0008, §16 de `03`) : sans consolidation de portefeu
 
 ## 2. Portfolio Arbitration Engine
 
+### Addendum TD2-700
+
+La première fondation exécutable est `portfolio_candidate_allocation_plan_v1`.
+
+- Les signaux actifs sont groupés par instrument.
+- La politique V1 est `NET_BY_DIRECTION`.
+- Une opposition parfaite produit une Candidate Allocation `FLAT` de taille `0`, statut `NEUTRALIZED`.
+- Un snapshot `virtual_strategy_portfolio_v1` agrège exposition et résultat R par `Strategy Instance`.
+- Aucun `OrderIntent` n’est produit à ce stade.
+
 ### 2.1 Entrée
 
 - Consomme les `Signal` (`05` §5.1) publiés en mode LIVE par le Live Strategy Runtime (`10`) sur le Standardized Signal Bus, ainsi que les `AI Context Advisory` associées (`12`), en lecture seule.
@@ -32,6 +42,16 @@ Rappel du raisonnement (ADR-0008, §16 de `03`) : sans consolidation de portefeu
 - `Candidate Allocation` transmise au Global Risk Engine — jamais directement à l'Execution Gateway.
 
 ## 3. Global Risk Engine
+
+### Addendum TD2-701
+
+La première fondation exécutable de budget global est `portfolio_risk_budget_evaluation_v1`.
+
+- Les budgets sont configurables par portefeuille, compte, instrument, Strategy Instance et groupe corrélé.
+- Les limites de perte journalière et hebdomadaire sont évaluées avant toute approbation.
+- Sans budget numérique, le moteur retourne `CONFIG_MISSING` et `gate.pass=false`.
+- Une allocation peut être `PASS`, `REDUCE` ou `BLOCK`.
+- La réduction calcule une taille approuvable, mais ne produit pas encore de `Target Position` broker.
 
 ### 3.1 Limites appliquées
 
@@ -48,6 +68,73 @@ Rappel du raisonnement (ADR-0008, §16 de `03`) : sans consolidation de portefeu
 - Produit une `Risk Decision` (`05` §6.2) pour chaque `Candidate Allocation` traitée, y compris celles réduites à zéro — jamais de silence sur un rejet.
 
 ## 4. Broker Netting Engine
+
+### Addendum TD2-702
+
+La fondation exécutable de netting est `portfolio_target_position_plan_v1`.
+
+- Elle consomme les Candidate Allocations et l’évaluation budgétaire.
+- Elle produit une seule Target Position par `account_id + instrument`.
+- Elle calcule `current_net_size` et `delta_size`.
+- Elle conserve les contributions par Strategy Instance.
+- Elle ne génère pas encore d’`OrderIntent`.
+
+### Addendum TD2-703
+
+La conversion exécutable Target Position → OrderIntent est `portfolio_order_intent_plan_v1`.
+
+- Elle génère uniquement des intents dérivés d’une `Target Position`.
+- Elle calcule `BUY`/`SELL`, quantité, `OPEN`/`REDUCE`/`REVERSE`/`CANCEL_REPLACE`.
+- Elle applique une idempotence par hash canonique.
+- Elle protège contre le double envoi via `existing_order_intents`.
+- Elle exige des protections broker avant `broker_submission_allowed=true`.
+- Elle reste provider-neutral et ne dépend pas directement de NinjaTrader.
+
+### Addendum TD2-704
+
+La sécurité exécution est formalisée par `portfolio_execution_reconciliation_v1`.
+
+- Redémarrage : un intent actif identique ne produit pas de nouvel ordre.
+- Concurrence : un double `idempotency_key` actif déclenche `CONTROLLED_DIVERGENCE`.
+- Fills partiels : le restant ouvert est auditable.
+- Divergence broker/desk : le desk pose `HALT_BROKER_SUBMIT`, demande snapshot provider et revue opérateur.
+
+### Addendum TD2-900
+
+La frontière provider-neutral d'exécution est `execution_provider_port_v1`.
+
+- Elle consomme des `OrderIntent` déjà autorisés.
+- Elle produit des `ExecutionProviderCommand` canoniques.
+- Elle normalise les événements broker en `broker_provider_event_v1`.
+- Elle permet de remplacer ou comparer les adapters sans modifier stratégie, risque ou netting.
+
+### Addendum TD2-706
+
+Le cockpit et le risk engine consomment `portfolio_virtual_pnl_attribution_v1`.
+
+- Le PnL virtuel est attribué par Strategy Instance.
+- La similarité réutilise les génomes TD2-507.
+- Les stratégies trop proches produisent un impact d’allocation explicite.
+- Ces projections alimentent TD2-705.
+
+### Addendum TD2-707
+
+Les contraintes prop firm sont portées par `prop_firm_account_risk_v1`.
+
+- Le trailing drawdown est calculé par compte.
+- Les limites journalières et contrats peuvent bloquer l’action.
+- Le risque peut être réduit au buffer disponible.
+- Le multi-compte reste isolé par `account_id + instrument`.
+
+### Addendum TD2-705
+
+Le cockpit transitoire `Portfolio Risk` est exposé dans le front opérateur.
+
+- `GET /api/v1/portfolio-risk/overview` lit les sources réelles `execution`, `strategy-v2` et `performance`.
+- La vue globale montre santé, comptes, exposition nette, contrôles, concentration stratégie, intentions et réconciliations.
+- Chaque section ouvre une route de zoom dédiée sous `/operations/portfolio-risk/<section>`.
+- Les actions sensibles restent contrôlées : le cockpit ouvre la console d’exécution mais ne publie aucune écriture portefeuille.
+- En cas de source indisponible, la projection passe en état partiel et affiche l’erreur au lieu de masquer ou remplacer la donnée.
 
 ### 4.1 Rôle
 
@@ -69,7 +156,8 @@ flowchart LR
     GRE --> RD["Risk Decision (approved_size <= proposed_size)"]
     RD --> BNE["Broker Netting Engine"]
     BNE --> TP["Target Position (clé d'agrégation prouvée, ADR-0003)"]
-    TP --> EG["Execution Gateway (13)"]
+    TP --> OI["OrderIntent provider-neutral"]
+    OI --> EG["Execution Gateway (13)"]
 ```
 
 ## 6. Arborescence indicative (non engagée)

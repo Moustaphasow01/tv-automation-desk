@@ -59,6 +59,7 @@ const SESSION_LABELS: Record<string, string> = {
   "NY Open": "Session New York",
   asia_open: "Session Asie",
   ny_open: "Session New York",
+  ny_open_1530: "Plan New York 15:30",
   full_day: "Journée continue",
 };
 

@@ -79,7 +79,7 @@ export default function IncidentsPage() {
       subtitle="Alertes, erreurs et guardrails matérialisés avec evidence, ownership et timeline."
       backTo="/operations"
       actions={<button className="secondary-btn" onClick={() => sync.mutate()} disabled={sync.isPending}><Icon name="refresh" size={14}/>{sync.isPending ? "Sync…" : "Évaluer guardrails"}</button>}
-      tabs={<PageTabs items={[{ label: "Cockpit", to: "/operations", end: true }, { label: "Observabilité", to: "/operations/observability" }, { label: "Incidents", to: "/operations/incidents" }, { label: "Notifications", to: "/operations/notifications" }, { label: "Runbooks", to: "/operations/runbooks" }]}/>}
+      tabs={<PageTabs items={[{ label: "Cockpit", to: "/operations", end: true }, { label: "Agents IA", to: "/operations/agents" }, { label: "AI Context", to: "/operations/ai-context" }, { label: "Portfolio Risk", to: "/operations/portfolio-risk" }, { label: "Observabilité", to: "/operations/observability" }, { label: "Incidents", to: "/operations/incidents" }, { label: "Notifications", to: "/operations/notifications" }, { label: "Runbooks", to: "/operations/runbooks" }]}/>}
     />
 
     <div className="metric-grid metric-grid--compact incident-command-kpis">
@@ -169,7 +169,7 @@ export function IncidentZoomPage() {
       subtitle={incident.message || "Incident sans message complémentaire"}
       backTo={returnTo}
       actions={<><Link className="secondary-btn" to={returnTo}>Retour au ledger</Link><StatusTag status={incident.lifecycleStatus}/></>}
-      tabs={<PageTabs items={[{ label: "Cockpit", to: "/operations", end: true }, { label: "Observabilité", to: "/operations/observability" }, { label: "Incidents", to: "/operations/incidents" }, { label: "Notifications", to: "/operations/notifications" }, { label: "Runbooks", to: "/operations/runbooks" }]}/>}
+      tabs={<PageTabs items={[{ label: "Cockpit", to: "/operations", end: true }, { label: "Agents IA", to: "/operations/agents" }, { label: "AI Context", to: "/operations/ai-context" }, { label: "Portfolio Risk", to: "/operations/portfolio-risk" }, { label: "Observabilité", to: "/operations/observability" }, { label: "Incidents", to: "/operations/incidents" }, { label: "Notifications", to: "/operations/notifications" }, { label: "Runbooks", to: "/operations/runbooks" }]}/>}
     />
     <div className="metric-grid metric-grid--compact incident-command-kpis incident-zoom-kpis">
       <Card className="metric-card" data-tone={incident.severity === "critical" ? "negative" : "warning"}><span>Sévérité</span><strong>{severityLabel(incident.severity)}</strong><small>{kindLabel(incident.kind)}</small></Card>

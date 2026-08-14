@@ -1,0 +1,65 @@
+{
+  "schema": "desk_architecture_scorecard_v1",
+  "updated_at_utc": "2026-08-09T02:16:00.000Z",
+  "p_minus_1": {
+    "total_tickets": 16,
+    "done_tickets": 16,
+    "done_external_ids": [
+      "TD2-ARCH-001",
+      "TD2-ARCH-002",
+      "TD2-ARCH-003",
+      "TD2-ARCH-004",
+      "TD2-ARCH-005",
+      "TD2-ARCH-006",
+      "TD2-ARCH-007",
+      "TD2-ARCH-008",
+      "TD2-ARCH-009",
+      "TD2-ARCH-010",
+      "TD2-ARCH-011",
+      "TD2-ARCH-012",
+      "TD2-ARCH-013",
+      "TD2-ARCH-014",
+      "TD2-ARCH-015",
+      "TD2-ARCH-016"
+    ]
+  },
+  "exceptions": {
+    "active": 3,
+    "next_expiration": "2026-12-31",
+    "final_gate": "zero_active_exceptions"
+  },
+  "static_quality": {
+    "aggregate_budgets": {
+      "oversized_function_count": 243,
+      "high_complexity_function_count": 592,
+      "duplicate_block_count": 50,
+      "possibly_dead_file_count": 14
+    }
+  },
+  "required_scripts": [
+    "guard:architecture",
+    "guard:architecture:test",
+    "guard:static-quality",
+    "guard:static-quality:test",
+    "guard:exceptions",
+    "guard:exceptions:test",
+    "guard:architecture-scorecard",
+    "guard:architecture-scorecard:test",
+    "guard:pr-governance",
+    "guard:pr-governance:test",
+    "guard:security-supply-chain",
+    "guard:security-supply-chain:test",
+    "guard:jira-backlog-sync",
+    "guard:sql-migrations",
+    "guard:sql-migrations:test",
+    "guard:problem-details",
+    "guard:problem-details:test",
+    "guard:runtime-safety",
+    "guard:runtime-safety:test",
+    "guard:mcp-slices",
+    "guard:mcp-slices:test",
+    "guard:front-architecture",
+    "guard:front-architecture:test",
+    "certify:resilience"
+  ]
+}

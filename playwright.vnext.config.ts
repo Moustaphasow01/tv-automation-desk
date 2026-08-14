@@ -1,0 +1,21 @@
+import { defineConfig } from "@playwright/test";
+
+export default defineConfig({
+  testDir: "./e2e",
+  testMatch: "control-plane-v2.spec.ts",
+  outputDir: "./output/playwright/control-plane-v2",
+  fullyParallel: false,
+  workers: 1,
+  retries: 0,
+  timeout: 90_000,
+  expect: { timeout: 30_000 },
+  reporter: [["list"]],
+  use: {
+    baseURL: process.env.DESK_VNEXT_BASE_URL || "http://127.0.0.1:8091",
+    browserName: "chromium",
+    serviceWorkers: "block",
+    viewport: { width: 1792, height: 1024 },
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure"
+  }
+});

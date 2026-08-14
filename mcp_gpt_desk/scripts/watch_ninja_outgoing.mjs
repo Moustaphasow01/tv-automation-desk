@@ -19,6 +19,7 @@ const statePath = path.resolve(process.env.DESK_NINJA_WATCHER_STATE || path.join
 const pollMs = Math.max(1_000, Math.min(Number(process.env.DESK_NINJA_OUTGOING_POLL_MS) || 2_000, 60_000));
 const exchanges = csv(process.env.DESK_NINJA_EXCHANGES || "Globex,CME,NYMEX,COMEX,CBOT");
 const reconciliationEnabled = args.has("--reconcile") || process.env.DESK_NINJA_RECONCILE_ENABLED === "true";
+const reconciliationMode = String(process.env.DESK_BROKER_RECONCILIATION_MODE || "alert_only").toLowerCase();
 
 assertSafeObserver();
 
@@ -101,7 +102,14 @@ async function scanOnce() {
     const positions = parsedFiles
       .filter((item) => item.parsed.kind === "position")
       .map((item) => ({ instrument: item.parsed.instrument, market_position: item.parsed.market_position, quantity: item.parsed.market_position === "FLAT" ? 0 : item.parsed.quantity, average_entry_price: item.parsed.average_entry_price }));
-    reconciliation = await post("/execution/bridge/reconcile", { bridgeId, brokerAccountId, brokerSnapshot: { orders, positions, account: { account_name: accountName } } });
+    reconciliation = await post("/execution/bridge/reconcile", {
+      bridgeId,
+      brokerAccountId,
+      reconciliationMode,
+      triggeredBy: "scheduled",
+      operatorConfirmation: process.env.DESK_BROKER_RECONCILIATION_CONFIRMATION || undefined,
+      brokerSnapshot: { orders, positions, account: { account_name: accountName } },
+    });
   }
   await saveState(next);
   return { ok: true, submitted: false, writesToNinjaTrader: false, scanned: parsedFiles.length, eventsPersisted, ninjaConnected, reconciliation: reconciliation?.reconciliation?.status || null };

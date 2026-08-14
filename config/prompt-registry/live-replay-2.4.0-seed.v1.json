@@ -1,0 +1,124 @@
+{
+  "schema_version": "desk_prompt_registry_seed_v1",
+  "generated_for_ticket": "TD2-PRM-005",
+  "generated_at_utc": "2026-08-09T00:00:00.000Z",
+  "parity_mode": "BYTE_EXACT_SOURCE",
+  "entries": [
+    {
+      "lane": "live",
+      "runtime_stack": "LIVE_V5_4_V2_4",
+      "prompt_definition": {
+        "prompt_definition_id": "11000000-0000-4000-8000-000000000001",
+        "prompt_key": "CHATGPT_LIVE_WORKER_FALLBACK",
+        "display_name": "ChatGPT Live Worker Fallback",
+        "mission_key": "LIVE_CONTEXT_DECISION",
+        "output_contract": "DeskMasterAnalysisContract_v5_4_0+DeskHourlyThesisMonitorContract_v2_4_0",
+        "owner_role": "agents"
+      },
+      "prompt_version": {
+        "prompt_version_id": "11000000-0000-4000-8000-000000000101",
+        "semantic_version": "2.4.0",
+        "status": "PUBLISHED",
+        "source_path": "docs/CHATGPT_LIVE_WORKER_PROMPT.md",
+        "content_sha256": "sha256:58805173a2a0f7db96cfc4c8ed0ad213b4a2d74045990f9ee151255730fa4ffd",
+        "published_at_utc": "2026-08-09T00:00:00.000Z",
+        "variables_schema": {
+          "required": ["WORKER_ID"],
+          "properties": {
+            "WORKER_ID": { "type": "string" }
+          }
+        }
+      },
+      "composition": {
+        "prompt_composition_id": "11000000-0000-4000-8000-000000000201",
+        "composition_key": "chatgpt-live-worker-fallback-2.4.0",
+        "status": "PUBLISHED",
+        "environment": "preprod",
+        "render_mode": "RAW_FILE_PARITY",
+        "rendered_sha256": "sha256:58805173a2a0f7db96cfc4c8ed0ad213b4a2d74045990f9ee151255730fa4ffd",
+        "published_at_utc": "2026-08-09T00:00:00.000Z",
+        "items": [
+          {
+            "prompt_composition_item_id": "11000000-0000-4000-8000-000000000301",
+            "ordinal": 1,
+            "item_kind": "PROMPT",
+            "item_key": "legacy-live-worker-template",
+            "source_path": "docs/CHATGPT_LIVE_WORKER_PROMPT.md",
+            "content_sha256": "sha256:58805173a2a0f7db96cfc4c8ed0ad213b4a2d74045990f9ee151255730fa4ffd"
+          }
+        ]
+      },
+      "binding": {
+        "agent_prompt_binding_id": "11000000-0000-4000-8000-000000000401",
+        "binding_key": "chatgpt-live-worker-fallback-preprod",
+        "agent_role": "CHATGPT_LIVE_WORKER",
+        "mission_key": "LIVE_CONTEXT_DECISION",
+        "lane": "live",
+        "environment": "preprod",
+        "prompt_composition_id": "11000000-0000-4000-8000-000000000201",
+        "last_known_good_composition_id": "11000000-0000-4000-8000-000000000201",
+        "deployment_stage": "ACTIVE",
+        "canary_weight_pct": 0,
+        "valid_from_utc": "2026-08-09T00:00:00.000Z"
+      }
+    },
+    {
+      "lane": "replay",
+      "runtime_stack": "REPLAY_V5_4_V2_4",
+      "prompt_definition": {
+        "prompt_definition_id": "11000000-0000-4000-8000-000000000002",
+        "prompt_key": "CHATGPT_REPLAY_WORKER_FALLBACK",
+        "display_name": "ChatGPT Replay Worker Fallback",
+        "mission_key": "REPLAY_AUTOPILOT_CYCLE",
+        "output_contract": "DeskMasterAnalysisContract_v5_4_0+DeskHourlyThesisMonitorContract_v2_4_0",
+        "owner_role": "agents"
+      },
+      "prompt_version": {
+        "prompt_version_id": "11000000-0000-4000-8000-000000000102",
+        "semantic_version": "2.4.0",
+        "status": "PUBLISHED",
+        "source_path": "docs/CHATGPT_REPLAY_WORKER_PROMPT.md",
+        "content_sha256": "sha256:79b9648bd9b2388e55e759aa60e15b7ecd492907f98856a066cde52cfd1558f2",
+        "published_at_utc": "2026-08-09T00:00:00.000Z",
+        "variables_schema": {
+          "required": ["WORKER_ID"],
+          "properties": {
+            "WORKER_ID": { "type": "string" }
+          }
+        }
+      },
+      "composition": {
+        "prompt_composition_id": "11000000-0000-4000-8000-000000000202",
+        "composition_key": "chatgpt-replay-worker-fallback-2.4.0",
+        "status": "PUBLISHED",
+        "environment": "preprod",
+        "render_mode": "RAW_FILE_PARITY",
+        "rendered_sha256": "sha256:79b9648bd9b2388e55e759aa60e15b7ecd492907f98856a066cde52cfd1558f2",
+        "published_at_utc": "2026-08-09T00:00:00.000Z",
+        "items": [
+          {
+            "prompt_composition_item_id": "11000000-0000-4000-8000-000000000302",
+            "ordinal": 1,
+            "item_kind": "PROMPT",
+            "item_key": "legacy-replay-worker-template",
+            "source_path": "docs/CHATGPT_REPLAY_WORKER_PROMPT.md",
+            "content_sha256": "sha256:79b9648bd9b2388e55e759aa60e15b7ecd492907f98856a066cde52cfd1558f2"
+          }
+        ]
+      },
+      "binding": {
+        "agent_prompt_binding_id": "11000000-0000-4000-8000-000000000402",
+        "binding_key": "chatgpt-replay-worker-fallback-preprod",
+        "agent_role": "CHATGPT_REPLAY_WORKER",
+        "mission_key": "REPLAY_AUTOPILOT_CYCLE",
+        "lane": "replay",
+        "environment": "preprod",
+        "prompt_composition_id": "11000000-0000-4000-8000-000000000202",
+        "last_known_good_composition_id": "11000000-0000-4000-8000-000000000202",
+        "deployment_stage": "ACTIVE",
+        "canary_weight_pct": 0,
+        "valid_from_utc": "2026-08-09T00:00:00.000Z"
+      }
+    }
+  ]
+}

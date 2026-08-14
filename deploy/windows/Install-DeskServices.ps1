@@ -63,6 +63,7 @@ $replacements = [ordered]@{
     "__CODEX_EXE__" = $CodexExecutable
     "__CODEX_HOME__" = $codexHome
     "__AI_WORKER_MODE__" = $AiWorkerMode
+    "__AGENT_SUPERVISOR_MODE__" = "shadow"
 }
 
 $templates = @(
@@ -71,6 +72,8 @@ $templates = @(
     "DeskReplayPreparation",
     "DeskBrokerManagement",
     "DeskTelegram",
+    "DeskAgentRuntimeSupervisor",
+    "DeskAgentRuntimeResearch",
     "DeskCodexLive01",
     "DeskCodexLive02",
     "DeskCodexReplay01",
@@ -98,6 +101,8 @@ if ($KeepAiWorkersDisabled) {
         "DeskFuturesLiveRuntime",
         "DeskFuturesReplayPreparation",
         "DeskFuturesBrokerManagement",
+        "DeskFuturesAgentRuntimeSupervisor",
+        "DeskFuturesAgentRuntimeResearch",
         "DeskFuturesCodexLive02",
         "DeskFuturesCodexReplay01"
     )) {

@@ -51,14 +51,14 @@ try {
     const tickStarted = Date.now();
     try {
       const outcome = await runDueWork(new Date());
-      const macroDegraded = outcome.macro_calendar
-        && !["READY", "DISABLED"].includes(outcome.macro_calendar.status);
+      const macroBlocking = macroCalendarBlocksRuntime(outcome.macro_calendar);
+      const macroWarning = macroCalendarWarnsOnly(outcome.macro_calendar);
       const newsDegraded = outcome.news
         && !["READY", "DISABLED"].includes(outcome.news.status);
       // Editorial news is an optional, last-known-capable dependency. A provider
       // throttle must remain visible without taking the live scheduler out of
       // service while prices, packs and the macro calendar are ready.
-      await heartbeat(outcome.data_state === "data_not_ready" || macroDegraded ? "degraded" : "healthy", {
+      await heartbeat(outcome.data_state === "data_not_ready" || macroBlocking ? "degraded" : "healthy", {
         last_engine_key: lastEngineM1Key || null,
         last_gpt_key: lastGptMonitorKey || null,
         engine_cadence_seconds: DETERMINISTIC_ENGINE_CADENCE_SECONDS,
@@ -71,7 +71,10 @@ try {
         live_prewarm: outcome.live_prewarm || null,
         macro_calendar: outcome.macro_calendar || null,
         news: outcome.news || null,
-        optional_dependency_warnings: newsDegraded ? ["news_provider_degraded"] : [],
+        optional_dependency_warnings: [
+          ...(macroWarning ? ["macro_calendar_provider_degraded_cached_coverage_ready"] : []),
+          ...(newsDegraded ? ["news_provider_degraded"] : []),
+        ],
         cycle_ms: Date.now() - tickStarted,
       });
     } catch (error) {
@@ -144,58 +147,42 @@ async function runDueWork(now) {
     lastGptMonitorAttemptKey = gptMonitorKey;
     lastGptMonitorAttemptAt = nowMs;
     try {
-      const pack = await store.buildAndPublishLiveRollingPack({
-        date: tradingDate,
-        session,
-        checkpoint_paris: gptCheckpointParis,
-      });
-      log("live_pack_ready", { session, trading_date: tradingDate, checkpoint_paris: gptCheckpointParis, cadence: GPT_MONITOR_CADENCE_VALUE, pack_build_id: pack?.pack_build_id || null });
-      lastGptMonitorKey = gptMonitorKey;
-    } catch (error) {
-      if (!isDataNotReady(error)) throw error;
-      dataBlocker = error.code || String(error.message || error).split(":")[0];
-      log("live_pack_data_not_ready", { session, trading_date: tradingDate, checkpoint_paris: gptCheckpointParis, cadence: GPT_MONITOR_CADENCE_VALUE, code: dataBlocker });
-    }
-  } else if (gptMonitorKey !== lastGptMonitorKey) {
-    dataBlocker = "LIVE_PACK_RETRY_WAIT";
-  }
-
-  if (gptMonitorKey === lastGptMonitorKey && gptMonitorKey !== lastPrewarmKey) {
-    try {
       const prewarm = await store.prewarmNextLiveWork({ trading_date: tradingDate });
-      lastPrewarmOutcome = {
-        status: prewarm.status,
-        workflow: prewarm.workflow || null,
-        checkpoint: prewarm.checkpoint || null,
-        target_checkpoint: prewarm.target_checkpoint || null,
-        bundle_id: prewarm.bundle_id || null,
-        reason: prewarm.reason || null,
-      };
-      if (prewarm.status !== "PREWARM_DATA_NOT_READY") {
-        lastPrewarmKey = gptMonitorKey;
-      }
+      lastPrewarmOutcome = projectPrewarmOutcome(prewarm);
       log("live_work_prewarm", {
         session,
         trading_date: tradingDate,
         checkpoint_paris: gptCheckpointParis,
         ...lastPrewarmOutcome,
       });
+      if (prewarm.status === "PREWARM_DATA_NOT_READY") {
+        dataBlocker = prewarm.error?.code
+          || prewarm.data_quality?.blocker_code
+          || prewarm.reason
+          || "LIVE_PACK_DATA_NOT_READY";
+      } else {
+        // A non-due checkpoint (for example 00:00 before the 00:15 Master) is
+        // healthy idle time, not a data outage. The live cursor owns the actual
+        // due/claim rules; the scheduler only materializes the next eligible
+        // work item.
+        lastGptMonitorKey = gptMonitorKey;
+        lastPrewarmKey = gptMonitorKey;
+      }
     } catch (error) {
+      if (!isDataNotReady(error)) throw error;
+      dataBlocker = error.code || String(error.message || error).split(":")[0];
       lastPrewarmOutcome = {
-        status: "FAILED",
+        status: "PREWARM_DATA_NOT_READY",
         workflow: null,
         checkpoint: gptCheckpointParis,
         target_checkpoint: gptCheckpointParis,
         bundle_id: null,
-        reason: error.code || error.message || String(error),
+        reason: dataBlocker,
       };
-      log("live_work_prewarm_failed", {
-        session,
-        trading_date: tradingDate,
-        checkpoint_paris: gptCheckpointParis,
-        error: lastPrewarmOutcome.reason,
-      });
+      log("live_work_prewarm_data_not_ready", { session, trading_date: tradingDate, checkpoint_paris: gptCheckpointParis, cadence: GPT_MONITOR_CADENCE_VALUE, code: dataBlocker });
     }
+  } else if (gptMonitorKey !== lastGptMonitorKey) {
+    dataBlocker = "LIVE_PACK_RETRY_WAIT";
   }
 
   if (engineM1Key !== lastEngineM1Key) {
@@ -363,6 +350,32 @@ function isDataNotReady(error) {
     "LOCAL_PACK_CORE_DATASET_STALE",
     "LIVE_ROLLING_PACK_COVERAGE_INSUFFICIENT",
   ].includes(error?.code || String(error?.message || error).split(":")[0]);
+}
+
+function macroCalendarBlocksRuntime(macroCalendar) {
+  if (!macroCalendar || ["READY", "DISABLED"].includes(macroCalendar.status)) return false;
+  if (macroCalendar.next_trading_date_ready === true
+    && Array.isArray(macroCalendar.missing_required_dates)
+    && macroCalendar.missing_required_dates.length === 0) {
+    return false;
+  }
+  return true;
+}
+
+function macroCalendarWarnsOnly(macroCalendar) {
+  if (!macroCalendar || ["READY", "DISABLED"].includes(macroCalendar.status)) return false;
+  return !macroCalendarBlocksRuntime(macroCalendar);
+}
+
+function projectPrewarmOutcome(prewarm = {}) {
+  return {
+    status: prewarm.status || null,
+    workflow: prewarm.workflow || null,
+    checkpoint: prewarm.checkpoint || null,
+    target_checkpoint: prewarm.target_checkpoint || null,
+    bundle_id: prewarm.bundle_id || null,
+    reason: prewarm.reason || prewarm.error?.code || null,
+  };
 }
 
 function boundedNumber(value, fallback, minimum, maximum) {

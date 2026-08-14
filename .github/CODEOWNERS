@@ -1,0 +1,32 @@
+# Trading Desk — logical module ownership map
+#
+# Owners use logical GitHub teams. During organization setup, create or map these
+# teams to the real humans responsible for each bounded context.
+#
+# The file is intentionally broad: every architectural surface touched by a PR
+# must make its owner visible before review.
+
+* @trading-desk/platform
+
+/AGENTS.md @trading-desk/architecture
+/docs/engineering/ @trading-desk/architecture
+/docs/trading-desk-target-blueprint/ @trading-desk/architecture
+/.github/ @trading-desk/architecture
+
+/packages/desk-domain/ @trading-desk/execution @trading-desk/portfolio-risk
+/packages/desk-replay-engine/ @trading-desk/simulation
+/packages/desk-contracts/ @trading-desk/strategy @trading-desk/agents
+/packages/desk-audit/ @trading-desk/audit
+/packages/desk-time/ @trading-desk/platform
+
+/mcp_gpt_desk/ @trading-desk/legacy-mcp-host @trading-desk/architecture
+/src/ @trading-desk/reporting
+/public/ @trading-desk/reporting
+/e2e/ @trading-desk/reporting @trading-desk/operations
+
+/scripts/ @trading-desk/platform @trading-desk/operations
+/config/ @trading-desk/platform
+/deploy/ @trading-desk/operations
+/infra/ @trading-desk/operations
+/integrations/ @trading-desk/execution @trading-desk/market-data
+/tradingview/ @trading-desk/market-data

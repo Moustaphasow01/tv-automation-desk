@@ -14,7 +14,17 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - run: npm ci
+      - run: npm run test:uiux-rules
+      - run: npm run audit:uiux:report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-ux-static-audit
+          path: reports/ui-ux/front-v2-static-audit.json
       - run: npm run typecheck
       - run: npm run build
       - run: npm run test:react

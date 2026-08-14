@@ -31,6 +31,8 @@ foreach ($serviceName in @(
     "DeskFuturesLiveRuntime",
     "DeskFuturesReplayPreparation",
     "DeskFuturesBrokerManagement",
+    "DeskFuturesAgentRuntimeSupervisor",
+    "DeskFuturesAgentRuntimeResearch",
     "DeskFuturesCodexLive01",
     "DeskFuturesCodexLive02",
     "DeskFuturesCodexReplay01"

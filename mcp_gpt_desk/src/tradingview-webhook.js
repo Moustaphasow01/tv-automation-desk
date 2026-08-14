@@ -74,6 +74,7 @@ function normalizePayload(raw) {
     symbol: canonicalSymbol(raw.symbol ?? raw.sym ?? raw.ticker),
     timeframe: canonicalTimeframe(raw.timeframe ?? raw.tf ?? raw.interval ?? raw.resolution),
     timestamp_utc: canonicalUtc(raw.timestamp_utc ?? raw.ts ?? raw.timestamp ?? raw.time),
+    source: stringOrNull(raw.source ?? raw.source_kind ?? raw.source_mode),
     bar_status: String(raw.bar_status || (raw.confirmed === false ? "open" : "closed")).toLowerCase(),
     open: number(raw.open ?? price.open ?? price.o),
     high: number(raw.high ?? price.high ?? price.h),
@@ -105,6 +106,7 @@ function canonicalCandle(candle, { now, requestIp, environment }) {
   const timestamp = new Date(candle.timestamp_utc);
   const base = {
     schema_version: "market-candle-v2",
+    source: candle.source,
     environment,
     provider: "tradingview",
     source_service: "local_tradingview_webhook",
@@ -126,6 +128,7 @@ function canonicalCandle(candle, { now, requestIp, environment }) {
   };
   const feed = {
     schema_version: "market-feed-v2",
+    source: candle.source,
     environment,
     provider: "tradingview",
     source_service: "local_tradingview_webhook",
@@ -141,6 +144,7 @@ function canonicalCandle(candle, { now, requestIp, environment }) {
   };
   const event = {
     event_id: eventId,
+    source: candle.source,
     received_at_utc: now.toISOString(),
     endpoint: "/api/v1/webhooks/tradingview",
     client_ip: requestIp,
@@ -162,6 +166,10 @@ function canonicalCandle(candle, { now, requestIp, environment }) {
     ],
     result: { market_feed_id: feedId, market_feed_candle_id: candleId, event_id: eventId },
   };
+}
+
+function stringOrNull(value) {
+  return value === null || value === undefined || value === "" ? null : String(value).trim();
 }
 
 function validateFreshness(candle, now, options) {

@@ -18,6 +18,31 @@
 | `generated_at` / `expires_at` | timestamp | oui | Fenêtre de validité |
 | `correlation_id` | string | oui | Traçabilité |
 
+## Transport outbox PostgreSQL — TD2-601
+
+Le `Signal` est transporté par la table canonique `strategy_signal_outbox`.
+
+Principes obligatoires :
+
+- `strategy_signal_outbox.dedupe_key` est unique et rend l’émission rejouable sans doublon aval.
+- `strategy_signal_outbox.payload_hash` scelle le payload event-envelope publié.
+- `pg_notify('desk_strategy_signal_ready', ...)` accélère le réveil des consommateurs.
+- Le polling `status='pending' AND expires_at_utc > now()` reste le fallback obligatoire si la notification PostgreSQL est perdue.
+- Le consommateur marque l’item `consumed` après traitement. Il ne modifie pas le signal d’origine.
+
+La notification n’est donc pas la vérité métier : elle est seulement un accélérateur. La vérité durable est l’outbox PostgreSQL.
+
+## Projection front transitoire — TD2-604
+
+Le front opérateur lit le Signal Bus via `GET /api/v1/strategy-v2/signals`.
+
+Règles :
+
+- le front peut afficher les signaux en attente et leur fenêtre de validité ;
+- le front peut marquer un item comme consommé via `POST /api/v1/strategy-v2/signals/{signalOutboxId}/actions` avec `action="consume"` ;
+- le front ne publie jamais de nouveau signal ;
+- un signal expiré ou consommé ne doit pas être réinventé par l’interface.
+
 ## Exemple JSON
 
 ```json

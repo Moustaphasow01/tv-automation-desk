@@ -1,0 +1,117 @@
+{
+  "schema": "desk_sql_migration_policy_v1",
+  "migration_directory": "infra/postgres/init",
+  "filename_pattern": "^\\d{3}_[a-z0-9_]+\\.sql$",
+  "owner_rules": [
+    {
+      "owner": "platform",
+      "patterns": [
+        "^desk_documents$",
+        "^desk_document_links$",
+        "^desk_pack_objects$",
+        "^desk_runtime_migrations$",
+        "^desk_schema_migrations$",
+        "^desk_service_heartbeats$"
+      ]
+    },
+    {
+      "owner": "market-data",
+      "patterns": [
+        "^market_",
+        "^tradingview_",
+        "^desk_import_",
+        "^desk_document_quarantine$",
+        "^news_",
+        "^data_sources$",
+        "^ingestion_batches$",
+        "^datasets$",
+        "^dataset_"
+      ]
+    },
+    {
+      "owner": "execution",
+      "patterns": [
+        "^broker_",
+        "^human_execution_",
+        "^trade_",
+        "^trades$"
+      ]
+    },
+    {
+      "owner": "strategy",
+      "patterns": [
+        "^strategy_",
+        "^desk_strategy_"
+      ]
+    },
+    {
+      "owner": "features",
+      "patterns": [
+        "^feature_"
+      ]
+    },
+    {
+      "owner": "simulation",
+      "patterns": [
+        "^simulation_"
+      ]
+    },
+    {
+      "owner": "research",
+      "patterns": [
+        "^research_"
+      ]
+    },
+    {
+      "owner": "portfolio-risk",
+      "patterns": [
+        "^portfolio_"
+      ]
+    },
+    {
+      "owner": "operations",
+      "patterns": [
+        "^desk_backup_",
+        "^desk_maintenance_",
+        "^desk_deployment_",
+        "^telegram_"
+      ]
+    },
+    {
+      "owner": "agents",
+      "patterns": [
+        "^agents$",
+        "^agent_missions$",
+        "^agent_conversations$",
+        "^agent_tasks$",
+        "^agent_task_leases$",
+        "^agent_events$",
+        "^agent_execution_policy_snapshots$",
+        "^agent_task_dead_letters$",
+        "^agent_task_run_metrics$",
+        "^prompt_",
+        "^instruction_",
+        "^agent_prompt_"
+      ]
+    },
+    {
+      "owner": "ai-context",
+      "patterns": [
+        "^ai_context_"
+      ]
+    }
+  ],
+  "allowed_destructive_statements": [
+    {
+      "file": "007_remove_legacy_v4.sql",
+      "starts_with": "DELETE FROM desk_documents",
+      "reason": "Legacy V4 desk_cross_asset_deltas data cleanup approved before immutable pack cutover."
+    }
+  ],
+  "destructive_operations": [
+    "DROP TABLE",
+    "DROP COLUMN",
+    "TRUNCATE",
+    "DELETE FROM"
+  ]
+}

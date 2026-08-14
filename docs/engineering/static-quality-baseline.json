@@ -1,0 +1,391 @@
+{
+  "schema": "desk_static_quality_baseline_v1",
+  "generated_at_utc": "2026-08-14T09:32:07.495Z",
+  "source": "npm run guard:static-quality -- --print-baseline",
+  "standards": {
+    "max_file_lines": 600,
+    "max_function_lines": 60,
+    "max_cyclomatic_complexity": 15,
+    "duplicate_window_lines": 12
+  },
+  "aggregate_budgets": {
+    "oversized_function_count": 250,
+    "high_complexity_function_count": 650,
+    "duplicate_block_count": 72,
+    "possibly_dead_file_count": 17
+  },
+  "file_line_budgets": {
+    "mcp_gpt_desk/src/analytical-journey.js": 806,
+    "mcp_gpt_desk/src/broker-execution-repository.js": 1384,
+    "mcp_gpt_desk/src/broker-execution-service.js": 1197,
+    "mcp_gpt_desk/src/canonical-strategy-runtime.js": 705,
+    "mcp_gpt_desk/src/codex-exec-adapter.js": 1221,
+    "mcp_gpt_desk/src/data-foundation-repository.js": 750,
+    "mcp_gpt_desk/src/desk-ai-worker-envelope.js": 1873,
+    "mcp_gpt_desk/src/desk-ai-worker-service.js": 2595,
+    "mcp_gpt_desk/src/desk-contract-service.js": 605,
+    "mcp_gpt_desk/src/desk-live-bundle-algorithms.js": 1170,
+    "mcp_gpt_desk/src/desk-market-feature-algorithms.js": 1345,
+    "mcp_gpt_desk/src/desk-pack-service.js": 758,
+    "mcp_gpt_desk/src/desk-replay-orchestration-algorithms.js": 3025,
+    "mcp_gpt_desk/src/desk-replay-service.js": 2084,
+    "mcp_gpt_desk/src/desk-state-algorithms.js": 1011,
+    "mcp_gpt_desk/src/desk-strategy-audit-algorithms.js": 2164,
+    "mcp_gpt_desk/src/front-api-openapi.js": 752,
+    "mcp_gpt_desk/src/front-control-plane-api.js": 2299,
+    "mcp_gpt_desk/src/front-operations-api.js": 727,
+    "mcp_gpt_desk/src/front-operations-service.js": 4812,
+    "mcp_gpt_desk/src/front-session-projection.js": 1659,
+    "mcp_gpt_desk/src/legacy-compatibility-adapter.js": 1210,
+    "mcp_gpt_desk/src/live-cursor.js": 1041,
+    "mcp_gpt_desk/src/live-paper-execution.js": 977,
+    "mcp_gpt_desk/src/local-pack-builder.js": 757,
+    "mcp_gpt_desk/src/macro-calendar-service.js": 955,
+    "mcp_gpt_desk/src/news-ingestion-service.js": 803,
+    "mcp_gpt_desk/src/persistence/postgres-desk-persistence.js": 2177,
+    "mcp_gpt_desk/src/position-continuity-engine.js": 962,
+    "mcp_gpt_desk/src/replay-bundle-view.js": 839,
+    "mcp_gpt_desk/src/replay-continuity.js": 1922,
+    "mcp_gpt_desk/src/replay-preparation-service.js": 603,
+    "mcp_gpt_desk/src/schemas.js": 1363,
+    "mcp_gpt_desk/src/server.js": 1159,
+    "mcp_gpt_desk/src/store.js": 2484,
+    "mcp_gpt_desk/src/telegram-alert-service.js": 879,
+    "mcp_gpt_desk/src/tools.js": 2547,
+    "mcp_gpt_desk/src/tradingview-m1-backfill-importer.js": 824,
+    "packages/desk-domain/src/deterministic-compilers-v1.js": 1323,
+    "packages/desk-domain/src/deterministic-predicate-registry-v1.js": 996,
+    "packages/desk-domain/src/strategy-dsl-compiler-v1.js": 624,
+    "packages/desk-replay-engine/src/canonical-simulation-engine-v1.js": 881,
+    "src/operationsTypes.ts": 1290,
+    "src/styles/v2.css": 1006
+  },
+  "top_legacy_hotspots": {
+    "largest_files": [
+      {
+        "path": "mcp_gpt_desk/src/front-operations-service.js",
+        "lines": 4812
+      },
+      {
+        "path": "mcp_gpt_desk/src/desk-replay-orchestration-algorithms.js",
+        "lines": 3025
+      },
+      {
+        "path": "mcp_gpt_desk/src/desk-ai-worker-service.js",
+        "lines": 2595
+      },
+      {
+        "path": "mcp_gpt_desk/src/tools.js",
+        "lines": 2547
+      },
+      {
+        "path": "mcp_gpt_desk/src/store.js",
+        "lines": 2484
+      },
+      {
+        "path": "mcp_gpt_desk/src/front-control-plane-api.js",
+        "lines": 2299
+      },
+      {
+        "path": "mcp_gpt_desk/src/persistence/postgres-desk-persistence.js",
+        "lines": 2177
+      },
+      {
+        "path": "mcp_gpt_desk/src/desk-strategy-audit-algorithms.js",
+        "lines": 2164
+      },
+      {
+        "path": "mcp_gpt_desk/src/desk-replay-service.js",
+        "lines": 2084
+      },
+      {
+        "path": "mcp_gpt_desk/src/replay-continuity.js",
+        "lines": 1922
+      },
+      {
+        "path": "mcp_gpt_desk/src/desk-ai-worker-envelope.js",
+        "lines": 1873
+      },
+      {
+        "path": "mcp_gpt_desk/src/front-session-projection.js",
+        "lines": 1659
+      },
+      {
+        "path": "mcp_gpt_desk/src/broker-execution-repository.js",
+        "lines": 1384
+      },
+      {
+        "path": "mcp_gpt_desk/src/schemas.js",
+        "lines": 1363
+      },
+      {
+        "path": "mcp_gpt_desk/src/desk-market-feature-algorithms.js",
+        "lines": 1345
+      },
+      {
+        "path": "packages/desk-domain/src/deterministic-compilers-v1.js",
+        "lines": 1323
+      },
+      {
+        "path": "src/operationsTypes.ts",
+        "lines": 1290
+      },
+      {
+        "path": "mcp_gpt_desk/src/codex-exec-adapter.js",
+        "lines": 1221
+      },
+      {
+        "path": "mcp_gpt_desk/src/legacy-compatibility-adapter.js",
+        "lines": 1210
+      },
+      {
+        "path": "mcp_gpt_desk/src/broker-execution-service.js",
+        "lines": 1197
+      }
+    ],
+    "longest_functions": [
+      {
+        "file": "mcp_gpt_desk/src/tools.js",
+        "start_line": 709,
+        "lines": 1592,
+        "complexity": 55
+      },
+      {
+        "file": "mcp_gpt_desk/src/front-api-openapi.js",
+        "start_line": 115,
+        "lines": 372,
+        "complexity": 8
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-replay-orchestration-algorithms.js",
+        "start_line": 1534,
+        "lines": 370,
+        "complexity": 158
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-ai-worker-service.js",
+        "start_line": 1750,
+        "lines": 340,
+        "complexity": 80
+      },
+      {
+        "file": "mcp_gpt_desk/src/live-paper-execution.js",
+        "start_line": 54,
+        "lines": 304,
+        "complexity": 106
+      },
+      {
+        "file": "mcp_gpt_desk/src/store.js",
+        "start_line": 2160,
+        "lines": 287,
+        "complexity": 110
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-live-bundle-algorithms.js",
+        "start_line": 263,
+        "lines": 284,
+        "complexity": 92
+      },
+      {
+        "file": "mcp_gpt_desk/src/front-api-openapi.js",
+        "start_line": 488,
+        "lines": 265,
+        "complexity": 1
+      },
+      {
+        "file": "mcp_gpt_desk/src/v5-frozen-quiesce.js",
+        "start_line": 23,
+        "lines": 250,
+        "complexity": 28
+      },
+      {
+        "file": "packages/desk-domain/src/deterministic-compiler-entry-v1.js",
+        "start_line": 98,
+        "lines": 246,
+        "complexity": 101
+      },
+      {
+        "file": "packages/desk-domain/src/broker-execution.js",
+        "start_line": 263,
+        "lines": 235,
+        "complexity": 204
+      },
+      {
+        "file": "mcp_gpt_desk/src/live-cursor.js",
+        "start_line": 213,
+        "lines": 223,
+        "complexity": 85
+      },
+      {
+        "file": "mcp_gpt_desk/src/tradingview-m1-backfill-importer.js",
+        "start_line": 339,
+        "lines": 223,
+        "complexity": 30
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-ai-worker-service.js",
+        "start_line": 800,
+        "lines": 215,
+        "complexity": 35
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-live-bundle-algorithms.js",
+        "start_line": 50,
+        "lines": 212,
+        "complexity": 49
+      },
+      {
+        "file": "packages/desk-domain/src/deterministic-compilers-v1.js",
+        "start_line": 411,
+        "lines": 207,
+        "complexity": 109
+      },
+      {
+        "file": "mcp_gpt_desk/src/server.js",
+        "start_line": 194,
+        "lines": 199,
+        "complexity": 80
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-replay-orchestration-algorithms.js",
+        "start_line": 639,
+        "lines": 195,
+        "complexity": 66
+      },
+      {
+        "file": "packages/desk-domain/src/deterministic-predicate-registry-v1.js",
+        "start_line": 332,
+        "lines": 195,
+        "complexity": 63
+      },
+      {
+        "file": "mcp_gpt_desk/src/macro-calendar-service.js",
+        "start_line": 46,
+        "lines": 192,
+        "complexity": 51
+      }
+    ],
+    "highest_complexity_functions": [
+      {
+        "file": "packages/desk-domain/src/broker-execution.js",
+        "start_line": 263,
+        "lines": 235,
+        "complexity": 204
+      },
+      {
+        "file": "src/pages/ExecutionConsolePage.tsx",
+        "start_line": 34,
+        "lines": 173,
+        "complexity": 173
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-replay-orchestration-algorithms.js",
+        "start_line": 1534,
+        "lines": 370,
+        "complexity": 158
+      },
+      {
+        "file": "mcp_gpt_desk/src/replay-continuity.js",
+        "start_line": 437,
+        "lines": 177,
+        "complexity": 146
+      },
+      {
+        "file": "packages/desk-domain/src/decision-model.js",
+        "start_line": 23,
+        "lines": 124,
+        "complexity": 127
+      },
+      {
+        "file": "packages/desk-domain/src/broker-position-management.js",
+        "start_line": 231,
+        "lines": 79,
+        "complexity": 112
+      },
+      {
+        "file": "mcp_gpt_desk/src/position-continuity-engine.js",
+        "start_line": 27,
+        "lines": 167,
+        "complexity": 110
+      },
+      {
+        "file": "mcp_gpt_desk/src/store.js",
+        "start_line": 2160,
+        "lines": 287,
+        "complexity": 110
+      },
+      {
+        "file": "packages/desk-domain/src/deterministic-compilers-v1.js",
+        "start_line": 411,
+        "lines": 207,
+        "complexity": 109
+      },
+      {
+        "file": "mcp_gpt_desk/src/front-operations-api.js",
+        "start_line": 120,
+        "lines": 158,
+        "complexity": 106
+      },
+      {
+        "file": "mcp_gpt_desk/src/live-paper-execution.js",
+        "start_line": 54,
+        "lines": 304,
+        "complexity": 106
+      },
+      {
+        "file": "mcp_gpt_desk/src/front-operations-service.js",
+        "start_line": 3122,
+        "lines": 55,
+        "complexity": 103
+      },
+      {
+        "file": "packages/desk-domain/src/deterministic-compiler-entry-v1.js",
+        "start_line": 98,
+        "lines": 246,
+        "complexity": 101
+      },
+      {
+        "file": "mcp_gpt_desk/src/position-continuity-engine.js",
+        "start_line": 719,
+        "lines": 106,
+        "complexity": 95
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-live-bundle-algorithms.js",
+        "start_line": 263,
+        "lines": 284,
+        "complexity": 92
+      },
+      {
+        "file": "packages/desk-domain/src/strategy-dsl-compiler-v1.js",
+        "start_line": 287,
+        "lines": 139,
+        "complexity": 90
+      },
+      {
+        "file": "packages/desk-domain/src/broker-execution.js",
+        "start_line": 149,
+        "lines": 113,
+        "complexity": 88
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-state-algorithms.js",
+        "start_line": 761,
+        "lines": 88,
+        "complexity": 87
+      },
+      {
+        "file": "mcp_gpt_desk/src/desk-state-algorithms.js",
+        "start_line": 543,
+        "lines": 135,
+        "complexity": 85
+      },
+      {
+        "file": "mcp_gpt_desk/src/live-cursor.js",
+        "start_line": 213,
+        "lines": 223,
+        "complexity": 85
+      }
+    ]
+  }
+}

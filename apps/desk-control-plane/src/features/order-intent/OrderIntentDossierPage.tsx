@@ -1,0 +1,153 @@
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Card, KpiCard } from "@/design-system/primitives";
+import { OperatorPageHeader } from "@/design-system/workspace";
+import { ViewTruthBanner } from "@/design-system/states";
+import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
+import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
+import { buildOrderIntentDossier } from "@/features/order-intent/mapper";
+import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
+import {
+  AuthorityStageCard,
+  DataMetric,
+  ExecutionAuthorityPanel,
+  HumanExecutionGatePanel,
+  ProviderLifecycleTimeline,
+  ReadonlyTradeTerms,
+  ReconciliationPanel,
+  TechnicalInspector,
+} from "@/features/order-intent/components";
+import { presentOrderLifecycleEvidence } from "@/features/order-intent/statusRegistry";
+import "@/features/order-intent/order-intent.css";
+
+export function OrderIntentDossierPage() {
+  const { orderId } = useParams();
+  const query = useFrontView("order-detail", { orderId });
+  const repository = useFrontViewRepository();
+  const [command, setCommand] = useState<CommandAccepted | null>(null);
+  const [commandError, setCommandError] = useState<string | null>(null);
+  const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
+
+  if (query.isLoading) return <DetailLoading />;
+  if (query.isError) return <DetailError error={query.error as Error} />;
+  if (!query.data) return <DetailError error={new Error("Projection absente")} />;
+
+  const dossier = buildOrderIntentDossier(query.data);
+  const lifecycle = presentOrderLifecycleEvidence(dossier.brokerSummary);
+  const instrument = readable(dossier.signal.instrument, "OrderIntent");
+  const side = readable(dossier.signal.side, "");
+
+  const submitGateAction = async (action: HumanGateAction, reason: string) => {
+    setSubmittingActionId(action.actionId);
+    setCommandError(null);
+    try {
+      const accepted = await repository.submitCommand(buildHumanGateCommand(action, reason));
+      setCommand(accepted);
+      await query.refetch();
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : "HUMAN_GATE_COMMAND_FAILED");
+    } finally {
+      setSubmittingActionId(null);
+    }
+  };
+
+  return (
+    <div className="operator-page order-dossier-page">
+      <ViewTruthBanner meta={dossier.meta} />
+      <OperatorPageHeader
+        title={`${instrument} ${side} · dossier d'exécution`}
+        description="De la décision stratégie à la preuve broker, sans recalcul ni mutation des termes validés."
+        actions={<><Link to="/execution/orders">Retour aux ordres</Link><Link to="/operations/events">Audit global</Link></>}
+      />
+
+      {dossier.degradedReadOnly ? (
+        <div className="order-dossier__degraded" role="status">
+          <strong>Mode dégradé · lecture seule</strong>
+          <span>La dernière projection reste consultable, mais les actions sensibles sont indisponibles tant que l'autorité backend n'est pas complète et fraîche.</span>
+          <small>asOf {dossier.meta.asOf}</small>
+        </div>
+      ) : null}
+
+      <section className="operator-kpi-strip" aria-label="Synthèse du dossier d'exécution">
+        <KpiCard label="LIFECYCLE" value={lifecycle.label} delta={lifecycle.helper} tone={lifecycle.tone} />
+        <KpiCard label="ORDONNÉ" value={`${dossier.brokerSummary.orderedQuantity}`} delta="projection ordre" />
+        <KpiCard label="EXÉCUTÉ" value={`${dossier.brokerSummary.filledQuantity}`} delta={`${dossier.brokerSummary.fillCount} fill(s)`} tone={dossier.brokerSummary.filledQuantity > 0 ? "success" : "neutral"} />
+        <KpiCard label="RESTANT" value={`${dossier.brokerSummary.remainingQuantity}`} delta="quantité broker" tone={dossier.brokerSummary.remainingQuantity > 0 ? "warning" : "neutral"} />
+        <KpiCard label="PROTECTION" value={dossier.brokerSummary.protectionStatus} delta="état backend" />
+        <KpiCard label="HUMAN GATE" value={dossier.humanGate.actions.length ? "Disponible" : "Indisponible"} delta="backend-driven" tone={dossier.humanGate.actions.length ? "warning" : "neutral"} />
+      </section>
+
+      <nav className="order-dossier__lineage" aria-label="Lineage du dossier" tabIndex={0}>
+        {["Signal", "Context Gate", "Portfolio", "Global Risk", "Target", "OrderIntent", "Human Gate", "Provider", "Broker", "Réconciliation"].map((label, index) => (
+          <span key={label}><b>{String(index + 1).padStart(2, "0")}</b>{label}</span>
+        ))}
+      </nav>
+
+      <section className="order-dossier__overview-grid" aria-label="Identité, stratégie et autorité">
+        <Card title="Identity & strategy lineage" eyebrow="CANONICAL IDS" density="compact">
+          <div className="order-dossier__metrics-grid">
+            <DataMetric label="OrderIntent" value={dossier.identity.orderIntentId} />
+            <DataMetric label="Order" value={dossier.identity.orderId} />
+            <DataMetric label="Strategy" value={dossier.strategy.strategyId} />
+            <DataMetric label="Instance" value={dossier.strategy.strategyInstanceId} />
+            <DataMetric label="Version" value={dossier.strategy.strategyVersion} />
+            <DataMetric label="Signal" value={dossier.signal.signalId} />
+          </div>
+        </Card>
+        <ExecutionAuthorityPanel dossier={dossier} />
+        <Card title="Target Position" eyebrow="RISK OUTPUT" density="compact" state="partial">
+          <div className="order-dossier__metrics-grid">
+            <DataMetric label="TargetPosition" value={dossier.targetPosition.targetPositionId} />
+            <DataMetric label="Compte" value={dossier.targetPosition.account} />
+            <DataMetric label="Quantité autorisée" value={dossier.targetPosition.authorizedQuantity} />
+            <DataMetric label="Révision" value={dossier.executionPlan.expectedRevision} />
+          </div>
+        </Card>
+      </section>
+
+      <section className="order-dossier__stage-grid" aria-label="Décisions d'autorité">
+        <AuthorityStageCard stage={dossier.contextGate} />
+        <AuthorityStageCard stage={dossier.portfolioArbitration} />
+        <AuthorityStageCard stage={dossier.globalRisk} />
+      </section>
+
+      <section className="order-dossier__decision-grid" aria-label="Plan et Human Gate">
+        <ReadonlyTradeTerms dossier={dossier} />
+        <HumanExecutionGatePanel gate={dossier.humanGate} onSubmit={submitGateAction} submittingActionId={submittingActionId} command={command} error={commandError} />
+      </section>
+
+      <section className="order-dossier__evidence-grid" aria-label="Provider, broker et réconciliation">
+        <Card title="Provider Lifecycle" eyebrow="EVENTS BACKEND" density="compact" state={dossier.providerLifecycle.length ? "nominal" : "partial"}>
+          <ProviderLifecycleTimeline events={dossier.providerLifecycle} />
+        </Card>
+        <Card title="Broker evidence" eyebrow="FILLS" density="compact" state={dossier.fills.length ? "nominal" : "empty"}>
+          {dossier.fills.length ? (
+            <div className="order-dossier__fill-list">
+              {dossier.fills.map((fill) => <article key={fill.fillId}><span><strong>{fill.quantity} @ {fill.price}</strong><small>{fill.fillId}</small></span><time dateTime={fill.filledAt}>{formatTime(fill.filledAt)}</time></article>)}
+            </div>
+          ) : <p className="empty-state">Aucun fill broker publié. Une confirmation ou un ACK ne crée pas de fill implicite.</p>}
+        </Card>
+        <ReconciliationPanel reconciliation={dossier.reconciliation} />
+      </section>
+
+      <section className="order-dossier__audit-grid" aria-label="Relations et audit">
+        <Card title="Cross navigation" eyebrow="LINEAGE" density="compact">
+          {dossier.relations.length ? <div className="zoom-link-list">{dossier.relations.map((relation) => <Link key={`${relation.label}-${relation.id}`} to={relation.route}><strong>{relation.label}</strong><small>{relation.id}</small></Link>)}</div> : <p className="empty-state">Aucune relation canonique publiée.</p>}
+        </Card>
+        <Card title="Audit & provenance" eyebrow="TECHNICAL" density="compact"><TechnicalInspector dossier={dossier} /></Card>
+      </section>
+    </div>
+  );
+}
+
+function readable(value: { state: string; value?: string }, fallback: string): string {
+  return (value.state === "KNOWN" || value.state === "STALE") && value.value ? value.value : fallback;
+}
+
+function formatTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Heure indisponible" : new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
+}
+
+function DetailLoading() { return <div className="operator-page"><Card state="loading" density="compact"><p>Chargement du dossier d'exécution…</p></Card></div>; }
+function DetailError({ error }: { error: Error }) { return <div className="operator-page"><Card title="Dossier d'exécution indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact"><p>{error.message}</p><Link to="/execution/orders">Retour à la liste</Link></Card></div>; }

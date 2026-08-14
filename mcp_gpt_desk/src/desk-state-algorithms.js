@@ -364,23 +364,12 @@ export function compactMonitor(monitor) {
 }
 
 export function conditionList(activeThesis, conditionStatus, monitor, key) {
-  const fromCondition = conditionStatus?.condition_status?.[key];
-  if (Array.isArray(fromCondition)) {
-    return fromCondition;
-  }
-  if (key === "conditions_go" && Array.isArray(activeThesis?.wait_to_go_conditions)) {
-    return activeThesis.wait_to_go_conditions;
-  }
-  if (key === "invalidations" && Array.isArray(activeThesis?.invalidation_conditions)) {
-    return activeThesis.invalidation_conditions;
-  }
-  if (key === "conditions_go" && Array.isArray(monitor?.wait_to_go_check)) {
-    return monitor.wait_to_go_check;
-  }
-  if (key === "invalidations" && Array.isArray(monitor?.invalidation_check)) {
-    return monitor.invalidation_check;
-  }
-  return [];
+  const sources = key === "conditions_go"
+    ? [conditionStatus?.condition_status?.conditions_go, activeThesis?.wait_to_go_conditions, monitor?.wait_to_go_check]
+    : key === "invalidations"
+      ? [conditionStatus?.condition_status?.invalidations, activeThesis?.invalidation_conditions, monitor?.invalidation_check]
+      : [conditionStatus?.condition_status?.[key]];
+  return sources.find(Array.isArray) || [];
 }
 
 export function keyLevels(activeThesis, levelMap, latestMaster) {

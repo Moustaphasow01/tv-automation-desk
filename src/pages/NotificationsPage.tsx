@@ -11,6 +11,8 @@ import type { NotificationAction, NotificationActionInput, OperationsNotificatio
 
 const tabs = [
   { label: "Cockpit", to: "/operations", end: true },
+  { label: "Agents IA", to: "/operations/agents" }, { label: "AI Context", to: "/operations/ai-context" },
+  { label: "Portfolio Risk", to: "/operations/portfolio-risk" },
   { label: "Observabilité", to: "/operations/observability" },
   { label: "Incidents", to: "/operations/incidents" },
   { label: "Notifications", to: "/operations/notifications" },

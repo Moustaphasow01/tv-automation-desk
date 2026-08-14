@@ -162,9 +162,21 @@ test("OpenAPI publishes every current BFF route with resolvable component refere
     "/workflows/{workflowId}/events", "/workflows/{workflowId}/actions", "/replays", "/replays/compare",
     "/replays/{runId}", "/replays/{runId}/days", "/replays/{runId}/days/{date}",
     "/replays/{runId}/sessions/{sessionExecutionId}", "/replays/{runId}/timeline", "/replays/{runId}/price-series",
+    "/simulation-runs", "/simulation-runs/compare", "/simulation-runs/{simulationRunId}", "/simulation-runs/{simulationRunId}/artifacts",
     "/gpt-processes", "/gpt-processes/{processId}", "/observability/overview", "/observability/policy", "/observability/incidents/evaluate", "/performance/overview", "/incidents",
     "/incidents/{incidentId}/actions", "/notifications", "/notifications/sync", "/notifications/{notificationId}/actions", "/runbooks", "/runbooks/{runbookId}", "/history/sessions", "/history/sessions/{sessionId}", "/strategies",
-    "/strategies/{strategyId}/versions/compare", "/events",
+    "/strategies/{strategyId}/versions/compare",
+    "/strategy-v2/overview", "/strategy-v2/definitions", "/strategy-v2/definitions/{strategyDefinitionId}",
+    "/strategy-v2/versions", "/strategy-v2/versions/{strategyVersionId}", "/strategy-v2/versions/{strategyVersionId}/actions",
+    "/strategy-v2/instances", "/strategy-v2/instances/{strategyInstanceId}", "/strategy-v2/instances/{strategyInstanceId}/actions",
+    "/strategy-v2/signals", "/strategy-v2/signals/{signalOutboxId}/actions", "/strategy-v2/audit",
+    "/portfolio-risk/overview", "/ai-context/overview", "/research/overview", "/research/experiments",
+    "/research/experiments/{researchExperimentId}", "/research/candidates", "/research/candidates/{researchCandidateId}",
+    "/research/evaluation-reports",
+    "/data-foundation/overview", "/data-foundation/sources", "/data-foundation/ingestion-batches",
+    "/data-foundation/datasets", "/data-foundation/features", "/data-foundation/feature-computations",
+    "/data-foundation/market-data-profiles", "/data-foundation/storage-objects",
+    "/data-foundation/hot-series-windows", "/data-foundation/feature-values", "/events",
   ];
 
   assert.equal(document.openapi, "3.1.0");

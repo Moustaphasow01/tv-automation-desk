@@ -29,6 +29,25 @@ test("signed AddOn routes validate shadow heartbeat and snapshots", async () => 
   });
   assert.equal(calls[0][1].commandEnabled, false);
   assert.equal(calls[1][1].reconcile, false);
+  assert.equal(calls[1][1].reconciliationMode, undefined);
+});
+
+test("bridge reconciliation API defaults scheduled runners to alert-only semantics", async () => {
+  const calls = [];
+  const result = await handleFrontOperations({
+    reconcileBrokerExecution: async (input) => { calls.push(input); return { ok: true }; },
+  }, {
+    pathname: "/api/v1/execution/bridge/reconcile",
+    method: "POST",
+    actor: { kind: "ninja_bridge" },
+    body: {
+      bridgeId: "bridge_123",
+      brokerSnapshot: { orders: [], positions: [], account: { account_name: "Sim101" } },
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(calls[0].reconciliationMode, "alert_only");
+  assert.equal(calls[0].triggeredBy, "bridge");
 });
 
 test("execution API validates and delegates safe actions", async () => {

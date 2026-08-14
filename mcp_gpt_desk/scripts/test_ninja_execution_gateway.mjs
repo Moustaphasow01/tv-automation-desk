@@ -3,9 +3,13 @@ import assert from "node:assert/strict";
 import pg from "pg";
 
 const { Pool } = pg;
+const CONFIRMATION = "I_CONFIRM_LOCAL_GATEWAY_EVENT_TEST_ONLY";
 const databaseUrl = process.env.DATABASE_URL;
 const apiKey = process.env.DESK_MCP_API_KEY || process.env.DESK_GPT_MCP_API_KEY || "";
 const apiBase = String(process.env.DESK_NINJA_API_BASE_URL || "http://127.0.0.1:8787/api/v1").replace(/\/+$/, "");
+
+assertLocalGatewayEventTestOnly();
+
 if (!databaseUrl) throw new Error("DATABASE_URL is required.");
 if (!apiKey) throw new Error("DESK_MCP_API_KEY is required.");
 
@@ -112,3 +116,19 @@ async function post(path, body) {
   return payload;
 }
 function headers() { return { accept: "application/json", authorization: `Bearer ${apiKey}`, "x-desk-api-key": apiKey }; }
+
+function assertLocalGatewayEventTestOnly() {
+  if (process.env.DESK_NINJA_GATEWAY_TEST_CONFIRMATION !== CONFIRMATION) {
+    throw new Error(`DESK_NINJA_GATEWAY_TEST_CONFIRMATION=${CONFIRMATION} is required.`);
+  }
+  if (process.env.DESK_ENVIRONMENT === "production" || process.env.NODE_ENV === "production") {
+    throw new Error("Gateway event integration fixture is forbidden in production.");
+  }
+  if (process.env.DESK_LEGACY_POSITION_EXECUTION_ENABLED !== "true") {
+    throw new Error("DESK_LEGACY_POSITION_EXECUTION_ENABLED=true is required because this legacy fixture materializes a desk_position.");
+  }
+  const parsed = new URL(apiBase);
+  if (!["127.0.0.1", "localhost", "::1"].includes(parsed.hostname)) {
+    throw new Error("Gateway event integration fixture must target a local API only.");
+  }
+}

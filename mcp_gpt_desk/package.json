@@ -19,8 +19,15 @@
     "telegram:acceptance": "node scripts/run_telegram_acceptance.mjs",
     "pack:build-local": "node scripts/build_local_pack.mjs",
     "backfill:tradingview-m1": "node scripts/import_tradingview_m1_backfill.mjs",
+    "data:coverage": "node scripts/audit_market_data_coverage.mjs",
+    "data:capabilities": "node scripts/profile_market_data_capabilities.mjs",
+    "data:storage-plan": "node scripts/plan_market_data_storage.mjs",
+    "feature:catalog": "node scripts/print_feature_catalog.mjs",
     "replay:autopilot-codex": "node scripts/replay_autopilot_codex_agent.mjs",
-    "ai:worker": "node scripts/run_desk_ai_worker.mjs",
+  "agent:supervisor": "node scripts/run_agent_runtime_supervisor.mjs",
+  "agent:supervisor:once": "node scripts/run_agent_runtime_supervisor.mjs --once",
+  "research:bootstrap-demo-paper": "node scripts/bootstrap_demo_paper_autonomous_research.mjs",
+  "ai:worker": "node scripts/run_desk_ai_worker.mjs",
     "ai:worker:once": "node scripts/run_desk_ai_worker.mjs --once",
     "replay:preparation-worker": "node scripts/run_replay_preparation_worker.mjs",
     "maintenance:runtime": "node scripts/run_runtime_maintenance.mjs",
@@ -55,6 +62,8 @@
   },
   "overrides": {
     "@hono/node-server": "^2.0.11",
-    "fast-uri": "^3.1.4"
+    "fast-uri": "^3.1.4",
+    "hono": "^4.13.1",
+    "ip-address": "^10.4.0"
   }
 }

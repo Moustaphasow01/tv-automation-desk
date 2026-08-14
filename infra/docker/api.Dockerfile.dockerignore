@@ -1,6 +1,12 @@
-*
+**
 !packages
 !packages/**
+!config
+!config/prompt-registry
+!config/prompt-registry/**
+!docs
+!docs/CHATGPT_LIVE_WORKER_PROMPT.md
+!docs/CHATGPT_REPLAY_WORKER_PROMPT.md
 !mcp_gpt_desk
 !mcp_gpt_desk/package.json
 !mcp_gpt_desk/package-lock.json

@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import {
-  BROKER_CONTRACT_ROUNDING_MODE,
   BROKER_DEFAULT_MAX_DECISION_AGE_SECONDS,
   BROKER_RISK_PERCENT,
   brokerExecutionAuthorityMode,
@@ -21,6 +20,14 @@ import {
   renderBrokerManagementCommand,
 } from "@tv-automation/desk-domain";
 import { DESK_COLLECTIONS } from "@tv-automation/desk-contracts/collections";
+import {
+  processTheoreticalExecution as processTheoreticalExecutionService,
+  recordManualExecutionEvent as recordManualExecutionEventService,
+} from "./broker-theoretical-execution-service.js";
+import { buildBrokerExecutionOverview } from "./broker-execution-overview-projection.js";
+import { assertBrokerOrderIntentAuthority, assertLegacyPositionExecutionRollbackEnabled } from "./broker-order-intent-authority.js";
+import { maybeExecutePortfolioExecutionAction } from "./broker-portfolio-execution-actions.js";
+import { PortfolioOrderIntentExecutionService } from "./portfolio-order-intent-execution-service.js";
 
 const C = DESK_COLLECTIONS;
 const OPEN_POSITION_STATES = new Set(["OPEN", "PROTECTED", "SCALING", "ARMED"]);
@@ -29,15 +36,18 @@ const MAX_CONFIGURABLE_RISK_PERCENT = 0.25;
 const MAX_CONFIGURABLE_ROUNDING_EXCESS_PERCENT = 0.25;
 const MIN_CONFIGURABLE_DECISION_AGE_SECONDS = 5;
 const MAX_CONFIGURABLE_DECISION_AGE_SECONDS = 3_600;
+export const BROKER_RECONCILIATION_MODES = Object.freeze(["disabled", "alert_only", "blocking"]);
+export const BROKER_RECONCILIATION_BLOCKING_CONFIRMATION = "PROMOTE_RECONCILIATION_BLOCKING";
 
 export class BrokerExecutionService {
-  constructor({ repository, persistence, clock, environment = brokerExecutionEnvironment(process.env), addonAtmStrategyName = process.env.DESK_NINJA_ATM_STRATEGY_NAME || "", startupControl = null }) {
+  constructor({ repository, persistence, clock, environment = brokerExecutionEnvironment(process.env), addonAtmStrategyName = process.env.DESK_NINJA_ATM_STRATEGY_NAME || "", startupControl = null, portfolioOrderIntentExecutionService = null }) {
     this.repository = repository;
     this.persistence = persistence;
     this.clock = clock;
     this.environment = environment;
     this.addonAtmStrategyName = String(addonAtmStrategyName || "").trim();
     this.startupControl = startupControl;
+    this.portfolioOrderIntentExecutionService = portfolioOrderIntentExecutionService || new PortfolioOrderIntentExecutionService({ persistence, clock });
   }
 
   async overview(filters = {}) {
@@ -45,77 +55,24 @@ export class BrokerExecutionService {
     const startupStatus = this.startupControl
       ? await this.startupControl.status()
       : { available: false, enabled: false, revision: 0, autoConnectRequired: true, simulationOnly: true, state: "unavailable" };
-    data.managementIntents ||= [];
-    data.managementApprovals ||= [];
-    data.managementOutbox ||= [];
-    data.addonSnapshots ||= [];
-    data.addonEvents ||= [];
-    data.adapterParityRuns ||= [];
-    const latestAddonBridge = data.bridges.find((item) => item.adapter_kind === "addon") || null;
-    const addonHeartbeatAgeMs = latestAddonBridge ? Date.parse(this.#now()) - Date.parse(latestAddonBridge.last_seen_at || "") : Number.POSITIVE_INFINITY;
-    const addonHeartbeatFresh = Number.isFinite(addonHeartbeatAgeMs) && addonHeartbeatAgeMs >= 0 && addonHeartbeatAgeMs <= this.environment.bridgeStaleSeconds * 1_000;
-    const addonConnected = addonHeartbeatFresh && latestAddonBridge?.ninja_connected === true;
-    const latestAddonSnapshot = data.addonSnapshots.reduce((latest, candidate) => (
-      !latest || Date.parse(candidate?.captured_at || "") > Date.parse(latest?.captured_at || "") ? candidate : latest
-    ), null);
-    const addonSnapshotConnected = String(latestAddonSnapshot?.connection?.status || "").toLowerCase() === "connected"
-      && String(latestAddonSnapshot?.connection?.price_status || "").toLowerCase() === "connected";
-    const ninjaTraderStartup = {
-      ...startupStatus,
-      connectionName: String(latestAddonSnapshot?.connection?.name || startupStatus.connectionName || ""),
-      connectionProvider: String(latestAddonSnapshot?.connection?.provider || startupStatus.connectionProvider || ""),
-      addonHeartbeatFresh,
-      addonConnected,
-      connectionReady: addonConnected && addonSnapshotConnected,
-      state: startupStatus.state === "running" && !addonConnected ? "waiting_addon" : startupStatus.state,
-    };
-    const activeLocks = data.locks || [];
-    const sizingPolicy = data.policies.find((item) => item.policy_profile_id === "ninjatrader_sim101_local") || data.policies[0] || null;
-    const executionAuthorityMode = brokerExecutionAuthorityMode(sizingPolicy || {});
-    return contract("DeskExecutionOverview", {
+    return buildBrokerExecutionOverview({
+      data,
+      startupStatus,
+      environment: this.environment,
       generatedAt: this.#now(),
-      safety: {
-        executionEnabled: this.environment.executionEnabled,
-        bridgeMode: this.environment.bridgeMode,
-        killSwitchEnv: this.environment.killSwitch,
-        maxContracts: this.environment.maxContracts,
-        riskPercent: Number(sizingPolicy?.risk_per_trade_pct ?? BROKER_RISK_PERCENT),
-        maxRoundingExcessPercent: Number(sizingPolicy?.max_rounding_excess_pct ?? 0.25),
-        maxDecisionAgeSeconds: Number(sizingPolicy?.max_decision_age_seconds ?? BROKER_DEFAULT_MAX_DECISION_AGE_SECONDS),
-        executionAuthorityMode,
-        entryOperatorApprovalRequired: executionAuthorityMode === "semi_auto",
-        managementOperatorApprovalRequired: false,
-        contractRoundingMode: BROKER_CONTRACT_ROUNDING_MODE,
-        fallbackCapitalEnabled: sizingPolicy?.fallback_capital_enabled === true,
-        fallbackCapital: sizingPolicy?.fallback_capital === null || sizingPolicy?.fallback_capital === undefined ? null : Number(sizingPolicy.fallback_capital),
-        sizingPolicyRevision: Number(sizingPolicy?.revision || 0),
-        accountSnapshotMaxAgeSeconds: this.environment.accountSnapshotStaleSeconds,
-        allowedInstruments: this.environment.allowedInstruments,
-        liveAccountAllowed: this.environment.allowLiveAccount,
-        databaseLocked: activeLocks.length > 0,
-        submissionPossible: this.environment.executionEnabled === true
-          && this.environment.killSwitch === false
-          && activeLocks.length === 0,
-      },
-      summary: {
-        pendingApproval: data.intents.filter((item) => item.status === "pending_approval").length,
-        queued: data.intents.filter((item) => item.status === "queued").length,
-        activeOrders: data.orders.filter((item) => !["filled", "cancelled", "rejected", "expired"].includes(item.status)).length,
-        openTrades: data.trades.filter((item) => !["closed", "cancelled", "rejected", "expired"].includes(item.status)).length,
-        healthyBridges: data.bridges.filter((item) => ["healthy", "armed"].includes(item.status)).length,
-        activeLocks: activeLocks.length,
-        pendingManagement: data.managementIntents.filter((item) => item.status === "pending_approval").length,
-        queuedManagement: data.managementIntents.filter((item) => ["queued", "leased", "rendered", "delivered"].includes(item.status)).length,
-        addonSnapshots: data.addonSnapshots.length,
-        addonEvents: data.addonEvents.length,
-        addonParityDivergences: data.adapterParityRuns.filter((item) => item.status === "diverged").length,
-      },
-      ninjaTraderStartup,
-      ...data,
     });
   }
 
   async materializeEligiblePositions(scope = {}) {
+    if (!this.environment.legacyPositionExecutionEnabled) {
+      return {
+        ok: true,
+        status: "SKIPPED",
+        reason: "LEGACY_POSITION_EXECUTION_DISABLED",
+        count: 0,
+        items: [],
+      };
+    }
     if (!this.repository.available) return { ok: true, status: "SKIPPED", reason: "BROKER_REPOSITORY_UNAVAILABLE", count: 0, items: [] };
     const positions = typeof this.persistence.queryCollectionDocuments === "function"
       ? await this.persistence.queryCollectionDocuments({
@@ -143,6 +100,7 @@ export class BrokerExecutionService {
   }
 
   async evaluateDecision({ decisionId, accountId, policyProfileId, actor = "backend" }) {
+    assertLegacyPositionExecutionRollbackEnabled(this.environment);
     const context = await this.repository.decisionContext({ decisionId, accountId, policyProfileId });
     const executionAuthorityMode = brokerExecutionAuthorityMode(context.policy);
     const evaluated = evaluateBrokerPolicy({ ...context, environment: this.environment, now: this.#now() });
@@ -166,6 +124,18 @@ export class BrokerExecutionService {
         })
       : null;
     const stored = await this.repository.insertRiskResult({ riskCheck, intent });
+    if (this.environment.manualTelegramExecutionEnabled === true) {
+      return {
+        ...stored,
+        executionAuthorityMode,
+        automaticAuthorization: null,
+        manualTelegramExecution: {
+          status: "ALERT_ONLY",
+          brokerSubmissionSkipped: true,
+          reason: "DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED",
+        },
+      };
+    }
     if (!stored.intent || executionAuthorityMode !== "auto") {
       return { ...stored, executionAuthorityMode, automaticAuthorization: null };
     }
@@ -210,11 +180,29 @@ export class BrokerExecutionService {
     };
   }
 
+  async materializePortfolioOrderIntents(scope = {}) {
+    if (!this.portfolioOrderIntentExecutionService) return skippedPortfolioExecution("PORTFOLIO_ORDER_INTENT_EXECUTION_SERVICE_UNAVAILABLE");
+    if (!this.environment.executionEnabled || this.environment.killSwitch) return skippedPortfolioExecution("ENVIRONMENT_NOT_ARMED");
+    return this.portfolioOrderIntentExecutionService.materializeReadyCommands({ ...scope, execution_halt: this.environment.killSwitch === true });
+  }
+
+  async processTheoreticalExecution({ entryLimit = 100, exitLimit = 100 } = {}) {
+    return processTheoreticalExecutionService(this, { entryLimit, exitLimit });
+  }
+
+  async recordManualExecutionEvent(input = {}, actor = {}) {
+    return recordManualExecutionEventService(this, input, actor);
+  }
+
+  now() { return this.#now(); }
+
   async intentDetail(intentId) { return contract("DeskExecutionIntentDetail", await this.repository.intentDetail(intentId)); }
 
   async materializeManagementFromMonitor(monitor) {
     if (!this.repository.available) return { ok: true, status: "SKIPPED", reason: "BROKER_REPOSITORY_UNAVAILABLE" };
-    if (!this.environment.executionEnabled || this.environment.killSwitch) return { ok: true, status: "SKIPPED", reason: "ENVIRONMENT_NOT_ARMED" };
+    if ((!this.environment.executionEnabled && this.environment.manualTelegramExecutionEnabled !== true) || (this.environment.killSwitch && this.environment.manualTelegramExecutionEnabled !== true)) {
+      return { ok: true, status: "SKIPPED", reason: "ENVIRONMENT_NOT_ARMED" };
+    }
     const trade = await this.repository.findOpenTradeForMonitor({
       tradeId: monitor.trade_id || monitor.position_check?.trade_id || null,
       sourcePositionId: monitorSourcePositionId(monitor),
@@ -239,6 +227,19 @@ export class BrokerExecutionService {
     const evaluation = evaluateBrokerManagementPolicy({ ...context, intent, environment: this.environment, now: this.#now() });
     const storedIntent = await this.repository.insertManagementIntent({ intent, evaluation });
     if (!evaluation.pass) return { ok: true, status: "BLOCKED", intent: storedIntent, evaluation };
+    if (this.environment.manualTelegramExecutionEnabled === true) {
+      return {
+        ok: true,
+        status: "ALERT_ONLY",
+        intent: storedIntent,
+        evaluation,
+        manualTelegramExecution: {
+          status: "ALERT_ONLY",
+          brokerSubmissionSkipped: true,
+          reason: "DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED",
+        },
+      };
+    }
     if (storedIntent.status !== "pending_approval") {
       return { ok: true, status: "EXISTING", intent: storedIntent, evaluation, automaticAuthorization: null };
     }
@@ -259,7 +260,7 @@ export class BrokerExecutionService {
   }
 
   async materializeRecentManagement({ monitorId = null, scope = {}, limit = 100 } = {}) {
-    if (!this.repository.available || !this.environment.executionEnabled || this.environment.killSwitch) {
+    if (!this.repository.available || (!this.environment.executionEnabled && this.environment.manualTelegramExecutionEnabled !== true) || (this.environment.killSwitch && this.environment.manualTelegramExecutionEnabled !== true)) {
       return { ok: true, status: "SKIPPED", reason: !this.repository.available ? "BROKER_REPOSITORY_UNAVAILABLE" : "ENVIRONMENT_NOT_ARMED", count: 0, items: [] };
     }
     const monitors = monitorId
@@ -281,7 +282,12 @@ export class BrokerExecutionService {
     const who = actor.email || actor.uid || actor.kind || "front-operator";
     const now = this.#now();
     if (input.action === "materialize") return this.materializeEligiblePositions(input.scope || {});
+    if (input.action === "materialize_portfolio_order_intents") return this.materializePortfolioOrderIntents(input.scope || input);
+    const portfolioExecutionAction = await maybeExecutePortfolioExecutionAction({ input, actorName: who, service: this.portfolioOrderIntentExecutionService, requirePhrase });
+    if (portfolioExecutionAction.handled) return portfolioExecutionAction.result;
     if (input.action === "materialize_management") return this.materializeRecentManagement({ monitorId: input.monitorId || null, scope: input.scope || {}, limit: input.limit });
+    if (input.action === "process_theoretical_execution") return this.processTheoreticalExecution({ entryLimit: input.entryLimit, exitLimit: input.exitLimit });
+    if (input.action === "record_manual_execution_event") return this.recordManualExecutionEvent(input, actor);
     if (input.action === "evaluate") return this.evaluateDecision({ decisionId: input.decisionId, accountId: input.accountId, policyProfileId: input.policyProfileId, actor: who });
     if (input.action === "configure_sizing") {
       requirePhrase(input.confirmationPhrase, "CONFIRM_SIM101_SIZING_POLICY");
@@ -353,6 +359,7 @@ export class BrokerExecutionService {
     if (input.action === "approve") {
       requirePhrase(input.confirmationPhrase, "CONFIRM_SIM101_ORDER");
       const detail = await this.repository.intentDetail(input.intentId);
+      assertBrokerOrderIntentAuthority({ intent: detail.intent, environment: this.environment, action: "approve" });
       const context = await this.repository.decisionContext({ decisionId: detail.decision.trade_decision_id, accountId: detail.intent.broker_account_id, policyProfileId: detail.riskCheck?.policy_profile_id });
       const currentRisk = evaluateBrokerPolicy({ ...context, environment: this.environment, now });
       if (!currentRisk.pass) throw serviceError("APPROVAL_RISK_RECHECK_FAILED", "Approval refused because current broker guards do not pass.", { violations: currentRisk.violations });
@@ -435,6 +442,7 @@ export class BrokerExecutionService {
     }
     const candidate = await this.repository.peekOutbox();
     if (!candidate) return contract("DeskBrokerBridgeClaim", { status: "NO_WORK", work: null });
+    assertBrokerOrderIntentAuthority({ candidate, environment: this.environment, action: "claim_bridge" });
     const context = await this.repository.decisionContext({ decisionId: candidate.trade_decision_id, accountId: candidate.broker_account_id });
     const risk = evaluateBrokerPolicy({ ...context, environment: this.environment, now: this.#now() });
     if (!risk.pass) return contract("DeskBrokerBridgeClaim", { status: "BLOCKED", reason: "RISK_RECHECK_FAILED", violations: risk.violations, work: null });
@@ -522,6 +530,7 @@ export class BrokerExecutionService {
     }
     const candidate = await this.repository.peekOutbox();
     if (!candidate) return contract("DeskNinjaAddonClaim", { status: "NO_WORK", work: null });
+    assertBrokerOrderIntentAuthority({ candidate, environment: this.environment, action: "claim_addon" });
     const context = await this.repository.decisionContext({ decisionId: candidate.trade_decision_id, accountId: candidate.broker_account_id });
     context.bridge = bridge;
     const snapshotParity = await this.#addonSnapshotParity({ context, bridgeId: input.bridgeId, workType: "entry" });
@@ -557,8 +566,9 @@ export class BrokerExecutionService {
         event,
       });
       let lifecycle = null;
+      let protection = null;
       if (event.intent_id && (event.payload?.protective_stop_order_ref || event.payload?.profit_target_order_ref) && typeof this.repository.attachAddonProtection === "function") {
-        await this.repository.attachAddonProtection({ intentId: event.intent_id, payload: event.payload });
+        protection = await this.repository.attachAddonProtection({ intentId: event.intent_id, payload: event.payload });
       }
       if (event.event_type === "order" && event.payload?.desk_lifecycle === true && (event.intent_id || event.management_intent_id)) {
         lifecycle = await this.recordBrokerEvent({
@@ -568,7 +578,10 @@ export class BrokerExecutionService {
           update: { ...event.payload, execution_adapter: "addon", command_id: event.command_id },
         });
       }
-      results.push({ event: stored, lifecycle });
+      if (!protection && event.intent_id && (event.payload?.protective_stop_order_ref || event.payload?.profit_target_order_ref) && typeof this.repository.attachAddonProtection === "function") {
+        protection = await this.repository.attachAddonProtection({ intentId: event.intent_id, payload: event.payload });
+      }
+      results.push({ event: stored, lifecycle, protection });
     }
     return contract("DeskNinjaAddonEventBatch", { count: results.length, items: results });
   }
@@ -601,6 +614,15 @@ export class BrokerExecutionService {
           now: this.#now(),
         })
       : [];
+    const protectionConfirmations = typeof this.repository.confirmProtectionFromAddonSnapshot === "function"
+      ? await this.repository.confirmProtectionFromAddonSnapshot({
+          accountId,
+          brokerSnapshot: snapshot,
+          snapshotId: stored.addon_snapshot_id,
+          capturedAt,
+          now: this.#now(),
+        })
+      : [];
     const ati = typeof this.repository.latestAtiSnapshot === "function" ? await this.repository.latestAtiSnapshot({ accountId }) : null;
     const comparison = ati?.broker_snapshot ? compareNinjaAdapterSnapshots(ati.broker_snapshot, snapshot) : null;
     const parity = await this.repository.storeAdapterParity({ run: {
@@ -617,9 +639,18 @@ export class BrokerExecutionService {
       metadata: { addon_snapshot_id: stored.addon_snapshot_id, ati_reconciliation_started_at: ati?.started_at || null, shadow_only: bridge.command_enabled !== true },
     } });
     const reconciliation = input.reconcile === true
-      ? await this.reconcile({ bridgeId: input.bridgeId, brokerAccountId: accountId, brokerSnapshot: snapshot, source: "ninja_addon", lockOnDivergence: input.lockOnDivergence === true })
+      ? await this.reconcile({
+          bridgeId: input.bridgeId,
+          brokerAccountId: accountId,
+          brokerSnapshot: snapshot,
+          source: "ninja_addon",
+          lockOnDivergence: input.lockOnDivergence === true,
+          reconciliationMode: input.reconciliationMode,
+          triggeredBy: input.triggeredBy || input.triggered_by || "addon",
+          operatorConfirmation: input.operatorConfirmation || input.operator_confirmation || "",
+        })
       : null;
-    return contract("DeskNinjaAddonSnapshot", { snapshot: stored, accountSnapshot, protectiveSettlements, parity, reconciliation });
+    return contract("DeskNinjaAddonSnapshot", { snapshot: stored, accountSnapshot, protectiveSettlements, protectionConfirmations, parity, reconciliation });
   }
 
   async recordBrokerEvent(input = {}) {
@@ -646,24 +677,42 @@ export class BrokerExecutionService {
 
   async reconcile(input = {}) {
     const accountId = input.brokerAccountId || this.environment.defaultAccount;
+    const now = this.#now();
+    const policy = resolveBrokerReconciliationPolicy(input, { environment: this.environment, now, defaultMode: "blocking" });
+    if (policy.mode === "disabled") {
+      return contract("DeskBrokerReconciliation", {
+        reconciliation: {
+          reconciliation_run_id: `reconciliation_skipped_${randomUUID().replaceAll("-", "")}`,
+          broker_account_id: accountId,
+          status: "skipped",
+          started_at: now,
+          completed_at: now,
+          mismatch_count: 0,
+          mismatches: [],
+          metadata: { reconciliation_policy: policy, reason: "RECONCILIATION_DISABLED" },
+        },
+        accountSnapshot: null,
+        settledManagement: [],
+        managementProjections: [],
+      });
+    }
     const brokerAccount = input.brokerSnapshot?.account || null;
     const accountSnapshot = brokerAccount && hasCapitalValue(brokerAccount) && typeof this.repository.recordAccountSnapshot === "function"
-      ? await this.repository.recordAccountSnapshot({ accountId, snapshot: brokerAccount, now: this.#now() })
+      ? await this.repository.recordAccountSnapshot({ accountId, snapshot: brokerAccount, now })
       : null;
     const settledManagement = typeof this.repository.settleManagementFromSnapshot === "function"
-      ? await this.repository.settleManagementFromSnapshot({ accountId, brokerSnapshot: input.brokerSnapshot || {}, now: this.#now() })
+      ? await this.repository.settleManagementFromSnapshot({ accountId, brokerSnapshot: input.brokerSnapshot || {}, now })
       : [];
     const managementProjections = [];
     for (const settlement of settledManagement) {
       managementProjections.push(await this.#projectAcknowledgedManagement({
         managementIntentId: settlement.management_intent_id,
-        update: { status: "filled", occurred_at: this.#now() },
+        update: { status: "filled", occurred_at: now },
         source: "broker_reconciliation",
       }));
     }
     const desk = await this.repository.reconciliationSnapshot(accountId);
-    const mismatches = compareSnapshots(desk, input.brokerSnapshot || {});
-    const now = this.#now();
+    const mismatches = compareSnapshots(desk, input.brokerSnapshot || {}, { accountId });
     const run = {
       reconciliation_run_id: `reconciliation_${randomUUID().replaceAll("-", "")}`,
       bridge_id: input.bridgeId || null,
@@ -677,16 +726,61 @@ export class BrokerExecutionService {
       desk_snapshot: desk,
       metadata: {
         source: input.source || "ninja_bridge",
-        fail_closed: true,
+        triggered_by: policy.triggeredBy,
+        reconciliation_policy: policy,
+        alert_only: policy.mode === "alert_only",
+        fail_closed: policy.lockOnDivergence,
+        blocking_enabled: policy.lockOnDivergence,
+        rollback_mode: "alert_only",
         account_snapshot_id: accountSnapshot?.broker_account_snapshot_id || null,
         sizing_risk_percent: BROKER_RISK_PERCENT,
       },
     };
     return contract("DeskBrokerReconciliation", {
-      reconciliation: await this.repository.storeReconciliation({ run, lockOnDivergence: input.lockOnDivergence !== false }),
+      reconciliation: await this.repository.storeReconciliation({ run, lockOnDivergence: policy.lockOnDivergence }),
       accountSnapshot,
       settledManagement,
       managementProjections,
+    });
+  }
+
+  async runScheduledReconciliation(input = {}) {
+    const accountId = input.brokerAccountId || this.environment.defaultAccount;
+    const brokerSnapshot = input.brokerSnapshot || (typeof this.repository.latestAddonSnapshot === "function"
+      ? await this.repository.latestAddonSnapshot({ accountId, bridgeId: input.bridgeId || null })
+      : null);
+    if (!brokerSnapshot) {
+      const now = this.#now();
+      return contract("DeskBrokerReconciliation", {
+        reconciliation: {
+          reconciliation_run_id: `reconciliation_skipped_${randomUUID().replaceAll("-", "")}`,
+          broker_account_id: accountId,
+          status: "skipped",
+          started_at: now,
+          completed_at: now,
+          mismatch_count: 0,
+          mismatches: [],
+          metadata: {
+            reason: "BROKER_SNAPSHOT_UNAVAILABLE",
+            reconciliation_policy: resolveBrokerReconciliationPolicy({ ...input, triggeredBy: "scheduled", reconciliationMode: input.reconciliationMode || "alert_only" }, {
+              environment: this.environment,
+              now,
+              defaultMode: "alert_only",
+            }),
+          },
+        },
+        accountSnapshot: null,
+        settledManagement: [],
+        managementProjections: [],
+      });
+    }
+    return this.reconcile({
+      ...input,
+      brokerAccountId: accountId,
+      brokerSnapshot,
+      source: input.source || "scheduled_reconciliation",
+      triggeredBy: input.triggeredBy || input.triggered_by || "scheduled",
+      reconciliationMode: input.reconciliationMode || input.mode || "alert_only",
     });
   }
 
@@ -823,13 +917,14 @@ export class BrokerExecutionService {
     }
     const candidates = (await Promise.all(reads)).filter(Boolean);
     const expectedInstrument = positionKey(context?.contract?.broker_symbol || context?.contract?.instrument_code || trade?.broker_symbol || trade?.instrument_code);
+    const expectedAccount = accountKey(context?.account?.broker_account_id || trade?.broker_account_id || accountId);
     const expectedQuantity = Math.max(0, Number(trade?.quantity_open || 0));
     const expectedSide = String(trade?.side || "").toUpperCase() === "SHORT" ? "SHORT" : "LONG";
     return candidates
       .map(({ snapshot, source }) => {
-        const actual = (snapshot?.positions || []).find((item) => positionKey(item.instrument || item.broker_symbol) === expectedInstrument) || null;
-        const actualQuantity = Math.max(0, Number(actual?.quantity || 0));
-        const actualSide = String(actual?.market_position || actual?.side || "").toUpperCase();
+        const actual = aggregateBrokerPositions(snapshot?.positions || [], { defaultAccountId: expectedAccount }).get(positionMapKey(expectedAccount, expectedInstrument)) || null;
+        const actualQuantity = Math.abs(actual?.signedQuantity || 0);
+        const actualSide = actual?.side || "";
         const reconciled = actual !== null && actualQuantity === expectedQuantity && (!actualSide || actualSide === expectedSide);
         return {
           price: firstFinite(actual?.mark_price, actual?.last_price, actual?.market_price, actual?.current_price, actual?.last),
@@ -857,8 +952,9 @@ export class BrokerExecutionService {
       return { pass: false, reason: "ADDON_SNAPSHOT_DISCONNECTED", violations: [{ code: "ADDON_SNAPSHOT_DISCONNECTED" }] };
     }
     const expectedInstrument = positionKey(context.contract?.broker_symbol || context.contract?.instrument_code);
-    const actual = (snapshot.positions || []).find((item) => positionKey(item.instrument || item.broker_symbol) === expectedInstrument) || null;
-    const actualQuantity = Math.max(0, Number(actual?.quantity || 0));
+    const expectedAccount = accountKey(context.account?.broker_account_id || context.trade?.broker_account_id || accountId);
+    const actual = aggregateBrokerPositions(snapshot.positions || [], { defaultAccountId: expectedAccount }).get(positionMapKey(expectedAccount, expectedInstrument)) || null;
+    const actualQuantity = Math.abs(actual?.signedQuantity || 0);
     if (workType === "entry") {
       return actualQuantity === 0
         ? { pass: true, snapshot }
@@ -866,7 +962,7 @@ export class BrokerExecutionService {
     }
     const deskQuantity = Math.max(0, Number(context.trade?.quantity_open || 0));
     const deskSide = context.trade?.side === "short" ? "SHORT" : "LONG";
-    const actualSide = String(actual?.market_position || actual?.side || (actualQuantity === 0 ? "FLAT" : "")).toUpperCase();
+    const actualSide = actual?.side || (actualQuantity === 0 ? "FLAT" : "");
     const quantityMatches = actualQuantity === deskQuantity;
     const sideMatches = actualQuantity === 0 || !actualSide || actualSide === deskSide;
     return quantityMatches && sideMatches
@@ -874,30 +970,183 @@ export class BrokerExecutionService {
       : {
           pass: false,
           reason: "ADDON_POSITION_MISMATCH",
-          violations: [{ code: "ADDON_POSITION_MISMATCH", instrument: expectedInstrument, desk_quantity: deskQuantity, broker_quantity: actualQuantity, desk_side: deskSide, broker_side: actualSide }],
+          violations: [{ code: "ADDON_POSITION_MISMATCH", account_id: expectedAccount, instrument: expectedInstrument, desk_quantity: deskQuantity, broker_quantity: actualQuantity, desk_side: deskSide, broker_side: actualSide }],
         };
   }
 }
 
-function compareSnapshots(desk, broker) {
+function compareSnapshots(desk, broker, { accountId = null } = {}) {
   const mismatches = [];
   const deskOrders = new Set((desk.orders || []).map((item) => item.broker_order_ref).filter(Boolean));
   const brokerOrders = new Set((broker.orders || []).map((item) => item.order_id || item.broker_order_ref).filter(Boolean));
   for (const order of deskOrders) if (!brokerOrders.has(order)) mismatches.push({ type: "ORDER_MISSING_AT_BROKER", broker_order_ref: order });
   for (const order of brokerOrders) if (!deskOrders.has(order)) mismatches.push({ type: "ORDER_UNKNOWN_TO_DESK", broker_order_ref: order });
-  const deskPositions = new Map((desk.trades || []).map((item) => [positionKey(item.broker_symbol || item.instrument_code), {
-    quantity: Number(item.quantity_open || 0), side: String(item.side || "").toUpperCase() === "SHORT" ? "SHORT" : "LONG",
-  }]));
-  const brokerPositions = new Map((broker.positions || []).map((item) => [positionKey(item.instrument || item.broker_symbol), {
-    quantity: Number(item.quantity || 0), side: String(item.market_position || item.side || "").toUpperCase(),
-  }]));
-  for (const [instrument, position] of deskPositions) {
-    const brokerPosition = brokerPositions.get(instrument) || { quantity: 0, side: "FLAT" };
-    if (brokerPosition.quantity !== position.quantity) mismatches.push({ type: "POSITION_QUANTITY_MISMATCH", instrument, desk_quantity: position.quantity, broker_quantity: brokerPosition.quantity });
-    if (brokerPosition.quantity > 0 && brokerPosition.side && brokerPosition.side !== position.side) mismatches.push({ type: "POSITION_SIDE_MISMATCH", instrument, desk_side: position.side, broker_side: brokerPosition.side });
+  const defaultAccountId = accountKey(accountId);
+  const deskPositions = aggregateDeskPositions(desk.trades || [], { defaultAccountId });
+  const brokerPositions = aggregateBrokerPositions(broker.positions || [], { defaultAccountId });
+  for (const [key, position] of deskPositions) {
+    const brokerPosition = brokerPositions.get(key) || zeroPosition(position);
+    if (sameSignedQuantity(position.signedQuantity, brokerPosition.signedQuantity)) continue;
+    if (sameSignedQuantity(Math.abs(position.signedQuantity), Math.abs(brokerPosition.signedQuantity)) && position.signedQuantity !== 0 && brokerPosition.signedQuantity !== 0) {
+      mismatches.push({
+        type: "POSITION_SIDE_MISMATCH",
+        account_id: position.accountId,
+        instrument: position.instrument,
+        desk_side: sideFromSigned(position.signedQuantity),
+        broker_side: sideFromSigned(brokerPosition.signedQuantity),
+        desk_signed_quantity: position.signedQuantity,
+        broker_signed_quantity: brokerPosition.signedQuantity,
+      });
+      continue;
+    }
+    mismatches.push({
+      type: "POSITION_QUANTITY_MISMATCH",
+      account_id: position.accountId,
+      instrument: position.instrument,
+      desk_quantity: Math.abs(position.signedQuantity),
+      broker_quantity: Math.abs(brokerPosition.signedQuantity),
+      desk_signed_quantity: position.signedQuantity,
+      broker_signed_quantity: brokerPosition.signedQuantity,
+    });
   }
-  for (const [instrument, position] of brokerPositions) if (!deskPositions.has(instrument) && position.quantity !== 0) mismatches.push({ type: "POSITION_UNKNOWN_TO_DESK", instrument, broker_quantity: position.quantity, broker_side: position.side });
+  for (const [key, position] of brokerPositions) {
+    if (!deskPositions.has(key) && !sameSignedQuantity(position.signedQuantity, 0)) {
+      mismatches.push({
+        type: "POSITION_UNKNOWN_TO_DESK",
+        account_id: position.accountId,
+        instrument: position.instrument,
+        broker_quantity: Math.abs(position.signedQuantity),
+        broker_side: sideFromSigned(position.signedQuantity),
+        broker_signed_quantity: position.signedQuantity,
+      });
+    }
+  }
   return mismatches;
+}
+
+export function resolveBrokerReconciliationPolicy(input = {}, { environment = {}, now = null, defaultMode = "alert_only" } = {}) {
+  const hasExplicitMode = input.reconciliationMode !== undefined || input.reconciliation_mode !== undefined || input.mode !== undefined || environment.reconciliationMode !== undefined;
+  const rawMode = hasExplicitMode
+    ? input.reconciliationMode ?? input.reconciliation_mode ?? input.mode ?? environment.reconciliationMode
+    : input.lockOnDivergence === true
+      ? "blocking"
+      : input.lockOnDivergence === false
+        ? "alert_only"
+        : defaultMode;
+  const mode = String(rawMode || "alert_only").trim().toLowerCase();
+  if (!BROKER_RECONCILIATION_MODES.includes(mode)) {
+    throw serviceError("RECONCILIATION_MODE_INVALID", `Unsupported broker reconciliation mode: ${rawMode}.`, { supported_modes: BROKER_RECONCILIATION_MODES });
+  }
+  const triggeredBy = String(input.triggeredBy || input.triggered_by || "manual").trim().toLowerCase() || "manual";
+  const promotionConfirmation = String(input.operatorConfirmation || input.operator_confirmation || "").trim();
+  const blockingConfirmed = promotionConfirmation === BROKER_RECONCILIATION_BLOCKING_CONFIRMATION
+    || input.blockingPromotionConfirmed === true
+    || input.blocking_promotion_confirmed === true;
+  if (mode === "blocking" && triggeredBy === "scheduled" && !blockingConfirmed) {
+    throw serviceError(
+      "RECONCILIATION_BLOCKING_CONFIRMATION_REQUIRED",
+      `Scheduled blocking reconciliation requires confirmation phrase ${BROKER_RECONCILIATION_BLOCKING_CONFIRMATION}.`,
+      { confirmation_phrase: BROKER_RECONCILIATION_BLOCKING_CONFIRMATION },
+    );
+  }
+  return Object.freeze({
+    schema_version: "broker_reconciliation_policy_v1",
+    mode,
+    triggeredBy,
+    evaluated_at: now,
+    lockOnDivergence: mode === "blocking",
+    alertOnly: mode === "alert_only",
+    blockingPromotionConfirmed: mode === "blocking" ? blockingConfirmed : false,
+    requiredConfirmationForBlocking: BROKER_RECONCILIATION_BLOCKING_CONFIRMATION,
+    rollbackMode: mode === "blocking" ? "alert_only" : mode,
+  });
+}
+
+function aggregateDeskPositions(items = [], { defaultAccountId = "*" } = {}) {
+  return aggregateSignedPositions(items, {
+    defaultAccountId,
+    instrumentOf: (item) => positionKey(item.broker_symbol || item.instrument_code || item.instrument || item.symbol),
+    accountOf: (item) => item.broker_account_id || item.account_id || item.account_name || item.accountName,
+    quantityOf: (item) => firstFinite(item.quantity_open, item.open_quantity, item.quantity, item.qty),
+    sideOf: (item) => item.side || item.direction || item.market_position,
+  });
+}
+
+function aggregateBrokerPositions(items = [], { defaultAccountId = "*" } = {}) {
+  return aggregateSignedPositions(items, {
+    defaultAccountId,
+    instrumentOf: (item) => positionKey(item.instrument || item.broker_symbol || item.instrument_code || item.symbol),
+    accountOf: (item) => item.broker_account_id || item.account_id || item.account_name || item.accountName,
+    quantityOf: (item) => firstFinite(item.quantity, item.quantity_open, item.net_quantity, item.qty),
+    sideOf: (item) => item.market_position || item.side || item.direction,
+  });
+}
+
+function aggregateSignedPositions(items = [], { defaultAccountId = "*", accountOf, instrumentOf, quantityOf, sideOf } = {}) {
+  const aggregated = new Map();
+  for (const item of items || []) {
+    const instrument = instrumentOf(item);
+    if (!instrument) continue;
+    const accountId = accountKey(accountOf(item) || defaultAccountId);
+    const signedQuantity = signedPositionQuantity({ quantity: quantityOf(item), side: sideOf(item) });
+    const key = positionMapKey(accountId, instrument);
+    const current = aggregated.get(key) || {
+      accountId,
+      instrument,
+      signedQuantity: 0,
+      rawCount: 0,
+      raw: [],
+      side: "FLAT",
+    };
+    current.signedQuantity = normalizeSignedQuantity(current.signedQuantity + signedQuantity);
+    current.rawCount += 1;
+    current.raw.push(item);
+    current.side = sideFromSigned(current.signedQuantity);
+    for (const field of ["mark_price", "last_price", "market_price", "current_price", "last", "mark_time", "mark_timestamp", "timestamp_utc"]) {
+      if (current[field] === undefined && item?.[field] !== undefined) current[field] = item[field];
+    }
+    aggregated.set(key, current);
+  }
+  return aggregated;
+}
+
+function signedPositionQuantity({ quantity, side }) {
+  const qty = Math.max(0, Number(quantity || 0));
+  if (!Number.isFinite(qty) || qty === 0) return 0;
+  const normalizedSide = normalizePositionSide(side);
+  if (normalizedSide === "SHORT") return normalizeSignedQuantity(-qty);
+  if (normalizedSide === "FLAT") return 0;
+  return normalizeSignedQuantity(qty);
+}
+
+function normalizePositionSide(side) {
+  const normalized = String(side || "").trim().toUpperCase();
+  if (["SHORT", "SELL"].includes(normalized)) return "SHORT";
+  if (["LONG", "BUY"].includes(normalized)) return "LONG";
+  if (["FLAT", "NONE", "0"].includes(normalized)) return "FLAT";
+  return normalized || "LONG";
+}
+
+function sideFromSigned(value) {
+  if (value > 0) return "LONG";
+  if (value < 0) return "SHORT";
+  return "FLAT";
+}
+
+function sameSignedQuantity(left, right) {
+  return Math.abs(Number(left || 0) - Number(right || 0)) < 1e-9;
+}
+
+function normalizeSignedQuantity(value) {
+  const parsed = Number(value || 0);
+  if (!Number.isFinite(parsed) || Math.abs(parsed) < 1e-9) return 0;
+  return Number(parsed.toFixed(8));
+}
+
+function zeroPosition(position) { return { accountId: position.accountId, instrument: position.instrument, signedQuantity: 0, side: "FLAT" }; }
+
+function positionMapKey(accountId, instrument) {
+  return `${accountKey(accountId)}::${positionKey(instrument)}`;
 }
 
 function firstFinite(...values) {
@@ -908,16 +1157,7 @@ function firstFinite(...values) {
   }
   return null;
 }
-function hasCapitalValue(account) {
-  return [
-    account.cash_value,
-    account.cashValue,
-    account.CashValue,
-    account.net_liquidation_value,
-    account.net_liquidation,
-    account.NetLiquidation,
-  ].some((value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) > 0);
-}
+function hasCapitalValue(account) { return [account.cash_value, account.cashValue, account.CashValue, account.net_liquidation_value, account.net_liquidation, account.NetLiquidation].some((value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) > 0); }
 function monitorSourcePositionId(monitor = {}) {
   return monitor.deterministic_monitor_command?.position_request?.position_id
     || monitor.position_request?.position_id
@@ -936,13 +1176,22 @@ function positionKey(value) {
   const year = rawYear.length === 2 ? 2000 + Number(rawYear) : Number(rawYear);
   return `${root}:${year}-${String(month).padStart(2, "0")}`;
 }
+function accountKey(value) {
+  return String(value || "*").trim() || "*";
+}
 function requirePhrase(actual, expected) { if (actual !== expected) throw serviceError("CONFIRMATION_REQUIRED", `Confirmation phrase must be ${expected}.`); }
-function safeEnvironment(environment) { return { executionEnabled: environment.executionEnabled, bridgeMode: environment.bridgeMode, killSwitch: environment.killSwitch, maxContracts: environment.maxContracts, allowedInstruments: environment.allowedInstruments, allowLiveAccount: environment.allowLiveAccount }; }
+function safeEnvironment(environment) { return { executionEnabled: environment.executionEnabled, manualTelegramExecutionEnabled: environment.manualTelegramExecutionEnabled, legacyPositionExecutionEnabled: environment.legacyPositionExecutionEnabled, bridgeMode: environment.bridgeMode, killSwitch: environment.killSwitch, maxContracts: environment.maxContracts, allowedInstruments: environment.allowedInstruments, allowLiveAccount: environment.allowLiveAccount }; }
 function finiteOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
+function validIso(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+}
 
 function contract(name, payload) { return { contract: name, schemaVersion: "1.0.0", ...payload }; }
 function serviceError(code, message, details = {}) { const error = new Error(message); error.code = code; error.details = details; error.statusCode = 409; return error; }
+function skippedPortfolioExecution(reason) { return { ok: true, status: "SKIPPED", reason, count: 0, items: [] }; }

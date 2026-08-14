@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { TelegramClient } from "./telegram-client.js";
+import { buildTelegramTradingCandidate, isTelegramTradingAlertSourceAllowed } from "./telegram-trading-message.js";
 
 const CONFIG_ID = "desk_telegram";
 const ACTIVE_NOTIFICATION_STATES = new Set(["pending", "active", "watching", "action_required", "open"]);
-const TRADE_TERMINAL_STATES = new Set(["closed", "cancelled", "rejected", "expired", "error", "failed"]);
+export { isTelegramTradingAlertSourceAllowed };
 
 export class TelegramAlertService {
   constructor({ persistence, clock, env = process.env, fetchImpl = globalThis.fetch } = {}) {
@@ -567,11 +568,19 @@ export class TelegramAlertService {
        UNION ALL
        SELECT 'order_intent', toi.order_intent_id, toi.status::text, toi.updated_at,
               jsonb_build_object(
-                'decision_id', toi.trade_decision_id, 'side', toi.side, 'order_type', toi.order_type,
+                'decision_id', toi.trade_decision_id,
+                'instrument', COALESCE(toi.payload->>'instrument', bc.instrument_code),
+                'broker_symbol', COALESCE(toi.payload->>'broker_symbol', bc.broker_symbol),
+                'side', toi.side, 'order_type', toi.order_type,
                 'quantity', toi.quantity, 'limit_price', toi.limit_price, 'stop_price', toi.stop_price,
+                'protective_stop', COALESCE(toi.payload->'protective_stop', toi.bracket->'stop_price'),
+                'profit_target', COALESCE(toi.payload->'profit_target', toi.bracket->'target_price'),
+                'time_in_force', toi.time_in_force,
+                'expires_at', toi.expires_at,
                 'approval_status', toi.approval_status
               )
        FROM trade_order_intents toi
+       LEFT JOIN broker_contracts bc ON bc.broker_contract_id = toi.broker_contract_id
        ORDER BY occurred_at DESC
        LIMIT 200`,
     );
@@ -607,15 +616,21 @@ export class TelegramAlertService {
                 tmi.status::text AS source_state,
                 tmi.updated_at AS occurred_at,
                 jsonb_build_object(
-                  'trade_id', tmi.trade_id, 'action', tmi.action, 'quantity', tmi.requested_quantity,
+                  'trade_id', tmi.trade_id, 'instrument', bc.instrument_code, 'broker_symbol', bc.broker_symbol,
+                  'action', tmi.action, 'quantity', tmi.requested_quantity,
                   'stop_price', tmi.requested_stop_price, 'reason', tmi.reason,
                   'approval_status', tmi.approval_status
                 ) AS payload
          FROM trade_management_intents tmi
+         LEFT JOIN trades t ON t.trade_id = tmi.trade_id
+         LEFT JOIN broker_contracts bc ON bc.broker_contract_id = t.broker_contract_id
          ORDER BY tmi.updated_at DESC LIMIT 100`,
       ),
     ]);
-    return [...result.rows, ...events.rows, ...trades.rows, ...management.rows].map(tradingCandidate).filter(Boolean);
+    const manualTelegramExecution = String(this.env.DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED || "false").toLowerCase() === "true";
+    return [...result.rows, ...events.rows, ...trades.rows, ...management.rows]
+      .map((row) => buildTelegramTradingCandidate(row, { manualTelegramExecution, hash }))
+      .filter(Boolean);
   }
 
   async #handleAdminCommand(update) {
@@ -768,37 +783,6 @@ function notificationCandidate(item = {}) {
     silent: !active,
     message: `${icon} ${item.title || "Incident Desk"}\n${item.message || "Consulter le centre d’incidents."}\nÉtat: ${active ? "actif" : "rétabli"}`,
     payload: { notification_id: id, severity, status },
-  };
-}
-
-function tradingCandidate(row = {}) {
-  const payload = row.payload || {};
-  const state = String(row.source_state || "unknown").toLowerCase();
-  const kind = String(row.source_kind || "trade_event");
-  if (kind === "trade_decision" && (state === "draft" || !payload.side)) return null;
-  const icon = TRADE_TERMINAL_STATES.has(state) ? "🏁" : kind === "trade_decision" ? "🧠" : kind === "management_intent" ? "🛡️" : "📈";
-  const title = {
-    trade_decision: "Décision trading",
-    order_intent: "Ordre préparé",
-    broker_order_event: "Événement broker",
-    trade: "Cycle de trade",
-    management_intent: "Gestion de position",
-  }[kind] || "Événement trading";
-  const details = Object.entries(payload)
-    .filter(([, value]) => value !== null && value !== undefined && typeof value !== "object")
-    .slice(0, 7)
-    .map(([key, value]) => `${key}: ${value}`)
-    .join("\n");
-  return {
-    profile: "trading",
-    sourceKey: `${kind}:${row.source_id}`,
-    sourceKind: kind,
-    state,
-    fingerprint: hash({ state, payload }),
-    priority: kind === "broker_order_event" || kind === "trade" ? 80 : 65,
-    silent: kind === "trade_decision" && ["draft", "no_trade"].includes(state),
-    message: `${icon} ${title}\nÉtat: ${state.toUpperCase()}\n${details || `Référence: ${row.source_id}`}`,
-    payload: { source_id: row.source_id, occurred_at: iso(row.occurred_at), ...payload },
   };
 }
 

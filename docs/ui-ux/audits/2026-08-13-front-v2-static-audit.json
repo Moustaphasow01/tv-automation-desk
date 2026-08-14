@@ -1,0 +1,2082 @@
+{
+  "version": "1.0.0",
+  "summary": {
+    "scannedRoot": "/mnt/c/Users/CES/Desktop/TV_Automation_PREPROD/apps/desk-control-plane/src",
+    "filesScanned": 84,
+    "findingCount": 230,
+    "errors": 167,
+    "warnings": 63
+  },
+  "findings": [
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 561,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "text-align: right !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 565,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "text-align: center !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1019,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1055,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1067,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1093,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1103,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: var(--success) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1108,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: var(--warning) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1112,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: var(--danger) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1174,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0283",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1183,
+      "message": "Suppression du focus visible sans remplacement vérifiable.",
+      "excerpt": "outline: 0;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1233,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1258,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1278,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: #dce8f2 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1279,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "font-size: 10px !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1366,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1372,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1380,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1420,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1488,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: rgba(34, 211, 197, 0.5) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1489,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(34, 211, 197, 0.12) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1490,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: var(--accent-strong) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1520,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1586,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1628,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1698,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1741,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1787,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 1852,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2033,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2080,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2116,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2135,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2141,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2258,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: #c3d3e3 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2259,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "font-size: 10px !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2272,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border: 0 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2274,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: transparent !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2290,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: #dbe8f5 !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2304,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2317,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: #e6eff8 !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2337,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2358,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2429,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: #1679ef !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2430,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #0e63c9 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2431,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: #eef7ff !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2624,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2644,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2665,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: #1968a9 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2666,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #0b3159 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2667,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: #bfe1ff !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2758,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2793,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2802,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2812,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2825,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2856,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "grid-template-columns: 56px repeat(5, minmax(0, 1fr)) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2864,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2872,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2878,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #446b20 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2882,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #0b817f !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2886,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #0b6593 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2890,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #0a2948 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2894,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #0b4373 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2898,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #49202a !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2902,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #681d28 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2906,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: #15304b !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2933,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2946,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: var(--warning) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2950,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: #18bcea !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2969,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2974,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 2979,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "grid-template-columns: repeat(4, minmax(0, 1fr)) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3002,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3008,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3029,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3047,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3150,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3157,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3281,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3332,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3371,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3464,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3533,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3629,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3634,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3671,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3867,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 3899,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4104,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4125,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4133,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4224,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4238,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4349,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4456,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4474,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4565,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4600,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4655,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4777,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4803,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4869,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4903,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4938,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 4946,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (6 px).",
+      "excerpt": "font-size: 6px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5064,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5114,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5157,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5220,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5331,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5352,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5368,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5393,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5438,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5484,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5489,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: #1477f2 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5490,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(20, 119, 242, 0.24) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5491,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: #e8f2ff !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5623,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5639,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5664,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5685,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5858,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5874,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5893,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5915,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: rgba(255, 77, 94, 0.6) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5916,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(255, 77, 94, 0.1) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5926,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 5947,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6023,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6149,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6165,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6184,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6203,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: rgba(255, 157, 46, 0.52) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6204,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(255, 157, 46, 0.08) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6210,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6231,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6308,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: rgba(255, 157, 46, 0.55) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6309,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(255, 157, 46, 0.08) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6313,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: rgba(255, 77, 94, 0.55) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6314,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(255, 77, 94, 0.08) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6359,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6375,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6394,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6413,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: rgba(255, 77, 94, 0.6) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6414,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(255, 77, 94, 0.1) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6424,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6445,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6505,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6521,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6534,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6629,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6645,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6664,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6682,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: rgba(255, 77, 94, 0.52) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6683,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(255, 77, 94, 0.08) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6693,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6714,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6815,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6831,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6850,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6878,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: rgba(255, 77, 94, 0.52) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6879,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(255, 77, 94, 0.08) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6889,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 6910,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7021,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7037,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7056,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7075,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: rgba(255, 77, 94, 0.52) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7076,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(255, 77, 94, 0.08) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7086,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7193,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7239,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7262,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7278,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7337,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7356,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7388,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7496,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7506,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7546,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7618,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7670,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: #865400 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7671,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(255, 157, 46, 0.08) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7686,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "color: var(--warning) !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7731,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7786,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7820,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7880,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7902,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 7974,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "font-size: 11px !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8067,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8074,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8080,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8092,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8120,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8142,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8226,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8270,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8279,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8302,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8315,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8331,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8360,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "border-color: #4f3481 !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8361,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "background: rgba(148, 84, 233, 0.08) !important;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8362,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "padding: 8px !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8380,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8503,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8513,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8533,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": "font-size: 10px !important;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8553,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8608,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8732,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8752,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8767,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8826,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0283",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8856,
+      "message": "Suppression du focus visible sans remplacement vérifiable.",
+      "excerpt": "outline: 0;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8970,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8977,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 8997,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 9031,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 9107,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (8 px).",
+      "excerpt": "font-size: 8px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 9152,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 9159,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (7 px).",
+      "excerpt": "font-size: 7px;"
+    },
+    {
+      "ruleId": "UXR-0161",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/design-system/styles.css",
+      "line": 9167,
+      "message": "Taille de texte fonctionnel potentiellement inférieure à 10 px (9 px).",
+      "excerpt": "font-size: 9px;"
+    },
+    {
+      "ruleId": "UXR-0765",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/domains/realtime/commandRuntime.ts",
+      "line": 145,
+      "message": "Identifiant aléatoire potentiel dans la couche de lecture/UI ; exiger un ID canonique.",
+      "excerpt": "return globalThis.crypto.randomUUID().replace(/-/g, \"\");"
+    },
+    {
+      "ruleId": "UXR-0765",
+      "priority": "P0",
+      "severity": "ERROR",
+      "file": "apps/desk-control-plane/src/domains/realtime/commandRuntime.ts",
+      "line": 148,
+      "message": "Identifiant aléatoire potentiel dans la couche de lecture/UI ; exiger un ID canonique.",
+      "excerpt": "return Math.random().toString(36).slice(2, 14);"
+    },
+    {
+      "ruleId": "UXR-0748",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/pages/AuthSessionPage.tsx",
+      "line": 87,
+      "message": "Accès HTTP direct depuis page/composant ; passer par data-access/query.",
+      "excerpt": "const response = await fetch(\"/api/v1/auth/operator/login\", {"
+    },
+    {
+      "ruleId": "UXR-0748",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/pages/AuthSessionPage.tsx",
+      "line": 113,
+      "message": "Accès HTTP direct depuis page/composant ; passer par data-access/query.",
+      "excerpt": "const response = await fetch(\"/api/v1/auth/operator/logout\", {"
+    }
+  ]
+}

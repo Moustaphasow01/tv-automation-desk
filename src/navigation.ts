@@ -1,4 +1,6 @@
 import type { IconName } from "@/components/common";
+import { frontV3MigrationForSpace } from "@/features/front-migration/manifest";
+import type { FrontV3SpaceMigration } from "@/features/front-migration/manifest";
 
 export interface NavigationItem {
   to: string;
@@ -11,6 +13,7 @@ export interface NavigationSpace extends NavigationItem {
   id: "today" | "replay" | "performance" | "operations" | "execution" | "settings";
   matches: (pathname: string) => boolean;
   items: NavigationItem[];
+  v3Migration: FrontV3SpaceMigration;
 }
 
 const todayItems: NavigationItem[] = [
@@ -38,7 +41,10 @@ const performanceItems: NavigationItem[] = [
 
 const operationsItems: NavigationItem[] = [
   item("/operations", "Automatisations", "Workflows et état global", "monitor"),
+  item("/operations/agents", "Agents IA", "Workers, pools et scheduler", "brain"),
+  item("/operations/ai-context", "AI Context", "Avis IA, fallbacks et contraintes", "brain"),
   item("/operations/claim-lanes", "Files GPT", "LIVE et Replay séparés", "layers"),
+  item("/operations/portfolio-risk", "Portfolio Risk", "Risque global et netting", "target"),
   item("/operations/observability", "Activité GPT", "Claims, délais et coûts", "chart"),
   item("/operations/incidents", "Incidents", "Alertes qui demandent une action", "alert"),
   item("/operations/notifications", "Notifications", "Messages et escalades", "bell"),
@@ -51,6 +57,9 @@ const executionItems: NavigationItem[] = [
 
 const settingsItems: NavigationItem[] = [
   item("/strategies", "Stratégie & contrats", "Versions actives et compatibilité", "settings"),
+  item("/research", "Research Lab", "Experiments, candidates et preuves", "brain"),
+  item("/prompt-registry", "Prompt Registry", "Prompts, bindings et rollback", "brain"),
+  item("/data-foundation", "Data Foundation", "Datasets, lineage et features", "database"),
   item("/audit", "Qualité des données", "Sources, couverture et contrôles", "audit"),
 ];
 
@@ -66,7 +75,7 @@ export const navigationSpaces: NavigationSpace[] = [
   space("execution", "/operations/execution", "Exécution", "Gérer NinjaTrader Sim101", "position", executionItems, pathname =>
     pathname.startsWith("/operations/execution")),
   space("settings", "/strategies", "Réglages", "Stratégie, contrats et qualité", "settings", settingsItems, pathname =>
-    pathname.startsWith("/strategies") || pathname === "/audit"),
+    pathname.startsWith("/strategies") || pathname.startsWith("/research") || pathname === "/prompt-registry" || pathname === "/data-foundation" || pathname === "/audit"),
 ];
 
 export const navigationCatalog: Array<{ label: string; items: NavigationItem[] }> =
@@ -89,5 +98,5 @@ function space(
   items: NavigationItem[],
   matches: NavigationSpace["matches"],
 ): NavigationSpace {
-  return { id, to, label, description, icon, items, matches };
+  return { id, to, label, description, icon, items, matches, v3Migration: frontV3MigrationForSpace(id) };
 }

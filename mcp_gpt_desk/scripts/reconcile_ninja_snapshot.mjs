@@ -7,12 +7,16 @@ if (!snapshotPath) throw new Error("Usage: node scripts/reconcile_ninja_snapshot
 const brokerSnapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
 const apiBase = String(process.env.DESK_NINJA_API_BASE_URL || "http://127.0.0.1:8787/api/v1").replace(/\/+$/, "");
 const apiKey = String(process.env.DESK_MCP_API_KEY || process.env.DESK_GPT_MCP_API_KEY || "");
+const reconciliationMode = String(process.env.DESK_BROKER_RECONCILIATION_MODE || "alert_only").toLowerCase();
 const response = await fetch(`${apiBase}/execution/bridge/reconcile`, {
   method: "POST",
   headers: { "content-type": "application/json", accept: "application/json", ...(apiKey ? { authorization: `Bearer ${apiKey}`, "x-desk-api-key": apiKey } : {}) },
   body: JSON.stringify({
     bridgeId: process.env.DESK_NINJA_BRIDGE_ID || "ninja_bridge_local",
     brokerAccountId: process.env.DESK_NINJA_DEFAULT_ACCOUNT || "ninjatrader_paper_local",
+    reconciliationMode,
+    triggeredBy: process.env.DESK_BROKER_RECONCILIATION_TRIGGERED_BY || "scheduled",
+    operatorConfirmation: process.env.DESK_BROKER_RECONCILIATION_CONFIRMATION || undefined,
     brokerSnapshot,
   }),
 });

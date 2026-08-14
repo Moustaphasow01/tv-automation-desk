@@ -14,6 +14,7 @@ import {
 test("V5 profile pins exact canonical M1 feeds and derived M5 datasets", () => {
   const mnqM1 = V5_REPLAY_DATA_PROFILE.datasets.find(({ dataset }) => dataset === "MNQ_M1");
   const mnqM5 = V5_REPLAY_DATA_PROFILE.datasets.find(({ dataset }) => dataset === "MNQ_M5");
+  const megaCapsM5 = V5_REPLAY_DATA_PROFILE.datasets.find(({ dataset }) => dataset === "mega_caps_premarket");
 
   assert.equal(V5_REPLAY_DATA_PROFILE_VERSION, "1.1.0");
   assert.equal(V5_REPLAY_DATA_PROFILE.canonical_m5_mode, "derived_from_m1");
@@ -22,6 +23,8 @@ test("V5 profile pins exact canonical M1 feeds and derived M5 datasets", () => {
   assert.equal(mnqM5.sourceMode, "derived");
   assert.equal(mnqM5.sourceDataset, "MNQ_M1");
   assert.deepEqual(mnqM5.providerAuditFeedIds, ["prod__tradingview__MNQ1!__5"]);
+  assert.deepEqual(megaCapsM5.symbols, ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "AVGO", "TSLA", "SMH", "SOXX"]);
+  assert.equal(megaCapsM5.required, false);
 });
 
 test("canonical M1 query starts at context warm-up while M1 coverage remains execution-scoped", () => {

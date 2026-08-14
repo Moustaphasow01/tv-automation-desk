@@ -421,6 +421,36 @@
       "status": "active",
       "runtime_exposed": true,
       "owner_milestone": "New React front Lot 1"
+    },
+    "strategy_definition_contract": {
+      "contract_id": "DeskStrategyDefinition_v1_0_0",
+      "contract_name": "DeskStrategyDefinition",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/strategy-definition-v1.schema.json",
+      "example_path": "examples/strategy-definition.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "TD2-101 Strategy Kernel"
+    },
+    "strategy_version_contract": {
+      "contract_id": "DeskStrategyVersion_v1_0_0",
+      "contract_name": "DeskStrategyVersion",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/strategy-version-v1.schema.json",
+      "example_path": "examples/strategy-version.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "TD2-101 Strategy Kernel"
+    },
+    "strategy_instance_contract": {
+      "contract_id": "DeskStrategyInstance_v1_0_0",
+      "contract_name": "DeskStrategyInstance",
+      "schema_version": "1.0.0",
+      "schema_path": "schemas/entities/strategy-instance-v1.schema.json",
+      "example_path": "examples/strategy-instance.example.json",
+      "status": "active",
+      "runtime_exposed": false,
+      "owner_milestone": "TD2-101 Strategy Kernel"
     }
   },
   "lifecycle_policy": {

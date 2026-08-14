@@ -80,6 +80,7 @@ function ReplayComparisonWorkbench({ data }: { data: ReplayComparison }) {
       <MetricCard label="Spread max/min" value={`${summary.spreadR.toFixed(2)} R`}/>
       <MetricCard label="GPT" value={summary.gptProcesses} detail={`${summary.waitingGpt} attente · ${summary.telemetryCoveragePct ?? "—"}% tél.`}/>
       <MetricCard label="Coût mesuré" value={formatCost(summary.costUsd)} detail={summary.totalTokens != null ? `${summary.totalTokens} tokens` : "couverture absente"}/>
+      <MetricCard label="Preuves sim" value={summary.simulationProofs ?? 0} detail={`${summary.simulationProofFailures ?? 0} sans preuve`} tone={(summary.simulationProofFailures ?? 0) ? "warning" : "positive"}/>
     </MetricStrip>
 
     <section className="replay-terminal-section replay-compare-scoreboard">
@@ -104,6 +105,7 @@ function ReplayComparisonWorkbench({ data }: { data: ReplayComparison }) {
     </section>
 
     <div className="replay-compare-lower-grid">
+      <ReplayCompareSimulationPanel rows={rows}/>
       <ReplayCompareGptPanel rows={rows}/>
       <ReplayCompareTimelinePanel rows={rows}/>
     </div>
@@ -138,6 +140,23 @@ function ReplayCompareGptPanel({ rows }: { rows: ReplayComparisonItem[] }) {
         </Link>)}
         {row.gptProcesses.length > 8 && <Link className="replay-compare-more-link" to={`/replay/runs/${encodeURIComponent(row.id)}`}>+{row.gptProcesses.length - 8} processus dans le détail du run <Icon name="arrow" size={13}/></Link>}
       </>}
+    </section>)}</div>
+  </Card>;
+}
+
+function ReplayCompareSimulationPanel({ rows }: { rows: ReplayComparisonItem[] }) {
+  const linked = rows.filter(row => row.simulationEvidence?.available);
+  return <Card className="replay-compare-simulation-panel">
+    <header><div><p className="eyebrow">Run Registry</p><h2>Preuves & artifacts</h2></div><span>{linked.reduce((sum, row) => sum + (row.simulationEvidence?.count || 0), 0)}</span></header>
+    <div>{rows.map(row => <section key={row.id}>
+      <header><strong title={row.id}>{compactId(row.id, 44)}</strong><small>{row.simulationEvidence?.available ? `${row.simulationEvidence.count} run simulation lié` : "registry indisponible"}</small></header>
+      {!row.simulationEvidence?.available ? <p className="muted-copy">Le Run Registry simulation n’est pas disponible pour cet environnement.</p> : !row.simulationEvidence.count ? <p className="muted-copy">Aucune preuve simulation liée à ce replay.</p> : row.simulationEvidence.runs.map(run => <article key={run.id} className="simulation-proof-card">
+        <div><strong>{compactId(run.id, 42)}</strong><StatusTag status={run.status}/></div>
+        <small>Résultat · {simulationMetricsLabel(row, run.id)}</small>
+        <small>Dataset · {compactId(run.datasetId || "—", 34)}</small>
+        <small>Métriques · {compactId(run.metricsHash || "—", 34)}</small>
+        <small>Artifacts · {row.simulationEvidence?.artifacts.filter(artifact => artifact.simulationRunId === run.id).map(artifact => artifact.artifactKind).join(", ") || "—"}</small>
+      </article>)}
     </section>)}</div>
   </Card>;
 }
@@ -179,12 +198,19 @@ function variantLabel(value?: string | null) {
 }
 
 function riskLabel(value: string) {
-  const labels: Record<string, string> = { RUN_FAILED: "run en échec", RUN_BLOCKED: "run bloqué", RUN_ERROR: "erreur", GPT_FAILURE: "risque GPT", WAITING_GPT: "attente GPT", TELEMETRY_PARTIAL: "tél. partielle" };
+  const labels: Record<string, string> = { RUN_FAILED: "run en échec", RUN_BLOCKED: "run bloqué", RUN_ERROR: "erreur", GPT_FAILURE: "risque GPT", WAITING_GPT: "attente GPT", TELEMETRY_PARTIAL: "tél. partielle", SIMULATION_PROOF_MISSING: "preuve sim absente" };
   return labels[value] || value.toLowerCase();
 }
 
 function formatCost(value: number | null | undefined) {
   return value == null ? "—" : `$${value.toFixed(4)}`;
+}
+
+function simulationMetricsLabel(row: ReplayComparisonItem, simulationRunId: string) {
+  const summary = row.simulationEvidence?.artifacts.find(artifact => artifact.simulationRunId === simulationRunId && artifact.artifactKind === "METRICS")?.payloadSummary || {};
+  const totalR = typeof summary.totalR === "number" ? summary.totalR : null;
+  const tradeCount = typeof summary.tradeCount === "number" ? summary.tradeCount : null;
+  return `${totalR == null ? "—" : `${totalR >= 0 ? "+" : ""}${totalR.toFixed(2)} R`} · ${tradeCount ?? "—"} trades`;
 }
 
 function compactId(value: string, max = 36) {

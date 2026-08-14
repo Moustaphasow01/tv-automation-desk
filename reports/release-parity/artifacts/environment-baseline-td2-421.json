@@ -1,0 +1,422 @@
+{
+  "schema": "desk_environment_baseline_v1",
+  "captured_at_utc": "2026-08-14T11:36:11.039Z",
+  "repo_root": "/mnt/c/Users/CES/Desktop/TV_Automation_PREPROD",
+  "local": {
+    "host": "DESKTOP-A0TIK79",
+    "platform": "linux",
+    "release": "6.6.87.2-microsoft-standard-WSL2",
+    "arch": "x64",
+    "cpus": 8,
+    "memory_total_mb": 7868,
+    "node": "v20.20.2",
+    "npm": "10.8.2",
+    "git": {
+      "version": "git version 2.34.1",
+      "branch": "codex/preprod-v4-local-parity-cleanup",
+      "revision": "e18b48a310085679c94639420ca0b0b8c78ee70f",
+      "dirty_entries": 645
+    },
+    "docker": {
+      "command": "/mnt/c/Program Files/Docker/Docker/resources/bin/docker.exe",
+      "available": true,
+      "version": "Docker version 28.5.1, build e180ab8",
+      "compose_available": true,
+      "compose_version": "Docker Compose version v2.40.3-desktop.1",
+      "note": "docker_available"
+    },
+    "postgres": {
+      "static_schema": {
+        "migration_files": [
+          "001_schema.sql",
+          "002_market_import_schema.sql",
+          "003_trade_automation_schema.sql",
+          "004_reference_seed.sql",
+          "005_pack_object_catalog.sql",
+          "006_runtime_origin.sql",
+          "007_remove_legacy_v4.sql",
+          "008_ninjatrader_execution_gateway.sql",
+          "009_broker_sizing_policy.sql",
+          "010_broker_position_management.sql",
+          "011_ninjatrader_addon_gateway.sql",
+          "012_deployment_readiness.sql",
+          "013_news_ingestion.sql",
+          "014_news_runtime_grants.sql",
+          "015_broker_execution_authority.sql",
+          "016_telegram_alerting.sql",
+          "017_trade_outcomes_resilience.sql",
+          "018_runtime_resilience.sql",
+          "019_strategy_v5_risk_guard.sql",
+          "020_broker_rounding_risk_policy.sql",
+          "021_broker_decision_freshness_policy.sql",
+          "022_strategy_kernel_registry.sql",
+          "023_strategy_kernel_audit.sql",
+          "024_trade_strategy_instance_link.sql",
+          "025_data_source_ingestion_batch_registry.sql",
+          "026_dataset_registry.sql",
+          "027_feature_registry.sql",
+          "028_market_calendar_session_rollover.sql",
+          "029_market_data_capability_profiles.sql",
+          "030_market_data_storage_architecture.sql",
+          "031_feature_initial_point_in_time_catalog.sql",
+          "032_simulation_run_registry.sql",
+          "033_order_simulation_policy_artifact_kind.sql",
+          "034_robustness_report_artifact_kind.sql",
+          "035_dataset_temporal_splits.sql",
+          "036_prompt_instruction_registry.sql",
+          "037_agent_runtime_registry.sql",
+          "038_agent_runtime_notifications.sql",
+          "039_agent_conversation_affinity.sql",
+          "040_agent_execution_policy_snapshots.sql",
+          "041_agent_task_recovery.sql",
+          "042_agent_task_run_metrics.sql",
+          "043_research_experiment_registry.sql",
+          "044_strategy_signal_bus.sql",
+          "045_execution_provider_port.sql",
+          "046_broker_execution_authority_mode.sql",
+          "047_manual_and_theoretical_execution.sql",
+          "048_portfolio_risk_runtime_lineage.sql",
+          "049_execution_provider_portfolio_lineage.sql",
+          "050_human_execution_gate_provider_lifecycle.sql",
+          "051_ai_context_gate_decisions.sql",
+          "052_research_promotion_gate_reports.sql",
+          "053_portfolio_candidate_allocation_account_scope.sql",
+          "054_data_engine_extended_point_in_time_features.sql"
+        ],
+        "table_count": 124,
+        "index_count": 230,
+        "enum_count": 79,
+        "tables": [
+          "agent_conversations",
+          "agent_events",
+          "agent_execution_policy_snapshots",
+          "agent_missions",
+          "agent_prompt_bindings",
+          "agent_task_dead_letters",
+          "agent_task_leases",
+          "agent_task_run_metrics",
+          "agent_tasks",
+          "agents",
+          "ai_context_gate_decisions",
+          "ai_context_gate_events",
+          "broker_account_snapshots",
+          "broker_accounts",
+          "broker_adapter_parity_runs",
+          "broker_addon_events",
+          "broker_addon_snapshots",
+          "broker_bridge_heartbeats",
+          "broker_contracts",
+          "broker_execution_locks",
+          "broker_execution_outbox",
+          "broker_management_outbox",
+          "broker_order_events",
+          "broker_orders",
+          "broker_policy_audit_events",
+          "broker_provider_commands",
+          "broker_provider_events",
+          "broker_providers",
+          "broker_reconciliation_runs",
+          "data_sources",
+          "dataset_ingestion_batches",
+          "dataset_temporal_splits",
+          "datasets",
+          "desk_backup_catalog",
+          "desk_deployment_runs",
+          "desk_document_links",
+          "desk_document_quarantine",
+          "desk_documents",
+          "desk_import_checkpoints",
+          "desk_import_runs",
+          "desk_maintenance_runs",
+          "desk_pack_objects",
+          "desk_runtime_migrations",
+          "desk_schema_migrations",
+          "desk_service_heartbeats",
+          "feature_computation_runs",
+          "feature_definitions",
+          "feature_value_points",
+          "feature_versions",
+          "human_execution_gate_events",
+          "human_execution_gates",
+          "ingestion_batches",
+          "instruction_definitions",
+          "instruction_versions",
+          "market_calendar_days",
+          "market_calendars",
+          "market_candles",
+          "market_data_capability_profile_runs",
+          "market_data_capability_profiles",
+          "market_data_hot_series_windows",
+          "market_data_storage_objects",
+          "market_feed_status",
+          "market_feeds",
+          "market_futures_rollovers",
+          "market_instruments",
+          "market_session_occurrences",
+          "market_session_templates",
+          "market_symbols",
+          "market_timeframes",
+          "news_articles",
+          "news_ingestion_runs",
+          "news_sources",
+          "portfolio_arbitration_runs",
+          "portfolio_candidate_allocations",
+          "portfolio_order_intent_execution_states",
+          "portfolio_order_intent_lineage",
+          "portfolio_risk_decisions",
+          "portfolio_target_position_allocations",
+          "portfolio_target_position_risk_decisions",
+          "portfolio_target_positions",
+          "prompt_audit_events",
+          "prompt_composition_items",
+          "prompt_compositions",
+          "prompt_definitions",
+          "prompt_deployments",
+          "prompt_evaluations",
+          "prompt_render_snapshots",
+          "prompt_versions",
+          "research_audit_events",
+          "research_candidates",
+          "research_evaluation_reports",
+          "research_experiment_run_links",
+          "research_experiments",
+          "research_hypotheses",
+          "simulation_run_artifacts",
+          "simulation_run_audit_events",
+          "simulation_run_split_usage",
+          "simulation_runs",
+          "strategy_definitions",
+          "strategy_instances",
+          "strategy_kernel_audit_events",
+          "strategy_signal_outbox",
+          "strategy_versions",
+          "telegram_command_requests",
+          "telegram_delivery_attempts",
+          "telegram_delivery_outbox",
+          "telegram_runtime_config",
+          "telegram_runtime_state",
+          "telegram_source_state",
+          "trade_approvals",
+          "trade_decisions",
+          "trade_events",
+          "trade_fills",
+          "trade_management_approvals",
+          "trade_management_intents",
+          "trade_manual_execution_events",
+          "trade_order_intents",
+          "trade_outcomes",
+          "trade_policy_profiles",
+          "trade_position_snapshots",
+          "trade_risk_checks",
+          "trade_theoretical_execution_events",
+          "trades",
+          "tradingview_events"
+        ]
+      },
+      "runtime": {
+        "status": "not_configured",
+        "note": "set DESK_BASELINE_DATABASE_URL or DATABASE_URL for read-only runtime counts"
+      }
+    },
+    "package_scripts": {
+      "build": true,
+      "typecheck": true,
+      "test:react": true,
+      "test:e2e": true,
+      "test:stack": true,
+      "guard:architecture": true,
+      "guard:static-quality": true,
+      "guard:pr-governance": true,
+      "guard:front-architecture": true,
+      "benchmark:local": true,
+      "baseline:environment": true,
+      "certify:resilience": true
+    }
+  },
+  "vps": {
+    "status": "captured",
+    "target_host": "145.239.73.250",
+    "facts": {
+      "hostname": "WIN-7DCAP4LELPI",
+      "captured_at": "2026-08-14T13:36:37.0227975+02:00",
+      "os_caption": "Microsoft Windows Server 2025 Standard",
+      "os_version": "10.0.26100",
+      "os_build": "26100",
+      "powershell": "5.1.26100.32860",
+      "manufacturer": "OpenStack Foundation",
+      "model": "OpenStack Nova",
+      "logical_processors": 8,
+      "memory_total_gb": 23.44,
+      "cpu": "AMD EPYC-Milan Processor",
+      "disks": [
+        {
+          "device": "C:",
+          "size_gb": 199.66,
+          "free_gb": 116.76
+        }
+      ],
+      "node": "v24.18.0",
+      "npm": "11.16.0",
+      "git": "git version 2.55.0.windows.3",
+      "psql": null,
+      "docker": null,
+      "services": [
+        {
+          "name": "DeskFuturesAgentRuntimeResearch",
+          "display_name": "Desk Futures Agent Runtime Research",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesAgentRuntimeSupervisor",
+          "display_name": "Desk Futures Agent Runtime Supervisor",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesApi",
+          "display_name": "Desk Futures API MCP",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesBrokerManagement",
+          "display_name": "Desk Futures Broker Management",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesCaddy",
+          "display_name": "Desk Futures HTTPS Gateway",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesCodexLive01",
+          "display_name": "Desk Futures Codex LIVE 01",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesCodexLive02",
+          "display_name": "Desk Futures Codex LIVE 02",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesCodexReplay01",
+          "display_name": "Desk Futures Codex Replay 01",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesLiveRuntime",
+          "display_name": "Desk Futures LIVE Runtime",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesReplayPreparation",
+          "display_name": "Desk Futures Replay Preparation",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DeskFuturesTelegram",
+          "display_name": "Desk Futures Telegram Alerting",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "DispBrokerDesktopSvc",
+          "display_name": "Display Policy Service",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "postgresql-x64-16",
+          "display_name": "postgresql-x64-16 - PostgreSQL Server 16",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "SessionEnv",
+          "display_name": "Remote Desktop Configuration",
+          "status": "Running",
+          "start_type": "Manual"
+        },
+        {
+          "name": "ssh-agent",
+          "display_name": "OpenSSH Authentication Agent",
+          "status": "Stopped",
+          "start_type": "Disabled"
+        },
+        {
+          "name": "sshd",
+          "display_name": "OpenSSH SSH Server",
+          "status": "Running",
+          "start_type": "Automatic"
+        },
+        {
+          "name": "TermService",
+          "display_name": "Remote Desktop Services",
+          "status": "Running",
+          "start_type": "Manual"
+        },
+        {
+          "name": "UmRdpService",
+          "display_name": "Remote Desktop Services UserMode Port Redirector",
+          "status": "Running",
+          "start_type": "Manual"
+        },
+        {
+          "name": "vmicrdv",
+          "display_name": "Hyper-V Remote Desktop Virtualization Service",
+          "status": "Stopped",
+          "start_type": "Manual"
+        }
+      ],
+      "listening_ports": [
+        {
+          "local_address": "0.0.0.0",
+          "local_port": 22,
+          "owning_process": 2108
+        },
+        {
+          "local_address": "::",
+          "local_port": 22,
+          "owning_process": 2108
+        },
+        {
+          "local_address": "::",
+          "local_port": 80,
+          "owning_process": 5208
+        },
+        {
+          "local_address": "::",
+          "local_port": 443,
+          "owning_process": 5208
+        },
+        {
+          "local_address": "127.0.0.1",
+          "local_port": 5432,
+          "owning_process": 13508
+        },
+        {
+          "local_address": "127.0.0.1",
+          "local_port": 8787,
+          "owning_process": 16332
+        }
+      ],
+      "postgres_runtime": {
+        "status": "not_configured",
+        "note": "runtime_database_url_not_exposed_to_read_only_vps_baseline"
+      }
+    }
+  },
+  "safety": {
+    "read_only": true,
+    "secrets_policy": "no_environment_dump_no_credentials_no_tokens",
+    "generated_by": "scripts/quality/capture_environment_baseline.mjs"
+  }
+}

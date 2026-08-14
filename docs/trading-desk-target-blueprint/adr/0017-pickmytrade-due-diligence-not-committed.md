@@ -1,16 +1,26 @@
-# ADR-0017 — PickMyTrade traité en due diligence + pilote (Phase 10), pas en intégration engagée
+# ADR-0017 — PickMyTrade traité en due diligence + pilote paper limité (Phase 10)
 
-- **Statut** : À DÉCIDER (OPÉRATEUR — voir `operator-decisions.yaml`, OP-7)
+- **Statut** : TRANCHÉE POUR PILOTE PAPER LIMITÉ
 - **Date** : 2026-08-07
+- **Mise à jour** : 2026-08-10
 - **Invariant/critère protégé** : `01` §7 (non-objectifs — choix de broker reste une décision opérateur)
 
 ## Contexte
 
 Le plan directeur mentionne PickMyTrade comme second provider d'exécution possible. Aucune intégration, contrat, ni due diligence de sécurité/fiabilité n'a été trouvée dans le dépôt actuel (`03` §13, confirmé absent).
 
-## Décision (recommandation, en attente d'arbitrage opérateur)
+## Décision
 
-PickMyTrade n'est **pas** engagé comme provider de production par ce dossier. La Phase 10 se limite à une due diligence structurée (sécurité, fiabilité, modèle de coût, SLA) et, si l'opérateur l'approuve, un pilote en mode SHADOW/PAPER uniquement — jamais en LIVE sans une décision opérateur distincte et postérieure à la Phase 10. Cette ADR sera mise à jour avec le statut `TRANCHÉE` dès que l'opérateur aura statué sur `OP-7`.
+PickMyTrade n'est **pas** engagé comme provider de production. L'opérateur approuve seulement un pilote `PAPER_ONLY` borné par l'Execution Gateway :
+
+- adapter domaine pur ;
+- aucune requête réseau depuis le domaine ;
+- aucun secret dans les payloads domaine ;
+- aucun mode live ;
+- aucun remplacement de la réconciliation interne ;
+- aucun passage provider primaire tant que callbacks, fills, positions, idempotence et rollback ne sont pas prouvés.
+
+Le chemin principal du test ne passe pas par TradingView. TradingView peut rester une référence opérateur externe, pas le comparateur ni le contrôleur du desk.
 
 ## Alternatives (à arbitrer par l'opérateur)
 
@@ -20,7 +30,8 @@ PickMyTrade n'est **pas** engagé comme provider de production par ce dossier. L
 ## Conséquences
 
 - Tant que `OP-5` n'est pas tranchée, `phase-gates.yaml` marque la Phase 10 comme optionnelle et non bloquante pour les phases suivantes.
-- Aucun code d'intégration PickMyTrade n'est écrit avant que l'opérateur n'ait explicitement approuvé au moins la due diligence.
+- TD2-903 peut écrire un adapter PickMyTrade `PAPER_ONLY`.
+- Toute activation live demande une nouvelle décision opérateur explicite.
 
 ## Preuve AS-IS
 

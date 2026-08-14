@@ -1,0 +1,15 @@
+{
+  "schema_version": "strategy_definition_v1",
+  "strategy_definition_id": "8f14e45f-ceea-467e-add4-8c1f9f0d2a1b",
+  "external_key": "breakout-retest-mnq",
+  "name": "Breakout Retest MNQ",
+  "description": "Retest de cassure avec confirmation M1.",
+  "owner": "operator@desk",
+  "asset_class": "FUTURES",
+  "default_instruments": ["MNQ", "MES"],
+  "tags": ["us-open", "retest"],
+  "metadata": {
+    "desk": "preprod"
+  },
+  "created_at": "2026-08-07T09:00:00.000Z"
+}

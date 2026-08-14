@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Move active TVAutomation feed alerts to the VPS webhook without logging secrets."""
+"""Audit or move active TVAutomation feed alerts to the VPS webhook.
+
+Dry-run is the default: the script audits TradingView Desktop and reports which
+alerts still need migration without reading or printing the webhook secret. Use
+``--execute`` only when the operator intentionally wants to update TradingView.
+"""
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import base64
 import json
@@ -18,6 +24,24 @@ VPS_USER = "Administrator"
 VPS_KEY = "/home/u01i003/.ssh/tv-desk-ovh-2026"
 PUBLIC_HOST = "vps-6d6969db.vps.ovh.net"
 ALERT_LABELS = ("M1", "M5", "M15", "H1", "H4")
+WEBHOOK_PATH = "/api/v1/webhooks/tradingview"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--execute", action="store_true", help="Actually update TradingView alert webhook URLs.")
+    parser.add_argument("--tradingview-project", default="/mnt/c/Users/CES/Desktop/TV_Automation")
+    parser.add_argument("--public-host", default=PUBLIC_HOST)
+    parser.add_argument("--labels", default=",".join(ALERT_LABELS), help="Comma-separated batch labels to audit or migrate.")
+    return parser.parse_args()
+
+
+def requested_labels(raw: str) -> tuple[str, ...]:
+    labels = tuple(label.strip().upper() for label in raw.split(",") if label.strip())
+    unknown = [label for label in labels if label not in ALERT_LABELS]
+    if unknown:
+        raise SystemExit(f"unsupported_alert_labels:{','.join(unknown)}")
+    return labels
 
 
 def payload(response: dict[str, Any]) -> Any:
@@ -54,6 +78,45 @@ def read_vps_webhook_secret() -> str:
     if len(secret) < 16 or secret.startswith("__"):
         raise RuntimeError("vps_webhook_secret_invalid")
     return secret
+
+
+def target_webhook_url(secret: str, public_host: str) -> str:
+    return f"https://{public_host}{WEBHOOK_PATH}?{urlencode({'token': secret})}"
+
+
+def alert_for_label(audit: dict[str, Any], label: str) -> dict[str, Any] | None:
+    return next((
+        item for item in audit.get("active", [])
+        if f"Batch {label}:" in str(item.get("name") or "")
+    ), None)
+
+
+def alert_points_to_target(alert: dict[str, Any] | None, public_host: str) -> bool:
+    return any(
+        webhook.get("host") == public_host
+        and webhook.get("path") == WEBHOOK_PATH
+        and webhook.get("has_token_query") is True
+        for webhook in (alert or {}).get("webhooks", [])
+    )
+
+
+def migration_plan(audit: dict[str, Any], labels: tuple[str, ...], public_host: str) -> dict[str, list[str]]:
+    already_migrated: list[str] = []
+    needs_migration: list[str] = []
+    missing_alerts: list[str] = []
+    for label in labels:
+        alert = alert_for_label(audit, label)
+        if not alert:
+            missing_alerts.append(label)
+        elif alert_points_to_target(alert, public_host):
+            already_migrated.append(label)
+        else:
+            needs_migration.append(label)
+    return {
+        "already_migrated": already_migrated,
+        "needs_migration": needs_migration,
+        "missing_alerts": missing_alerts,
+    }
 
 
 async def checked_call(adapter: Any, tool: str, args: dict[str, Any]) -> Any:
@@ -154,19 +217,15 @@ async def edit_alert(adapter: Any, label: str, webhook_url: str) -> None:
 
 
 async def main() -> None:
-    tradingview_project = Path("/mnt/c/Users/CES/Desktop/TV_Automation")
+    args = parse_args()
+    labels = requested_labels(args.labels)
+    tradingview_project = Path(args.tradingview_project)
     sys.path.insert(0, str(tradingview_project))
     from scanner.live_data.mcp_live_data_probe import load_config  # type: ignore
     from scanner.mcp_adapter import MCPTradingViewAdapter  # type: ignore
 
-    secret = read_vps_webhook_secret()
-    webhook_url = (
-        f"https://{PUBLIC_HOST}/api/v1/webhooks/tradingview?"
-        f"{urlencode({'token': secret})}"
-    )
     adapter = MCPTradingViewAdapter(load_config())
     migrated: list[str] = []
-    already_migrated: list[str] = []
     try:
         connection = await adapter.connect()
         if not connection.get("ok"):
@@ -176,50 +235,38 @@ async def main() -> None:
             await asyncio.sleep(0.15)
         await ensure_alert_panel(adapter)
         initial_audit = await checked_call(adapter, "alert_webhook_audit", {})
-        labels_to_migrate = []
-        for label in ALERT_LABELS:
-            alert = next((
-                item for item in initial_audit.get("active", [])
-                if f"Batch {label}:" in str(item.get("name") or "")
-            ), None)
-            current = any(
-                webhook.get("host") == PUBLIC_HOST
-                and webhook.get("path") == "/api/v1/webhooks/tradingview"
-                and webhook.get("has_token_query") is True
-                for webhook in (alert or {}).get("webhooks", [])
-            )
-            if current:
-                already_migrated.append(label)
-            else:
-                labels_to_migrate.append(label)
-        for label in labels_to_migrate:
-            await edit_alert(adapter, label, webhook_url)
-            migrated.append(label)
-        audit = await checked_call(adapter, "alert_webhook_audit", {})
-        vps_alerts = [
-            alert for alert in audit.get("active", [])
-            if alert.get("symbol") == "CME_MINI:MES1!"
-            and any(
-                webhook.get("host") == PUBLIC_HOST
-                and webhook.get("path") == "/api/v1/webhooks/tradingview"
-                and webhook.get("has_token_query") is True
-                for webhook in alert.get("webhooks", [])
-            )
-        ]
-        if len(vps_alerts) != len(ALERT_LABELS):
-            raise RuntimeError(f"alert_webhook_verification_failed:{len(vps_alerts)}")
+        plan = migration_plan(initial_audit, labels, args.public_host)
+        if args.execute:
+            secret = read_vps_webhook_secret()
+            webhook_url = target_webhook_url(secret, args.public_host)
+            for label in plan["needs_migration"]:
+                await edit_alert(adapter, label, webhook_url)
+                migrated.append(label)
+            secret = ""
+            webhook_url = ""
+            audit = await checked_call(adapter, "alert_webhook_audit", {})
+        else:
+            audit = initial_audit
+        verified_plan = migration_plan(audit, labels, args.public_host)
+        verified_labels = sorted(set(labels) - set(verified_plan["needs_migration"]) - set(verified_plan["missing_alerts"]))
+        if args.execute and len(verified_labels) != len(labels):
+            raise RuntimeError(f"alert_webhook_verification_failed:{len(verified_labels)}")
         print(json.dumps({
             "ok": True,
+            "status": "EXECUTED" if args.execute else ("READY" if len(verified_labels) == len(labels) else "DRY_RUN_NEEDS_MIGRATION"),
+            "execute": args.execute,
             "migrated": migrated,
-            "already_migrated": already_migrated,
-            "verified_alerts": len(vps_alerts),
-            "public_host": PUBLIC_HOST,
-            "path": "/api/v1/webhooks/tradingview",
+            "already_migrated": plan["already_migrated"],
+            "needs_migration": verified_plan["needs_migration"],
+            "missing_alerts": verified_plan["missing_alerts"],
+            "verified_labels": verified_labels,
+            "verified_alerts": len(verified_labels),
+            "public_host": args.public_host,
+            "path": WEBHOOK_PATH,
             "secret_exposed": False,
+            "execute_command": "python3 scripts/tradingview/migrate_local_alert_webhooks.py --execute",
         }, indent=2))
     finally:
-        secret = ""
-        webhook_url = ""
         await adapter.disconnect()
 
 

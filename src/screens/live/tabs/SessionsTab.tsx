@@ -1,5 +1,6 @@
 import { Card, StatusBadge } from "@/components/common";
 import { LiveSectionHeading } from "@/components/deskCards";
+import { sessionLabel } from "@/lib/presentation";
 import type { DeskSession } from "@/types";
 
 const phases = [
@@ -46,7 +47,7 @@ export function SessionsTab({
 function SessionContextCard({ title, data, loading, active }: { title: string; data?: DeskSession; loading: boolean; active: boolean }) {
   return <Card className={`session-context-detail ${active ? "active" : ""}`}>
     <header><div><p className="eyebrow">{title}</p><h2>{data?.label || (loading ? "Chargement…" : "Non disponible")}</h2></div><StatusBadge tone={active ? "info" : "muted"}>{active ? "CONTEXTE ACTIF" : "EN ATTENTE"}</StatusBadge></header>
-    {data ? <dl className="definition-grid"><dt>Stratégie</dt><dd>{data.strategyId}</dd><dt>Mode</dt><dd>{data.mode}</dd><dt>État</dt><dd>{data.status}</dd><dt>Prochain monitor</dt><dd>{data.nextMonitorAt}</dd></dl> : !loading && <p className="muted-copy">Le contexte n’est pas matérialisé par le backend.</p>}
+    {data ? <dl className="definition-grid"><dt>Stratégie</dt><dd>{sessionLabel(data.strategyId)}</dd><dt>Mode</dt><dd>{data.mode}</dd><dt>État</dt><dd>{data.status}</dd><dt>Prochain monitor</dt><dd>{data.nextMonitorAt}</dd></dl> : !loading && <p className="muted-copy">Le contexte n’est pas matérialisé par le backend.</p>}
   </Card>;
 }
 

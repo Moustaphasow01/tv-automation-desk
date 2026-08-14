@@ -5,8 +5,14 @@
 !.env.preprod.example
 node_modules
 **/node_modules
+apps
 dist
 .local
+.worktrees
+.playwright-cli
+output
+test-results
+playwright-report
 coverage
 reports
 exports

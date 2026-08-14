@@ -8,6 +8,7 @@ import {
   frontProjectionMatchesScope,
   prepareFrontProjectionMaterialization,
 } from "./front-projection-materializer.js";
+import { parisMarketSessionState } from "./market-session-state.js";
 
 const COLLECTIONS = DESK_COLLECTIONS;
 
@@ -34,6 +35,7 @@ export class DeskFrontService {
   async getLiveMarketSnapshot({ date } = {}) {
     const tick = this.clock.now();
     const tradingDate = String(date || tick.paris).slice(0, 10);
+    const currentSession = parisMarketSessionState(new Date(Date.parse(tick.utc)));
     const specs = [
       { instrument: "MNQ", symbol: "MNQ", timeframes: ["1", "5"], lookbackDays: 8 },
       { instrument: "MES", symbol: "MES", timeframes: ["1", "5"], lookbackDays: 8 },
@@ -118,15 +120,22 @@ export class DeskFrontService {
     }));
     const instruments = Object.fromEntries(values.filter(Boolean).map((value) => [value.symbol, value]));
     const effectiveMarketDate = resolveEffectiveFrontMarketDate(instruments);
-    const marketClosed = Boolean(effectiveMarketDate && effectiveMarketDate < tradingDate);
+    const requestedCurrentSession = !date || tradingDate === currentSession.trading_date;
+    const marketClosed = Boolean(effectiveMarketDate && effectiveMarketDate < tradingDate)
+      || (requestedCurrentSession && currentSession.market_closed === true);
     return {
       ok: Object.keys(instruments).length > 0,
       date: tradingDate,
       requested_date: tradingDate,
       effective_market_date: effectiveMarketDate,
       market_closed: marketClosed,
+      market_session: requestedCurrentSession ? currentSession : null,
       availability: effectiveMarketDate
-        ? marketClosed ? "last_closed_session" : "live_postgres"
+        ? effectiveMarketDate < tradingDate
+          ? "last_closed_session"
+          : requestedCurrentSession && currentSession.market_closed === true
+            ? currentSession.state
+            : "live_postgres"
         : "unavailable",
       timestamp_paris: latestFrontMarketTimestamp(instruments) || tick.paris,
       source: "postgres_market_feeds",
@@ -146,6 +155,25 @@ export class DeskFrontService {
 
   async getOperatorCommand({ command_id }) {
     return this.persistence.getDocument(COLLECTIONS.dashboardCommands, command_id);
+  }
+
+  async completeOperatorCommand({ command_id, status, result = null, error_message = null, updated_at_utc }) {
+    const current = await this.getOperatorCommand({ command_id });
+    if (!current) return null;
+    const next = { ...current, status, result: result ?? current.result ?? null, error_message, updated_at_utc };
+    await this.persistence.setDocument(COLLECTIONS.dashboardCommands, command_id, next, { merge: false });
+    await this.persistence.setDocument(COLLECTIONS.dashboardState, `front_control_plane__${command_id}`, {
+      schema_version: "front_control_plane_command_state_v1",
+      state_id: `front_control_plane__${command_id}`,
+      command_id,
+      command_type: current.command_type,
+      environment: current.environment,
+      status,
+      revision: Number(current.revision || 1) + 1,
+      last_command_id: command_id,
+      updated_at_utc,
+    }, { merge: false });
+    return next;
   }
 
   async commitOperatorCommandMutation(plan) {

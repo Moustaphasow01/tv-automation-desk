@@ -1,3 +1,5 @@
+import type { SimulationReplayEvidence } from "@/simulationRunTypes"; export type { SimulationReplayEvidence, SimulationReproducibilityProof, SimulationRunArtifact, SimulationRunArtifactList, SimulationRunComparison, SimulationRunComparisonItem, SimulationRunDetail, SimulationRunList, SimulationRunSummary } from "@/simulationRunTypes";
+
 export type WorkflowStatus = "queued" | "running" | "waiting_gpt" | "blocked" | "failed" | "completed" | "cancelled" | "paused" | "unknown";
 
 export interface WorkflowSummary {
@@ -138,12 +140,11 @@ export interface WorkflowCommandCenter {
   audit: { events: OperationsEvent[]; eventCount: number };
   links: Array<OperationsLink & { action?: string }>;
 }
-export interface WorkflowDetail {
-  contract: string; schemaVersion: string; workflow: WorkflowSummary; steps: WorkflowStep[];
-  events: OperationsEvent[]; allowedActions: Array<"retry" | "resume" | "pause" | "cancel">;
-  relations: Record<string, unknown>;
-  commandCenter: WorkflowCommandCenter;
-}
+export interface WorkflowDetail { contract: string; schemaVersion: string; workflow: WorkflowSummary; steps: WorkflowStep[]; events: OperationsEvent[]; allowedActions: Array<"retry" | "resume" | "pause" | "cancel">; relations: Record<string, unknown>; commandCenter: WorkflowCommandCenter; }
+
+export interface PromptRegistryOverview { contract: "DeskPromptRegistryOverviewV1"; schemaVersion: "1.0.0"; generatedAt: string | null; summary: { activePrompts: number; publishedCompositions: number; activeBindings: number; parityOk: number; parityDrift: number; dynamicPromptsToReplace: number }; items: PromptRegistryItem[]; dynamicPrompts: Array<Record<string, unknown>>; source: { registry: string; inventoryPath: string; seedPath: string; parityMode: string; writeApiEnabled: boolean; writeApiReason: string }; }
+export interface PromptRegistryItem { promptKey: string; lane: "live" | "replay" | string; runtimeStack: string; missionKey: string; semanticVersion: string; promptVersionId: string; compositionId: string; compositionKey: string; binding: Record<string, unknown> | null; status: string; deploymentStage: string; sourcePath: string; sourceBytes: number | null; contentSha256: string; renderedSha256: string; actualSourceSha256: string | null; parityStatus: "OK" | "DRIFT" | string; consumers: string[]; contracts: Array<Record<string, string>>; evaluation: { status: string; qualityScore: number | null; costUsd: number | null; latencyMs: number | null; inputTokens: number | null; outputTokens: number | null; reason: string }; rollback: { lastKnownGoodCompositionId: string; canRollback: boolean }; }
+export type { ResearchCandidateDetail, ResearchCandidateRow, ResearchEvaluationReportRow, ResearchExperimentDetail, ResearchExperimentRow, ResearchHypothesisRow, ResearchLabOverview, ResearchLabSource, ResearchListEnvelope } from "@/researchTypes";
 
 export interface ReplayDaySummary {
   date: string;
@@ -527,17 +528,13 @@ export interface ObservabilityOverview {
 export interface ReplayRunDetail {
   contract: string; schemaVersion: string; run: WorkflowSummary; canonicalState: Record<string, unknown>;
   timeline: OperationsEvent[]; priceSeries: PricePoint[]; gptProcesses: GptProcess[];
-  conclusions: Array<{ processId: string; conclusion: string; at: string | null }>;
+  conclusions: Array<{ processId: string; conclusion: string; at: string | null }>; simulationEvidence?: SimulationReplayEvidence | null;
 }
 
 export interface ReplaySessionDetail extends ReplayRunDetail { parentRunId: string; sessionExecutionId: string }
 
 export interface ReplayComparisonItem {
-  id: string;
-  baseline: boolean;
-  rank: number | null;
-  run: WorkflowSummary;
-  summary: Record<string, unknown>;
+  id: string; baseline: boolean; rank: number | null; run: WorkflowSummary; summary: Record<string, unknown>;
   metrics: {
     resultR: number;
     deltaR: number;
@@ -557,7 +554,7 @@ export interface ReplayComparisonItem {
     pricePoints: number;
     durationMs: number | null;
   };
-  conclusion: { processId: string | null; runId: string | null; conclusion: string | null; decision: string | null; at: string | null } | null;
+  conclusion: { processId: string | null; runId: string | null; conclusion: string | null; decision: string | null; at: string | null } | null; simulationEvidence?: SimulationReplayEvidence | null;
   riskFlags: string[];
   priceRange: { from: string | null; to: string | null; firstClose: number | null; lastClose: number | null };
   timelineSample: OperationsEvent[];
@@ -589,7 +586,7 @@ export interface ReplayComparison {
     totalTokens: number | null;
     timelineEvents: number;
     decisions: number;
-    riskFlags: string[];
+    riskFlags: string[]; simulationProofs?: number; simulationProofFailures?: number;
   };
   items: ReplayComparisonItem[];
 }
@@ -1054,10 +1051,232 @@ export interface StrategyList {
     versions: Array<Record<string, unknown>>; activeContracts: Array<{ name: string; version: string; status: string }>;
   }>;
 }
+export interface StrategyV2Definition {
+  strategy_definition_id: string;
+  external_key: string;
+  name: string;
+  family?: string | null;
+  owner?: string | null;
+  asset_class?: string | null;
+  description?: string | null;
+  default_instruments?: string[];
+  tags?: string[];
+  metadata?: Record<string, unknown>;
+  created_at?: string | null;
+  updated_at?: string | null;
+  created_at_utc?: string | null;
+  updated_at_utc?: string | null;
+}
+export interface StrategyV2Version {
+  strategy_version_id: string;
+  strategy_definition_id: string;
+  version_label: string;
+  status: "DRAFT" | "IN_SIMULATION" | "VALIDATED" | "PUBLISHED" | "RETIRED" | string;
+  dsl_source_hash?: string | null;
+  compiled_artifact_ref?: string | null;
+  compiled_artifact_hash?: string | null;
+  runtime_contract_bundle_version?: string | null;
+  validated_metrics_ref?: string | null;
+  published_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  created_at_utc?: string | null;
+  updated_at_utc?: string | null;
+  metadata?: Record<string, unknown>;
+}
+export interface StrategyV2Instance {
+  strategy_instance_id: string;
+  strategy_version_id: string;
+  runtime_state: "CREATED" | "STARTING" | "RUNNING" | "PAUSED" | "STOPPED" | "ERRORED" | "FAILED_TO_START" | string;
+  execution_mode: "SHADOW" | "PAPER" | "LIVE" | "DISABLED" | string;
+  instrument_scope?: string[];
+  session_scope?: string[];
+  risk_budget_ref?: string | null;
+  account_scope?: string | null;
+  last_heartbeat_at?: string | null;
+  triple_lock_validated?: boolean;
+  operator_approval_id?: string | null;
+  performance_drift?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  created_at_utc?: string | null;
+  updated_at_utc?: string | null;
+  metadata?: Record<string, unknown>;
+}
+export interface StrategyV2AuditEvent {
+  audit_event_id: string;
+  aggregate_type: "strategy_definition" | "strategy_version" | "strategy_instance" | string;
+  aggregate_id: string;
+  event_type: string;
+  actor?: string | null;
+  reason?: string | null;
+  created_at?: string | null;
+  created_at_utc?: string | null;
+  [key: string]: unknown;
+}
+export interface StrategyV2OverviewItem {
+  strategy_definition_id: string;
+  external_key: string;
+  name: string;
+  family?: string | null;
+  owner?: string | null;
+  description?: string | null;
+  latest_version: StrategyV2Version | null;
+  published_version: StrategyV2Version | null;
+  live_instance: StrategyV2Instance | null;
+  paper_instance: StrategyV2Instance | null;
+  version_count: number;
+  instance_count: number;
+  audit_count: number;
+  versions: StrategyV2Version[];
+  instances: StrategyV2Instance[];
+  recent_audit: StrategyV2AuditEvent[];
+  operator_state: {
+    has_definition: boolean;
+    has_published_version: boolean;
+    has_runtime_instance: boolean;
+    has_live_instance: boolean;
+    recommended_next_step: string;
+  };
+}
+export interface StrategyV2Overview {
+  contract: "DeskStrategyV2Overview";
+  schemaVersion: string;
+  generated_at_utc: string;
+  summary: {
+    definitions: number;
+    versions: number;
+    instances: number;
+    published_versions: number;
+    live_instances: number;
+    paper_instances: number;
+    shadow_instances: number;
+    version_statuses: Record<string, number>;
+    runtime_states: Record<string, number>;
+    execution_modes: Record<string, number>;
+  };
+  count: number;
+  strategies: StrategyV2OverviewItem[];
+  definitions: StrategyV2Definition[];
+  versions: StrategyV2Version[];
+  instances: StrategyV2Instance[];
+  audit: StrategyV2AuditEvent[];
+  source: { canonical: string; legacy_strategy_endpoint: string; note: string };
+}
+export type StrategyV2SignalDirection = "LONG" | "SHORT" | "FLAT" | "NO_TRADE" | string;
+export type StrategyV2SignalStatus = "PENDING" | "PUBLISHED" | "CONSUMED" | "FAILED" | "CANCELLED" | string;
+export type StrategyV2ExecutionMode = "SHADOW" | "PAPER" | "LIVE" | string;
+export interface StrategyV2SignalOutboxItem { signal_outbox_id: string; signal_id: string; strategy_instance_id: string; strategy_version_id: string | null; signal_type: string; instrument: string; direction: StrategyV2SignalDirection; confidence: number | null; execution_mode_origin: StrategyV2ExecutionMode; generated_at_utc: string | null; expires_at_utc: string | null; correlation_id: string; payload: Record<string, unknown>; payload_hash: string; dedupe_key: string; status: StrategyV2SignalStatus; notify_attempt_count: number; published_at_utc: string | null; consumed_at_utc: string | null; consumer_id: string | null; last_error: Record<string, unknown> | string | null; created_at_utc: string | null; updated_at_utc: string | null; }
+export interface StrategyV2SignalPollResult { contract: "DeskStrategySignalPollResultV2"; schemaVersion: string; status: "OK" | string; count: number; items: StrategyV2SignalOutboxItem[]; }
+export interface StrategyV2SignalConsumeResult { contract: "DeskStrategySignalConsumeResultV2"; schemaVersion: string; status: "CONSUMED" | string; outbox: StrategyV2SignalOutboxItem; }
 export interface StrategyVersionChange { path: string; before: unknown; after: unknown }
 export interface StrategyVersionComparison {
   contract: string; schemaVersion: string; strategyId: string;
   left: Record<string, unknown> | null; right: Record<string, unknown> | null; changes: StrategyVersionChange[];
+}
+
+export interface DataFoundationEnvelope<TItem = Record<string, unknown>> {
+  contract: string;
+  schemaVersion: string;
+  generated_at_utc: string;
+  audience: "front" | "simulation" | "agent" | "operator" | string;
+  source: { canonical: string; storage: string; direct_table_access: boolean; [key: string]: unknown };
+  items?: TItem[];
+  count?: number;
+  counts?: Record<string, number>;
+  lineage?: DataFoundationDatasetLineage[];
+  [key: string]: unknown;
+}
+
+export interface DataFoundationDataset {
+  dataset_id: string;
+  dataset_key: string;
+  name: string;
+  status: string;
+  cutoff_utc: string | null;
+  cutoff_paris: string | null;
+  source_batch_count: number;
+  content_hash: string | null;
+  provenance_hash: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DataFoundationDatasetLineage {
+  dataset_id: string;
+  dataset_key: string;
+  ingestion_batch_id: string;
+  batch_key: string;
+  ordinal: number;
+  role: string;
+  source_key: string | null;
+}
+
+export interface DataFoundationFeature {
+  feature_definition_id: string;
+  feature_key: string;
+  name: string;
+  category: string;
+  output_kind: string;
+  status: string;
+  published_version?: {
+    feature_version_id: string;
+    version: string;
+    status: string;
+    formula_ref?: string;
+    formula_hash?: string | null;
+    point_in_time_safe?: boolean;
+    deterministic?: boolean;
+    metadata?: Record<string, unknown>;
+  } | null;
+  versions?: Array<Record<string, unknown>>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DataFoundationMarketProfile {
+  market_data_capability_profile_id: string;
+  source_key: string;
+  instrument_code: string;
+  provider: string;
+  environment: string;
+  timeframe: string;
+  status: string;
+  blocking_classification: string;
+  storage_recommendation: string;
+  observed_row_count: number;
+  missing_capabilities: string[];
+  blocking_missing_capabilities: string[];
+  non_blocking_missing_capabilities: string[];
+  recommendation?: string | null;
+  cost_profile?: Record<string, unknown>;
+}
+
+export interface DataFoundationStorageObject {
+  market_data_storage_object_id: string;
+  object_key: string;
+  storage_tier: string;
+  storage_format: string;
+  status: string;
+  uri: string;
+  dataset_key?: string | null;
+  source_key: string;
+  instrument_code: string;
+  timeframe: string;
+  record_count: number;
+  byte_size: number;
+  retention_days: number | null;
+}
+
+export interface DataFoundationHotSeriesWindow {
+  hot_series_window_id: string;
+  source_key: string;
+  instrument_code: string;
+  timeframe: string;
+  hot_table: string;
+  status: string;
+  latest_timestamp_utc: string | null;
+  retention_days: number;
+  row_count: number;
+  object_key?: string | null;
 }
 
 export interface OperationsCommandInput {

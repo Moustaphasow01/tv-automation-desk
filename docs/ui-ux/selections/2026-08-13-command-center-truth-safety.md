@@ -1,0 +1,186 @@
+# Applicable UI/UX rules
+
+Query: Front V2 Phase 0 vertical slice Command Center truth and safety: valeurs inconnues indisponibles partielles ou obsolètes, données API réelles, capability et permission réelles, cycle terminal des commandes avec audit receipt, drill-down paramétré, états loading empty error forbidden conflict disconnected, accessibilité, responsive et tests end-to-end · Priorities: P0, P1 · Rules: 60
+
+- **UXR-0621 · Ch. 32 · MUST · P0 · AUTO** — Toute action dangereuse doit être liée à un command type backend réellement implémenté.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le capability catalog annonce support, permission et lifecycle.
+- **UXR-0481 · Ch. 25 · MUST · P0 · AUTO** — Chaque source de données doit distinguer loading, ready, empty, partial, stale, disconnected, forbidden et error lorsque pertinents.
+  - Chapitre: Chargement, vide, données partielles, stale, offline et indisponibilité
+  - Preuve: Le type de vue ou la query expose ces états sans ambiguïté.
+- **UXR-0637 · Ch. 32 · MUST · P0 · AUTO** — Les paramètres sensibles d'une commande doivent être affichés dans le preview mais masqués selon les permissions.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Aucun secret ne fuit dans l'UI, l'URL ou l'audit.
+- **UXR-0626 · Ch. 32 · MUST · P0 · AUTO** — L'interface doit distinguer SUBMITTED, ACCEPTED, RUNNING, SUCCEEDED, FAILED, CANCELLED et TIMED_OUT selon le contrat réel.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le statut terminal vient du backend et non d'un timeout UI.
+- **UXR-0627 · Ch. 32 · MUST · P0 · AUTO** — Un succès ne doit être affiché qu'après état terminal et relecture cohérente de la ressource.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le test E2E compare résultat attendu et projection.
+- **UXR-0630 · Ch. 32 · MUST · P0 · AUTO** — Toute action dangereuse doit produire un audit receipt consultable.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le receipt contient command ID, acteur, objet, raison, timestamps, résultat et corrélation.
+- **UXR-0623 · Ch. 32 · MUST · P0 · AUTO** — La confirmation doit demander une raison lorsque l'audit ou la politique l'exige.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: La raison est validée, persistée et visible dans le receipt.
+- **UXR-0625 · Ch. 32 · MUST · P0 · AUTO** — Chaque commande doit utiliser une clé d'idempotence et une version attendue lorsque la concurrence est possible.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Les doublons et conflits sont testés.
+- **UXR-0622 · Ch. 32 · MUST · P0 · AUTO** — Une action dangereuse doit présenter un preview d'impact avant confirmation.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le preview nomme objets, portée, conséquences et dépendances.
+- **UXR-0830 · Ch. 42 · MUST · P0 · AUTO** — Les parcours E2E doivent couvrir au minimum succès, erreur, permission refusée, données partielles et reprise.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: Chaque flow critique possède ces variantes ou une justification.
+- **UXR-0831 · Ch. 42 · MUST · P0 · AUTO** — Les actions sensibles doivent être testées jusqu'à l'état terminal backend et l'audit.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: Le test ne s'arrête pas au reçu ACCEPTED.
+- **UXR-0966 · Ch. 49 · MUST · P0 · AUTO** — Les états loading, empty, partial, stale, disconnected, forbidden, conflict, error et ready applicables doivent être implémentés et testés.
+  - Chapitre: Definition of Done, release, feature flags et amélioration continue
+  - Preuve: Le catalogue de stories ou fixtures couvre la matrice.
+- **UXR-0628 · Ch. 32 · MUST · P0 · AUTO** — Une commande non implémentée doit être absente, désactivée avec raison ou rejetée explicitement.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Elle ne produit jamais un faux reçu de succès.
+- **UXR-0629 · Ch. 32 · MUST · P0 · AUTO** — Les retries de commande doivent vérifier le statut existant avant de créer une nouvelle intention.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le système évite les doubles effets après rupture réseau.
+- **UXR-0602 · Ch. 31 · MUST · P0 · AUTO** — Le backend doit revalider toute permission, même lorsque le frontend masque ou désactive l'action.
+  - Chapitre: SaaS enterprise, rôles, permissions et multi-contexte
+  - Preuve: Les tests d'autorisation appellent directement l'API avec un rôle insuffisant.
+- **UXR-0624 · Ch. 32 · MUST · P0 · AUTO** — Les opérations les plus critiques doivent utiliser une confirmation renforcée comme phrase, re-authentification ou quatre yeux.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le niveau de confirmation est défini par policy, pas par la page.
+- **UXR-0633 · Ch. 32 · MUST · P0 · AUTO** — Les actions de kill, cutover, promotion LIVE, override et modification de policy doivent être isolées dans un workflow dédié.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Elles ne sont pas déclenchables depuis une simple carte overview.
+- **UXR-0640 · Ch. 32 · MUST · P0 · SEMI** — Aucune action à haut risque ne peut être libérée sans revue sécurité, test E2E réel, feature flag et rollback de release.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: La Definition of Done contient les quatre preuves.
+- **UXR-0840 · Ch. 42 · MUST · P0 · SEMI** — Une page n'est pas Done tant que ses états, responsive, accessibilité, interactions et E2E principaux ne sont pas prouvés.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: La checklist de release contient les preuves exécutées.
+- **UXR-0635 · Ch. 32 · MUST · P1 · AUTO** — L'utilisateur doit pouvoir annuler une commande seulement si l'autorité confirme qu'elle est encore annulable.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le bouton se base sur capability et état courant.
+- **UXR-0491 · Ch. 25 · MUST NOT · P0 · AUTO** — Une mutation sensible ne doit pas être automatiquement rejouée après une incertitude réseau sans garantie d'idempotence.
+  - Chapitre: Chargement, vide, données partielles, stale, offline et indisponibilité
+  - Preuve: Le lifecycle vérifie le statut de commande avant toute reprise.
+- **UXR-0500 · Ch. 25 · MUST · P0 · AUTO** — Le frontend ne doit jamais déduire le succès ou l'état nominal de l'absence d'erreur.
+  - Chapitre: Chargement, vide, données partielles, stale, offline et indisponibilité
+  - Preuve: Seul un statut ou une donnée autoritaire peut établir le résultat.
+- **UXR-0985 · Ch. 50 · MUST · P0 · MANUAL** — L'agent ne doit pas inventer une donnée, une capability, une permission ou un résultat de commande absent du code ou du contrat.
+  - Chapitre: Protocole d’exécution Codex et auto-audit obligatoire
+  - Preuve: L'inconnu est déclaré et un besoin backend est ouvert si nécessaire.
+- **UXR-0634 · Ch. 32 · MUST · P1 · AUTO** — La progression d'une commande doit rester consultable après navigation ou reconnexion.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Un centre global de commandes et l'audit restaurent l'état.
+- **UXR-0760 · Ch. 38 · MUST · P0 · AUTO** — Les frontières frontend doivent être vérifiées automatiquement dans la CI.
+  - Chapitre: Architecture frontend par feature et séparation des couches
+  - Preuve: Un outil d'architecture contrôle cycles, imports, taille et placement des appels réseau.
+- **UXR-0057 · Ch. 3 · MUST · P1 · SEMI** — Chaque écran doit définir ses états loading, empty, partial, stale, disconnected, forbidden, conflict, error et ready lorsqu'ils sont applicables.
+  - Chapitre: Objectif produit, tâche et contrat d'exploitation de page
+  - Preuve: La matrice de page et les stories couvrent ces états.
+- **UXR-0636 · Ch. 32 · MUST · P1 · SEMI** — Une commande concurrente ou superseded doit expliquer quelle intention fait autorité.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le détail montre la relation entre commandes et résultat final.
+- **UXR-0741 · Ch. 38 · MUST · P0 · AUTO** — Le frontend doit être organisé par feature ou domaine métier, non par dossiers globaux de tous les composants et services.
+  - Chapitre: Architecture frontend par feature et séparation des couches
+  - Preuve: La structure contient features/<domain> avec routes, pages, components, api et model.
+- **UXR-0482 · Ch. 25 · MUST · P0 · AUTO** — Un état empty ne doit être utilisé que lorsque l'absence de données est confirmée.
+  - Chapitre: Chargement, vide, données partielles, stale, offline et indisponibilité
+  - Preuve: Une source indisponible ou non chargée n'affiche jamais « aucun résultat ».
+- **UXR-0821 · Ch. 42 · MUST · P0 · AUTO** — Chaque mapper doit être testé avec DTO complet, partiel, inconnu, nul et invalide.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: Les tests vérifient états de vérité et absence de faux fallbacks.
+- **UXR-0638 · Ch. 32 · MUST · P1 · AUTO** — Le résultat partiel d'une commande de masse doit détailler chaque objet et permettre une reprise ciblée.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le produit ne résume pas tout par un succès global.
+- **UXR-0639 · Ch. 32 · MUST · P1 · AUTO** — Les écrans de commande doivent être testés avec 403, 409, 422, 501, 503, timeout et reconnexion.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Chaque cas possède un message et une récupération distincts.
+- **UXR-0601 · Ch. 31 · MUST · P0 · AUTO** — La visibilité d'une route et d'une action doit être dérivée des capabilities et permissions réelles de session.
+  - Chapitre: SaaS enterprise, rôles, permissions et multi-contexte
+  - Preuve: Le frontend ne contient pas d'allowlist statique qui simule le RBAC.
+- **UXR-0769 · Ch. 39 · MUST · P0 · AUTO** — Le frontend ne doit pas recalculer un statut officiel, une permission, un risque ou un PnL canonique.
+  - Chapitre: Contrats API, DTO, modèles de domaine UI et provenance
+  - Preuve: La valeur autoritaire vient du backend avec version de règle si nécessaire.
+- **UXR-0631 · Ch. 32 · MUST · P1 · MANUAL** — Le rollback doit être proposé lorsque techniquement et métierment possible.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le preview explique ce qui est réversible et ce qui ne l'est pas.
+- **UXR-0632 · Ch. 32 · MUST · P1 · MANUAL** — Une action destructive doit préférer une désactivation, archive ou période de grâce lorsque le métier le permet.
+  - Chapitre: Actions dangereuses, commandes, audit et réversibilité
+  - Preuve: Le choix de suppression définitive est justifié.
+- **UXR-0753 · Ch. 38 · MUST · P1 · AUTO** — Le lifecycle de commande doit être une capacité transverse réutilisée par toutes les actions sensibles.
+  - Chapitre: Architecture frontend par feature et séparation des couches
+  - Preuve: Les features fournissent command type et payload, pas un faux succès local.
+- **UXR-0833 · Ch. 42 · MUST · P1 · AUTO** — Les tests de contenu doivent inclure chaînes longues, langues, chiffres extrêmes et absence de données.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: Le layout ne dépend pas des exemples courts.
+- **UXR-0982 · Ch. 50 · MUST · P0 · SEMI** — L'agent doit inspecter le repository, les routes, composants, styles, contrats API, données et tests avant de proposer une architecture.
+  - Chapitre: Protocole d’exécution Codex et auto-audit obligatoire
+  - Preuve: Le rapport cite les fichiers réellement observés.
+- **UXR-0983 · Ch. 50 · MUST · P0 · MANUAL** — L'agent doit définir objectif, utilisateurs, questions, informations, actions, états, permissions et responsive avant de modifier un écran non spécifié.
+  - Chapitre: Protocole d’exécution Codex et auto-audit obligatoire
+  - Preuve: Une fiche minimale est produite ou l'absence bloque le développement.
+- **UXR-0989 · Ch. 50 · MUST · P0 · SEMI** — L'agent doit implémenter les états de vérité et d'erreur avant de polir le happy path.
+  - Chapitre: Protocole d’exécution Codex et auto-audit obligatoire
+  - Preuve: Les fixtures et tests couvrent partial, stale, forbidden et erreur dès la première tranche.
+- **UXR-0485 · Ch. 25 · MUST NOT · P1 · AUTO** — Un spinner global ne doit pas bloquer toute une page lorsque des sections peuvent se charger indépendamment.
+  - Chapitre: Chargement, vide, données partielles, stale, offline et indisponibilité
+  - Preuve: Les requêtes et états sont localisés par section.
+- **UXR-0742 · Ch. 38 · MUST · P1 · AUTO** — Le dossier core doit contenir uniquement les capacités transverses uniques comme auth, HTTP, query, realtime, commands et errors.
+  - Chapitre: Architecture frontend par feature et séparation des couches
+  - Preuve: Aucune logique métier spécifique n'est placée dans core.
+- **UXR-0960 · Ch. 48 · MUST NOT · P0 · SEMI** — Ne pas déclarer une page terminée sur la seule base d'une capture desktop happy path.
+  - Chapitre: Anti-patterns UI/UX explicitement interdits
+  - Preuve: États, clavier, responsive, données réelles, permissions, actions et erreurs sont vérifiés.
+- **UXR-0779 · Ch. 39 · MUST · P1 · AUTO** — Les fixtures de contrat doivent inclure données complètes, partielles, inconnues, extrêmes et invalides.
+  - Chapitre: Contrats API, DTO, modèles de domaine UI et provenance
+  - Preuve: Les tests de mapper couvrent chaque catégorie.
+- **UXR-0990 · Ch. 50 · MUST · P1 · AUTO** — L'agent doit exécuter le linter UI/UX, les tests, l'accessibilité et les contrôles visuels applicables avant de conclure.
+  - Chapitre: Protocole d’exécution Codex et auto-audit obligatoire
+  - Preuve: Le rapport donne commandes, résultats et limites.
+- **UXR-0761 · Ch. 39 · MUST · P0 · AUTO** — Le frontend doit consommer un contrat API documenté et versionné.
+  - Chapitre: Contrats API, DTO, modèles de domaine UI et provenance
+  - Preuve: Le client est généré ou fortement typé depuis OpenAPI ou schéma équivalent.
+- **UXR-0823 · Ch. 42 · MUST · P0 · AUTO** — Les composants interactifs doivent avoir des tests clavier et focus.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: Les scénarios utilisent des rôles et noms accessibles.
+- **UXR-0825 · Ch. 42 · MUST · P0 · MANUAL** — Les scans automatisés ne remplacent pas les tests manuels avec lecteurs d'écran et utilisateurs.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: La Definition of Done distingue les deux preuves.
+- **UXR-0110 · Ch. 6 · MUST · P1 · SEMI** — Le niveau de drill-down doit être déterminé avant l'implémentation du composant.
+  - Chapitre: Profondeur de page, drill-down, drawers et sous-pages
+  - Preuve: La Screen Specification décrit destination, données et comportement du retour.
+- **UXR-0499 · Ch. 25 · MUST · P1 · AUTO** — Tous les états de données doivent être documentés dans les stories et testés au niveau mapper et écran.
+  - Chapitre: Chargement, vide, données partielles, stale, offline et indisponibilité
+  - Preuve: La matrice d'états est complète avant fusion.
+- **UXR-0487 · Ch. 25 · MUST · P0 · AUTO** — Une dernière valeur connue doit être clairement distinguée d'une valeur actuelle.
+  - Chapitre: Chargement, vide, données partielles, stale, offline et indisponibilité
+  - Preuve: Le label, timestamp et source indiquent le caractère historique.
+- **UXR-0746 · Ch. 38 · MUST · P0 · AUTO** — Le registre de routes, navigation, breadcrumbs et recherche doit être une source de vérité unique enrichie par capabilities.
+  - Chapitre: Architecture frontend par feature et séparation des couches
+  - Preuve: Aucune sidebar parallèle n'est codée en dur.
+- **UXR-0824 · Ch. 42 · MUST · P0 · AUTO** — Les scans axe ou équivalents doivent être exécutés sur composants et pages critiques.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: Les violations nouvelles P0/P1 bloquent la CI.
+- **UXR-0101 · Ch. 6 · MUST · P1 · MANUAL** — Une vue L0 doit répondre à « que se passe-t-il et où regarder » sans prétendre contenir toute l'analyse.
+  - Chapitre: Profondeur de page, drill-down, drawers et sous-pages
+  - Preuve: Le contenu priorise état, exceptions, tendances et accès aux domaines propriétaires.
+- **UXR-0743 · Ch. 38 · MUST · P1 · AUTO** — Le shell doit gérer navigation, contexte et chrome sans calculer les données des domaines.
+  - Chapitre: Architecture frontend par feature et séparation des couches
+  - Preuve: Les widgets métier restent dans les features ou un endpoint composé explicite.
+- **UXR-0759 · Ch. 38 · MUST · P1 · AUTO** — Chaque feature doit inclure ses tests, fixtures et stories à proximité.
+  - Chapitre: Architecture frontend par feature et séparation des couches
+  - Preuve: Le déplacement ou la suppression de la feature ne laisse pas de tests orphelins.
+- **UXR-0832 · Ch. 42 · MUST · P1 · AUTO** — Les tests de responsive doivent couvrir les viewports et densités contractuels.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: Les captures vérifient overflow, contenu masqué et navigation.
+- **UXR-0836 · Ch. 42 · MUST · P1 · AUTO** — Les tests de sécurité UI doivent couvrir redaction, URLs, exports, permissions et contenus non fiables.
+  - Chapitre: Tests UI, accessibilité, interaction, visuel et E2E
+  - Preuve: Aucune donnée sensible ne fuit dans le DOM ou les logs.
+- **UXR-0263 · Ch. 14 · MUST · P0 · SEMI** — L'utilisation de composants accessibles ne dispense pas de tester le parcours complet.
+  - Chapitre: Fondations d'accessibilité et conception inclusive
+  - Preuve: Les tests E2E couvrent ordre, messages, focus et états combinés.
+
+Selection is an aid, not a substitute for reading the relevant chapters and product contracts.

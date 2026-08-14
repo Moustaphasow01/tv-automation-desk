@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deskSessionFixture } from "@/test/fixtures/deskSessionFixture";
-import { mergeDeskSessionResources } from "@/hooks/useDesk";
+import { mergeLiveDeskSessionResources } from "@/features/live-desk/dataAccess";
 import type { DeskAuditResource, DeskMarketResource, DeskPositionResource, DeskSession } from "@/types";
 
 const session = () => structuredClone(deskSessionFixture.sessions.ny_open) as unknown as DeskSession;
@@ -16,10 +16,10 @@ const meta = {
   }
 } as const;
 
-describe("mergeDeskSessionResources", () => {
+describe("mergeLiveDeskSessionResources", () => {
   it("conserve l’agrégat quand une ressource optionnelle échoue", () => {
     const aggregate = session();
-    const merged = mergeDeskSessionResources(aggregate, {});
+    const merged = mergeLiveDeskSessionResources(aggregate, {});
 
     expect(merged.position).toEqual(aggregate.position);
     expect(merged.market).toEqual(aggregate.market);
@@ -48,7 +48,7 @@ describe("mergeDeskSessionResources", () => {
       audit: aggregate.audit
     };
 
-    const merged = mergeDeskSessionResources(aggregate, { market, audit });
+    const merged = mergeLiveDeskSessionResources(aggregate, { market, audit });
 
     expect(merged.dataQuality.status).toBe("degraded");
     expect(merged.dataQuality.warnings).toEqual(["news_digest_missing", "market_snapshot_stale"]);
@@ -68,7 +68,7 @@ describe("mergeDeskSessionResources", () => {
       }
     };
 
-    const merged = mergeDeskSessionResources(aggregate, { position });
+    const merged = mergeLiveDeskSessionResources(aggregate, { position });
 
     expect(aggregate.position.status).toBe("CLOSED");
     expect(merged.position.status).toBe("protected");

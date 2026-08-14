@@ -1,92 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { deskApi } from "@/api/deskApi";
-import { refreshPolicyMs } from "@/api/endpoints";
+import {
+  isRunningAutomationStatus,
+  liveDeskDataAccess,
+  liveDeskKeys,
+  liveDeskQueryDefaults,
+  liveDeskRefreshPolicy,
+  mergeLiveDeskSessionResources
+} from "@/features/live-desk/dataAccess";
 import type {
-  DeskActivityResource,
-  DeskAlertsResource,
-  DeskAuditResource,
   DeskDetailScope,
-  DeskMacroResource,
-  DeskMarketResource,
-  DeskNewsDigestResource,
-  DeskNewsHeadlinesResource,
-  DeskPositionResource,
   DeskSession,
   SessionId
 } from "@/types";
 
-export const deskKeys = {
-  session: (id: SessionId) => ["desk-session", id] as const,
-  market: (id: SessionId) => ["desk-market", id] as const,
-  position: (id: SessionId) => ["desk-position", id] as const,
-  macro: (id: SessionId, date = "current") => ["desk-macro", id, date] as const,
-  newsDigest: (id: SessionId, date = "current") => ["desk-news-digest", id, date] as const,
-  newsHeadlines: (id: SessionId, date = "current") => ["desk-news-headlines", id, date] as const,
-  activity: (id: SessionId) => ["desk-activity", id] as const,
-  alerts: (id: SessionId) => ["desk-alerts", id] as const,
-  audit: (id: SessionId) => ["desk-audit", id] as const,
-  timeline: (scope: DeskDetailScope) => ["desk-timeline", scope.session, scope.strategyId, scope.date] as const,
-  master: (id: string, scope: DeskDetailScope) => ["desk-master", id, scope.session, scope.date] as const,
-  monitor: (id: string, scope: DeskDetailScope) => ["desk-monitor", id, scope.session, scope.date] as const,
-  thesis: (id: string, scope: DeskDetailScope) => ["desk-thesis", id, scope.session, scope.date] as const,
-  thesisConditions: (id: string, scope: DeskDetailScope) => ["desk-thesis-conditions", id, scope.session, scope.date] as const,
-  setup: (id: string, scope: DeskDetailScope) => ["desk-setup", id, scope.session, scope.date] as const
-};
-
-interface DeskSessionResources {
-  market?: DeskMarketResource;
-  position?: DeskPositionResource;
-  macro?: DeskMacroResource;
-  newsDigest?: DeskNewsDigestResource;
-  newsHeadlines?: DeskNewsHeadlinesResource;
-  activity?: DeskActivityResource;
-  alerts?: DeskAlertsResource;
-  audit?: DeskAuditResource;
-}
-
-const liveQueryDefaults = {
-  retry: 0,
-  refetchOnWindowFocus: false,
-  refetchOnReconnect: false,
-  refetchOnMount: false
-} as const;
-
-/**
- * Merge independently refreshed read models over the initial aggregate.
- * Missing optional resources keep the last aggregate value, while canonical
- * execution resources override it whenever a fresher response is available.
- */
-export function mergeDeskSessionResources(session: DeskSession, resources: DeskSessionResources): DeskSession {
-  const resourceWarnings = Object.values(resources).flatMap(resource => resource?.warnings || []);
-  const news = resources.newsDigest?.news || session.news;
-  return {
-    ...session,
-    ...(resources.market && {
-      lastDataAt: resources.market.lastDataAt,
-      market: resources.market.market,
-      marketBrief: resources.market.marketBrief,
-      crossAssetBrief: resources.market.crossAssetBrief,
-      levels: resources.market.levels
-    }),
-    ...(resources.position && { position: resources.position.position }),
-    ...(resources.macro && { nextMacro: resources.macro.nextMacro, macro: resources.macro.macro }),
-    news: {
-      ...news,
-      headlines: resources.newsHeadlines?.headlines || news.headlines
-    },
-    ...(resources.activity && { automation: resources.activity.automation, activity: resources.activity.activity }),
-    ...(resources.alerts && { alerts: resources.alerts.alerts }),
-    ...(resources.audit && { audit: resources.audit.audit }),
-    dataQuality: {
-      ...(resources.audit?.dataQuality || session.dataQuality),
-      warnings: [...new Set([
-        ...(resources.audit?.dataQuality.warnings || session.dataQuality.warnings),
-        ...resourceWarnings
-      ])]
-    }
-  };
-}
+export const deskKeys = liveDeskKeys;
+export const mergeDeskSessionResources = mergeLiveDeskSessionResources;
 
 interface DeskSessionQueryOptions {
   enabled?: boolean;
@@ -98,12 +27,12 @@ interface DeskSessionQueryOptions {
 
 export function useDeskSessionBase(id: SessionId, options: DeskSessionQueryOptions = {}) {
   return useQuery({
-    ...liveQueryDefaults,
-    queryKey: deskKeys.session(id),
-    queryFn: () => deskApi.getSession(id),
+    ...liveDeskQueryDefaults,
+    queryKey: liveDeskKeys.session(id),
+    queryFn: () => liveDeskDataAccess.getSession(id),
     enabled: options.enabled ?? true,
     staleTime: 30_000,
-    refetchInterval: options.refetchInterval ?? refreshPolicyMs.projection,
+    refetchInterval: options.refetchInterval ?? liveDeskRefreshPolicy.projection,
     retry: options.retry ?? 1,
     refetchOnMount: options.refetchOnMount ?? true,
     refetchOnReconnect: options.refetchOnReconnect ?? true
@@ -112,18 +41,18 @@ export function useDeskSessionBase(id: SessionId, options: DeskSessionQueryOptio
 
 export function useDeskMarketSnapshot(id: SessionId, options: { enabled?: boolean; refetchInterval?: number | false } = {}) {
   return useQuery({
-    queryKey: deskKeys.market(id),
-    queryFn: () => deskApi.getMarketSnapshot(id),
+    queryKey: liveDeskKeys.market(id),
+    queryFn: () => liveDeskDataAccess.getMarketSnapshot(id),
     enabled: options.enabled ?? true,
     staleTime: 15_000,
-    refetchInterval: options.refetchInterval ?? refreshPolicyMs.market,
-    ...liveQueryDefaults
+    refetchInterval: options.refetchInterval ?? liveDeskRefreshPolicy.market,
+    ...liveDeskQueryDefaults
   });
 }
 
 export function useDeskSession(id: SessionId) {
   const sessionQuery = useDeskSessionBase(id, {
-    refetchInterval: Math.max(refreshPolicyMs.projection, 45_000),
+    refetchInterval: Math.max(liveDeskRefreshPolicy.projection, 45_000),
     retry: 2,
     refetchOnMount: "always",
     refetchOnReconnect: true
@@ -132,68 +61,68 @@ export function useDeskSession(id: SessionId) {
   const backgroundResourcesEnabled = useDeferredEnabled(Boolean(sessionQuery.data), 2_500);
   const marketQuery = useDeskMarketSnapshot(id, {
     enabled: criticalResourcesEnabled,
-    refetchInterval: refreshPolicyMs.market
+    refetchInterval: liveDeskRefreshPolicy.market
   });
   const positionQuery = useQuery({
-    queryKey: deskKeys.position(id),
-    queryFn: () => deskApi.getPosition(id),
+    queryKey: liveDeskKeys.position(id),
+    queryFn: () => liveDeskDataAccess.getPosition(id),
     enabled: criticalResourcesEnabled,
     staleTime: 15_000,
-    refetchInterval: query => query.state.data?.position.active ? Math.max(refreshPolicyMs.activePosition, 15_000) : 60_000,
-    ...liveQueryDefaults
+    refetchInterval: query => query.state.data?.position.active ? Math.max(liveDeskRefreshPolicy.activePosition, 15_000) : 60_000,
+    ...liveDeskQueryDefaults
   });
   const macroQuery = useQuery({
-    queryKey: deskKeys.macro(id, sessionQuery.data?.date),
-    queryFn: () => deskApi.getMacroCalendar(id),
+    queryKey: liveDeskKeys.macro(id, sessionQuery.data?.date),
+    queryFn: () => liveDeskDataAccess.getMacroCalendar(id),
     enabled: backgroundResourcesEnabled,
     staleTime: 120_000,
-    refetchInterval: query => query.state.data?.nearEvent ? Math.max(refreshPolicyMs.macroNearEvent, 90_000) : refreshPolicyMs.macro,
-    ...liveQueryDefaults
+    refetchInterval: query => query.state.data?.nearEvent ? Math.max(liveDeskRefreshPolicy.macroNearEvent, 90_000) : liveDeskRefreshPolicy.macro,
+    ...liveDeskQueryDefaults
   });
   const newsDigestQuery = useQuery({
-    queryKey: deskKeys.newsDigest(id, sessionQuery.data?.date),
-    queryFn: () => deskApi.getNewsDigest(id),
+    queryKey: liveDeskKeys.newsDigest(id, sessionQuery.data?.date),
+    queryFn: () => liveDeskDataAccess.getNewsDigest(id),
     enabled: backgroundResourcesEnabled,
     staleTime: 300_000,
-    refetchInterval: refreshPolicyMs.newsDigest,
-    ...liveQueryDefaults
+    refetchInterval: liveDeskRefreshPolicy.newsDigest,
+    ...liveDeskQueryDefaults
   });
   const newsHeadlinesQuery = useQuery({
-    queryKey: deskKeys.newsHeadlines(id, sessionQuery.data?.date),
-    queryFn: () => deskApi.getNewsHeadlines(id),
+    queryKey: liveDeskKeys.newsHeadlines(id, sessionQuery.data?.date),
+    queryFn: () => liveDeskDataAccess.getNewsHeadlines(id),
     enabled: backgroundResourcesEnabled,
     staleTime: 120_000,
-    refetchInterval: Math.max(refreshPolicyMs.news, 180_000),
-    ...liveQueryDefaults
+    refetchInterval: Math.max(liveDeskRefreshPolicy.news, 180_000),
+    ...liveDeskQueryDefaults
   });
   const activityQuery = useQuery({
-    queryKey: deskKeys.activity(id),
-    queryFn: () => deskApi.getDeskActivity(id),
+    queryKey: liveDeskKeys.activity(id),
+    queryFn: () => liveDeskDataAccess.getDeskActivity(id),
     enabled: criticalResourcesEnabled,
     staleTime: 15_000,
-    refetchInterval: query => isRunning(query.state.data?.automation.status) ? Math.max(refreshPolicyMs.deskActivityRunning, 15_000) : 60_000,
-    ...liveQueryDefaults
+    refetchInterval: query => isRunningAutomationStatus(query.state.data?.automation.status) ? Math.max(liveDeskRefreshPolicy.deskActivityRunning, 15_000) : 60_000,
+    ...liveDeskQueryDefaults
   });
   const alertsQuery = useQuery({
-    queryKey: deskKeys.alerts(id),
-    queryFn: () => deskApi.getAlerts(id),
+    queryKey: liveDeskKeys.alerts(id),
+    queryFn: () => liveDeskDataAccess.getAlerts(id),
     enabled: criticalResourcesEnabled,
     staleTime: 30_000,
-    refetchInterval: Math.max(refreshPolicyMs.alerts, 30_000),
-    ...liveQueryDefaults
+    refetchInterval: Math.max(liveDeskRefreshPolicy.alerts, 30_000),
+    ...liveDeskQueryDefaults
   });
   const auditQuery = useQuery({
-    queryKey: deskKeys.audit(id),
-    queryFn: () => deskApi.getAudit(id),
+    queryKey: liveDeskKeys.audit(id),
+    queryFn: () => liveDeskDataAccess.getAudit(id),
     enabled: backgroundResourcesEnabled,
     staleTime: 300_000,
-    refetchInterval: Math.max(refreshPolicyMs.audit, 300_000),
-    ...liveQueryDefaults
+    refetchInterval: Math.max(liveDeskRefreshPolicy.audit, 300_000),
+    ...liveDeskQueryDefaults
   });
 
   const data = useMemo(() => {
     if (!sessionQuery.data) return undefined;
-    return mergeDeskSessionResources(sessionQuery.data, {
+    return mergeLiveDeskSessionResources(sessionQuery.data, {
       market: marketQuery.data,
       position: positionQuery.data,
       macro: macroQuery.data,
@@ -276,72 +205,68 @@ export function deskDetailScope(session: DeskSession): DeskDetailScope {
 
 export function useTimelineDetail(scope: DeskDetailScope) {
   return useQuery({
-    queryKey: deskKeys.timeline(scope),
-    queryFn: () => deskApi.getTimeline(scope),
+    queryKey: liveDeskKeys.timeline(scope),
+    queryFn: () => liveDeskDataAccess.getTimeline(scope),
     enabled: Boolean(scope.strategyId && scope.date),
     staleTime: 15_000,
-    refetchInterval: refreshPolicyMs.projection,
+    refetchInterval: liveDeskRefreshPolicy.projection,
     retry: 1
   });
 }
 
 export function useMasterDetail(masterId: string, scope: DeskDetailScope) {
   return useQuery({
-    queryKey: deskKeys.master(masterId, scope),
-    queryFn: () => deskApi.getMaster(masterId, scope),
+    queryKey: liveDeskKeys.master(masterId, scope),
+    queryFn: () => liveDeskDataAccess.getMaster(masterId, scope),
     enabled: detailEnabled(masterId),
     staleTime: 30_000,
-    refetchInterval: refreshPolicyMs.projection,
+    refetchInterval: liveDeskRefreshPolicy.projection,
     retry: 1
   });
 }
 
 export function useMonitorDetail(monitorId: string, scope: DeskDetailScope) {
   return useQuery({
-    queryKey: deskKeys.monitor(monitorId, scope),
-    queryFn: () => deskApi.getMonitor(monitorId, scope),
+    queryKey: liveDeskKeys.monitor(monitorId, scope),
+    queryFn: () => liveDeskDataAccess.getMonitor(monitorId, scope),
     enabled: detailEnabled(monitorId),
     staleTime: 15_000,
-    refetchInterval: refreshPolicyMs.projection,
+    refetchInterval: liveDeskRefreshPolicy.projection,
     retry: 1
   });
 }
 
 export function useThesisDetail(thesisId: string, scope: DeskDetailScope) {
   return useQuery({
-    queryKey: deskKeys.thesis(thesisId, scope),
-    queryFn: () => deskApi.getThesis(thesisId, scope),
+    queryKey: liveDeskKeys.thesis(thesisId, scope),
+    queryFn: () => liveDeskDataAccess.getThesis(thesisId, scope),
     enabled: detailEnabled(thesisId),
     staleTime: 30_000,
-    refetchInterval: refreshPolicyMs.projection,
+    refetchInterval: liveDeskRefreshPolicy.projection,
     retry: 1
   });
 }
 
 export function useThesisConditionsDetail(thesisId: string, scope: DeskDetailScope) {
   return useQuery({
-    queryKey: deskKeys.thesisConditions(thesisId, scope),
-    queryFn: () => deskApi.getThesisConditions(thesisId, scope),
+    queryKey: liveDeskKeys.thesisConditions(thesisId, scope),
+    queryFn: () => liveDeskDataAccess.getThesisConditions(thesisId, scope),
     enabled: detailEnabled(thesisId),
     staleTime: 15_000,
-    refetchInterval: refreshPolicyMs.projection,
+    refetchInterval: liveDeskRefreshPolicy.projection,
     retry: 1
   });
 }
 
 export function useSetupDetail(setupId: string, scope: DeskDetailScope) {
   return useQuery({
-    queryKey: deskKeys.setup(setupId, scope),
-    queryFn: () => deskApi.getSetup(setupId, scope),
+    queryKey: liveDeskKeys.setup(setupId, scope),
+    queryFn: () => liveDeskDataAccess.getSetup(setupId, scope),
     enabled: detailEnabled(setupId),
     staleTime: 30_000,
-    refetchInterval: refreshPolicyMs.projection,
+    refetchInterval: liveDeskRefreshPolicy.projection,
     retry: 1
   });
-}
-
-function isRunning(status: string | undefined) {
-  return Boolean(status && !["idle", "unknown", "done", "failed", "cancelled"].includes(status.toLowerCase()));
 }
 
 function detailEnabled(id: string) {

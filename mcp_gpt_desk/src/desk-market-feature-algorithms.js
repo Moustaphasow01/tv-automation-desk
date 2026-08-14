@@ -7,6 +7,8 @@ import { deskError } from "./desk-errors.js";
 import { stableVNextId } from "./desk-ids.js";
 import { normalizeUtcIso } from "./desk-time-utils.js";
 import { normalizeDeskInstrumentScopes } from "./data-availability-policy.js";
+import { buildDevelopingVolumeProfile } from "./market-derived-features.js";
+import { AVERAGE_RANGE_LEGACY_VERSION, buildVolatilityIndicators, recentAverageRange as legacyRecentAverageRange, WILDER_ATR_14_VERSION } from "./market-volatility-indicators.js";
 
 export function normalizeOperationalQuery(args = {}, { requireMaster = false, requireThesis = false } = {}) {
   const required = ["strategy_id", "session", "mode", "trading_date", "run_id", "as_of_utc"];
@@ -391,7 +393,10 @@ export function buildSessionSnapshotDoc({ date, session, instrument, rows, cutof
     overnight_high_low: highLowBlock(rowsBetweenParis(sessionRows, "00:00", "09:30")),
     previous_ny_high_low: highLowBlock(rowsBetweenParis(rows, "15:30", "22:00", { beforeDate: date })),
     vwap: vwapValue(sessionRows.length ? sessionRows : rows),
-    poc_vah_val: {},
+    poc_vah_val: buildDevelopingVolumeProfile(sessionRows.length ? sessionRows : rows, {
+      cutoffUtc: normalizeUtcIso(cutoff_paris || computed_at),
+      tickSize: ["MES", "ES"].includes(instrument) ? 0.25 : 0.25,
+    }),
     range_state: rangeState(sessionRows.length ? sessionRows : rows),
     volatility_state: volatilityState(sessionRows.length ? sessionRows : rows),
     computed_with_cutoff: cutoff_paris,
@@ -406,8 +411,8 @@ export function buildLevelMapDoc({ date, session, instrument, candlesByTimeframe
     candidates.push(...levelCandidatesFromRows(rows, timeframe, date));
   }
   const baseRows = candlesByTimeframe["5"] || candlesByTimeframe.M5 || candlesByTimeframe["15"] || [];
-  const atr = recentAverageRange(baseRows) || 1;
-  const tolerance = Math.max(atr * 0.35, ["MNQ", "NQ", "MES", "ES"].includes(instrument) ? 2 : 0.1);
+  const averageRange = recentAverageRange(baseRows) || 1;
+  const tolerance = Math.max(averageRange * 0.35, ["MNQ", "NQ", "MES", "ES"].includes(instrument) ? 2 : 0.1);
   const clusters = clusterFeatureCandidates(candidates, tolerance);
   const levels = clusters.map((cluster, index) => scoreFeatureCluster({
     cluster,
@@ -758,28 +763,46 @@ export function vwapValue(rows) {
 
 export function rangeState(rows) {
   const block = highLowBlock(rows);
-  const atr = recentAverageRange(rows);
+  const volatility = buildVolatilityIndicators(rows);
+  const atr = volatility.atr_14;
+  const averageRange = volatility.average_range_14;
+  const reference = volatility.volatility_reference_points;
   return {
     range_points: block.range_points || 0,
     atr_14: atr,
+    atr_14_version: WILDER_ATR_14_VERSION,
+    average_range_14: averageRange,
+    average_range_legacy_version: AVERAGE_RANGE_LEGACY_VERSION,
+    legacy_atr_14: averageRange,
     range_vs_atr: atr ? roundNumber((block.range_points || 0) / atr) : null,
+    range_vs_average_range: averageRange ? roundNumber((block.range_points || 0) / averageRange) : null,
+    range_vs_volatility_reference: reference ? roundNumber((block.range_points || 0) / reference) : null,
+    volatility_reference_source: volatility.volatility_reference_source,
   };
 }
 
 export function volatilityState(rows) {
-  const avgRange = recentAverageRange(rows, 20);
-  const atr = recentAverageRange(rows, 14);
-  const ratio = atr ? avgRange / atr : 0;
+  const volatility = buildVolatilityIndicators(rows);
+  const avgRange = volatility.average_range_recent;
+  const atr = volatility.atr_14;
+  const reference = volatility.volatility_reference_points;
+  const ratio = reference ? avgRange / reference : 0;
   return {
     atr_14: atr,
+    atr_14_version: WILDER_ATR_14_VERSION,
+    average_range_14: volatility.average_range_14,
+    average_range_legacy_version: AVERAGE_RANGE_LEGACY_VERSION,
     avg_recent_range: avgRange,
+    avg_recent_range_version: AVERAGE_RANGE_LEGACY_VERSION,
+    legacy_atr_14: volatility.average_range_14,
+    volatility_reference_points: reference,
+    volatility_reference_source: volatility.volatility_reference_source,
     regime: ratio > 1.2 ? "expanded" : ratio < 0.7 ? "compressed" : rows?.length ? "normal" : "unknown",
   };
 }
 
 export function recentAverageRange(rows, count = 14) {
-  const ranges = (rows || []).slice(-count).map((row) => numeric(row.high, 0) - numeric(row.low, 0)).filter((value) => value > 0);
-  return ranges.length ? roundNumber(average(ranges)) : 0;
+  return legacyRecentAverageRange(rows, count);
 }
 
 export function average(values) {

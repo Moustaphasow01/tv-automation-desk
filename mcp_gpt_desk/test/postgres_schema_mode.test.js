@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   PostgresDeskPersistence,
   postgresPoolOptions,
+  retryPostgresInitialization,
 } from "../src/persistence/postgres-desk-persistence.js";
 
 test("public runtime schema validation never executes DDL", async () => {
@@ -57,6 +58,37 @@ test("public runtime schema validation fails closed when migrations are missing"
     persistence.initialized,
     (error) => error?.code === "POSTGRES_SCHEMA_NOT_READY",
   );
+});
+
+test("postgres initialization retries a transient recovery error and then succeeds", async () => {
+  let attempts = 0;
+  const delays = [];
+  const result = await retryPostgresInitialization(async () => {
+    attempts += 1;
+    if (attempts < 3) throw Object.assign(new Error("the database system is starting up"), { code: "57P03" });
+    return "ready";
+  }, {
+    maxAttempts: 4,
+    baseDelayMs: 10,
+    maxDelayMs: 20,
+    sleep: async (delayMs) => delays.push(delayMs),
+  });
+
+  assert.equal(result, "ready");
+  assert.equal(attempts, 3);
+  assert.deepEqual(delays, [10, 20]);
+});
+
+test("postgres initialization does not retry a missing migration", async () => {
+  let attempts = 0;
+  await assert.rejects(
+    retryPostgresInitialization(async () => {
+      attempts += 1;
+      throw Object.assign(new Error("Required PostgreSQL tables are missing"), { code: "POSTGRES_SCHEMA_NOT_READY" });
+    }, { maxAttempts: 4, sleep: async () => {} }),
+    (error) => error?.code === "POSTGRES_SCHEMA_NOT_READY",
+  );
+  assert.equal(attempts, 1);
 });
 
 test("market candle query applies an optional exact feed_id filter", async () => {

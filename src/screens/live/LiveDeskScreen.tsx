@@ -13,8 +13,12 @@ import {
   ThesisSummary
 } from "@/components/deskCards";
 import type { LiveDeskScreenProps } from "./LiveDeskScreen.types";
-import { dataQualityLabel, sessionLabel } from "@/lib/presentation";
-import type { DeskSession } from "@/types";
+import {
+  buildLiveDeskScreenViewModel,
+  type LiveBrokerGuardViewModel,
+  type LiveDeskScreenViewModel,
+  type LiveProcessStageViewModel
+} from "@/features/live-desk/viewModel";
 import "./liveDeskScreen.css";
 
 const liveSections = [
@@ -32,6 +36,7 @@ export function LiveDeskScreen({
   phaseLabel,
   refreshing,
   dataUpdatedAt,
+  executionOverview,
   onRefresh,
   actions,
   tabs,
@@ -40,7 +45,7 @@ export function LiveDeskScreen({
   executionContent
 }: LiveDeskScreenProps) {
   const [activeSection, setActiveSection] = useState<LiveSectionId>("live-decision");
-  const upcomingMacro = data.macro.find(event => event.isNext);
+  const viewModel = buildLiveDeskScreenViewModel(data, { phaseLabel, refreshing, dataUpdatedAt, executionOverview });
 
   const jumpTo = (id: LiveSectionId) => {
     setActiveSection(id);
@@ -49,14 +54,14 @@ export function LiveDeskScreen({
 
   return <section className="view live-desk-v2 live-screen" data-screen="live-desk">
     <PageHeading
-      eyebrow={`Session automatique · ${phaseLabel}`}
-      title="Live Desk"
-      subtitle={`${sessionLabel(data.label)} · ${data.date} · ${sessionLabel(data.strategyId)}`}
+      eyebrow={viewModel.heading.eyebrow}
+      title={viewModel.heading.title}
+      subtitle={viewModel.heading.subtitle}
       actions={<>
-        <DataSourceBadge label="SOURCE LIVE" detail={dataQualityLabel(data.dataQuality.status)}/>
+        <DataSourceBadge label={viewModel.source.label} detail={viewModel.source.detail}/>
         <button className={`live-sync-indicator ${refreshing ? "is-refreshing" : ""}`} onClick={onRefresh}>
           <span className="live-sync-indicator__gear"><Icon name="settings" size={14}/></span>
-          <span><strong>{refreshing ? "Synchronisation…" : "Desk actif"}</strong><small>mis à jour {formatUpdatedAt(dataUpdatedAt)}</small></span>
+          <span><strong>{viewModel.sync.title}</strong><small>{viewModel.sync.detail}</small></span>
         </button>
         <button className="text-btn" onClick={actions.openJournal}>Ouvrir le journal</button>
         <button className="secondary-btn" onClick={actions.openSetup}>Setup & Position</button>
@@ -80,40 +85,40 @@ export function LiveDeskScreen({
         <DecisionCard data={data} onOpenSetup={actions.openSetup}/>
         <ThesisSummary data={data} onOpenThesis={actions.openThesis}/>
       </div>
-      <LiveProcessPulse data={data} refreshing={refreshing}/>
+      <LiveProcessPulse process={viewModel.process} refreshing={refreshing}/>
       <MetricStrip className="live-metric-strip metric-strip--ten">
         <MetricCard label="Confiance" value={`${data.thesis.confidence}%`}/>
         <MetricCard label="Santé" value={`${data.thesis.health}/100`}/>
-        <MetricCard label="Risque setup" value={data.setup.risk == null ? "—" : `${fmtLive(data.setup.risk)}%`}/>
+        <MetricCard label="Risque setup" value={viewModel.metrics.riskSetup}/>
         <MetricCard
           label="R non réalisé"
-          value={data.position.unrealizedR == null ? "—" : `${data.position.unrealizedR.toFixed(2)} R`}
-          tone={data.position.unrealizedR == null ? "neutral" : data.position.unrealizedR >= 0 ? "positive" : "negative"}
+          value={viewModel.metrics.unrealizedR}
+          tone={viewModel.metrics.unrealizedRTone}
         />
         <MetricCard label="Dernier monitor" value={data.lastMonitorAt}/>
         <MetricCard
           label="Dernier claim"
-          value={data.claim.lastClaimAt}
-          detail={data.claim.workerId || "Aucun worker"}
+          value={viewModel.metrics.lastClaimAt}
+          detail={viewModel.metrics.lastClaimDetail}
         />
         <MetricCard
           label="Checkpoint à traiter"
-          value={data.claim.nextTaskStatusLabel}
-          detail={`${data.claim.nextTaskLabel} · ${data.claim.dueCheckpoint || data.claim.nextTaskCheckpoint}`}
-          tone={taskStatusTone(data.claim.nextTaskStatus)}
+          value={viewModel.metrics.nextTaskStatusLabel}
+          detail={viewModel.metrics.nextTaskDetail}
+          tone={viewModel.metrics.nextTaskTone}
         />
         <MetricCard
           label="Checkpoint suivant"
-          value={data.nextCheckpointAt || data.claim.followingTaskCheckpoint || data.nextMonitorAt}
-          detail={workflowLabel(data.claim.followingTaskWorkflow)}
+          value={viewModel.metrics.followingCheckpoint}
+          detail={viewModel.metrics.followingWorkflow}
         />
         <MetricCard
           label="Checkpoint → claim"
-          value={claimLatencyLabel(data.claim.latencySeconds)}
-          detail={`dû ${data.claim.readyAt} · bundle → claim ${claimLatencyLabel(data.claim.bundleClaimLatencySeconds)} · cible < ${Math.round((data.claim.latencyTargetSeconds || 120) / 60)} min`}
-          tone={data.claim.latencyStatus === "late" ? "negative" : data.claim.latencyStatus === "on_target" ? "positive" : "neutral"}
+          value={viewModel.metrics.claimLatency}
+          detail={viewModel.metrics.claimLatencyDetail}
+          tone={viewModel.metrics.claimLatencyTone}
         />
-        <MetricCard label="Prochain macro" value={upcomingMacro ? `${upcomingMacro.time} · ${upcomingMacro.title}` : "Aucun à venir"}/>
+        <MetricCard label="Prochain macro" value={viewModel.metrics.nextMacro}/>
       </MetricStrip>
       <article className="card operational-timeline-card">
         <LiveSectionHeading title="Déroulé planifié / réel" subtitle="Chaque jalon ouvre son contexte et son délai observé"/>
@@ -122,12 +127,13 @@ export function LiveDeskScreen({
     </div>
 
     <div id="live-market" className="live-module live-screen__module">
-      <LiveSectionHeading title="Prix & évolution" subtitle="MNQ, MES, MCL et mega caps · OHLC quotidien, RSI et ATR"/>
+      <LiveSectionHeading title="Prix & évolution" subtitle="MNQ, MES, MCL et mega caps · OHLC quotidien, RSI et ATR Wilder"/>
       <MarketTable data={data}/>
     </div>
 
     <div id="live-execution" className="live-module live-screen__module">
       <LiveSectionHeading title="Plan & exécution" subtitle="Setup théorique et position canonique restent distincts"/>
+      <BrokerGuardPanel guard={viewModel.brokerGuard}/>
       {executionContent}
     </div>
 
@@ -158,44 +164,34 @@ export function LiveDeskScreen({
   </section>;
 }
 
-function fmtLive(value: number) {
-  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(value);
+function BrokerGuardPanel({ guard }: { guard: LiveBrokerGuardViewModel }) {
+  return <article className="card live-broker-guard" data-tone={guard.tone} aria-label="Projection broker front">
+    <header>
+      <div>
+        <p className="eyebrow">Broker · données · protections</p>
+        <h2>{guard.headline}</h2>
+        <span>{guard.summary}</span>
+      </div>
+      <strong>{guard.available ? "POSTGRES + NINJATRADER" : "NON CHARGÉ"}</strong>
+    </header>
+    <div className="live-broker-guard__grid">
+      {guard.cards.map(card => <div key={card.label} data-tone={card.tone}>
+        <span>{card.label}</span>
+        <strong>{card.value}</strong>
+        <small>{card.detail}</small>
+      </div>)}
+    </div>
+    {guard.alerts.length > 0 && <ul className="live-broker-guard__alerts">
+      {guard.alerts.slice(0, 4).map(alert => <li key={alert}>{alert}</li>)}
+    </ul>}
+  </article>;
 }
 
-function taskStatusTone(status: DeskSession["claim"]["nextTaskStatus"]) {
-  if (status === "executed") return "positive";
-  if (status === "late") return "negative";
-  if (status === "waiting") return "warning";
-  return "neutral";
-}
-
-function formatUpdatedAt(value: number) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(value);
-}
-
-function claimLatencyLabel(value: number | null) {
-  if (value == null) return "À mesurer";
-  if (value < 60) return `${value} s`;
-  return `${Math.floor(value / 60)} min ${value % 60} s`;
-}
-
-function workflowLabel(value: string | null) {
-  if (value === "LIVE_MASTER") return "Master";
-  if (value === "LIVE_M15_MONITOR") return "Monitor GPT M15";
-  return "Planification backend";
-}
-
-function LiveProcessPulse({ data, refreshing }: { data: DeskSession; refreshing: boolean }) {
-  const stages = [
-    { label: "Données", detail: data.lastDataAt, state: data.lastDataAt === "—" ? "waiting" : "done" },
-    { label: "Bundle", detail: data.claim.readyAt, state: data.claim.readyAt === "—" ? "waiting" : "done" },
-    { label: "Claim", detail: data.claim.lastClaimAt, state: data.claim.nextTaskStatus === "in_progress" ? "active" : data.claim.lastClaimAt === "—" ? "waiting" : "done" },
-    { label: data.claim.nextTaskLabel, detail: data.claim.dueCheckpoint, state: refreshing ? "active" : data.claim.nextTaskStatus },
-  ];
+function LiveProcessPulse({ process, refreshing }: { process: LiveDeskScreenViewModel["process"]; refreshing: boolean }) {
+  const stages = process.stages;
   return <div className="live-process-pulse" aria-label="Processus live">
-    <span className="live-process-pulse__label" title="Gestion déterministe des prix sur chaque clôture M1 ; analyse stratégique GPT toutes les 15 minutes et sur événement critique."><i className={refreshing ? "is-spinning" : ""}><Icon name="settings" size={14}/></i> Moteur M1 · GPT M15 + événements</span>
-    <div>{stages.map((stage, index) => <span key={stage.label} data-state={stage.state}>
+    <span className="live-process-pulse__label" title={process.title}><i className={refreshing ? "is-spinning" : ""}><Icon name="settings" size={14}/></i> {process.label}</span>
+    <div>{stages.map((stage: LiveProcessStageViewModel, index: number) => <span key={stage.label} data-state={stage.state}>
       <i/><strong>{stage.label}</strong><small>{stage.detail || "—"}</small>{index < stages.length - 1 && <em>→</em>}
     </span>)}</div>
   </div>;

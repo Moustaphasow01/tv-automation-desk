@@ -66,12 +66,48 @@ npm run test:react
 npm run build
 npm run test:e2e
 npm run test:stack
+npm run guard:architecture
+npm run guard:static-quality
+npm run guard:exceptions
+npm run guard:architecture-scorecard
+npm run guard:pr-governance
+npm run guard:security-supply-chain
+npm run guard:sql-migrations
+npm run guard:problem-details
+npm run guard:runtime-safety
+npm run guard:mcp-slices
+npm run guard:front-architecture
 npm --prefix packages/desk-domain run coverage:gate
 npm --prefix mcp_gpt_desk test
 docker compose config --quiet
 ```
 
 Ajouter les guards d'architecture, sécurité, migrations, contrats et déploiement concernés. Ne jamais inventer une commande absente.
+
+## UI/UX & Frontend Product Engineering
+
+Après les lectures générales obligatoires définies en tête de ce fichier, l'ordre de lecture spécifique à toute tâche frontend est :
+
+1. les sources de vérité produit et architecture du projet ;
+2. le Page Operating Contract et la Screen Specification de l'écran ;
+3. `docs/ui-ux/UI_UX_FRONTEND_PRODUCT_ENGINEERING_RULEBOOK.md` ;
+4. `docs/codex/CODEX_UI_UX_EXECUTION_PROTOCOL.md`.
+
+Les documents produit, architecture, contrats actifs, ADR et standards d'ingénierie du projet restent prioritaires sur le référentiel UI/UX général. La hiérarchie détaillée et les extensions locales sont documentées dans `docs/ui-ux/PROJECT_OVERRIDES.md`.
+
+Obligations :
+
+- sélectionner et citer les règles `UXR-XXXX` applicables avant le code ;
+- inspecter le repository et les contrats API avant de conclure ;
+- ne jamais inventer donnée, capability, permission ou résultat ;
+- traiter Truth & Safety et les états dégradés avant le polish ;
+- ne jamais afficher un bouton sans action réelle ;
+- séparer DTO, validation, mapper, view model, query, feature et primitive UI ;
+- exécuter l'audit UI/UX, les tests, l'accessibilité et le visuel applicables ;
+- déclarer tout contrôle non exécuté ;
+- ne déclarer Done qu'après auto-audit UXR et Definition of Done.
+
+Toute violation P0 bloque la tâche sans dérogation approuvée et datée. Le scanner statique reste heuristique : son succès ne constitue jamais une preuve de conformité complète.
 
 ## Compte rendu obligatoire
 

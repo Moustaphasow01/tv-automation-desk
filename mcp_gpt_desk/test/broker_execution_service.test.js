@@ -1,15 +1,113 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { brokerExecutionEnvironment } from "@tv-automation/desk-domain";
-import { BrokerExecutionService } from "../src/broker-execution-service.js";
+import {
+  BROKER_RECONCILIATION_BLOCKING_CONFIRMATION,
+  BrokerExecutionService,
+  resolveBrokerReconciliationPolicy,
+} from "../src/broker-execution-service.js";
 
 const now = "2026-07-22T14:00:00.000Z";
 const clock = { now: () => ({ utc: now, paris: "2026-07-22T16:00:00+02:00" }) };
 
-test("execution service materializes only eligible LIVE paper positions", async () => {
+function legacyPositionExecutionEnvironment(overrides = {}) {
+  return brokerExecutionEnvironment({
+    DESK_LEGACY_POSITION_EXECUTION_ENABLED: "true",
+    ...overrides,
+  });
+}
+
+function portfolioBackedCommandPayload(overrides = {}) {
+  return {
+    schema_version: "portfolio_order_intent_v1",
+    target_position_id: "target_position_test_1",
+    broker_submission_allowed: true,
+    source: {
+      kind: "TARGET_POSITION",
+      target_position_id: "target_position_test_1",
+      risk_decision_ids: ["risk_decision_test_1"],
+      candidate_allocation_ids: ["candidate_allocation_test_1"],
+    },
+    audit: {
+      direct_llm_order: false,
+      derived_from_netting_engine: true,
+    },
+    ...overrides,
+  };
+}
+
+test("legacy position materialization is fail-closed by default", async () => {
+  const repository = new FakeRepository();
+  const persistence = { listDocuments: async () => [paperPosition()] };
+  const service = new BrokerExecutionService({ repository, persistence, clock, environment: brokerExecutionEnvironment({}) });
+  const result = await service.materializeEligiblePositions({ trading_date: "2026-07-22", session: "ny_open" });
+  assert.equal(result.status, "SKIPPED");
+  assert.equal(result.reason, "LEGACY_POSITION_EXECUTION_DISABLED");
+  assert.equal(result.count, 0);
+  assert.equal(repository.decisions.length, 0);
+});
+
+test("legacy position evaluation is fail-closed by default", async () => {
+  const repository = new FakeRepository();
+  repository.context = blockedContext();
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: brokerExecutionEnvironment({}) });
+  await assert.rejects(
+    () => service.evaluateDecision({ decisionId: repository.context.decision.trade_decision_id, actor: "test" }),
+    (error) => error.code === "LEGACY_POSITION_EXECUTION_DISABLED",
+  );
+});
+
+test("runtime action materializes provider commands from Portfolio OrderIntent lineage only when armed", async () => {
+  const calls = [];
+  const portfolioOrderIntentExecutionService = {
+    materializeReadyCommands: async (input) => {
+      calls.push(input);
+      return { ok: true, status: "PROVIDER_COMMANDS_READY", count: 1, items: [] };
+    },
+  };
+  const environment = brokerExecutionEnvironment({
+    DESK_BROKER_EXECUTION_ENABLED: "true",
+    DESK_NINJA_KILL_SWITCH: "false",
+  });
+  const service = new BrokerExecutionService({
+    repository: new FakeRepository(),
+    persistence: {},
+    clock,
+    environment,
+    portfolioOrderIntentExecutionService,
+  });
+
+  const result = await service.executeAction({ action: "materialize_portfolio_order_intents", scope: { provider_id: "ninjatrader" } });
+
+  assert.equal(result.status, "PROVIDER_COMMANDS_READY");
+  assert.equal(calls[0].provider_id, "ninjatrader");
+  assert.equal(calls[0].execution_halt, false);
+});
+
+test("runtime action does not materialize provider commands while the kill switch is active", async () => {
+  const portfolioOrderIntentExecutionService = { materializeReadyCommands: async () => { throw new Error("should_not_call"); } };
+  const environment = brokerExecutionEnvironment({
+    DESK_BROKER_EXECUTION_ENABLED: "true",
+    DESK_NINJA_KILL_SWITCH: "true",
+  });
+  const service = new BrokerExecutionService({
+    repository: new FakeRepository(),
+    persistence: {},
+    clock,
+    environment,
+    portfolioOrderIntentExecutionService,
+  });
+
+  const result = await service.executeAction({ action: "materialize_portfolio_order_intents" });
+
+  assert.equal(result.status, "SKIPPED");
+  assert.equal(result.reason, "ENVIRONMENT_NOT_ARMED");
+});
+
+test("explicit rollback materializes only eligible LIVE paper positions", async () => {
   const repository = new FakeRepository();
   const persistence = { listDocuments: async () => [paperPosition(), { ...paperPosition(), position_id: "closed", status: "CLOSED" }] };
-  const service = new BrokerExecutionService({ repository, persistence, clock, environment: brokerExecutionEnvironment({}) });
+  const service = new BrokerExecutionService({ repository, persistence, clock, environment: legacyPositionExecutionEnvironment() });
   const result = await service.materializeEligiblePositions({ trading_date: "2026-07-22", session: "ny_open" });
   assert.equal(result.count, 1);
   assert.equal(repository.decisions[0].source_document_id, "position_live_1");
@@ -19,7 +117,7 @@ test("execution service materializes only eligible LIVE paper positions", async 
 test("execution service creates a failed risk audit and no intent with safe defaults", async () => {
   const repository = new FakeRepository();
   repository.context = blockedContext();
-  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: brokerExecutionEnvironment({}) });
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: legacyPositionExecutionEnvironment() });
   const result = await service.evaluateDecision({ decisionId: repository.context.decision.trade_decision_id, actor: "test" });
   assert.equal(result.riskCheck.status, "fail");
   assert.equal(result.intent, null);
@@ -35,7 +133,7 @@ test("AUTO mode queues a passing Sim101 entry without operator approval", async 
   });
   repository.context.policy.execution_authority_mode = "auto";
   repository.context.policy.require_operator_approval = false;
-  const environment = brokerExecutionEnvironment({
+  const environment = legacyPositionExecutionEnvironment({
     DESK_BROKER_EXECUTION_ENABLED: "true", DESK_NINJA_BRIDGE_MODE: "sim101_addon_approved_only",
     DESK_NINJA_KILL_SWITCH: "false", DESK_NINJA_MAX_CONTRACTS: "1",
     DESK_NINJA_ACCOUNT_ALLOWLIST: "ninjatrader_paper_local",
@@ -47,6 +145,35 @@ test("AUTO mode queues a passing Sim101 entry without operator approval", async 
   assert.equal(repository.entryApprovalInput.actor, "desk:auto-entry");
 });
 
+test("manual Telegram mode creates the intent but never authorizes broker delivery", async () => {
+  const repository = new FakeRepository();
+  repository.context = passingAddonContext({
+    bridge_id: "manual_telegram", broker_account_id: "ninjatrader_paper_local", adapter_kind: "addon",
+    mode: "disabled", status: "read_only", command_enabled: false,
+    ninja_connected: false, account_name: "Sim101", last_seen_at: now,
+  });
+  repository.context.policy.execution_authority_mode = "auto";
+  repository.context.policy.require_operator_approval = false;
+  const environment = legacyPositionExecutionEnvironment({
+    DESK_BROKER_EXECUTION_ENABLED: "false",
+    DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED: "true",
+    DESK_NINJA_BRIDGE_MODE: "disabled",
+    DESK_NINJA_KILL_SWITCH: "true",
+    DESK_NINJA_MAX_CONTRACTS: "1",
+    DESK_NINJA_ACCOUNT_ALLOWLIST: "ninjatrader_paper_local",
+  });
+  const result = await new BrokerExecutionService({ repository, persistence: {}, clock, environment })
+    .evaluateDecision({ decisionId: repository.context.decision.trade_decision_id });
+  assert.equal(result.riskCheck.status, "pass");
+  assert.equal(result.intent.status, "pending_approval");
+  assert.deepEqual(result.manualTelegramExecution, {
+    status: "ALERT_ONLY",
+    brokerSubmissionSkipped: true,
+    reason: "DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED",
+  });
+  assert.equal(repository.entryApprovalInput, null);
+});
+
 test("SEMI_AUTO mode leaves a passing entry pending for the operator", async () => {
   const repository = new FakeRepository();
   repository.context = passingAddonContext({
@@ -55,7 +182,7 @@ test("SEMI_AUTO mode leaves a passing entry pending for the operator", async () 
     ninja_connected: true, account_name: "Sim101", last_seen_at: now,
   });
   repository.context.policy.execution_authority_mode = "semi_auto";
-  const environment = brokerExecutionEnvironment({
+  const environment = legacyPositionExecutionEnvironment({
     DESK_BROKER_EXECUTION_ENABLED: "true", DESK_NINJA_BRIDGE_MODE: "sim101_addon_approved_only",
     DESK_NINJA_KILL_SWITCH: "false", DESK_NINJA_MAX_CONTRACTS: "1",
     DESK_NINJA_ACCOUNT_ALLOWLIST: "ninjatrader_paper_local",
@@ -92,6 +219,57 @@ test("ATI bridge cannot claim when the AddOn mode owns delivery", async () => {
   assert.equal(result.reason, "ENVIRONMENT_NOT_ARMED");
 });
 
+test("armed ATI bridge blocks an approved legacy outbox item without Portfolio/Risk lineage", async () => {
+  const repository = new FakeRepository();
+  repository.entryCandidate = {
+    execution_outbox_id: "outbox_legacy_ati_1",
+    order_intent_id: "order_intent_legacy_ati_12345678",
+    trade_decision_id: "trade_decision_legacy_ati_1",
+    broker_account_id: "ninjatrader_paper_local",
+    expires_at: "2026-07-22T14:01:00.000Z",
+    command_payload: { broker_symbol: "MNQ 09-26", action: "BUY", quantity: 1, order_type: "limit", limit_price: 30000 },
+  };
+  const environment = brokerExecutionEnvironment({
+    DESK_BROKER_EXECUTION_ENABLED: "true",
+    DESK_NINJA_BRIDGE_MODE: "sim101_ati_approved_only",
+    DESK_NINJA_KILL_SWITCH: "false",
+    DESK_NINJA_MAX_CONTRACTS: "1",
+    DESK_NINJA_ACCOUNT_ALLOWLIST: "ninjatrader_paper_local",
+  });
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment });
+  await assert.rejects(
+    () => service.claimBridgeWork({ bridgeId: "ati_1", accountName: "Sim101", leaseSeconds: 30 }),
+    (error) => error.code === "ORDER_INTENT_PORTFOLIO_RISK_PROOF_REQUIRED",
+  );
+  assert.equal(repository.leasedOutboxId, null);
+});
+
+test("armed AddOn blocks an approved legacy outbox item without Portfolio/Risk lineage", async () => {
+  const repository = new FakeRepository();
+  repository.addonBridge = { bridge_id: "addon_1", broker_account_id: "ninjatrader_paper_local", adapter_kind: "addon", mode: "sim101_addon_approved_only", status: "armed", command_enabled: true, ninja_connected: true, ati_enabled: false, account_name: "Sim101", last_seen_at: now };
+  repository.entryCandidate = {
+    execution_outbox_id: "outbox_legacy_1",
+    order_intent_id: "order_intent_legacy_12345678",
+    trade_decision_id: "trade_decision_legacy_1",
+    broker_account_id: "ninjatrader_paper_local",
+    expires_at: "2026-07-22T14:01:00.000Z",
+    command_payload: { broker_symbol: "MNQ 09-26", action: "BUY", quantity: 1, order_type: "limit", limit_price: 30000 },
+  };
+  const environment = brokerExecutionEnvironment({
+    DESK_BROKER_EXECUTION_ENABLED: "true",
+    DESK_NINJA_BRIDGE_MODE: "sim101_addon_approved_only",
+    DESK_NINJA_KILL_SWITCH: "false",
+    DESK_NINJA_MAX_CONTRACTS: "1",
+    DESK_NINJA_ACCOUNT_ALLOWLIST: "ninjatrader_paper_local",
+  });
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment });
+  await assert.rejects(
+    () => service.claimAddonWork({ bridgeId: "addon_1", accountName: "Sim101", leaseSeconds: 30 }),
+    (error) => error.code === "ORDER_INTENT_PORTFOLIO_RISK_PROOF_REQUIRED",
+  );
+  assert.equal(repository.leasedOutboxId, null);
+});
+
 test("armed AddOn leases only an approved outbox item and emits a canonical command", async () => {
   const repository = new FakeRepository();
   repository.addonBridge = { bridge_id: "addon_1", broker_account_id: "ninjatrader_paper_local", adapter_kind: "addon", mode: "sim101_addon_approved_only", status: "armed", command_enabled: true, ninja_connected: true, ati_enabled: false, account_name: "Sim101", last_seen_at: now };
@@ -104,8 +282,9 @@ test("armed AddOn leases only an approved outbox item and emits a canonical comm
   };
   repository.entryCandidate = {
     execution_outbox_id: "outbox_addon_1", order_intent_id: "order_intent_addon_12345678", trade_decision_id: repository.context.decision.trade_decision_id,
+    portfolio_order_intent_id: "portfolio_order_intent_addon_12345678",
     broker_account_id: "ninjatrader_paper_local", expires_at: "2026-07-22T14:01:00.000Z",
-    command_payload: { broker_symbol: "MNQ 09-26", action: "BUY", quantity: 1, order_type: "limit", limit_price: 30000, protective_stop: 29980, profit_target: 30040, time_in_force: "DAY", atm_strategy_id: "desk_atm_addon_1" },
+    command_payload: portfolioBackedCommandPayload({ broker_symbol: "MNQ 09-26", action: "BUY", quantity: 1, order_type: "limit", limit_price: 30000, protective_stop: 29980, profit_target: 30040, time_in_force: "DAY", atm_strategy_id: "desk_atm_addon_1" }),
   };
   const environment = brokerExecutionEnvironment({
     DESK_BROKER_EXECUTION_ENABLED: "true", DESK_NINJA_BRIDGE_MODE: "sim101_addon_approved_only",
@@ -126,7 +305,8 @@ test("armed AddOn blocks an entry when the canonical Ninja contract already has 
   repository.context = passingAddonContext(repository.addonBridge);
   repository.entryCandidate = {
     execution_outbox_id: "outbox_addon_occupied", order_intent_id: "order_intent_addon_occupied", trade_decision_id: repository.context.decision.trade_decision_id,
-    broker_account_id: "ninjatrader_paper_local", expires_at: "2026-07-22T14:01:00.000Z", command_payload: {},
+    portfolio_order_intent_id: "portfolio_order_intent_addon_occupied",
+    broker_account_id: "ninjatrader_paper_local", expires_at: "2026-07-22T14:01:00.000Z", command_payload: portfolioBackedCommandPayload(),
   };
   repository.addonSnapshot = {
     captured_at: now,
@@ -494,6 +674,70 @@ test("reconciliation divergence is sent to fail-closed storage", async () => {
   assert.equal(result.reconciliation.status, "diverged");
   assert.equal(result.reconciliation.mismatch_count, 1);
   assert.equal(repository.storedReconciliation.status, "diverged");
+  assert.equal(repository.storedReconciliationLockOnDivergence, true);
+});
+
+test("progressive reconciliation alert-only measures divergence without locking", async () => {
+  const repository = new FakeRepository();
+  repository.deskSnapshot = { orders: [{ broker_order_ref: "NT-ALERT" }], trades: [] };
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: brokerExecutionEnvironment({}) });
+  const result = await service.reconcile({
+    bridgeId: "bridge_alert",
+    brokerSnapshot: { orders: [], positions: [] },
+    reconciliationMode: "alert_only",
+    triggeredBy: "scheduled",
+  });
+  assert.equal(result.reconciliation.status, "diverged");
+  assert.equal(result.reconciliation.metadata.reconciliation_policy.mode, "alert_only");
+  assert.equal(result.reconciliation.metadata.reconciliation_policy.triggeredBy, "scheduled");
+  assert.equal(result.reconciliation.metadata.fail_closed, false);
+  assert.equal(repository.storedReconciliationLockOnDivergence, false);
+});
+
+test("scheduled blocking reconciliation requires an explicit promotion confirmation", async () => {
+  const repository = new FakeRepository();
+  repository.deskSnapshot = { orders: [{ broker_order_ref: "NT-BLOCK" }], trades: [] };
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: brokerExecutionEnvironment({}) });
+  await assert.rejects(
+    () => service.reconcile({
+      bridgeId: "bridge_blocking",
+      brokerSnapshot: { orders: [], positions: [] },
+      reconciliationMode: "blocking",
+      triggeredBy: "scheduled",
+    }),
+    { code: "RECONCILIATION_BLOCKING_CONFIRMATION_REQUIRED" },
+  );
+  const result = await service.reconcile({
+    bridgeId: "bridge_blocking",
+    brokerSnapshot: { orders: [], positions: [] },
+    reconciliationMode: "blocking",
+    triggeredBy: "scheduled",
+    operatorConfirmation: BROKER_RECONCILIATION_BLOCKING_CONFIRMATION,
+  });
+  assert.equal(result.reconciliation.status, "diverged");
+  assert.equal(result.reconciliation.metadata.reconciliation_policy.mode, "blocking");
+  assert.equal(result.reconciliation.metadata.reconciliation_policy.blockingPromotionConfirmed, true);
+  assert.equal(repository.storedReconciliationLockOnDivergence, true);
+});
+
+test("scheduled reconciliation defaults to alert-only and reuses the latest AddOn snapshot", async () => {
+  const repository = new FakeRepository();
+  repository.deskSnapshot = { orders: [{ broker_order_ref: "NT-SCHEDULED" }], trades: [] };
+  repository.addonSnapshot = { captured_at: now, orders: [], positions: [], account: { account_name: "Sim101" } };
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: brokerExecutionEnvironment({}) });
+  const result = await service.runScheduledReconciliation({ bridgeId: "addon_1" });
+  assert.equal(result.reconciliation.status, "diverged");
+  assert.equal(repository.latestAddonSnapshotInput.accountId, "ninjatrader_paper_local");
+  assert.equal(repository.latestAddonSnapshotInput.bridgeId, "addon_1");
+  assert.equal(result.reconciliation.metadata.source, "scheduled_reconciliation");
+  assert.equal(result.reconciliation.metadata.reconciliation_policy.mode, "alert_only");
+  assert.equal(repository.storedReconciliationLockOnDivergence, false);
+});
+
+test("reconciliation policy resolver keeps the legacy lockOnDivergence fallback explicit", () => {
+  assert.equal(resolveBrokerReconciliationPolicy({ lockOnDivergence: false }, { now, defaultMode: "blocking" }).mode, "alert_only");
+  assert.equal(resolveBrokerReconciliationPolicy({ lockOnDivergence: true }, { now, defaultMode: "alert_only" }).mode, "blocking");
+  assert.equal(resolveBrokerReconciliationPolicy({}, { now, defaultMode: "alert_only" }).rollbackMode, "alert_only");
 });
 
 test("reconciliation detects a position side mismatch", async () => {
@@ -503,6 +747,59 @@ test("reconciliation detects a position side mismatch", async () => {
   const result = await service.reconcile({ brokerSnapshot: { orders: [], positions: [{ instrument: "MNQ 09-26", quantity: 1, market_position: "SHORT" }] } });
   assert.equal(result.reconciliation.status, "diverged");
   assert.equal(result.reconciliation.mismatches[0].type, "POSITION_SIDE_MISMATCH");
+});
+
+test("reconciliation aggregates signed quantities by account and instrument", async () => {
+  const repository = new FakeRepository();
+  repository.deskSnapshot = {
+    orders: [],
+    trades: [
+      { broker_account_id: "sim101", broker_symbol: "MNQ 09-26", quantity_open: 2, side: "long" },
+      { broker_account_id: "sim101", broker_symbol: "MNQ 09-26", quantity_open: 1, side: "short" },
+      { broker_account_id: "sim102", broker_symbol: "MNQ 09-26", quantity_open: 1, side: "short" },
+      { broker_account_id: "sim101", broker_symbol: "MES 09-26", quantity_open: 0, side: "long" },
+    ],
+  };
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: brokerExecutionEnvironment({}) });
+  const result = await service.reconcile({
+    brokerAccountId: "sim101",
+    brokerSnapshot: {
+      orders: [],
+      positions: [
+        { broker_account_id: "sim101", instrument: "MNQ 09-26", quantity: 1, market_position: "LONG" },
+        { broker_account_id: "sim102", instrument: "MNQ 09-26", quantity: 1, market_position: "SHORT" },
+        { broker_account_id: "sim101", instrument: "MES 09-26", quantity: 0, market_position: "FLAT" },
+      ],
+    },
+  });
+  assert.equal(result.reconciliation.status, "matched", JSON.stringify(result.reconciliation.mismatches));
+  assert.equal(result.reconciliation.mismatch_count, 0);
+});
+
+test("reconciliation never lets another account overwrite the same instrument", async () => {
+  const repository = new FakeRepository();
+  repository.deskSnapshot = {
+    orders: [],
+    trades: [
+      { broker_account_id: "sim101", broker_symbol: "MNQ 09-26", quantity_open: 1, side: "long" },
+      { broker_account_id: "sim102", broker_symbol: "MNQ 09-26", quantity_open: 1, side: "long" },
+    ],
+  };
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: brokerExecutionEnvironment({}) });
+  const result = await service.reconcile({
+    brokerAccountId: "sim101",
+    brokerSnapshot: {
+      orders: [],
+      positions: [
+        { broker_account_id: "sim101", instrument: "MNQ 09-26", quantity: 1, market_position: "LONG" },
+        { broker_account_id: "sim102", instrument: "MNQ 09-26", quantity: 1, market_position: "SHORT" },
+      ],
+    },
+  });
+  assert.equal(result.reconciliation.status, "diverged");
+  assert.equal(result.reconciliation.mismatches.length, 1);
+  assert.equal(result.reconciliation.mismatches[0].type, "POSITION_SIDE_MISMATCH");
+  assert.equal(result.reconciliation.mismatches[0].account_id, "sim102");
 });
 
 test("reconciliation persists a capital snapshot for deterministic sizing", async () => {
@@ -538,6 +835,8 @@ class FakeRepository {
   managementCandidate = null;
   protectiveSettlements = [];
   protectiveSettlementInput = null;
+  latestAddonSnapshotInput = null;
+  storedReconciliationLockOnDivergence = null;
   leasedOutboxId = null;
   async insertDecision(decision) { this.decisions.push(decision); return decision; }
   async decisionContext() { return this.context; }
@@ -545,7 +844,7 @@ class FakeRepository {
   async approveIntent(input) { this.entryApprovalInput = input; return { approval: { status: "approved" }, idempotent: false }; }
   async upsertHeartbeat(value) { return value; }
   async bridgeHeartbeat() { return this.addonBridge; }
-  async latestAddonSnapshot() { return this.addonSnapshot; }
+  async latestAddonSnapshot(input = {}) { this.latestAddonSnapshotInput = input; return this.addonSnapshot; }
   async storeAddonSnapshot({ snapshotId, bridgeId, accountId, accountName, capturedAt, snapshot, contentHash, metadata }) {
     return { addon_snapshot_id: snapshotId, bridge_id: bridgeId, broker_account_id: accountId, account_name: accountName, captured_at: capturedAt, ...snapshot, content_hash: contentHash, metadata };
   }
@@ -556,7 +855,7 @@ class FakeRepository {
   async peekOutbox() { return this.entryCandidate; }
   async leaseOutbox({ outboxId, leaseToken }) { this.leasedOutboxId = outboxId; return { ...this.entryCandidate, lease_token: leaseToken }; }
   async reconciliationSnapshot() { return this.deskSnapshot; }
-  async storeReconciliation({ run }) { this.storedReconciliation = run; return run; }
+  async storeReconciliation({ run, lockOnDivergence }) { this.storedReconciliation = run; this.storedReconciliationLockOnDivergence = lockOnDivergence; return run; }
   async recordAccountSnapshot(input) {
     this.accountSnapshotInput = input;
     return { broker_account_snapshot_id: "snapshot_test", broker_account_id: input.accountId, cash_value: Number(input.snapshot.net_liquidation_value), captured_at: input.now };

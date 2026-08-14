@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PostgresBrokerExecutionRepository } from "../src/broker-execution-repository.js";
+import { PostgresBrokerExecutionRepository, evaluateBrokerProtectionSnapshot } from "../src/broker-execution-repository.js";
 
 test("findOpenTradeForMonitor joins the originating desk position and filters it independently", async () => {
   const calls = [];
@@ -55,3 +55,63 @@ test("findOpenTradeForMonitor preserves the legacy trade-id lookup when no desk 
   assert.equal(result.trade_id, "trade_legacy");
   assert.deepEqual(calls[0].params, ["trade_legacy", null, null, null, null, null]);
 });
+
+test("post-fill protection confirms only with an active opposite-side protective stop", () => {
+  const result = evaluateBrokerProtectionSnapshot({
+    trade: protectedTrade(),
+    now: "2026-07-22T14:00:20.000Z",
+    capturedAt: "2026-07-22T14:00:20.000Z",
+    snapshotId: "snapshot_confirmed",
+    brokerSnapshot: {
+      connection: { status: "Connected" },
+      orders: [
+        { broker_order_ref: "STOP-1", status: "Working", side: "SELL", quantity: 1, stop_price: 29980 },
+        { broker_order_ref: "TARGET-1", status: "Working", side: "SELL", quantity: 1, limit_price: 30040 },
+      ],
+    },
+  });
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.reason, "PROTECTIVE_STOP_ACTIVE");
+  assert.equal(result.evidence.stop_order.broker_order_ref, "STOP-1");
+  assert.equal(result.evidence.target_status, "working");
+});
+
+test("post-fill protection stays pending during the grace window when refs are not yet visible", () => {
+  const result = evaluateBrokerProtectionSnapshot({
+    trade: { ...protectedTrade(), raw: {}, opened_at: "2026-07-22T14:00:00.000Z" },
+    now: "2026-07-22T14:00:10.000Z",
+    graceSeconds: 30,
+    brokerSnapshot: { connection: { status: "Connected" }, orders: [] },
+  });
+  assert.equal(result.status, "pending");
+  assert.equal(result.reason, "PROTECTIVE_STOP_REF_MISSING");
+});
+
+test("post-fill protection fails closed after the grace window when the stop is absent", () => {
+  const result = evaluateBrokerProtectionSnapshot({
+    trade: protectedTrade({ raw: { protective_stop_order_ref: "STOP-MISSING" }, opened_at: "2026-07-22T14:00:00.000Z" }),
+    now: "2026-07-22T14:01:00.000Z",
+    graceSeconds: 30,
+    brokerSnapshot: { connection: { status: "Connected" }, orders: [] },
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.reason, "PROTECTIVE_STOP_ORDER_MISSING");
+});
+
+function protectedTrade(overrides = {}) {
+  return {
+    trade_id: "trade_protection_1",
+    broker_account_id: "ninjatrader_paper_local",
+    broker_symbol: "MNQ 09-26",
+    side: "long",
+    quantity_open: 1,
+    current_stop_price: 29980,
+    tick_size: 0.25,
+    opened_at: "2026-07-22T14:00:00.000Z",
+    raw: {
+      protective_stop_order_ref: "STOP-1",
+      profit_target_order_ref: "TARGET-1",
+    },
+    ...overrides,
+  };
+}

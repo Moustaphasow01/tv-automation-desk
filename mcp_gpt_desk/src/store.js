@@ -12,9 +12,7 @@ import {
   DECISION_SOURCE_ROLE,
   normalizeDecision,
 } from "@tv-automation/desk-domain";
-import {
-  prepareLiveReplanMasterAfterMonitor,
-} from "./live-orchestration.js";
+import { prepareLiveReplanMasterAfterMonitor } from "./live-orchestration.js";
 import { DeskContractService } from "./desk-contract-service.js";
 import { stableVNextId } from "./desk-ids.js";
 import { DeskPackService } from "./desk-pack-service.js";
@@ -28,6 +26,7 @@ import {
 } from "./live-paper-execution.js";
 import { DeskFrontService } from "./desk-front-service.js";
 import { FrontOperationsService } from "./front-operations-service.js";
+import { buildPromptRegistryOverview } from "./prompt-registry-front-projection.js";
 import { BrokerExecutionService } from "./broker-execution-service.js";
 import { createBrokerExecutionRepository } from "./broker-execution-repository.js";
 import { NinjaTraderStartupControl } from "./ninjatrader-startup-control.js";
@@ -41,13 +40,19 @@ import {
   canonicalizeMasterStrategyPayload,
   canonicalizeMonitorStrategyPayload,
 } from "./canonical-strategy-runtime.js";
-import {
-  assertActiveStrategySaveTarget,
-} from "./strategy-runtime-versioning.js";
+import { assertActiveStrategySaveTarget } from "./strategy-runtime-versioning.js";
 import { DeskMarketFeatureService } from "./desk-market-feature-service.js";
 import { MacroCalendarService } from "./macro-calendar-service.js";
 import { NewsIngestionService } from "./news-ingestion-service.js";
 import { TelegramAlertService } from "./telegram-alert-service.js";
+import { StrategyKernelService } from "./strategy-kernel-service.js";
+import { createStrategyKernelRepository } from "./strategy-kernel-repository.js";
+import { attachStrategySignalBusStoreMethods } from "./strategy-signal-bus-store-extension.js";
+import { DataFoundationService } from "./data-foundation-service.js";
+import { createDataFoundationRepository } from "./data-foundation-repository.js";
+import { attachResearchLabStoreMethods } from "./research-lab-store-extension.js";
+import { attachAgentRuntimeStoreMethods } from "./agent-runtime-store-extension.js";
+import { createSimulationRunRegistryService } from "./simulation-run-registry-service.js";
 import {
   assertReplayRunMatchesQuery,
   canonicalTimeframe,
@@ -156,16 +161,135 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const PACKAGE_ROOT = resolve(__dirname, "..");
 const COLLECTIONS = DESK_COLLECTIONS;
-const FRONT_LIVE_STATE_CACHE_TTL_MS = Math.max(
-  0,
-  Math.min(Number(process.env.DESK_FRONT_LIVE_STATE_CACHE_TTL_MS) || 10_000, 60_000),
-);
+const FRONT_LIVE_STATE_CACHE_TTL_MS = Math.max(0, Math.min(Number(process.env.DESK_FRONT_LIVE_STATE_CACHE_TTL_MS) || 10_000, 60_000));
 const DEFAULT_LIVE_CLAIM_RETRY_ATTEMPTS = 3;
 const DEFAULT_LIVE_CLAIM_RETRY_DELAY_SECONDS = 60;
 
 function shouldProjectLiveBundle(args = {}) {
   return args.view === "compact"
     || Boolean(args.bundle_id && args.include_raw_refs === false);
+}
+
+function strategyKernelResponse(contract, payload = {}) {
+  return {
+    contract,
+    schemaVersion: "strategy_registry_rest_v2",
+    ...payload,
+  };
+}
+
+function dataFoundationResponse(contract, payload = {}) {
+  return {
+    contract,
+    schemaVersion: "data_foundation_rest_v1",
+    count: Array.isArray(payload.items) ? payload.items.length : payload.count,
+    ...payload,
+  };
+}
+
+function commandActor(input = {}, actor = {}) {
+  return {
+    idempotency_key: input.idempotencyKey || input.idempotency_key || null,
+    actor: actor.email || actor.uid || actor.kind || "operator",
+    reason: input.reason || null,
+  };
+}
+
+function groupByKey(items = [], key) {
+  return items.reduce((groups, item) => {
+    const value = item?.[key];
+    if (!value) return groups;
+    if (!groups.has(value)) groups.set(value, []);
+    groups.get(value).push(item);
+    return groups;
+  }, new Map());
+}
+
+function firstByStatus(items = [], status) {
+  return items.find((item) => String(item?.status || "").toUpperCase() === status) || null;
+}
+
+function strategyV2StatusCounts(items = [], key) {
+  return items.reduce((counts, item) => {
+    const status = String(item?.[key] || "UNKNOWN").toUpperCase();
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function buildStrategyV2Summary({ definitions = [], versions = [], instances = [] }) {
+  return {
+    definitions: definitions.length,
+    versions: versions.length,
+    instances: instances.length,
+    published_versions: versions.filter((item) => String(item.status || "").toUpperCase() === "PUBLISHED").length,
+    live_instances: instances.filter((item) => String(item.execution_mode || "").toUpperCase() === "LIVE").length,
+    paper_instances: instances.filter((item) => String(item.execution_mode || "").toUpperCase() === "PAPER").length,
+    shadow_instances: instances.filter((item) => String(item.execution_mode || "").toUpperCase() === "SHADOW").length,
+    version_statuses: strategyV2StatusCounts(versions, "status"),
+    runtime_states: strategyV2StatusCounts(instances, "runtime_state"),
+    execution_modes: strategyV2StatusCounts(instances, "execution_mode"),
+  };
+}
+
+function buildStrategyV2OverviewItems({ definitions = [], versions = [], instances = [], audit = [] }) {
+  const versionsByDefinition = groupByKey(versions, "strategy_definition_id");
+  const instancesByVersion = groupByKey(instances, "strategy_version_id");
+  const auditByAggregate = groupByKey(audit, "aggregate_id");
+  return definitions.map((definition) => {
+    const definitionVersions = [...(versionsByDefinition.get(definition.strategy_definition_id) || [])]
+      .sort((a, b) => String(b.updated_at_utc || b.updated_at || "").localeCompare(String(a.updated_at_utc || a.updated_at || "")));
+    const definitionInstances = definitionVersions.flatMap((version) => instancesByVersion.get(version.strategy_version_id) || []);
+    const publishedVersion = firstByStatus(definitionVersions, "PUBLISHED");
+    const liveInstance = definitionInstances.find((item) => String(item.execution_mode || "").toUpperCase() === "LIVE") || null;
+    const paperInstance = definitionInstances.find((item) => String(item.execution_mode || "").toUpperCase() === "PAPER") || null;
+    const latestVersion = definitionVersions[0] || null;
+    const aggregateIds = new Set([
+      definition.strategy_definition_id,
+      ...definitionVersions.map((item) => item.strategy_version_id),
+      ...definitionInstances.map((item) => item.strategy_instance_id),
+    ].filter(Boolean));
+    const recentAudit = [...auditByAggregate.entries()]
+      .filter(([aggregateId]) => aggregateIds.has(aggregateId))
+      .flatMap(([, rows]) => rows)
+      .sort((a, b) => String(b.created_at_utc || b.created_at || "").localeCompare(String(a.created_at_utc || a.created_at || "")))
+      .slice(0, 10);
+    return {
+      strategy_definition_id: definition.strategy_definition_id,
+      external_key: definition.external_key,
+      name: definition.name,
+      family: definition.family,
+      owner: definition.owner,
+      description: definition.description || null,
+      latest_version: latestVersion,
+      published_version: publishedVersion,
+      live_instance: liveInstance,
+      paper_instance: paperInstance,
+      version_count: definitionVersions.length,
+      instance_count: definitionInstances.length,
+      audit_count: recentAudit.length,
+      versions: definitionVersions,
+      instances: definitionInstances,
+      recent_audit: recentAudit,
+      operator_state: {
+        has_definition: true,
+        has_published_version: Boolean(publishedVersion),
+        has_runtime_instance: definitionInstances.length > 0,
+        has_live_instance: Boolean(liveInstance),
+        recommended_next_step: !definitionVersions.length
+          ? "CREATE_VERSION"
+          : !publishedVersion
+            ? "VALIDATE_AND_PUBLISH_VERSION"
+            : !definitionInstances.length
+              ? "CREATE_SHADOW_INSTANCE"
+              : liveInstance
+                ? "MONITOR_LIVE_INSTANCE"
+                : paperInstance
+                  ? "EVALUATE_PAPER_PROMOTION"
+                  : "RUN_SHADOW_VALIDATION",
+      },
+    };
+  });
 }
 
 function normalizeLiveMasterActiveThesis({ thesis, master, setupDocs = [], tick }) {
@@ -333,6 +457,12 @@ export class PersistentDeskStore {
     this.macroCalendar = new MacroCalendarService({ persistence, clock });
     this.news = new NewsIngestionService({ persistence, clock });
     this.telegram = persistence.pool ? new TelegramAlertService({ persistence, clock }) : null;
+    this.strategyKernel = new StrategyKernelService({
+      repository: createStrategyKernelRepository(persistence),
+      clock,
+    });
+    this.dataFoundation = new DataFoundationService({ repository: createDataFoundationRepository(persistence), clock });
+    this.simulationRuns = createSimulationRunRegistryService({ persistence, clock });
     this.strategy = new DeskStrategyAuditService({ persistence, clock, host: this, market: this.market });
     this.replay = new DeskReplayService({ persistence, clock, host: this });
     this.replayPreparation = new ReplayPreparationService({ persistence, clock, host: this });
@@ -455,6 +585,131 @@ export class PersistentDeskStore {
   async getOperationsHistorySession({ session_id }) { return this.operations.getHistorySession(session_id); }
   async listOperationsStrategies() { return this.operations.listStrategies(); }
   async compareOperationsStrategyVersions({ strategy_id, left, right }) { return this.operations.compareStrategyVersions(strategy_id, left, right); }
+  async listStrategyV2Definitions(args = {}) {
+    const items = await this.strategyKernel.listDefinitions({ limit: args.limit });
+    return strategyKernelResponse("DeskStrategyDefinitionListV2", { count: items.length, items });
+  }
+  async getStrategyV2Definition({ strategy_definition_id }) {
+    return strategyKernelResponse("DeskStrategyDefinitionV2", { definition: await this.strategyKernel.getDefinition(strategy_definition_id) });
+  }
+  async createStrategyV2Definition({ input = {}, actor = {} } = {}) {
+    return strategyKernelResponse("DeskStrategyDefinitionCommandResultV2", await this.strategyKernel.registerDefinition(input, commandActor(input, actor)));
+  }
+  async listStrategyV2Versions(args = {}) {
+    const items = await this.strategyKernel.listVersions({
+      strategyDefinitionId: args.strategy_definition_id || args.strategyDefinitionId || null,
+      status: args.status || null,
+      limit: args.limit,
+    });
+    return strategyKernelResponse("DeskStrategyVersionListV2", { count: items.length, items });
+  }
+  async getStrategyV2Version({ strategy_version_id }) { return strategyKernelResponse("DeskStrategyVersionV2", { version: await this.strategyKernel.getVersion(strategy_version_id) }); }
+  async createStrategyV2Version({ input = {}, actor = {} } = {}) {
+    return strategyKernelResponse("DeskStrategyVersionCommandResultV2", await this.strategyKernel.registerVersion(input, commandActor(input, actor)));
+  }
+  async executeStrategyV2VersionAction({ strategy_version_id, input = {}, actor = {} } = {}) {
+    if (input.action === "compile_dsl") return strategyKernelResponse("DeskStrategyVersionCompilationResultV2", await this.strategyKernel.compileVersion({ ...input, strategy_version_id }, commandActor(input, actor)));
+    if (input.action !== "transition_status") throw Object.assign(new Error(`Unknown Strategy Version action: ${input.action}`), { code: "STRATEGY_VERSION_ACTION_UNKNOWN", statusCode: 400 });
+    return strategyKernelResponse("DeskStrategyVersionCommandResultV2", await this.strategyKernel.transitionVersion({
+      strategy_version_id,
+      next_status: input.nextStatus || input.next_status,
+      validated_metrics_ref: input.validatedMetricsRef || input.validated_metrics_ref,
+      updated_at: input.updatedAt || input.updated_at,
+    }, commandActor(input, actor)));
+  }
+  async listStrategyV2Instances(args = {}) {
+    const items = await this.strategyKernel.listInstances({
+      strategyVersionId: args.strategy_version_id || args.strategyVersionId || null,
+      runtimeState: args.runtime_state || args.runtimeState || null,
+      executionMode: args.execution_mode || args.executionMode || null,
+      limit: args.limit,
+    });
+    return strategyKernelResponse("DeskStrategyInstanceListV2", { count: items.length, items });
+  }
+  async getStrategyV2Instance({ strategy_instance_id }) {
+    return strategyKernelResponse("DeskStrategyInstanceV2", { instance: await this.strategyKernel.getInstance(strategy_instance_id) });
+  }
+  async createStrategyV2Instance({ input = {}, actor = {} } = {}) {
+    return strategyKernelResponse("DeskStrategyInstanceCommandResultV2", await this.strategyKernel.registerInstance(input, commandActor(input, actor)));
+  }
+  async executeStrategyV2InstanceAction({ strategy_instance_id, input = {}, actor = {} } = {}) {
+    if (input.action !== "transition") throw Object.assign(new Error(`Unknown Strategy Instance action: ${input.action}`), { code: "STRATEGY_INSTANCE_ACTION_UNKNOWN", statusCode: 400 });
+    return strategyKernelResponse("DeskStrategyInstanceCommandResultV2", await this.strategyKernel.transitionInstance({
+      strategy_instance_id,
+      next_runtime_state: input.nextRuntimeState || input.next_runtime_state,
+      next_execution_mode: input.nextExecutionMode || input.next_execution_mode,
+      account_scope: input.accountScope ?? input.account_scope,
+      triple_lock_validated: input.tripleLockValidated ?? input.triple_lock_validated,
+      operator_approval_id: input.operatorApprovalId || input.operator_approval_id,
+      last_heartbeat_at: input.lastHeartbeatAt || input.last_heartbeat_at,
+      updated_at: input.updatedAt || input.updated_at,
+    }, commandActor(input, actor)));
+  }
+  async listStrategyV2AuditEvents(args = {}) {
+    const items = await this.strategyKernel.listAuditEvents({
+      aggregateType: args.aggregate_type || args.aggregateType || null,
+      aggregateId: args.aggregate_id || args.aggregateId || null,
+      limit: args.limit,
+    });
+    return strategyKernelResponse("DeskStrategyKernelAuditEventListV2", { count: items.length, items });
+  }
+  async getStrategyV2Overview(args = {}) {
+    const limit = args.limit ? Number(args.limit) : 500;
+    const [definitions, versions, instances, audit] = await Promise.all([
+      this.strategyKernel.listDefinitions({ limit }),
+      this.strategyKernel.listVersions({ strategyDefinitionId: args.strategy_definition_id || args.strategyDefinitionId || null, limit }),
+      this.strategyKernel.listInstances({ strategyVersionId: args.strategy_version_id || args.strategyVersionId || null, limit }),
+      this.strategyKernel.listAuditEvents({ limit: Math.min(limit, 200) }),
+    ]);
+    const filteredInstances = args.strategy_definition_id || args.strategyDefinitionId
+      ? instances.filter((instance) => versions.some((version) => version.strategy_version_id === instance.strategy_version_id))
+      : instances;
+    const strategies = buildStrategyV2OverviewItems({ definitions, versions, instances: filteredInstances, audit });
+    return strategyKernelResponse("DeskStrategyV2Overview", {
+      generated_at_utc: this.clock.now().utc,
+      summary: buildStrategyV2Summary({ definitions, versions, instances: filteredInstances }),
+      count: strategies.length,
+      strategies,
+      definitions,
+      versions,
+      instances: filteredInstances,
+      audit,
+      source: {
+        canonical: "strategy_kernel_v2",
+        legacy_strategy_endpoint: "/api/v1/strategies",
+        note: "Legacy strategy endpoint remains available only for historical performance comparison while Strategy v2 owns governance.",
+      },
+    });
+  }
+  async getDataFoundationOverview(args = {}) { return dataFoundationResponse("DeskDataFoundationOverviewV1", await this.dataFoundation.getOverview(args)); }
+  async getPromptRegistryOverview() { return buildPromptRegistryOverview({ nowUtc: this.clock.now().utc }); }
+  async listDataFoundationSources(args = {}) {
+    return dataFoundationResponse("DeskDataSourceListV1", await this.dataFoundation.listDataSources(args));
+  }
+  async listDataFoundationIngestionBatches(args = {}) {
+    return dataFoundationResponse("DeskIngestionBatchListV1", await this.dataFoundation.listIngestionBatches(args));
+  }
+  async listDataFoundationDatasets(args = {}) {
+    return dataFoundationResponse("DeskDatasetListV1", await this.dataFoundation.listDatasets(args));
+  }
+  async listDataFoundationFeatures(args = {}) {
+    return dataFoundationResponse("DeskFeatureDefinitionListV1", await this.dataFoundation.listFeatureDefinitions(args));
+  }
+  async listDataFoundationFeatureComputations(args = {}) {
+    return dataFoundationResponse("DeskFeatureComputationRunListV1", await this.dataFoundation.listFeatureComputationRuns(args));
+  }
+  async listDataFoundationMarketDataProfiles(args = {}) {
+    return dataFoundationResponse("DeskMarketDataCapabilityProfileListV1", await this.dataFoundation.listMarketDataCapabilityProfiles(args));
+  }
+  async listDataFoundationStorageObjects(args = {}) {
+    return dataFoundationResponse("DeskMarketDataStorageObjectListV1", await this.dataFoundation.listMarketDataStorageObjects(args));
+  }
+  async listDataFoundationHotSeriesWindows(args = {}) {
+    return dataFoundationResponse("DeskMarketDataHotSeriesWindowListV1", await this.dataFoundation.listMarketDataHotSeriesWindows(args));
+  }
+  async listDataFoundationFeatureValues(args = {}) {
+    return dataFoundationResponse("DeskFeatureValueListV1", await this.dataFoundation.listFeatureValues(args));
+  }
   async getExecutionOverview(args = {}) { return this.execution.overview(args); }
   async getExecutionIntent({ intent_id }) { return this.execution.intentDetail(intent_id); }
   async executeBrokerAction({ input, actor }) { return this.execution.executeAction(input, actor); }
@@ -1031,6 +1286,10 @@ export class PersistentDeskStore {
 
   async getFrontOperatorCommand({ command_id }) {
     return this.front.getOperatorCommand({ command_id });
+  }
+
+  async completeFrontOperatorCommand(input) {
+    return this.front.completeOperatorCommand(input);
   }
 
   async commitFrontOperatorCommandMutation(plan) {
@@ -2217,8 +2476,9 @@ export class PersistentDeskStore {
     return this.persistence.queryCollectionDocuments({ collection, filters, orderBy, limit });
   }
 
-  async #setDocument(collection, documentId, data, { merge = false } = {}) {
-    return this.persistence.setDocument(collection, documentId, data, { merge });
-  }
-
+  async #setDocument(collection, documentId, data, { merge = false } = {}) { return this.persistence.setDocument(collection, documentId, data, { merge }); }
 }
+
+attachResearchLabStoreMethods(PersistentDeskStore);
+attachAgentRuntimeStoreMethods(PersistentDeskStore);
+attachStrategySignalBusStoreMethods(PersistentDeskStore, { commandActor, strategyKernelResponse });

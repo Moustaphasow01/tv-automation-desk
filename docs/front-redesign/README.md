@@ -9,9 +9,17 @@ le premier module directement remplaçable et sert de modèle aux autres écrans
 
 ## Fichiers actifs
 
+- `FRONTEND_V2_MASTER_BLUEPRINT_2026-08-13.md` : référence maître produit, UX, UI, architecture et migration de Desk Control Plane V2.
+- `FRONTEND_V2_PAGE_OPERATING_CONTRACTS_2026-08-13.md` : contrat d'exploitation détaillé de chacune des 24 routes existantes.
+- `FRONTEND_V2_BACKEND_FRONT_AUDIT_2026-08-13.md` : preuves code, hardcoding, composants, données et mapping backend → frontend.
 - `MANIFEST.md` : contrat de mission, responsabilités Claude/Codex et format de sortie attendu.
 - `PROMPT.md` : prompt prêt à transmettre à Claude.
 - `HANDOFF.md` : snapshot généré du frontend actuel, incluant inventaire des écrans et code/CSS utiles.
+
+Les trois documents datés du 13 août 2026 remplacent les recommandations
+fonctionnelles historiques lorsqu'elles divergent. `MANIFEST.md`, `PROMPT.md` et
+`HANDOFF.md` restent des pièces de contexte et de passation, pas l'autorité
+produit de la refonte.
 
 ## Régénérer le handoff
 

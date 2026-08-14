@@ -1,0 +1,27 @@
+{
+  "schema_version": "strategy_dsl_v1",
+  "pattern": "BREAKOUT_RETEST",
+  "setup_templates": [
+    {
+      "template_id": "mnq_long_breakout_retest",
+      "direction": "long",
+      "instrument": "MNQ",
+      "timeframe": "M1",
+      "entry_mode": "RETEST_ZONE_AFTER_CONFIRMATION",
+      "order_type": "LIMIT",
+      "rank": 1,
+      "status": "ARMED_CONDITIONAL",
+      "tolerance_points": 1,
+      "max_bars": 12,
+      "rr_minimum": 2,
+      "risk_pct": 0.25,
+      "break_even_at_r": 0.7,
+      "tp1_close_fraction": 0.5
+    }
+  ],
+  "metadata": {
+    "compiler": "strategy-dsl-compiler-v1",
+    "compiler_target": "deterministic_execution_plan_v1_4",
+    "runtime_binding_required": true
+  }
+}

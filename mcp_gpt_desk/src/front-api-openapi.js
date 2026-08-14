@@ -1,3 +1,4 @@
+import { researchOpenApiPaths } from "./front-api-openapi-research.js";
 export const FRONT_OPENAPI_PATH = "/api/v1/openapi.json";
 
 const jsonContent = (schema) => ({
@@ -49,6 +50,19 @@ const operationsGet = (operationId, summary, parameters = []) => getOperation({
   schemaRef: "#/components/schemas/OperationsEnvelope",
   parameters,
   cache: false,
+});
+
+const dataFoundationParameters = [{ name: "audience", in: "query", required: false, schema: { type: "string", enum: ["front", "simulation", "agent", "operator"], default: "front" } }, { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 500 } }];
+
+const dataFoundationGet = (operationId, summary, parameters = []) => ({
+  operationId,
+  summary,
+  tags: ["Desk Data Foundation"],
+  parameters: [...dataFoundationParameters, ...parameters],
+  responses: {
+    "200": { description: "Data Foundation controlled read model", content: jsonContent({ $ref: "#/components/schemas/DataFoundationEnvelope" }) },
+    ...errorResponses,
+  },
 });
 
 const operationsPost = (operationId, summary, parameters = []) => ({
@@ -111,6 +125,7 @@ export function frontApiOpenApiDocument() {
       { name: "Desk Front", description: "Scoped read models for the new React front" },
       { name: "Desk Operator", description: "Authenticated, audited Desk-state commands; never broker order execution" },
       { name: "Desk Operations", description: "Global workflows, replays, GPT processes, incidents, history and strategy versions" },
+      { name: "Desk Data Foundation", description: "Controlled read API for data sources, datasets, feature definitions and point-in-time feature values" },
       { name: "Desk Execution", description: "Fail-closed NinjaTrader Sim101 gateway. Never exposed as a GPT/MCP order tool." },
     ],
     security: [{ BearerAuth: [] }, { DeskApiKey: [] }, {}],
@@ -281,8 +296,8 @@ export function frontApiOpenApiDocument() {
         },
       },
       "/performance/overview": { get: operationsGet("getOperationsPerformance", "Get performance totals and breakdowns") },
-      "/replays/compare": { get: operationsGet("compareOperationsReplays", "Compare replay executions") },
-      "/incidents": { get: operationsGet("listOperationsIncidents", "List alert, guardrail, error and data-quality incidents") },
+      "/replays/compare": { get: operationsGet("compareOperationsReplays", "Compare replay executions") }, "/simulation-runs": { get: operationsGet("listSimulationRuns", "List canonical simulation registry runs") }, "/simulation-runs/compare": { get: operationsGet("compareSimulationRuns", "Compare canonical simulation run proofs") },
+      "/simulation-runs/{simulationRunId}": { get: operationsGet("getSimulationRun", "Get a canonical simulation run and artifacts", [{ name: "simulationRunId", in: "path", required: true, schema: { type: "string" } }]) }, "/simulation-runs/{simulationRunId}/artifacts": { get: operationsGet("getSimulationRunArtifacts", "List artifacts for a canonical simulation run", [{ name: "simulationRunId", in: "path", required: true, schema: { type: "string" } }]) }, "/incidents": { get: operationsGet("listOperationsIncidents", "List alert, guardrail, error and data-quality incidents") },
       "/incidents/{incidentId}/actions": { post: operationsPost("executeOperationsIncidentAction", "Acknowledge, assign, snooze, resolve or reopen an incident", [{ name: "incidentId", in: "path", required: true, schema: { type: "string" } }]) },
       "/notifications": { get: operationsGet("listOperationsNotifications", "List local incident notification outbox entries") },
       "/notifications/sync": {
@@ -320,6 +335,111 @@ export function frontApiOpenApiDocument() {
       "/history/sessions/{sessionId}": { get: operationsGet("getOperationsHistorySession", "Get one consolidated historical session", [{ name: "sessionId", in: "path", required: true, schema: { type: "string" } }]) },
       "/strategies": { get: operationsGet("listOperationsStrategies", "List strategy configuration and version state") },
       "/strategies/{strategyId}/versions/compare": { get: operationsGet("compareOperationsStrategyVersions", "Compare two strategy versions") },
+      "/strategy-v2/overview": { get: operationsGet("getStrategyV2Overview", "Get Strategy Kernel operator overview") },
+      "/strategy-v2/definitions": {
+        get: operationsGet("listStrategyV2Definitions", "List Strategy Kernel definitions"),
+        post: operationsPost("createStrategyV2Definition", "Create a Strategy Kernel definition"),
+      },
+      "/strategy-v2/definitions/{strategyDefinitionId}": {
+        get: operationsGet("getStrategyV2Definition", "Get one Strategy Kernel definition", [{ name: "strategyDefinitionId", in: "path", required: true, schema: { type: "string", format: "uuid" } }]),
+      },
+      "/strategy-v2/versions": {
+        get: operationsGet("listStrategyV2Versions", "List Strategy Kernel versions"),
+        post: operationsPost("createStrategyV2Version", "Create a Strategy Kernel version"),
+      },
+      "/strategy-v2/versions/{strategyVersionId}": {
+        get: operationsGet("getStrategyV2Version", "Get one Strategy Kernel version", [{ name: "strategyVersionId", in: "path", required: true, schema: { type: "string", format: "uuid" } }]),
+      },
+      "/strategy-v2/versions/{strategyVersionId}/actions": {
+        post: operationsPost("executeStrategyV2VersionAction", "Transition or compile a Strategy Kernel version", [{ name: "strategyVersionId", in: "path", required: true, schema: { type: "string", format: "uuid" } }]),
+      },
+      "/strategy-v2/instances": {
+        get: operationsGet("listStrategyV2Instances", "List Strategy Kernel runtime instances"),
+        post: operationsPost("createStrategyV2Instance", "Create a Strategy Kernel runtime instance"),
+      },
+      "/strategy-v2/instances/{strategyInstanceId}": {
+        get: operationsGet("getStrategyV2Instance", "Get one Strategy Kernel runtime instance", [{ name: "strategyInstanceId", in: "path", required: true, schema: { type: "string", format: "uuid" } }]),
+      },
+      "/strategy-v2/instances/{strategyInstanceId}/actions": {
+        post: operationsPost("executeStrategyV2InstanceAction", "Transition a Strategy Kernel runtime instance", [{ name: "strategyInstanceId", in: "path", required: true, schema: { type: "string", format: "uuid" } }]),
+      },
+      "/strategy-v2/signals": { get: operationsGet("pollStrategyV2Signals", "List pending Strategy Signal Bus outbox items for the transitional operator front") },
+      "/strategy-v2/signals/{signalOutboxId}/actions": { post: operationsPost("consumeStrategyV2Signal", "Mark one Strategy Signal Bus outbox item as consumed", [{ name: "signalOutboxId", in: "path", required: true, schema: { type: "string", format: "uuid" } }]) }, "/strategy-v2/audit": { get: operationsGet("listStrategyV2AuditEvents", "List Strategy Kernel audit events") },
+      "/portfolio-risk/overview": { get: operationsGet("getPortfolioRiskOverview", "Read Portfolio Risk cockpit projection from execution, strategy and performance sources") }, "/ai-context/overview": { get: operationsGet("getAiContextOverview", "Read AI Context gate decisions, fallbacks and source controls from agent-runtime sources") }, ...researchOpenApiPaths({ errorResponses, jsonContent }),
+      "/data-foundation/overview": { get: dataFoundationGet("getDataFoundationOverview", "Read Data Foundation catalog, counts and recent controlled resources") },
+      "/data-foundation/sources": {
+        get: dataFoundationGet("listDataFoundationSources", "List governed upstream data sources", [
+          { name: "status", in: "query", schema: { type: "string", enum: ["ACTIVE", "DEPRECATED"] } },
+          { name: "kind", in: "query", schema: { type: "string", enum: ["MARKET_OHLCV", "MARKET_TICK", "MACRO_CALENDAR", "NEWS", "BROKER_EXECUTION", "ALTERNATIVE", "MANUAL"] } },
+          { name: "provider", in: "query", schema: { type: "string" } },
+          { name: "environment", in: "query", schema: { type: "string" } },
+        ]),
+      },
+      "/data-foundation/ingestion-batches": {
+        get: dataFoundationGet("listDataFoundationIngestionBatches", "List ingestion batches with their governed source", [
+          { name: "status", in: "query", schema: { type: "string", enum: ["RUNNING", "COMPLETED", "FAILED"] } },
+          { name: "data_source_id", in: "query", schema: { type: "string", format: "uuid" } },
+          { name: "source_key", in: "query", schema: { type: "string" } },
+        ]),
+      },
+      "/data-foundation/datasets": {
+        get: dataFoundationGet("listDataFoundationDatasets", "List sealed datasets and source lineage", [
+          { name: "status", in: "query", schema: { type: "string", enum: ["BUILDING", "READY", "ARCHIVED"] } },
+          { name: "dataset_id", in: "query", schema: { type: "string", format: "uuid" } },
+          { name: "dataset_key", in: "query", schema: { type: "string" } },
+        ]),
+      },
+      "/data-foundation/features": {
+        get: dataFoundationGet("listDataFoundationFeatures", "List feature definitions and versions", [
+          { name: "status", in: "query", schema: { type: "string", enum: ["ACTIVE", "DEPRECATED"] } },
+          { name: "category", in: "query", schema: { type: "string" } },
+        ]),
+      },
+      "/data-foundation/feature-computations": {
+        get: dataFoundationGet("listDataFoundationFeatureComputations", "List reproducible feature computation runs", [
+          { name: "status", in: "query", schema: { type: "string", enum: ["RUNNING", "COMPLETED", "FAILED"] } },
+          { name: "dataset_key", in: "query", schema: { type: "string" } },
+          { name: "feature_key", in: "query", schema: { type: "string" } },
+        ]),
+      },
+      "/data-foundation/market-data-profiles": {
+        get: dataFoundationGet("listDataFoundationMarketDataProfiles", "List measured market data capabilities, missing microstructure and storage recommendations", [
+          { name: "source_key", in: "query", schema: { type: "string" } },
+          { name: "instrument_code", in: "query", schema: { type: "string" } },
+          { name: "timeframe", in: "query", schema: { type: "string" } },
+          { name: "status", in: "query", schema: { type: "string", enum: ["MEASURED", "PARTIAL", "MISSING", "UNAVAILABLE"] } },
+          { name: "blocking_classification", in: "query", schema: { type: "string", enum: ["BLOCKING", "NON_BLOCKING", "UNKNOWN"] } },
+        ]),
+      },
+      "/data-foundation/storage-objects": {
+        get: dataFoundationGet("listDataFoundationStorageObjects", "List governed cold/raw market data storage objects and their dataset lineage", [
+          { name: "source_key", in: "query", schema: { type: "string" } },
+          { name: "instrument_code", in: "query", schema: { type: "string" } },
+          { name: "timeframe", in: "query", schema: { type: "string" } },
+          { name: "storage_tier", in: "query", schema: { type: "string", enum: ["HOT_SERIES", "COLD_PARQUET", "RAW_ARCHIVE", "HOT_AND_COLD", "IGNORE"] } },
+          { name: "storage_format", in: "query", schema: { type: "string", enum: ["POSTGRES_SERIES", "PARQUET", "JSONL", "CSV"] } },
+          { name: "status", in: "query", schema: { type: "string", enum: ["PLANNED", "ACTIVE", "ARCHIVED", "MISSING", "FAILED"] } },
+        ]),
+      },
+      "/data-foundation/hot-series-windows": {
+        get: dataFoundationGet("listDataFoundationHotSeriesWindows", "List hot PostgreSQL market series windows backed by raw/cold lineage", [
+          { name: "source_key", in: "query", schema: { type: "string" } },
+          { name: "instrument_code", in: "query", schema: { type: "string" } },
+          { name: "timeframe", in: "query", schema: { type: "string" } },
+          { name: "status", in: "query", schema: { type: "string", enum: ["PLANNED", "ACTIVE", "ARCHIVED", "MISSING", "FAILED"] } },
+        ]),
+      },
+      "/data-foundation/feature-values": {
+        get: dataFoundationGet("listDataFoundationFeatureValues", "Read point-in-time feature values with dataset and feature version provenance", [
+          { name: "dataset_key", in: "query", schema: { type: "string" } },
+          { name: "feature_key", in: "query", schema: { type: "string" } },
+          { name: "entity_key", in: "query", schema: { type: "string" } },
+          { name: "instrument_code", in: "query", schema: { type: "string" } },
+          { name: "timeframe", in: "query", schema: { type: "string" } },
+          { name: "from_utc", in: "query", schema: { type: "string", format: "date-time" } },
+          { name: "to_utc", in: "query", schema: { type: "string", format: "date-time" } },
+        ]),
+      },
       "/execution/overview": { get: operationsGet("getExecutionOverview", "Read broker safety, decisions, approvals, orders and reconciliation state") },
       "/execution/intents/{intentId}": { get: operationsGet("getExecutionIntent", "Read one execution intent and its audit chain", [{ name: "intentId", in: "path", required: true, schema: { type: "string" } }]) },
       "/execution/actions": { post: executionPost("executeBrokerAction", "Materialize, risk-check, approve, reject or kill-switch a Sim101 intent") },
@@ -333,7 +453,7 @@ export function frontApiOpenApiDocument() {
       "/execution/addon/complete": { post: executionPost("completeNinjaAddonExecution", "Complete one AddOn command lease", "BridgeCompleteInput") },
       "/execution/addon/events": { post: executionPost("recordNinjaAddonEvents", "Persist a signed AddOn event batch", "AddonEventsInput") },
       "/execution/addon/snapshot": { post: executionPost("recordNinjaAddonSnapshot", "Persist a signed AddOn account snapshot and ATI parity", "AddonSnapshotInput") },
-      "/events": { get: { operationId: "streamOperationsEvents", summary: "Stream operations snapshot changes", tags: ["Desk Operations"], responses: { "200": { description: "Server-sent events stream", content: { "text/event-stream": { schema: { type: "string" } } } }, ...errorResponses } } },
+      "/events": { get: { operationId: "streamOperationsEvents", summary: "Stream operations snapshot changes with Last-Event-ID/cursor resume", tags: ["Desk Operations"], responses: { "200": { description: "Server-sent events stream with typed front_events_v1 envelopes", content: { "text/event-stream": { schema: { type: "string" } } } }, ...errorResponses } } },
     },
     components: {
       securitySchemes: {
@@ -374,6 +494,28 @@ function frontOpenApiSchemas() {
     OpenApiDocument: { type: "object", required: ["openapi", "info", "paths"], additionalProperties: true },
     Error: { type: "object", required: ["ok", "error"], properties: { ok: { const: false }, error: { type: "string" }, code: { type: "string" } }, additionalProperties: false },
     OperationsEnvelope: { type: "object", required: ["contract", "schemaVersion"], properties: { contract: { type: "string" }, schemaVersion: { const: "1.0.0" } }, additionalProperties: true },
+    DataFoundationEnvelope: {
+      type: "object",
+      additionalProperties: true,
+      required: ["contract", "schemaVersion", "generated_at_utc", "audience", "source"],
+      properties: {
+        contract: { type: "string", pattern: "^Desk(Data|Feature|Ingestion|Market)" },
+        schemaVersion: { const: "data_foundation_rest_v1" },
+        generated_at_utc: { type: "string", format: "date-time" },
+        audience: { type: "string", enum: ["front", "simulation", "agent", "operator"] },
+        count: { type: "integer", minimum: 0 },
+        source: {
+          type: "object",
+          additionalProperties: true,
+          required: ["canonical", "storage", "direct_table_access"],
+          properties: {
+            canonical: { const: "data_foundation_v1" },
+            storage: { const: "postgres" },
+            direct_table_access: { const: false },
+          },
+        },
+      },
+    },
     OperationsCommandInput: {
       type: "object", additionalProperties: false,
       required: ["action", "expectedRevision", "idempotencyKey", "confirmationPhrase", "reason"],
@@ -466,11 +608,33 @@ function frontOpenApiSchemas() {
     BridgeClaimInput: { type: "object", additionalProperties: false, required: ["bridgeId", "accountName"], properties: { bridgeId: { type: "string" }, accountName: { type: "string", pattern: "^Sim[0-9]*$" }, leaseSeconds: { type: "integer", minimum: 5, maximum: 120 } } },
     BridgeCompleteInput: { type: "object", additionalProperties: true, required: ["bridgeId", "outboxId", "leaseToken", "status"], properties: { bridgeId: { type: "string" }, outboxId: { type: "string" }, leaseToken: { type: "string", format: "uuid" }, workType: { type: "string", enum: ["entry", "management"], default: "entry" }, status: { type: "string", enum: ["rendered", "delivered", "acknowledged", "failed"] } } },
     BridgeEventInput: { type: "object", additionalProperties: false, required: ["update"], properties: { intentId: { type: "string" }, managementIntentId: { type: "string" }, managementOrderRef: { type: "boolean" }, brokerOrderId: { type: "string" }, externalEventKey: { type: "string" }, update: { type: "object", additionalProperties: true } } },
-    BridgeReconcileInput: { type: "object", additionalProperties: false, required: ["brokerSnapshot"], properties: { bridgeId: { type: "string" }, brokerAccountId: { type: "string" }, brokerSnapshot: { type: "object", additionalProperties: true } } },
+    BridgeReconcileInput: {
+      type: "object", additionalProperties: false, required: ["brokerSnapshot"],
+      properties: {
+        bridgeId: { type: "string" },
+        brokerAccountId: { type: "string" },
+        reconciliationMode: { type: "string", enum: ["disabled", "alert_only", "blocking"], default: "alert_only" },
+        triggeredBy: { type: "string", enum: ["manual", "scheduled", "operator", "bridge", "addon"], default: "bridge" },
+        operatorConfirmation: { type: "string" },
+        brokerSnapshot: { type: "object", additionalProperties: true },
+      },
+    },
     AddonHeartbeatInput: { type: "object", additionalProperties: false, required: ["bridgeId", "ninjaConnected", "commandEnabled", "accountName"], properties: { bridgeId: { type: "string" }, brokerAccountId: { type: "string" }, mode: { const: "sim101_addon_approved_only" }, ninjaConnected: { type: "boolean" }, commandEnabled: { type: "boolean" }, accountName: { type: "string", pattern: "^Sim[0-9]*$" }, protocolVersion: { const: "desk_ninja_addon_v1" }, capabilities: { type: "object", additionalProperties: true } } },
     AddonClaimInput: { type: "object", additionalProperties: false, required: ["bridgeId", "accountName"], properties: { bridgeId: { type: "string" }, brokerAccountId: { type: "string" }, accountName: { type: "string", pattern: "^Sim[0-9]*$" }, leaseSeconds: { type: "integer", minimum: 5, maximum: 120 } } },
     AddonEventsInput: { type: "object", additionalProperties: false, required: ["bridgeId", "events"], properties: { bridgeId: { type: "string" }, brokerAccountId: { type: "string" }, events: { type: "array", minItems: 1, maxItems: 200, items: { type: "object", additionalProperties: true } } } },
-    AddonSnapshotInput: { type: "object", additionalProperties: false, required: ["bridgeId", "snapshot"], properties: { bridgeId: { type: "string" }, brokerAccountId: { type: "string" }, reconcile: { type: "boolean", default: false }, lockOnDivergence: { type: "boolean", default: false }, snapshot: { type: "object", additionalProperties: true } } },
+    AddonSnapshotInput: {
+      type: "object", additionalProperties: false, required: ["bridgeId", "snapshot"],
+      properties: {
+        bridgeId: { type: "string" },
+        brokerAccountId: { type: "string" },
+        reconcile: { type: "boolean", default: false },
+        lockOnDivergence: { type: "boolean", default: false },
+        reconciliationMode: { type: "string", enum: ["disabled", "alert_only", "blocking"] },
+        triggeredBy: { type: "string", enum: ["manual", "scheduled", "operator", "bridge", "addon"], default: "addon" },
+        operatorConfirmation: { type: "string" },
+        snapshot: { type: "object", additionalProperties: true },
+      },
+    },
     EntityId: { type: "string", minLength: 1, maxLength: 200, pattern: "^[A-Za-z0-9_.:-]+$" },
     ResourceScope: {
       type: "object", additionalProperties: false, required: ["strategyId", "session", "tradingDate", "mode"],

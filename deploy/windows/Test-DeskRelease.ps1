@@ -13,6 +13,26 @@ $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ($manifest.schema -ne "desk_windows_release_v1") { throw "Unsupported release schema: $($manifest.schema)" }
 
 $failures = @()
+$standardReleaseFiles = @(
+    "front/index.html",
+    "front/manifest.webmanifest",
+    "front/service-worker.js",
+    "front/icons/desk-control-plane.svg",
+    "scripts/stack/check_demo_paper_gate.mjs",
+    "scripts/stack/check_demo_paper_release_gate.mjs",
+    "scripts/stack/check_vnext_operator_e2e.mjs",
+    "scripts/stack/diagnose_demo_paper_readiness.mjs",
+    "scripts/stack/diagnose_tradingview_freshness.mjs",
+    "scripts/stack/diagnose_ninjatrader_addon_readiness.mjs",
+    "scripts/runtime/cli-entrypoint.mjs",
+    "packages/desk-time/index.js",
+    "packages/desk-time/package.json"
+)
+foreach ($standardFile in $standardReleaseFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $ReleaseRoot $standardFile.Replace("/", "\")) -PathType Leaf)) {
+        $failures += "standard-release-missing:$standardFile"
+    }
+}
 $releaseProfileProperty = $manifest.PSObject.Properties["release_profile"]
 $isV5Frozen = $releaseProfileProperty -and [string]$releaseProfileProperty.Value -eq "deterministic_strategy_v5_frozen"
 if ($RequireV5Frozen -and -not $isV5Frozen) {
@@ -42,7 +62,10 @@ if ($isV5Frozen) {
 
 $requiredFiles = if ($isV5Frozen) { @(
     "app/mcp_gpt_desk/scripts/run_desk_ai_worker.mjs",
+    "app/mcp_gpt_desk/scripts/run_agent_runtime_supervisor.mjs",
     "app/mcp_gpt_desk/scripts/run_desk_context_mcp.mjs",
+    "app/mcp_gpt_desk/src/agent-runtime-postgres-repository.js",
+    "app/mcp_gpt_desk/src/agent-runtime-supervisor.js",
     "app/mcp_gpt_desk/src/analytical-evidence-receipts.js",
     "app/mcp_gpt_desk/src/desk-ai-context-capability.js",
     "app/mcp_gpt_desk/src/desk-ai-context-policy.js",
@@ -53,6 +76,9 @@ $requiredFiles = if ($isV5Frozen) { @(
     "deploy/windows/database/Ensure-DeskContextReadOnlyRole.ps1",
     "deploy/windows/database/Test-DeskLatestBackup.ps1",
     "deploy/windows/Set-DeskAiWorkerMode.ps1",
+    "deploy/windows/Set-DeskAgentRuntimeSupervisorMode.ps1",
+    "app/mcp_gpt_desk/scripts/run_research_agent_task_runner.mjs",
+    "app/mcp_gpt_desk/src/research/research-backtest-review-runner.js",
     "app/mcp_gpt_desk/scripts/seed_contracts.mjs",
     "app/mcp_gpt_desk/scripts/verify_v5_frozen_state.mjs",
     "app/mcp_gpt_desk/scripts/prepare_v5_frozen_replay.mjs",
@@ -70,6 +96,10 @@ $requiredFiles = if ($isV5Frozen) { @(
     "infra/postgres/init/019_strategy_v5_risk_guard.sql",
     "infra/postgres/init/020_broker_rounding_risk_policy.sql",
     "infra/postgres/init/021_broker_decision_freshness_policy.sql",
+    "infra/postgres/init/037_agent_runtime_registry.sql",
+    "infra/postgres/init/038_agent_runtime_notifications.sql",
+    "deploy/windows/services/DeskAgentRuntimeSupervisor.xml.template",
+    "deploy/windows/services/DeskAgentRuntimeResearch.xml.template",
     "deploy/windows/services/DeskCodexLive01.xml.template",
     "deploy/windows/services/DeskCodexLive02.xml.template",
     "deploy/windows/services/DeskCodexReplay01.xml.template"

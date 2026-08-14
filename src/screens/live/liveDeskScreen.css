@@ -40,6 +40,137 @@
   margin-top: var(--live-screen-module-gap);
 }
 
+.live-broker-guard {
+  margin-bottom: 8px;
+  padding: 0 !important;
+  overflow: hidden;
+  border-color: var(--line);
+  box-shadow: inset 3px 0 var(--text-disabled);
+}
+
+.live-broker-guard[data-tone="positive"] {
+  box-shadow: inset 3px 0 var(--positive);
+}
+
+.live-broker-guard[data-tone="warning"] {
+  box-shadow: inset 3px 0 var(--warning);
+}
+
+.live-broker-guard[data-tone="negative"] {
+  box-shadow: inset 3px 0 var(--negative);
+}
+
+.live-broker-guard > header {
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.live-broker-guard > header > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.live-broker-guard > header h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-broker-guard > header span {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-broker-guard > header > strong {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  font: 700 10px/1 var(--font-mono);
+  letter-spacing: .04em;
+}
+
+.live-broker-guard__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.live-broker-guard__grid > div {
+  min-width: 0;
+  min-height: 72px;
+  padding: 8px 9px;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  border-right: 1px solid var(--line-soft);
+  background: var(--surface-0);
+}
+
+.live-broker-guard__grid > div:last-child {
+  border-right: 0;
+}
+
+.live-broker-guard__grid > div[data-tone="positive"] {
+  background: color-mix(in srgb, var(--positive) 8%, var(--surface-0));
+}
+
+.live-broker-guard__grid > div[data-tone="warning"] {
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface-0));
+}
+
+.live-broker-guard__grid > div[data-tone="negative"] {
+  background: color-mix(in srgb, var(--negative) 10%, var(--surface-0));
+}
+
+.live-broker-guard__grid span {
+  color: var(--text-tertiary);
+  font: 700 9px/1 var(--font-mono);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.live-broker-guard__grid strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font: 750 13px/1.15 var(--font-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-broker-guard__grid small {
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 14px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.live-broker-guard__alerts {
+  margin: 0;
+  padding: 7px 10px 8px 28px;
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 15px;
+}
+
 .live-metric-strip.metric-strip--ten {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -47,6 +178,18 @@
 @media (max-width: 1279px) {
   .live-metric-strip.metric-strip--ten {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .live-broker-guard__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .live-broker-guard__grid > div:nth-child(3n) {
+    border-right: 0;
+  }
+
+  .live-broker-guard__grid > div:nth-child(n + 4) {
+    border-top: 1px solid var(--line-soft);
   }
 
   .live-metric-strip.metric-strip--ten .metric-card:nth-child(4n) {
@@ -73,6 +216,25 @@
 
   .live-metric-strip.metric-strip--ten {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .live-broker-guard > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .live-broker-guard__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .live-broker-guard__grid > div {
+    min-height: 58px;
+    border-right: 0;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .live-broker-guard__grid > div:first-child {
+    border-top: 0;
   }
 
   .live-metric-strip.metric-strip--ten .metric-card:nth-child(2n) {

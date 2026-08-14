@@ -1,0 +1,84 @@
+{
+  "package": "UI_UX_FRONTEND_RULEBOOK_PACK",
+  "version": "1.0.0",
+  "generated_at": "2026-08-13",
+  "rules": 1000,
+  "chapters": 50,
+  "files": [
+    {
+      "path": "AGENTS_UI_UX_SNIPPET.md",
+      "bytes": 1044,
+      "sha256": "a082c5f69709f18b173f7015f8becb43bfb70844dd088c7bb44b7a5381bcd510"
+    },
+    {
+      "path": "CODEX_UI_UX_EXECUTION_PROTOCOL.md",
+      "bytes": 5080,
+      "sha256": "596a21a683ca5e7d15579360aa727abd2506aef85dd33cbc747234fae58c0411"
+    },
+    {
+      "path": "PROMPT_CODEX_INSTALL_UI_UX_RULEBOOK.md",
+      "bytes": 3020,
+      "sha256": "c34127a32f33c80d8aa5d63ba651c350294ac596ce2d83a2f7e7f31416bf60ba"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3839,
+      "sha256": "ffe48c7d8fd5d271c5af3fbefb3b43b38f959ace7f18ae8b51a9be0a360f8bf7"
+    },
+    {
+      "path": "SOURCES.md",
+      "bytes": 6817,
+      "sha256": "1ade9957cb61ecd1d2f0a312ccb78af6ddf156cb96a0f5b1aed9d789bc62bf31"
+    },
+    {
+      "path": "UI_UX_FRONTEND_PRODUCT_ENGINEERING_RULEBOOK.md",
+      "bytes": 266404,
+      "sha256": "9b7a976842be2b0d2d350ed2700c70a374e7d0ebcb492ddfc8a81a72a15bebf5"
+    },
+    {
+      "path": "UI_UX_REVIEW_CHECKLIST.md",
+      "bytes": 24819,
+      "sha256": "1f21ffca2abe360c979036e9bb0c0d18630fe98358939d25d28d69572e3ee637"
+    },
+    {
+      "path": "scripts/select-ui-ux-rules.mjs",
+      "bytes": 4214,
+      "sha256": "8f204d17631294fc08393cc540230d7bf952acadbced886b9bb6e4659230bba9"
+    },
+    {
+      "path": "scripts/test-select-ui-ux-rules.mjs",
+      "bytes": 983,
+      "sha256": "257600e34567d7e51139a06dc6fe9775188f80ae819a772e2813dcacd34a0b3f"
+    },
+    {
+      "path": "scripts/test-ui-ux-audit.mjs",
+      "bytes": 1633,
+      "sha256": "6b1a0d387b24261ac3ca2a1efea261439d45a4749a008171f3cbc15ce1631028"
+    },
+    {
+      "path": "scripts/ui-ux-audit.mjs",
+      "bytes": 6957,
+      "sha256": "0d404db55c9439b0a976ff8147e363a5ed7558b9b1e3cf7ed78b36556027f03f"
+    },
+    {
+      "path": "scripts/validate-rulebook.py",
+      "bytes": 1155,
+      "sha256": "1c53e1c87746d041412c4c0a1c05e2e622f2f4627e3808507e0966d115289513"
+    },
+    {
+      "path": "templates/UI_UX_SCREEN_REVIEW_TEMPLATE.md",
+      "bytes": 2190,
+      "sha256": "8ab82d931f8ae628cfba010219b63e5f88fdb4af685230c2a7b408729ca9e3fe"
+    },
+    {
+      "path": "ui-ux-rules.csv",
+      "bytes": 281420,
+      "sha256": "51fe08ebbc4f98e92df761a516af2051ac9497afcdfe3e6e60f339197fde0078"
+    },
+    {
+      "path": "ui-ux-rules.json",
+      "bytes": 622289,
+      "sha256": "7a9cbdeecc9d5d48f56cdcc04d5ac208d0356d3da9a64beca499a40fb512ca87"
+    }
+  ]
+}

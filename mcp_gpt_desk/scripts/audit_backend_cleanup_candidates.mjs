@@ -60,6 +60,7 @@ const scriptCandidates = sourceFiles
     const basename = rel.split(/[\\/]/).pop();
     const references = [...contentByFile.entries()]
       .filter(([other]) => other !== file)
+      .filter(([other]) => !isReferenceOnlyAuditReport(other))
       .filter(([, text]) => text.includes(rel) || text.includes(basename))
       .map(([other]) => relative(root, other));
     return { file: rel, references };
@@ -112,11 +113,17 @@ function matchingLines(text, pattern) {
 
 function isExcludedFindingDocument(file) {
   const rel = relative(root, file).replace(/\\/g, "/");
-  return rel.startsWith("docs/archive/")
+  return isReferenceOnlyAuditReport(file)
+    || rel.startsWith("docs/archive/")
     || rel.includes("/archive/")
     || /^docs\/(MIGRATION_|FIRESTORE_|MARKET_CANDLES_|POSTGRES_|AUTOPILOT_V4_)[^/]+$/.test(rel)
     || rel === "docs/M17_BACKEND_CLEANUP_RUNBOOK.md"
     || rel === "docs/PREPROD_PROJECT_MANIFEST.md";
+}
+
+function isReferenceOnlyAuditReport(file) {
+  const rel = relative(root, file).replace(/\\/g, "/");
+  return /^docs\/engineering\/legacy-and-dependency-classification-[0-9-]+\.md$/.test(rel);
 }
 
 function separator() {

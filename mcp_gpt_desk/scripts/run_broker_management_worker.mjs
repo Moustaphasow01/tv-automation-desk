@@ -22,12 +22,16 @@ try {
   do {
     try {
       const entries = await store.execution.processEligiblePositions();
+      const theoretical = await store.execution.processTheoreticalExecution({ entryLimit: 200, exitLimit: 200 });
       const management = await store.execution.materializeRecentManagement({ limit: 200 });
+      const overview = await store.execution.overview({ limit: 50 });
       const result = {
-        ok: entries.ok !== false && management.ok !== false,
-        status: entries.count || management.count ? "MATERIALIZED" : "NO_ACTIONABLE_WORK",
+        ok: entries.ok !== false && theoretical.ok !== false && management.ok !== false,
+        status: entries.count || theoretical.materialized || management.count ? "MATERIALIZED" : "NO_ACTIONABLE_WORK",
         entries,
+        theoretical,
         management,
+        paper_safety: projectPaperSafety(overview),
       };
       console.log(JSON.stringify({ at: new Date().toISOString(), ...result }));
       await heartbeat("healthy", { result });
@@ -65,3 +69,34 @@ async function heartbeat(status, details) {
 }
 
 function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+function projectPaperSafety(overview = {}) {
+  const safety = overview.safety || {};
+  const startup = overview.ninjaTraderStartup || {};
+  const bridges = Array.isArray(overview.bridges) ? overview.bridges : [];
+  const snapshots = Array.isArray(overview.addonSnapshots) ? overview.addonSnapshots : [];
+  const addonBridge = bridges.find((item) => item?.adapter_kind === "addon") || null;
+  const latestSnapshot = snapshots.reduce((latest, candidate) => (
+    !latest || Date.parse(candidate?.captured_at || "") > Date.parse(latest?.captured_at || "") ? candidate : latest
+  ), null);
+  const accountName = String(latestSnapshot?.account_name || addonBridge?.account_name || "").trim();
+  const sim101Account = /^Sim\d*$/i.test(accountName);
+  return {
+    execution_enabled: safety.executionEnabled === true,
+    bridge_mode: safety.bridgeMode || null,
+    kill_switch_released: safety.killSwitchEnv === false && safety.databaseLocked !== true,
+    max_contracts: Number(safety.maxContracts || 0),
+    execution_authority_mode: safety.executionAuthorityMode || null,
+    manual_telegram_execution_enabled: safety.manualTelegramExecutionEnabled === true,
+    entry_operator_approval_required: safety.entryOperatorApprovalRequired ?? null,
+    submission_possible: safety.submissionPossible === true,
+    live_account_allowed: safety.liveAccountAllowed === true,
+    addon_bridge_status: addonBridge?.status || null,
+    addon_heartbeat_fresh: startup.addonHeartbeatFresh === true,
+    addon_connected: startup.addonConnected === true,
+    connection_ready: startup.connectionReady === true,
+    command_enabled: addonBridge?.command_enabled === true,
+    account_name: accountName || null,
+    sim101_account: sim101Account,
+  };
+}

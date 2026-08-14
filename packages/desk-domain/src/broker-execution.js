@@ -4,6 +4,11 @@ import {
   normalizeEntryModeV1,
   validateEntryOrderSemanticsV1,
 } from "./entry-order-semantics-v1.js";
+export {
+  normalizeNinjaUpdate,
+  renderNinjaOifCommand,
+  renderNinjaOifManagementCommand,
+} from "./broker-ninja-oif.js";
 
 export const BROKER_EXECUTION_SCHEMA_VERSION = "broker_execution_v2";
 export const BROKER_RISK_PERCENT = 0.25;
@@ -39,6 +44,8 @@ export class BrokerExecutionError extends Error {
 export function brokerExecutionEnvironment(env = process.env) {
   return Object.freeze({
     executionEnabled: env.DESK_BROKER_EXECUTION_ENABLED === "true",
+    manualTelegramExecutionEnabled: env.DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED === "true",
+    legacyPositionExecutionEnabled: env.DESK_LEGACY_POSITION_EXECUTION_ENABLED === "true",
     provider: text(env.DESK_BROKER_PROVIDER || "ninjatrader").toLowerCase(),
     bridgeMode: bridgeMode(env.DESK_NINJA_BRIDGE_MODE),
     requireOperatorApproval: env.DESK_NINJA_REQUIRE_OPERATOR_APPROVAL !== "false",
@@ -327,17 +334,23 @@ export function evaluateBrokerPolicy({
     || (lock.scope_type === "session" && lock.scope_value === decision?.session));
   const providerMatches = text(provider?.broker_provider_code).toLowerCase() === text(environment.provider).toLowerCase();
   const authorityMode = brokerExecutionAuthorityMode(policy);
+  const manualTelegramExecution = environment.manualTelegramExecutionEnabled === true;
 
-  add("ENV_EXECUTION_ENABLED", environment.executionEnabled === true);
-  add("ENV_KILL_SWITCH_RELEASED", environment.killSwitch === false);
-  add("ENV_BRIDGE_MODE_SUBMITS", SUBMISSION_BRIDGE_MODES.includes(environment.bridgeMode), { mode: environment.bridgeMode });
+  add("ENV_EXECUTION_ENABLED", environment.executionEnabled === true || manualTelegramExecution, { manual_telegram_execution: manualTelegramExecution });
+  add("ENV_KILL_SWITCH_RELEASED", environment.killSwitch === false || manualTelegramExecution, { manual_telegram_execution: manualTelegramExecution });
+  add("ENV_BRIDGE_MODE_SUBMITS", SUBMISSION_BRIDGE_MODES.includes(environment.bridgeMode) || manualTelegramExecution, {
+    mode: environment.bridgeMode,
+    manual_telegram_execution: manualTelegramExecution,
+  });
   add("PROVIDER_MATCH", providerMatches);
   add("PROVIDER_ENABLED", providerMatches && provider?.enabled === true);
   add("ACCOUNT_ALLOWLIST", environment.accountAllowlist?.includes(accountId), { account_id: accountId });
   add("ACCOUNT_PREPROD", account?.environment === "preprod");
   add("ACCOUNT_SIM_ONLY", account?.mode === "paper" && /^sim\d*$/i.test(text(bridge?.account_name || account?.metadata?.account_name || "Sim101")));
   add("LIVE_ACCOUNT_FORBIDDEN", environment.allowLiveAccount !== true && account?.mode !== "live");
-  add("ACCOUNT_WRITABLE", account?.read_only === false && account?.order_submission_enabled === true);
+  add("ACCOUNT_WRITABLE", (account?.read_only === false && account?.order_submission_enabled === true) || manualTelegramExecution, {
+    manual_telegram_execution: manualTelegramExecution,
+  });
   add("POLICY_ENABLED", policy?.enabled === true);
   add("POLICY_EXECUTION_AUTHORITY_VALID", BROKER_EXECUTION_AUTHORITY_MODES.includes(authorityMode), { mode: authorityMode });
   add("POLICY_APPROVAL_COMPATIBLE", policy?.require_operator_approval === (authorityMode === "semi_auto"), {
@@ -430,12 +443,25 @@ export function evaluateBrokerPolicy({
       phase: "BROKER_SUBMIT",
     },
   );
-  add("NO_EXECUTION_LOCK", !matchingLock, matchingLock ? { lock_id: matchingLock.execution_lock_id, reason: matchingLock.reason } : {});
-  add("BRIDGE_HEALTHY", ["armed", "healthy"].includes(bridge?.status) && bridgeFresh, { status: bridge?.status, fresh: bridgeFresh });
+  add("NO_EXECUTION_LOCK", !matchingLock || manualTelegramExecution, matchingLock ? {
+    lock_id: matchingLock.execution_lock_id,
+    reason: matchingLock.reason,
+    manual_telegram_execution: manualTelegramExecution,
+  } : {});
+  add("BRIDGE_HEALTHY", manualTelegramExecution || (["armed", "healthy"].includes(bridge?.status) && bridgeFresh), {
+    status: bridge?.status,
+    fresh: bridgeFresh,
+    manual_telegram_execution: manualTelegramExecution,
+  });
   const bridgeTransportReady = environment.bridgeMode === "sim101_addon_approved_only"
     ? bridge?.ninja_connected === true && bridge?.adapter_kind === "addon" && bridge?.command_enabled === true
     : bridge?.ninja_connected === true && bridge?.ati_enabled === true;
-  add("BRIDGE_CONNECTED", bridgeTransportReady, { adapter_kind: bridge?.adapter_kind || "ati", command_enabled: bridge?.command_enabled === true, ati_enabled: bridge?.ati_enabled === true });
+  add("BRIDGE_CONNECTED", manualTelegramExecution || bridgeTransportReady, {
+    adapter_kind: bridge?.adapter_kind || "ati",
+    command_enabled: bridge?.command_enabled === true,
+    ati_enabled: bridge?.ati_enabled === true,
+    manual_telegram_execution: manualTelegramExecution,
+  });
   const duplicate = (existingTrades || []).some((trade) => canonicalInstrument(trade.instrument_code || trade.broker_contract?.instrument_code) === instrument
     && trade.session === decision?.session
     && !["closed", "cancelled", "rejected", "expired"].includes(String(trade.status || "").toLowerCase()));
@@ -461,6 +487,7 @@ export function evaluateBrokerPolicy({
       decision_age_seconds: decisionAgeSeconds,
       max_decision_age_seconds: maxDecisionAgeSeconds,
       execution_authority_mode: authorityMode,
+      manual_telegram_execution: manualTelegramExecution,
       entry_operator_approval_required: authorityMode === "semi_auto",
       management_operator_approval_required: false,
       account_snapshot_age_seconds: accountSnapshotFresh ? Math.max(0, (nowMs - accountSnapshotMs) / 1000) : null,
@@ -530,90 +557,6 @@ export function createOrderIntent({ decision, riskCheck, account, contract, now 
   });
 }
 
-export function renderNinjaOifCommand(intent, { accountName = "Sim101", orderId, strategyName = "", strategyId = "" } = {}) {
-  if (!/^Sim\d*$/i.test(text(accountName))) throw new BrokerExecutionError("SIM_ACCOUNT_REQUIRED", "Only a NinjaTrader simulation account is accepted by the local bridge.");
-  const payload = intent?.command_payload || intent?.payload || intent;
-  const type = ninjaOrderType(payload.order_type);
-  const action = String(payload.action || (intent.side === "buy" ? "BUY" : "SELL")).toUpperCase();
-  if (!["BUY", "SELL"].includes(action)) throw new BrokerExecutionError("INVALID_ORDER_ACTION", `Unsupported NinjaTrader action: ${action}.`);
-  const quantity = positiveInteger(payload.quantity || intent.quantity);
-  const instrument = requiredText(payload.broker_symbol, "broker_symbol");
-  const id = text(orderId || intent.order_intent_id || payload.order_id).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 48);
-  const fields = [
-    "PLACE",
-    accountName,
-    instrument,
-    action,
-    String(quantity),
-    type,
-    type === "MARKET" || type === "STOPMARKET" ? "" : price(payload.limit_price ?? intent.limit_price),
-    type === "STOPMARKET" || type === "STOPLIMIT" ? price(payload.stop_price ?? intent.stop_price) : "",
-    text(payload.time_in_force || intent.time_in_force || "DAY").toUpperCase(),
-    text(payload.oco_id),
-    id,
-    text(strategyName),
-    text(strategyId),
-  ];
-  return `${fields.join(";")}\r\n`;
-}
-
-export function renderNinjaOifManagementCommand(input = {}, { accountName = "Sim101", allowGlobalCommand = false } = {}) {
-  if (!/^Sim\d*$/i.test(text(accountName))) throw new BrokerExecutionError("SIM_ACCOUNT_REQUIRED", "Only a NinjaTrader simulation account is accepted by the local bridge.");
-  const command = text(input.command).toUpperCase();
-  const orderId = text(input.order_id || input.orderId);
-  const strategyId = text(input.strategy_id || input.strategyId);
-  const instrument = text(input.instrument || input.broker_symbol);
-  let fields;
-  if (command === "CANCEL") {
-    if (!orderId) throw new BrokerExecutionError("ORDER_ID_REQUIRED", "CANCEL requires an order ID.");
-    fields = [command, "", "", "", "", "", "", "", "", "", orderId, "", strategyId];
-  } else if (command === "CHANGE") {
-    if (!orderId) throw new BrokerExecutionError("ORDER_ID_REQUIRED", "CHANGE requires an order ID.");
-    fields = [command, "", "", "", optionalNonNegativeInteger(input.quantity), "", optionalPrice(input.limit_price), optionalPrice(input.stop_price), "", "", orderId, "", strategyId];
-  } else if (command === "CLOSEPOSITION") {
-    if (!instrument) throw new BrokerExecutionError("INSTRUMENT_REQUIRED", "CLOSEPOSITION requires an instrument.");
-    fields = [command, accountName, instrument, "", "", "", "", "", "", "", "", "", ""];
-  } else if (command === "CLOSESTRATEGY") {
-    if (!strategyId) throw new BrokerExecutionError("STRATEGY_ID_REQUIRED", "CLOSESTRATEGY requires a strategy ID.");
-    fields = [command, "", "", "", "", "", "", "", "", "", "", "", strategyId];
-  } else if (command === "CANCELALLORDERS" || command === "FLATTENEVERYTHING") {
-    if (!allowGlobalCommand) throw new BrokerExecutionError("GLOBAL_COMMAND_CONFIRMATION_REQUIRED", `${command} requires an explicit global-simulation confirmation.`);
-    fields = [command, "", "", "", "", "", "", "", "", "", "", "", ""];
-  } else if (command === "REVERSEPOSITION") {
-    const action = text(input.action).toUpperCase();
-    if (!instrument || !["BUY", "SELL"].includes(action)) throw new BrokerExecutionError("REVERSE_INPUT_REQUIRED", "REVERSEPOSITION requires an instrument and BUY/SELL action.");
-    const type = ninjaOrderType(input.order_type || "market");
-    fields = [command, accountName, instrument, action, String(positiveInteger(input.quantity)), type,
-      type === "MARKET" || type === "STOPMARKET" ? "" : price(input.limit_price),
-      type === "STOPMARKET" || type === "STOPLIMIT" ? price(input.stop_price) : "",
-      text(input.time_in_force || "DAY").toUpperCase(), text(input.oco_id), orderId, text(input.strategy_name), strategyId];
-  } else {
-    throw new BrokerExecutionError("INVALID_MANAGEMENT_COMMAND", `Unsupported NinjaTrader management command: ${command}.`);
-  }
-  return `${fields.join(";")}\r\n`;
-}
-
-export function normalizeNinjaUpdate(input = {}, now = new Date().toISOString()) {
-  const status = String(input.status || input.order_state || input.state || "unknown").trim().toLowerCase().replace(/\s+/g, "_");
-  const statusMap = {
-    initialized: "submitted", pending_submit: "submitted", pendingsubmit: "submitted", submitted: "submitted",
-    accepted: "accepted", working: "working", suspended: "working", change_submitted: "working", changesubmitted: "working",
-    cancel_pending: "cancel_requested", cancelpending: "cancel_requested", cancel_submitted: "cancel_requested",
-    trigger_pending: "working", triggerpending: "working", partfilled: "partially_filled", partially_filled: "partially_filled",
-    partiallyfilled: "partially_filled", filled: "filled", cancelled: "cancelled", canceled: "cancelled",
-    rejected: "rejected", expired: "expired", error: "error",
-  };
-  return Object.freeze({
-    broker_order_ref: requiredText(input.broker_order_ref || input.order_id || input.orderId, "broker_order_ref"),
-    status: statusMap[status] || "unknown",
-    filled_quantity: finite(input.filled_quantity ?? input.filled) || 0,
-    average_fill_price: finite(input.average_fill_price ?? input.avg_fill_price),
-    remaining_quantity: finite(input.remaining_quantity ?? input.remaining),
-    occurred_at: iso(input.occurred_at || input.timestamp || now),
-    raw: input,
-  });
-}
-
 function canonicalInstrument(value) { return text(value).toUpperCase().split(":").at(-1).replace(/1!$/, ""); }
 function canonicalSide(value) {
   const normalized = text(value).toLowerCase();
@@ -630,8 +573,6 @@ function finite(value) { if (value === null || value === undefined || value === 
 function positiveNumber(value, field) { const parsed = finite(value); if (parsed === null || parsed <= 0) throw new BrokerExecutionError("POSITIVE_NUMBER_REQUIRED", `${field} must be a positive number.`, { field }); return parsed; }
 function positiveIntegerOrNull(value) { const parsed = finite(value); return parsed !== null && Number.isInteger(parsed) && parsed > 0 ? parsed : null; }
 function positiveInteger(value) { const parsed = positiveIntegerOrNull(value); if (parsed === null) throw new BrokerExecutionError("POSITIVE_INTEGER_REQUIRED", "A positive integer quantity is required."); return parsed; }
-function optionalNonNegativeInteger(value) { const parsed = finite(value); return parsed !== null && Number.isInteger(parsed) && parsed >= 0 ? String(parsed) : "0"; }
-function optionalPrice(value) { const parsed = finite(value); return parsed === null ? "0" : String(parsed); }
 function nonNegativeInteger(value, fallback) { const parsed = Number(value); return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback; }
 function boundedInteger(value, fallback, min, max) { const parsed = Number(value); return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback; }
 function normalizedConfidence(value) { const parsed = finite(value); if (parsed === null) return null; return parsed > 1 ? Math.max(0, Math.min(1, parsed / 100)) : Math.max(0, Math.min(1, parsed)); }
@@ -646,10 +587,3 @@ function contractExpiryEndOfDayUtc(value) {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 function metric(value) { return Number(Number(value).toFixed(10)); }
-function price(value) { const parsed = finite(value); if (parsed === null) return ""; return String(parsed); }
-function ninjaOrderType(value) {
-  const type = text(value).toLowerCase();
-  const map = { market: "MARKET", limit: "LIMIT", stop_market: "STOPMARKET", stopmarket: "STOPMARKET", stop_limit: "STOPLIMIT", stoplimit: "STOPLIMIT" };
-  if (!map[type]) throw new BrokerExecutionError("INVALID_ORDER_TYPE", `Unsupported NinjaTrader order type: ${type}.`);
-  return map[type];
-}

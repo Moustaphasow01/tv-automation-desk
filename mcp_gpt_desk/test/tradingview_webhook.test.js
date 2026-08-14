@@ -12,6 +12,7 @@ test("local TradingView webhook validates, strips secrets and writes canonical d
     body: {
       token: "test-secret",
       alert_id: "alert-1",
+      source: "tradingview_alert_webhook",
       symbol: "CME_MINI:MES1!",
       timeframe: "5",
       timestamp_utc: "2026-07-15T10:00:00.000Z",
@@ -34,8 +35,11 @@ test("local TradingView webhook validates, strips secrets and writes canonical d
   assert.equal(candle.data.feed_id, "preprod__tradingview__MES1!__5");
   assert.equal(candle.documentId, "20260715T100000Z");
   assert.equal(candle.data.symbol, "MES1!");
+  assert.equal(candle.data.source, "tradingview_alert_webhook");
   assert.equal(candle.data.close, 102);
   assert.equal(candle.data.environment, "preprod");
+  const event = persistence.writes.find((write) => write.collection === "tradingview_webhook_events");
+  assert.equal(event.data.source, "tradingview_alert_webhook");
 });
 
 test("local TradingView webhook targets the canonical prod feed environment by default", async () => {

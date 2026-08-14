@@ -1,0 +1,20 @@
+{
+  "name": "Desk Control Plane",
+  "short_name": "Desk CP",
+  "description": "Cockpit opérateur Trading Desk VNext.",
+  "start_url": "/?density=workstation#/command-center",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape-primary",
+  "background_color": "#03080e",
+  "theme_color": "#03080e",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/desk-control-plane.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

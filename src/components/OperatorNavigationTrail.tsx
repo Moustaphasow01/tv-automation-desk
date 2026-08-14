@@ -149,6 +149,7 @@ function describeLocation(pathname: string, search: string): { label: string; pa
     "/performance": "Calendrier des résultats",
     "/performance/analysis": "Analyse des performances",
     "/operations": "Automatisations",
+    "/operations/agents": "Agents IA",
     "/operations/claim-lanes": "Files GPT",
     "/operations/execution": "NinjaTrader",
     "/operations/observability": process ? gptProcessLabel(process) : "Activité GPT",
@@ -158,6 +159,7 @@ function describeLocation(pathname: string, search: string): { label: string; pa
     "/replay": "Journées de test",
     "/history": "Archives",
     "/strategies": "Stratégie & contrats",
+    "/data-foundation": "Data Foundation",
     "/more": "Tous les écrans",
   };
   return detail(staticLabels[pathname] || "Desk");

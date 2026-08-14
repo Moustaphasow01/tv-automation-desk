@@ -123,7 +123,7 @@ export function MarketTable({ data }: { data: DeskSession }) {
   return <div className="market-compact-grid">{data.market.map(item => <article className="market-compact-card" key={item.symbol} data-trend={item.trend}>
     <header><strong>{item.symbol}</strong><span className={item.trend === "up" ? "positive" : item.trend === "down" ? "negative" : ""}>{item.change}</span></header>
     <div className="market-compact-card__price">{item.price}</div>
-    <dl><dt>RSI</dt><dd>{item.rsi || "—"}</dd><dt>ATR</dt><dd>{item.atr || "—"}</dd></dl>
+    <dl><dt>RSI</dt><dd>{item.rsi || "—"}</dd><dt>ATR Wilder</dt><dd>{item.atr || "—"}</dd></dl>
     <small title={item.note}>{item.note || item.marketDate || "Source backend"}</small>
   </article>)}</div>;
 }

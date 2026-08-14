@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Desk Control Plane</title>
+  <rect width="512" height="512" rx="112" fill="#03080e"/>
+  <path d="M104 146h304v44H104z" fill="#10243a"/>
+  <path d="M104 231h88v135h-88z" fill="#1477f2"/>
+  <path d="M216 231h88v135h-88z" fill="#16d990"/>
+  <path d="M328 231h80v135h-80z" fill="#ff9d2e"/>
+  <path d="M112 154h112v28H112z" fill="#e8f2ff" opacity=".92"/>
+  <path d="M236 154h64v28h-64z" fill="#16d990"/>
+  <path d="M320 154h80v28h-80z" fill="#8fa8c3"/>
+</svg>

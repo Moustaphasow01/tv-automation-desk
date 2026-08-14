@@ -1,0 +1,32 @@
+{
+  "schema": "desk_runtime_safety_policy_v1",
+  "clock": {
+    "package": "packages/desk-time",
+    "required_exports": ["ClockPort", "SystemClock", "FixedClock", "toUtcIso", "toParisIso", "parisOffset"],
+    "direct_clock_usage_budget": 130
+  },
+  "sql": {
+    "migration_directory": "infra/postgres/init",
+    "idempotency_guards": [
+      { "table": "trade_order_intents", "field": "idempotency_key" },
+      { "table": "trade_approvals", "field": "idempotency_key" },
+      { "table": "broker_policy_audit_events", "field": "idempotency_key" },
+      { "table": "trade_management_intents", "field": "idempotency_key" },
+      { "table": "trade_management_approvals", "field": "idempotency_key" },
+      { "table": "telegram_delivery_outbox", "field": "dedupe_key" },
+      { "table": "telegram_command_requests", "field": "telegram_update_id" }
+    ],
+    "lease_guards": [
+      { "table": "broker_execution_outbox", "lease_field": "lease_token", "expires_field": "lease_expires_at", "attempt_field": "attempt_count" },
+      { "table": "broker_management_outbox", "lease_field": "lease_token", "expires_field": "lease_expires_at", "attempt_field": "attempt_count" },
+      { "table": "telegram_delivery_outbox", "lease_field": "lease_token", "expires_field": "lease_expires_at_utc", "attempt_field": "attempt_count" }
+    ],
+    "optimistic_lock_guards": [
+      { "table": "trade_policy_profiles", "fields": ["revision"] },
+      { "table": "trades", "fields": ["revision"] },
+      { "table": "broker_policy_audit_events", "fields": ["expected_revision", "applied_revision"] },
+      { "table": "trade_management_intents", "fields": ["expected_trade_revision"] },
+      { "table": "telegram_runtime_config", "fields": ["revision"] }
+    ]
+  }
+}

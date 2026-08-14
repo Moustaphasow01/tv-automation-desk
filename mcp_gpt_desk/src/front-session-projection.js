@@ -1,3 +1,5 @@
+import { clockEpochMs as frontSessionEpochMs, clockUtc as frontSessionUtc } from "./front-runtime-clock.js";
+
 const FRONT_API_MAP = [
   ["Live Desk", "/api/v1/live-desk/current"],
   ["Sessions", "/api/v1/sessions"],
@@ -14,7 +16,7 @@ const FRONT_MARKET_CACHE_TTL_MS = boundedTtlMs(process.env.DESK_FRONT_MARKET_CAC
 const frontSessionCaches = new WeakMap();
 const frontMarketCaches = new WeakMap();
 
-export function normalizeFrontApiScope(input = {}, now = new Date()) {
+export function normalizeFrontApiScope(input = {}, now = new Date(frontSessionEpochMs())) {
   const session = input.session === "ny_open" ? "ny_open" : "asia_open";
   const tradingDate = isoDate(input.trading_date || input.date) || parisDate(now);
   const strategyId = stringValue(input.strategy_id) || (session === "ny_open" ? "ny_open_1530" : "asia_open");
@@ -251,14 +253,14 @@ async function loadFrontMarketSnapshotUncached(store, { date, session = "asia_op
 function cachedFrontRead(caches, store, key, ttlMs, read) {
   if (!store || ttlMs <= 0) return read();
   const cache = frontCacheFor(caches, store);
-  const now = Date.now();
+  const now = frontSessionEpochMs();
   const existing = cache.get(key);
   if (existing && existing.expiresAt > now) return existing.promise;
   const entry = { expiresAt: Number.POSITIVE_INFINITY, promise: null };
   entry.promise = Promise.resolve()
     .then(read)
     .then((value) => {
-      if (cache.get(key) === entry) entry.expiresAt = Date.now() + ttlMs;
+      if (cache.get(key) === entry) entry.expiresAt = frontSessionEpochMs() + ttlMs;
       return value;
     })
     .catch((error) => {
@@ -279,7 +281,7 @@ function frontCacheFor(caches, store) {
   return cache;
 }
 
-function pruneFrontCache(cache, now = Date.now()) {
+function pruneFrontCache(cache, now = frontSessionEpochMs()) {
   if (cache.size <= 100) return;
   for (const [key, entry] of cache) {
     if (entry.expiresAt <= now) cache.delete(key);
@@ -370,11 +372,11 @@ async function loadDailyPackMarketSnapshot(store, date) {
 function summarizeDailyAsset(rows, { symbol, dataset }) {
   const ordered = rows
     .filter((row) => numberValue(row.close) != null)
-    .sort((left, right) => String(left.timestamp_utc || left.timestamp_paris || "").localeCompare(String(right.timestamp_utc || right.timestamp_paris || "")));
+    .sort((left, right) => dailyRowTime(left).localeCompare(dailyRowTime(right)));
   const last = ordered.at(-1);
   if (!last) return null;
-  const latestDate = String(last.timestamp_paris || last.timestamp_utc || "").slice(0, 10);
-  const daily = ordered.filter((row) => String(row.timestamp_paris || row.timestamp_utc || "").slice(0, 10) === latestDate);
+  const latestDate = dailyRowTime(last).slice(0, 10);
+  const daily = ordered.filter((row) => dailyRowTime(row).slice(0, 10) === latestDate);
   const first = daily[0] || last;
   const open = numberValue(first.open);
   const close = numberValue(last.close);
@@ -417,7 +419,7 @@ export function projectDeskSession(sources = {}) {
     ? macroEventsInWindow(macroSource.events, macroSource.window)
     : dailyEvents(macroSource.events, tradingDate);
   const newsItems = array(record(sources.news).items);
-  const asOfUtc = stringValue(live.resolved_scope?.as_of_utc, live.as_of_utc) || new Date().toISOString();
+  const asOfUtc = stringValue(live.resolved_scope?.as_of_utc, live.as_of_utc) || frontSessionUtc();
   const projectedMacro = projectMacroEvents(macroEvents, asOfUtc);
   const nextMacroEvent = projectedMacro.find((event) => event.isNext);
   const dataQuality = projectDataQuality(live, audit);
@@ -948,7 +950,7 @@ function projectMarketBrief(snapshotValue, fullMaster) {
     range.high != null && range.low != null
       ? `Range observé ${formatNumber(range.low)}–${formatNumber(range.high)} au cutoff backend.`
       : instrumentCount
-        ? `${instrumentCount} actifs alimentés par les données de marché quotidiennes avec OHLC, variation, RSI et ATR.`
+        ? `${instrumentCount} actifs alimentés par les données de marché quotidiennes avec OHLC, variation, RSI et ATR Wilder.`
         : "Aucun snapshot de marché matérialisé."
   );
   return {
@@ -1645,14 +1647,8 @@ function validTimestamp(value) {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : "";
 }
 
-function parisDate(now) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Paris",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-}
+function parisDate(now) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(now); }
+function dailyRowTime(row = {}) { return String(row.timestamp_utc || row.timestamp_paris || ""); }
 
 async function safeRead(read, fallback) {
   try {

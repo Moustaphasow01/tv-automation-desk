@@ -1,0 +1,52 @@
+{
+  "schema_version": "desk_prompt_registry_governance_v1",
+  "generated_for_ticket": "TD2-PRM-008",
+  "secret_policy": "NO_SECRET_ALLOWED",
+  "default_effect": "DENY",
+  "read_actions": [
+    {
+      "action": "READ_PROMPT_REGISTRY",
+      "roles": ["operator", "agent_runtime", "prompt_registry_admin"],
+      "audit_required": false
+    }
+  ],
+  "write_actions": [
+    {
+      "action": "PUBLISH_PROMPT_VERSION",
+      "roles": ["prompt_registry_admin"],
+      "confirmation_phrase": "CONFIRM_PUBLISH_PROMPT",
+      "audit_required": true,
+      "requires_reason": true,
+      "requires_passed_evaluation": true
+    },
+    {
+      "action": "DEPLOY_PROMPT_COMPOSITION",
+      "roles": ["prompt_registry_admin"],
+      "confirmation_phrase": "CONFIRM_DEPLOY_PROMPT",
+      "audit_required": true,
+      "requires_reason": true,
+      "requires_passed_evaluation": true
+    },
+    {
+      "action": "ROLLBACK_PROMPT_BINDING",
+      "roles": ["prompt_registry_admin"],
+      "confirmation_phrase": "CONFIRM_ROLLBACK_PROMPT",
+      "audit_required": true,
+      "requires_reason": true,
+      "requires_passed_evaluation": false
+    },
+    {
+      "action": "REVOKE_PROMPT_BINDING",
+      "roles": ["prompt_registry_admin"],
+      "confirmation_phrase": "CONFIRM_REVOKE_PROMPT",
+      "audit_required": true,
+      "requires_reason": true,
+      "requires_passed_evaluation": false
+    }
+  ],
+  "bypass_policy": {
+    "latest_resolution_after_claim": "FORBIDDEN",
+    "direct_prompt_file_runtime_use": "FORBIDDEN_AFTER_REGISTRY_CUTOVER",
+    "operator_ui_mutation_without_backend_action": "FORBIDDEN"
+  }
+}

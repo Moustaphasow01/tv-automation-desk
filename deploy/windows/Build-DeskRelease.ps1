@@ -5,7 +5,9 @@ param(
     [switch]$SkipTests,
     [switch]$UsePrebuiltFront,
     [switch]$AllowDirty,
-    [switch]$Replace
+    [switch]$Replace,
+    [ValidateSet("standard", "deterministic_strategy_v5_frozen")]
+    [string]$ReleaseProfile = "standard"
 )
 
 . (Join-Path $PSScriptRoot "DeskDeployment.Common.ps1")
@@ -53,12 +55,13 @@ $commit = $commit.Trim()
 if (-not $SkipTests) {
     Invoke-DeskCommand -FilePath $npm -Arguments @("run", "typecheck") -WorkingDirectory $ProjectRoot
     Invoke-DeskCommand -FilePath $npm -Arguments @("run", "test:react") -WorkingDirectory $ProjectRoot
+    Invoke-DeskCommand -FilePath $npm -Arguments @("--prefix", "apps/desk-control-plane", "run", "test") -WorkingDirectory $ProjectRoot
     Invoke-DeskCommand -FilePath $npm -Arguments @("--prefix", "mcp_gpt_desk", "test") -WorkingDirectory $ProjectRoot
 }
+$frontDist = Join-Path $ProjectRoot "apps\desk-control-plane\dist"
 if ($UsePrebuiltFront) {
-    $frontDist = Join-Path $ProjectRoot "dist"
     if (-not (Test-Path -LiteralPath (Join-Path $frontDist "index.html") -PathType Leaf)) {
-        throw "-UsePrebuiltFront requires a populated dist directory."
+        throw "-UsePrebuiltFront requires a populated apps\desk-control-plane\dist directory."
     }
     $sourceMaps = @(Get-ChildItem -LiteralPath $frontDist -File -Recurse -Filter "*.map")
     if ($sourceMaps.Count -gt 0) {
@@ -71,7 +74,19 @@ if ($UsePrebuiltFront) {
     }
     Write-Host "Using verified prebuilt front from $frontDist"
 } else {
-    Invoke-DeskCommand -FilePath $npm -Arguments @("run", "build") -WorkingDirectory $ProjectRoot
+    $previousDataMode = $env:VITE_DATA_MODE
+    $previousFrontApiBaseUrl = $env:VITE_FRONT_API_BASE_URL
+    $previousFrontApiTimeoutMs = $env:VITE_FRONT_API_TIMEOUT_MS
+    try {
+        $env:VITE_DATA_MODE = "bff"
+        $env:VITE_FRONT_API_BASE_URL = "/front-api/v1"
+        if (-not $env:VITE_FRONT_API_TIMEOUT_MS) { $env:VITE_FRONT_API_TIMEOUT_MS = "12000" }
+        Invoke-DeskCommand -FilePath $npm -Arguments @("--prefix", "apps/desk-control-plane", "run", "build") -WorkingDirectory $ProjectRoot
+    } finally {
+        $env:VITE_DATA_MODE = $previousDataMode
+        $env:VITE_FRONT_API_BASE_URL = $previousFrontApiBaseUrl
+        $env:VITE_FRONT_API_TIMEOUT_MS = $previousFrontApiTimeoutMs
+    }
 }
 
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
@@ -86,7 +101,24 @@ New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $releaseRoot "front") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $releaseRoot "app\mcp_gpt_desk") -Force | Out-Null
 
-Copy-Item -Path (Join-Path $ProjectRoot "dist\*") -Destination (Join-Path $releaseRoot "front") -Recurse -Force
+function Copy-DeskSharedPackages {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceRoot,
+        [Parameter(Mandatory = $true)][string]$DestinationRoot
+    )
+
+    New-Item -ItemType Directory -Path $DestinationRoot -Force | Out-Null
+    Get-ChildItem -LiteralPath $SourceRoot -File -Recurse |
+        Where-Object { $_.FullName -notmatch '[\\/]node_modules[\\/]' } |
+        ForEach-Object {
+            $relative = $_.FullName.Substring($SourceRoot.Length + 1)
+            $target = Join-Path $DestinationRoot $relative
+            New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+            Copy-Item -LiteralPath $_.FullName -Destination $target -Force
+        }
+}
+
+Copy-Item -Path (Join-Path $frontDist "*") -Destination (Join-Path $releaseRoot "front") -Recurse -Force
 foreach ($path in @("src", "scripts", "contracts", "schemas")) {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "mcp_gpt_desk\$path") -Destination (Join-Path $releaseRoot "app\mcp_gpt_desk\$path") -Recurse -Force
 }
@@ -94,16 +126,13 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot "mcp_gpt_desk\package.json") -Des
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "mcp_gpt_desk\package-lock.json") -Destination (Join-Path $releaseRoot "app\mcp_gpt_desk\package-lock.json") -Force
 $packagesSource = Join-Path $ProjectRoot "packages"
 $packagesTarget = Join-Path $releaseRoot "app\packages"
-New-Item -ItemType Directory -Path $packagesTarget -Force | Out-Null
-Get-ChildItem -LiteralPath $packagesSource -File -Recurse |
-    Where-Object { $_.FullName -notmatch '[\\/]node_modules[\\/]' } |
-    ForEach-Object {
-        $relative = $_.FullName.Substring($packagesSource.Length + 1)
-        $target = Join-Path $packagesTarget $relative
-        New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
-        Copy-Item -LiteralPath $_.FullName -Destination $target -Force
-    }
-foreach ($path in @("config", "deploy", "integrations", "infra\postgres\init")) {
+Copy-DeskSharedPackages -SourceRoot $packagesSource -DestinationRoot $packagesTarget
+# Root-level operational scripts are executed from the release root on the VPS
+# and keep the same relative imports as in the source tree:
+# scripts/stack/*.mjs -> ../../packages/<package>/index.js.
+# Keep a second copy at the root so post-deploy gates remain self-contained.
+Copy-DeskSharedPackages -SourceRoot $packagesSource -DestinationRoot (Join-Path $releaseRoot "packages")
+foreach ($path in @("config", "deploy", "integrations", "infra\postgres\init", "scripts\stack", "scripts\runtime")) {
     $target = Join-Path $releaseRoot $path
     New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $ProjectRoot $path) -Destination $target -Recurse -Force
@@ -138,7 +167,7 @@ $manifest = [ordered]@{
     git_commit = $commit
     dirty = [bool]$dirty
     node_minimum = "20.6.0"
-    release_profile = "deterministic_strategy_v5_frozen"
+    release_profile = $ReleaseProfile
     strategy_contract_lock = $strategyLock
     execution_policy_lock = $executionPolicyLock
     files = $files

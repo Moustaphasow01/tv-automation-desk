@@ -103,6 +103,7 @@ import {
   liveBundleReceiptText,
   liveClaimReceiptText,
 } from "./live-bundle-view.js";
+import { createAgentRuntimeAdminToolDefinitions } from "./agent-runtime-admin-tools.js";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const executionModeSchema = z.enum(["live", "paper", "replay", "backtest"]);
@@ -639,7 +640,6 @@ const saveReplayMonitorInputSchema = {
   ...saveReplayMonitorV2InputSchema,
 };
 const simulateReplayIntervalInputSchema = {
-
   type: "object",
   properties: {
     backtest_id: { type: "string" },
@@ -706,9 +706,9 @@ const replayOnlyWorkflowsJson = {
   maxItems: 2,
   default: ["REPLAY_MASTER", "REPLAY_MONITOR"],
 };
-
 export function createDeskToolRegistry(store) {
   return [
+    ...createAgentRuntimeAdminToolDefinitions(store).map((definition) => createTool(store, definition)),
     createTool(store, {
       name: "desk_ping",
       title: "Desk ping",

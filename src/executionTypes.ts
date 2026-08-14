@@ -92,8 +92,28 @@ export interface TradeDecision { trade_decision_id: string; source_document_id: 
 export interface ContractSizing { risk_percent: number; rounding_mode: "ceil"; capital: number; risk_budget: number; risk_points: number; point_value: number; risk_per_contract: number; raw_contracts: number; contracts: number; actual_risk: number; actual_risk_percent: number; rounding_excess: number; rounding_excess_percent: number; exceeds_risk_target: boolean; }
 export interface OrderIntent { order_intent_id: string; trade_decision_id: string; status: string; approval_status: string; side: string; order_type: string; quantity: number; limit_price: number | null; expires_at: string | null; instrument_code?: string; broker_symbol?: string; strategy_id?: string; trading_date?: string; session?: string; raw?: { position_sizing?: ContractSizing }; }
 export interface BrokerOrder { broker_order_id: string; broker_order_ref: string | null; status: string; side: string; order_type: string; quantity: number; limit_price: number | null; updated_at: string; }
-export interface BrokerTrade { trade_id: string; status: string; side: string; quantity_open: number; avg_entry_price: number | null; realized_pnl: number | null; unrealized_pnl: number | null; updated_at: string; }
-export interface BrokerReconciliation { reconciliation_run_id: string; status: string; mismatch_count: number; started_at: string; completed_at: string | null; }
+export interface BrokerTrade {
+  trade_id: string;
+  status: string;
+  side: string;
+  quantity_open: number;
+  avg_entry_price: number | null;
+  realized_pnl: number | null;
+  unrealized_pnl: number | null;
+  updated_at: string;
+  broker_account_id?: string;
+  broker_contract_id?: string;
+  raw?: Record<string, unknown>;
+}
+export interface BrokerReconciliation {
+  reconciliation_run_id: string;
+  status: string;
+  mismatch_count: number;
+  started_at: string;
+  completed_at: string | null;
+  mismatches?: Array<Record<string, unknown>>;
+  metadata?: Record<string, unknown>;
+}
 export interface BrokerManagementIntent { management_intent_id: string; trade_id: string; source_document_id: string; source_action: string; action: "move_stop" | "reduce_position" | "close_position"; status: string; approval_status: string; expected_trade_revision: number; requested_quantity: number | null; requested_stop_price: number | null; reason: string; expires_at: string; instrument_code: string; broker_symbol: string; trade_side: string; quantity_open: number; trade_revision: number; guard_evidence?: { violations?: Array<{ code: string }> }; }
 export interface BrokerManagementApproval { management_approval_id: string; management_intent_id: string; status: string; actor: string; reason: string; created_at: string; }
 export interface BrokerManagementOutbox { management_outbox_id: string; management_intent_id: string; status: string; attempt_count: number; delivered_at: string | null; acknowledged_at: string | null; last_error: string | null; }

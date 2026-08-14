@@ -23,6 +23,11 @@ test("broker execution environment is fail-closed by default", () => {
   assert.equal(env.maxContracts, 0);
   assert.equal(env.accountSnapshotStaleSeconds, 60);
   assert.equal(env.allowLiveAccount, false);
+  assert.equal(env.legacyPositionExecutionEnabled, false);
+  assert.equal(
+    brokerExecutionEnvironment({ DESK_LEGACY_POSITION_EXECUTION_ENABLED: "true" }).legacyPositionExecutionEnabled,
+    true,
+  );
 });
 
 test("contract sizing risks 0.25 percent and rounds contracts upward", () => {
@@ -108,6 +113,46 @@ test("risk policy blocks the seeded configuration on every safety layer", () => 
   assert.ok(risk.violations.some((rule) => rule.code === "ENV_EXECUTION_ENABLED"));
   assert.ok(risk.violations.some((rule) => rule.code === "NO_EXECUTION_LOCK"));
   assert.ok(risk.violations.some((rule) => rule.code === "ACCOUNT_WRITABLE"));
+});
+
+test("manual Telegram execution can create an intent while broker transport stays unavailable", () => {
+  const decision = materializeTradeDecision({ position: paperPosition(), now });
+  const environment = brokerExecutionEnvironment({
+    DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED: "true",
+    DESK_BROKER_EXECUTION_ENABLED: "false",
+    DESK_NINJA_BRIDGE_MODE: "disabled",
+    DESK_NINJA_KILL_SWITCH: "true",
+    DESK_NINJA_MAX_CONTRACTS: "2",
+    DESK_NINJA_ACCOUNT_ALLOWLIST: "ninjatrader_paper_local",
+    DESK_NINJA_ALLOWED_INSTRUMENTS: "MNQ,MES",
+  });
+  const risk = evaluateBrokerPolicy({
+    decision,
+    provider: { broker_provider_code: "ninjatrader", enabled: true },
+    account: { broker_account_id: "ninjatrader_paper_local", environment: "preprod", mode: "paper", read_only: true, order_submission_enabled: false, max_contracts: 2 },
+    contract: { broker_contract_id: "nt:mnq", instrument_code: "MNQ", active: true, tick_size: 0.25, point_value: 2, expiry_date: "2026-09-18" },
+    policy: { enabled: true, allowed_accounts: ["ninjatrader_paper_local"], allowed_instruments: ["MNQ", "MES"], allowed_sessions: ["ny_open"], max_contracts: 2, max_daily_loss: 500, min_reward_risk: 2, require_operator_approval: false, execution_authority_mode: "auto", risk_per_trade_pct: 0.25 },
+    bridge: { status: "read_only", last_seen_at: "2026-07-22T13:00:00.000Z", account_name: "Sim101", ninja_connected: false, ati_enabled: false },
+    locks: [{ execution_lock_id: "global_default_kill_switch", scope_type: "global", scope_value: "*", locked: true, reason: "ENGINE_V5_VALIDATION_HOLD" }],
+    existingTrades: [],
+    accountSnapshot: { cash_value: 16_000, realized_pnl: -10, captured_at: now },
+    environment,
+    now,
+  });
+  assert.equal(risk.pass, true, JSON.stringify(risk.violations));
+  assert.equal(risk.metrics.manual_telegram_execution, true);
+  assert.equal(risk.rules.find((rule) => rule.code === "NO_EXECUTION_LOCK")?.details.manual_telegram_execution, true);
+  assert.equal(risk.rules.find((rule) => rule.code === "BRIDGE_CONNECTED")?.details.manual_telegram_execution, true);
+  const intent = createOrderIntent({
+    decision,
+    riskCheck: { ...risk, risk_check_id: "risk_manual_telegram" },
+    account: { broker_account_id: "ninjatrader_paper_local" },
+    contract: { broker_contract_id: "nt:mnq", broker_symbol: "MNQ 09-26" },
+    now,
+  });
+  assert.equal(intent.payload.action, "BUY");
+  assert.equal(intent.payload.protective_stop, 29980);
+  assert.equal(intent.payload.profit_target, 30040);
 });
 
 test("approved-only Sim101 configuration can pass all deterministic gates", () => {

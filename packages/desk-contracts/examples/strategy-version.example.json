@@ -1,0 +1,16 @@
+{
+  "schema_version": "strategy_version_v1",
+  "strategy_version_id": "3b2f1a90-6e3d-4b8e-9d1a-2f6c8e0a9b11",
+  "strategy_definition_id": "8f14e45f-ceea-467e-add4-8c1f9f0d2a1b",
+  "version_label": "1.2.0",
+  "status": "VALIDATED",
+  "dsl_source_hash": "sha256:c8fc3d66a626ef2abab169b31f9f74bd44f17e7d1fe4ed385277a50acbfc9a3b",
+  "compiled_artifact_ref": "artifacts/strategy-versions/3b2f1a90.plan.json",
+  "compiled_artifact_hash": "sha256:ce3f693af8fc708c52106bb98ff2fe31d91a1dc9d51199da3415f0c1dc18b8f4",
+  "validated_metrics_ref": "6c1a3e00-1111-4a2b-9c3d-abcdef012345",
+  "runtime_contract_bundle_version": "engine=5.4.0,catalog=v1-2",
+  "metadata": {
+    "compiler": "strategy-dsl-v1"
+  },
+  "created_at": "2026-08-07T09:10:00.000Z"
+}

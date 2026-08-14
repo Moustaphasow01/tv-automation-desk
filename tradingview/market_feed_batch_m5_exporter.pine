@@ -119,14 +119,26 @@ c14 = f_candle("AAPL", "AAPL", "NASDAQ:AAPL", s14)
 s15 = request.security("NASDAQ:MSFT", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
 c15 = f_candle("MSFT", "MSFT", "NASDAQ:MSFT", s15)
 
-s16 = request.security("NASDAQ:TSLA", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-c16 = f_candle("TSLA", "TSLA", "NASDAQ:TSLA", s16)
+s16 = request.security("NASDAQ:AMZN", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c16 = f_candle("AMZN", "AMZN", "NASDAQ:AMZN", s16)
 
-s17 = request.security("NASDAQ:SMH", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-c17 = f_candle("SMH", "SMH", "NASDAQ:SMH", s17)
+s17 = request.security("NASDAQ:META", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c17 = f_candle("META", "META", "NASDAQ:META", s17)
 
-s18 = request.security("NASDAQ:SOXX", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-c18 = f_candle("SOXX", "SOXX", "NASDAQ:SOXX", s18)
+s18 = request.security("NASDAQ:GOOGL", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c18 = f_candle("GOOGL", "GOOGL", "NASDAQ:GOOGL", s18)
+
+s19 = request.security("NASDAQ:AVGO", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c19 = f_candle("AVGO", "AVGO", "NASDAQ:AVGO", s19)
+
+s20 = request.security("NASDAQ:TSLA", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c20 = f_candle("TSLA", "TSLA", "NASDAQ:TSLA", s20)
+
+s21 = request.security("NASDAQ:SMH", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c21 = f_candle("SMH", "SMH", "NASDAQ:SMH", s21)
+
+s22 = request.security("NASDAQ:SOXX", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c22 = f_candle("SOXX", "SOXX", "NASDAQ:SOXX", s22)
 
 payload = "{"
 payload := payload + '"source":"tradingview_webhook",'
@@ -153,6 +165,10 @@ payload := payload + "," + c15
 payload := payload + "," + c16
 payload := payload + "," + c17
 payload := payload + "," + c18
+payload := payload + "," + c19
+payload := payload + "," + c20
+payload := payload + "," + c21
+payload := payload + "," + c22
 payload := payload + ']'
 payload := payload + "}"
 

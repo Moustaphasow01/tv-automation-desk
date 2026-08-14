@@ -31,6 +31,7 @@ if ($Stage -eq "Build") {
         ProjectRoot = $ProjectRoot
         OutputRoot = $OutputRoot
         Version = $ReleaseName
+        ReleaseProfile = "deterministic_strategy_v5_frozen"
     }
     if ($SkipTests) { $buildParameters["SkipTests"] = $true }
     if ($AllowDirty) { $buildParameters["AllowDirty"] = $true }

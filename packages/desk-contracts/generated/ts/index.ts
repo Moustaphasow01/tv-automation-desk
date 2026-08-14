@@ -3206,6 +3206,9 @@ export type ContractRegistry = {
   "worker_mission_contract": unknown;
   "dashboard_state_contract": unknown;
   "front_projection_contract": unknown;
+  "strategy_definition_contract": unknown;
+  "strategy_version_contract": unknown;
+  "strategy_instance_contract": unknown;
 };
   "lifecycle_policy": {
   "statuses": ["draft","active","archived"];
@@ -4952,6 +4955,66 @@ export type SimulationStep = {
   "summary"?: string;
 };
   "notes"?: string;
+};
+
+export type StrategyDefinitionV1 = {
+  "schema_version": "strategy_definition_v1";
+  "strategy_definition_id": string;
+  "external_key"?: unknown;
+  "name": string;
+  "description"?: unknown;
+  "owner": string;
+  "asset_class"?: unknown;
+  "default_instruments"?: string[];
+  "tags"?: string[];
+  "metadata"?: {
+  [key: string]: unknown;
+};
+  "created_at": string;
+  "updated_at"?: unknown;
+};
+
+export type StrategyInstanceV1 = {
+  "schema_version": "strategy_instance_v1";
+  "strategy_instance_id": string;
+  "strategy_version_id": string;
+  "runtime_state": "CREATED" | "STARTING" | "RUNNING" | "PAUSED" | "STOPPING" | "STOPPED" | "FAILED_TO_START" | "ERRORED";
+  "execution_mode": "SHADOW" | "PAPER" | "LIVE";
+  "account_scope"?: unknown;
+  "instrument_scope"?: string[];
+  "session_scope"?: string[];
+  "risk_budget_ref"?: unknown;
+  "triple_lock_validated": boolean;
+  "operator_approval_id"?: unknown;
+  "metadata"?: {
+  [key: string]: unknown;
+};
+  "created_at": string;
+  "updated_at"?: unknown;
+  "last_heartbeat_at"?: unknown;
+  "started_at"?: unknown;
+  "stopped_at"?: unknown;
+  "failed_at"?: unknown;
+};
+
+export type StrategyVersionV1 = {
+  "schema_version": "strategy_version_v1";
+  "strategy_version_id": string;
+  "strategy_definition_id": string;
+  "version_label": string;
+  "status": "DRAFT" | "IN_SIMULATION" | "VALIDATED" | "PUBLISHED" | "DEPRECATED";
+  "dsl_source_hash": string;
+  "compiled_artifact_ref": string;
+  "compiled_artifact_hash"?: unknown;
+  "validated_metrics_ref"?: unknown;
+  "runtime_contract_bundle_version": string;
+  "metadata"?: {
+  [key: string]: unknown;
+};
+  "created_at": string;
+  "updated_at"?: unknown;
+  "published_at"?: unknown;
+  "deprecated_at"?: unknown;
 };
 
 export type WorkerMission = {

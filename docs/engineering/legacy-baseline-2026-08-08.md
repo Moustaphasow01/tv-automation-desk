@@ -38,6 +38,15 @@ Cette baseline autorise une migration progressive ; elle n'autorise ni aggravati
 | `broker-execution-service.js` | 948 |
 | `telegram-alert-service.js` | 895 |
 
+La baseline exhaustive et exécutable des budgets de lignes, fonctions longues, complexité, duplication et fichiers potentiellement morts est `docs/engineering/static-quality-baseline.json`.
+Elle est contrôlée par `npm run guard:static-quality` et empêche l'aggravation des compteurs suivants au 2026-08-08 :
+
+- 39 fichiers de production au-dessus de 600 lignes ;
+- 228 fonctions au-dessus de 60 lignes ;
+- 565 fonctions au-dessus du seuil de complexité cyclomatique 15 ;
+- 49 blocs dupliqués détectés ;
+- 11 fichiers potentiellement morts.
+
 ## Frontend au-dessus de 600 lignes
 
 - `src/operationsTypes.ts` : 1071 lignes.
@@ -51,6 +60,14 @@ Cette baseline autorise une migration progressive ; elle n'autorise ni aggravati
 - Les prompts Live/Replay sont versionnés/hashés mais construits en dur dans plusieurs fichiers.
 - Les fixtures front trouvées sont confinées aux tests ; aucun mock métier de production n'a été détecté par le scan initial.
 - Les tests sont nombreux, mais les frontières, tailles, imports, dépendances et TODO ne sont pas encore tous contrôlés automatiquement.
+
+## Classification TD2-003
+
+Le rapport `docs/engineering/legacy-and-dependency-classification-2026-08-08.md` classe les 24 scripts non référencés par scan statique et les dépendances vulnérables détectées.
+
+- 24 scripts non référencés ne sont pas supprimés : ils sont classés comme outils opérateur, réparation replay, backfill/import manuel ou diagnostic IA.
+- `mcp_gpt_desk` est corrigé de 1 vulnérabilité high transitive `ip-address` et 1 vulnérabilité moderate `hono` via overrides ciblés.
+- Les vulnérabilités modérées React Router du front sont suivies par le ticket Jira `TD2-140` / `TD2-SEC-001`, car la correction impose une migration majeure v7.
 
 ## Politique de convergence
 

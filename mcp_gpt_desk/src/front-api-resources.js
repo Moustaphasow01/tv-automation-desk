@@ -1,10 +1,13 @@
 import { z } from "zod";
+import { SystemClock } from "@tv-automation/desk-time";
 import {
   loadFrontDailyMacroSource,
   loadFrontMarketSnapshot,
   normalizeFrontApiScope,
   projectDeskSession,
 } from "./front-session-projection.js";
+
+const FRONT_API_RESOURCE_CLOCK = new SystemClock();
 
 const scopeSchema = z.object({
   strategyId: z.string().min(1),
@@ -278,7 +281,7 @@ export async function loadFrontApiResource(store, pathname, scopeInput = {}) {
 
 export async function loadFrontPerformanceCalendarResource(store, scopeInput = {}) {
   const context = await liveContext(store, scopeInput);
-  const now = new Date();
+  const now = new Date(frontApiResourceEpochMs());
   const year = Number(scopeInput.year || now.getUTCFullYear());
   const month = Number(scopeInput.month || now.getUTCMonth() + 1);
   const strategyId = String(scopeInput.strategy_id || "ny_open_1530");
@@ -493,24 +496,28 @@ function hasNearMacroEvent(eventsValue, asOfUtc) {
   const nowMs = Date.parse(asOfUtc || "");
   if (!Number.isFinite(nowMs)) return false;
   return (Array.isArray(eventsValue) ? eventsValue : []).some((event) => {
-    const timestamp = event?.scheduled_at_paris || event?.timestamp_paris || event?.published_at_paris || event?.datetime || event?.timestamp;
+    const timestamp = firstEventTimestamp(event);
     const eventMs = Date.parse(timestamp || "");
     const deltaMs = eventMs - nowMs;
     return Number.isFinite(eventMs) && deltaMs >= 0 && deltaMs <= 90 * 60 * 1000;
   });
 }
 
+function firstEventTimestamp(event = {}) {
+  return event.scheduled_at_paris || event.timestamp_paris || event.published_at_paris || event.datetime || event.timestamp;
+}
+
 function cachedLiveContext(store, key, read) {
   if (!store) return read();
   const cache = liveContextCacheFor(store);
-  const now = Date.now();
+  const now = frontApiResourceEpochMs();
   const existing = cache.get(key);
   if (existing && existing.expiresAt > now) return existing.promise;
   const entry = { expiresAt: Number.POSITIVE_INFINITY, promise: null };
   entry.promise = Promise.resolve()
     .then(read)
     .then((context) => {
-      if (cache.get(key) === entry) entry.expiresAt = Date.now() + LIVE_CONTEXT_CACHE_TTL_MS;
+      if (cache.get(key) === entry) entry.expiresAt = frontApiResourceEpochMs() + LIVE_CONTEXT_CACHE_TTL_MS;
       return context;
     })
     .catch((error) => {
@@ -531,7 +538,7 @@ function liveContextCacheFor(store) {
   return cache;
 }
 
-function pruneLiveContextCache(cache, now = Date.now()) {
+function pruneLiveContextCache(cache, now = frontApiResourceEpochMs()) {
   if (cache.size <= 100) return;
   for (const [key, entry] of cache) {
     if (entry.expiresAt <= now) cache.delete(key);
@@ -540,6 +547,8 @@ function pruneLiveContextCache(cache, now = Date.now()) {
     cache.delete(cache.keys().next().value);
   }
 }
+
+function frontApiResourceEpochMs() { return FRONT_API_RESOURCE_CLOCK.now().epochMs; }
 
 function liveContextCacheKey(input = {}, scope = {}) {
   const explicitAsOf = Boolean(input.as_of_utc);

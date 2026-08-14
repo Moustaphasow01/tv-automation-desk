@@ -9,6 +9,9 @@ import {
   isCodexReasoningEffort,
   loadCodexRuntimeSettings,
 } from "./codex-runtime-settings.js";
+import { clockEpochMs as frontOperationsEpochMs } from "./front-runtime-clock.js";
+import { createSimulationRunFrontApi } from "./simulation-run-front-api.js";
+import { createReplayComparisonProjector, replayIdentitySetForRun } from "./front-operations-replay-comparison.js";
 
 const C = DESK_COLLECTIONS;
 const TERMINAL = new Set(["DONE", "COMPLETED", "DAY_END", "FAILED", "CANCELLED", "ARCHIVED", "RESOLVED"]);
@@ -46,19 +49,26 @@ const DEFAULT_OBSERVABILITY_POLICY = Object.freeze({
 });
 
 export const OPERATIONS_CONTRACT_VERSION = "1.0.0";
-
 export class FrontOperationsService {
   constructor({ persistence, clock, host }) {
     this.persistence = persistence;
     this.clock = clock;
     this.host = host;
+    this.simulationRunFront = createSimulationRunFrontApi({ host, clock });
+    this.replayComparison = createReplayComparisonProjector({
+      operationsService: this,
+      persistence,
+      host,
+      simulationRunFront: this.simulationRunFront,
+      helpers: replayComparisonHelpers(),
+    });
     this.summaryCache = null;
     attachListCacheInvalidation(this.persistence);
   }
 
   async getOperationsSummary(filters = {}) {
     const cacheKey = canonicalSha256(normalizedFilters(filters));
-    const now = Date.now();
+    const now = frontOperationsEpochMs(this.clock);
     if (SUMMARY_CACHE_TTL_MS && this.summaryCache?.key === cacheKey && this.summaryCache.expiresAt > now) {
       return this.summaryCache.promise;
     }
@@ -69,7 +79,7 @@ export class FrontOperationsService {
     try {
       const summary = await promise;
       if (SUMMARY_CACHE_TTL_MS && this.summaryCache?.promise === promise) {
-        this.summaryCache = { key: cacheKey, expiresAt: Date.now() + SUMMARY_CACHE_TTL_MS, promise: Promise.resolve(summary) };
+        this.summaryCache = { key: cacheKey, expiresAt: frontOperationsEpochMs(this.clock) + SUMMARY_CACHE_TTL_MS, promise: Promise.resolve(summary) };
       }
       return summary;
     } catch (error) {
@@ -299,11 +309,12 @@ export class FrontOperationsService {
     if (!isReplayLabRecord(state.selected_backtest, "all")) {
       throw notFound("REPLAY_NOT_FOUND", `Replay introuvable : ${runId}`);
     }
-    const [timeline, gpt, priceSeries, positions] = await Promise.all([
+    const [timeline, gpt, priceSeries, positions, simulationEvidence] = await Promise.all([
       this.getReplayTimeline(runId),
       this.listGptProcesses({ runId, limit: 500 }),
       this.getReplayPriceSeries(runId),
       listForReplay(this.persistence, C.deskReplayPositions, runId),
+      this.simulationRunFront.findSimulationEvidenceForReplay(state.selected_backtest),
     ]);
     const run = state.selected_backtest;
     return contract("DeskReplayRunDetail", {
@@ -313,7 +324,24 @@ export class FrontOperationsService {
       priceSeries: priceSeries.items,
       gptProcesses: gpt.items,
       conclusions: gpt.items.filter((item) => item.conclusion).map((item) => ({ processId: item.id, conclusion: item.conclusion, at: item.completedAt })),
+      simulationEvidence,
     });
+  }
+
+  async listSimulationRuns(filters = {}) {
+    return this.simulationRunFront.listSimulationRuns(filters);
+  }
+
+  async getSimulationRun(simulationRunId) {
+    return this.simulationRunFront.getSimulationRun(simulationRunId);
+  }
+
+  async getSimulationRunArtifacts(simulationRunId, filters = {}) {
+    return this.simulationRunFront.getSimulationRunArtifacts(simulationRunId, filters);
+  }
+
+  async compareSimulationRuns(ids = []) {
+    return this.simulationRunFront.compareSimulationRuns(ids);
   }
 
   async getReplayDays(runId) {
@@ -412,11 +440,13 @@ export class FrontOperationsService {
   }
 
   async listGptProcesses(filters = {}) {
-    const runs = await list(this.persistence, C.deskReplayRuns);
-    const replayIds = new Set(replayLabRecords(runs, filters.runId ? "all" : "current").map((run) => run.backtest_id || run.replay_run_id || run.run_id));
+    const scopedRunId = stringOrNull(filters.runId || filters.run_id);
+    const replayIds = scopedRunId
+      ? await replayIdentitySetForRun({ persistence: this.persistence, runId: scopedRunId, helpers: replayComparisonHelpers() })
+      : new Set(replayLabRecords(await list(this.persistence, C.deskReplayRuns), "current").flatMap(replayIdentityValues));
     const itemFilters = [];
-    if (filters.runId) itemFilters.push({ field: "backtest_id", operator: "==", value: filters.runId });
-    if (filters.includeHistory !== true && !filters.runId) {
+    if (scopedRunId) itemFilters.push({ field: "backtest_id", operator: "==", value: scopedRunId });
+    if (filters.includeHistory !== true && !scopedRunId) {
       itemFilters.push({ field: "operational_visibility", operator: "!=", value: "history" });
     }
     const items = await projectDocuments(this.persistence, C.deskAgentWorkItems, [
@@ -464,7 +494,7 @@ export class FrontOperationsService {
       ? { ...filters, includeHistory: true }
       : filters;
     const normalized = operationalRecords(relevantItems, visibilityFilters)
-      .filter((item) => !filters.runId || item.backtest_id === filters.runId)
+      .filter((item) => !scopedRunId || item.backtest_id === scopedRunId)
       .filter((item) => !filters.status || normalizeStatus(item.status) === filters.status)
       .map((item) => normalizeGptProcess(
         item,
@@ -867,19 +897,7 @@ export class FrontOperationsService {
   }
 
   async compareReplays(ids = []) {
-    const unique = [...new Set(ids.filter(Boolean))].slice(0, 8);
-    const details = await Promise.all(unique.map((id) => this.getReplayRun(id)));
-    const baselineR = firstNumber(details[0]?.run?.metrics?.totalR) || 0;
-    const rows = details.map((detail, index) => buildReplayComparisonRow(detail, unique[index], baselineR, index === 0));
-    const rankedIds = [...rows].sort((a, b) => b.metrics.resultR - a.metrics.resultR).map((row) => row.id);
-    const items = rows.map((row) => ({ ...row, rank: rankedIds.indexOf(row.id) + 1 }));
-    return contract("DeskReplayComparison", {
-      ids: unique,
-      baselineRunId: unique[0] || null,
-      summary: buildReplayComparisonSummary(items),
-      items,
-      dimensions: ["resultR", "deltaR", "progress", "steps", "gptProcesses", "telemetryCoverage", "timelineEvents", "riskFlags"],
-    });
+    return this.replayComparison.compare(ids);
   }
 
   async listIncidents(filters = {}) {
@@ -1463,105 +1481,6 @@ export class FrontOperationsService {
     }).catch(() => undefined);
     invalidateListCache(this.persistence);
   }
-}
-
-function buildReplayComparisonRow(detail = {}, requestedId, baselineR = 0, baseline = false) {
-  const run = detail.run || {};
-  const gptProcesses = detail.gptProcesses || [];
-  const timeline = detail.timeline || [];
-  const priceSeries = detail.priceSeries || [];
-  const resultR = firstNumber(run.metrics?.totalR) || 0;
-  const stepsDone = Number(run.metrics?.stepsDone || 0);
-  const stepsTotal = Number(run.metrics?.stepsTotal || 0);
-  const telemetryAvailable = gptProcesses.filter((item) => item.telemetry?.available).length;
-  const gptFailed = gptProcesses.filter((item) => item.status === "failed" || item.status === "blocked").length;
-  const gptWaiting = gptProcesses.filter((item) => item.status === "waiting_gpt").length;
-  const measuredCost = sum(gptProcesses.map((item) => item.telemetry?.costUsd).filter((value) => value !== null && value !== undefined));
-  const totalTokens = sum(gptProcesses.map((item) => item.telemetry?.totalTokens).filter((value) => value !== null && value !== undefined));
-  const decisions = timeline.filter((item) => item.layer === "decision" || item.decision);
-  const conclusion = (detail.conclusions || []).at(-1) || gptProcesses.find((item) => item.conclusion) || null;
-  const riskFlags = [
-    run.status === "failed" ? "RUN_FAILED" : null,
-    run.status === "blocked" ? "RUN_BLOCKED" : null,
-    run.error ? "RUN_ERROR" : null,
-    gptFailed ? "GPT_FAILURE" : null,
-    gptWaiting ? "WAITING_GPT" : null,
-    gptProcesses.length && telemetryAvailable < gptProcesses.length ? "TELEMETRY_PARTIAL" : null,
-  ].filter(Boolean);
-  const firstPrice = priceSeries[0] || null;
-  const lastPrice = priceSeries.at(-1) || null;
-  return {
-    id: run.sourceId || requestedId,
-    baseline,
-    rank: null,
-    run,
-    summary: detail.canonicalState?.summary_stats || run.metrics || {},
-    metrics: {
-      resultR: roundPerformance(resultR),
-      deltaR: roundPerformance(resultR - baselineR),
-      progress: Number(run.progress || 0),
-      stepsDone,
-      stepsTotal,
-      stepCompletionPct: stepsTotal ? Math.round((stepsDone / stepsTotal) * 100) : 0,
-      gptProcesses: gptProcesses.length,
-      gptWaiting,
-      gptFailed,
-      telemetryAvailable,
-      telemetryCoveragePct: gptProcesses.length ? Math.round((telemetryAvailable / gptProcesses.length) * 100) : null,
-      costUsd: telemetryAvailable ? roundPerformance(measuredCost, 4) : null,
-      totalTokens: telemetryAvailable ? totalTokens : null,
-      timelineEvents: timeline.length,
-      decisions: decisions.length,
-      pricePoints: priceSeries.length,
-      durationMs: run.durationMs || null,
-    },
-    conclusion: conclusion ? {
-      processId: conclusion.processId || conclusion.id || null,
-      runId: conclusion.runId || run.sourceId || null,
-      conclusion: conclusion.conclusion || null,
-      decision: conclusion.decision || null,
-      at: conclusion.at || conclusion.completedAt || null,
-    } : null,
-    riskFlags,
-    priceRange: {
-      from: firstPrice?.time || null,
-      to: lastPrice?.time || null,
-      firstClose: firstPrice?.close ?? null,
-      lastClose: lastPrice?.close ?? null,
-    },
-    timelineSample: timeline.slice(-5),
-    gptProcesses,
-    conclusions: detail.conclusions || [],
-  };
-}
-
-function buildReplayComparisonSummary(items = []) {
-  const sorted = [...items].sort((a, b) => b.metrics.resultR - a.metrics.resultR);
-  const best = sorted[0] || null;
-  const worst = sorted.at(-1) || null;
-  const results = items.map((item) => item.metrics.resultR);
-  const telemetryAvailable = sum(items.map((item) => item.metrics.telemetryAvailable || 0));
-  const gptProcesses = sum(items.map((item) => item.metrics.gptProcesses || 0));
-  return {
-    count: items.length,
-    baselineRunId: items[0]?.id || null,
-    bestRunId: best?.id || null,
-    worstRunId: worst?.id || null,
-    bestR: best ? best.metrics.resultR : 0,
-    worstR: worst ? worst.metrics.resultR : 0,
-    averageR: items.length ? roundPerformance(sum(results) / items.length) : 0,
-    spreadR: best && worst ? roundPerformance(best.metrics.resultR - worst.metrics.resultR) : 0,
-    completed: items.filter((item) => item.run.status === "completed").length,
-    failed: items.filter((item) => item.run.status === "failed" || item.run.status === "blocked").length,
-    waitingGpt: sum(items.map((item) => item.metrics.gptWaiting || 0)),
-    gptProcesses,
-    telemetryCoveragePct: gptProcesses ? Math.round((telemetryAvailable / gptProcesses) * 100) : null,
-    costUsd: telemetryAvailable ? roundPerformance(sum(items.map((item) => item.metrics.costUsd || 0)), 4) : null,
-    totalTokens: telemetryAvailable ? sum(items.map((item) => item.metrics.totalTokens || 0)) : null,
-    timelineEvents: sum(items.map((item) => item.metrics.timelineEvents || 0)),
-    decisions: sum(items.map((item) => item.metrics.decisions || 0)),
-    riskFlags: [...new Set(items.flatMap((item) => item.riskFlags || []))],
-  };
 }
 
 function normalizeReplayWorkflow(run = {}, workItems = [], errors = [], positions = []) {
@@ -2466,7 +2385,7 @@ function severityRank(value) {
   return value === "critical" ? 2 : value === "warning" ? 1 : 0;
 }
 
-function normalizeIncident(item = {}, kind, events = [], nowMs = Date.now()) {
+function normalizeIncident(item = {}, kind, events = [], nowMs = frontOperationsEpochMs()) {
   const sourceId = item.alert_id || item.error_id || item.audit_id || item.id || hashObject(item).slice(0, 24);
   const sourceCollection = ["alert", "guardrail"].includes(kind) ? C.deskAlerts : kind === "error" ? C.deskErrors : C.deskDataQualityAudits;
   const evidence = item.evidence || null;
@@ -2510,7 +2429,7 @@ function normalizeIncident(item = {}, kind, events = [], nowMs = Date.now()) {
   return enrichIncidentForTriage(incident, nowMs);
 }
 
-function enrichIncidentForTriage(incident, nowMs = Date.now()) {
+function enrichIncidentForTriage(incident, nowMs = frontOperationsEpochMs()) {
   const active = !["resolved", "archived"].includes(incident.lifecycleStatus);
   const sla = incidentSla(incident, nowMs);
   const triage = incidentTriage(incident, sla);
@@ -2524,7 +2443,7 @@ function enrichIncidentForTriage(incident, nowMs = Date.now()) {
   };
 }
 
-function incidentSla(incident = {}, nowMs = Date.now()) {
+function incidentSla(incident = {}, nowMs = frontOperationsEpochMs()) {
   const start = Date.parse(incident.firstObservedAt || incident.createdAt || incident.updatedAt || "");
   const ageMs = Number.isFinite(start) ? Math.max(0, nowMs - start) : null;
   const targetMs = incident.severity === "critical" ? 15 * 60 * 1000
@@ -2976,7 +2895,7 @@ function clearNotification(current, tick, actor, reason) {
   };
 }
 
-function incidentEscalation(incident = {}, epochMs = Date.now()) {
+function incidentEscalation(incident = {}, epochMs = frontOperationsEpochMs()) {
   const lifecycle = normalizeLifecycle(incident.lifecycleStatus);
   const severity = normalizeSeverity(incident.severity);
   const ageMs = Math.max(0, epochMs - Date.parse(incident.firstObservedAt || incident.createdAt || incident.updatedAt || new Date(epochMs).toISOString()));
@@ -4298,6 +4217,26 @@ function accumulatePerformance(points) {
   });
 }
 
+function replayComparisonHelpers() {
+  return {
+    byUpdatedDesc,
+    contract,
+    duration,
+    eventTime,
+    extractConclusion,
+    isReplayLabRecord,
+    listForReplay,
+    normalizeReplayWorkflow,
+    normalizeStatus,
+    observedTelemetry,
+    operationalRecords,
+    projectDocuments,
+    publicError,
+    replayIdentityValues,
+    notFound,
+  };
+}
+
 function buildPerformanceFacets(trades, daily, runs) {
   const dates = [...trades, ...daily, ...runs].map((item) => item.trading_date || item.tradingDate || item.date).filter(Boolean).sort();
   return {
@@ -4458,6 +4397,10 @@ function replayLabRecords(items = [], versionScope = "v4") {
   return (items || []).filter((item) => isReplayLabRecord(item, versionScope));
 }
 
+function replayIdentityValues(item = {}) {
+  return uniqueValues([item.backtest_id, item.replay_run_id, item.run_id, item.id]);
+}
+
 function isReplayLabRecord(item = {}, versionScope = "v4") {
   const isHistory = item.operational_visibility === "history";
   if (isHistory && item.research_visibility && item.research_visibility !== "replay_lab") return false;
@@ -4610,7 +4553,7 @@ async function list(persistence, collection) {
   if (!LIST_CACHE_TTL_MS || !persistence || (typeof persistence !== "object" && typeof persistence !== "function")) {
     return persistence.listDocuments(collection, 1000).catch(() => []);
   }
-  const now = Date.now();
+  const now = frontOperationsEpochMs();
   let cache = LIST_CACHE.get(persistence);
   if (!cache) {
     cache = new Map();
@@ -4624,7 +4567,7 @@ async function list(persistence, collection) {
   const promise = persistence.listDocuments(collection, 1000).catch(() => []);
   cache.set(collection, { expiresAt: now + LIST_CACHE_TTL_MS, promise });
   const items = await promise;
-  cache.set(collection, { expiresAt: Date.now() + LIST_CACHE_TTL_MS, promise: Promise.resolve(items) });
+  cache.set(collection, { expiresAt: frontOperationsEpochMs() + LIST_CACHE_TTL_MS, promise: Promise.resolve(items) });
   return items.slice();
 }
 
@@ -4640,7 +4583,7 @@ async function listCodexWorkerHeartbeats(persistence) {
   return result.rows || [];
 }
 
-function projectCodexWorkerFleet(heartbeats = [], runs = [], nowMs = Date.now()) {
+function projectCodexWorkerFleet(heartbeats = [], runs = [], nowMs = frontOperationsEpochMs()) {
   const recentRuns = [...runs]
     .sort((left, right) => String(right.updated_at_utc || "").localeCompare(String(left.updated_at_utc || "")))
     .slice(0, 20)
@@ -4753,7 +4696,7 @@ async function projectDocuments(persistence, collection, fields, filters = []) {
   if (!LIST_CACHE_TTL_MS || !persistence || (typeof persistence !== "object" && typeof persistence !== "function")) {
     return persistence.queryCollectionDocumentProjections({ collection, fields, filters, limit: 1000 }).catch(() => []);
   }
-  const now = Date.now();
+  const now = frontOperationsEpochMs();
   let cache = LIST_CACHE.get(persistence);
   if (!cache) {
     cache = new Map();
@@ -4767,7 +4710,7 @@ async function projectDocuments(persistence, collection, fields, filters = []) {
   const promise = persistence.queryCollectionDocumentProjections({ collection, fields, filters, limit: 1000 }).catch(() => []);
   cache.set(cacheKey, { expiresAt: now + LIST_CACHE_TTL_MS, promise });
   const items = await promise;
-  cache.set(cacheKey, { expiresAt: Date.now() + LIST_CACHE_TTL_MS, promise: Promise.resolve(items) });
+  cache.set(cacheKey, { expiresAt: frontOperationsEpochMs() + LIST_CACHE_TTL_MS, promise: Promise.resolve(items) });
   return items.slice();
 }
 

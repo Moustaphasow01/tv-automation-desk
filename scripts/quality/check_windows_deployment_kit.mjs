@@ -19,6 +19,7 @@ const required = [
   "deploy/windows/Install-DeskCodex.ps1",
   "deploy/windows/Test-DeskCodexInference.ps1",
   "deploy/windows/Set-DeskAiWorkerMode.ps1",
+  "deploy/windows/Set-DeskAgentRuntimeSupervisorMode.ps1",
   "deploy/windows/Prepare-DeskSim101.ps1",
   "deploy/windows/Invoke-DeskV5FrozenRelease.ps1",
   "deploy/windows/Test-DeskV5FrozenRelease.ps1",
@@ -49,6 +50,7 @@ const required = [
   "deploy/windows/services/DeskReplayPreparation.xml.template",
   "deploy/windows/services/DeskBrokerManagement.xml.template",
   "deploy/windows/services/DeskTelegram.xml.template",
+  "deploy/windows/services/DeskAgentRuntimeSupervisor.xml.template",
   "deploy/windows/services/DeskCodexLive01.xml.template",
   "deploy/windows/services/DeskCodexLive02.xml.template",
   "deploy/windows/services/DeskCodexReplay01.xml.template",
@@ -60,6 +62,12 @@ const required = [
   "infra/postgres/init/019_strategy_v5_risk_guard.sql",
   "infra/postgres/init/020_broker_rounding_risk_policy.sql",
   "infra/postgres/init/021_broker_decision_freshness_policy.sql",
+  "infra/postgres/init/037_agent_runtime_registry.sql",
+  "infra/postgres/init/038_agent_runtime_notifications.sql",
+  "infra/postgres/init/039_agent_conversation_affinity.sql",
+  "infra/postgres/init/040_agent_execution_policy_snapshots.sql",
+  "infra/postgres/init/041_agent_task_recovery.sql",
+  "infra/postgres/init/042_agent_task_run_metrics.sql",
   "mcp_gpt_desk/scripts/seed_contracts.mjs",
   "mcp_gpt_desk/scripts/quiesce_v5_frozen_state.mjs",
   "mcp_gpt_desk/scripts/verify_v5_frozen_state.mjs",
@@ -74,6 +82,16 @@ const required = [
   "mcp_gpt_desk/scripts/run_runtime_maintenance.mjs",
   "mcp_gpt_desk/scripts/run_telegram_alert_worker.mjs",
   "mcp_gpt_desk/scripts/run_desk_ai_worker.mjs",
+  "mcp_gpt_desk/scripts/run_agent_runtime_supervisor.mjs",
+  "mcp_gpt_desk/src/agent-runtime-admin-service.js",
+  "mcp_gpt_desk/src/agent-runtime-admin-tools.js",
+  "mcp_gpt_desk/src/agent-runtime-metrics-postgres.js",
+  "mcp_gpt_desk/src/agent-runtime-postgres-common.js",
+  "mcp_gpt_desk/src/agent-runtime-postgres-repository.js",
+  "mcp_gpt_desk/src/agent-runtime-recovery-postgres.js",
+  "mcp_gpt_desk/src/agent-runtime-scheduler-service.js",
+  "mcp_gpt_desk/src/agent-runtime-supervisor.js",
+  "mcp_gpt_desk/src/agent-runtime-supervisor-host.js",
 ];
 
 const content = new Map();
@@ -94,6 +112,24 @@ for (const expected of [
   "DESK_RUNTIME_PROFILE=standard",
   "DESK_AI_WORKER_MODE=shadow",
   "DESK_AI_WORKER_POLL_MS=15000",
+  "DESK_AGENT_SUPERVISOR_MODE=shadow",
+  "DESK_AGENT_SUPERVISOR_HOST_PLATFORM=windows-service",
+  "DESK_AGENT_WORKER_POOL=live",
+  "DESK_AGENT_POOL_POLICY_JSON=",
+  "DESK_AGENT_SUPERVISOR_POLL_MS=15000",
+  "DESK_AGENT_SUPERVISOR_LEASE_SECONDS=900",
+  "DESK_AGENT_CONVERSATION_PROVIDER=codex",
+  "DESK_AGENT_CONVERSATION_MAX_TURNS=12",
+  "DESK_AGENT_MODEL=codex",
+  "DESK_AGENT_REASONING_EFFORT=xhigh",
+  "DESK_AGENT_TIMEOUT_MS=780000",
+  "DESK_AGENT_TOKEN_BUDGET=0",
+  "DESK_AGENT_MAX_OUTPUT_TOKENS=0",
+  "DESK_AGENT_RETRY_BASE_DELAY_SECONDS=60",
+  "DESK_AGENT_RETRY_MAX_DELAY_SECONDS=900",
+  "DESK_AGENT_RETRY_MULTIPLIER=2",
+  "DESK_AGENT_RETRY_JITTER_SECONDS=0",
+  "DESK_AGENT_SCHEDULER_MODE=disabled",
   "DESK_AI_REPLAY_SELECTOR_MODE=next_ready_config",
   "DESK_AI_REPLAY_WORKER_GROUP=replay-v4",
   "DESK_AI_CONTEXT_DATABASE_URL=postgresql://desk_ai_context:__DESK_DB_CONTEXT_PASSWORD__@127.0.0.1:5432/desk",
@@ -166,14 +202,23 @@ if (!update.includes("maintenance.env") || !update.includes('["DESK_DB_MIGRATION
   violations.push("update_protected_migration_credential_missing");
 }
 const buildRelease = content.get("deploy/windows/Build-DeskRelease.ps1");
-if (!buildRelease.includes('release_profile = "deterministic_strategy_v5_frozen"') || !buildRelease.includes("execution_policy_lock = $executionPolicyLock")) violations.push("v5_frozen_manifest_lock_missing");
+if (
+  !buildRelease.includes('[ValidateSet("standard", "deterministic_strategy_v5_frozen")]')
+  || !buildRelease.includes('$ReleaseProfile = "standard"')
+  || !buildRelease.includes("release_profile = $ReleaseProfile")
+  || !buildRelease.includes("execution_policy_lock = $executionPolicyLock")
+) {
+  violations.push("release_manifest_profile_lock_missing");
+}
+const frozenRelease = content.get("deploy/windows/Invoke-DeskV5FrozenRelease.ps1");
+if (!frozenRelease.includes('ReleaseProfile = "deterministic_strategy_v5_frozen"')) violations.push("v5_frozen_manifest_profile_not_explicit");
 if (!buildRelease.includes('"schemas"')) violations.push("release_archive_mcp_schemas_missing");
 if (!update.includes("KeepFrozen") || !update.includes('"CompleteFrozen"') || !update.includes("KeepAiWorkersDisabled")) violations.push("update_can_reopen_v5_release");
 if (!update.includes("QuiesceFrozenState") || !update.includes("quiesce_v5_frozen_state.mjs") || !update.includes("--require-broker-lock")) violations.push("v5_frozen_quiesce_not_enforced");
 const drain = content.get("deploy/windows/Invoke-DeskDrain.ps1");
 if (!drain.includes('if ($Action -eq "CompleteFrozen")') || !drain.includes("ENGINE_V5_VALIDATION_HOLD")) violations.push("strict_frozen_drain_missing");
 
-for (const name of ["DeskApi", "DeskLiveRuntime", "DeskReplayPreparation", "DeskBrokerManagement", "DeskTelegram", "DeskCodexLive01", "DeskCodexLive02", "DeskCodexReplay01", "DeskCaddy"]) {
+for (const name of ["DeskApi", "DeskLiveRuntime", "DeskReplayPreparation", "DeskBrokerManagement", "DeskTelegram", "DeskAgentRuntimeSupervisor", "DeskCodexLive01", "DeskCodexLive02", "DeskCodexReplay01", "DeskCaddy"]) {
   const xml = content.get(`deploy/windows/services/${name}.xml.template`);
   if (!xml.includes("<startmode>Automatic</startmode>")) violations.push(`service_not_automatic:${name}`);
   if (!xml.includes('<onfailure action="restart"')) violations.push(`service_restart_missing:${name}`);
@@ -199,6 +244,16 @@ if (!aiWorker.includes("replayAdmission")) violations.push("ai_worker_live_prior
 if (aiWorker.includes('heartbeat("disabled"')) {
   violations.push("ai_worker_heartbeat_uses_invalid_database_status");
 }
+const agentSupervisor = content.get("mcp_gpt_desk/scripts/run_agent_runtime_supervisor.mjs");
+if (!agentSupervisor.includes("pg_try_advisory_lock")) violations.push("agent_supervisor_lock_missing");
+if (!agentSupervisor.includes("LISTEN desk_agent_runtime_ready")) violations.push("agent_supervisor_notify_listener_missing");
+if (!agentSupervisor.includes("buildAgentRuntimeSupervisorHostConfig")) violations.push("agent_supervisor_host_config_missing");
+const agentSupervisorHost = content.get("mcp_gpt_desk/src/agent-runtime-supervisor-host.js");
+if (!agentSupervisorHost.includes("DESK_AGENT_WORKER_POOL")) violations.push("agent_supervisor_worker_pool_missing");
+if (!agentSupervisorHost.includes("DESK_AGENT_SUPERVISOR_HOST_PLATFORM")) violations.push("agent_supervisor_host_platform_missing");
+const agentSupervisorService = content.get("mcp_gpt_desk/src/agent-runtime-supervisor.js");
+if (!agentSupervisorService.includes("RUNNER_NOT_CONFIGURED")) violations.push("agent_supervisor_active_runner_guard_missing");
+if (!agentSupervisorService.includes("POOL_CONFIGURATION_REJECTED")) violations.push("agent_supervisor_pool_guard_missing");
 
 const aiMode = content.get("deploy/windows/Set-DeskAiWorkerMode.ps1");
 if (!aiMode.includes('Invoke-DeskCommand -FilePath $codex -Arguments @("login", "status")')) {
@@ -208,7 +263,7 @@ if (!aiMode.includes("DESK_AI_WORKER_MODE")) violations.push("ai_worker_mode_swi
 const installServices = content.get("deploy/windows/Install-DeskServices.ps1");
 if (!installServices.includes("KeepAiWorkersDisabled") || !installServices.includes("StartupType Disabled")) violations.push("frozen_ai_service_disable_missing");
 const frozenReleaseCheck = content.get("deploy/windows/Test-DeskV5FrozenRelease.ps1");
-for (const service of ["DeskFuturesLiveRuntime", "DeskFuturesReplayPreparation", "DeskFuturesBrokerManagement", "DeskFuturesCodexLive01", "DeskFuturesCodexLive02", "DeskFuturesCodexReplay01"]) {
+for (const service of ["DeskFuturesLiveRuntime", "DeskFuturesReplayPreparation", "DeskFuturesBrokerManagement", "DeskFuturesAgentRuntimeSupervisor", "DeskFuturesCodexLive01", "DeskFuturesCodexLive02", "DeskFuturesCodexReplay01"]) {
   if (!installServices.includes(service)) violations.push(`frozen_service_not_disabled:${service}`);
   if (!frozenReleaseCheck.includes(service)) violations.push(`frozen_service_not_verified:${service}`);
 }
@@ -225,6 +280,7 @@ const frozenProducerServices = [
   "DeskFuturesLiveRuntime",
   "DeskFuturesReplayPreparation",
   "DeskFuturesBrokerManagement",
+  "DeskFuturesAgentRuntimeSupervisor",
   "DeskFuturesCodexLive01",
   "DeskFuturesCodexLive02",
   "DeskFuturesCodexReplay01",

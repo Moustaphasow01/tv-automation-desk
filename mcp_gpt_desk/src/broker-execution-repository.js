@@ -1,4 +1,15 @@
-import { calculateTradeOutcome } from "@tv-automation/desk-domain";
+import { materializeTradeOutcome } from "./broker-trade-outcome-repository.js";
+import {
+  latestClosedCandleForIntent as latestTheoreticalClosedCandleForIntent,
+  latestClosedCandleForTrade as latestTheoreticalClosedCandleForTrade,
+  listTheoreticalEntryCandidates as listTheoreticalEntryCandidatesRepository,
+  listTheoreticalOpenTrades as listTheoreticalOpenTradesRepository,
+  recordManualExecutionEvent as recordManualExecutionEventRepository,
+  recordTheoreticalEntryExpired as recordTheoreticalEntryExpiredRepository,
+  recordTheoreticalEntryFill as recordTheoreticalEntryFillRepository,
+  recordTheoreticalExitFill as recordTheoreticalExitFillRepository,
+  recordTheoreticalReviewRequired as recordTheoreticalReviewRequiredRepository,
+} from "./broker-theoretical-execution-repository.js";
 
 export class PostgresBrokerExecutionRepository {
   constructor(persistence) {
@@ -16,7 +27,7 @@ export class PostgresBrokerExecutionRepository {
   async overview({ limit = 100 } = {}) {
     await this.ready();
     const bounded = Math.max(1, Math.min(Number(limit) || 100, 500));
-    const [providers, accounts, accountSnapshots, contracts, policies, policyAudits, bridges, locks, decisions, intents, orders, trades, reconciliations, managementIntents, managementApprovals, managementOutbox, addonSnapshots, addonEvents, adapterParityRuns] = await Promise.all([
+    const [providers, accounts, accountSnapshots, contracts, policies, policyAudits, bridges, locks, decisions, intents, orders, trades, reconciliations, managementIntents, managementApprovals, managementOutbox, addonSnapshots, addonEvents, adapterParityRuns, theoreticalEvents, manualExecutionEvents, portfolioOrderIntents, humanExecutionGates, portfolioExecutionStates, providerCommands, providerEvents] = await Promise.all([
       rows(this.pool, "SELECT * FROM broker_providers ORDER BY broker_provider_code"),
       rows(this.pool, "SELECT * FROM broker_accounts ORDER BY broker_account_id"),
       rows(this.pool, "SELECT DISTINCT ON (broker_account_id) * FROM broker_account_snapshots ORDER BY broker_account_id, captured_at DESC"),
@@ -57,8 +68,34 @@ export class PostgresBrokerExecutionRepository {
       rows(this.pool, "SELECT * FROM broker_addon_snapshots ORDER BY captured_at DESC LIMIT $1", [bounded]),
       rows(this.pool, "SELECT * FROM broker_addon_events ORDER BY occurred_at DESC LIMIT $1", [bounded]),
       rows(this.pool, "SELECT * FROM broker_adapter_parity_runs ORDER BY compared_at DESC LIMIT $1", [bounded]),
+      optionalRows(this.pool, "SELECT * FROM trade_theoretical_execution_events ORDER BY event_at_utc DESC, created_at_utc DESC LIMIT $1", [bounded]),
+      optionalRows(this.pool, "SELECT * FROM trade_manual_execution_events ORDER BY occurred_at_utc DESC, created_at_utc DESC LIMIT $1", [bounded]),
+      optionalRows(this.pool, `SELECT l.*, l.payload AS order_intent_payload,
+          t.account_id AS target_account_id, t.instrument AS target_instrument,
+          t.net_target_size, t.delta_size, t.risk_approved_net_size, t.payload AS target_position_payload,
+          array_remove(array_agg(DISTINCT a.candidate_allocation_id), NULL) AS candidate_allocation_ids,
+          array_remove(array_agg(DISTINCT r.risk_decision_id), NULL) AS risk_decision_ids,
+          COALESCE(jsonb_agg(DISTINCT jsonb_build_object(
+            'risk_decision_id', rd.risk_decision_id,
+            'decision', rd.decision,
+            'status', rd.status,
+            'reason_codes', rd.reason_codes,
+            'risk_rule_set_version', rd.risk_rule_set_version,
+            'approved_size', rd.approved_size
+          )) FILTER (WHERE rd.risk_decision_id IS NOT NULL), '[]'::jsonb) AS risk_decisions
+        FROM portfolio_order_intent_lineage l
+        JOIN portfolio_target_positions t ON t.target_position_id = l.target_position_id
+        LEFT JOIN portfolio_target_position_allocations a ON a.target_position_id = t.target_position_id
+        LEFT JOIN portfolio_target_position_risk_decisions r ON r.target_position_id = t.target_position_id
+        LEFT JOIN portfolio_risk_decisions rd ON rd.risk_decision_id = r.risk_decision_id
+        GROUP BY l.portfolio_order_intent_id, t.target_position_id
+        ORDER BY l.created_at_utc DESC LIMIT $1`, [bounded]),
+      optionalRows(this.pool, "SELECT * FROM human_execution_gates ORDER BY updated_at_utc DESC LIMIT $1", [bounded]),
+      optionalRows(this.pool, "SELECT * FROM portfolio_order_intent_execution_states ORDER BY updated_at_utc DESC LIMIT $1", [bounded]),
+      optionalRows(this.pool, "SELECT * FROM broker_provider_commands ORDER BY updated_at DESC LIMIT $1", [bounded]),
+      optionalRows(this.pool, "SELECT * FROM broker_provider_events ORDER BY created_at DESC LIMIT $1", [bounded]),
     ]);
-    return { providers, accounts, accountSnapshots, contracts, policies, policyAudits, bridges, locks, decisions, intents, orders, trades, reconciliations, managementIntents, managementApprovals, managementOutbox, addonSnapshots, addonEvents, adapterParityRuns };
+    return { providers, accounts, accountSnapshots, contracts, policies, policyAudits, bridges, locks, decisions, intents, orders, trades, reconciliations, managementIntents, managementApprovals, managementOutbox, addonSnapshots, addonEvents, adapterParityRuns, theoreticalEvents, manualExecutionEvents, portfolioOrderIntents, humanExecutionGates, portfolioExecutionStates, providerCommands, providerEvents };
   }
 
   async configureSizingPolicy({ policyProfileId, expectedRevision, riskPercent, maxRoundingExcessPercent = 0.25, maxDecisionAgeSeconds = 120, fallbackCapitalEnabled, fallbackCapital, idempotencyKey, actor, reason, now }) {
@@ -286,6 +323,16 @@ export class PostgresBrokerExecutionRepository {
     ]);
     return { intent, decision, riskCheck, approvals, outbox, orders };
   }
+
+  async listTheoreticalEntryCandidates({ limit = 100 } = {}) { return listTheoreticalEntryCandidatesRepository(this, { limit }); }
+  async latestClosedCandleForIntent(intent) { return latestTheoreticalClosedCandleForIntent(this, intent); }
+  async recordTheoreticalEntryFill({ result, now }) { return recordTheoreticalEntryFillRepository(this, { result, now }); }
+  async recordTheoreticalEntryExpired({ result, now }) { return recordTheoreticalEntryExpiredRepository(this, { result, now }); }
+  async listTheoreticalOpenTrades({ limit = 100 } = {}) { return listTheoreticalOpenTradesRepository(this, { limit }); }
+  async latestClosedCandleForTrade(trade) { return latestTheoreticalClosedCandleForTrade(this, trade); }
+  async recordTheoreticalExitFill({ result, now }) { return recordTheoreticalExitFillRepository(this, { result, now }); }
+  async recordTheoreticalReviewRequired({ result, now }) { return recordTheoreticalReviewRequiredRepository(this, { result, now }); }
+  async recordManualExecutionEvent({ event }) { return recordManualExecutionEventRepository(this, { event }); }
 
   async findOpenTradeForMonitor({ tradeId = null, sourcePositionId = null, instrument = null, strategyId = null, tradingDate = null, session = null } = {}) {
     await this.ready();
@@ -576,7 +623,8 @@ export class PostgresBrokerExecutionRepository {
 
   async peekOutbox() {
     await this.ready();
-    return one(this.pool, `SELECT o.*, i.trade_decision_id, i.broker_account_id
+    return one(this.pool, `SELECT o.*, i.trade_decision_id, i.broker_account_id,
+        i.payload AS intent_payload, i.raw AS intent_raw
       FROM broker_execution_outbox o
       JOIN trade_order_intents i ON i.order_intent_id = o.order_intent_id
       WHERE (o.status = 'pending' OR (o.status = 'leased' AND o.lease_expires_at < now()))
@@ -829,6 +877,84 @@ export class PostgresBrokerExecutionRepository {
     return settled;
   }
 
+  async confirmProtectionFromAddonSnapshot({ accountId, brokerSnapshot = {}, snapshotId = null, capturedAt = null, now, graceSeconds = 30 }) {
+    await this.ready();
+    const candidates = await rows(this.pool, `SELECT t.*, c.broker_symbol, c.tick_size
+      FROM trades t JOIN broker_contracts c ON c.broker_contract_id = t.broker_contract_id
+      WHERE t.broker_account_id = $1 AND t.status IN ('open','scaling','protected') AND t.quantity_open > 0`, [accountId]);
+    const results = [];
+    for (const trade of candidates) {
+      const evaluation = evaluateBrokerProtectionSnapshot({ trade, brokerSnapshot, snapshotId, capturedAt, now, graceSeconds });
+      if (trade.raw?.broker_protection_state === evaluation.status && evaluation.status !== "failed") {
+        results.push({ trade_id: trade.trade_id, changed: false, ...evaluation });
+        continue;
+      }
+      const client = await this.pool.connect();
+      try {
+        await client.query("BEGIN");
+        const currentTrade = await one(client, "SELECT * FROM trades WHERE trade_id = $1 FOR UPDATE", [trade.trade_id]);
+        if (!currentTrade || !["open", "scaling", "protected"].includes(currentTrade.status) || Number(currentTrade.quantity_open || 0) <= 0) {
+          await client.query("COMMIT");
+          results.push({ trade_id: trade.trade_id, changed: false, skipped: true, ...evaluation });
+          continue;
+        }
+        await client.query(
+          `UPDATE trades SET
+             status = CASE WHEN $2 = 'confirmed' THEN 'protected'::trade_status ELSE status END,
+             raw = raw || jsonb_build_object(
+               'broker_protection_state', $2::text,
+               'broker_protection_reason', $3::text,
+               'broker_protection_checked_at', $4::text,
+               'broker_protection_snapshot_id', $5::text,
+               'broker_protection_evidence', $6::jsonb
+             ) || CASE WHEN $2 = 'confirmed'
+               THEN jsonb_build_object('broker_protection_confirmed_at', $4::text)
+               ELSE '{}'::jsonb
+             END,
+             revision = CASE WHEN $2 = 'confirmed' AND status <> 'protected' THEN revision + 1 ELSE revision END,
+             updated_at = now()
+           WHERE trade_id = $1`,
+          [currentTrade.trade_id, evaluation.status, evaluation.reason, now, snapshotId, json(evaluation.evidence)],
+        );
+        if (trade.raw?.broker_protection_state !== evaluation.status || evaluation.status === "failed") {
+          await client.query(
+            `INSERT INTO trade_events (trade_event_id, trade_id, event_type, status, occurred_at, payload, raw)
+             VALUES ($1,$2,$3::lifecycle_event_type,$4::trade_status,$5,$6::jsonb,$7::jsonb)`,
+            [`trade_event_${cryptoId()}`, currentTrade.trade_id,
+              evaluation.status === "confirmed" ? "sync_reconciled" : "manual_intervention",
+              evaluation.status === "confirmed" ? "protected" : currentTrade.status,
+              now,
+              json({ protection_status: evaluation.status, reason: evaluation.reason, snapshot_id: snapshotId }),
+              json({ source: "ninjatrader_addon_snapshot", evidence: evaluation.evidence })],
+          );
+        }
+        if (evaluation.status === "failed") {
+          await client.query(
+            `INSERT INTO broker_execution_locks (execution_lock_id, scope_type, scope_value, locked, reason, set_by, metadata)
+             VALUES ($1,'account',$2,true,$3,'broker_protection_guard',$4::jsonb)
+             ON CONFLICT (scope_type, scope_value) DO UPDATE SET
+               locked = true,
+               reason = EXCLUDED.reason,
+               set_by = EXCLUDED.set_by,
+               set_at = now(),
+               metadata = broker_execution_locks.metadata || EXCLUDED.metadata`,
+            [`protection_lock_${accountId}`, accountId,
+              `Broker protection not confirmed for ${currentTrade.trade_id}: ${evaluation.reason}`,
+              json({ trade_id: currentTrade.trade_id, snapshot_id: snapshotId, protection_status: evaluation.status, evidence: evaluation.evidence })],
+          );
+        }
+        await client.query("COMMIT");
+        results.push({ trade_id: currentTrade.trade_id, changed: true, ...evaluation });
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+    return results;
+  }
+
   async #persistProtectiveSnapshotFill({ trade, protectiveOrder, brokerOrderRef, role, maxQuantity, filledQuantity, fillPrice, snapshotId, occurredAt, now }) {
     const client = await this.pool.connect();
     try {
@@ -1036,7 +1162,16 @@ async function persistEntryFillAndTrade(client, { intent, order, previousOrder, 
       side, intent.quantity, filled, averagePrice, intent.bracket?.stop_price || null, intent.bracket?.target_price || null,
       intent.payload?.atm_strategy_id || null, update.occurred_at || now, decision?.trading_date || null,
       decision?.session || null, decision?.strategy_id || null,
-      json({ source: update.raw?.execution_adapter === "addon" ? "ninjatrader_addon" : "ninjatrader_ati", entry_order_ref: order.broker_order_ref, atm_strategy_id: intent.payload?.atm_strategy_id || null })],
+      json({
+        source: update.raw?.execution_adapter === "addon" ? "ninjatrader_addon" : "ninjatrader_ati",
+        entry_order_ref: order.broker_order_ref,
+        atm_strategy_id: intent.payload?.atm_strategy_id || null,
+        protective_stop_order_ref: update.raw?.protective_stop_order_ref || null,
+        profit_target_order_ref: update.raw?.profit_target_order_ref || null,
+        broker_protection_state: "pending",
+        broker_protection_reason: "AWAITING_PROTECTION_SNAPSHOT",
+        broker_protection_checked_at: update.occurred_at || now,
+      })],
   );
   const fillRef = externalEventKey || `${order.broker_order_ref}:${filled}:${averagePrice}`;
   await client.query(
@@ -1052,72 +1187,6 @@ async function persistEntryFillAndTrade(client, { intent, order, previousOrder, 
     [`trade_event_${cryptoId()}`, tradeId, update.status === "partially_filled" ? "partial_fill" : "order_filled",
       update.occurred_at || now, json({ quantity: delta, cumulative_quantity: filled, price: incrementalPrice }), json(update.raw)],
   );
-}
-
-async function materializeTradeOutcome(client, tradeId, calculatedAt) {
-  const trade = await one(client, `SELECT t.*, c.point_value
-    FROM trades t
-    LEFT JOIN broker_contracts c ON c.broker_contract_id = t.broker_contract_id
-    WHERE t.trade_id = $1`, [tradeId]);
-  if (!trade?.avg_entry_price || !trade?.initial_stop_price) return null;
-  const fills = await rows(client, `SELECT f.*
-    FROM trade_fills f
-    WHERE f.trade_id = $1
-    ORDER BY f.filled_at ASC, f.trade_fill_id ASC`, [tradeId]);
-  const entrySide = trade.side === "long" ? "buy" : "sell";
-  const entryFills = fills.filter((fill) => fill.side === entrySide);
-  const exitFills = fills.filter((fill) => fill.side !== entrySide);
-  if (!exitFills.length) return null;
-  const outcome = calculateTradeOutcome({
-    side: trade.side,
-    entryPrice: Number(trade.avg_entry_price),
-    initialStopPrice: Number(trade.initial_stop_price),
-    initialQuantity: Number(trade.quantity_planned || entryFills.reduce((sum, fill) => sum + Number(fill.quantity || 0), 0)),
-    pointValue: Number(trade.point_value || 1),
-    entryFills: entryFills.map(projectFill),
-    exitFills: exitFills.map(projectFill),
-    calculatedAt,
-    finalized: trade.status === "closed",
-  });
-  const latest = await one(client, "SELECT COALESCE(max(revision), 0)::integer AS revision FROM trade_outcomes WHERE trade_id = $1", [tradeId]);
-  const revision = Number(latest?.revision || 0) + 1;
-  const outcomeId = `trade_outcome_${tradeId}_${revision}`;
-  await client.query(
-    `INSERT INTO trade_outcomes (
-       trade_outcome_id, trade_id, revision, status, schema_version, engine_version,
-       initial_risk_amount, gross_realized_pnl, total_fees, net_realized_pnl, result_r,
-       mfe_r, mae_r, evidence_hash, evidence, calculated_at_utc, finalized_at_utc
-     ) VALUES (
-       $1,$2,$3,$4::trade_outcome_status,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,
-       CASE WHEN $4 = 'final' THEN $16::timestamptz ELSE NULL END
-     )
-     ON CONFLICT (trade_id, evidence_hash) DO NOTHING`,
-    [outcomeId, tradeId, revision, outcome.status, outcome.schema_version, outcome.engine_version,
-      outcome.initial_risk_amount, outcome.gross_realized_pnl, outcome.total_fees,
-      outcome.net_realized_pnl, outcome.result_r, outcome.mfe_r, outcome.mae_r,
-      outcome.evidence_hash, json(outcome.evidence), outcome.calculated_at_utc],
-  );
-  await client.query(
-    `UPDATE trades SET initial_risk_amount = $2, gross_realized_pnl = $3, total_fees = $4,
-       net_realized_pnl = $5, realized_pnl = $5, result_r = $6, mfe_r = $7, mae_r = $8,
-       outcome_schema_version = $9, outcome_evidence_hash = $10,
-       raw = raw - 'outcome_pending_reason', updated_at = now()
-     WHERE trade_id = $1`,
-    [tradeId, outcome.initial_risk_amount, outcome.gross_realized_pnl, outcome.total_fees,
-      outcome.net_realized_pnl, outcome.result_r, outcome.mfe_r, outcome.mae_r,
-      outcome.schema_version, outcome.evidence_hash],
-  );
-  return outcome;
-}
-
-function projectFill(fill) {
-  return {
-    quantity: Number(fill.quantity),
-    price: Number(fill.price),
-    commission: Number(fill.commission || 0),
-    filled_at: fill.filled_at,
-    fill_ref: fill.broker_fill_ref,
-  };
 }
 
 async function persistManagementFill(client, { intent, trade, order, update, externalEventKey, now }) {
@@ -1154,15 +1223,93 @@ async function persistManagementFill(client, { intent, trade, order, update, ext
 
 export class DisabledBrokerExecutionRepository {
   get available() { return false; }
-  async overview() { return { providers: [], accounts: [], accountSnapshots: [], contracts: [], policies: [], policyAudits: [], bridges: [], locks: [], decisions: [], intents: [], orders: [], trades: [], reconciliations: [], managementIntents: [], managementApprovals: [], managementOutbox: [], addonSnapshots: [], addonEvents: [], adapterParityRuns: [] }; }
+  async overview() { return { providers: [], accounts: [], accountSnapshots: [], contracts: [], policies: [], policyAudits: [], bridges: [], locks: [], decisions: [], intents: [], orders: [], trades: [], reconciliations: [], managementIntents: [], managementApprovals: [], managementOutbox: [], addonSnapshots: [], addonEvents: [], adapterParityRuns: [], portfolioOrderIntents: [], humanExecutionGates: [], portfolioExecutionStates: [], providerCommands: [], providerEvents: [] }; }
 }
 
 export function createBrokerExecutionRepository(persistence) {
   return persistence?.pool ? new PostgresBrokerExecutionRepository(persistence) : new DisabledBrokerExecutionRepository();
 }
 
+export function evaluateBrokerProtectionSnapshot({ trade = {}, brokerSnapshot = {}, snapshotId = null, capturedAt = null, now, graceSeconds = 30 } = {}) {
+  const checkedAt = validTimestamp(now) || new Date().toISOString();
+  const openedAt = validTimestamp(trade.opened_at || trade.opened_at_utc || trade.raw?.opened_at || trade.raw?.filled_at);
+  const ageSeconds = openedAt ? Math.max(0, (Date.parse(checkedAt) - Date.parse(openedAt)) / 1_000) : Number.POSITIVE_INFINITY;
+  const stopRef = String(trade.raw?.protective_stop_order_ref || trade.protective_stop_order_ref || "").trim();
+  const targetRef = String(trade.raw?.profit_target_order_ref || trade.profit_target_order_ref || "").trim();
+  const baseEvidence = {
+    schema_version: "broker_protection_confirmation_v1",
+    snapshot_id: snapshotId,
+    captured_at: validTimestamp(capturedAt),
+    checked_at: checkedAt,
+    trade_id: trade.trade_id || null,
+    broker_account_id: trade.broker_account_id || null,
+    broker_symbol: trade.broker_symbol || null,
+    quantity_open: Number(trade.quantity_open || 0),
+    protective_stop_order_ref: stopRef || null,
+    profit_target_order_ref: targetRef || null,
+    grace_seconds: graceSeconds,
+    age_seconds: Number.isFinite(ageSeconds) ? Math.round(ageSeconds) : null,
+  };
+  if (!isConnectedAddonSnapshot(brokerSnapshot)) {
+    return protectionResult("pending", "SNAPSHOT_NOT_CONNECTED", baseEvidence);
+  }
+  if (!Array.isArray(brokerSnapshot.orders)) {
+    return protectionResult("pending", "SNAPSHOT_ORDERS_MISSING", baseEvidence);
+  }
+  if (!stopRef) {
+    return protectionResult(ageSeconds <= graceSeconds ? "pending" : "failed", "PROTECTIVE_STOP_REF_MISSING", baseEvidence);
+  }
+  const stopOrder = findSnapshotOrder(brokerSnapshot.orders, stopRef);
+  if (!stopOrder) {
+    return protectionResult(ageSeconds <= graceSeconds ? "pending" : "failed", "PROTECTIVE_STOP_ORDER_MISSING", baseEvidence);
+  }
+  const stopStatus = normalizeBrokerOrderStatus(stopOrder.status || stopOrder.order_state || stopOrder.state);
+  const enrichedEvidence = { ...baseEvidence, stop_order: protectionOrderEvidence(stopOrder, stopStatus) };
+  if (["rejected", "cancelled", "expired", "error"].includes(stopStatus)) {
+    return protectionResult("failed", `PROTECTIVE_STOP_${stopStatus.toUpperCase()}`, enrichedEvidence);
+  }
+  if (stopStatus === "filled") {
+    return protectionResult("failed", "PROTECTIVE_STOP_FILLED_WHILE_TRADE_OPEN", enrichedEvidence);
+  }
+  if (!["submitted", "accepted", "working"].includes(stopStatus)) {
+    return protectionResult(ageSeconds <= graceSeconds ? "pending" : "failed", "PROTECTIVE_STOP_NOT_ACTIVE", enrichedEvidence);
+  }
+  const expectedSide = String(trade.side || "").toLowerCase() === "short" ? "BUY" : "SELL";
+  const stopSide = String(stopOrder.side || stopOrder.action || "").trim().toUpperCase();
+  if (stopSide && stopSide !== expectedSide) {
+    return protectionResult("failed", "PROTECTIVE_STOP_SIDE_MISMATCH", { ...enrichedEvidence, expected_stop_side: expectedSide, actual_stop_side: stopSide });
+  }
+  const expectedQuantity = Math.max(0, Number(trade.quantity_open || 0));
+  const stopQuantity = firstNumber(stopOrder.quantity, stopOrder.remaining_quantity, stopOrder.order_quantity, stopOrder.qty);
+  if (stopQuantity !== null && stopQuantity < expectedQuantity) {
+    return protectionResult("failed", "PROTECTIVE_STOP_QUANTITY_TOO_SMALL", { ...enrichedEvidence, expected_quantity: expectedQuantity, actual_quantity: stopQuantity });
+  }
+  const expectedStop = firstNumber(trade.current_stop_price, trade.initial_stop_price, trade.raw?.current_stop_price, trade.raw?.protective_stop_price);
+  const actualStop = firstNumber(stopOrder.stop_price, stopOrder.stopPrice, stopOrder.price);
+  const tick = Math.max(0, firstNumber(trade.tick_size) || 0);
+  if (expectedStop !== null && actualStop !== null && Math.abs(expectedStop - actualStop) > Math.max(tick, 1e-9)) {
+    return protectionResult("failed", "PROTECTIVE_STOP_PRICE_MISMATCH", { ...enrichedEvidence, expected_stop_price: expectedStop, actual_stop_price: actualStop, tick_size: tick || null });
+  }
+  const targetOrder = targetRef ? findSnapshotOrder(brokerSnapshot.orders, targetRef) : null;
+  const targetStatus = targetOrder ? normalizeBrokerOrderStatus(targetOrder.status || targetOrder.order_state || targetOrder.state) : "missing";
+  return protectionResult("confirmed", "PROTECTIVE_STOP_ACTIVE", {
+    ...enrichedEvidence,
+    expected_stop_side: expectedSide,
+    target_order: targetOrder ? protectionOrderEvidence(targetOrder, targetStatus) : null,
+    target_status: targetStatus,
+  });
+}
+
 async function rows(client, sql, params = []) { return (await client.query(sql, params)).rows; }
 async function one(client, sql, params = []) { return (await client.query(sql, params)).rows[0] || null; }
+async function optionalRows(client, sql, params = []) {
+  try {
+    return await rows(client, sql, params);
+  } catch (error) {
+    if (error?.code === "42P01") return [];
+    throw error;
+  }
+}
 function json(value) { return JSON.stringify(value ?? {}); }
 function cryptoId() { return globalThis.crypto.randomUUID().replaceAll("-", ""); }
 function firstNumber(...values) { for (const value of values) { const parsed = Number(value); if (value !== null && value !== undefined && value !== "" && Number.isFinite(parsed)) return parsed; } return null; }
@@ -1183,6 +1330,34 @@ function positionKey(value) {
 function isConnectedAddonSnapshot(snapshot = {}) {
   const connection = String(snapshot.connection?.status || snapshot.connection?.connection_status || "").toLowerCase();
   return connection === "connected";
+}
+function protectionResult(status, reason, evidence) {
+  return Object.freeze({ status, reason, evidence: Object.freeze(evidence || {}) });
+}
+function findSnapshotOrder(orders = [], ref) {
+  const expected = String(ref || "").trim();
+  if (!expected) return null;
+  return (orders || []).find((order) => String(order?.broker_order_ref || order?.order_id || order?.id || "").trim() === expected) || null;
+}
+function normalizeBrokerOrderStatus(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
+  if (["pending_submit", "initialized", "submitted"].includes(normalized)) return "submitted";
+  if (["accepted"].includes(normalized)) return "accepted";
+  if (["working", "trigger_pending", "triggerpending"].includes(normalized)) return "working";
+  if (["filled"].includes(normalized)) return "filled";
+  if (["cancelled", "canceled"].includes(normalized)) return "cancelled";
+  if (["rejected", "expired", "error"].includes(normalized)) return normalized;
+  return normalized || "unknown";
+}
+function protectionOrderEvidence(order = {}, status) {
+  return {
+    broker_order_ref: String(order.broker_order_ref || order.order_id || order.id || "") || null,
+    status,
+    side: String(order.side || order.action || "").trim().toUpperCase() || null,
+    quantity: firstNumber(order.quantity, order.remaining_quantity, order.order_quantity, order.qty),
+    stop_price: firstNumber(order.stop_price, order.stopPrice, order.price),
+    limit_price: firstNumber(order.limit_price, order.limitPrice),
+  };
 }
 function sizingPolicyValues(policy) {
   return {

@@ -5,7 +5,7 @@ import { Card, DataSourceBadge, ErrorView, Icon, InlineStateCard, LoadingView, M
 import { ConfirmActionForm } from "@/components/ConfirmActionForm";
 import { formatDateTime, MetricCard, MetricStrip, PageHeading, PageTabs, StatusTag } from "@/components/operations";
 import { executionKeys, useExecutionOverview } from "@/hooks/useExecution";
-import type { BrokerManagementIntent, OrderIntent, TradeDecision, TradePolicy } from "@/executionTypes";
+import type { BrokerBridge, BrokerManagementIntent, ExecutionOverview, OrderIntent, TradeDecision, TradePolicy } from "@/executionTypes";
 
 type PendingAction =
   | { kind: "approve"; intent: OrderIntent }
@@ -22,6 +22,8 @@ type SizingDraft = { riskPercent: number; maxRoundingExcessPercent: number; maxD
 
 const tabs = [
   { label: "Cockpit", to: "/operations", end: true },
+  { label: "Agents IA", to: "/operations/agents" }, { label: "AI Context", to: "/operations/ai-context" },
+  { label: "Portfolio Risk", to: "/operations/portfolio-risk" },
   { label: "Exécution", to: "/operations/execution" },
   { label: "Observabilité", to: "/operations/observability" },
   { label: "Incidents", to: "/operations/incidents" },
@@ -54,9 +56,11 @@ export default function ExecutionConsolePage() {
   const snapshotFresh = isFreshAccountSnapshot(simSnapshot, data.generatedAt, data.safety.accountSnapshotMaxAgeSeconds);
   const capital = snapshotFresh ? brokerCapital(simSnapshot) : null;
   const sizingPolicy = data.policies.find(policy => policy.policy_profile_id === "ninjatrader_sim101_local") || data.policies[0];
+  const launchBlockers = demoPaperLaunchBlockers(data, addonBridge);
+  const launchReady = launchBlockers.length === 0;
   const effectiveCapital = capital ?? (data.safety.fallbackCapitalEnabled ? data.safety.fallbackCapital : null);
   const usingFallback = capital === null && data.safety.fallbackCapitalEnabled && data.safety.fallbackCapital !== null;
-  const safetyTone = data.safety.submissionPossible ? "warning" : "positive";
+  const safetyTone = launchReady ? "positive" : data.safety.submissionPossible ? "warning" : "critical";
   const expectedPhrase = pending?.kind === "approve" ? "CONFIRM_SIM101_ORDER"
     : pending?.kind === "approve_management" ? "CONFIRM_SIM101_MANAGEMENT"
     : pending?.kind === "reject" || pending?.kind === "reject_management" ? "CONFIRM_REJECT"
@@ -85,7 +89,7 @@ export default function ExecutionConsolePage() {
   return <section className="view workspace-view execution-console-view">
     <PageHeading eyebrow="Exécution contrôlée" title="NinjaTrader · Execution Console" actions={<><DataSourceBadge label="POSTGRES" detail="données broker réelles"/><button className="secondary-btn" onClick={() => query.refetch()}><Icon name="refresh" size={14}/>Actualiser</button></>} tabs={<PageTabs items={tabs}/>}/>
 
-    <InlineStateCard tone={safetyTone} code={data.safety.submissionPossible ? "SIM101_ARMABLE" : "BROKER_FAIL_CLOSED"} title={data.safety.submissionPossible ? "Le chemin Sim101 est armable" : "Les soumissions broker sont bloquées"} text={`env=${data.safety.executionEnabled ? "on" : "off"} · mode=${data.safety.bridgeMode} · kill_env=${data.safety.killSwitchEnv ? "on" : "off"} · lock_db=${data.safety.databaseLocked ? "on" : "off"} · max=${data.safety.maxContracts}` } action={<button className={data.safety.databaseLocked ? "secondary-btn" : "danger-btn"} onClick={() => setPending({ kind: "lock", locked: !data.safety.databaseLocked })}>{data.safety.databaseLocked ? "Préparer déverrouillage Sim101" : "Kill switch"}</button>}/>
+    <InlineStateCard tone={safetyTone} code={launchReady ? "DEMO_PAPER_READY" : "DEMO_PAPER_BLOCKED"} title={launchReady ? "Démo PAPER prête côté broker" : "Démo PAPER bloquée avant ordre"} text={launchReady ? `AUTO · Sim101 · max ${data.safety.maxContracts} contrat(s) · AddOn command-enabled` : launchBlockers.slice(0, 3).join(" · ")} action={<button className={data.safety.databaseLocked ? "secondary-btn" : "danger-btn"} onClick={() => setPending({ kind: "lock", locked: !data.safety.databaseLocked })}>{data.safety.databaseLocked ? "Préparer déverrouillage Sim101" : "Kill switch"}</button>}/>
 
     <MetricStrip className="metric-strip--six">
       <MetricCard label="Décisions" value={data.decisions.length} detail="paper matérialisées"/>
@@ -120,11 +124,16 @@ export default function ExecutionConsolePage() {
         <div><span>Connexion autorisée</span><strong title={`${data.ninjaTraderStartup.connectionProvider} · ${data.ninjaTraderStartup.connectionName}`}>{data.ninjaTraderStartup.connectionName}</strong></div>
         <div><span>Dernier lancement</span><strong>{data.ninjaTraderStartup.lastStartedAt ? formatDateTime(data.ninjaTraderStartup.lastStartedAt) : "—"}</strong></div>
       </div>
+      {!launchReady && <div className="execution-startup-checklist" aria-label="Blocages demo PAPER">
+        <strong>Checklist avant activation des agents</strong>
+        <ul>{launchBlockers.map(blocker => <li key={blocker}>{blocker}</li>)}</ul>
+        <code>npm run doctor:demo-paper</code>
+      </div>}
       <p className="execution-startup-note">La désactivation empêche les prochains redémarrages sans arrêter le processus en cours. NinjaTrader 8.1 exige encore son authentification principale à chaque lancement ; après le login, lance la connexion de compte « Simulation ». L’AddOn et les reconnexions réseau restent automatiques. Les verrous d’exécution restent fermés.</p>
       {data.ninjaTraderStartup.lastError && <p className="operator-feedback operator-feedback--error" role="alert">{data.ninjaTraderStartup.lastError}</p>}
     </Card>
 
-    {(mutation.isError) && <InlineStateCard tone="critical" code="EXECUTION_ACTION_BLOCKED" title="Action refusée par les garde-fous" text={mutation.error?.message || "Action non exécutée."}/>} 
+    {(mutation.isError) && <InlineStateCard tone="critical" code="EXECUTION_ACTION_BLOCKED" title="Action refusée par les garde-fous" text={mutation.error?.message || "Action non exécutée."}/>}
 
     <div className="execution-console-grid">
       <Card className="execution-status-panel">
@@ -191,7 +200,7 @@ export default function ExecutionConsolePage() {
           <label className="sizing-policy-toggle"><input type="checkbox" checked={sizingDraft.fallbackCapitalEnabled} onChange={event => setSizingDraft(value => ({ ...value, fallbackCapitalEnabled: event.target.checked }))}/><span>Autoriser le capital net de secours</span></label>
           <label>Capital net de secours (USD)<input type="number" inputMode="decimal" min="100" max="100000000" step="100" disabled={!sizingDraft.fallbackCapitalEnabled} value={sizingDraft.fallbackCapital} onChange={event => setSizingDraft(value => ({ ...value, fallbackCapital: Number(event.target.value) }))}/><small>N’est utilisé que si le snapshot NinjaTrader est absent ou périmé.</small></label>
         </div>}
-      </ConfirmActionForm>} 
+      </ConfirmActionForm>}
     </Modal>
   </section>;
 }
@@ -209,6 +218,34 @@ function ManagementLedger({ intents, busy, onMaterialize, onAction }: { intents:
 }
 
 function managementLabel(action: BrokerManagementIntent["action"]) { return ({ move_stop: "Stop à break-even", reduce_position: "Réduction", close_position: "Fermeture" })[action]; }
+
+function demoPaperLaunchBlockers(data: ExecutionOverview, addonBridge?: BrokerBridge) {
+  const blockers: string[] = [];
+  if (!data.safety.executionEnabled) blockers.push("Broker execution désactivé");
+  if (data.safety.bridgeMode !== "sim101_addon_approved_only") blockers.push(`Bridge mode ${data.safety.bridgeMode}`);
+  if (data.safety.killSwitchEnv || data.safety.databaseLocked) blockers.push("Kill switch actif");
+  if (data.safety.maxContracts <= 0) blockers.push("Max contrats non armé");
+  if (data.safety.liveAccountAllowed) blockers.push("Compte live autorisé — interdit en démo");
+  if (!data.safety.submissionPossible) blockers.push("Soumission broker fail-closed");
+  if (data.safety.executionAuthorityMode !== "auto") blockers.push("Mode AUTO non activé");
+  if (data.safety.entryOperatorApprovalRequired) blockers.push("Validation opérateur encore requise");
+  if (!data.ninjaTraderStartup.processRunning) blockers.push("NinjaTrader arrêté");
+  if (data.ninjaTraderStartup.loginRequired) blockers.push("Login NinjaTrader requis");
+  if (!data.ninjaTraderStartup.connectionReady) blockers.push("Connexion Simulation/Sim101 non prête");
+  if (!data.ninjaTraderStartup.addonHeartbeatFresh) blockers.push("Heartbeat AddOn non frais");
+  if (!addonBridge) {
+    blockers.push("AddOn DeskExecution absent");
+  } else {
+    if (addonBridge.status !== "armed") blockers.push(`AddOn ${addonBridge.status}`);
+    if (!addonBridge.command_enabled) blockers.push("Commandes AddOn désactivées");
+    if (!isSim101Account(addonBridge.account_name)) blockers.push(`Compte ${addonBridge.account_name || "inconnu"} ≠ Sim101`);
+  }
+  return Array.from(new Set(blockers));
+}
+
+function isSim101Account(accountName: string | null | undefined) {
+  return /^Sim\d*$/i.test(String(accountName || "").trim());
+}
 
 function Empty({ code: _code, text }: { code: string; text: string }) { return <div className="terminal-empty-state terminal-empty-state--human"><span>{text}</span></div>; }
 function brokerCapital(snapshot: { cash_value: number | null; payload: Record<string, unknown> } | undefined) {

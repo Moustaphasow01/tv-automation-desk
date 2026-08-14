@@ -3,6 +3,9 @@ FROM node:20-bookworm-slim
 WORKDIR /app
 
 COPY packages ./packages
+COPY config/prompt-registry ./config/prompt-registry
+COPY docs/CHATGPT_LIVE_WORKER_PROMPT.md ./docs/CHATGPT_LIVE_WORKER_PROMPT.md
+COPY docs/CHATGPT_REPLAY_WORKER_PROMPT.md ./docs/CHATGPT_REPLAY_WORKER_PROMPT.md
 COPY mcp_gpt_desk/package.json mcp_gpt_desk/package-lock.json ./mcp_gpt_desk/
 
 WORKDIR /app/mcp_gpt_desk
