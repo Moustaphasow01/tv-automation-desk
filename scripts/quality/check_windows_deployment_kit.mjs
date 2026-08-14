@@ -201,6 +201,15 @@ const update = content.get("deploy/windows/Update-Desk.ps1");
 if (!update.includes("maintenance.env") || !update.includes('["DESK_DB_MIGRATION_URL"]')) {
   violations.push("update_protected_migration_credential_missing");
 }
+if (!update.includes('$keepAiWorkersDisabled = $KeepFrozen -or ($AiWorkerMode -eq "disabled")')) {
+  violations.push("update_ai_worker_disabled_mode_not_bound_to_service_state");
+}
+if (!update.includes("-KeepAiWorkersDisabled:$keepAiWorkersDisabled")) {
+  violations.push("update_ai_worker_disabled_mode_not_passed_to_install");
+}
+if (!update.includes("-AllowDisabledAiWorkers:$keepAiWorkersDisabled")) {
+  violations.push("update_ai_worker_disabled_mode_not_passed_to_healthcheck");
+}
 const buildRelease = content.get("deploy/windows/Build-DeskRelease.ps1");
 if (
   !buildRelease.includes('[ValidateSet("standard", "deterministic_strategy_v5_frozen")]')

@@ -139,6 +139,7 @@ if ($Rehearsal) {
         if ([string]::IsNullOrWhiteSpace($MigrationDatabaseUrl)) {
             throw "DESK_DB_MIGRATION_URL must be supplied by process environment, protected maintenance.env, or -MigrationDatabaseUrl."
         }
+        $keepAiWorkersDisabled = $KeepFrozen -or ($AiWorkerMode -eq "disabled")
 
         if (-not $SkipDrain) {
             $drainScript = Join-Path $probeRoot "deploy\windows\Invoke-DeskDrain.ps1"
@@ -190,9 +191,9 @@ if ($Rehearsal) {
             -PostgresBin $PostgresBin `
             -MigrationDatabaseUrl $MigrationDatabaseUrl `
             -PostgresServiceName $PostgresServiceName `
-            -KeepAiWorkersDisabled:$KeepFrozen
+            -KeepAiWorkersDisabled:$keepAiWorkersDisabled
 
-        & (Join-Path $InstallRoot "current\deploy\windows\Test-DeskLocalHealth.ps1") -DataRoot $DataRoot -AllowDisabledAiWorkers:$KeepFrozen
+        & (Join-Path $InstallRoot "current\deploy\windows\Test-DeskLocalHealth.ps1") -DataRoot $DataRoot -AllowDisabledAiWorkers:$keepAiWorkersDisabled
         & (Join-Path $InstallRoot "current\deploy\windows\Test-DeskDeployment.ps1") -PublicBaseUrl "https://$Domain"
         if ($deploymentId) {
             & (Join-Path $InstallRoot "current\deploy\windows\Invoke-DeskDrain.ps1") `
