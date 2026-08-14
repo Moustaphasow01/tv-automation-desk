@@ -7,6 +7,7 @@ import {
   buildResearchStrategyIterationPlan,
 } from "../src/research/research-strategy-iteration-runner.js";
 import {
+  candidateKey,
   strategyIterationVersionLabel,
 } from "../src/research/research-strategy-iteration-materializer.js";
 import {
@@ -105,6 +106,8 @@ describe("research strategy iteration runner", () => {
     assert.notEqual(first.variants[0].strategy_version_id, second.variants[0].strategy_version_id);
     assert.match(strategyIterationVersionLabel(first.variants[0]), /^1\.1\.0\+[0-9a-f]{12}$/);
     assert.notEqual(strategyIterationVersionLabel(first.variants[0]), strategyIterationVersionLabel(second.variants[0]));
+    assert.notEqual(candidateKey(seedFromVariant(first.variants[0])), candidateKey(seedFromVariant(second.variants[0])));
+    assert.match(candidateKey(seedFromVariant(first.variants[0])), /:branch:[0-9a-f]{12}:iter-1:/);
   });
 
   it("produces executable variant geometry for the canonical simulator", () => {
@@ -224,6 +227,15 @@ function simulationDataset(context) {
     cutoff_paris: "2026-06-01T06:00:00+02:00",
     sealed_at_utc: "2026-06-01T04:00:00.000Z",
     rows: context.rows,
+  };
+}
+
+function seedFromVariant(variant) {
+  return {
+    dataset: { dataset_key: variant.dataset_key },
+    scope: { instrument: "MNQ" },
+    ids: { definitionId: variant.strategy_definition_id },
+    variant,
   };
 }
 

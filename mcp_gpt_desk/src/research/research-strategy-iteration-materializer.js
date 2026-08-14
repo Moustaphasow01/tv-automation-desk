@@ -348,8 +348,9 @@ async function recordValidationReportOrReuseExisting({ registry, report, command
 }
 
 async function enqueueReviewTask(pool, { seed, registered, research, task, nowUtc }) {
-  const taskKey = `research-review-${seed.dataset.dataset_key}-iter-${seed.variant.iteration_index}-${researchStrategyIterationGeneratorSlug()}-${seed.variant.variant_label}`;
-  const missionKey = `research-demo-paper-${seed.dataset.dataset_key}-iter-${seed.variant.iteration_index}-${researchStrategyIterationGeneratorSlug()}`;
+  const branch = researchIterationBranchKey(seed);
+  const taskKey = `research-review-${seed.dataset.dataset_key}-branch-${branch}-iter-${seed.variant.iteration_index}-${researchStrategyIterationGeneratorSlug()}-${seed.variant.variant_label}`;
+  const missionKey = `research-demo-paper-${seed.dataset.dataset_key}-branch-${branch}-iter-${seed.variant.iteration_index}-${researchStrategyIterationGeneratorSlug()}`;
   const missionIds = stableResearchTaskIds({ key: missionKey, kind: "RESEARCH_STRATEGY_VALIDATION" });
   const taskIds = stableResearchTaskIds({ key: taskKey, kind: "RESEARCH_BACKTEST_REVIEW" });
   return enqueueResearchAgentTask(pool, {
@@ -478,12 +479,22 @@ function variantResult({ variant, seed, registered, simulation, agentTask }) {
   };
 }
 
-function candidateKey(seed) {
-  return `derived:${seed.dataset.dataset_key}:strategy:${seed.ids.definitionId}:iter-${seed.variant.iteration_index}:${researchStrategyIterationGeneratorSlug()}:${seed.variant.variant_label}`;
+export function candidateKey(seed) {
+  return `derived:${seed.dataset.dataset_key}:strategy:${seed.ids.definitionId}:branch:${researchIterationBranchKey(seed)}:iter-${seed.variant.iteration_index}:${researchStrategyIterationGeneratorSlug()}:${seed.variant.variant_label}`;
 }
 
 function strategyExternalKey(seed) {
-  return `demo-paper.${seed.scope.instrument.toLowerCase()}.opening-range-retest.${seed.variant.iteration_index}.${researchStrategyIterationGeneratorSlug()}.${seed.variant.variant_label}`;
+  return `demo-paper.${seed.scope.instrument.toLowerCase()}.opening-range-retest.${researchIterationBranchKey(seed)}.${seed.variant.iteration_index}.${researchStrategyIterationGeneratorSlug()}.${seed.variant.variant_label}`;
+}
+
+function researchIterationBranchKey(seed) {
+  return semverBuildHash({
+    variant_id: seed.variant.variant_id,
+    source_research_candidate_id: seed.variant.source_research_candidate_id,
+    source_simulation_run_id: seed.variant.metadata?.parent_simulation_run_id || null,
+    dataset_key: seed.dataset.dataset_key,
+    generator_version: RESEARCH_STRATEGY_ITERATION_GENERATOR_VERSION,
+  }, 12);
 }
 
 function variantSimulationShards(seed, context) {
