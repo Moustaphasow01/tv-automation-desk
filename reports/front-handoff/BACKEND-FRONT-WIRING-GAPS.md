@@ -1,13 +1,13 @@
 # Backend/front wiring gaps
 
-- generatedAt: `2026-08-15T11:27:55.597Z`
+- generatedAt: `2026-08-15T15:11:25.122Z`
 - repositoryBranch: `codex/preprod-v4-local-parity-cleanup`
-- repositoryCommit: `670b05778896c2e936be9193a218e144bd4eb163`
+- repositoryCommit: `ac8c418a9f87687090c5779f01fdfc2b753bb00f`
 - schemaVersion: `front_handoff_v1`
 - generatorVersion: `front_handoff_generator_v1.0.0`
-- activeVpsRelease: `null`
-- activeVpsCommit: `null`
-- runtimeProbeTimestamp: `null`
+- activeVpsRelease: `preprod-v2-front-freeze-20260815.1`
+- activeVpsCommit: `ac8c418a9f87687090c5779f01fdfc2b753bb00f`
+- runtimeProbeTimestamp: `2026-08-15T15:10:13.211Z`
 
 ## P0_BEFORE_FRONT_FREEZE
 
