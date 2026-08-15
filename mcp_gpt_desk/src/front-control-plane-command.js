@@ -51,6 +51,12 @@ export const FRONT_COMMAND_CATALOG = Object.freeze({
     mutation: "assistant.question.submit",
     brokerExecution: false,
   }),
+  "strategy.version.fork": Object.freeze({
+    capability: "front.command",
+    environments: Object.freeze(["MOCK", "PAPER"]),
+    mutation: "strategy.version.fork",
+    brokerExecution: false,
+  }),
   "execution.order_intent.confirm": Object.freeze({
     capability: "execution.paper",
     environments: Object.freeze(["PAPER"]),
@@ -164,6 +170,7 @@ function runtimeMutationPlan(context) {
   if (context.commandType.startsWith("desk.")) return { kind: context.commandType, broker_execution: false };
   if (context.commandType === "research.bootstrap_demo_paper") return { kind: "research.bootstrap_demo_paper", broker_execution: false };
   if (context.commandType === "assistant.question.submit") return { kind: "assistant.question.submit", broker_execution: false };
+  if (context.commandType === "strategy.version.fork") return { kind: "strategy.version.fork", broker_execution: false };
   if (context.commandType === "execution.order_intent.confirm") return { kind: "execution.order_intent.confirm", broker_execution: false };
   if (context.commandType === "execution.order_intent.reject") return { kind: "execution.order_intent.reject", broker_execution: false };
   return null;
@@ -190,6 +197,9 @@ async function executeRuntimeMutation(store, context) {
   if (context.mutationPlan.kind === "assistant.question.submit") {
     return executeAssistantQuestionMutation(store, context);
   }
+  if (context.mutationPlan.kind === "strategy.version.fork") {
+    return executeStrategyVersionForkMutation(store, context);
+  }
   if (typeof store?.executeResearchLabAction !== "function") {
     throw codedError("RESEARCH_BOOTSTRAP_ACTION_UNAVAILABLE", "Research Lab bootstrap action is unavailable.", 503);
   }
@@ -203,6 +213,89 @@ async function executeRuntimeMutation(store, context) {
     },
     actor: context.actor,
   });
+}
+
+async function executeStrategyVersionForkMutation(store, context) {
+  const payload = object(context.body.payload);
+  const sourceStrategyVersionId = payloadText(payload, ["sourceStrategyVersionId", "source_strategy_version_id"]);
+  if (!sourceStrategyVersionId) throw codedError("SOURCE_STRATEGY_VERSION_ID_REQUIRED", "sourceStrategyVersionId is required.", 400);
+  if (typeof store?.executeStrategyVersionForkAction === "function") {
+    return store.executeStrategyVersionForkAction({
+      input: strategyVersionForkInput({ context, payload, sourceStrategyVersionId }),
+      actor: context.actor,
+    });
+  }
+  if (typeof store?.getStrategyV2Version !== "function" || typeof store?.createStrategyV2Version !== "function") {
+    throw codedError("STRATEGY_VERSION_FORK_UNAVAILABLE", "Strategy Kernel versioning service is unavailable.", 503);
+  }
+  const sourceResult = await store.getStrategyV2Version({ strategy_version_id: sourceStrategyVersionId });
+  const sourceVersion = object(sourceResult?.version || sourceResult);
+  if (!Object.keys(sourceVersion).length) throw codedError("SOURCE_STRATEGY_VERSION_NOT_FOUND", `Source strategy version not found: ${sourceStrategyVersionId}`, 404);
+  const forkInput = strategyVersionForkInput({ context, payload, sourceStrategyVersionId, sourceVersion });
+  const created = await store.createStrategyV2Version({ input: forkInput, actor: context.actor });
+  return {
+    status: "DRAFT_CREATED",
+    sourceStrategyVersionId,
+    strategyVersionId: text(forkInput.strategy_version_id, ""),
+    strategyDefinitionId: text(forkInput.strategy_definition_id, ""),
+    autoPublish: false,
+    autoActivateInstance: false,
+    broker_execution: false,
+    order_submission_enabled: false,
+    result: created,
+  };
+}
+
+function strategyVersionForkInput({ context, payload, sourceStrategyVersionId, sourceVersion = {} }) {
+  const source = object(sourceVersion);
+  const nextId = payloadText(payload, ["newStrategyVersionId", "new_strategy_version_id"], `strver_fork_${hash(`${sourceStrategyVersionId}:${context.idempotencyKey}`).slice(0, 20)}`);
+  const copiedSpec = object(firstDefined([payload.strategySpec, payload.strategy_spec, source.strategy_spec], {}));
+  const copiedParams = object(firstDefined([payload.parameters, source.parameters], {}));
+  return {
+    ...copyStrategyVersionFields(source),
+    ...object(payload.overrides),
+    strategy_version_id: nextId,
+    source_strategy_version_id: sourceStrategyVersionId,
+    strategy_definition_id: payloadText(payload, ["strategyDefinitionId", "strategy_definition_id"], text(source.strategy_definition_id || source.strategy_id, "")),
+    version_label: payloadText(payload, ["versionLabel", "version_label"], `fork-${context.idempotencyKey.slice(0, 8)}`),
+    status: "DRAFT",
+    strategy_spec: copiedSpec,
+    parameters: copiedParams,
+    lineage: {
+      ...object(source.lineage),
+      source_strategy_version_id: sourceStrategyVersionId,
+      forked_by_command_id: context.commandId,
+      forked_at_utc: context.acceptedAt,
+      correlation_id: context.correlationId,
+      causation_id: context.causationId,
+    },
+    audit: {
+      forked_from_strategy_version_id: sourceStrategyVersionId,
+      copied_fields: ["strategy_spec", "parameters", "dsl", "rules"],
+      auto_publish: false,
+      auto_activate_instance: false,
+      broker_execution: false,
+      order_submission_enabled: false,
+    },
+  };
+}
+
+function copyStrategyVersionFields(source = {}) {
+  const disallowed = new Set([
+    "strategy_version_id",
+    "version_id",
+    "id",
+    "status",
+    "published_at_utc",
+    "activated_at_utc",
+    "runtime_state",
+    "order_intent_id",
+    "provider_command_id",
+    "broker_order_id",
+    "credentials",
+    "secret",
+  ]);
+  return Object.fromEntries(Object.entries(source).filter(([key]) => !disallowed.has(key)));
 }
 
 async function executeAssistantQuestionMutation(store, context) {
@@ -362,5 +455,6 @@ function commandAggregateId(commandType, body = {}) {
   if (commandType.startsWith("desk.")) return "desk:operational-control";
   if (commandType.startsWith("research.")) return text(payload.missionId || payload.mission_id || payload.dataset_key, "research:control-plane");
   if (commandType.startsWith("assistant.")) return text(payload.assistantId || payload.assistant_id, "assistant:control-plane");
+  if (commandType.startsWith("strategy.version.")) return text(payload.sourceStrategyVersionId || payload.source_strategy_version_id || payload.strategyVersionId || payload.strategy_version_id, "strategy:versioning");
   return "front-control-plane";
 }

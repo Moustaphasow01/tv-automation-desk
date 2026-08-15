@@ -162,13 +162,25 @@ async function insertRiskDecision(client, record, decision) {
   await client.query(`INSERT INTO portfolio_risk_decisions (
       risk_decision_id, candidate_allocation_id, account_id, instrument, status, decision,
       requested_size, approved_size, reason_codes, limits_applied, risk_budget_id,
-      risk_rule_set_version, risk_evaluation_hash, decided_at_utc, payload_hash, payload
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)`, [
+      risk_rule_set_version, risk_evaluation_hash, decided_at_utc, payload_hash, payload,
+      account_capital_reference, requested, authorized, trade_risk, portfolio_before,
+      portfolio_after, limits, nearest_limit, breaches, risk_economics
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17::jsonb,$18::jsonb,$19::jsonb,$20::jsonb,$21::jsonb,$22::jsonb,$23::jsonb,$24::jsonb,$25::jsonb,$26::jsonb)`, [
     decision.risk_decision_id, decision.candidate_allocation_id, text(decision.account_id || record.run.account_id), decision.instrument,
     decision.status, decision.decision, number(decision.requested_size), number(decision.approved_size),
     array(decision.reason_codes), array(decision.limits_applied), text(record.risk?.budget?.budget_id),
     text(record.risk?.budget?.budget_hash), text(record.risk?.evaluation_hash), record.run.as_of_utc,
     hash(decision), json(decision),
+    jsonOrNull(decision.account_capital_reference),
+    jsonOrNull(decision.requested),
+    jsonOrNull(decision.authorized),
+    jsonOrNull(decision.trade_risk),
+    jsonOrNull(decision.portfolio_before),
+    jsonOrNull(decision.portfolio_after),
+    jsonOrNull(decision.limits),
+    jsonOrNull(decision.nearest_limit),
+    jsonOrNull(decision.breaches),
+    jsonOrNull(decision.risk_economics),
   ]);
 }
 
@@ -176,12 +188,17 @@ async function insertTarget(client, runId, target) {
   await client.query(`INSERT INTO portfolio_target_positions (
       target_position_id, portfolio_arbitration_run_id, account_id, instrument, net_direction,
       current_net_size, net_target_size, delta_size, risk_approved_net_size, status,
-      computed_at_utc, target_hash, payload_hash, payload
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)`, [
+      computed_at_utc, target_hash, payload_hash, payload,
+      approved_trade_plan, risk_allocation, expected_exposure, lineage
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb,$17::jsonb,$18::jsonb)`, [
     target.id, runId, target.account_id, target.instrument, target.net_direction,
     number(target.current_net_size), number(target.net_target_size), number(target.delta_size),
     number(target.risk_approved_net_size), target.status, target.computed_at_utc,
     hash(target), hash(target), json(target),
+    jsonOrNull(target.approved_trade_plan),
+    jsonOrNull(target.risk_allocation),
+    jsonOrNull(target.expected_exposure),
+    jsonOrNull(target.lineage),
   ]);
 }
 
@@ -198,10 +215,22 @@ async function insertOrderIntentLineage(client, intent) {
   await client.query(`INSERT INTO portfolio_order_intent_lineage (
       portfolio_order_intent_id, target_position_id, trade_order_intent_id, idempotency_key,
       status, broker_submission_allowed, quantity, order_intent_hash, payload_hash, payload
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`, [
+      , execution_terms, risk_snapshot, lineage, policy, immutability, immutable_terms_hash
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13::jsonb,$14::jsonb,$15::jsonb,$16)`, [
     intent.order_intent_id, intent.target_position_id, intent.trade_order_intent_id || null,
     intent.idempotency_key, intent.status, intent.broker_submission_allowed === true,
     number(intent.quantity), intent.order_intent_hash, hash(intent), json(intent),
+    jsonOrNull(intent.execution_terms),
+    jsonOrNull(intent.risk_snapshot),
+    jsonOrNull(intent.source?.lineage || null),
+    jsonOrNull({
+      provider_id: intent.provider_id,
+      order_type: intent.order_type,
+      time_in_force: intent.time_in_force,
+      broker_submission_allowed: intent.broker_submission_allowed,
+    }),
+    jsonOrNull(intent.immutability),
+    intent.immutable_terms_hash || null,
   ]);
 }
 
@@ -220,6 +249,7 @@ async function one(client, sql, params = []) { return (await client.query(sql, p
 function repositoryError(code, message) { const error = new Error(message || code); error.code = code; error.statusCode = 503; return error; }
 function hash(value) { return `sha256:${canonicalSha256(value)}`; }
 function json(value) { return JSON.stringify(value ?? {}); }
+function jsonOrNull(value) { return value === undefined || value === null ? null : JSON.stringify(value); }
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function array(value) { return Array.isArray(value) ? value : []; }
 function text(value) { return String(value ?? "").trim(); }

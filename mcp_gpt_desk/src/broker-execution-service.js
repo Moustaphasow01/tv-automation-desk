@@ -25,6 +25,7 @@ import {
   recordManualExecutionEvent as recordManualExecutionEventService,
 } from "./broker-theoretical-execution-service.js";
 import { buildBrokerExecutionOverview } from "./broker-execution-overview-projection.js";
+import { positionKey } from "./broker-execution-normalizers.js";
 import { assertBrokerOrderIntentAuthority, assertLegacyPositionExecutionRollbackEnabled } from "./broker-order-intent-authority.js";
 import { maybeExecutePortfolioExecutionAction } from "./broker-portfolio-execution-actions.js";
 import { PortfolioOrderIntentExecutionService } from "./portfolio-order-intent-execution-service.js";
@@ -1163,18 +1164,6 @@ function monitorSourcePositionId(monitor = {}) {
     || monitor.position_request?.position_id
     || monitor.linked_position_id
     || null;
-}
-function positionKey(value) {
-  const normalized = String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
-  const named = normalized.match(/^([A-Z0-9]+)\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{2}|\d{4})$/);
-  const numeric = normalized.match(/^([A-Z0-9]+)\s+(\d{1,2})-(\d{2}|\d{4})$/);
-  if (!named && !numeric) return normalized;
-  const months = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
-  const root = (named || numeric)[1];
-  const month = named ? months[named[2]] : Number(numeric[2]);
-  const rawYear = named ? named[3] : numeric[3];
-  const year = rawYear.length === 2 ? 2000 + Number(rawYear) : Number(rawYear);
-  return `${root}:${year}-${String(month).padStart(2, "0")}`;
 }
 function accountKey(value) {
   return String(value || "*").trim() || "*";

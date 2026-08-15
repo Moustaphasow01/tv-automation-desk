@@ -47,6 +47,7 @@ import { NewsIngestionService } from "./news-ingestion-service.js";
 import { TelegramAlertService } from "./telegram-alert-service.js";
 import { StrategyKernelService } from "./strategy-kernel-service.js";
 import { createStrategyKernelRepository } from "./strategy-kernel-repository.js";
+import { createAiContextGateRepository } from "./ai-context-gate-repository.js";
 import { attachStrategySignalBusStoreMethods } from "./strategy-signal-bus-store-extension.js";
 import { DataFoundationService } from "./data-foundation-service.js";
 import { createDataFoundationRepository } from "./data-foundation-repository.js";
@@ -457,10 +458,8 @@ export class PersistentDeskStore {
     this.macroCalendar = new MacroCalendarService({ persistence, clock });
     this.news = new NewsIngestionService({ persistence, clock });
     this.telegram = persistence.pool ? new TelegramAlertService({ persistence, clock }) : null;
-    this.strategyKernel = new StrategyKernelService({
-      repository: createStrategyKernelRepository(persistence),
-      clock,
-    });
+    this.strategyKernel = new StrategyKernelService({ repository: createStrategyKernelRepository(persistence), clock });
+    this.aiContextGateRepository = createAiContextGateRepository(persistence);
     this.dataFoundation = new DataFoundationService({ repository: createDataFoundationRepository(persistence), clock });
     this.simulationRuns = createSimulationRunRegistryService({ persistence, clock });
     this.strategy = new DeskStrategyAuditService({ persistence, clock, host: this, market: this.market });
@@ -711,6 +710,7 @@ export class PersistentDeskStore {
     return dataFoundationResponse("DeskFeatureValueListV1", await this.dataFoundation.listFeatureValues(args));
   }
   async getExecutionOverview(args = {}) { return this.execution.overview(args); }
+  async listAiContextGateDecisions(args = {}) { return this.aiContextGateRepository.listDecisions(args); }
   async getExecutionIntent({ intent_id }) { return this.execution.intentDetail(intent_id); }
   async executeBrokerAction({ input, actor }) { return this.execution.executeAction(input, actor); }
   async recordBrokerHeartbeat(input = {}) { return this.execution.heartbeat(input); }

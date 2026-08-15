@@ -23,6 +23,31 @@ test("portfolio risk projection summarizes real execution and strategy sources",
   assert.equal(view.actions.find((item) => item.action_id === "portfolio_risk_write_gate").enabled, false);
 });
 
+test("portfolio risk projection exposes authoritative pending portfolio risk state", () => {
+  const view = buildPortfolioRiskOverview({
+    generatedAt: "2026-08-09T08:00:00.000Z",
+    execution: executionOverview({
+      portfolioOrderIntents: [portfolioOrderIntent()],
+      humanExecutionGates: [{ human_execution_gate_id: "gate-1", portfolio_order_intent_id: "portfolio-intent-1", status: "AWAITING_MANUAL_CONFIRMATION" }],
+      locks: [],
+    }),
+    strategy: strategyOverview(),
+    performance: { ok: true, items: [] },
+  });
+
+  assert.equal(view.summary.pendingIntents, 2);
+  assert.equal(view.summary.pendingTargetPositions, 1);
+  assert.equal(view.summary.pendingHumanGates, 1);
+  assert.equal(view.portfolio_state.sourceTypes.target, "PENDING");
+  assert.equal(view.portfolio_state.pendingTargetPositions[0].targetPositionId, "target-1");
+  assert.equal(view.portfolio_state.openRisk.value, 80);
+  assert.equal(view.risk_center.availability, "KNOWN");
+  assert.equal(view.risk_center.openRisk.value, 80);
+  assert.equal(view.risk_center.nearestLimits[0].type, "INSTRUMENT_ABS_SIZE");
+  assert.equal(view.portfolio_order_intents[0].risk_snapshot.riskPerContract, 40);
+  assert.deepEqual(view.portfolio_order_intents[0].allowed_actions.denialReasons, ["HUMAN_GATE_REQUIRED_FOR_MUTATION"]);
+});
+
 test("portfolio risk projection keeps partial source failures visible", () => {
   const view = buildPortfolioRiskOverview({
     generatedAt: "2026-08-09T08:00:00.000Z",
@@ -59,5 +84,34 @@ function strategyOverview() {
       { strategy_instance_id: "a", execution_mode: "PAPER", runtime_state: "RUNNING", instrument_scope: ["MNQ"] },
       { strategy_instance_id: "b", execution_mode: "PAPER", runtime_state: "RUNNING", instrument_scope: ["MNQ"] },
     ],
+  };
+}
+
+function portfolioOrderIntent() {
+  return {
+    portfolio_order_intent_id: "portfolio-intent-1",
+    target_position_id: "target-1",
+    target_account_id: "sim101",
+    target_instrument: "MNQ",
+    net_target_size: 2,
+    delta_size: 2,
+    risk_approved_net_size: 2,
+    quantity: 2,
+    status: "READY",
+    immutable_terms_hash: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    execution_terms: { instrument: "MNQ", side: "BUY", quantity: 2, order_type: "LIMIT" },
+    risk_snapshot: { authorizedQty: 2, riskAmount: 80, riskPerContract: 40, stopDistance: { points: 20, ticks: 80 }, reasonCodes: ["MAX_RISK_OK"] },
+    risk_decisions: [{
+      risk_decision_id: "risk-1",
+      decision: "APPROVED",
+      status: "PASS",
+      risk_rule_set_version: "risk-v1",
+      reason_codes: ["MAX_RISK_OK"],
+      authorized: { risk_amount: 80, risk_pct: 0.16 },
+      trade_risk: { risk_per_contract: 40, stop_distance_points: 20, stop_distance_ticks: 80 },
+      nearest_limit: { type: "INSTRUMENT_ABS_SIZE", utilization: 0.5 },
+      limits: [{ type: "INSTRUMENT_ABS_SIZE", breached: false, resulting_utilization: 0.5 }],
+      breaches: [],
+    }],
   };
 }

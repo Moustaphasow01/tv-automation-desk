@@ -8,6 +8,21 @@ import { authSession } from "./front-control-plane-auth.js";
 import { jarvisWorkspace } from "./front-jarvis-projection.js";
 import { loadFrontAssistantRuntime } from "./front-assistant-runtime-source.js";
 import { codedError, currentTick, currentUtc, hash, text } from "./front-control-plane-common.js";
+import { buildCommandCenterProjection } from "./front-command-center-projection.js";
+import { livePlan } from "./front-control-plane-live-plan-projection.js";
+import { liveSignalDetail } from "./front-control-plane-live-signal-projection.js";
+import {
+  auditRelations,
+  canonicalOrderIntentDossier,
+  frontAuditEvents,
+  liveCanonicalRuntime,
+  portfolioOrderIntentSummaryRow,
+  telegramDrilldownFromHealth,
+} from "./front-control-plane-domain-completeness.js";
+import { executionIncidents, incidentRow, incidentSummary } from "./front-control-plane-incident-projection.js";
+import { orderHumanGateProjection, permissions, resourceAllowedActions } from "./front-control-plane-permissions.js";
+import { accountRow, activeOrderRow, fillRow, intentRow, orderFillRow, orderRow, positionRow, providerRows, signalRow } from "./front-control-plane-row-mappers.js";
+import { frontTimeSeriesContracts } from "./front-control-plane-time-series-contracts.js";
 
 export {
   frontControlPlaneSseFrame,
@@ -42,7 +57,7 @@ const VIEW_NAMES = new Set([
   "workflow-detail", "event-detail", "operations-runbooks", "governance-prompts", "governance-policies",
 ]);
 const VIEW_BUILDERS = {
-  "command-center": commandCenter,
+  "command-center": buildCommandCenterProjection,
   "demo-paper-readiness": demoPaperReadiness,
   "live-trading": liveTrading,
   portfolio,
@@ -100,7 +115,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "admin-access": ["execution", "incidents"],
   "command-center": ["execution", "strategy", "incidents", "agent-runtime", "portfolio-risk", "health"],
   "demo-paper-readiness": ["execution", "strategy", "agent-runtime", "data-foundation", "portfolio-risk", "health"],
-  "events-audit": ["execution", "incidents", "agent-runtime"],
+  "events-audit": ["execution", "strategy", "incidents", "agent-runtime"],
   "operations-queue": ["agent-runtime", "incidents"],
   "research-agent-fleet": ["agent-runtime", "research"],
   "research-compute-scheduler": ["agent-runtime", "simulation-runs"],
@@ -111,7 +126,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "strategy-center": ["strategy", "research"],
   "strategy-detail": ["strategy", "research", "execution", "incidents"],
   "strategy-compare": ["strategy", "research", "simulation-runs"],
-  "live-trading": ["execution", "strategy", "incidents", "ai-context", "health"],
+  "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "health"],
   "live-signal-detail": ["execution", "strategy", "portfolio-risk", "ai-context"],
   "order-detail": ["execution"],
   "position-detail": ["execution"],
@@ -392,61 +407,6 @@ function isEventLookupMiss(error) {
   return ["TIMELINE_EVENT_NOT_FOUND", "EVENT_NOT_FOUND", "SCOPE_REQUIRED", "STRATEGY_SESSION_MISMATCH"].includes(String(error?.code || ""));
 }
 
-function commandCenter({ execution, strategy, incidents, runtime, risk, warnings, nowIso }) {
-  const openIncidents = rows(incidents).length;
-  return {
-    summary: commandCenterSummary({ execution, strategy, incidents, runtime, warnings }),
-    systems: commandCenterSystems({ execution, strategy, runtime, risk, warnings }),
-    activity: activityRows({ execution, strategy, incidents }),
-    risk: commandCenterRisk({ execution, risk, openIncidents }),
-    lanes: commandCenterLanes({ execution, runtime, risk }),
-    upcoming: [{ id: "next-refresh", time: timeLabel(nowIso), title: "Rafraîchissement projection", detail: "BFF VNext read-only", tone: warnings.length ? "WATCH" : "INFO" }],
-  };
-}
-
-function commandCenterSummary({ execution, strategy, incidents, runtime, warnings }) {
-  const criticalIncidents = countBy(rows(incidents), isCriticalSeverity);
-  return {
-    deskStatus: warnings.length || criticalIncidents || execution?.safety?.submissionPossible === false ? "DEGRADED" : "NOMINAL",
-    activeStrategies: countBy(strategy?.instances, isActiveExecutionMode),
-    activeResearchAgents: rows(runtime).length,
-    criticalIncidents,
-    pendingCommands: countBy(execution?.intents, isPendingCommandStatus),
-  };
-}
-
-function commandCenterSystems({ execution, strategy, runtime, risk, warnings }) {
-  return [
-    system("market-data", "Market Data", execution ? "OK" : "DEGRADED", execution ? "État execution disponible ; fraîcheur détaillée dans Live" : "Source execution indisponible", 0),
-    system("strategy-runtime", "Strategy Runtime", availabilityStatus(strategy), `${rows(strategy?.instances).length} instances visibles`, 0),
-    system("agent-runtime", "AI Worker Service", availabilityStatus(runtime), `${rows(runtime).length} tâches agent visibles`, 0),
-    system("execution-gateway", "Execution Gateway", availabilityStatus(execution), `${rows(execution?.orders).length} ordres broker visibles`, 0),
-    system("portfolio-risk", "Portfolio Risk", risk?.summary?.submission_possible === false ? "DEGRADED" : availabilityStatus(risk), risk?.summary?.status || "projection partielle", 0),
-    system("postgres", "PostgreSQL", warnings.length ? "DEGRADED" : "OK", warnings[0] || "lectures BFF effectuées", 0),
-  ];
-}
-
-function commandCenterRisk({ execution, risk, openIncidents }) {
-  return {
-    capitalStatus: riskCapitalStatus(risk),
-    riskUsagePct: number(risk?.summary?.risk_percent, 0),
-    maxDrawdownR: number(execution?.performance?.max_drawdown_R ?? 0, 0),
-    openPositions: number(risk?.summary?.openTrades, 0),
-    healthyLimits: risk?.summary?.submission_possible ? 1 : 0,
-    totalLimits: 1,
-    activeAlerts: openIncidents,
-  };
-}
-
-function commandCenterLanes({ execution, runtime, risk }) {
-  return [
-    laneState("live-lane", "Chaîne Live", "runtime → risk → execution", execution),
-    laneState("research-lane", "Research Factory", "agents IA et expériences", runtime),
-    laneState("execution-lane", "Exécution & protection", "provider-neutral", execution),
-    laneState("risk-lane", "Portfolio Risk", "arbitrage et limites globales", risk),
-  ];
-}
-
 function sessionsView({ sessions, query }) {
   const scope = normalizeFrontApiScope(query);
   const items = rows(sessions).filter((item) => item?.id).map((item) => ({
@@ -470,124 +430,6 @@ function sessionsView({ sessions, query }) {
       tradingDate: scope.trading_date,
     },
     sessions: items,
-  };
-}
-
-function livePlan({ liveSession, query, nowIso }) {
-  const scope = normalizeFrontApiScope(query);
-  const session = liveSession || {};
-  const master = session.master || {};
-  const thesis = session.thesis || {};
-  const setup = session.setup || {};
-  const position = session.position || {};
-  const masterAvailable = Boolean(master.id && master.id !== "no-master");
-  const thesisAvailable = Boolean(thesis.id && thesis.id !== "no-active-thesis");
-  const setupAvailable = Boolean(setup.id && setup.id !== "no-setup");
-  return {
-    summary: {
-      sessionStatus: text(session.status, "UNKNOWN"),
-      masterAvailable,
-      thesisAvailable,
-      setupAvailable,
-      positionActive: position.active === true,
-      nextMonitorAt: text(session.nextMonitorAt, "—"),
-    },
-    scope: {
-      sessionId: text(session.id, scope.session),
-      tradingDate: text(session.date, scope.trading_date),
-      mode: text(session.mode, scope.mode).toUpperCase(),
-      generatedAt: nowIso,
-    },
-    brief: {
-      headline: text(session.liveBrief?.headline, "Aucun brief live matérialisé."),
-      action: text(session.liveBrief?.action, "AUCUNE ACTION"),
-      summary: text(session.liveBrief?.summary, "Aucun résumé matérialisé."),
-      why: text(session.liveBrief?.why, "Motif non publié."),
-      nextAction: text(session.liveBrief?.nextAction, "Aucune prochaine action publiée."),
-      decision: text(session.liveBrief?.decision, "NO_ACTION"),
-    },
-    claim: {
-      lastClaimAt: text(session.claim?.lastClaimAt, "—"),
-      workerId: text(session.claim?.workerId, "—"),
-      nextTaskStatus: text(session.claim?.nextTaskStatus, "unknown"),
-      nextTaskLabel: text(session.claim?.nextTaskLabel, "Tâche non publiée"),
-      dueCheckpoint: text(session.claim?.dueCheckpoint, "—"),
-      followingCheckpoint: text(session.claim?.followingTaskCheckpoint, "—"),
-      latencySeconds: nullableNumber(session.claim?.latencySeconds),
-      latencyTargetSeconds: nullableNumber(session.claim?.latencyTargetSeconds),
-    },
-    master: {
-      available: masterAvailable,
-      id: text(master.id, "—"),
-      createdAt: text(master.createdAt, "—"),
-      decision: text(master.decision, "NON DISPONIBLE"),
-      instrument: text(master.instrument, "—"),
-      direction: text(master.direction, "wait"),
-      confidence: number(master.confidence, 0),
-      summary: text(master.summary, "Aucun Master matérialisé."),
-      regime: text(master.regime, "Non matérialisé"),
-      macroThesis: text(master.macroThesis, "Non matérialisée"),
-      assetSelection: text(master.assetSelection, "Non matérialisée"),
-      expectedPath: stringList(master.expectedPath),
-      failurePath: stringList(master.failurePath),
-      monitoringPlaybook: stringList(master.monitoringPlaybook),
-    },
-    thesis: {
-      available: thesisAvailable,
-      id: text(thesis.id, "—"),
-      instrument: text(thesis.instrument, "—"),
-      direction: text(thesis.direction, "wait"),
-      status: text(thesis.status, "NO_ACTIVE_THESIS"),
-      dominantScenario: text(thesis.dominantScenario, "Aucune thèse active matérialisée."),
-      secondaryScenario: text(thesis.secondaryScenario, "Aucun scénario secondaire matérialisé."),
-      confidence: number(thesis.confidence, 0),
-      health: number(thesis.health, 0),
-      validUntil: text(thesis.validUntil, "—"),
-      nextFocus: text(thesis.nextFocus, "Aucun focus matérialisé."),
-      positiveDrivers: stringList(thesis.scoreDriversPositive),
-      negativeDrivers: stringList(thesis.scoreDriversNegative),
-    },
-    setup: {
-      available: setupAvailable,
-      id: text(setup.id, "—"),
-      label: text(setup.label, "Aucun setup matérialisé"),
-      instrument: text(setup.instrument, "—"),
-      direction: text(setup.direction, "wait"),
-      status: text(setup.status, "NO_SETUP"),
-      geometryReady: setup.geometryReady === true,
-      backendCanTrigger: setup.backendCanTrigger === true,
-      missingFields: stringList(setup.missingFields),
-      entryLower: nullableNumber(setup.entryLower ?? setup.entryFrom),
-      entryUpper: nullableNumber(setup.entryUpper ?? setup.entryTo),
-      executionEntry: nullableNumber(setup.executionEntry),
-      executionRule: text(setup.executionRule, "Règle non publiée"),
-      stop: nullableNumber(setup.stop),
-      tp1: nullableNumber(setup.tp1),
-      tp2: nullableNumber(setup.tp2),
-      tp3: nullableNumber(setup.tp3),
-      risk: nullableNumber(setup.risk),
-      confidence: nullableNumber(setup.confidence),
-      rr: nullableNumber(setup.rr),
-      reason: text(setup.reason, "Aucun motif publié."),
-    },
-    position: {
-      active: position.active === true,
-      status: text(position.status, "NO_POSITION"),
-      instrument: text(position.instrument, "—"),
-      direction: text(position.direction, "wait"),
-      entry: nullableNumber(position.entry),
-      current: nullableNumber(position.current),
-      unrealizedR: nullableNumber(position.unrealizedR),
-      executionMode: text(position.executionMode, scope.mode),
-      brokerExecution: position.brokerExecution === true,
-      note: text(position.note, "Aucune position canonique active."),
-    },
-    levels: rows(session.levels).map((item, index) => ({
-      levelId: text(item.id || item.level_id, `level-${index + 1}`),
-      label: text(item.label || item.name, "Niveau"),
-      value: nullableNumber(item.value ?? item.price),
-      kind: text(item.kind || item.type, "REFERENCE"),
-    })),
   };
 }
 
@@ -886,21 +728,23 @@ function replayRunsExplorer({ replays }) {
 }
 
 function replayRunDetailExplorer({ replayDetail }) {
-  const run = replayDetail?.run || {};
-  const gptProcessCount = replayDetail?.gptProcessCount ?? rows(replayDetail?.gptProcesses).length;
-  const timelineCount = replayDetail?.timelineCount ?? rows(replayDetail?.timeline).length;
-  return explorerView("Détail Replay", text(run.name, text(run.sourceId || run.id, "Replay")), [explorerItem({
-    id: text(run.sourceId || run.id, "replay"),
+  const run = nested(replayDetail, ["run"]) || {};
+  const metrics = nested(run, ["metrics"]) || {};
+  const gptProcessCount = firstValue(nested(replayDetail, ["gptProcessCount"]), rows(nested(replayDetail, ["gptProcesses"])).length);
+  const timelineCount = firstValue(nested(replayDetail, ["timelineCount"]), rows(nested(replayDetail, ["timeline"])).length);
+  const runId = text(firstValue(run.sourceId, run.id), "Replay");
+  return explorerView("Détail Replay", text(run.name, runId), [explorerItem({
+    id: text(firstValue(run.sourceId, run.id), "replay"),
     title: text(run.name, "Replay run"),
     subtitle: `${text(run.tradingDate, "—")} · ${text(run.session, "—")} · ${number(run.progress, 0)}%`,
     status: run.status,
-    primary: `${signedNumber(run.metrics?.totalR)} R`,
+    primary: `${signedNumber(metrics.totalR)} R`,
     secondary: `${number(gptProcessCount, 0)} processus GPT · ${number(timelineCount, 0)} événements`,
     tags: [run.engineVersion, run.replaySchemaVersion, run.variantId],
     facts: [
       fact("Moteur", run.engineVersion), fact("Contrat Master", run.masterContractVersion), fact("V4 certifié", run.v4Certified ? "Oui" : "Non"), fact("Résultat éligible", run.resultEligible ? "Oui" : "Non"), fact("Étape courante", run.currentStepId), fact("Action suivante", run.nextAction),
     ],
-  })], [metric("Progression", `${number(run.progress, 0)}%`), metric("Total R", `${signedNumber(run.metrics?.totalR)} R`), metric("GPT", number(gptProcessCount, 0)), metric("Timeline", number(timelineCount, 0))]);
+  })], [metric("Progression", `${number(run.progress, 0)}%`), metric("Total R", `${signedNumber(metrics.totalR)} R`), metric("GPT", number(gptProcessCount, 0)), metric("Timeline", number(timelineCount, 0))]);
 }
 
 function replayCompareExplorer({ replays, replayComparison }) {
@@ -943,16 +787,50 @@ function performanceTradesExplorer({ performance }) {
 }
 
 function workflowDetailExplorer({ workflowDetail }) {
-  const workflow = workflowDetail?.workflow || workflowDetail || {};
-  const id = text(workflow.id || workflow.workflowId || workflow.workflow_id, "workflow");
-  const steps = rows(workflowDetail?.steps || workflow.steps).map((step, index) => explorerItem({ id: step.id || step.stepId || `step-${index + 1}`, title: step.label || step.name || step.stepId || "Étape", subtitle: step.detail || step.message || "Détail non publié", status: step.status || step.state, primary: step.durationMs == null ? "Durée indisponible" : `${step.durationMs} ms`, secondary: step.updatedAt || step.updated_at_utc || "Horodatage indisponible" }));
-  return explorerView("Détail workflow", id, steps, [metric("Statut", text(workflow.status, "UNKNOWN")), metric("Étapes", steps.length), metric("Progression", `${number(workflow.progress, 0)}%`), metric("Total R", `${signedNumber(workflow.metrics?.totalR)} R`)]);
+  const workflow = firstValue(nested(workflowDetail, ["workflow"]), workflowDetail, {});
+  const id = text(firstValue(workflow.id, workflow.workflowId, workflow.workflow_id), "workflow");
+  const steps = rows(firstValue(nested(workflowDetail, ["steps"]), workflow.steps)).map(workflowStepExplorerItem);
+  return explorerView("Détail workflow", id, steps, workflowDetailMetrics(workflow, steps));
 }
 
 function eventDetailExplorer({ eventDetail }) {
-  const event = eventDetail?.event || eventDetail || {};
-  const id = text(event.id || event.eventId || event.event_id, "event");
-  return explorerView("Détail événement", text(event.title || event.eventType || event.event_type, id), [explorerItem({ id, title: text(event.title || event.eventType || event.event_type, "Événement"), subtitle: text(event.detail || event.message, "Détail non publié"), status: event.status || event.severity || "RECORDED", primary: text(event.occurredAt || event.occurred_at_utc || event.created_at_utc, "Horodatage indisponible"), secondary: text(event.correlationId || event.correlation_id, "Corrélation indisponible"), facts: objectFacts(event, Object.keys(event).slice(0, 12)) })], [metric("Type", text(event.eventType || event.event_type, "—")), metric("Statut", text(event.status || event.severity, "RECORDED"))]);
+  const event = firstValue(nested(eventDetail, ["event"]), eventDetail, {});
+  const id = text(firstValue(event.id, event.eventId, event.event_id), "event");
+  return explorerView("Détail événement", eventDetailTitle(event, id), [eventDetailItem(event, id)], eventDetailMetrics(event));
+}
+
+function workflowStepExplorerItem(step, index) {
+  return explorerItem({
+    id: firstValue(step.id, step.stepId, `step-${index + 1}`),
+    title: firstValue(step.label, step.name, step.stepId, "Étape"),
+    subtitle: firstValue(step.detail, step.message, "Détail non publié"),
+    status: firstValue(step.status, step.state),
+    primary: step.durationMs == null ? "Durée indisponible" : `${step.durationMs} ms`,
+    secondary: firstValue(step.updatedAt, step.updated_at_utc, "Horodatage indisponible"),
+  });
+}
+function workflowDetailMetrics(workflow, steps) {
+  return [
+    metric("Statut", text(workflow.status, "UNKNOWN")),
+    metric("Étapes", steps.length),
+    metric("Progression", `${number(workflow.progress, 0)}%`),
+    metric("Total R", `${signedNumber(nested(workflow, ["metrics", "totalR"]))} R`),
+  ];
+}
+function eventDetailTitle(event, id) { return text(firstValue(event.title, event.eventType, event.event_type), id); }
+function eventDetailItem(event, id) {
+  return explorerItem({
+    id,
+    title: text(firstValue(event.title, event.eventType, event.event_type), "Événement"),
+    subtitle: text(firstValue(event.detail, event.message), "Détail non publié"),
+    status: firstValue(event.status, event.severity, "RECORDED"),
+    primary: text(firstValue(event.occurredAt, event.occurred_at_utc, event.created_at_utc), "Horodatage indisponible"),
+    secondary: text(firstValue(event.correlationId, event.correlation_id), "Corrélation indisponible"),
+    facts: objectFacts(event, Object.keys(event).slice(0, 12)),
+  });
+}
+function eventDetailMetrics(event) {
+  return [metric("Type", text(firstValue(event.eventType, event.event_type), "—")), metric("Statut", text(firstValue(event.status, event.severity), "RECORDED"))];
 }
 
 function operationsRunbooksExplorer({ runbooks }) {
@@ -974,23 +852,58 @@ function promptContractTag(contract) {
 }
 
 function governancePoliciesExplorer({ execution, observabilityPolicy }) {
-  const executionItems = rows(execution?.policies).map((item, index) => explorerItem({ id: item.policy_id || item.id || `execution-policy-${index + 1}`, title: item.name || item.policy_key || "Politique exécution", subtitle: item.description || "Politique publiée par execution overview", status: item.status || (item.enabled === false ? "DISABLED" : "ACTIVE"), primary: text(item.revision, "Révision indisponible"), secondary: text(item.updated_at_utc || item.updatedAt, "Horodatage indisponible"), tags: ["EXECUTION"] }));
-  const obsPolicy = observabilityPolicy?.policy || observabilityPolicy;
-  const observabilityItems = obsPolicy && typeof obsPolicy === "object" ? [explorerItem({ id: text(obsPolicy.id || obsPolicy.policyId, "observability-policy"), title: text(obsPolicy.name, "Politique observabilité"), subtitle: "Seuils, budgets et garde-fous de télémétrie", status: obsPolicy.enabled === false ? "DISABLED" : text(obsPolicy.status, "ACTIVE"), primary: text(obsPolicy.revision, "Révision indisponible"), secondary: text(obsPolicy.updatedAt || obsPolicy.updated_at_utc, "Horodatage indisponible"), tags: ["OBSERVABILITY"], facts: objectFacts(obsPolicy, Object.keys(obsPolicy).slice(0, 10)) })] : [];
+  const executionItems = rows(nested(execution, ["policies"])).map(executionPolicyExplorerItem);
+  const obsPolicy = firstValue(nested(observabilityPolicy, ["policy"]), observabilityPolicy);
+  const observabilityItems = observabilityPolicyItems(obsPolicy);
   const items = [...executionItems, ...observabilityItems];
   return explorerView("Policies", "Politiques réelles de risque, exécution et observabilité en lecture seule.", items, [metric("Politiques", items.length), metric("Actives", items.filter((item) => upper(item.status) === "ACTIVE").length), metric("Désactivées", items.filter((item) => upper(item.status) === "DISABLED").length)]);
 }
 
-function liveTrading({ execution, strategy, incidents, ai, health, query, warnings, nowIso }) {
+function executionPolicyExplorerItem(item, index) {
+  return explorerItem({
+    id: firstValue(item.policy_id, item.id, `execution-policy-${index + 1}`),
+    title: firstValue(item.name, item.policy_key, "Politique exécution"),
+    subtitle: firstValue(item.description, "Politique publiée par execution overview"),
+    status: firstValue(item.status, item.enabled === false ? "DISABLED" : "ACTIVE"),
+    primary: text(item.revision, "Révision indisponible"),
+    secondary: text(firstValue(item.updated_at_utc, item.updatedAt), "Horodatage indisponible"),
+    tags: ["EXECUTION"],
+  });
+}
+function observabilityPolicyItems(obsPolicy) {
+  if (!obsPolicy || typeof obsPolicy !== "object") return [];
+  return [explorerItem({
+    id: text(firstValue(obsPolicy.id, obsPolicy.policyId), "observability-policy"),
+    title: text(obsPolicy.name, "Politique observabilité"),
+    subtitle: "Seuils, budgets et garde-fous de télémétrie",
+    status: obsPolicy.enabled === false ? "DISABLED" : text(obsPolicy.status, "ACTIVE"),
+    primary: text(obsPolicy.revision, "Révision indisponible"),
+    secondary: text(firstValue(obsPolicy.updatedAt, obsPolicy.updated_at_utc), "Horodatage indisponible"),
+    tags: ["OBSERVABILITY"],
+    facts: objectFacts(obsPolicy, Object.keys(obsPolicy).slice(0, 10)),
+  })];
+}
+
+function liveTrading({ execution, strategy, incidents, ai, risk, health, query, warnings, nowIso, actor }) {
   const executionValue = execution || {};
   const safety = executionValue.safety || {};
   const performance = executionValue.performance || {};
   const advisorySummary = (ai && ai.summary) || {};
   const scope = normalizeFrontApiScope(query);
   const signals = rows(strategy?.signals).filter(hasSignalId).map(signalRow);
+  const portfolioOrderIntents = rows(executionValue.portfolioOrderIntents).map((item) => portfolioOrderIntentSummaryRow({ execution: executionValue, item, actor }));
   const ordersList = rows(executionValue.orders).filter(hasOrderId).map(orderRow);
   const fills = rows(executionValue.fills).filter(hasFillId).map(fillRow);
   const launchGate = demoPaperLaunchGate({ health, execution: executionValue, nowIso, rows });
+  const canonicalRuntime = liveCanonicalRuntime({
+    execution: executionValue,
+    strategy,
+    ai,
+    risk,
+    launchGate,
+    actor,
+    nowIso,
+  });
   const arbitrations = rows(executionValue.arbitrations).filter((item) => item?.arbitration_id && item?.signal_id).map((item) => ({
     arbitrationId: String(item.arbitration_id),
     signalId: String(item.signal_id),
@@ -1013,13 +926,16 @@ function liveTrading({ execution, strategy, incidents, ai, health, query, warnin
   if (!executionValue.arbitrations) warnings.push("live-arbitrations:UNAVAILABLE");
   if (!executionValue.risk_checks) warnings.push("live-risk-checks:UNAVAILABLE");
   if (safety.correlatedExposurePct == null) warnings.push("live-correlated-exposure:UNAVAILABLE");
-  if (!rows(executionValue.pipeline).length) warnings.push("live-pipeline:UNAVAILABLE");
+  if (!rows(executionValue.pipeline).length && canonicalRuntime.pipeline.every((item) => item.status === "UNAVAILABLE")) warnings.push("live-pipeline:UNAVAILABLE");
   if (!rows(executionValue.timeline).length) warnings.push("live-timeline:UNAVAILABLE");
   return {
     summary: {
       signalsToday: signals.length,
       tradesExecuted: fills.length,
-      acceptanceRatePct: signals.length ? Math.round((ordersList.length / signals.length) * 100) : 0,
+      acceptanceRatePct: signals.length ? Math.round((portfolioOrderIntents.length / signals.length) * 100) : 0,
+      orderIntentsPending: portfolioOrderIntents.filter((item) => ["READY", "AWAITING_MANUAL_CONFIRMATION", "PENDING"].includes(upper(item.state))).length,
+      providerCommandsCreated: rows(executionValue.providerCommands).length,
+      providerEventsObserved: rows(executionValue.providerEvents).length,
       riskUsedPct: number(safety.riskPercent, 0),
       correlatedExposurePct: number(safety.correlatedExposurePct, 0),
       liveDrawdownR: number(performance.max_drawdown_R, 0),
@@ -1033,15 +949,19 @@ function liveTrading({ execution, strategy, incidents, ai, health, query, warnin
     },
     launchGate: publicLaunchGate(launchGate),
     pipeline: pipeline(executionValue, launchGate),
+    canonicalRuntime,
     signals,
     arbitrations,
     riskChecks,
+    portfolioOrderIntents,
     orders: ordersList,
     fills,
     positions: rows(executionValue.trades).filter(hasTradeId).map(positionRow),
     providers: providerRows(execution),
     incidents: rows(incidents).filter(hasIncidentId).map(incidentSummary),
     timeline: rows(executionValue.timeline).filter((item) => item?.event_id).map((item) => ({ eventId: String(item.event_id), at: text(item.occurred_at_utc || item.created_at_utc, "unavailable"), step: text(item.step || item.domain, "unavailable"), title: text(item.title || item.event_type, "Événement"), detail: text(item.detail || item.message, "Détail indisponible"), tone: ["HIGH", "WATCH"].includes(upper(item.tone || item.severity)) ? upper(item.tone || item.severity) : "INFO" })),
+    timeSeriesContracts: frontTimeSeriesContracts({ view: "live-trading", execution: executionValue, strategy, risk, nowIso }),
+    telegramDrilldown: telegramDrilldownFromHealth(health),
     aiAdvisory: { mode: "ADVISORY", lastContextAt: ai?.generatedAt || nowIso, summary: advisorySummary.status || "AI Context consultatif uniquement." },
   };
 }
@@ -1050,35 +970,37 @@ function demoPaperReadiness(context) { return buildDemoPaperReadiness({ ...conte
 
 function portfolio({ execution, risk, nowIso, warnings }) {
   warnings.push("portfolio-attribution:NOT_IMPLEMENTED", "portfolio-correlation:NOT_IMPLEMENTED", "portfolio-equity-curve:NOT_IMPLEMENTED", "portfolio-reconciliation:PARTIAL", "portfolio-virtual-attribution:NOT_IMPLEMENTED");
-  const sourceExposureRows = rows(risk?.exposures).filter((item) => item?.exposure_id || item?.instrument_code);
-  const exposureRows = sourceExposureRows.filter((item) => finiteNumber(item?.value_usd) !== null);
+  const sourceExposureRows = rows(nested(risk, ["exposures"])).filter(hasExposureIdentity);
+  const exposureRows = sourceExposureRows.filter(hasExposureValue);
   if (sourceExposureRows.length && !exposureRows.length) warnings.push("portfolio-exposure-values:UNAVAILABLE");
-  const trades = rows(execution?.trades).filter(hasTradeId).filter(isOpenPortfolioTrade);
+  const trades = rows(nested(execution, ["trades"])).filter(hasTradeId).filter(isOpenPortfolioTrade);
   const summary = portfolioSummary(execution, risk, nowIso);
   if (summary.accountSnapshotStale) warnings.push("portfolio-account-snapshot:STALE");
   return {
     summary: summary.values,
     summaryTruth: summary.truth,
+    authoritativeState: firstValue(nested(risk, ["portfolio_state"]), null),
     equityCurve: [],
     positions: trades.map(portfolioPositionRow),
-    exposureTree: exposureRows.map((item) => ({ id: text(item.exposure_id || item.instrument_code, ""), label: text(item.instrument_code, "Instrument"), group: "Index", side: "NET", valueUsd: number(item.value_usd, 0), weightPct: number(item.weight_pct, 0) })),
+    exposureTree: exposureRows.map(portfolioExposureTreeRow),
     brokerPositions: trades.map(portfolioBrokerPositionRow),
     correlationMatrix: { instruments: exposureRows.map((item) => text(item.instrument_code, "—")).slice(0, 4), cells: [], topPair: "—", portfolioCorrelation: 0, diversificationScore: 0 },
     virtualAllocations: [],
-    reconciliation: { status: risk?.summary?.reconciliationDivergences ? "MISMATCH" : "PENDING", targetDeskQuantity: 0, brokerRealQuantity: 0, deltaQuantity: 0, asOf: nowIso, ordersInFlight: number(execution?.summary?.activeOrders, 0) },
+    reconciliation: portfolioReconciliationSummary({ execution, risk, nowIso }),
     attribution: { bestContributor: "—", top3RiskPct: 0, diversificationScore: 0, items: [] },
     timeline: [],
+    timeSeriesContracts: frontTimeSeriesContracts({ view: "portfolio", execution, risk, nowIso }),
   };
 }
 
 function portfolioSummary(execution = {}, risk = {}, nowIso) {
-  const snapshot = latestAccountSnapshot(execution?.accountSnapshots);
-  const equity = finiteNumber(snapshot?.payload?.net_liquidation_value ?? snapshot?.cash_value);
-  const unrealizedPnl = finiteNumber(snapshot?.unrealized_pnl ?? snapshot?.payload?.unrealized_pnl);
-  const riskPct = finiteNumber(risk?.summary?.risk_percent ?? execution?.safety?.riskPercent);
-  const correlatedExposurePct = finiteNumber(risk?.summary?.correlated_exposure_pct);
-  const sourceAt = isoTimestamp(snapshot?.captured_at, nowIso);
-  const accountSnapshotStale = Boolean(snapshot) && isOlderThanSeconds(sourceAt, nowIso, number(execution?.safety?.accountSnapshotMaxAgeSeconds, 60));
+  const snapshot = latestAccountSnapshot(nested(execution, ["accountSnapshots"]));
+  const equity = finiteNumber(firstValue(nested(snapshot, ["payload", "net_liquidation_value"]), nested(snapshot, ["cash_value"])));
+  const unrealizedPnl = finiteNumber(firstValue(nested(snapshot, ["unrealized_pnl"]), nested(snapshot, ["payload", "unrealized_pnl"])));
+  const riskPct = finiteNumber(firstValue(nested(risk, ["summary", "risk_percent"]), nested(execution, ["safety", "riskPercent"])));
+  const correlatedExposurePct = finiteNumber(nested(risk, ["summary", "correlated_exposure_pct"]));
+  const sourceAt = isoTimestamp(nested(snapshot, ["captured_at"]), nowIso);
+  const accountSnapshotStale = Boolean(snapshot) && isOlderThanSeconds(sourceAt, nowIso, number(nested(execution, ["safety", "accountSnapshotMaxAgeSeconds"]), 60));
   const values = {
     equity: equity ?? 0,
     grossExposureUsd: 0,
@@ -1090,7 +1012,7 @@ function portfolioSummary(execution = {}, risk = {}, nowIso) {
     dailyR: 0,
     exposureUsd: 0,
     maxDrawdownR: 0,
-    openPositions: number(execution?.summary?.openTrades, 0),
+    openPositions: number(nested(execution, ["summary", "openTrades"]), 0),
     riskUsagePct: riskPct ?? 0,
   };
   return {
@@ -1104,6 +1026,29 @@ function portfolioSummary(execution = {}, risk = {}, nowIso) {
       correlatedExposurePct: correlatedExposurePct == null ? notImplementedValue("Exposition corrélée non publiée", "portfolio.correlation") : knownValue(correlatedExposurePct, nowIso, "portfolio-risk"),
     },
     accountSnapshotStale,
+  };
+}
+
+function hasExposureIdentity(item) { return Boolean(item?.exposure_id || item?.instrument_code); }
+function hasExposureValue(item) { return finiteNumber(nested(item, ["value_usd"])) !== null; }
+function portfolioExposureTreeRow(item) {
+  return {
+    id: text(firstValue(item.exposure_id, item.instrument_code), ""),
+    label: text(item.instrument_code, "Instrument"),
+    group: "Index",
+    side: "NET",
+    valueUsd: number(item.value_usd, 0),
+    weightPct: number(item.weight_pct, 0),
+  };
+}
+function portfolioReconciliationSummary({ execution, risk, nowIso }) {
+  return {
+    status: nested(risk, ["summary", "reconciliationDivergences"]) ? "MISMATCH" : "PENDING",
+    targetDeskQuantity: 0,
+    brokerRealQuantity: 0,
+    deltaQuantity: 0,
+    asOf: nowIso,
+    ordersInFlight: number(nested(execution, ["summary", "activeOrders"]), 0),
   };
 }
 
@@ -1183,22 +1128,38 @@ function operationsQueue({ runtime, incidents, warnings }) {
   };
 }
 
-function eventsAudit({ warnings }) {
-  warnings.push("events-audit-source:NOT_IMPLEMENTED");
+function eventsAudit({ execution, strategy, incidents, runtime, warnings, nowIso }) {
+  const events = frontAuditEvents({ execution, strategy, incidents, runtime, nowIso });
+  if (!events.length) warnings.push("events-audit-source:UNAVAILABLE");
+  const correlationIds = [...new Set(events.map((item) => item.correlationId).filter((item) => item && item !== "none"))];
+  const selectedCorrelationId = correlationIds[0] || "none";
+  const selectedEvents = events.filter((item) => item.correlationId === selectedCorrelationId);
   return {
-    summary: { totalEvents: 0, correlations: 0, authoritativeSteps: 0, advisoryBranches: 0, avgLatencyMs: 0, exportablePayloads: 0 },
-    filters: { activeCorrelationId: "none", domains: [], statuses: [], windowLabel: "BFF current" },
-    events: [],
-    selectedCorrelation: {
-      correlationId: "none",
-      rootEventId: "none",
-      authoritativePath: [],
-      advisoryPath: [],
-      totalLatencyMs: 0,
-      payloadPreview: [],
-      logs: [],
+    summary: {
+      totalEvents: events.length,
+      correlations: correlationIds.length,
+      authoritativeSteps: countBy(events, (item) => item.authority === "AUTHORITATIVE"),
+      advisoryBranches: countBy(events, (item) => item.authority === "ADVISORY"),
+      avgLatencyMs: average(events.map((item) => number(item.latencyMs, NaN))),
+      exportablePayloads: countBy(events, (item) => item.payloadPreview.length > 0),
     },
-    relations: [],
+    filters: {
+      activeCorrelationId: selectedCorrelationId,
+      domains: [...new Set(events.map((item) => item.domain))],
+      statuses: [...new Set(events.map((item) => item.status))],
+      windowLabel: "BFF current",
+    },
+    events,
+    selectedCorrelation: {
+      correlationId: selectedCorrelationId,
+      rootEventId: selectedEvents[0]?.eventId || "none",
+      authoritativePath: selectedEvents.filter((item) => item.authority === "AUTHORITATIVE").map((item) => item.eventId),
+      advisoryPath: selectedEvents.filter((item) => item.authority === "ADVISORY").map((item) => item.eventId),
+      totalLatencyMs: selectedEvents.reduce((sum, item) => sum + number(item.latencyMs, 0), 0),
+      payloadPreview: selectedEvents.flatMap((item) => item.payloadPreview).slice(0, 20),
+      logs: selectedEvents.map((item) => ({ at: item.at, domain: item.domain, status: item.status, title: item.title })),
+    },
+    relations: auditRelations(events),
     commandActions: [],
   };
 }
@@ -1209,7 +1170,7 @@ function orders({ execution, warnings }) {
   return { summary: { orderIntents: rows(execution?.intents).filter(hasIntentId).length, activeOrders: activeOrders.length, recentFills: rows(execution?.fills).filter(hasFillId).length, partialOrders: countBy(activeOrders, (item) => item.state === "PARTIAL"), rejectedOrders: countBy(activeOrders, (item) => item.state === "REJECTED"), protectedOrdersPct: orderProtectionRate(activeOrders) }, filters: { activeTab: "ACTIVE", stateCounts: {}, providerCounts: {} }, orderIntents: rows(execution?.intents).filter(hasIntentId).map(intentRow), activeOrders, fills: rows(execution?.fills).filter(hasFillId).map(orderFillRow), protections: [], providers: providerRows(execution), stateMachine: [], history: [], commandActions: [] };
 }
 
-function orderDetail({ execution, query, warnings, actor }) {
+function orderDetail({ execution, query, warnings, actor, nowIso }) {
   const requestedOrderId = text(query.orderId, "");
   const source = rows(execution?.orders).find((item) => String(item.broker_order_id || item.order_id || "").trim() === requestedOrderId)
     || (!requestedOrderId ? rows(execution?.orders)[0] : null);
@@ -1233,6 +1194,14 @@ function orderDetail({ execution, query, warnings, actor }) {
     order: effectiveOrder,
     intent: intentSource ? intentRow(intentSource) : null,
     authority: portfolioIntentSource ? orderAuthorityProjection(portfolioIntentSource) : null,
+    canonicalDossier: portfolioIntentSource ? canonicalOrderIntentDossier({ execution, portfolioIntent: portfolioIntentSource, order: effectiveOrder, actor, nowIso }) : null,
+    resourceActions: portfolioIntentSource ? resourceAllowedActions({
+      resourceType: "OrderIntent",
+      status: text(portfolioIntentSource.status || portfolioIntentSource.payload?.status, "READY"),
+      revision: text(portfolioIntentSource.immutable_terms_hash || portfolioIntentSource.order_intent_hash || effectiveOrder.expectedVersion, "unavailable"),
+      actor,
+      expiresAt: text(portfolioIntentSource.expires_at_utc || portfolioIntentSource.payload?.expires_at_utc, ""),
+    }) : resourceAllowedActions({ resourceType: "BrokerOrder", status: effectiveOrder.state, actor }),
     executionMode: portfolioIntentSource ? "SEMI_MANUAL" : null,
     humanGate: portfolioIntentSource ? orderHumanGateProjection({ execution, portfolioIntent: portfolioIntentSource, actor }) : null,
     reconciliation,
@@ -1244,22 +1213,22 @@ function orderDetail({ execution, query, warnings, actor }) {
 }
 
 function findPortfolioOrderIntent({ execution, queryOrderId, order }) {
-  const expected = new Set([
-    queryOrderId,
-    order?.portfolio_order_intent_id,
-    order?.order_intent_id,
-    order?.payload?.portfolio_order_intent_id,
-    order?.payload?.order_intent_id,
-  ].map((value) => text(value, "")).filter(Boolean));
-  return rows(execution?.portfolioOrderIntents).find((item) => {
-    const payload = item?.order_intent_payload || item?.payload || {};
-    return [
-      item?.portfolio_order_intent_id,
-      item?.order_intent_id,
-      payload?.order_intent_id,
-      payload?.portfolio_order_intent_id,
-    ].some((value) => expected.has(text(value, "")));
-  }) || null;
+  const expected = new Set(portfolioOrderIntentIds(order, [queryOrderId]));
+  return rows(nested(execution, ["portfolioOrderIntents"]))
+    .find((item) => portfolioOrderIntentIds(item).some((value) => expected.has(value)))
+    || null;
+}
+
+function portfolioOrderIntentIds(item = {}, seeds = []) {
+  item = item || {};
+  const payload = firstValue(item.order_intent_payload, item.payload, {});
+  return [
+    ...seeds,
+    item.portfolio_order_intent_id,
+    item.order_intent_id,
+    payload.portfolio_order_intent_id,
+    payload.order_intent_id,
+  ].map((value) => text(value, "")).filter(Boolean);
 }
 
 function syntheticOrderFromPortfolioIntent(lineage = {}) {
@@ -1345,61 +1314,6 @@ function authorityStage(label, { decision, authorityId, version, reasonCodes }) 
   };
 }
 
-function orderHumanGateProjection({ execution, portfolioIntent, actor }) {
-  const portfolioOrderIntentId = text(portfolioIntent?.portfolio_order_intent_id, "");
-  const gate = rows(execution?.humanExecutionGates).find((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId)
-    || (portfolioIntent?.human_execution_gate_id ? portfolioIntent : null);
-  const status = upper(gate?.status || portfolioIntent?.human_gate_status || "AWAITING_MANUAL_CONFIRMATION");
-  const operatorCanWrite = permissions(actor).some((item) => item.capability === "front.command" && item.allowed);
-  return {
-    gateId: text(gate?.human_execution_gate_id || portfolioIntent?.human_execution_gate_id, ""),
-    status,
-    revision: number(gate?.revision || portfolioIntent?.human_gate_revision, 0),
-    expiresAt: text(gate?.expires_at_utc || portfolioIntent?.human_gate_expires_at_utc || portfolioIntent?.expires_at_utc, ""),
-    confirmedAt: text(gate?.confirmed_at_utc || portfolioIntent?.human_gate_confirmed_at_utc, ""),
-    rejectedAt: text(gate?.rejected_at_utc || portfolioIntent?.human_gate_rejected_at_utc, ""),
-    actions: status === "AWAITING_MANUAL_CONFIRMATION" ? humanGateActions({ portfolioIntent, operatorCanWrite }) : [],
-    unavailableReason: operatorCanWrite
-      ? ""
-      : "Session desk.write requise ; le front ne peut pas inventer d'autorisation locale.",
-  };
-}
-
-function humanGateActions({ portfolioIntent, operatorCanWrite }) {
-  const payload = portfolioIntent.order_intent_payload || portfolioIntent.payload || {};
-  const portfolioOrderIntentId = text(portfolioIntent.portfolio_order_intent_id || payload.order_intent_id, "");
-  const expectedRevision = text(portfolioIntent.order_intent_hash || payload.order_intent_hash || portfolioIntent.human_gate_revision, "unavailable");
-  const permission = operatorCanWrite ? "ALLOWED" : "DENIED";
-  return [
-    {
-      action: "CONFIRM",
-      actionId: `human-gate.confirm.${portfolioOrderIntentId}`,
-      label: "Confirmer OrderIntent PAPER",
-      commandType: "execution.order_intent.confirm",
-      environment: "PAPER",
-      permission,
-      requiresConfirmation: true,
-      requiresReason: true,
-      expectedRevision,
-      impactPreview: "Autorise uniquement le passage Human Gate ; aucune preuve provider ni fill n'est créée par cette action.",
-      payload: { portfolioOrderIntentId },
-    },
-    {
-      action: "REJECT",
-      actionId: `human-gate.reject.${portfolioOrderIntentId}`,
-      label: "Rejeter OrderIntent",
-      commandType: "execution.order_intent.reject",
-      environment: "PAPER",
-      permission,
-      requiresConfirmation: true,
-      requiresReason: true,
-      expectedRevision,
-      impactPreview: "Bloque l'intention post-risk sans modifier les termes immuables.",
-      payload: { portfolioOrderIntentId },
-    },
-  ];
-}
-
 function orderIntentReconciliation({ execution, portfolioIntent, fills }) {
   const portfolioOrderIntentId = text(portfolioIntent?.portfolio_order_intent_id, "");
   const state = rows(execution?.portfolioExecutionStates).find((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId) || {};
@@ -1444,13 +1358,54 @@ function providerLifecycleRows({ execution, portfolioIntent, order }) {
 }
 
 function positionDetail({ execution, query, warnings }) {
-  const source = selectById(rows(execution?.trades), query.positionId, (item) => item.trade_id || item.position_id, "POSITION_NOT_FOUND");
+  const source = selectById(rows(nested(execution, ["trades"])), query.positionId, (item) => firstValue(item.trade_id, item.position_id), "POSITION_NOT_FOUND");
   const base = positionRow(source);
-  const relatedOrders = rows(execution?.orders).filter((item) => String(item.strategy_instance_id) === base.strategyInstanceId || (source.signal_id && String(item.signal_id) === String(source.signal_id))).map(activeOrderRow);
-  if (!rows(execution?.trade_events).length) warnings.push("position-lifecycle:UNAVAILABLE");
-  const lifecycle = rows(execution?.trade_events).filter((item) => String(item.trade_id || item.position_id) === base.positionId).map((item) => ({ eventId: text(item.event_id, "unavailable"), at: text(item.occurred_at_utc || item.created_at_utc, "unavailable"), state: text(item.state || item.event_type, "unavailable"), detail: text(item.detail || item.message, "Détail indisponible") }));
+  const relatedOrders = positionRelatedOrders({ execution, source, base });
+  if (!rows(nested(execution, ["trade_events"])).length) warnings.push("position-lifecycle:UNAVAILABLE");
+  const lifecycle = positionLifecycleRows({ execution, base });
   const signalId = text(source.signal_id, "unavailable");
-  return { summary: { state: text(source.status || source.state, base.quantity > 0 ? "OPEN" : "CLOSED"), quantity: base.quantity, pnlR: base.pnlR, riskR: base.riskR, protectionStatus: base.protectionStatus }, identity: { positionId: base.positionId, strategyInstanceId: base.strategyInstanceId, signalId, correlationId: text(source.correlation_id, "unavailable") }, position: { ...base, state: text(source.status || source.state, base.quantity > 0 ? "OPEN" : "CLOSED"), stopPrice: number(source.stop_price, undefined), targetPrice: number(source.target_price, undefined), openedAt: text(source.opened_at_utc || source.entry_at_utc, "unavailable"), closedAt: text(source.closed_at_utc || source.exit_at_utc, undefined) }, orders: relatedOrders, lifecycle, relations: [{ label: "Signal", id: signalId, route: `/live/signals/${encodeURIComponent(signalId)}` }, { label: "Stratégie", id: base.strategyInstanceId, route: `/strategies/${encodeURIComponent(base.strategyInstanceId)}` }] };
+  return { summary: positionDetailSummary(source, base), identity: positionDetailIdentity(source, base, signalId), position: positionDetailBody(source, base), orders: relatedOrders, lifecycle, relations: positionDetailRelations(base, signalId) };
+}
+
+function positionRelatedOrders({ execution, source, base }) {
+  return rows(nested(execution, ["orders"]))
+    .filter((item) => String(item.strategy_instance_id) === base.strategyInstanceId || matchingSignalId(item, source))
+    .map(activeOrderRow);
+}
+function matchingSignalId(item, source) {
+  return Boolean(source.signal_id) && String(item.signal_id) === String(source.signal_id);
+}
+function positionLifecycleRows({ execution, base }) {
+  return rows(nested(execution, ["trade_events"]))
+    .filter((item) => String(firstValue(item.trade_id, item.position_id)) === base.positionId)
+    .map(positionLifecycleRow);
+}
+function positionLifecycleRow(item) {
+  return {
+    eventId: text(item.event_id, "unavailable"),
+    at: text(firstValue(item.occurred_at_utc, item.created_at_utc), "unavailable"),
+    state: text(firstValue(item.state, item.event_type), "unavailable"),
+    detail: text(firstValue(item.detail, item.message), "Détail indisponible"),
+  };
+}
+function positionDetailSummary(source, base) {
+  return { state: text(firstValue(source.status, source.state), base.quantity > 0 ? "OPEN" : "CLOSED"), quantity: base.quantity, pnlR: base.pnlR, riskR: base.riskR, protectionStatus: base.protectionStatus };
+}
+function positionDetailIdentity(source, base, signalId) {
+  return { positionId: base.positionId, strategyInstanceId: base.strategyInstanceId, signalId, correlationId: text(source.correlation_id, "unavailable") };
+}
+function positionDetailBody(source, base) {
+  return {
+    ...base,
+    state: text(firstValue(source.status, source.state), base.quantity > 0 ? "OPEN" : "CLOSED"),
+    stopPrice: number(source.stop_price, undefined),
+    targetPrice: number(source.target_price, undefined),
+    openedAt: text(firstValue(source.opened_at_utc, source.entry_at_utc), "unavailable"),
+    closedAt: text(firstValue(source.closed_at_utc, source.exit_at_utc), undefined),
+  };
+}
+function positionDetailRelations(base, signalId) {
+  return [{ label: "Signal", id: signalId, route: `/live/signals/${encodeURIComponent(signalId)}` }, { label: "Stratégie", id: base.strategyInstanceId, route: `/strategies/${encodeURIComponent(base.strategyInstanceId)}` }];
 }
 
 function incidentDetail({ incidents, query, warnings }) {
@@ -1461,23 +1416,103 @@ function incidentDetail({ incidents, query, warnings }) {
   return { summary: { severity: incident.severity, status: incident.status, retryCount: number(source.retry_count, 0), operatorGate: text(source.operator_gate, "NONE") }, incident: { ...incident, retryCount: number(source.retry_count, 0), operatorGate: text(source.operator_gate, "NONE"), impactR: number(source.impact_R ?? source.impact_r, 0), impactSummary: text(source.impact_summary, incident.detail), machineRecommendation: text(source.machine_recommendation, "Indisponible"), openedAt: text(source.opened_at_utc || source.created_at_utc, "unavailable"), updatedAt: text(source.updated_at_utc || source.created_at_utc, "unavailable") }, payloadPreview: incident.payloadPreview, meta: incident.meta, chronology: incident.chronology, reconciliationResults: incident.reconciliationResults, postMortem: incident.postMortem, retries: rows(source.retries), relations: [{ label: "Ordre", id: text(source.order_id, "unavailable"), route: `/execution/orders/${encodeURIComponent(text(source.order_id, "unavailable"))}` }, { label: "Position", id: text(source.position_id, "unavailable"), route: `/execution/portfolio/positions/${encodeURIComponent(text(source.position_id, "unavailable"))}` }] };
 }
 
-function riskCenter({ risk, warnings }) {
-  if (!risk?.limits) warnings.push("risk-limits:UNAVAILABLE");
-  return { summary: { globalStatus: risk?.summary?.status || "DATA_UNAVAILABLE", riskUsedPct: number(risk?.summary?.risk_percent, 0), grossExposureUsd: number(risk?.summary?.gross_exposure_usd, 0), netExposureUsd: number(risk?.summary?.net_exposure_usd, 0), leverage: number(risk?.summary?.leverage, 0), dailyLossR: number(risk?.summary?.daily_loss_r, 0), dailyLossLimitR: number(risk?.summary?.daily_loss_limit_r, 0), trailingDrawdownR: number(risk?.summary?.trailing_drawdown_r, 0), maxDrawdownR: number(risk?.summary?.max_drawdown_r, 0), activeBreaches: rows(risk?.breaches).length, stressTestsToday: rows(risk?.stress_tests).length }, limits: rows(risk?.limits), exposures: rows(risk?.exposures).filter((item) => item?.exposure_id || item?.instrument_code).map((item) => ({ exposureId: text(item.exposure_id || item.instrument_code, ""), label: text(item.instrument_code, "Exposure"), valueUsd: number(item.value_usd, 0), riskPct: number(item.risk_pct, 0), status: upper(item.status) === "BLOCK" ? "BLOCK" : upper(item.status) === "PASS" ? "PASS" : "WATCH" })), correlations: rows(risk?.correlations), propConstraints: rows(risk?.prop_constraints), stressTests: rows(risk?.stress_tests), breaches: rows(risk?.breaches), commandActions: [] };
+function riskCenter({ risk, execution, nowIso, warnings }) {
+  if (!nested(risk, ["limits"])) warnings.push("risk-limits:UNAVAILABLE");
+  const authoritative = nested(risk, ["risk_center"]) || null;
+  return {
+    summary: riskCenterSummary(risk, authoritative),
+    authoritativeState: authoritative,
+    limits: riskCenterPreferredRows(authoritative, risk, "limits"),
+    exposures: riskCenterExposures(risk),
+    correlations: rows(nested(risk, ["correlations"])),
+    propConstraints: rows(nested(risk, ["prop_constraints"])),
+    stressTests: rows(nested(risk, ["stress_tests"])),
+    breaches: riskCenterPreferredRows(authoritative, risk, "breaches"),
+    timeSeriesContracts: frontTimeSeriesContracts({ view: "risk", execution, risk, nowIso }),
+    commandActions: [],
+  };
 }
 
 function executionProviders({ execution, incidents, warnings }) {
-  if (!execution?.performance) warnings.push("execution-provider-performance:UNAVAILABLE");
+  if (!nested(execution, ["performance"])) warnings.push("execution-provider-performance:UNAVAILABLE");
   const providers = providerRows(execution);
   const accounts = rows(execution?.accounts).filter((item) => item?.broker_account_id).map(accountRow);
-  return { summary: { primaryProviderId: providers[0]?.providerId || "unavailable", standbyProviderId: providers[1]?.providerId || "unavailable", activeProviders: providers.length, degradedProviders: countBy(providers, (item) => item.status !== "OK"), avgLatencyMs: average(providers.map((item) => item.latencyMs)), fillRatePct: number(execution?.performance?.fill_rate_pct, 0), slippageR: number(execution?.performance?.slippage_r, 0), openIncidents: rows(incidents).filter(hasIncidentId).length, accounts: accounts.length }, providers: providers.map((item, index) => ({ ...item, adapter: item.providerId, state: item.status === "OK" ? index === 0 ? "PRIMARY" : "STANDBY" : "DEGRADED", role: index === 0 ? "PRIMARY" : "STANDBY", fillRatePct: number(execution?.performance?.fill_rate_pct, 0), browserExposure: "NONE" })), accounts, adapters: [], healthChecks: providers.map((item) => ({ checkId: `health_${item.providerId}`, label: item.label, detail: item.status, latencyMs: item.latencyMs, status: item.status === "OK" ? "PASS" : "WATCH" })), switchWorkflow: [], events: [], incidents: rows(incidents).filter(hasIncidentId).map(incidentSummary), commandActions: [] };
+  return {
+    summary: executionProviderSummary({ execution, providers, accounts, incidents }),
+    providers: providers.map((item, index) => executionProviderRow(item, index, execution)),
+    accounts,
+    adapters: [],
+    healthChecks: providers.map(executionProviderHealthRow),
+    switchWorkflow: [],
+    events: [],
+    incidents: rows(incidents).filter(hasIncidentId).map(incidentSummary),
+    commandActions: [],
+  };
 }
 
-function executionIncidents({ incidents, warnings }) {
-  warnings.push("incident-reconciliation-details:NOT_IMPLEMENTED");
-  const list = rows(incidents).filter(hasIncidentId).map(incidentRow);
-  return { summary: { openIncidents: list.length, criticalIncidents: countBy(list, (item) => item.severity === "CRITICAL"), highIncidents: countBy(list, (item) => item.severity === "HIGH"), retryableIncidents: 0, pendingReconciliations: 0, impactedOrders: 0, avgAgeMinutes: 0, impactR: 0 }, filters: { activeDomain: "ALL", activeSeverity: "ALL", searchHint: "incident, provider, order", statuses: [] }, incidents: list, selectedIncident: list[0] || emptyIncident(), retries: [], commandActions: [] };
+function riskCenterSummary(risk, authoritative) {
+  const summary = nested(risk, ["summary"]) || {};
+  return {
+    globalStatus: firstValue(nested(authoritative, ["globalStatus"]), summary.status, "DATA_UNAVAILABLE"),
+    riskUsedPct: number(summary.risk_percent, 0),
+    grossExposureUsd: number(summary.gross_exposure_usd, 0),
+    netExposureUsd: number(summary.net_exposure_usd, 0),
+    leverage: number(summary.leverage, 0),
+    dailyLossR: number(summary.daily_loss_r, 0),
+    dailyLossLimitR: number(summary.daily_loss_limit_r, 0),
+    trailingDrawdownR: number(summary.trailing_drawdown_r, 0),
+    maxDrawdownR: number(summary.max_drawdown_r, 0),
+    activeBreaches: firstValue(rows(nested(authoritative, ["breaches"])).length || undefined, rows(nested(risk, ["breaches"])).length),
+    stressTestsToday: rows(nested(risk, ["stress_tests"])).length,
+  };
 }
+function riskCenterPreferredRows(authoritative, risk, key) {
+  const authoritativeRows = rows(nested(authoritative, [key]));
+  return authoritativeRows.length ? authoritativeRows : rows(nested(risk, [key]));
+}
+function riskCenterExposures(risk) {
+  return rows(nested(risk, ["exposures"]))
+    .filter((item) => item?.exposure_id || item?.instrument_code)
+    .map((item) => ({
+      exposureId: text(firstValue(item.exposure_id, item.instrument_code), ""),
+      label: text(item.instrument_code, "Exposure"),
+      valueUsd: number(item.value_usd, 0),
+      riskPct: number(item.risk_pct, 0),
+      status: riskExposureStatus(item.status),
+    }));
+}
+function riskExposureStatus(status) {
+  const normalized = upper(status);
+  if (normalized === "BLOCK") return "BLOCK";
+  return normalized === "PASS" ? "PASS" : "WATCH";
+}
+function executionProviderSummary({ execution, providers, accounts, incidents }) {
+  return {
+    primaryProviderId: firstValue(nested(providers, [0, "providerId"]), "unavailable"),
+    standbyProviderId: firstValue(nested(providers, [1, "providerId"]), "unavailable"),
+    activeProviders: providers.length,
+    degradedProviders: countBy(providers, (item) => item.status !== "OK"),
+    avgLatencyMs: average(providers.map((item) => item.latencyMs)),
+    fillRatePct: number(nested(execution, ["performance", "fill_rate_pct"]), 0),
+    slippageR: number(nested(execution, ["performance", "slippage_r"]), 0),
+    openIncidents: rows(incidents).filter(hasIncidentId).length,
+    accounts: accounts.length,
+  };
+}
+function executionProviderRow(item, index, execution) {
+  return {
+    ...item,
+    adapter: item.providerId,
+    state: item.status === "OK" ? primaryOrStandby(index) : "DEGRADED",
+    role: primaryOrStandby(index),
+    fillRatePct: number(nested(execution, ["performance", "fill_rate_pct"]), 0),
+    browserExposure: "NONE",
+  };
+}
+function executionProviderHealthRow(item) {
+  return { checkId: `health_${item.providerId}`, label: item.label, detail: item.status, latencyMs: item.latencyMs, status: item.status === "OK" ? "PASS" : "WATCH" };
+}
+function primaryOrStandby(index) { return index === 0 ? "PRIMARY" : "STANDBY"; }
 
 function researchLab({ runtime, research, dataFoundation, simulationRuns, incidents, actor }) {
   const experiments = rows(research?.experiments).filter((item) => item?.research_experiment_id).map(researchExperimentRow);
@@ -1544,13 +1579,6 @@ function strategyCenter({ strategy }) {
 
 function operatorSettings({ warnings }) { warnings.push("operator-settings-store:NOT_IMPLEMENTED"); return { summary: { theme: "dark", density: "compact", language: "fr", timezone: "Europe/Paris", notificationsEnabled: false, voiceState: "OFF", activeDevices: 0, activeSessions: 0, privacyMode: "STRICT" }, cockpitPreferences: [], widgets: [], notificationRules: [], jarvis: { pushToTalkEnabled: false, wakeWordEnabled: false, voiceState: "OFF", lastVoiceCheckAt: "unavailable", transcriptRetention: "NONE" }, shortcuts: [], devices: [], privacy: [], guardrails: [], commandActions: [] }; }
 function adminAccess({ actor, warnings }) { warnings.push("admin-directory:NOT_IMPLEMENTED"); const writeAllowed = permissions(actor).some((item) => item.capability === "front.command" && item.allowed); return { summary: { accessMode: writeAllowed ? "FULL_ADMIN" : "READ_ONLY", users: 0, activeUsers: 0, roles: rows(actor?.roles).length, capabilities: permissions(actor).length, accountGroups: 0, pendingChanges: 0, auditEvents: 0 }, currentAccess: { userId: text(actor?.uid || actor?.email, "anonymous"), roles: rows(actor?.roles), canMutate: writeAllowed, readOnlyReason: writeAllowed ? "" : "Session desk.write requise", stepUpReady: writeAllowed }, users: [], roles: [], capabilities: permissions(actor), accountGroups: [], policies: [], providerAccess: [], auditEvents: [], commandActions: [] }; }
-function liveSignalDetail({ strategy, execution, risk, ai, query, nowIso }) {
-  const source = selectById(rows(strategy?.signals), query.signalId, (item) => item.signal_outbox_id || item.signal_id, "LIVE_SIGNAL_NOT_FOUND");
-  const signal = signalRow(source);
-  const matchingOrders = rows(execution?.orders).filter((item) => text(item.signal_id, "") === signal.signalId).map(orderRow);
-  const identityValue = { signalId: signal.signalId, strategyId: signal.strategyId, strategyDefinitionId: signal.strategyId, strategyVersionId: signal.strategyVersionId, strategyInstanceId: signal.strategyInstanceId, runtimeBundleId: text(source.runtime_bundle_id, "unavailable"), sessionId: text(source.session_id, "unavailable"), correlationId: text(source.correlation_id, "unavailable"), featureSnapshotId: signal.featureSnapshotId, expectedVersion: text(source.revision, "0") };
-  return { summary: { signalScore: signal.confidence, timeToExpirySec: Math.max(0, Math.floor((Date.parse(signal.expiresAt) - Date.parse(nowIso)) / 1000)), acceptanceProbabilityPct: signal.confidence, targetQuantity: number(source.target_quantity, 0), riskUsedPct: number(risk?.summary?.risk_percent, 0), conflictCount: 0 }, identity: identityValue, signal: { symbol: signal.symbol, direction: signal.direction, state: signal.state, generatedAt: signal.createdAt, expiresAt: signal.expiresAt, confidence: signal.confidence, expectancyR: signal.expectancyR, rewardRisk: signal.rewardRisk, regime: signal.regime, entryZoneLow: number(source.entry_zone_low ?? source.entry_price, 0), entryZoneHigh: number(source.entry_zone_high ?? source.entry_price, 0), stopPrice: number(source.stop_price, 0), targetPrice: number(source.target_price, 0) }, predicates: rows(source.predicates), featureSnapshot: { featureSnapshotId: signal.featureSnapshotId, datasetId: text(source.dataset_id, "unavailable"), cutoffAt: text(source.cutoff_at_utc || source.created_at_utc, nowIso), hash: text(source.feature_snapshot_hash, "unavailable"), pointInTime: true, freshness: source.feature_snapshot_id ? "FRESH" : "WATCH", items: rows(source.features) }, context: [], conflicts: [], existingPositions: rows(execution?.trades).map(positionRow), arbitration: { arbitrationId: text(source.arbitration_id, "unavailable"), decision: matchingOrders.length ? "ACCEPTED" : "REJECTED", targetQuantity: number(source.target_quantity, 0), conflictStatus: "CLEAR", correlationPct: number(source.correlation_pct, 0), reasonCode: text(source.reason_code, matchingOrders.length ? "ORDER_LINKED" : "ARBITRATION_UNAVAILABLE"), portfolioRoute: "/portfolio" }, riskCheck: { riskCheckId: text(source.risk_check_id, "unavailable"), status: source.risk_check_status === "PASS" ? "PASS" : "WATCH", limitLabel: text(source.risk_limit_label, "Donnée risk check indisponible"), usedPct: number(risk?.summary?.risk_percent, 0), reasonCode: text(source.risk_reason_code, "RISK_CHECK_UNAVAILABLE"), maxRiskPct: number(source.max_risk_pct, 0), netCapital: firstNumber(risk?.accounts, "capital"), targetRiskR: number(source.target_risk_r, 0), roundedQuantity: number(source.target_quantity, 0) }, linkedOrders: matchingOrders, auditTrail: [], aiAdvisory: { mode: "ADVISORY", lastContextAt: ai?.generatedAt || nowIso, summary: text(ai?.summary?.status, "Contexte IA indisponible."), authority: "NONE", recommendation: "WAIT" }, navigation: [{ label: "Stratégie", route: `/strategies/${signal.strategyId}`, kind: "STRATEGY" }, { label: "Ordres", route: "/orders", kind: "ORDERS" }], commandActions: [] };
-}
 function strategyDetail({ strategy, research, execution, incidents, query, warnings }) {
   const definition = selectById(rows(strategy?.definitions), query.strategyId, (item) => item.strategy_definition_id || item.strategy_id, "STRATEGY_NOT_FOUND");
   const strategyId = String(definition.strategy_definition_id || definition.strategy_id);
@@ -1754,18 +1782,7 @@ function envelope({ viewName, data, started, stale, warnings = [], clock, source
   };
 }
 
-function permissions(actor = {}) {
-  const writeAllowed = ["operator_session", "api_key", "oauth"].includes(String(actor.kind || "")) && rows(actor.scopes).includes("desk.write");
-  return [
-    { capability: "front.read", allowed: true },
-    { capability: "front.command", allowed: writeAllowed, reason: writeAllowed ? undefined : "WRITE_REQUIRES_OPERATOR_SESSION", requiresStepUp: !writeAllowed },
-    { capability: "execution.paper", allowed: writeAllowed, reason: writeAllowed ? undefined : "WRITE_REQUIRES_OPERATOR_SESSION", requiresStepUp: !writeAllowed },
-    { capability: "execution.live", allowed: false, reason: "LIVE_CUTOVER_LOCKED", requiresStepUp: true },
-  ];
-}
-function system(id, label, status, detail, latencyMs) { return { id, label, status, detail, latencyMs }; }
 function lane(id, label, detail, completed, total, state) { return { id, label, detail, completed, total, state }; }
-function laneState(id, label, detail, source) { return lane(id, label, detail, source ? 1 : 0, 1, source ? "NOMINAL" : "WATCH"); }
 function pipeline(execution, launchGate) {
   const allowedSteps = new Set(["MARKET_DATA", "FEATURE_ENGINE", "STRATEGY_RUNTIME", "SIGNAL_BUS", "ARBITRATION", "GLOBAL_RISK", "BROKER_NETTING", "ORDER_INTENT", "EXECUTION_GATEWAY", "PROVIDER", "BROKER", "RECONCILIATION"]);
   const canonical = rows(execution?.pipeline)
@@ -1783,20 +1800,6 @@ function pipeline(execution, launchGate) {
     .filter((item) => item.status)
     .map((item) => ({ stepId: item.stepId, label: item.stepId.replaceAll("_", " "), status: item.status, latencyMs: 0, detail: item.detail || "État issu du launch gate autoritaire" }));
 }
-function activityRows({ execution, strategy, incidents, nowIso = currentUtc() }) { return [{ id: "act_strategy_projection", time: timeLabel(nowIso), domain: "Strategy", label: "Projection strategy-v2", detail: `${rows(strategy?.instances).length} instances`, duration: "—", state: strategy ? "DONE" : "WATCH" }, { id: "act_execution_projection", time: timeLabel(nowIso), domain: "Execution", label: "Projection execution", detail: `${rows(execution?.orders).length} ordres`, duration: "—", state: execution ? "DONE" : "WATCH" }, ...rows(incidents).filter(hasIncidentId).slice(0, 4).map((item) => ({ id: text(item.incident_id, ""), time: timeLabel(item.created_at_utc || nowIso), domain: text(item.domain, "Operations"), label: text(item.title, "Incident"), detail: text(item.message || item.detail, "Incident ouvert"), duration: "—", state: "WATCH" }))]; }
-function signalRow(item) { return { signalId: text(item.signal_outbox_id || item.signal_id, ""), strategyId: text(item.strategy_definition_id || item.strategy_id, "unavailable"), strategyVersionId: text(item.strategy_version_id, "unavailable"), strategyInstanceId: text(item.strategy_instance_id, "unavailable"), symbol: text(item.instrument_code || item.symbol, "unavailable"), direction: upper(item.direction || item.side) === "SHORT" ? "SHORT" : "LONG", state: signalState(item.state || item.status), confidence: number(item.confidence, 0), createdAt: text(item.created_at_utc, "unavailable"), expiresAt: text(item.expires_at_utc, "unavailable"), featureSnapshotId: text(item.feature_snapshot_id, "unavailable"), ruleHits: stringList(item.rule_hits), expectancyR: number(item.expectancy_R ?? item.expectancy_r, 0), rewardRisk: number(item.reward_risk, 0), regime: text(item.regime, "unavailable") }; }
-function orderRow(item) { return { orderId: text(item.broker_order_id || item.order_id, ""), signalId: text(item.signal_id, "unavailable"), providerId: text(item.provider_id, "unavailable"), brokerOrderId: text(item.broker_order_id, "unavailable"), symbol: text(item.instrument_code || item.broker_symbol, "unavailable"), side: upper(item.side) === "SELL" ? "SELL" : "BUY", type: orderType(item.order_type || item.type), quantity: number(item.quantity, 0), state: orderState(item.state || item.status) }; }
-function activeOrderRow(item) { const payload = item?.order_intent_payload || item?.payload || {}; const protection = payload.protection || {}; return { ...orderRow(item), orderIntentId: text(item.portfolio_order_intent_id || item.order_intent_id || payload.order_intent_id, "unavailable"), strategyInstanceId: text(item.strategy_instance_id || payload.strategy_instance_id, "unavailable"), account: text(item.broker_account_id || payload.broker_account_id || payload.account_id, "unavailable"), instrument: text(item.instrument_code || item.broker_symbol || payload.instrument, "unavailable"), remainingQuantity: number(item.remaining_quantity ?? item.quantity ?? payload.quantity, 0), tif: text(item.tif || item.time_in_force || payload.time_in_force, "unavailable"), limitPrice: number(item.limit_price ?? item.entry_price ?? payload.limit_price ?? payload.entry_price, undefined), stopPrice: number(item.stop_price ?? payload.stop_price ?? protection.stop_price, undefined), targetPrice: number(item.target_price ?? payload.target_price ?? protection.target_price, undefined), commissions: number(item.commissions, 0), slippageR: number(item.slippage_R ?? item.slippage_r, 0), protectionStatus: protectionState(item.protection_status || (protection.ready ? "PROTECTED" : "")), idempotencyKey: text(item.idempotency_key || payload.idempotency_key, "unavailable"), correlationId: text(item.correlation_id || payload.correlation_id, "unavailable"), updatedAt: text(item.updated_at_utc || item.created_at_utc || payload.requested_at_utc, "unavailable"), expectedVersion: text(item.revision || item.order_intent_hash || payload.order_intent_hash, "unavailable") }; }
-function intentRow(item) { const payload = item?.order_intent_payload || item?.payload || {}; const protection = payload.protection || {}; return { orderIntentId: text(item.intent_id || item.order_intent_id || item.portfolio_order_intent_id || payload.order_intent_id, ""), signalId: text(item.signal_id || payload.signal_id, "unavailable"), strategyInstanceId: text(item.strategy_instance_id || payload.strategy_instance_id, "unavailable"), account: text(item.broker_account_id || payload.broker_account_id || payload.account_id || item.target_account_id, "unavailable"), instrument: text(item.instrument_code || payload.instrument || item.target_instrument, "unavailable"), side: upper(item.side || payload.side || payload.action) === "SELL" ? "SELL" : "BUY", quantity: number(item.quantity ?? payload.quantity, 0), type: orderType(item.order_type || item.type || payload.order_type), tif: text(item.tif || item.time_in_force || payload.time_in_force, "unavailable"), limitPrice: number(item.limit_price ?? item.entry_price ?? payload.limit_price ?? payload.entry_price, undefined), stopPrice: number(item.stop_price ?? payload.stop_price ?? protection.stop_price, undefined), targetPrice: number(item.target_price ?? payload.target_price ?? protection.target_price, undefined), providerId: text(item.provider_id || payload.provider_id, "unavailable"), state: text(item.state || item.status || payload.status, "unavailable"), idempotencyKey: text(item.idempotency_key || payload.idempotency_key, "unavailable"), correlationId: text(item.correlation_id || payload.correlation_id, "unavailable"), createdAt: text(item.created_at_utc || payload.requested_at_utc, "unavailable"), expectedVersion: text(item.revision || item.order_intent_hash || payload.order_intent_hash, "unavailable") }; }
-function fillRow(item) { return { fillId: text(item.fill_id, ""), orderId: text(item.order_id, "unavailable"), quantity: number(item.quantity, 0), price: number(item.price, 0), filledAt: text(item.filled_at_utc, "unavailable") }; }
-function orderFillRow(item) { return { ...fillRow(item), providerId: text(item.provider_id, "provider"), brokerExecutionId: text(item.broker_execution_id, "—"), instrument: text(item.instrument_code, "—"), commission: 0, slippageR: 0 }; }
-function positionRow(item) { return { positionId: text(item.trade_id || item.position_id, ""), strategyInstanceId: text(item.strategy_instance_id, "unavailable"), symbol: text(item.instrument_code, "unavailable"), side: side(item.side), quantity: number(item.quantity_open, 0), averagePrice: number(item.entry_price, 0), riskR: number(item.risk_R ?? item.risk_r, 0), pnlR: number(item.realized_R ?? item.pnl_R ?? item.result_R, 0), protectionStatus: protectionState(item.protection_status) }; }
-function providerRows(execution) { return rows(execution?.providers).filter((item) => item?.provider_id).map((item) => ({ providerId: text(item.provider_id, ""), label: text(item.label || item.provider_id, "Provider"), mode: executionModeState(item.mode), status: providerState(item), latencyMs: number(item.latency_ms, 0), lastHeartbeatAt: text(item.last_heartbeat_at_utc, "unavailable") })); }
-function accountRow(item) { return { accountId: text(item.broker_account_id, ""), providerId: text(item.provider_id, "unavailable"), label: text(item.account_label, "Account"), mode: upper(item.mode) === "LIVE" ? "LIVE" : "PAPER", state: item.read_only ? "READ_ONLY" : "ACTIVE", netLiqUsd: number(item.capital, 0), openPositions: number(item.open_positions, 0), ordersToday: number(item.orders_today, 0) }; }
-function incidentSummary(item) { return { incidentId: text(item.incident_id, ""), severity: severity(item.severity), title: text(item.title, "Incident"), detail: text(item.detail || item.message, "Incident backend"), route: `/operations/incidents/${encodeURIComponent(String(item.incident_id))}` }; }
-function incidentRow(item) { return { ...incidentSummary(item), domain: text(item.domain, "operations"), status: text(item.status, "OPEN"), ageMinutes: 0, impactedOrderIds: [], correlationId: text(item.correlation_id, "none"), route: "/execution/incidents", chronology: [], reconciliationResults: [], meta: [{ label: "Source", value: text(item.domain, "operations") }], payloadPreview: [{ key: "incident_id", value: text(item.incident_id, "unknown") }], postMortem: emptyPostMortem() }; }
-function emptyIncident() { return { incidentId: "none", severity: "LOW", title: "Aucun incident", detail: "Aucun incident ouvert dans la projection.", route: "/execution/incidents", chronology: [], reconciliationResults: [], meta: [], payloadPreview: [], postMortem: emptyPostMortem() }; }
-function emptyPostMortem() { return { rootCause: "Aucun incident sélectionné", containment: "Aucune action requise", permanentFix: "Non applicable", ownerRole: "SYSTEM", dueAt: currentUtc() }; }
 function agentRow(item) { return { agentId: text(item.worker_id || item.task_id, ""), name: text(item.worker_id, "Agent runtime"), role: text(item.task_type, "agent-runtime"), status: upper(item.status) === "READY" ? "WAITING" : upper(item.status) === "FAILED" ? "FAILED" : "ACTIVE", missionId: text(item.mission_id, "unavailable"), task: text(item.status, "unavailable"), model: text(item.model, "unavailable"), reasoningLevel: text(item.reasoning_level, "unavailable"), queueDepth: number(item.queue_depth, 0), tokenBudgetPct: number(item.token_budget_pct, 0) }; }
 function researchExperimentRow(item) { const reports = number(item.counts?.evaluation_reports, 0); return { experimentId: text(item.research_experiment_id, ""), missionId: text(item.metadata?.mission_id, "unavailable"), runId: text(item.winner_simulation_run_id, "unavailable"), title: text(item.name, "Expérience recherche"), hypothesis: text(item.objective, "Hypothèse non publiée"), ownerAgent: text(item.owner, "unavailable"), stage: stageFromResearch(item), status: statusFromResearch(item), progressPct: researchProgress(item, Array.from({ length: reports }), []), score: number(item.metadata?.score, 0), eta: "unavailable", currentTask: text(item.comparison_metric, "unavailable"), expectedEvent: text(item.expected_event, "unavailable"), tokenBudgetPct: number(item.token_budget_pct, 0), computeBudgetPct: number(item.compute_budget_pct, 0) }; }
 function researchPipelineRows({ experiments, reports, candidates }) { return ["IDEA", "BASELINE", "ITERATION", "ROBUSTNESS", "OOS", "PAPER_READY"].map((stage) => ({ stageId: stage, label: stage.replace("_", " "), state: pipelineState(stage, { experiments, reports, candidates }), activeExperiments: countBy(experiments, (item) => item.stage === stage), promoted: countBy(candidates, (item) => upper(item.status) === "PROMOTION_READY"), rejected: countBy(candidates, (item) => upper(item.status) === "REJECTED"), budgetUsedPct: stage === "BASELINE" ? Math.min(100, reports.length * 25) : 0 })); }
@@ -1887,27 +1890,39 @@ function signalState(value) {
 function strategySpecProjection(source = {}) {
   const spec = source && typeof source === "object" ? source : {};
   return {
-    entryModel: text(spec.entry_model || spec.entryModel, "unavailable"),
-    stopModel: text(spec.stop_model || spec.stopModel, "unavailable"),
-    targetModel: text(spec.target_model || spec.targetModel, "unavailable"),
-    invalidationModel: text(spec.invalidation_model || spec.invalidationModel, "unavailable"),
-    riskModel: text(spec.risk_model || spec.riskModel, "unavailable"),
-    rules: rows(spec.rules).map((rule, index) => ({
-      ruleId: text(rule.rule_id || rule.ruleId, `rule_${index + 1}`),
-      label: text(rule.label || rule.name, `Règle ${index + 1}`),
-      type: strategyRuleType(rule.type),
-      expression: text(rule.expression || rule.predicate, "unavailable"),
-      state: upper(rule.state) === "DISABLED" ? "DISABLED" : upper(rule.state) === "WATCH" ? "WATCH" : "ACTIVE",
-      weightPct: number(rule.weight_pct ?? rule.weightPct, 0),
-    })),
-    levels: rows(spec.levels).map((level, index) => ({
-      levelId: text(level.level_id || level.levelId, `level_${index + 1}`),
-      label: text(level.label || level.name, `Niveau ${index + 1}`),
-      lower: number(level.lower, 0),
-      upper: number(level.upper, 0),
-      role: strategyLevelRole(level.role),
-    })),
+    entryModel: text(firstValue(spec.entry_model, spec.entryModel), "unavailable"),
+    stopModel: text(firstValue(spec.stop_model, spec.stopModel), "unavailable"),
+    targetModel: text(firstValue(spec.target_model, spec.targetModel), "unavailable"),
+    invalidationModel: text(firstValue(spec.invalidation_model, spec.invalidationModel), "unavailable"),
+    riskModel: text(firstValue(spec.risk_model, spec.riskModel), "unavailable"),
+    rules: rows(spec.rules).map(strategySpecRuleRow),
+    levels: rows(spec.levels).map(strategySpecLevelRow),
   };
+}
+
+function strategySpecRuleRow(rule, index) {
+  return {
+    ruleId: text(firstValue(rule.rule_id, rule.ruleId), `rule_${index + 1}`),
+    label: text(firstValue(rule.label, rule.name), `Règle ${index + 1}`),
+    type: strategyRuleType(rule.type),
+    expression: text(firstValue(rule.expression, rule.predicate), "unavailable"),
+    state: strategyRuleState(rule.state),
+    weightPct: number(firstValue(rule.weight_pct, rule.weightPct), 0),
+  };
+}
+function strategySpecLevelRow(level, index) {
+  return {
+    levelId: text(firstValue(level.level_id, level.levelId), `level_${index + 1}`),
+    label: text(firstValue(level.label, level.name), `Niveau ${index + 1}`),
+    lower: number(level.lower, 0),
+    upper: number(level.upper, 0),
+    role: strategyLevelRole(level.role),
+  };
+}
+function strategyRuleState(value) {
+  const state = upper(value);
+  if (state === "DISABLED") return "DISABLED";
+  return state === "WATCH" ? "WATCH" : "ACTIVE";
 }
 
 function strategyRuleType(value) {
@@ -1977,16 +1992,6 @@ function runtimeMissionState(value) {
   if (["BLOCKED", "NEEDS_OPERATOR", "FAILED"].includes(state)) return "BLOCKED";
   if (["READY", "WAITING", "QUEUED"].includes(state)) return "WAITING";
   return "RUNNING";
-}
-
-function orderType(value) {
-  const type = upper(value);
-  return ["MARKET", "STOP_LIMIT"].includes(type) ? type : "LIMIT";
-}
-
-function orderState(value) {
-  const state = upper(value);
-  return ["INTENT", "SENT", "ACKED", "PARTIAL", "FILLED", "CANCELLED", "REJECTED"].includes(state) ? state : "INTENT";
 }
 
 function protectionState(value) {
@@ -2234,9 +2239,18 @@ function viewAvailability(warnings, sources) {
 }
 function countBy(value, predicate) { return rows(value).filter(predicate).length; }
 function firstNumber(value, key) { const found = rows(value).map((item) => number(item?.[key], null)).find((item) => item !== null); return found || 0; }
+function firstValue(...values) { for (const value of values) if (value !== null && value !== undefined && value !== "") return value; return undefined; }
+function nested(source, path) { let value = source; for (const key of path) { if (!value || typeof value !== "object") return undefined; value = value[key]; } return value; }
 function average(values) { const finite = values.filter((item) => Number.isFinite(item)); return finite.length ? Math.round(finite.reduce((a, b) => a + b, 0) / finite.length) : 0; }
 function number(value, fallback = 0) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
 function nullableNumber(value) { if (value === null || value === undefined || value === "") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
+function latestTimestamp(items, keys) {
+  return rows(items)
+    .flatMap((item) => keys.map((key) => item?.[key]).filter(Boolean))
+    .map((value) => String(value))
+    .sort()
+    .at(-1) || null;
+}
 function requiredQuery(query, key, code) { const value = text(query?.[key] ?? query?.[key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)], ""); if (!value) throw codedError(code, `${key} is required`, 400); return value; }
 function queryList(value) { return Array.isArray(value) ? value.map(String).filter(Boolean) : String(value || "").split(",").map((item) => item.trim()).filter(Boolean); }
 function signedNumber(value) { const parsed = number(value, 0); return `${parsed >= 0 ? "+" : ""}${parsed.toFixed(2)}`; }
@@ -2247,9 +2261,26 @@ function explorerItem({ id, title, subtitle, status, primary, secondary, route, 
 function explorerView(title, description, items, metrics = []) { return { summary: { title, description, total: items.length, metrics }, items }; }
 function replayExplorerItem(item) { return explorerItem({ id: item.sourceId || item.id, title: item.name || `Replay ${item.tradingDate || ""}`, subtitle: `${text(item.tradingDate, "—")} · ${text(item.session, "—")} · ${number(item.progress, 0)}%`, status: item.status, primary: `${signedNumber(item.metrics?.totalR)} R`, secondary: item.resultEligible ? "Résultat éligible" : "Résultat non éligible", route: `/replay/runs/${encodeURIComponent(String(item.sourceId || item.id))}`, tags: [item.engineVersion, item.variantId, item.replayClassification] }); }
 function performanceDayItem(item) { return explorerItem({ id: item.date, title: text(item.date, "Journée"), subtitle: `${number(item.trades, 0)} trades · ${number(item.winRate, 0).toFixed(1)}% win`, status: number(item.totalR, 0) > 0 ? "POSITIVE" : number(item.totalR, 0) < 0 ? "NEGATIVE" : "FLAT", primary: `${signedNumber(item.totalR)} R`, secondary: `${signedNumber(item.drawdownR)} R drawdown`, route: `/performance/days/${encodeURIComponent(String(item.date))}`, tags: [...rows(item.sessions), ...rows(item.strategyIds)] }); }
-function performanceTradeItem(item, index = 0) { return explorerItem({ id: item.tradeId || item.trade_id || item.positionId || `trade-${index + 1}`, title: `${text(item.instrument || item.instrument_code || item.symbol, "Trade")} · ${text(item.direction || item.side, "—")}`, subtitle: text(item.closedAt || item.closed_at_utc || item.exit_at_utc || item.openedAt || item.opened_at_utc, "Horodatage indisponible"), status: number(item.resultR ?? item.realized_R ?? item.pnlR, 0) > 0 ? "WIN" : number(item.resultR ?? item.realized_R ?? item.pnlR, 0) < 0 ? "LOSS" : "FLAT", primary: `${signedNumber(item.resultR ?? item.realized_R ?? item.pnlR)} R`, secondary: text(item.exitReason || item.exit_reason, "Sortie non publiée"), route: item.positionId || item.position_id ? `/execution/portfolio/positions/${encodeURIComponent(String(item.positionId || item.position_id))}` : undefined, tags: [item.strategyId || item.strategy_id, item.session] }); }
+function performanceTradeItem(item, index = 0) {
+  const resultR = firstValue(item.resultR, item.realized_R, item.pnlR);
+  const positionId = firstValue(item.positionId, item.position_id);
+  return explorerItem({
+    id: firstValue(item.tradeId, item.trade_id, positionId, `trade-${index + 1}`),
+    title: `${text(firstValue(item.instrument, item.instrument_code, item.symbol), "Trade")} · ${text(firstValue(item.direction, item.side), "—")}`,
+    subtitle: text(firstValue(item.closedAt, item.closed_at_utc, item.exit_at_utc, item.openedAt, item.opened_at_utc), "Horodatage indisponible"),
+    status: tradeResultStatus(resultR),
+    primary: `${signedNumber(resultR)} R`,
+    secondary: text(firstValue(item.exitReason, item.exit_reason), "Sortie non publiée"),
+    route: positionId ? `/execution/portfolio/positions/${encodeURIComponent(String(positionId))}` : undefined,
+    tags: [firstValue(item.strategyId, item.strategy_id), item.session],
+  });
+}
+function tradeResultStatus(resultR) {
+  const value = number(resultR, 0);
+  if (value > 0) return "WIN";
+  return value < 0 ? "LOSS" : "FLAT";
+}
 function upper(value) { return String(value ?? "").toUpperCase(); }
-function availabilityStatus(value) { return value ? "OK" : "DEGRADED"; }
 function stageFromResearch(item) { const status = upper(item.status); if (status === "COMPLETED") return "PAPER_READY"; if (number(item.counts?.evaluation_reports, 0) > 0) return "OOS"; return "BASELINE"; }
 function statusFromResearch(item) { const status = upper(item.status); if (status === "COMPLETED") return "PASSED"; if (status === "CANCELLED" || status === "ARCHIVED") return "REJECTED"; if (status === "DRAFT") return "WAITING"; return "RUNNING"; }
 function pipelineState(stage, { experiments, reports, candidates }) { if (stage === "IDEA") return experiments.length ? "DONE" : "WAITING"; if (stage === "BASELINE") return reports.length ? "DONE" : (experiments.length ? "RUNNING" : "WAITING"); if (stage === "PAPER_READY") return countBy(candidates, (item) => upper(item.status) === "PROMOTION_READY") ? "DONE" : "WAITING"; return reports.length ? "WAITING" : "WAITING"; }

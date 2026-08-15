@@ -1,4 +1,5 @@
 import { canonicalSha256 } from "./execution-scope.js";
+import { normalizeProposedTradePlanV1 } from "./trade-plan-economics-v1.js";
 
 export const STRATEGY_SIGNAL_SCHEMA_VERSION_V1 = "strategy_signal_v1";
 export const STRATEGY_SIGNAL_DIRECTIONS_V1 = Object.freeze(["LONG", "SHORT", "FLAT"]);
@@ -8,20 +9,40 @@ export function normalizeStrategySignalV1(input = {}) {
   const issues = [];
   const generatedAt = iso(firstDefined(input.generated_at_utc, input.generated_at, input.generatedAt));
   const expiresAt = iso(firstDefined(input.expires_at_utc, input.expires_at, input.expiresAt));
+  const tradePlanInput = firstDefined(input.proposed_trade_plan, input.proposedTradePlan, input.trade_plan, input.tradePlan, input.payload?.proposed_trade_plan, input.payload?.proposedTradePlan);
+  const tradePlan = tradePlanInput ? normalizeProposedTradePlanV1({
+    ...object(tradePlanInput),
+    instrument: firstDefined(input.instrument, object(tradePlanInput).instrument),
+    direction: firstDefined(input.direction, object(tradePlanInput).direction),
+    source_data_cutoff_utc: firstDefined(input.source_data_cutoff_utc, input.sourceDataCutoff, input.cutoff_at_utc, input.cutoffAtUtc, object(tradePlanInput).source_data_cutoff_utc),
+  }) : null;
   const signal = {
     schema_version: STRATEGY_SIGNAL_SCHEMA_VERSION_V1,
     signal_id: requiredText(firstDefined(input.signal_id, input.id), "signal_id", issues),
+    strategy_definition_id: optionalText(firstDefined(input.strategy_definition_id, input.strategyDefinitionId)),
     strategy_instance_id: requiredText(firstDefined(input.strategy_instance_id, input.strategyInstanceId), "strategy_instance_id", issues),
     strategy_version_id: optionalText(firstDefined(input.strategy_version_id, input.strategyVersionId)),
     instrument: requiredText(input.instrument, "instrument", issues).toUpperCase(),
     direction: enumValue(input.direction, STRATEGY_SIGNAL_DIRECTIONS_V1, "direction", issues),
     confidence: numberOrNull(input.confidence),
+    timeframe: optionalText(firstDefined(input.timeframe, input.time_frame, input.timeFrame)),
+    session: optionalText(input.session),
+    source_data_cutoff_utc: iso(firstDefined(input.source_data_cutoff_utc, input.sourceDataCutoff, input.cutoff_at_utc, input.cutoffAtUtc)),
     execution_mode_origin: enumValue(firstDefined(input.execution_mode_origin, input.executionModeOrigin), STRATEGY_SIGNAL_EXECUTION_MODES_V1, "execution_mode_origin", issues),
     generated_at_utc: generatedAt || issueValue("generated_at_utc", issues),
     expires_at_utc: expiresAt || issueValue("expires_at_utc", issues),
     correlation_id: requiredText(firstDefined(input.correlation_id, input.correlationId), "correlation_id", issues),
+    setup: object(firstDefined(input.setup, input.payload?.setup)),
+    predicates: array(firstDefined(input.predicates, input.payload?.predicates)),
+    evidence: array(firstDefined(input.evidence, input.features, input.payload?.evidence, input.payload?.features)),
+    reason_codes: array(firstDefined(input.reason_codes, input.reasonCodes, input.payload?.reason_codes)).map(String),
+    signal_quality: object(firstDefined(input.signal_quality, input.signalQuality, input.payload?.signal_quality)),
+    proposed_trade_plan: tradePlan?.proposed_trade_plan || null,
+    trade_plan_economics: tradePlan?.economics || null,
+    availability: tradePlan ? tradePlan.proposed_trade_plan.availability : "PARTIAL",
     payload: object(input.payload),
   };
+  if (tradePlan?.issues?.length) signal.reason_codes = unique([...signal.reason_codes, ...tradePlan.issues.map((item) => item.code)]);
   if (generatedAt && expiresAt && Date.parse(expiresAt) <= Date.parse(generatedAt)) {
     issues.push(issue("STRATEGY_SIGNAL_EXPIRY_NOT_AFTER_GENERATION", "expires_at_utc"));
   }
@@ -93,6 +114,10 @@ function numberOrNull(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function array(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function object(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -104,4 +129,8 @@ function iso(value) {
 
 function issue(code, path, extra = {}) {
   return { code, path, ...extra };
+}
+
+function unique(items) {
+  return [...new Set(items.filter(Boolean))];
 }

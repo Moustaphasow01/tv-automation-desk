@@ -1,0 +1,2271 @@
+{
+  "generatedAt": "2026-08-15T11:27:55.597Z",
+  "repositoryBranch": "codex/preprod-v4-local-parity-cleanup",
+  "repositoryCommit": "670b05778896c2e936be9193a218e144bd4eb163",
+  "schemaVersion": "front_endpoint_catalog_v1",
+  "generatorVersion": "front_handoff_generator_v1.0.0",
+  "activeVpsRelease": null,
+  "activeVpsCommit": null,
+  "runtimeProbeTimestamp": null,
+  "classificationNote": "Generated from front-control-plane VIEW_NAMES, FRONT_COMMAND_CATALOG and OpenAPI-derived front API catalog. No historical commit is hardcoded.",
+  "counts": {
+    "total": 171,
+    "vnextViews": 51,
+    "vnextCommands": 11,
+    "vnextControl": 3,
+    "openApiOperations": 106,
+    "brokerEffectCommands": 0
+  },
+  "entries": [
+    {
+      "id": "api-v2:getAiContextOverview",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/ai-context/overview",
+      "operationId": "getAiContextOverview",
+      "domain": "governance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getAlerts",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/alerts",
+      "operationId": "getAlerts",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getAudit",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/audit",
+      "operationId": "getAudit",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDataFoundationDatasets",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/datasets",
+      "operationId": "listDataFoundationDatasets",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDataFoundationFeatureComputations",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/feature-computations",
+      "operationId": "listDataFoundationFeatureComputations",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDataFoundationFeatureValues",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/feature-values",
+      "operationId": "listDataFoundationFeatureValues",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDataFoundationFeatures",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/features",
+      "operationId": "listDataFoundationFeatures",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDataFoundationHotSeriesWindows",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/hot-series-windows",
+      "operationId": "listDataFoundationHotSeriesWindows",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDataFoundationIngestionBatches",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/ingestion-batches",
+      "operationId": "listDataFoundationIngestionBatches",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDataFoundationMarketDataProfiles",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/market-data-profiles",
+      "operationId": "listDataFoundationMarketDataProfiles",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getDataFoundationOverview",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/overview",
+      "operationId": "getDataFoundationOverview",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDataFoundationSources",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/sources",
+      "operationId": "listDataFoundationSources",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDataFoundationStorageObjects",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/data-foundation/storage-objects",
+      "operationId": "listDataFoundationStorageObjects",
+      "domain": "data_foundation",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getDeskActivity",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/desk/activity",
+      "operationId": "getDeskActivity",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:streamOperationsEvents",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/events",
+      "operationId": "streamOperationsEvents",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:executeBrokerAction",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/actions",
+      "operationId": "executeBrokerAction",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:claimNinjaAddonExecution",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/addon/claim",
+      "operationId": "claimNinjaAddonExecution",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:completeNinjaAddonExecution",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/addon/complete",
+      "operationId": "completeNinjaAddonExecution",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:recordNinjaAddonEvents",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/addon/events",
+      "operationId": "recordNinjaAddonEvents",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:recordNinjaAddonHeartbeat",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/addon/heartbeat",
+      "operationId": "recordNinjaAddonHeartbeat",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:recordNinjaAddonSnapshot",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/addon/snapshot",
+      "operationId": "recordNinjaAddonSnapshot",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:claimBrokerExecution",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/bridge/claim",
+      "operationId": "claimBrokerExecution",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:completeBrokerExecution",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/bridge/complete",
+      "operationId": "completeBrokerExecution",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:recordBrokerOrderEvent",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/bridge/events",
+      "operationId": "recordBrokerOrderEvent",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:recordBrokerHeartbeat",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/bridge/heartbeat",
+      "operationId": "recordBrokerHeartbeat",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:reconcileBrokerExecution",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/execution/bridge/reconcile",
+      "operationId": "reconcileBrokerExecution",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getExecutionIntent",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/execution/intents/{intentId}",
+      "operationId": "getExecutionIntent",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getExecutionOverview",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/execution/overview",
+      "operationId": "getExecutionOverview",
+      "domain": "execution",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-capabilities",
+      "type": "VNEXT_CAPABILITIES",
+      "method": "GET",
+      "path": "/front-api/v1/capabilities",
+      "source": "capabilities registry",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-command:assistant.question.submit",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "assistant.question.submit",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "front.command",
+      "environments": [
+        "MOCK",
+        "PAPER"
+      ],
+      "mutation": "assistant.question.submit",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:control_plane.verify",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "control_plane.verify",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "front.command",
+      "environments": [
+        "MOCK",
+        "PAPER"
+      ],
+      "mutation": "control_plane.verify",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:desk.doctor",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "desk.doctor",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "front.command",
+      "environments": [
+        "MOCK",
+        "PAPER"
+      ],
+      "mutation": "desk.doctor",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:desk.restart",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "desk.restart",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "front.command",
+      "environments": [
+        "MOCK",
+        "PAPER"
+      ],
+      "mutation": "desk.restart",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:desk.start",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "desk.start",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "front.command",
+      "environments": [
+        "MOCK",
+        "PAPER"
+      ],
+      "mutation": "desk.start",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:desk.status",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "desk.status",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "front.command",
+      "environments": [
+        "MOCK",
+        "PAPER"
+      ],
+      "mutation": "desk.status",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:desk.stop",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "desk.stop",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "front.command",
+      "environments": [
+        "MOCK",
+        "PAPER"
+      ],
+      "mutation": "desk.stop",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:execution.order_intent.confirm",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "execution.order_intent.confirm",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "execution.paper",
+      "environments": [
+        "PAPER"
+      ],
+      "mutation": "execution.order_intent.confirm",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:execution.order_intent.reject",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "execution.order_intent.reject",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "execution.paper",
+      "environments": [
+        "PAPER"
+      ],
+      "mutation": "execution.order_intent.reject",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:research.bootstrap_demo_paper",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "research.bootstrap_demo_paper",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "research.command",
+      "environments": [
+        "MOCK",
+        "PAPER"
+      ],
+      "mutation": "research.bootstrap_demo_paper",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command:strategy.version.fork",
+      "type": "VNEXT_COMMAND",
+      "method": "POST",
+      "path": "/front-api/v1/commands",
+      "commandType": "strategy.version.fork",
+      "source": "front-control-plane-command:FRONT_COMMAND_CATALOG",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "capability": "front.command",
+      "environments": [
+        "MOCK",
+        "PAPER"
+      ],
+      "mutation": "strategy.version.fork",
+      "brokerExecution": false,
+      "sideEffects": "NO_DIRECT_BROKER_EFFECT"
+    },
+    {
+      "id": "front-command-status",
+      "type": "VNEXT_COMMAND_STATUS",
+      "method": "GET",
+      "path": "/front-api/v1/commands/{commandId}",
+      "source": "operator command status",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-events",
+      "type": "VNEXT_REALTIME",
+      "method": "GET",
+      "path": "/front-api/v1/events",
+      "source": "SSE cursor stream",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:admin-access",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/admin-access",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "incidents"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:auth-session",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/auth-session",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:command-center",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/command-center",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "strategy",
+        "incidents",
+        "agent-runtime",
+        "portfolio-risk",
+        "health"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "STABLE_ADDITIVE_ONLY",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:demo-paper-readiness",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/demo-paper-readiness",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "strategy",
+        "agent-runtime",
+        "data-foundation",
+        "portfolio-risk",
+        "health"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:event-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/event-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "event-detail"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:events-audit",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/events-audit",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "strategy",
+        "incidents",
+        "agent-runtime"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "STABLE_ADDITIVE_ONLY",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:execution-incidents",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/execution-incidents",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "incidents"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:execution-providers",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/execution-providers",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "incidents"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:execution-reconciliation",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/execution-reconciliation",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:governance-policies",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/governance-policies",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "observability-policy"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:governance-prompts",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/governance-prompts",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "prompt-registry"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:incident-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/incident-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "incidents"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:jarvis-workspace",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/jarvis-workspace",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "ai-context",
+        "incidents",
+        "agent-runtime",
+        "assistant-runtime",
+        "research",
+        "data-foundation",
+        "execution",
+        "strategy",
+        "portfolio-risk",
+        "health"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "STABLE_ADDITIVE_ONLY",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:live-news",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/live-news",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "live-session",
+        "front-macro",
+        "front-news"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:live-plan",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/live-plan",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "live-session"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:live-signal-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/live-signal-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "strategy",
+        "portfolio-risk",
+        "ai-context"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:live-timeline",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/live-timeline",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "live-session"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:live-trading",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/live-trading",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "strategy",
+        "incidents",
+        "ai-context",
+        "portfolio-risk",
+        "health"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "STABLE_ADDITIVE_ONLY",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:operations-observability",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/operations-observability",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "observability"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:operations-queue",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/operations-queue",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "agent-runtime",
+        "incidents"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:operations-runbooks",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/operations-runbooks",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "runbooks"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:operator-settings",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/operator-settings",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:order-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/order-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:orders",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/orders",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "STABLE_ADDITIVE_ONLY",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:performance-calendar",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/performance-calendar",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "performance"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:performance-day-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/performance-day-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "performance"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:performance-overview",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/performance-overview",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "performance"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:performance-strategies",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/performance-strategies",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "performance"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:performance-trades",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/performance-trades",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "performance"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:portfolio",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/portfolio",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "portfolio-risk"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "STABLE_ADDITIVE_ONLY",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:position-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/position-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:replay-compare",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/replay-compare",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "replays",
+        "replay-comparison"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:replay-overview",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/replay-overview",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "replays"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:replay-run-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/replay-run-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "replay-detail"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:replay-runs",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/replay-runs",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "replays"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:research-agent-fleet",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/research-agent-fleet",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "agent-runtime",
+        "research"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:research-candidates",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/research-candidates",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "research"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:research-compute-scheduler",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/research-compute-scheduler",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "agent-runtime",
+        "simulation-runs"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:research-data-catalog",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/research-data-catalog",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "data-foundation"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:research-dataset-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/research-dataset-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "data-foundation"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:research-experiment-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/research-experiment-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "research",
+        "agent-runtime",
+        "simulation-runs",
+        "data-foundation"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:research-experiments",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/research-experiments",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "research"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:research-lab",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/research-lab",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "agent-runtime",
+        "research",
+        "data-foundation",
+        "simulation-runs",
+        "incidents"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "STABLE_ADDITIVE_ONLY",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:research-run-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/research-run-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "research",
+        "simulation-runs"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:risk",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/risk",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "execution",
+        "portfolio-risk"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "STABLE_ADDITIVE_ONLY",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:sessions",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/sessions",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "sessions"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:strategy-center",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/strategy-center",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "strategy",
+        "research"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "STABLE_ADDITIVE_ONLY",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:strategy-compare",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/strategy-compare",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "strategy",
+        "research",
+        "simulation-runs"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:strategy-deployments",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/strategy-deployments",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "strategy"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:strategy-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/strategy-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "strategy",
+        "research",
+        "execution",
+        "incidents"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "front-view:workflow-detail",
+      "type": "VNEXT_VIEW",
+      "method": "GET",
+      "path": "/front-api/v1/views/workflow-detail",
+      "source": "front-control-plane-api:VIEW_NAMES",
+      "sourceReference": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "dependencies": [
+        "workflow-detail"
+      ],
+      "freshness": "backend-projected",
+      "contractStatus": "NOT_CLASSIFIED_VIEW",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listOperationsGptProcesses",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/gpt-processes",
+      "operationId": "listOperationsGptProcesses",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsGptProcess",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/gpt-processes/{processId}",
+      "operationId": "getOperationsGptProcess",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsHistory",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/history/sessions",
+      "operationId": "getOperationsHistory",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsHistorySession",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/history/sessions/{sessionId}",
+      "operationId": "getOperationsHistorySession",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listOperationsIncidents",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/incidents",
+      "operationId": "listOperationsIncidents",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:executeOperationsIncidentAction",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/incidents/{incidentId}/actions",
+      "operationId": "executeOperationsIncidentAction",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getLiveDeskCurrent",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/live-desk/current",
+      "operationId": "getLiveDeskCurrent",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getMacroCalendar",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/macro/calendar",
+      "operationId": "getMacroCalendar",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getMarketSnapshot",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/market/snapshot",
+      "operationId": "getMarketSnapshot",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getMaster",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/masters/{masterId}",
+      "operationId": "getMaster",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getMonitor",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/monitors/{monitorId}",
+      "operationId": "getMonitor",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getNewsDigest",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/news/digest",
+      "operationId": "getNewsDigest",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getNewsHeadlines",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/news/headlines",
+      "operationId": "getNewsHeadlines",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listOperationsNotifications",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/notifications",
+      "operationId": "listOperationsNotifications",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:executeOperationsNotificationAction",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/notifications/{notificationId}/actions",
+      "operationId": "executeOperationsNotificationAction",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:syncOperationsNotifications",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/notifications/sync",
+      "operationId": "syncOperationsNotifications",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:evaluateOperationsObservabilityIncidents",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/observability/incidents/evaluate",
+      "operationId": "evaluateOperationsObservabilityIncidents",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getOperationsObservability",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/observability/overview",
+      "operationId": "getOperationsObservability",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsObservabilityPolicy",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/observability/policy",
+      "operationId": "getOperationsObservabilityPolicy",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:updateOperationsObservabilityPolicy",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/observability/policy",
+      "operationId": "updateOperationsObservabilityPolicy",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getFrontOpenApi",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/openapi.json",
+      "operationId": "getFrontOpenApi",
+      "domain": "governance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "compatibility_reference",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsSummary",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/operations/summary",
+      "operationId": "getOperationsSummary",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:executeOperatorCommand",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/operator/commands",
+      "operationId": "executeOperatorCommand",
+      "domain": "governance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getOperatorState",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/operator/state",
+      "operationId": "getOperatorState",
+      "domain": "governance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getPerformanceCalendar",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/performance/calendar",
+      "operationId": "getPerformanceCalendar",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getPerformanceDay",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/performance/day",
+      "operationId": "getPerformanceDay",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsPerformance",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/performance/overview",
+      "operationId": "getOperationsPerformance",
+      "domain": "performance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getPortfolioRiskOverview",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/portfolio-risk/overview",
+      "operationId": "getPortfolioRiskOverview",
+      "domain": "governance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getCurrentPosition",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/positions/current",
+      "operationId": "getCurrentPosition",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listOperationsReplays",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/replays",
+      "operationId": "listOperationsReplays",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:createOperationsReplay",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/replays",
+      "operationId": "createOperationsReplay",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getOperationsReplay",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/replays/{runId}",
+      "operationId": "getOperationsReplay",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsReplayDays",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/replays/{runId}/days",
+      "operationId": "getOperationsReplayDays",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsReplayDay",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/replays/{runId}/days/{date}",
+      "operationId": "getOperationsReplayDay",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsReplayPriceSeries",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/replays/{runId}/price-series",
+      "operationId": "getOperationsReplayPriceSeries",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsReplaySession",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/replays/{runId}/sessions/{sessionExecutionId}",
+      "operationId": "getOperationsReplaySession",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsReplayTimeline",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/replays/{runId}/timeline",
+      "operationId": "getOperationsReplayTimeline",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:compareOperationsReplays",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/replays/compare",
+      "operationId": "compareOperationsReplays",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listResearchCandidates",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/research/candidates",
+      "operationId": "listResearchCandidates",
+      "domain": "research",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getResearchCandidate",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/research/candidates/{researchCandidateId}",
+      "operationId": "getResearchCandidate",
+      "domain": "research",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listResearchEvaluationReports",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/research/evaluation-reports",
+      "operationId": "listResearchEvaluationReports",
+      "domain": "research",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listResearchExperiments",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/research/experiments",
+      "operationId": "listResearchExperiments",
+      "domain": "research",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getResearchExperiment",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/research/experiments/{researchExperimentId}",
+      "operationId": "getResearchExperiment",
+      "domain": "research",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getResearchLabOverview",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/research/overview",
+      "operationId": "getResearchLabOverview",
+      "domain": "research",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listOperationsRunbooks",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/runbooks",
+      "operationId": "listOperationsRunbooks",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsRunbook",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/runbooks/{runbookId}",
+      "operationId": "getOperationsRunbook",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listDeskSessions",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/sessions",
+      "operationId": "listDeskSessions",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getSessionOverview",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/sessions/{strategyId}/{date}/overview",
+      "operationId": "getSessionOverview",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getSessionTimeline",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/sessions/{strategyId}/{date}/timeline",
+      "operationId": "getSessionTimeline",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getSetup",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/setups/{setupId}",
+      "operationId": "getSetup",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listSimulationRuns",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/simulation-runs",
+      "operationId": "listSimulationRuns",
+      "domain": "performance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getSimulationRun",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/simulation-runs/{simulationRunId}",
+      "operationId": "getSimulationRun",
+      "domain": "performance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getSimulationRunArtifacts",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/simulation-runs/{simulationRunId}/artifacts",
+      "operationId": "getSimulationRunArtifacts",
+      "domain": "performance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:compareSimulationRuns",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/simulation-runs/compare",
+      "operationId": "compareSimulationRuns",
+      "domain": "performance",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listOperationsStrategies",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategies",
+      "operationId": "listOperationsStrategies",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:compareOperationsStrategyVersions",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategies/{strategyId}/versions/compare",
+      "operationId": "compareOperationsStrategyVersions",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listStrategyV2AuditEvents",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategy-v2/audit",
+      "operationId": "listStrategyV2AuditEvents",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listStrategyV2Definitions",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategy-v2/definitions",
+      "operationId": "listStrategyV2Definitions",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:createStrategyV2Definition",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/strategy-v2/definitions",
+      "operationId": "createStrategyV2Definition",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getStrategyV2Definition",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategy-v2/definitions/{strategyDefinitionId}",
+      "operationId": "getStrategyV2Definition",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listStrategyV2Instances",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategy-v2/instances",
+      "operationId": "listStrategyV2Instances",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:createStrategyV2Instance",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/strategy-v2/instances",
+      "operationId": "createStrategyV2Instance",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getStrategyV2Instance",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategy-v2/instances/{strategyInstanceId}",
+      "operationId": "getStrategyV2Instance",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:executeStrategyV2InstanceAction",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/strategy-v2/instances/{strategyInstanceId}/actions",
+      "operationId": "executeStrategyV2InstanceAction",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getStrategyV2Overview",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategy-v2/overview",
+      "operationId": "getStrategyV2Overview",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:pollStrategyV2Signals",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategy-v2/signals",
+      "operationId": "pollStrategyV2Signals",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:consumeStrategyV2Signal",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/strategy-v2/signals/{signalOutboxId}/actions",
+      "operationId": "consumeStrategyV2Signal",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:listStrategyV2Versions",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategy-v2/versions",
+      "operationId": "listStrategyV2Versions",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:createStrategyV2Version",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/strategy-v2/versions",
+      "operationId": "createStrategyV2Version",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getStrategyV2Version",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/strategy-v2/versions/{strategyVersionId}",
+      "operationId": "getStrategyV2Version",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:executeStrategyV2VersionAction",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/strategy-v2/versions/{strategyVersionId}/actions",
+      "operationId": "executeStrategyV2VersionAction",
+      "domain": "strategy",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getThesis",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/theses/{thesisId}",
+      "operationId": "getThesis",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getThesisConditions",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/theses/{thesisId}/conditions",
+      "operationId": "getThesisConditions",
+      "domain": "today",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:listOperationsWorkflows",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/workflows",
+      "operationId": "listOperationsWorkflows",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsWorkflow",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/workflows/{workflowId}",
+      "operationId": "getOperationsWorkflow",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:executeOperationsWorkflowAction",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "POST",
+      "path": "/workflows/{workflowId}/actions",
+      "operationId": "executeOperationsWorkflowAction",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "operator_confirmed_revisioned_idempotent"
+    },
+    {
+      "id": "api-v2:getOperationsWorkflowEvents",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/workflows/{workflowId}/events",
+      "operationId": "getOperationsWorkflowEvents",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    },
+    {
+      "id": "api-v2:getOperationsWorkflowSteps",
+      "type": "LEGACY_OR_TRANSITIONAL_API",
+      "method": "GET",
+      "path": "/workflows/{workflowId}/steps",
+      "operationId": "getOperationsWorkflowSteps",
+      "domain": "operations",
+      "source": "front-api-catalog-v2:OpenAPI",
+      "sourceReference": "mcp_gpt_desk/src/front-api-catalog-v2.js",
+      "stability": "stable",
+      "sideEffects": "READ_ONLY"
+    }
+  ]
+}

@@ -26,6 +26,44 @@ describe("global risk mandatory pipeline V1", () => {
     assertLineage(pipeline);
   });
 
+  it("ACCEPT with trade plan: carries economics through Risk, TargetPosition and immutable OrderIntent", () => {
+    const pipeline = runPipeline({
+      signals: [signal({
+        signal_id: "sig-trade-plan",
+        direction: "LONG",
+        proposed_size: 2,
+        proposed_trade_plan: {
+          instrument: "MNQ",
+          direction: "LONG",
+          order_type: "LIMIT",
+          entry_price: 28000,
+          stop_price: 27980,
+          targets: [{ label: "T1", price: 28060 }],
+          time_in_force: "DAY",
+        },
+      })],
+      budget: budget({ max_instrument_abs_size: { MNQ: 4 } }),
+      accountCapitalReference: { source: "TEST_ACCOUNT_SNAPSHOT", value: 100000, currency: "USD", as_of_utc: asOf },
+    });
+
+    const risk = pipeline.risk.allocation_evaluations[0];
+    const target = pipeline.targets.target_positions[0];
+    const intent = pipeline.intents.order_intents[0];
+    assert.equal(risk.trade_risk.risk_per_contract, 40);
+    assert.equal(risk.authorized.risk_amount, 80);
+    assert.equal(risk.authorized.risk_pct, 0.08);
+    assert.equal(target.approved_trade_plan.entry.price, 28000);
+    assert.equal(target.risk_allocation.risk_amount, 80);
+    assert.equal(intent.order_type, "LIMIT");
+    assert.equal(intent.entry.price, 28000);
+    assert.equal(intent.protection.stop_price, 27980);
+    assert.equal(intent.targets[0].price, 28060);
+    assert.equal(intent.immutability.policy, "REJECT_AND_REPLAN");
+    assert.equal(intent.immutability.mutable_after_risk, false);
+    assert.match(intent.immutable_terms_hash, /^sha256:[a-f0-9]{64}$/);
+    assertLineage(pipeline);
+  });
+
   it("REDUCE: requested +10 is reduced by Global Risk to +4 before OrderIntent", () => {
     const pipeline = runPipeline({
       signals: [signal({ signal_id: "sig-reduce", direction: "LONG", proposed_size: 10 })],
@@ -117,7 +155,7 @@ describe("global risk mandatory pipeline V1", () => {
   });
 });
 
-function runPipeline({ signals, budget: riskBudget, virtualPortfolio = {}, currentPositions = [], existingOrderIntents = [] }) {
+function runPipeline({ signals, budget: riskBudget, virtualPortfolio = {}, currentPositions = [], existingOrderIntents = [], accountCapitalReference = null }) {
   const allocations = buildCandidateAllocationPortfolioV1({ as_of_utc: asOf, portfolio_scope: "paper-sim101", signals });
   const risk = evaluatePortfolioRiskBudgetV1({
     as_of_utc: asOf,
@@ -125,6 +163,7 @@ function runPipeline({ signals, budget: riskBudget, virtualPortfolio = {}, curre
     budget: riskBudget,
     candidate_allocations: allocations.candidate_allocations,
     virtual_portfolio: { ...allocations.virtual_portfolio, ...virtualPortfolio },
+    account_capital_reference: accountCapitalReference,
   });
   const targets = buildPortfolioTargetPositionPlanV1({
     as_of_utc: asOf,

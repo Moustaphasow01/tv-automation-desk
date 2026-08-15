@@ -80,6 +80,27 @@ describe("Strategy Signal Bus service", () => {
     );
     assert.equal(repository.outbox.size, 0);
   });
+
+  test("publishes additive proposed trade plan and economics in the signal payload", async () => {
+    const repository = new InMemoryStrategySignalBusRepository();
+    const service = serviceFor(repository);
+
+    const published = await service.publishSignal(signalFixture({
+      proposed_trade_plan: {
+        order_type: "LIMIT",
+        entry_price: 28000,
+        stop_price: 27980,
+        targets: [{ label: "T1", price: 28060 }],
+        time_in_force: "DAY",
+      },
+      source_data_cutoff_utc: NOW,
+    }), commandFixture());
+
+    assert.equal(published.signal.proposed_trade_plan.instrument, "MNQ");
+    assert.equal(published.signal.trade_plan_economics.risk_per_contract, 40);
+    assert.equal(published.signal.proposed_trade_plan.source.source_data_cutoff_utc, NOW);
+    assert.equal(published.outbox.payload.payload.proposed_trade_plan.economics.targets[0].reward_risk, 3);
+  });
 });
 
 function serviceFor(repository) {

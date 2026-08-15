@@ -1,4 +1,5 @@
 import { canonicalSha256 } from "./execution-scope.js";
+import { normalizeProposedTradePlanV1 } from "./trade-plan-economics-v1.js";
 
 export const PORTFOLIO_CANDIDATE_ALLOCATION_SCHEMA_VERSION_V1 = "portfolio_candidate_allocation_plan_v1";
 export const VIRTUAL_STRATEGY_PORTFOLIO_SCHEMA_VERSION_V1 = "virtual_strategy_portfolio_v1";
@@ -72,8 +73,20 @@ function normalizeSignal(item, asOf, policy, defaultAccountId) {
 
 function signalCore(item, source, defaultAccountId) {
   const direction = upper(firstDefined(source.direction, item.direction));
+  const proposedTradePlanInput = record(firstDefined(source.proposed_trade_plan, source.proposedTradePlan, item.proposed_trade_plan, item.proposedTradePlan));
+  const normalizedTradePlan = proposedTradePlanInput && !proposedTradePlanInput.schema_version
+    ? normalizeProposedTradePlanV1({
+      ...proposedTradePlanInput,
+      instrument: firstDefined(source.instrument, item.instrument, proposedTradePlanInput.instrument),
+      direction: firstDefined(direction, proposedTradePlanInput.direction),
+      source_data_cutoff_utc: firstDefined(source.source_data_cutoff_utc, source.sourceDataCutoff, item.source_data_cutoff_utc, proposedTradePlanInput.source_data_cutoff_utc),
+    })
+    : null;
+  const proposedTradePlan = normalizedTradePlan?.proposed_trade_plan || proposedTradePlanInput;
+  const tradePlanEconomics = record(firstDefined(source.trade_plan_economics, source.tradePlanEconomics, proposedTradePlan?.economics, item.trade_plan_economics, item.tradePlanEconomics, normalizedTradePlan?.economics));
   return {
     signal_id: text(firstDefined(source.signal_id, source.id, item.signal_id, item.signal_outbox_id, item.id)),
+    strategy_definition_id: text(firstDefined(source.strategy_definition_id, source.strategyDefinitionId, item.strategy_definition_id)),
     strategy_instance_id: text(firstDefined(source.strategy_instance_id, source.strategyInstanceId, item.strategy_instance_id)),
     strategy_version_id: text(firstDefined(source.strategy_version_id, source.strategyVersionId, item.strategy_version_id)),
     account_id: text(firstDefined(source.account_id, source.accountId, item.account_id, item.accountId, defaultAccountId)),
@@ -84,8 +97,11 @@ function signalCore(item, source, defaultAccountId) {
     execution_mode_origin: upper(firstDefined(source.execution_mode_origin, source.executionModeOrigin, item.execution_mode_origin)),
     generated_at_utc: iso(firstDefined(source.generated_at_utc, source.generated_at, source.generatedAt, item.generated_at_utc)),
     expires_at_utc: iso(firstDefined(source.expires_at_utc, source.expires_at, source.expiresAt, item.expires_at_utc)),
+    source_data_cutoff_utc: iso(firstDefined(source.source_data_cutoff_utc, source.sourceDataCutoff, item.source_data_cutoff_utc)),
     correlation_id: text(firstDefined(source.correlation_id, source.correlationId, item.correlation_id)),
     status: upper(firstDefined(item.status, source.status, "ACTIVE")),
+    proposed_trade_plan: proposedTradePlan,
+    trade_plan_economics: tradePlanEconomics,
   };
 }
 
@@ -147,6 +163,7 @@ function allocationForAccountInstrument(signals, portfolioScope, asOf) {
 function signalContribution(signal) {
   return {
     signal_id: signal.signal_id,
+    strategy_definition_id: signal.strategy_definition_id,
     strategy_instance_id: signal.strategy_instance_id,
     strategy_version_id: signal.strategy_version_id,
     account_id: signal.account_id,
@@ -154,7 +171,10 @@ function signalContribution(signal) {
     proposed_size: signal.proposed_size,
     signed_size: signedSize(signal.direction, signal.proposed_size),
     confidence: signal.confidence,
+    source_data_cutoff_utc: signal.source_data_cutoff_utc,
     correlation_id: signal.correlation_id,
+    proposed_trade_plan: signal.proposed_trade_plan || null,
+    trade_plan_economics: signal.trade_plan_economics || null,
   };
 }
 

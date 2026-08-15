@@ -57,9 +57,14 @@ function orderIntentForTarget(target, { asOf, policy, input }) {
   if (authorityIssues.length) return { skip_reason: authorityIssues[0], authority_issues: authorityIssues };
   const quantity = Math.ceil(rawQuantity);
   const action = delta > 0 ? "BUY" : "SELL";
-  const protection = protectionPlan(firstDefined(target.protection_plan, input.default_protection_plan, policy.default_protection_plan), policy);
+  const approvedTradePlan = approvedTradePlanForTarget(target);
+  const orderTypeValue = orderTypeForTarget(approvedTradePlan, policy);
+  const tifValue = timeInForceForTarget(approvedTradePlan, policy);
+  const entry = entryForTradePlan(approvedTradePlan);
+  const targets = targetsForTradePlan(approvedTradePlan);
+  const protection = protectionPlan(firstDefined(target.protection_plan, protectionFromTradePlan(approvedTradePlan), input.default_protection_plan, policy.default_protection_plan), policy);
   const contract = contractRef(target, firstDefined(input.provider_contracts, input.contracts, policy.provider_contracts), policy);
-  const idempotencyKey = canonicalSha256({ target_position_id: target.id, account_id: accountId(target, policy), instrument: instrument(target), targetSize, current, delta, quantity, action, contract, policy: policyHashScope(policy) });
+  const idempotencyKey = canonicalSha256({ target_position_id: target.id, account_id: accountId(target, policy), instrument: instrument(target), targetSize, current, delta, quantity, action, contract, order_type: orderTypeValue, time_in_force: tifValue, entry, protection, targets, policy: policyHashScope(policy) });
   const brokerAccount = brokerAccountId(target, policy);
   const base = {
     schema_version: ORDER_INTENT_SCHEMA_VERSION_V1,
@@ -72,8 +77,9 @@ function orderIntentForTarget(target, { asOf, policy, input }) {
     provider_contract_ref: contract,
     action,
     quantity,
-    order_type: policy.order_type,
-    time_in_force: policy.time_in_force,
+    side: action,
+    order_type: orderTypeValue,
+    time_in_force: tifValue,
     lifecycle_action: lifecycleAction(current, targetSize, delta),
     current_net_size: round(current),
     target_net_size: round(targetSize),
@@ -82,7 +88,14 @@ function orderIntentForTarget(target, { asOf, policy, input }) {
     opening_size: round(openingSize(current, targetSize)),
     status: protection.ready ? "READY" : "PROTECTION_REQUIRED",
     broker_submission_allowed: protection.ready && policy.submission_enabled,
+    entry,
+    targets,
+    approved_trade_plan: approvedTradePlan || null,
+    risk_allocation: target.risk_allocation || null,
+    expected_exposure: target.expected_exposure || null,
     protection,
+    execution_terms: executionTermsForIntent({ target, action, quantity, orderTypeValue, tifValue, entry, protection, targets, brokerAccount }),
+    risk_snapshot: riskSnapshotForTarget(target),
     idempotency_key: idempotencyKey,
     requested_at_utc: asOf,
     source: {
@@ -90,14 +103,17 @@ function orderIntentForTarget(target, { asOf, policy, input }) {
       target_position_id: text(target.id),
       risk_decision_ids: array(target.derived_from_risk_decision_ids),
       candidate_allocation_ids: array(target.candidate_allocation_ids),
+      lineage: target.lineage || null,
     },
     audit: {
       direct_llm_order: false,
       derived_from_netting_engine: true,
       quantity_rounding: { mode: "ceil", raw_quantity: round(rawQuantity), quantity, rounding_excess: round(quantity - rawQuantity) },
+      post_risk_immutable_fields: ["account_id", "instrument", "action", "quantity", "order_type", "entry", "protection.stop_price", "targets"],
     },
   };
-  return { ...base, order_intent_hash: hash(base) };
+  const immutability = postRiskImmutability(base);
+  return { ...base, immutability, immutable_terms_hash: immutability.immutable_terms_hash, order_intent_hash: hash({ ...base, immutability }) };
 }
 
 function normalizePolicy(input) {
@@ -133,6 +149,114 @@ function protectionPlan(input, policy) {
     target_price: target,
     max_slippage_ticks: positiveOrNull(source.max_slippage_ticks),
     oco_required: firstDefined(source.oco_required, true) !== false,
+  };
+}
+
+function approvedTradePlanForTarget(target) {
+  const plan = record(firstDefined(target.approved_trade_plan, target.approvedTradePlan));
+  if (!plan || plan.availability === "UNAVAILABLE") return null;
+  return plan;
+}
+
+function orderTypeForTarget(plan, policy) {
+  return upper(firstDefined(plan?.order_type, plan?.orderType, policy.order_type, "MARKET"));
+}
+
+function timeInForceForTarget(plan, policy) {
+  return upper(firstDefined(plan?.time_in_force, plan?.timeInForce, policy.time_in_force, "DAY"));
+}
+
+function entryForTradePlan(plan) {
+  const entry = record(plan?.entry) || {};
+  return {
+    availability: text(entry.availability || (entry.price !== undefined ? "KNOWN" : "UNAVAILABLE")),
+    type: text(entry.type || "PRICE"),
+    price: finite(firstDefined(entry.price, entry.calculation_price)),
+    low: finite(entry.low),
+    high: finite(entry.high),
+    unit: "PRICE",
+  };
+}
+
+function targetsForTradePlan(plan) {
+  return array(plan?.targets).map((item, index) => ({
+    label: text(firstDefined(item.label, `T${index + 1}`)),
+    price: finite(item.price),
+    expected_r: finite(firstDefined(item.expected_r, item.expectedR)),
+    reward_risk: finite(firstDefined(item.reward_risk, item.rewardRisk)),
+    availability: text(item.availability || "PARTIAL"),
+  }));
+}
+
+function protectionFromTradePlan(plan) {
+  if (!plan) return null;
+  const stopPrice = finite(record(plan.stop)?.price);
+  const firstTarget = targetsForTradePlan(plan).find((item) => item.price !== null);
+  if (stopPrice === null && !firstTarget) return null;
+  return {
+    stop_price: stopPrice,
+    target_price: firstTarget?.price ?? null,
+    targets: targetsForTradePlan(plan),
+    source: "APPROVED_TRADE_PLAN",
+  };
+}
+
+function executionTermsForIntent({ target, action, quantity, orderTypeValue, tifValue, entry, protection, targets, brokerAccount }) {
+  return {
+    account_id: accountId(target, {}),
+    broker_account_id: brokerAccount,
+    instrument: instrument(target),
+    side: action,
+    quantity,
+    order_type: orderTypeValue,
+    entry,
+    stop: { availability: protection.stop_price === null ? "UNAVAILABLE" : "KNOWN", price: protection.stop_price },
+    targets,
+    time_in_force: tifValue,
+  };
+}
+
+function riskSnapshotForTarget(target) {
+  const allocation = record(target.risk_allocation) || {};
+  const tradeRisk = record(target.approved_trade_plan?.economics) || {};
+  return {
+    requested_qty: target.risk_approved_net_size ?? target.net_target_size,
+    authorized_qty: target.risk_approved_net_size ?? target.net_target_size,
+    requested_risk_pct: allocation.risk_pct ?? null,
+    authorized_risk_pct: allocation.risk_pct ?? null,
+    risk_amount: allocation.risk_amount ?? null,
+    risk_per_contract: allocation.risk_per_contract ?? tradeRisk.risk_per_contract ?? null,
+    stop_distance: {
+      points: tradeRisk.stop_distance_points ?? null,
+      ticks: tradeRisk.stop_distance_ticks ?? null,
+    },
+    nearest_limit: target.nearest_limit || null,
+    reason_codes: array(target.risk_decision_statuses),
+  };
+}
+
+function postRiskImmutability(intent) {
+  const immutableTerms = {
+    account_id: intent.account_id,
+    broker_account_id: intent.broker_account_id,
+    instrument: intent.instrument,
+    action: intent.action,
+    quantity: intent.quantity,
+    order_type: intent.order_type,
+    time_in_force: intent.time_in_force,
+    entry: intent.entry,
+    protection: {
+      stop_price: intent.protection?.stop_price ?? null,
+      target_price: intent.protection?.target_price ?? null,
+    },
+    targets: intent.targets,
+  };
+  return {
+    policy: "REJECT_AND_REPLAN",
+    mutable_after_risk: false,
+    immutable_fields: Object.keys(immutableTerms),
+    immutable_terms: immutableTerms,
+    immutable_terms_hash: hash(immutableTerms),
   };
 }
 

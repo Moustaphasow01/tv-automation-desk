@@ -31,9 +31,11 @@ export function evaluatePortfolioRiskBudgetV1(input = {}) {
   const budget = normalizePortfolioRiskBudgetV1(firstDefined(input.budget, input.risk_budget, {}));
   const allocations = array(firstDefined(input.candidate_allocations, input.allocations));
   const portfolio = record(input.virtual_portfolio) || {};
+  const portfolioAvailable = Boolean(record(input.virtual_portfolio));
+  const accountCapitalReference = normalizeAccountCapitalReference(firstDefined(input.account_capital_reference, input.accountCapitalReference, budget.metadata?.account_capital_reference, budget.metadata?.accountCapitalReference));
   const accountId = text(firstDefined(input.account_id, input.accountId, "default"));
   const usage = buildUsageSnapshot(portfolio, allocations, budget.correlation_groups, accountId);
-  const evaluations = allocations.map((allocation) => evaluateAllocation(allocation, budget, usage, accountId));
+  const evaluations = allocations.map((allocation) => evaluateAllocation(allocation, budget, usage, accountId, { accountCapitalReference, portfolioAvailable }));
   const missing = budgetHasNoLimits(budget);
   const base = {
     schema_version: PORTFOLIO_RISK_BUDGET_EVALUATION_SCHEMA_VERSION_V1,
@@ -42,13 +44,14 @@ export function evaluatePortfolioRiskBudgetV1(input = {}) {
     account_id: accountId,
     budget,
     usage,
+    account_capital_reference: accountCapitalReference,
     allocation_evaluations: missing ? [] : evaluations,
     gate: gateSummary(missing, evaluations),
   };
   return { ...base, evaluation_hash: hash(base) };
 }
 
-function evaluateAllocation(allocation, budget, usage, accountId) {
+function evaluateAllocation(allocation, budget, usage, accountId, context = {}) {
   const instrument = upper(allocation.instrument);
   const allocationAccountId = text(firstDefined(allocation.account_id, allocation.accountId, accountId));
   const proposed = positiveOrNull(allocation.proposed_size) || 0;
@@ -76,7 +79,17 @@ function evaluateAllocation(allocation, budget, usage, accountId) {
     limit_checks: checks,
     limits_applied: checks.filter((item) => item.breached).map((item) => item.code),
   };
-  return { risk_decision_id: `portfoliorisk:${canonicalSha256(base).slice(0, 24)}`, ...base };
+  const economics = buildRiskEconomics({
+    allocation,
+    base,
+    approvedSize,
+    checks,
+    usage,
+    accountCapitalReference: context.accountCapitalReference,
+    portfolioAvailable: context.portfolioAvailable,
+    group,
+  });
+  return { risk_decision_id: `portfoliorisk:${canonicalSha256({ ...base, risk_economics: economics }).slice(0, 24)}`, ...base, ...economics };
 }
 
 function strategyChecks(allocation, usage, budget) {
@@ -152,6 +165,179 @@ function lossCheck(code, currentR, maxLossR) {
   return { code, scope: "portfolio", current: round(currentR), proposed: 0, projected: round(loss), limit: maxLossR, available: round(maxLossR - loss), breached: loss >= maxLossR };
 }
 
+function buildRiskEconomics({ allocation, base, approvedSize, checks, usage, accountCapitalReference, portfolioAvailable, group }) {
+  const tradeRisk = allocationTradeRisk(allocation, approvedSize);
+  const requestedRiskAmount = moneyMultiply(tradeRisk.risk_per_contract, base.requested_size);
+  const authorizedRiskAmount = moneyMultiply(tradeRisk.risk_per_contract, approvedSize);
+  const capitalValue = finite(accountCapitalReference?.value);
+  const limits = checks.map(limitProjection);
+  const nearestLimit = nearestLimitProjection(limits);
+  const beforeOpenSize = numberAt(usage, ["portfolio", "open_abs_size"]);
+  const beforeInstrumentSize = numberAt(usage, ["instruments", base.instrument]);
+  const beforeGroupSize = numberAt(usage, ["correlation_groups", group]);
+  const sourceState = portfolioAvailable ? "KNOWN" : "UNAVAILABLE";
+  const riskEconomics = {
+    schema_version: "global_risk_economics_v1",
+    availability: tradeRisk.availability === "KNOWN" ? "KNOWN" : "PARTIAL",
+    account_capital_reference: accountCapitalReference,
+    requested: {
+      quantity: base.requested_size,
+      risk_pct: pctOf(requestedRiskAmount, capitalValue),
+      risk_amount: requestedRiskAmount,
+      currency: tradeRisk.currency,
+      availability: tradeRisk.availability,
+    },
+    authorized: {
+      quantity: round(approvedSize),
+      risk_pct: pctOf(authorizedRiskAmount, capitalValue),
+      risk_amount: authorizedRiskAmount,
+      currency: tradeRisk.currency,
+      availability: tradeRisk.availability,
+    },
+    trade_risk: tradeRisk,
+    portfolio_before: {
+      availability: sourceState,
+      gross_exposure: metricNode(beforeOpenSize, "CONTRACTS", sourceState),
+      net_exposure: metricNode(beforeOpenSize, "CONTRACTS", sourceState),
+      instrument_exposure: metricNode(beforeInstrumentSize, "CONTRACTS", sourceState),
+      correlation_group_exposure: metricNode(beforeGroupSize, "CONTRACTS", sourceState),
+      open_risk: unavailableMetric("open_risk"),
+      margin_used: unavailableMetric("margin_used"),
+      daily_loss_used: metricNode(numberAt(usage, ["portfolio", "total_r"]), "R", sourceState),
+      trailing_drawdown_used: unavailableMetric("trailing_drawdown_used"),
+    },
+    portfolio_after: {
+      availability: sourceState,
+      gross_exposure: metricNode(round(beforeOpenSize + round(approvedSize)), "CONTRACTS", sourceState),
+      net_exposure: metricNode(round(beforeOpenSize + round(approvedSize)), "CONTRACTS", sourceState),
+      instrument_exposure: metricNode(round(beforeInstrumentSize + round(approvedSize)), "CONTRACTS", sourceState),
+      open_risk: authorizedRiskAmount === null ? unavailableMetric("open_risk") : { availability: "KNOWN", value: authorizedRiskAmount, unit: tradeRisk.currency },
+      margin_used: unavailableMetric("margin_used"),
+    },
+    limits,
+    nearest_limit: nearestLimit,
+    breaches: limits.filter((item) => item.breached),
+    reason_codes: base.reason_codes,
+    risk_rule_set_version: text(firstDefined(allocation.risk_rule_set_version, allocation.policy_version)),
+  };
+  return {
+    account_capital_reference: accountCapitalReference,
+    requested: riskEconomics.requested,
+    authorized: riskEconomics.authorized,
+    trade_risk: tradeRisk,
+    portfolio_before: riskEconomics.portfolio_before,
+    portfolio_after: riskEconomics.portfolio_after,
+    limits,
+    nearest_limit: nearestLimit,
+    breaches: riskEconomics.breaches,
+    risk_economics: { ...riskEconomics, economics_hash: hash(riskEconomics) },
+  };
+}
+
+function allocationTradeRisk(allocation, approvedSize) {
+  const signals = array(allocation.contributing_signals);
+  const tradeRisks = signals.map((item) => record(firstDefined(item.trade_plan_economics, item.tradePlanEconomics, item.proposed_trade_plan?.economics, item.proposedTradePlan?.economics))).filter(Boolean);
+  const known = tradeRisks.filter((item) => item.availability === "KNOWN");
+  const selected = known[0] || tradeRisks[0] || null;
+  if (!selected) {
+    return {
+      availability: "UNAVAILABLE",
+      reason_codes: ["TRADE_PLAN_ECONOMICS_UNAVAILABLE"],
+      entry_price: null,
+      stop_price: null,
+      stop_distance_points: null,
+      stop_distance_ticks: null,
+      tick_size: null,
+      tick_value: null,
+      currency: "UNAVAILABLE",
+      risk_per_contract: null,
+      total_authorized_risk: null,
+      expected_loss: null,
+      signal_count: signals.length,
+    };
+  }
+  const riskPerContract = finite(selected.risk_per_contract);
+  const totalAuthorizedRisk = moneyMultiply(riskPerContract, approvedSize);
+  return {
+    availability: known.length === 1 && tradeRisks.length === 1 ? "KNOWN" : "PARTIAL",
+    reason_codes: array(selected.reason_codes),
+    entry_price: finite(selected.entry_price),
+    stop_price: finite(selected.stop_price),
+    stop_distance_points: finite(selected.stop_distance_points),
+    stop_distance_ticks: finite(selected.stop_distance_ticks),
+    tick_size: finite(selected.tick_size),
+    tick_value: finite(selected.tick_value),
+    currency: text(selected.currency || "UNAVAILABLE"),
+    risk_per_contract: riskPerContract,
+    total_authorized_risk: totalAuthorizedRisk,
+    expected_loss: totalAuthorizedRisk,
+    target_risks: array(selected.targets),
+    signal_count: signals.length,
+  };
+}
+
+function normalizeAccountCapitalReference(value) {
+  const source = record(value) || {};
+  const capital = finite(firstDefined(source.value, source.equity, source.capital, source.net_liquidation_value, source.netLiquidationValue));
+  if (capital === null) {
+    return {
+      availability: "UNAVAILABLE",
+      source: text(firstDefined(source.source, "ACCOUNT_CAPITAL_REFERENCE_UNAVAILABLE")),
+      value: null,
+      currency: text(firstDefined(source.currency, "UNAVAILABLE")),
+      as_of_utc: iso(firstDefined(source.as_of_utc, source.asOfUtc, source.captured_at)),
+    };
+  }
+  return {
+    availability: "KNOWN",
+    source: text(firstDefined(source.source, "ACCOUNT_SNAPSHOT")),
+    value: capital,
+    currency: text(firstDefined(source.currency, "USD")),
+    as_of_utc: iso(firstDefined(source.as_of_utc, source.asOfUtc, source.captured_at)),
+  };
+}
+
+function limitProjection(check) {
+  const utilization = check.limit > 0 ? round(check.current / check.limit) : null;
+  const resulting = check.limit > 0 ? round(check.projected / check.limit) : null;
+  return {
+    limit_id: `${check.code}:${check.scope}`,
+    type: check.code,
+    scope: check.scope,
+    value: check.limit,
+    unit: check.code.includes("LOSS_R") ? "R" : "CONTRACTS",
+    current_utilization: utilization,
+    resulting_utilization: resulting,
+    remaining: round(check.available),
+    breached: check.breached,
+    severity: check.breached ? check.available <= 0 ? "BLOCK" : "REDUCE" : "INFO",
+  };
+}
+
+function nearestLimitProjection(limits) {
+  const ranked = limits.filter((item) => item.resulting_utilization !== null).sort((left, right) => right.resulting_utilization - left.resulting_utilization);
+  const first = ranked[0];
+  if (!first) return { availability: "UNAVAILABLE", reason_code: "NO_LIMIT_UTILIZATION_AVAILABLE" };
+  return { availability: "KNOWN", type: first.type, utilization: first.resulting_utilization, remaining: first.remaining, severity: first.severity };
+}
+
+function metricNode(value, unit, availability = "KNOWN") {
+  return availability === "KNOWN" ? { availability, value: round(value), unit } : { availability, value: null, unit, reason_code: "SOURCE_UNAVAILABLE" };
+}
+
+function unavailableMetric(kind) {
+  return { availability: "UNAVAILABLE", value: null, unit: "UNAVAILABLE", reason_code: `${kind.toUpperCase()}_UNAVAILABLE` };
+}
+
+function moneyMultiply(unitValue, quantity) {
+  return unitValue === null || unitValue === undefined ? null : Math.round(Number(unitValue) * Number(quantity || 0) * 100) / 100;
+}
+
+function pctOf(amount, capital) {
+  if (amount === null || capital === null || capital <= 0) return null;
+  return round((amount / capital) * 100);
+}
+
 function allocationStatus(checks) {
   if (checks.some((item) => item.breached && item.available <= 0)) return "BLOCK";
   if (checks.some((item) => item.breached)) return "REDUCE";
@@ -221,5 +407,6 @@ function firstDefined(...values) { return values.find((value) => value !== undef
 function text(value) { return String(value ?? "").trim(); }
 function upper(value) { return text(value).toUpperCase(); }
 function positiveOrNull(value) { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? parsed : null; }
+function finite(value) { if (value === null || value === undefined || value === "") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function iso(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
 function round(value) { return Math.round(Number(value || 0) * 10000) / 10000; }

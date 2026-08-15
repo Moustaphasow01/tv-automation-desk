@@ -31,9 +31,10 @@ function approvedAllocationLeg(allocation, risk, accountId) {
   const approved = approvedSize(allocation, evaluation);
   const direction = upper(firstDefined(allocation.net_direction, allocation.direction));
   const riskDecisionStatus = upper(firstDefined(evaluation?.status, allocation.status, "PASS"));
+  const riskDecisionReference = riskIssue ? "" : riskDecisionRef(id, evaluation, approved, risk);
   return {
     candidate_allocation_id: id,
-    risk_decision_ref: riskIssue ? "" : riskDecisionRef(id, evaluation, approved, risk),
+    risk_decision_ref: riskDecisionReference,
     risk_decision_status: riskDecisionStatus,
     risk_rule_set_version: text(firstDefined(evaluation?.rule_set_version, risk.rule_set_version)),
     risk_evaluation_hash: risk.evaluation_hash,
@@ -45,6 +46,8 @@ function approvedAllocationLeg(allocation, risk, accountId) {
     requested_size: positiveOrZero(firstDefined(allocation.proposed_size, evaluation.requested_size)),
     status: text(firstDefined(evaluation.status, allocation.status, "PASS")),
     strategy_breakdown: strategyBreakdown(allocation, approved),
+    approved_trade_plan: approvedTradePlanForAllocation(allocation, approved),
+    risk_allocation: riskAllocationForEvaluation({ evaluation, approved, riskDecisionReference }),
     skip_reason: allocationSkipReason(allocation, approved, riskIssue),
   };
 }
@@ -74,6 +77,21 @@ function targetForGroup(key, legs, currentPositions, asOf) {
     risk_approved_net_size: netTargetSize,
     candidate_allocation_ids: legs.map((leg) => leg.candidate_allocation_id),
     strategy_breakdown: mergeStrategyBreakdown(legs),
+    approved_trade_plan: mergeApprovedTradePlans(legs),
+    risk_allocation: mergeRiskAllocation(legs),
+    expected_exposure: {
+      availability: "KNOWN",
+      current: currentNetSize,
+      resulting: netTargetSize,
+      delta: round(netTargetSize - currentNetSize),
+      unit: "CONTRACTS",
+    },
+    lineage: {
+      strategy_signal_ids: unique(legs.flatMap((leg) => leg.strategy_breakdown.flatMap((item) => item.signal_ids || [item.signal_id]).filter(Boolean))),
+      strategy_instance_ids: unique(legs.flatMap((leg) => leg.strategy_breakdown.map((item) => item.strategy_instance_id).filter(Boolean))),
+      candidate_allocation_ids: legs.map((leg) => leg.candidate_allocation_id),
+      risk_decision_ids: legs.map((leg) => leg.risk_decision_ref).filter(Boolean),
+    },
     computed_at_utc: asOf,
   };
   return { id: `targetpos:${canonicalSha256(base)}`, ...base };
@@ -117,6 +135,74 @@ function normalizeRiskBudgetEvaluation(input) {
     available: rows.length > 0 && !["CONFIG_MISSING", "UNAVAILABLE", "ERROR", "FAILED"].includes(status),
     evaluations: new Map(rows.map((row) => [text(row.candidate_allocation_id), row])),
   };
+}
+
+function approvedTradePlanForAllocation(allocation, approved) {
+  const signals = array(allocation.contributing_signals);
+  const plans = signals.map((item) => record(firstDefined(item.proposed_trade_plan, item.proposedTradePlan))).filter(Boolean);
+  const plan = plans[0];
+  if (!plan) return { availability: "UNAVAILABLE", reason_code: "PROPOSED_TRADE_PLAN_UNAVAILABLE" };
+  const authorizedQuantity = round(approved);
+  return {
+    availability: plans.length === 1 && plan.availability === "KNOWN" ? "KNOWN" : "PARTIAL",
+    source_signal_id: text(signals[0]?.signal_id),
+    side: upper(firstDefined(plan.direction, allocation.net_direction, allocation.direction)),
+    authorized_quantity: authorizedQuantity,
+    order_type: text(firstDefined(plan.order_type, "LIMIT")),
+    entry: plan.entry || null,
+    stop: plan.stop || null,
+    targets: array(plan.targets),
+    time_in_force: text(firstDefined(plan.time_in_force, "DAY")),
+    invalidation: plan.invalidation || null,
+    economics: plan.economics || record(firstDefined(signals[0]?.trade_plan_economics, signals[0]?.tradePlanEconomics)) || null,
+    immutable_after_risk: true,
+    merge_policy: plans.length === 1 ? "SINGLE_SIGNAL" : "FIRST_SIGNAL_PARTIAL",
+  };
+}
+
+function riskAllocationForEvaluation({ evaluation, approved, riskDecisionReference }) {
+  const authorized = record(evaluation.authorized) || {};
+  const tradeRisk = record(evaluation.trade_risk) || record(evaluation.risk_economics?.trade_risk) || {};
+  return {
+    availability: authorized.availability || tradeRisk.availability || "PARTIAL",
+    risk_decision_id: text(riskDecisionReference),
+    risk_amount: numberOrNull(authorized.risk_amount),
+    risk_pct: numberOrNull(authorized.risk_pct),
+    risk_per_contract: numberOrNull(tradeRisk.risk_per_contract),
+    authorized_quantity: round(approved),
+    risk_budget_id: text(firstDefined(evaluation.risk_budget_id, evaluation.riskBudgetId)),
+  };
+}
+
+function mergeApprovedTradePlans(legs) {
+  const plans = legs.map((leg) => leg.approved_trade_plan).filter((item) => item && item.availability !== "UNAVAILABLE");
+  if (!plans.length) return { availability: "UNAVAILABLE", reason_code: "APPROVED_TRADE_PLAN_UNAVAILABLE" };
+  if (plans.length === 1) return plans[0];
+  return {
+    availability: "PARTIAL",
+    merge_policy: "MULTI_SIGNAL_NETTED",
+    authorized_quantity: round(legs.reduce((total, leg) => total + Math.abs(leg.signed_size), 0)),
+    plans,
+    reason_code: "MULTIPLE_TRADE_PLANS_NETTED",
+  };
+}
+
+function mergeRiskAllocation(legs) {
+  const rows = legs.map((leg) => leg.risk_allocation).filter(Boolean);
+  const allKnown = rows.length && rows.every((item) => item.availability === "KNOWN");
+  return {
+    availability: allKnown ? "KNOWN" : rows.length ? "PARTIAL" : "UNAVAILABLE",
+    risk_amount: sumNullable(rows, "risk_amount"),
+    risk_pct: sumNullable(rows, "risk_pct"),
+    risk_per_contract: rows.length === 1 ? numberOrNull(rows[0].risk_per_contract) : null,
+    risk_budget_ids: unique(rows.map((item) => item.risk_budget_id).filter(Boolean)),
+    risk_decision_ids: unique(rows.map((item) => item.risk_decision_id).filter(Boolean)),
+  };
+}
+
+function sumNullable(items, key) {
+  const values = items.map((item) => numberOrNull(item[key])).filter((value) => value !== null);
+  return values.length ? round(values.reduce((total, value) => total + value, 0)) : null;
 }
 
 function normalizeCurrentPositions(items, defaultAccountId) {
@@ -190,6 +276,7 @@ function firstDefined(...values) { return values.find((value) => value !== undef
 function text(value) { return String(value ?? "").trim(); }
 function upper(value) { return text(value).toUpperCase(); }
 function positiveOrZero(value) { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? parsed : 0; }
+function numberOrNull(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function iso(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
 function round(value) { return Math.round(Number(value || 0) * 10000) / 10000; }
 function groupBy(items, selector) {

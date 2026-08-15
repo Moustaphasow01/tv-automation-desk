@@ -87,6 +87,7 @@ function signalFromOutbox(item = {}) {
   return {
     signal_id: payload.signal_id || item.signal_id,
     strategy_instance_id: payload.strategy_instance_id || item.strategy_instance_id,
+    strategy_definition_id: payload.strategy_definition_id || item.strategy_definition_id,
     strategy_version_id: payload.strategy_version_id || item.strategy_version_id,
     instrument: payload.instrument || item.instrument,
     direction: payload.direction || item.direction,
@@ -95,7 +96,10 @@ function signalFromOutbox(item = {}) {
     execution_mode_origin: payload.execution_mode_origin || item.execution_mode_origin,
     generated_at_utc: payload.generated_at_utc || item.generated_at_utc,
     expires_at_utc: payload.expires_at_utc || item.expires_at_utc,
+    source_data_cutoff_utc: payload.source_data_cutoff_utc || item.source_data_cutoff_utc,
     correlation_id: payload.correlation_id || item.correlation_id,
+    proposed_trade_plan: payload.proposed_trade_plan || item.proposed_trade_plan,
+    trade_plan_economics: payload.trade_plan_economics || item.trade_plan_economics || payload.proposed_trade_plan?.economics,
     status: item.status || payload.status || "PENDING",
   };
 }

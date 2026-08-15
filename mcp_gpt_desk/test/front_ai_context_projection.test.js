@@ -34,6 +34,27 @@ test("AI Context projection surfaces source errors and a true empty state", asyn
   assert.ok(overview.controls.some((item) => item.code === "AI_CONTEXT_SOURCE_UNAVAILABLE"));
 });
 
+test("AI Context projection prefers canonical gate decisions with safe detail fields", async () => {
+  const overview = await buildAiContextOverviewFromStore({
+    clock: { now: () => ({ utc: "2026-08-10T08:00:00.000Z" }) },
+    async listAiContextGateDecisions() { return { items: [gateDecision()] }; },
+    async listAgentRuntimeTasks() { return { ok: true, items: [] }; },
+    async listAgentRuntimeMetrics() { return { ok: true, items: [] }; },
+    async listAgentRuntimeDeadLetters() { return { ok: true, items: [] }; },
+  });
+
+  assert.equal(overview.source.reads[0].source, "ai_context_gate_decisions");
+  assert.equal(overview.summary.total_decisions, 1);
+  assert.equal(overview.decisions[0].decision_id, "aictx_dec_1");
+  assert.equal(overview.decisions[0].recommendation, "TAKE_REDUCED");
+  assert.equal(overview.decisions[0].confidence, 0.72);
+  assert.equal(overview.decisions[0].risk_multiplier, 0.5);
+  assert.deepEqual(overview.decisions[0].reason_codes, ["REGIME_OK"]);
+  assert.equal(overview.decisions[0].token_input, "UNAVAILABLE");
+  assert.equal(overview.decisions[0].measured_cost, "UNAVAILABLE");
+  assert.equal(overview.decisions[0].model.includes("SECRET"), false);
+});
+
 function task(overrides = {}) {
   return {
     task_id: "task-context-1",
@@ -69,5 +90,40 @@ function metric() {
     total_tokens: 3400,
     cost_micros_usd: 1200,
     finished_at_utc: "2026-08-10T08:01:00.000Z",
+  };
+}
+
+function gateDecision() {
+  return {
+    ai_context_gate_decision_id: "aictx_dec_1",
+    agent_task_id: "task-context-1",
+    mode: "SHADOW",
+    status: "SHADOW_RECORDED",
+    recommendation: "TAKE_REDUCED",
+    confidence: 0.72,
+    risk_multiplier: 0.5,
+    reason_codes: ["REGIME_OK"],
+    anomalies: [],
+    policy_version: "ai-context-policy-v1",
+    model_policy_version: "agent-policy-v1",
+    model_ref: "codex/sk-SECRET",
+    decided_at_utc: "2026-08-10T08:00:30.000Z",
+    payload: {
+      schema_version: "ai_context_gate_execution_v1",
+      mode: "SHADOW",
+      status: "SHADOW_RECORDED",
+      latency_ms: 1200,
+      advisory: {
+        recommendation: "TAKE_REDUCED",
+        confidence: 0.72,
+        risk_multiplier: 0.5,
+        reason_codes: ["REGIME_OK"],
+        anomalies: [],
+        invalidation: { condition: "VIX_SPIKE" },
+        rationale: "Contexte cross-asset compatible.",
+        model_ref: "codex/context/xhigh",
+      },
+      binding_decision: { portfolio_action: "OBSERVE_ONLY" },
+    },
   };
 }

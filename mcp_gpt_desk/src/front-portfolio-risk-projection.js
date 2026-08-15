@@ -35,8 +35,11 @@ export function buildPortfolioRiskOverview({ generatedAt, execution, strategy, p
     accounts: accountRows(execution),
     exposures: exposureRows(execution),
     controls,
+    portfolio_state: portfolioState({ execution, generatedAt }),
+    risk_center: riskCenterState({ execution, generatedAt, controls }),
     strategy_concentration: strategyConcentrationRows(strategy),
     order_intents: orderIntentRows(execution),
+    portfolio_order_intents: portfolioOrderIntentRows(execution),
     reconciliation: reconciliationRows(execution),
     actions: controlledActions(controls),
   };
@@ -47,13 +50,15 @@ function buildSummary({ execution, strategy, errors }) {
   const counts = {
     accounts: safeArray(execution?.accounts).length,
     openTrades: safeArray(execution?.trades).filter(isOpenTrade).length,
-    pendingIntents: safeArray(execution?.intents).filter(isActiveIntent).length,
+    pendingIntents: safeArray(execution?.intents).filter(isActiveIntent).length + safeArray(execution?.portfolioOrderIntents).filter(isActivePortfolioIntent).length,
     activeOrders: safeArray(execution?.orders).filter(isActiveOrder).length,
     activeLocks: safeArray(execution?.locks).length,
     reconciliationDivergences: safeArray(execution?.adapterParityRuns).filter((item) => item.status === "diverged").length
       + safeArray(execution?.reconciliations).filter((item) => item.status === "diverged").length,
     liveInstances: safeArray(strategy?.instances).filter((item) => item.execution_mode === "LIVE").length,
     paperInstances: safeArray(strategy?.instances).filter((item) => item.execution_mode === "PAPER").length,
+    pendingTargetPositions: unique(safeArray(execution?.portfolioOrderIntents).map((item) => item.target_position_id).filter(Boolean)).length,
+    pendingHumanGates: safeArray(execution?.humanExecutionGates).filter((item) => String(item.status || "").toUpperCase() === "AWAITING_MANUAL_CONFIRMATION").length,
   };
   return {
     status: portfolioStatus({ counts, errors, submissionPossible: safety.submissionPossible }),
@@ -184,6 +189,90 @@ function exposureRows(execution) {
   return [...groups.values()].map((row) => ({ ...row, status: exposureStatus(row), detail: exposureDetail(row) }));
 }
 
+function portfolioState({ execution, generatedAt }) {
+  const brokerPositions = safeArray(execution?.trades).filter(isOpenTrade);
+  const portfolioIntents = safeArray(execution?.portfolioOrderIntents).filter(isActivePortfolioIntent);
+  const snapshots = safeArray(execution?.accountSnapshots);
+  const pendingRisk = portfolioIntents.map((item) => riskSnapshot(item)).filter((item) => item.availability !== "UNAVAILABLE");
+  return {
+    schemaVersion: "portfolio_authoritative_state_v1",
+    asOf: generatedAt || null,
+    availability: execution ? "PARTIAL" : "UNAVAILABLE",
+    sourceTypes: {
+      broker: brokerPositions.length ? "BROKER_CONFIRMED" : snapshots.length ? "RECONCILED" : "UNKNOWN",
+      target: portfolioIntents.length ? "PENDING" : "UNKNOWN",
+      strategy: portfolioIntents.length ? "VIRTUAL" : "UNKNOWN",
+    },
+    accounts: accountRows(execution).map((item) => ({
+      accountId: item.account_id,
+      equity: item.capital === null ? availabilityNode("UNAVAILABLE", "ACCOUNT_EQUITY_UNAVAILABLE") : { availability: "KNOWN", value: item.capital, currency: "USD", asOf: item.captured_at, source: item.capital_source },
+      cash: availabilityNode("UNAVAILABLE", "ACCOUNT_CASH_UNAVAILABLE"),
+      margin: availabilityNode("UNAVAILABLE", "ACCOUNT_MARGIN_UNAVAILABLE"),
+      buyingPower: availabilityNode("UNAVAILABLE", "ACCOUNT_BUYING_POWER_UNAVAILABLE"),
+      source: item.capital_source,
+    })),
+    positions: brokerPositions.map((item) => ({
+      positionId: item.trade_id,
+      sourceType: "BROKER_CONFIRMED",
+      accountId: item.broker_account_id,
+      instrument: instrumentFor(item, execution),
+      quantity: finite(item.quantity_open),
+      side: item.side,
+    })),
+    pendingTargetPositions: portfolioIntents.map((item) => ({
+      targetPositionId: item.target_position_id,
+      orderIntentId: item.portfolio_order_intent_id,
+      sourceType: "PENDING",
+      accountId: item.target_account_id || item.payload?.account_id || item.order_intent_payload?.account_id || null,
+      instrument: item.target_instrument || item.payload?.instrument || item.order_intent_payload?.instrument || null,
+      targetNetSize: finite(item.net_target_size),
+      deltaSize: finite(item.delta_size),
+      riskApprovedNetSize: finite(item.risk_approved_net_size),
+    })),
+    openRisk: aggregateMoney(pendingRisk.map((item) => item.riskAmount)),
+    pnl: availabilityNode("UNAVAILABLE", "PNL_SOURCE_UNAVAILABLE"),
+    concentration: availabilityNode("UNAVAILABLE", "CONCENTRATION_NOT_IMPLEMENTED"),
+    correlation: availabilityNode("NOT_IMPLEMENTED", "CORRELATION_NOT_IMPLEMENTED"),
+  };
+}
+
+function riskCenterState({ execution, generatedAt, controls }) {
+  const riskDecisions = safeArray(execution?.portfolioOrderIntents).flatMap((item) => safeArray(item.risk_decisions));
+  const riskSnapshots = safeArray(execution?.portfolioOrderIntents).map(riskSnapshot).filter((item) => item.availability !== "UNAVAILABLE");
+  const breaches = riskDecisions.flatMap((item) => safeArray(item.breaches));
+  const limits = riskDecisions.flatMap((item) => safeArray(item.limits));
+  const nearestLimits = riskDecisions.map((item) => item.nearest_limit).filter(Boolean);
+  const locks = safeArray(execution?.locks);
+  return {
+    schemaVersion: "global_risk_center_v1",
+    asOf: generatedAt || null,
+    source: "portfolio_risk_decisions",
+    availability: riskDecisions.length ? "KNOWN" : "UNAVAILABLE",
+    globalStatus: controls.some((item) => item.severity === "critical") ? "BLOCKED" : riskDecisions.length ? "CONTROLLED" : "DATA_UNAVAILABLE",
+    openRisk: aggregateMoney(riskSnapshots.map((item) => item.riskAmount)),
+    limits,
+    breaches,
+    nearestLimits,
+    dailyLoss: availabilityNode("UNAVAILABLE", "DAILY_LOSS_SOURCE_UNAVAILABLE"),
+    trailingDrawdown: availabilityNode("UNAVAILABLE", "TRAILING_DRAWDOWN_SOURCE_UNAVAILABLE"),
+    margin: availabilityNode("UNAVAILABLE", "MARGIN_SOURCE_UNAVAILABLE"),
+    grossExposure: availabilityNode("UNAVAILABLE", "GROSS_EXPOSURE_SOURCE_UNAVAILABLE"),
+    netExposure: availabilityNode("UNAVAILABLE", "NET_EXPOSURE_SOURCE_UNAVAILABLE"),
+    concentration: availabilityNode("UNAVAILABLE", "CONCENTRATION_SOURCE_UNAVAILABLE"),
+    propConstraints: availabilityNode("UNAVAILABLE", "PROP_CONSTRAINTS_SOURCE_UNAVAILABLE"),
+    killSwitch: {
+      availability: "KNOWN",
+      active: locks.length > 0,
+      source: "broker_execution_locks",
+      reasonCodes: locks.map((item) => item.reason || item.scope_value).filter(Boolean),
+    },
+    providerCircuitState: availabilityNode("UNAVAILABLE", "PROVIDER_CIRCUIT_STATE_UNAVAILABLE"),
+    pendingOrderIntents: safeArray(execution?.portfolioOrderIntents).filter(isActivePortfolioIntent).length,
+    pendingTargetPositions: unique(safeArray(execution?.portfolioOrderIntents).map((item) => item.target_position_id).filter(Boolean)).length,
+    policyVersions: unique(riskDecisions.map((item) => item.risk_rule_set_version).filter(Boolean)),
+  };
+}
+
 function exposureKey(item, contracts) {
   const contract = contracts.get(item.broker_contract_id) || {};
   return {
@@ -286,6 +375,48 @@ function orderIntentRows(execution) {
   }));
 }
 
+function portfolioOrderIntentRows(execution) {
+  return safeArray(execution?.portfolioOrderIntents).slice(0, 50).map((intent) => {
+    const payload = intent.order_intent_payload || intent.payload || {};
+    return {
+      order_intent_id: intent.portfolio_order_intent_id || payload.order_intent_id,
+      target_position_id: intent.target_position_id || payload.target_position_id,
+      status: intent.status || payload.status,
+      instrument_code: intent.target_instrument || payload.instrument || null,
+      account_id: intent.target_account_id || payload.account_id || payload.broker_account_id || null,
+      side: payload.action || payload.side || null,
+      quantity: finite(intent.quantity ?? payload.quantity),
+      execution_terms: intent.execution_terms || payload.execution_terms || null,
+      risk_snapshot: riskSnapshot(intent),
+      immutability: intent.immutability || payload.immutability || null,
+      allowed_actions: {
+        allowedActions: ["VIEW"],
+        denialReasons: ["HUMAN_GATE_REQUIRED_FOR_MUTATION"],
+        revision: intent.immutable_terms_hash || intent.order_intent_hash || payload.order_intent_hash || "unavailable",
+      },
+    };
+  });
+}
+
+function riskSnapshot(intent = {}) {
+  const payload = intent.order_intent_payload || intent.payload || {};
+  const snapshot = intent.risk_snapshot || payload.risk_snapshot || {};
+  const riskDecision = safeArray(intent.risk_decisions)[0] || {};
+  const riskAmount = finite(snapshot.riskAmount ?? snapshot.risk_amount ?? riskDecision.authorized?.risk_amount);
+  return Object.keys(snapshot).length || Object.keys(riskDecision).length ? {
+    availability: "KNOWN",
+    authorizedQty: finite(snapshot.authorizedQty ?? snapshot.authorized_qty ?? riskDecision.authorized?.quantity ?? riskDecision.approved_size),
+    riskAmount,
+    riskPerContract: finite(snapshot.riskPerContract ?? snapshot.risk_per_contract ?? riskDecision.trade_risk?.risk_per_contract),
+    stopDistance: snapshot.stopDistance || {
+      points: finite(riskDecision.trade_risk?.stop_distance_points),
+      ticks: finite(riskDecision.trade_risk?.stop_distance_ticks),
+    },
+    nearestLimit: snapshot.nearestLimit || riskDecision.nearest_limit || null,
+    reasonCodes: safeArray(snapshot.reasonCodes || snapshot.reason_codes || riskDecision.reason_codes).map(String),
+  } : { availability: "UNAVAILABLE", reasonCode: "RISK_SNAPSHOT_UNAVAILABLE" };
+}
+
 function reconciliationRows(execution) {
   return safeArray(execution?.reconciliations).slice(0, 20).map((item) => ({
     reconciliation_run_id: item.reconciliation_run_id,
@@ -322,6 +453,10 @@ function isActiveIntent(intent) {
   return ACTIVE_INTENT_STATUSES.has(String(intent?.status || "").toLowerCase());
 }
 
+function isActivePortfolioIntent(intent) {
+  return !["REJECTED", "CANCELLED", "CANCELED", "EXPIRED", "FILLED", "DONE", "COMPLETED", "FAILED"].includes(String(intent?.status || "").toUpperCase());
+}
+
 function isActiveOrder(order) {
   return ACTIVE_ORDER_STATUSES.has(String(order?.status || "").toLowerCase());
 }
@@ -345,4 +480,20 @@ function unique(items) {
 
 function formatQty(value) {
   return Number(value || 0).toFixed(0);
+}
+
+function instrumentFor(item, execution) {
+  const contracts = new Map(safeArray(execution?.contracts).map((contract) => [contract.broker_contract_id, contract]));
+  return contracts.get(item.broker_contract_id)?.instrument_code || item.instrument_code || null;
+}
+
+function availabilityNode(availability, reasonCode) {
+  return { availability, value: null, reasonCode };
+}
+
+function aggregateMoney(values) {
+  const finiteValues = values.filter((value) => value !== null && value !== undefined && Number.isFinite(Number(value)));
+  return finiteValues.length
+    ? { availability: "KNOWN", value: Math.round(finiteValues.reduce((sum, value) => sum + Number(value), 0) * 100) / 100, currency: "USD" }
+    : { availability: "UNAVAILABLE", value: null, currency: "UNAVAILABLE", reasonCode: "MONEY_VALUES_UNAVAILABLE" };
 }

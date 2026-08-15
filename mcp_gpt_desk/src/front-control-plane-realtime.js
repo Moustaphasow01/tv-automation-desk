@@ -42,9 +42,32 @@ export function writeFrontControlPlaneEvents(store, req, res, input = {}, corsHe
 }
 
 export async function loadFrontControlPlaneRealtimeEvents(store, { cursor = "", limit = 25 } = {}) {
-  if (typeof store?.listFrontRealtimeEvents === "function") return store.listFrontRealtimeEvents({ cursor, limit });
+  if (typeof store?.listFrontRealtimeEvents === "function") {
+    const result = await store.listFrontRealtimeEvents({ cursor, limit });
+    return normalizeRealtimeResult(result, { cursor });
+  }
   const pool = store?.persistence?.pool;
   if (!pool) return [];
+  let checkpointSequence = 0;
+  if (String(cursor || "").trim()) {
+    const checkpoint = await pool.query(`
+    WITH ordered AS (
+      SELECT o.assistant_outbox_id,
+             o.assistant_event_id,
+             o.created_at_utc,
+             row_number() OVER (ORDER BY o.created_at_utc, o.assistant_outbox_id)::int AS sequence
+        FROM assistant_outbox o
+        LEFT JOIN assistant_events e ON e.assistant_event_id = o.assistant_event_id
+       WHERE o.channel = 'FRONT_REALTIME'
+    )
+    SELECT sequence
+      FROM ordered
+     WHERE assistant_event_id = $1 OR assistant_outbox_id = $1
+     ORDER BY sequence DESC
+     LIMIT 1`, [String(cursor || "")]);
+    if (!checkpoint.rows.length) return [resyncRequiredEvent({ cursor })];
+    checkpointSequence = Number(checkpoint.rows[0].sequence || 0);
+  }
   const result = await pool.query(`
     WITH ordered AS (
       SELECT o.assistant_outbox_id,
@@ -59,18 +82,13 @@ export async function loadFrontControlPlaneRealtimeEvents(store, { cursor = "", 
         FROM assistant_outbox o
         LEFT JOIN assistant_events e ON e.assistant_event_id = o.assistant_event_id
        WHERE o.channel = 'FRONT_REALTIME'
-    ),
-    checkpoint AS (
-      SELECT COALESCE(max(sequence), 0) AS sequence
-        FROM ordered
-       WHERE assistant_event_id = $1 OR assistant_outbox_id = $1
     )
     SELECT *
       FROM ordered
-     WHERE sequence > (SELECT sequence FROM checkpoint)
+     WHERE sequence > $1::int
      ORDER BY sequence
-     LIMIT $2::int`, [String(cursor || ""), Math.max(1, Math.min(100, Number(limit) || 25))]);
-  return result.rows.map(frontAssistantOutboxRowToEvent);
+     LIMIT $2::int`, [checkpointSequence, Math.max(1, Math.min(100, Number(limit) || 25))]);
+  return normalizeRealtimeResult(result.rows.map(frontAssistantOutboxRowToEvent), { cursor });
 }
 
 export function frontControlPlaneSseFrame(event) {
@@ -102,6 +120,48 @@ function errorEvent({ error, input, lastEventId }) {
     sequence: errorTick.epochMs,
     payload: { source: "front-control-plane-bff", error: String(error?.message || error).slice(0, 500) },
   };
+}
+
+function resyncRequiredEvent({ cursor }) {
+  const occurredAt = currentUtc();
+  return {
+    eventId: `evt_front_control_plane_resync_${hash(`${cursor}:${occurredAt}`).slice(0, 16)}`,
+    aggregateId: "front-control-plane",
+    aggregateType: "front_realtime_stream",
+    eventType: "desk.resync_required",
+    occurredAt,
+    receivedAt: occurredAt,
+    source: "front-control-plane-bff",
+    correlationId: `corr_front_control_plane_resync_${hash(String(cursor || "")).slice(0, 12)}`,
+    causationId: valueOrNull(cursor),
+    schemaVersion: "1.0.0",
+    sequence: 0,
+    payload: {
+      reason: "CURSOR_NOT_FOUND_OR_EXPIRED",
+      requestedCursor: String(cursor || ""),
+      action: "REFETCH_SNAPSHOT_THEN_RESUBSCRIBE",
+      brokerExecution: false,
+      orderSubmissionEnabled: false,
+    },
+  };
+}
+
+function normalizeRealtimeResult(result, { cursor }) {
+  const events = Array.isArray(result) ? result : Array.isArray(result?.events) ? result.events : [];
+  if (!events.length) {
+    return result?.resyncRequired === true || result?.resync_required === true
+      ? [resyncRequiredEvent({ cursor })]
+      : [];
+  }
+  const seen = new Set();
+  return events
+    .filter((event) => {
+      const key = firstText([event?.eventId, event?.event_id]);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0));
 }
 
 function frontAssistantOutboxRowToEvent(row) {

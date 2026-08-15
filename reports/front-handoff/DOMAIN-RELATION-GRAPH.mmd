@@ -1,0 +1,17 @@
+flowchart LR
+  Data["Data / PostgreSQL"] --> Signal["Strategy Signal deterministic"]
+  Signal --> Context["AI Context Gate"]
+  Context --> Portfolio["Portfolio Arbitration"]
+  Portfolio --> Risk["Global Risk"]
+  Risk --> Target["Target Position"]
+  Target --> Intent["OrderIntent"]
+  Intent --> Human["Human Gate"]
+  Human --> Gateway["Execution Gateway"]
+  Gateway --> Provider["Provider adapter"]
+  Data --> BFF["/front-api/v1 BFF"]
+  Intent --> BFF
+  BFF --> Views["VNext views: 51"]
+  BFF --> SSE["SSE /events cursor stream"]
+  Views --> Front["Front VNext"]
+  SSE --> Front
+  Freeze["Freeze matrix: 10 frozen / 9 stable-additive"] -. governs .-> BFF

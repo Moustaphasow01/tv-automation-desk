@@ -1,0 +1,197 @@
+{
+  "schemaVersion": "front_contract_freeze_registry_v1",
+  "policy": "Evidence-based freeze. FROZEN_FOR_FRONT forbids breaking route/field/enum semantics. STABLE_ADDITIVE_ONLY permits additive optional fields through expand/contract discipline. NOT_FROZEN requires the frontend to keep UNKNOWN/UNAVAILABLE handling and must not be treated as a production blocker unless listed as P0_BEFORE_FRONT_FREEZE.",
+  "contracts": [
+    {
+      "contract": "VNext view envelope",
+      "version": "1.0.0",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "tests": ["mcp_gpt_desk/test/front_control_plane_api.test.js"],
+      "breakingChangeProhibition": "meta, permissions and data envelope shape cannot be removed or renamed.",
+      "allowedAdditiveChanges": "Optional meta fields and additive view data fields."
+    },
+    {
+      "contract": "VNext route surface /front-api/v1",
+      "version": "1.0.0",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "tests": ["mcp_gpt_desk/test/front_control_plane_api.test.js", "scripts/quality/check_api_compatibility.mjs"],
+      "breakingChangeProhibition": "Existing view, command, capability and event paths cannot be removed or renamed.",
+      "allowedAdditiveChanges": "New views, commands and optional query parameters."
+    },
+    {
+      "contract": "VNext command receipt",
+      "version": "1.0.0",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "mcp_gpt_desk/src/front-control-plane-command.js",
+      "tests": ["mcp_gpt_desk/test/front_control_plane_api.test.js"],
+      "breakingChangeProhibition": "ACCEPTED receipt, idempotencyKey, correlationId, commandId and brokerExecution=false semantics cannot regress.",
+      "allowedAdditiveChanges": "Optional audit/runtime diagnostics."
+    },
+    {
+      "contract": "Problem Details",
+      "version": "desk_problem_details_v1",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "packages/desk-domain/src/problem-details.js",
+      "tests": ["scripts/quality/check_problem_details.mjs"],
+      "breakingChangeProhibition": "Stable code/status/category/severity/retryable/operator_message fields cannot be removed.",
+      "allowedAdditiveChanges": "New registered error codes and optional technical details."
+    },
+    {
+      "contract": "Strategy Signal Bus",
+      "version": "v1",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "packages/desk-domain/src/strategy-signal-bus-v1.js",
+      "tests": ["mcp_gpt_desk/test/strategy_signal_bus_service.test.js", "packages/desk-domain/test/strategy-signal-bus-v1.test.js"],
+      "breakingChangeProhibition": "signal_id, strategy version/instance lineage, timing, dedupe and no-provider side effect semantics cannot regress.",
+      "allowedAdditiveChanges": "Optional context/provenance fields and additive reason metadata."
+    },
+    {
+      "contract": "Context detail projection",
+      "version": "1.0.0",
+      "status": "STABLE_ADDITIVE_ONLY",
+      "sourceFile": "mcp_gpt_desk/src/front-ai-context-projection.js",
+      "tests": ["mcp_gpt_desk/test/front_ai_context_projection.test.js"],
+      "breakingChangeProhibition": "TAKE/TAKE_REDUCED/WAIT/REJECT decision semantics, confidence and fail-safe fields cannot regress.",
+      "allowedAdditiveChanges": "Additional evidence slices, anomalies and source references."
+    },
+    {
+      "contract": "AI Context Gate decision",
+      "version": "ai_context_gate_execution_v1",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "packages/desk-domain/src/ai-context-gate-v1.js",
+      "tests": ["packages/desk-domain/test/ai-context-gate-v1.test.js", "mcp_gpt_desk/test/ai_context_gate_service.test.js"],
+      "breakingChangeProhibition": "Decision enums, fail-safe WAIT and no-direct-execution invariant cannot regress.",
+      "allowedAdditiveChanges": "Reason codes, anomalies and optional provenance."
+    },
+    {
+      "contract": "Portfolio Arbitration detail",
+      "version": "portfolio_candidate_allocation_v1",
+      "status": "STABLE_ADDITIVE_ONLY",
+      "sourceFile": "packages/desk-domain/src/portfolio-candidate-allocation-v1.js",
+      "tests": ["packages/desk-domain/test/global-risk-mandatory-pipeline-v1.test.js", "mcp_gpt_desk/test/front_portfolio_risk_projection.test.js"],
+      "breakingChangeProhibition": "Allocation lineage and conflict outcomes cannot be removed or reinterpreted.",
+      "allowedAdditiveChanges": "Additional conflict diagnostics and attribution fields."
+    },
+    {
+      "contract": "Global Risk detail",
+      "version": "portfolio_risk_decision_v1",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "packages/desk-domain/src/portfolio-risk-budget-v1.js",
+      "tests": ["packages/desk-domain/test/global-risk-mandatory-pipeline-v1.test.js", "mcp_gpt_desk/test/portfolio_risk_runtime_service.test.js"],
+      "breakingChangeProhibition": "APPROVED/REDUCED/REJECTED and PASS/REDUCE/BLOCK semantics, requested/approved size and lineage cannot regress.",
+      "allowedAdditiveChanges": "Reason codes, policy metadata and exposure diagnostics."
+    },
+    {
+      "contract": "TargetPosition detail",
+      "version": "target_position_v1",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "packages/desk-domain/src/portfolio-target-position-v1.js",
+      "tests": ["packages/desk-domain/test/global-risk-mandatory-pipeline-v1.test.js"],
+      "breakingChangeProhibition": "Risk-approved target and immutable Portfolio/Risk lineage semantics cannot regress.",
+      "allowedAdditiveChanges": "Optional pricing and exposure diagnostics."
+    },
+    {
+      "contract": "Canonical OrderIntent dossier",
+      "version": "portfolio_order_intent_v1",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "packages/desk-domain/src/portfolio-order-intent-v1.js",
+      "tests": ["packages/desk-domain/test/global-risk-mandatory-pipeline-v1.test.js", "mcp_gpt_desk/test/broker_execution_repository.test.js"],
+      "breakingChangeProhibition": "Post-risk terms, idempotency, target/risk lineage and broker_submission_allowed semantics cannot regress.",
+      "allowedAdditiveChanges": "Optional execution metadata and display explanations."
+    },
+    {
+      "contract": "Human Gate",
+      "version": "v1",
+      "status": "FROZEN_FOR_FRONT",
+      "sourceFile": "infra/postgres/init/050_human_execution_gate_provider_lifecycle.sql",
+      "tests": ["mcp_gpt_desk/test/portfolio_order_intent_human_gate_lifecycle.test.js", "mcp_gpt_desk/test/front_control_plane_api.test.js"],
+      "breakingChangeProhibition": "Confirmation/rejection/expiry, revision, operator audit and immutable terms cannot regress.",
+      "allowedAdditiveChanges": "New fail-closed terminal state or reason metadata through expand/contract."
+    },
+    {
+      "contract": "Resource allowedActions",
+      "version": "1.0.0",
+      "status": "STABLE_ADDITIVE_ONLY",
+      "sourceFile": "mcp_gpt_desk/src/front-control-plane-permissions.js",
+      "tests": ["mcp_gpt_desk/test/front_control_plane_api.test.js", "scripts/quality/check_jarvis_authority.mjs"],
+      "breakingChangeProhibition": "Backend must remain authoritative for allowed/denied actions; frontend must fail closed when actions are absent.",
+      "allowedAdditiveChanges": "Additional actions and denial reasons."
+    },
+    {
+      "contract": "Portfolio projection",
+      "version": "1.0.0",
+      "status": "STABLE_ADDITIVE_ONLY",
+      "sourceFile": "mcp_gpt_desk/src/front-portfolio-risk-projection.js",
+      "tests": ["mcp_gpt_desk/test/front_portfolio_risk_projection.test.js"],
+      "breakingChangeProhibition": "Official target/risk/order intent values remain backend-sourced and cannot move to frontend calculation.",
+      "allowedAdditiveChanges": "Additional rollups, attribution and drilldown links."
+    },
+    {
+      "contract": "Risk Center projection",
+      "version": "1.0.0",
+      "status": "STABLE_ADDITIVE_ONLY",
+      "sourceFile": "mcp_gpt_desk/src/front-control-plane-api.js",
+      "tests": ["mcp_gpt_desk/test/front_control_plane_api.test.js", "mcp_gpt_desk/test/front_portfolio_risk_projection.test.js"],
+      "breakingChangeProhibition": "Risk state, limits, stale/degraded semantics and no-front-risk-calculation invariant cannot regress.",
+      "allowedAdditiveChanges": "Additional risk limits and explanations."
+    },
+    {
+      "contract": "Live Session projection",
+      "version": "1.0.0",
+      "status": "STABLE_ADDITIVE_ONLY",
+      "sourceFile": "mcp_gpt_desk/src/front-session-projection.js",
+      "tests": ["mcp_gpt_desk/test/front_session_projection.test.js", "mcp_gpt_desk/test/front_control_plane_api.test.js"],
+      "breakingChangeProhibition": "Session identity, freshness and unavailable semantics cannot regress.",
+      "allowedAdditiveChanges": "Additional timeline/context sections."
+    },
+    {
+      "contract": "Audit/Event projection",
+      "version": "1.0.0",
+      "status": "STABLE_ADDITIVE_ONLY",
+      "sourceFile": "mcp_gpt_desk/src/front-control-plane-domain-completeness.js",
+      "tests": ["mcp_gpt_desk/test/front_control_plane_api.test.js"],
+      "breakingChangeProhibition": "Correlation/audit/read-only semantics and no-secret guarantee cannot regress.",
+      "allowedAdditiveChanges": "Additional event sources and richer relation graph."
+    },
+    {
+      "contract": "Incidents projection",
+      "version": "1.0.0",
+      "status": "STABLE_ADDITIVE_ONLY",
+      "sourceFile": "mcp_gpt_desk/src/front-control-plane-incident-projection.js",
+      "tests": ["mcp_gpt_desk/test/front_control_plane_api.test.js"],
+      "breakingChangeProhibition": "Severity/status/stale semantics and operator-safe messages cannot regress.",
+      "allowedAdditiveChanges": "Additional incident categories and action hints."
+    },
+    {
+      "contract": "VNext SSE envelope",
+      "version": "1.0.0",
+      "status": "NOT_FROZEN",
+      "sourceFile": "mcp_gpt_desk/src/front-control-plane-realtime.js",
+      "tests": ["mcp_gpt_desk/test/front_events_contract.test.js"],
+      "breakingChangeProhibition": "Current fields should remain while recovery semantics converge.",
+      "allowedAdditiveChanges": "Aggregate/revision/source/receivedAt and recovery metadata.",
+      "reason": "Only selected event streams have complete persisted cursor/gap evidence; frontend must keep refetch/resubscribe fallback."
+    },
+    {
+      "contract": "Execution Provider Port",
+      "version": "execution_provider_port_v1",
+      "status": "STABLE_ADDITIVE_ONLY",
+      "sourceFile": "packages/desk-domain/src/execution-provider-port-v1.js",
+      "tests": ["mcp_gpt_desk/test/broker_execution_repository.test.js", "mcp_gpt_desk/test/broker_execution_service.test.js"],
+      "breakingChangeProhibition": "ACK must not become FILL; idempotency and provider-neutral command semantics cannot regress.",
+      "allowedAdditiveChanges": "Provider-neutral optional fields and new guarded commands/events."
+    },
+    {
+      "contract": "Legacy /api/v1 front API",
+      "version": "1.2.0",
+      "status": "LEGACY",
+      "sourceFile": "mcp_gpt_desk/src/front-api-openapi.js",
+      "tests": ["mcp_gpt_desk/test/front_api_v2_catalog.test.js"],
+      "breakingChangeProhibition": "No destructive change before legacy frontend retirement.",
+      "allowedAdditiveChanges": "OpenAPI-compatible additive routes/fields."
+    }
+  ],
+  "p0BeforeFrontFreeze": []
+}
