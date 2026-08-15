@@ -1,7 +1,7 @@
 * text=auto eol=lf
 *.bat text eol=crlf
 *.ps1 text eol=crlf
-packages/desk-contracts/contracts/DeskHourlyThesisMonitorContract_v1_0_0.md text eol=crlf
+packages/desk-contracts/contracts/DeskHourlyThesisMonitorContract_v1_0_0.md -text
 *.png binary
 *.jpg binary
 *.ico binary
