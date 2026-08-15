@@ -421,3 +421,211 @@ Required next actions before resuming TD2-420:
 4. Re-run broker/provider before-count capture.
 5. Launch a bounded campaign that actually uses 10–20 existing Strategy_IDs from multiple families, or explicitly mark this requirement blocked until the Strategy_ID catalog is present on the VPS.
 6. Re-run the TD2-420 certifier and accept only the allowed verdicts.
+
+## VPS rehearsal attempt — 2026-08-15 `.12/r5`
+
+Status: **NO-GO — real VPS rehearsal executed but mandatory TD2-420 criteria are still not satisfied**.
+
+Administrative recovery:
+
+- The runaway Windows administration state was cleared by a controlled forced reboot:
+  - SSH/PowerShell recovered after reboot.
+  - `powershell.exe` could start normally again.
+- The previously failed deployment drain `deploy-20260815T001012Z-54d1fe89` was closed as `rolled_back` and restored the prior safe controls.
+
+Deployment:
+
+- Deployed release: `preprod-v2-convergence-20260814.12-td2-420-output-ref-fix`
+- Initial `.12` deploy failed because the checksum sidecar was missing:
+
+```text
+Release archive checksum is missing:
+C:\DeskFutures\incoming\preprod-v2-convergence-20260814.12-td2-420-output-ref-fix.zip.sha256
+```
+
+- The `.sha256` sidecar was then created/transferred.
+- Second `.12` deploy succeeded:
+
+```text
+Release verified: preprod-v2-convergence-20260814.12-td2-420-output-ref-fix (5017 files)
+Desk local health passed.
+PASS front 200
+PASS health 200
+PASS readiness 200
+PASS oauth-resource 200
+PASS oauth-server 200
+PASS webhook rejects missing secret
+Desk public deployment smoke test passed.
+Deployment deploy-20260815T001643Z-13607cce completed as verified; previous claim and execution controls restored.
+Desk update preprod-v2-convergence-20260814.12-td2-420-output-ref-fix verified and reopened.
+```
+
+Activated SHADOW/SEMI_MANUAL topology for the rehearsal:
+
+- Running:
+  - `DeskFuturesApi`
+  - `DeskFuturesCaddy`
+  - `DeskFuturesTelegram`
+  - `DeskFuturesLiveRuntime`
+  - `DeskFuturesAgentRuntimeSupervisor`
+  - `DeskFuturesAgentRuntimeResearch`
+- Kept stopped/disabled:
+  - `DeskFuturesBrokerManagement`
+  - `DeskFuturesReplayPreparation`
+  - `DeskFuturesCodexLive01`
+  - `DeskFuturesCodexLive02`
+  - `DeskFuturesCodexReplay01`
+
+Safety state after activation:
+
+```text
+DESK_LIVE_EXECUTION_MODE=shadow
+DESK_BROKER_EXECUTION_ENABLED=false
+DESK_NINJA_ALLOW_LIVE_ACCOUNT=false
+DESK_AI_WORKER_MODE=disabled
+DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED=true
+```
+
+Claims and broker execution remained fail-closed:
+
+```text
+desk_claim_lane_controls/live   enabled=false status=PAUSED
+desk_claim_lane_controls/replay enabled=false status=PAUSED
+global_default_kill_switch      locked=true
+```
+
+Rehearsal window:
+
+- `REHEARSAL_START`: `2026-08-15T00:21:41.8392963Z`
+- before-counts artifact on VPS:
+  - `C:\ProgramData\DeskFutures\proofs\td2-420\before_counts_12_2026-08-15T00-21-41-8392963Z.json`
+- after-counts artifact on VPS:
+  - `C:\ProgramData\DeskFutures\proofs\td2-420\after_counts_12_2026-08-15T00-21-41-8392963Z.json`
+- certifier artifact on VPS:
+  - `C:\ProgramData\DeskFutures\proofs\td2-420\td2_420_certifier_12_r5_imported.json`
+
+Broker/provider side-effect result:
+
+```text
+before broker_provider_commands: 0
+after  broker_provider_commands: 0
+before broker_provider_events:   0
+after  broker_provider_events:   0
+broker_execution_outbox:         8 -> 8
+broker_management_outbox:        10 -> 10
+broker_orders:                   15 -> 15
+trade_order_intents:             8 -> 8
+portfolio_order_intent_lineage:  0 -> 0
+```
+
+Research bootstrap r5:
+
+- dataset key: `td2-420-r5.demo-paper.mnq.m5.2026-06-10_2026-07-10`
+- dataset id: `f1b8edd4-3c76-46d1-887c-a90c53cc551a`
+- rows: `5976`
+- trading days: `23`
+- bootstrap simulation result:
+  - `total_r=-2.0736`
+  - `trade_count=2`
+  - `win_rate=0`
+  - `profit_factor=0`
+- agent task result:
+  - `106 DONE`
+  - `84 research_candidates`
+  - `duplicate_output_refs=0`
+
+Important runtime proof gained:
+
+- The `.12` output-ref fix is now proved on VPS runtime:
+
+```text
+duplicate_output_refs=0
+```
+
+This closes the `.11` regression where several branch/iteration tasks shared the same output reference.
+
+TD2-420 certifier result:
+
+```text
+verdict: NO-GO
+total: 25
+pass: 13
+fail: 10
+blocked_external: 2
+mandatory_failures: 8
+```
+
+Passing checks:
+
+- `safety.auto_execution_off`
+- `safety.live_auto_off`
+- `safety.zero_broker_side_effect_delta`
+- `cold_start.schema_present`
+- `cold_start.critical_services_healthy`
+- `workers.topology_known`
+- `workers.heartbeats_fresh`
+- `data.historical_lineage`
+- `signal_pipeline.safe_proof`
+- `front.vnext_truthful`
+- `assistants.read_only_truthful`
+- `observability.no_critical_errors`
+- `chaos.worker_recovery`
+
+Failing mandatory checks:
+
+- `research.strategy_sample_size`
+  - actual `strategy_count=1`
+  - required `10..20`
+  - strategy id available: `demo-paper.mnq.opening-range-breakout-retest`
+- `research.pipeline_artifacts`
+  - missions `106`
+  - tasks `106`
+  - datasets reported by certifier `0`
+  - simulation runs `84`
+  - evaluation reports `169`
+  - note: the r5 dataset exists and is linked to all 84 simulations, so the certifier still under-counts datasets in the research artifact check because it uses dataset `created_at_utc` rather than simulation lineage.
+- `research.gates_audited`
+  - missing `G0_DATA_READY`, `G3_ROBUST`, `G4_PORTFOLIO_FIT`
+  - present: `G1_SCREENED=169`, `G2_CANONICAL_VALID=84`
+- `strategy.artifact_lineage`
+  - validated versions `84`
+  - compiled artifacts `84`
+  - shadow instances reported `0`
+- `live_runtime.scheduler_observed`
+  - instances evaluated `5`
+  - feed state `closed_market_expected`
+  - last evaluation progressed `false`
+- `front.realtime_resume`
+  - SSE connected `true`
+  - cursor resume proven `true`
+  - browser reopen truth preserved `false`
+- `chaos.backend_restart_recovery`
+  - backend restart recovery not proved in the rehearsal window
+- `restart.full_restart_recovered`
+  - full restart recovery not proved through audited desk events
+
+Optional external blockers:
+
+- `telegram.notification_operator_safe`
+  - Telegram runtime authorization/proof unavailable in this rehearsal window.
+- `sim101.paper_smoke`
+  - Sim101/PAPER provider unavailable or intentionally not armed.
+
+Conclusion:
+
+- TD2-420 remains **NO-GO**.
+- `.12` is deployed and stable on the VPS.
+- The desk is safe:
+  - no auto execution;
+  - no live auto;
+  - broker execution disabled;
+  - provider command/event delta zero;
+  - claims paused;
+  - global broker kill switch locked.
+- The next blocker is no longer deployment. It is the TD2-420 evidence gap:
+  1. load/provision the real 10–20 Strategy_ID catalog across multiple families;
+  2. fix the certifier research dataset lineage count;
+  3. add/prove G3 robustness and G4 portfolio-fit reports;
+  4. prove SHADOW instances and live scheduler progression during a market/open-data window;
+  5. run audited backend/full restart recovery;
+  6. prove browser reopen truth and optional Telegram/Sim101 evidence when available.
