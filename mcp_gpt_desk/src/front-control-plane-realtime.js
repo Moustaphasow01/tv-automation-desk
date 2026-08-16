@@ -19,8 +19,8 @@ export function writeFrontControlPlaneEvents(store, req, res, input = {}, corsHe
       const events = await loadFrontControlPlaneRealtimeEvents(store, { cursor: lastEventId, limit: 25 });
       if (events.length) {
         for (const event of events) {
-          lastEventId = event.eventId;
           res.write(frontControlPlaneSseFrame(event));
+          lastEventId = event.eventType === "desk.resync_required" ? "" : event.eventId;
         }
       } else {
         res.write(frontControlPlaneSseFrame(heartbeatEvent({ input, lastEventId })));
@@ -104,7 +104,6 @@ function heartbeatEvent({ input, lastEventId }) {
     occurredAt: heartbeatAt,
     correlationId: lastEventId || `corr_front_control_plane_${hash(heartbeatAt).slice(0, 12)}`,
     schemaVersion: "1.0.0",
-    sequence: heartbeatTick.epochMs,
     payload: { source: "front-control-plane-bff", freshness: "heartbeat", lastEventId },
   };
 }
@@ -117,7 +116,6 @@ function errorEvent({ error, input, lastEventId }) {
     occurredAt: errorTick.utc,
     correlationId: lastEventId || `corr_front_control_plane_${hash(errorTick.utc).slice(0, 12)}`,
     schemaVersion: "1.0.0",
-    sequence: errorTick.epochMs,
     payload: { source: "front-control-plane-bff", error: String(error?.message || error).slice(0, 500) },
   };
 }
@@ -154,14 +152,12 @@ function normalizeRealtimeResult(result, { cursor }) {
       : [];
   }
   const seen = new Set();
-  return events
-    .filter((event) => {
+  return events.filter((event) => {
       const key = firstText([event?.eventId, event?.event_id]);
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
-    })
-    .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0));
+    });
 }
 
 function frontAssistantOutboxRowToEvent(row) {

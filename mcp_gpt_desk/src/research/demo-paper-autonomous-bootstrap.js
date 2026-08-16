@@ -47,10 +47,33 @@ export async function bootstrapDemoPaperAutonomousResearch({ store, input = {}, 
   const compilation = await compileVersion(store, seed, command);
   const simulation = runSimulation(seed, dataset, rows, compilation, ids);
   const registered = await registerSimulation(store, seed, dataset, simulation, compilation, seed.ids, command);
-  const research = await registerResearch(store, seed, registered.run, simulation, seed.ids, command);
+  const research = input.certification_replay === true
+    ? await loadExistingResearchRefs(store.persistence.pool, seed.ids.versionId)
+    : await registerResearch(store, seed, registered.run, simulation, seed.ids, command);
   const instance = await registerInstance(store, seed, registered.run, research, seed.ids, command);
-  const agentTask = await upsertResearchAgentTask(store.persistence.pool, { seed, dataset, registered, research, ids: seed.ids, operationTime });
+  const agentTask = input.certification_replay === true
+    ? null
+    : await upsertResearchAgentTask(store.persistence.pool, { seed, dataset, registered, research, ids: seed.ids, operationTime });
   return buildBootstrapResultPayload({ scope, rows, dataset, definition, version, compilation, simulation, registered, research, instance, agentTask });
+}
+
+async function loadExistingResearchRefs(pool, strategyVersionId) {
+  const result = await pool.query(`SELECT c.research_experiment_id, c.research_candidate_id
+    FROM strategy_versions target
+    JOIN strategy_versions reviewed ON reviewed.dsl_source_hash=target.dsl_source_hash
+    JOIN research_candidates c ON c.strategy_version_id=reviewed.strategy_version_id
+    WHERE target.strategy_version_id=$1
+    ORDER BY c.created_at_utc ASC LIMIT 1`, [strategyVersionId]);
+  const row = result.rows[0];
+  if (!row) throw coded("CERTIFICATION_RESEARCH_LINEAGE_MISSING", "Certification replay requires an existing reviewed research candidate.", { strategy_version_id: strategyVersionId });
+  const report = await pool.query(`SELECT research_evaluation_report_id FROM research_evaluation_reports
+    WHERE research_candidate_id=$1 ORDER BY created_at_utc DESC LIMIT 1`, [row.research_candidate_id]);
+  return {
+    experiment_id: row.research_experiment_id,
+    candidate_id: row.research_candidate_id,
+    report_id: report.rows[0]?.research_evaluation_report_id || null,
+    source: "EXISTING_RESEARCH_LINEAGE",
+  };
 }
 
 function normalizeScope(input = {}) {

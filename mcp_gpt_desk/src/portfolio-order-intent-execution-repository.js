@@ -23,6 +23,7 @@ import {
   InMemoryProviderLifecycleRepository,
   PostgresProviderLifecycleRepository,
 } from "./portfolio-order-intent-provider-lifecycle-repository.js";
+import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
 
 export { intentPayload, normalizeLineage } from "./portfolio-order-intent-execution-repository-common.js";
 
@@ -30,6 +31,7 @@ export class PostgresPortfolioOrderIntentExecutionRepository {
   constructor(persistence) {
     this.persistence = persistence;
     this.pool = persistence?.pool || null;
+    this.domainEvents = this.pool ? new DomainEventOutboxRepository(persistence) : null;
     this.humanGateRepository = new PostgresHumanExecutionGateRepository(this);
     this.providerLifecycleRepository = new PostgresProviderLifecycleRepository(this);
   }
@@ -153,6 +155,23 @@ export class PostgresPortfolioOrderIntentExecutionRepository {
           updated_at_utc = now()`,
         [lineage.portfolio_order_intent_id, inserted.execution_provider_command_id, json({ materialized_at_utc: nowUtc })],
       );
+      await this.domainEvents.append({
+        aggregateId: inserted.execution_provider_command_id,
+        aggregateType: "provider_command",
+        eventType: "provider.command.created",
+        occurredAt: nowUtc,
+        correlationId: lineage.payload?.correlation_id || lineage.payload?.correlationId || lineage.portfolio_order_intent_id,
+        causationId: lineage.portfolio_order_intent_id,
+        source: "execution-gateway",
+        payload: {
+          providerCommandId: inserted.execution_provider_command_id,
+          orderIntentId: lineage.portfolio_order_intent_id,
+          providerCode: inserted.broker_provider_code,
+          accountId: inserted.broker_account_id,
+          commandType: inserted.command_type,
+          status: inserted.status,
+        },
+      }, client);
       await client.query("COMMIT");
       return { status: "PERSISTED", provider_command: inserted };
     } catch (error) {

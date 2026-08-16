@@ -22,6 +22,7 @@ export class AiContextGateService {
       signal_id: input.signal_id || input.signalId,
       candidate_allocation_id: input.candidate_allocation_id || input.candidateAllocationId,
       position_id: input.position_id || input.positionId,
+      correlation_id: input.correlation_id || input.correlationId,
     });
   }
 }

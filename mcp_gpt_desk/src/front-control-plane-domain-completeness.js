@@ -20,7 +20,7 @@ import {
 import { orderHumanGateProjection, permissions, resourceAllowedActions } from "./front-control-plane-permissions.js";
 import { intentRow, signalRow } from "./front-control-plane-row-mappers.js";
 
-export function canonicalOrderIntentDossier({ execution, portfolioIntent, order, actor, nowIso }) {
+export function canonicalOrderIntentDossier({ execution, portfolioIntent, order, actor, nowIso, health }) {
   const payload = portfolioIntent.order_intent_payload || portfolioIntent.payload || {};
   const riskDecision = firstRow(portfolioIntent.risk_decisions);
   const humanGate = orderHumanGateProjection({ execution, portfolioIntent, actor });
@@ -30,7 +30,7 @@ export function canonicalOrderIntentDossier({ execution, portfolioIntent, order,
     lineage: canonicalDossierLineage({ execution, portfolioIntent, payload, humanGate, riskDecision }),
     executionTerms: canonicalDossierExecutionTerms({ portfolioIntent, payload, order }),
     riskSnapshot: canonicalDossierRiskSnapshot({ portfolioIntent, payload, riskDecision }),
-    policy: semiManualPaperPolicy(),
+    policy: executionPolicy(execution, health),
     immutability: portfolioIntent.immutability || payload.immutability || {
       policy: "REJECT_AND_REPLAN",
       immutableTermsHash: text(portfolioIntent.immutable_terms_hash || payload.immutable_terms_hash, "unavailable"),
@@ -53,15 +53,25 @@ export function canonicalOrderIntentDossier({ execution, portfolioIntent, order,
   };
 }
 
-export function liveCanonicalRuntime({ execution = {}, strategy = {}, ai = {}, risk = {}, launchGate, actor = {}, nowIso = currentUtc() }) {
-  const signals = rows(strategy?.signals).filter(hasSignalId).map(signalRow);
-  const gateDecisions = rows(ai?.decisions);
-  const portfolioOrderIntents = rows(execution?.portfolioOrderIntents);
-  const riskCenterValue = risk?.risk_center || null;
-  const portfolioState = risk?.portfolio_state || null;
+export function liveCanonicalRuntime({ execution = {}, strategy = {}, ai = {}, risk = {}, launchGate, actor = {}, nowIso = currentUtc(), health = {} }) {
+  const nominalSignals = rows(strategy?.signals).filter(isNominalLiveSignal);
+  const signals = nominalSignals.filter(hasSignalId).map(signalRow);
+  const nominalSignalIds = new Set(nominalSignals.map((item) => String(item.signal_id || item.signal_outbox_id || "")).filter(Boolean));
+  const gateDecisions = rows(ai?.decisions).filter((item) => nominalSignalIds.has(String(item.signal_id || "")));
+  const portfolioOrderIntents = rows(execution?.portfolioOrderIntents).filter(isNominalPortfolioIntent);
+  const nominalIntentIds = new Set(portfolioOrderIntents.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
+  const humanGates = rows(execution?.humanExecutionGates).filter((item) => nominalIntentIds.has(String(item.portfolio_order_intent_id || "")));
+  const providerCommands = rows(execution?.providerCommands).filter((item) => !item.portfolio_order_intent_id || nominalIntentIds.has(String(item.portfolio_order_intent_id)));
+  const commandIds = new Set(providerCommands.map((item) => String(item.execution_provider_command_id || "")).filter(Boolean));
+  const providerEvents = rows(execution?.providerEvents).filter((item) => (
+    (!item.portfolio_order_intent_id || nominalIntentIds.has(String(item.portfolio_order_intent_id)))
+    && (!item.execution_provider_command_id || commandIds.has(String(item.execution_provider_command_id)))
+  ));
+  const riskCenterValue = nominalRiskCenter(risk?.risk_center, portfolioOrderIntents);
+  const portfolioState = nominalPortfolioState(risk?.portfolio_state, nominalIntentIds);
   return {
     schemaVersion: "live_canonical_runtime_v1",
-    mode: semiManualPaperPolicy(),
+    mode: executionPolicy(execution, health),
     authoritativeSources: liveAuthoritativeSources({ execution, strategy, gateDecisions, portfolioOrderIntents }),
     freshness: liveFreshness({ strategy, gateDecisions, portfolioOrderIntents, launchGate, nowIso }),
     pipeline: canonicalLivePipeline({
@@ -70,12 +80,12 @@ export function liveCanonicalRuntime({ execution = {}, strategy = {}, ai = {}, r
       portfolioOrderIntents,
       riskCenter: riskCenterValue,
       portfolioState,
-      humanGates: rows(execution?.humanExecutionGates),
-      providerCommands: rows(execution?.providerCommands),
-      providerEvents: rows(execution?.providerEvents),
+      humanGates,
+      providerCommands,
+      providerEvents,
       launchGate,
     }),
-    activeStrategyInstances: activeStrategyInstanceRows(strategy),
+    activeStrategyInstances: activeStrategyInstanceRows(strategy, nowIso),
     latestSignals: signals.slice(0, 12),
     aiContextGate: aiContextGateRows(gateDecisions),
     pendingOrderIntents: portfolioOrderIntents.map((item) => portfolioOrderIntentSummaryRow({ execution, item, actor })),
@@ -86,6 +96,27 @@ export function liveCanonicalRuntime({ execution = {}, strategy = {}, ai = {}, r
       reason: "Global Risk projection is not available for this live view.",
     },
   };
+}
+
+export function isNominalLiveSignal(item = {}) {
+  return String(item.source_class || item.sourceClass || "LIVE").toUpperCase() !== "CERTIFICATION_REPLAY"
+    && !item.certification_run_id
+    && !item.certificationRunId;
+}
+
+export function isNominalPortfolioIntent(item = {}) {
+  const payload = payloadOf(item);
+  const terms = item.execution_terms || payload.execution_terms || {};
+  const values = [
+    item.target_account_id,
+    payload.account_id,
+    payload.broker_account_id,
+    terms.account_id,
+    terms.broker_account_id,
+    item.correlation_id,
+    payload.correlation_id,
+  ].map((value) => String(value || "").toLowerCase());
+  return !values.some((value) => value === "shadow_certification" || value.startsWith("certification:") || value.startsWith("corr_cert_shadow_"));
 }
 
 export function portfolioOrderIntentSummaryRow({ execution = {}, item = {}, actor = {} }) {
@@ -106,14 +137,15 @@ export function portfolioOrderIntentSummaryRow({ execution = {}, item = {}, acto
     humanGate: { gateId: humanGate.gateId || null, status: humanGate.status, allowedActions: humanGate.actions },
     allowedActions: resourceAllowedActions({
       resourceType: "OrderIntent",
-      status: text(firstValue(item.status, payload.status), "READY"),
+      status: humanGate.gateId ? humanGate.status : "HUMAN_GATE_NOT_CREATED",
       revision: text(firstValue(item.immutable_terms_hash, item.order_intent_hash, payload.order_intent_hash), "unavailable"),
       actor,
       expiresAt: text(item.expires_at_utc || payload.expires_at_utc, ""),
     }),
     providerCommandCount: providerCommands.length,
     providerEventCount: providerEvents.length,
-    brokerSubmissionAllowed: item.broker_submission_allowed === true || payload.broker_submission_allowed === true,
+    brokerSubmissionAllowed: execution?.safety?.submissionPossible === true
+      && (item.broker_submission_allowed === true || payload.broker_submission_allowed === true),
     physicalExecutionState: providerCommands.length ? "PROVIDER_COMMAND_CREATED" : "NOT_SENT",
     ackIsFill: false,
     route: `/execution/orders/${encodeURIComponent(portfolioOrderIntentId)}`,
@@ -279,7 +311,12 @@ function canonicalLivePipeline({ signals, gateDecisions, portfolioOrderIntents, 
     livePipelineStage("GLOBAL_RISK", riskPipelineStatus(riskCenter), text(firstValue(nested(riskCenter, ["globalStatus"]), nested(riskCenter, ["availability"])), "Risk center non publié"), "portfolio_risk_decisions"),
     livePipelineStage("TARGET_POSITION", targetPositions ? "OK" : "WAITING", `${targetPositions} target position(s)`, "portfolio_target_positions"),
     livePipelineStage("ORDER_INTENT", portfolioOrderIntents.length ? "OK" : "WAITING", `${portfolioOrderIntents.length} OrderIntent(s) post-risk`, "portfolio_order_intent_lineage"),
-    livePipelineStage("HUMAN_GATE", humanGates.length || portfolioOrderIntents.length ? "WAITING_OPERATOR" : "WAITING", `${humanGates.length} Human Gate(s)`, "human_execution_gates"),
+    livePipelineStage(
+      "HUMAN_GATE",
+      humanGates.length ? "WAITING_OPERATOR" : portfolioOrderIntents.length ? "BLOCKED" : "WAITING",
+      humanGates.length ? `${humanGates.length} Human Gate(s)` : portfolioOrderIntents.length ? "OrderIntent présent, mais aucun Human Gate canonique n'a été créé." : "Aucun OrderIntent ne requiert un Human Gate.",
+      "human_execution_gates",
+    ),
     livePipelineStage("EXECUTION_GATEWAY", providerCommands.length ? "OK" : "BLOCKED", providerCommands.length ? `${providerCommands.length} commande(s) provider` : "Aucune commande provider créée tant que Human Gate/Execution restent fermés.", "broker_provider_commands"),
     livePipelineStage("PROVIDER_EVENTS", providerEvents.length ? "OK" : "WAITING", `${providerEvents.length} événement(s) provider observé(s) ; ACK n'est jamais un fill.`, "broker_provider_events"),
   ];
@@ -315,17 +352,56 @@ function nested(source, path) {
   return value;
 }
 
-function activeStrategyInstanceRows(strategy) {
-  return rows(strategy?.instances).filter(isActiveExecutionMode).map((item) => ({
-    strategyInstanceId: text(item.strategy_instance_id, "unavailable"),
-    strategyDefinitionId: text(item.strategy_definition_id, "unavailable"),
-    strategyVersionId: text(item.strategy_version_id, "unavailable"),
-    executionMode: executionModeState(item.execution_mode),
-    runtimeState: runtimeState(item.runtime_state || item.status),
-    lastEvaluationAt: text(item.last_evaluation_at_utc || item.updated_at_utc, ""),
-    nextEvaluationAt: text(item.next_evaluation_at_utc || item.next_run_at_utc, ""),
-    scheduler: item.scheduler || null,
-  }));
+function activeStrategyInstanceRows(strategy, nowIso) {
+  const definitionByVersion = new Map(rows(strategy?.versions).map((version) => [String(version.strategy_version_id), version.strategy_definition_id]));
+  return rows(strategy?.instances).filter(isActiveExecutionMode).map((item) => {
+    const lastEvaluationAt = text(item.last_evaluation_at_utc, "");
+    const lastHeartbeatAt = text(item.last_heartbeat_at || item.last_heartbeat_at_utc, "");
+    const configuredState = runtimeState(item.runtime_state || item.status);
+    const observedAt = lastEvaluationAt || lastHeartbeatAt;
+    const observedAgeMs = observedAt ? Date.parse(nowIso) - Date.parse(observedAt) : Number.POSITIVE_INFINITY;
+    const schedulerHealth = text(item.scheduler_health, observedAt ? "OBSERVED" : "NOT_OBSERVED").toUpperCase();
+    const effectiveRuntimeState = configuredState === "RUNNING" && (schedulerHealth === "NOT_OBSERVED" || !Number.isFinite(observedAgeMs) || observedAgeMs > 20 * 60_000)
+      ? "STALE"
+      : configuredState;
+    return {
+      strategyInstanceId: text(item.strategy_instance_id, "unavailable"),
+      strategyDefinitionId: text(item.strategy_definition_id || definitionByVersion.get(String(item.strategy_version_id)), "unavailable"),
+      strategyVersionId: text(item.strategy_version_id, "unavailable"),
+      executionMode: executionModeState(item.execution_mode),
+      configuredState,
+      runtimeState: effectiveRuntimeState,
+      schedulerHealth,
+      lastHeartbeatAt,
+      lastEvaluationAt,
+      nextEvaluationAt: text(item.next_evaluation_at_utc || item.next_run_at_utc, ""),
+      lastEvaluationResult: text(item.last_evaluation_result, "UNKNOWN"),
+      lastError: text(item.last_error, ""),
+      artifactVersion: text(item.artifact_version, ""),
+      scheduler: item.scheduler || null,
+    };
+  });
+}
+
+function nominalRiskCenter(riskCenter, intents) {
+  if (!riskCenter) return null;
+  if (!intents.length) return {
+    ...riskCenter,
+    availability: "UNAVAILABLE",
+    globalStatus: "DATA_UNAVAILABLE",
+    openRisk: { availability: "UNAVAILABLE", value: null, reasonCode: "NO_NOMINAL_RISK_DECISION" },
+    pendingOrderIntents: 0,
+    pendingTargetPositions: 0,
+  };
+  return { ...riskCenter, pendingOrderIntents: intents.length };
+}
+
+function nominalPortfolioState(portfolioState, intentIds) {
+  if (!portfolioState) return null;
+  return {
+    ...portfolioState,
+    pendingTargetPositions: rows(portfolioState.pendingTargetPositions).filter((item) => intentIds.has(String(item.orderIntentId || item.order_intent_id || ""))),
+  };
 }
 
 function aiContextGateRows(gateDecisions) {
@@ -487,13 +563,15 @@ function livePipelineStage(stepId, status, detail, source) {
   return { stepId, label: stepId.replaceAll("_", " "), status, detail, source };
 }
 
-function semiManualPaperPolicy() {
+function executionPolicy(execution, health) {
+  const safety = execution?.safety || {};
+  const authority = upper(safety.executionAuthorityMode || safety.execution_authority_mode);
   return {
-    environment: "PAPER",
-    executionMode: "SEMI_MANUAL",
-    autoExecutionEnabled: false,
-    physicalExecutionEnabled: false,
-    humanGateRequired: true,
+    environment: upper(safety.environment || health?.environment) || "UNKNOWN",
+    executionMode: authority.includes("SEMI") ? "SEMI_MANUAL" : authority || "UNKNOWN",
+    autoExecutionEnabled: safety.executionEnabled === true && authority === "AUTO",
+    physicalExecutionEnabled: safety.submissionPossible === true,
+    humanGateRequired: safety.entryOperatorApprovalRequired === true || authority.includes("SEMI"),
     ackIsFill: false,
   };
 }

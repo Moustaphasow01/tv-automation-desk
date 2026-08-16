@@ -53,6 +53,11 @@ import { DataFoundationService } from "./data-foundation-service.js";
 import { createDataFoundationRepository } from "./data-foundation-repository.js";
 import { attachResearchLabStoreMethods } from "./research-lab-store-extension.js";
 import { attachAgentRuntimeStoreMethods } from "./agent-runtime-store-extension.js";
+import { loadFrontMarketSeries } from "./front-market-series-service.js";
+import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
+import { StrategyEvaluationRuntimeRepository } from "./strategy-evaluation-runtime-repository.js";
+import { CanonicalStrategyEvaluationScheduler } from "./canonical-strategy-evaluation-scheduler.js";
+import { loadStrategyV2Overview } from "./strategy-v2-overview-projection.js";
 import { createSimulationRunRegistryService } from "./simulation-run-registry-service.js";
 import {
   assertReplayRunMatchesQuery,
@@ -194,103 +199,6 @@ function commandActor(input = {}, actor = {}) {
     actor: actor.email || actor.uid || actor.kind || "operator",
     reason: input.reason || null,
   };
-}
-
-function groupByKey(items = [], key) {
-  return items.reduce((groups, item) => {
-    const value = item?.[key];
-    if (!value) return groups;
-    if (!groups.has(value)) groups.set(value, []);
-    groups.get(value).push(item);
-    return groups;
-  }, new Map());
-}
-
-function firstByStatus(items = [], status) {
-  return items.find((item) => String(item?.status || "").toUpperCase() === status) || null;
-}
-
-function strategyV2StatusCounts(items = [], key) {
-  return items.reduce((counts, item) => {
-    const status = String(item?.[key] || "UNKNOWN").toUpperCase();
-    counts[status] = (counts[status] || 0) + 1;
-    return counts;
-  }, {});
-}
-
-function buildStrategyV2Summary({ definitions = [], versions = [], instances = [] }) {
-  return {
-    definitions: definitions.length,
-    versions: versions.length,
-    instances: instances.length,
-    published_versions: versions.filter((item) => String(item.status || "").toUpperCase() === "PUBLISHED").length,
-    live_instances: instances.filter((item) => String(item.execution_mode || "").toUpperCase() === "LIVE").length,
-    paper_instances: instances.filter((item) => String(item.execution_mode || "").toUpperCase() === "PAPER").length,
-    shadow_instances: instances.filter((item) => String(item.execution_mode || "").toUpperCase() === "SHADOW").length,
-    version_statuses: strategyV2StatusCounts(versions, "status"),
-    runtime_states: strategyV2StatusCounts(instances, "runtime_state"),
-    execution_modes: strategyV2StatusCounts(instances, "execution_mode"),
-  };
-}
-
-function buildStrategyV2OverviewItems({ definitions = [], versions = [], instances = [], audit = [] }) {
-  const versionsByDefinition = groupByKey(versions, "strategy_definition_id");
-  const instancesByVersion = groupByKey(instances, "strategy_version_id");
-  const auditByAggregate = groupByKey(audit, "aggregate_id");
-  return definitions.map((definition) => {
-    const definitionVersions = [...(versionsByDefinition.get(definition.strategy_definition_id) || [])]
-      .sort((a, b) => String(b.updated_at_utc || b.updated_at || "").localeCompare(String(a.updated_at_utc || a.updated_at || "")));
-    const definitionInstances = definitionVersions.flatMap((version) => instancesByVersion.get(version.strategy_version_id) || []);
-    const publishedVersion = firstByStatus(definitionVersions, "PUBLISHED");
-    const liveInstance = definitionInstances.find((item) => String(item.execution_mode || "").toUpperCase() === "LIVE") || null;
-    const paperInstance = definitionInstances.find((item) => String(item.execution_mode || "").toUpperCase() === "PAPER") || null;
-    const latestVersion = definitionVersions[0] || null;
-    const aggregateIds = new Set([
-      definition.strategy_definition_id,
-      ...definitionVersions.map((item) => item.strategy_version_id),
-      ...definitionInstances.map((item) => item.strategy_instance_id),
-    ].filter(Boolean));
-    const recentAudit = [...auditByAggregate.entries()]
-      .filter(([aggregateId]) => aggregateIds.has(aggregateId))
-      .flatMap(([, rows]) => rows)
-      .sort((a, b) => String(b.created_at_utc || b.created_at || "").localeCompare(String(a.created_at_utc || a.created_at || "")))
-      .slice(0, 10);
-    return {
-      strategy_definition_id: definition.strategy_definition_id,
-      external_key: definition.external_key,
-      name: definition.name,
-      family: definition.family,
-      owner: definition.owner,
-      description: definition.description || null,
-      latest_version: latestVersion,
-      published_version: publishedVersion,
-      live_instance: liveInstance,
-      paper_instance: paperInstance,
-      version_count: definitionVersions.length,
-      instance_count: definitionInstances.length,
-      audit_count: recentAudit.length,
-      versions: definitionVersions,
-      instances: definitionInstances,
-      recent_audit: recentAudit,
-      operator_state: {
-        has_definition: true,
-        has_published_version: Boolean(publishedVersion),
-        has_runtime_instance: definitionInstances.length > 0,
-        has_live_instance: Boolean(liveInstance),
-        recommended_next_step: !definitionVersions.length
-          ? "CREATE_VERSION"
-          : !publishedVersion
-            ? "VALIDATE_AND_PUBLISH_VERSION"
-            : !definitionInstances.length
-              ? "CREATE_SHADOW_INSTANCE"
-              : liveInstance
-                ? "MONITOR_LIVE_INSTANCE"
-                : paperInstance
-                  ? "EVALUATE_PAPER_PROMOTION"
-                  : "RUN_SHADOW_VALIDATION",
-      },
-    };
-  });
 }
 
 function normalizeLiveMasterActiveThesis({ thesis, master, setupDocs = [], tick }) {
@@ -462,6 +370,13 @@ export class PersistentDeskStore {
     this.aiContextGateRepository = createAiContextGateRepository(persistence);
     this.dataFoundation = new DataFoundationService({ repository: createDataFoundationRepository(persistence), clock });
     this.simulationRuns = createSimulationRunRegistryService({ persistence, clock });
+    this.domainEvents = persistence.pool ? new DomainEventOutboxRepository(persistence) : null;
+    this.strategyEvaluations = persistence.pool
+      ? new StrategyEvaluationRuntimeRepository(persistence, { eventOutbox: this.domainEvents })
+      : null;
+    this.strategyEvaluationScheduler = persistence.pool
+      ? new CanonicalStrategyEvaluationScheduler({ store: this })
+      : null;
     this.strategy = new DeskStrategyAuditService({ persistence, clock, host: this, market: this.market });
     this.replay = new DeskReplayService({ persistence, clock, host: this });
     this.replayPreparation = new ReplayPreparationService({ persistence, clock, host: this });
@@ -539,6 +454,8 @@ export class PersistentDeskStore {
     ]);
     return {
       ...infrastructure,
+      environment: process.env.DESK_ENVIRONMENT || process.env.NODE_ENV || "unknown",
+      release_version: process.env.DESK_RELEASE_VERSION || "unversioned",
       ...(dataReadiness ? { data_readiness: dataReadiness } : {}),
       ...(operations ? { operations } : {}),
     };
@@ -564,6 +481,11 @@ export class PersistentDeskStore {
   async executeOperationsAiRuntimeSettingsAction({ input, actor }) { return this.operations.executeAiRuntimeSettingsAction(input, actor); }
   async evaluateOperationsObservabilityIncidents({ input = {}, actor = {} } = {}) { return this.operations.evaluateObservabilityIncidents(input, actor); }
   async getOperationsPerformance(args = {}) { return this.operations.getPerformanceOverview(args); }
+  async getFrontMarketSeries(args = {}) { return loadFrontMarketSeries(this.persistence, args); }
+  async listFrontRealtimeEvents(args = {}) {
+    if (!this.domainEvents) return { events: [], resyncRequired: false };
+    return this.domainEvents.listAfter(args);
+  }
   async compareOperationsReplays({ ids }) { return this.operations.compareReplays(ids); }
   async listOperationsIncidents(args = {}) { return this.operations.listIncidents(args); }
   async executeOperationsIncidentAction({ incident_id, input, actor }) { return this.operations.executeIncidentAction(incident_id, input, actor); }
@@ -653,32 +575,7 @@ export class PersistentDeskStore {
     return strategyKernelResponse("DeskStrategyKernelAuditEventListV2", { count: items.length, items });
   }
   async getStrategyV2Overview(args = {}) {
-    const limit = args.limit ? Number(args.limit) : 500;
-    const [definitions, versions, instances, audit] = await Promise.all([
-      this.strategyKernel.listDefinitions({ limit }),
-      this.strategyKernel.listVersions({ strategyDefinitionId: args.strategy_definition_id || args.strategyDefinitionId || null, limit }),
-      this.strategyKernel.listInstances({ strategyVersionId: args.strategy_version_id || args.strategyVersionId || null, limit }),
-      this.strategyKernel.listAuditEvents({ limit: Math.min(limit, 200) }),
-    ]);
-    const filteredInstances = args.strategy_definition_id || args.strategyDefinitionId
-      ? instances.filter((instance) => versions.some((version) => version.strategy_version_id === instance.strategy_version_id))
-      : instances;
-    const strategies = buildStrategyV2OverviewItems({ definitions, versions, instances: filteredInstances, audit });
-    return strategyKernelResponse("DeskStrategyV2Overview", {
-      generated_at_utc: this.clock.now().utc,
-      summary: buildStrategyV2Summary({ definitions, versions, instances: filteredInstances }),
-      count: strategies.length,
-      strategies,
-      definitions,
-      versions,
-      instances: filteredInstances,
-      audit,
-      source: {
-        canonical: "strategy_kernel_v2",
-        legacy_strategy_endpoint: "/api/v1/strategies",
-        note: "Legacy strategy endpoint remains available only for historical performance comparison while Strategy v2 owns governance.",
-      },
-    });
+    return loadStrategyV2Overview(this, args);
   }
   async getDataFoundationOverview(args = {}) { return dataFoundationResponse("DeskDataFoundationOverviewV1", await this.dataFoundation.getOverview(args)); }
   async getPromptRegistryOverview() { return buildPromptRegistryOverview({ nowUtc: this.clock.now().utc }); }

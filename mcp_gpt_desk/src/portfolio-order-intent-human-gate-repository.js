@@ -11,19 +11,31 @@ import {
   one,
   text,
 } from "./portfolio-order-intent-execution-repository-common.js";
+import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
 
 export class PostgresHumanExecutionGateRepository {
   constructor(repository) {
     this.repository = repository;
+    this.domainEvents = repository?.persistence ? new DomainEventOutboxRepository(repository.persistence) : null;
   }
 
   get pool() { return this.repository.pool; }
   async ready() { return this.repository.ready(); }
 
-  async ensureHumanGate({ portfolioOrderIntentId, expiresAtUtc = null, nowUtc } = {}) {
+  async ensureHumanGate({ portfolioOrderIntentId, expiresAtUtc = null, nowUtc, correlationId = null, correlation_id = null } = {}) {
     await this.ready();
     const gateId = `human_gate_${canonicalSha256({ portfolio_order_intent_id: portfolioOrderIntentId }).slice(0, 24)}`;
-    const result = await this.pool.query(
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const existing = await one(client, "SELECT * FROM human_execution_gates WHERE portfolio_order_intent_id = $1 FOR UPDATE", [text(portfolioOrderIntentId)]);
+      if (existing) {
+        await client.query("COMMIT");
+        return existing;
+      }
+      const lineage = await one(client, "SELECT payload FROM portfolio_order_intent_lineage WHERE portfolio_order_intent_id = $1", [text(portfolioOrderIntentId)]);
+      const correlation = text(correlationId || correlation_id || lineage?.payload?.correlation_id || lineage?.payload?.correlationId) || null;
+      const result = await client.query(
       `INSERT INTO human_execution_gates (
         human_execution_gate_id, portfolio_order_intent_id, status, expires_at_utc, payload
       ) VALUES ($1,$2,'AWAITING_MANUAL_CONFIRMATION',$3,$4::jsonb)
@@ -31,15 +43,19 @@ export class PostgresHumanExecutionGateRepository {
         expires_at_utc = COALESCE(human_execution_gates.expires_at_utc, EXCLUDED.expires_at_utc),
         updated_at_utc = now()
       RETURNING *`,
-      [gateId, text(portfolioOrderIntentId), expiresAtUtc || null, json({ opened_at_utc: nowUtc })],
-    );
-    await insertHumanGateEventWithClient(this.pool, {
-      gate: result.rows[0],
-      eventType: "OPENED",
-      nowUtc,
-      payload: { expires_at_utc: expiresAtUtc || null },
-    });
-    return result.rows[0];
+      [gateId, text(portfolioOrderIntentId), expiresAtUtc || null, json({ opened_at_utc: nowUtc, correlation_id: correlation })],
+      );
+      const gate = result.rows[0];
+      await insertHumanGateEventWithClient(client, { gate, eventType: "OPENED", nowUtc, payload: { expires_at_utc: expiresAtUtc || null } });
+      await appendHumanGateDomainEvent(this.domainEvents, client, { gate, eventType: "created", nowUtc, payload: { expiresAtUtc: expiresAtUtc || null } });
+      await client.query("COMMIT");
+      return gate;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async confirmHumanGate(input = {}) {
@@ -60,12 +76,12 @@ export class PostgresHumanExecutionGateRepository {
         }
       }
       const lineage = await one(client, "SELECT * FROM portfolio_order_intent_lineage WHERE portfolio_order_intent_id = $1 FOR UPDATE", [portfolioOrderIntentId]);
-      if (!lineage) return await refused(client, { portfolioOrderIntentId, reason: "PORTFOLIO_ORDER_INTENT_NOT_FOUND", input, nowUtc });
+      if (!lineage) return await refused(client, { portfolioOrderIntentId, reason: "PORTFOLIO_ORDER_INTENT_NOT_FOUND", input, nowUtc, domainEvents: this.domainEvents });
       let gate = await one(client, "SELECT * FROM human_execution_gates WHERE portfolio_order_intent_id = $1 FOR UPDATE", [portfolioOrderIntentId]);
       if (!gate) gate = await insertGateForConfirmation(client, { portfolioOrderIntentId, lineage, nowUtc });
       const normalized = normalizeLineage({ ...lineage, order_intent_payload: lineage.payload, ...gateToLineageFields(gate) });
       const issueCode = humanGateConfirmationIssue({ lineage: normalized, gate, input, nowUtc });
-      if (issueCode) return await refused(client, { gate, portfolioOrderIntentId, reason: issueCode, input, nowUtc });
+      if (issueCode) return await refused(client, { gate, portfolioOrderIntentId, reason: issueCode, input, nowUtc, domainEvents: this.domainEvents });
       const terms = confirmationTerms(normalized, input.approvedTerms || input.approved_terms || {});
       const termsHash = hash(terms);
       const confirmedGate = await one(client,
@@ -96,6 +112,7 @@ export class PostgresHumanExecutionGateRepository {
         status: "AWAITING_MANUAL_CONFIRMATION",
         payload: { human_gate_status: "CONFIRMED", confirmed_at_utc: nowUtc },
       });
+      await appendHumanGateDomainEvent(this.domainEvents, client, { gate: confirmedGate, eventType: "state_changed", nowUtc, payload: { previousState: gate.status, state: confirmedGate.status, operatorId: confirmedGate.operator_id } });
       await client.query("COMMIT");
       return { status: "CONFIRMED", idempotent: false, gate: confirmedGate };
     } catch (error) {
@@ -111,7 +128,10 @@ export class PostgresHumanExecutionGateRepository {
     const portfolioOrderIntentId = text(input.portfolioOrderIntentId || input.portfolio_order_intent_id);
     const nowUtc = input.nowUtc || DEFAULT_REPOSITORY_NOW_UTC;
     const gate = await this.ensureHumanGate({ portfolioOrderIntentId, nowUtc });
-    const result = await this.pool.query(
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
       `UPDATE human_execution_gates SET
         status = 'REJECTED',
         revision = revision + 1,
@@ -124,16 +144,18 @@ export class PostgresHumanExecutionGateRepository {
        RETURNING *`,
       [gate.human_execution_gate_id, text(input.operatorId || input.operator_id || "operator"),
         text(input.idempotencyKey || input.idempotency_key) || null, nowUtc, input.reason || null],
-    );
-    await insertHumanGateEventWithClient(this.pool, {
-      gate: result.rows[0],
-      eventType: "REJECTED",
-      operatorId: result.rows[0].operator_id,
-      idempotencyKey: text(input.idempotencyKey || input.idempotency_key) || null,
-      nowUtc,
-      payload: { reason: input.reason || null },
-    });
-    return { status: "REJECTED", gate: result.rows[0] };
+      );
+      const rejectedGate = result.rows[0];
+      await insertHumanGateEventWithClient(client, { gate: rejectedGate, eventType: "REJECTED", operatorId: rejectedGate.operator_id, idempotencyKey: text(input.idempotencyKey || input.idempotency_key) || null, nowUtc, payload: { reason: input.reason || null } });
+      await appendHumanGateDomainEvent(this.domainEvents, client, { gate: rejectedGate, eventType: "state_changed", nowUtc, payload: { previousState: gate.status, state: rejectedGate.status, operatorId: rejectedGate.operator_id, reason: input.reason || null } });
+      await client.query("COMMIT");
+      return { status: "REJECTED", gate: rejectedGate };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 
@@ -287,7 +309,7 @@ async function insertGateForConfirmation(client, { portfolioOrderIntentId, linea
   );
 }
 
-async function refused(client, { gate = null, portfolioOrderIntentId, reason, input, nowUtc }) {
+async function refused(client, { gate = null, portfolioOrderIntentId, reason, input, nowUtc, domainEvents = null }) {
   const existingGate = gate || await one(client, "SELECT * FROM human_execution_gates WHERE portfolio_order_intent_id = $1", [portfolioOrderIntentId]);
   const effectiveGate = existingGate || await insertRefusalGate(client, { portfolioOrderIntentId, nowUtc });
   await insertHumanGateEventWithClient(client, {
@@ -299,8 +321,29 @@ async function refused(client, { gate = null, portfolioOrderIntentId, reason, in
     payload: { reason },
   });
   await upsertGateStateWithClient(client, { portfolioOrderIntentId, status: "BLOCKED", payload: { human_gate_refusal: reason } });
+  await appendHumanGateDomainEvent(domainEvents, client, { gate: effectiveGate, eventType: "state_changed", nowUtc, payload: { state: effectiveGate.status, attemptedAction: "CONFIRM", refusalReason: reason } });
   await client.query("COMMIT");
   return { status: "REFUSED", reason, gate: effectiveGate };
+}
+
+async function appendHumanGateDomainEvent(outbox, client, { gate, eventType, nowUtc, payload = {} }) {
+  if (!outbox || !gate) return;
+  await outbox.append({
+    aggregateId: gate.human_execution_gate_id,
+    aggregateType: "human_gate",
+    eventType: `human_gate.${eventType}`,
+    occurredAt: nowUtc,
+    correlationId: gate.payload?.correlation_id || gate.payload?.correlationId || `order-intent:${gate.portfolio_order_intent_id}`,
+    causationId: gate.portfolio_order_intent_id,
+    revision: Number(gate.revision || 1),
+    source: "human-execution-gate",
+    payload: {
+      gateId: gate.human_execution_gate_id,
+      orderIntentId: gate.portfolio_order_intent_id,
+      state: gate.status,
+      ...payload,
+    },
+  }, client);
 }
 
 async function insertRefusalGate(client, { portfolioOrderIntentId, nowUtc }) {

@@ -1,9 +1,11 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
+import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
 
 export class PostgresPortfolioRiskRuntimeRepository {
   constructor(persistence) {
     this.persistence = persistence;
     this.pool = persistence?.pool || null;
+    this.domainEvents = this.pool ? new DomainEventOutboxRepository(persistence) : null;
   }
 
   get available() { return Boolean(this.pool); }
@@ -30,6 +32,7 @@ export class PostgresPortfolioRiskRuntimeRepository {
       for (const target of record.targets) await insertTarget(client, record.run.id, target);
       for (const target of record.targets) await insertTargetLinks(client, target);
       for (const intent of record.orderIntents) await insertOrderIntentLineage(client, intent);
+      await appendPipelineDomainEvents(this.domainEvents, client, record);
       await client.query("COMMIT");
       return { status: "PERSISTED", portfolio_arbitration_run_id: record.run.id, counts: counts(record) };
     } catch (error) {
@@ -234,6 +237,83 @@ async function insertOrderIntentLineage(client, intent) {
   ]);
 }
 
+async function appendPipelineDomainEvents(outbox, client, record) {
+  if (!outbox) return;
+  const correlationId = record.run.correlation_id || `portfolio-risk:${record.run.id}`;
+  await outbox.append({
+    aggregateId: record.run.id,
+    aggregateType: "portfolio_arbitration",
+    eventType: "portfolio.arbitration.completed",
+    occurredAt: record.run.as_of_utc,
+    correlationId,
+    causationId: record.run.signal_ids[0] || null,
+    source: "portfolio-risk-runtime",
+    payload: {
+      portfolioArbitrationRunId: record.run.id,
+      signalIds: record.run.signal_ids,
+      status: record.run.status,
+      candidateAllocationIds: record.allocations.map((item) => item.id),
+    },
+  }, client);
+  for (const decision of record.riskDecisions) {
+    await outbox.append({
+      aggregateId: decision.risk_decision_id,
+      aggregateType: "risk_decision",
+      eventType: "risk.decision.created",
+      occurredAt: record.run.as_of_utc,
+      correlationId,
+      causationId: record.run.id,
+      source: "portfolio-risk-runtime",
+      payload: {
+        riskDecisionId: decision.risk_decision_id,
+        candidateAllocationId: decision.candidate_allocation_id,
+        decision: decision.decision,
+        status: decision.status,
+        requestedQuantity: numberOrNull(decision.requested_size),
+        authorizedQuantity: numberOrNull(decision.approved_size),
+        reasonCodes: array(decision.reason_codes),
+      },
+    }, client);
+  }
+  for (const target of record.targets) {
+    await outbox.append({
+      aggregateId: target.id,
+      aggregateType: "target_position",
+      eventType: "target_position.created",
+      occurredAt: target.computed_at_utc || record.run.as_of_utc,
+      correlationId,
+      causationId: array(target.derived_from_risk_decision_ids)[0] || record.run.id,
+      source: "portfolio-risk-runtime",
+      payload: {
+        targetPositionId: target.id,
+        account: target.account_id,
+        instrument: target.instrument,
+        targetNetSize: numberOrNull(target.net_target_size),
+        deltaSize: numberOrNull(target.delta_size),
+        authorizedQuantity: numberOrNull(target.risk_approved_net_size),
+      },
+    }, client);
+  }
+  for (const intent of record.orderIntents) {
+    await outbox.append({
+      aggregateId: intent.order_intent_id,
+      aggregateType: "order_intent",
+      eventType: "order_intent.created",
+      occurredAt: intent.created_at_utc || record.run.as_of_utc,
+      correlationId,
+      causationId: intent.target_position_id,
+      source: "portfolio-risk-runtime",
+      payload: {
+        orderIntentId: intent.order_intent_id,
+        targetPositionId: intent.target_position_id,
+        status: intent.status,
+        authorizedQuantity: numberOrNull(intent.quantity),
+        brokerSubmissionAllowed: intent.broker_submission_allowed === true,
+      },
+    }, client);
+  }
+}
+
 function counts(record) {
   return { allocations: record.allocations.length, risk_decisions: record.riskDecisions.length, target_positions: record.targets.length, order_intents: record.orderIntents.length };
 }
@@ -254,6 +334,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function array(value) { return Array.isArray(value) ? value : []; }
 function text(value) { return String(value ?? "").trim(); }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
+function numberOrNull(value) { const parsed = Number(value); return value === null || value === undefined || value === "" || !Number.isFinite(parsed) ? null : parsed; }
 function integer(value) { return Math.max(0, Math.trunc(number(value))); }
 function iso(value) {
   const parsed = Date.parse(value || "");

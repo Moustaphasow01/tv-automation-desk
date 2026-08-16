@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   demoPaperLaunchGate,
   launchGatePipelineStatus,
+  liveMarketDataStatus,
 } from "../src/front-control-plane-demo-paper.js";
 
 test("demo paper front gate accepts manual Telegram execution without NinjaTrader AddOn", () => {
@@ -36,6 +37,16 @@ test("demo paper front gate blocks manual Telegram execution when trading channe
   assert.equal(gate.status, "BLOCKED");
   assert.equal(gate.checksById["execution.manual_telegram_ready"].ok, false);
   assert.equal(launchGatePipelineStatus("BROKER", gate), "BLOCKED");
+});
+
+test("market closure is not mislabeled as stale when a last known durable close exists", () => {
+  const health = healthFixture();
+  health.data_readiness.ok = false;
+  health.data_readiness.market_closed = true;
+  health.data_readiness.core_feeds[0].latest_timestamp_utc = "2026-08-14T21:59:00.000Z";
+  const gate = demoPaperLaunchGate({ nowIso: "2026-08-16T08:00:00.000Z", health, execution: { safety: {} }, rows });
+
+  assert.equal(liveMarketDataStatus(gate), "LAST_KNOWN");
 });
 
 function rows(value) {

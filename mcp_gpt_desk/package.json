@@ -12,6 +12,7 @@
     "live:shadow-readiness": "node scripts/run_live_checkpoint_cycle.mjs",
     "live:paper-tick": "node scripts/run_live_paper_tick.mjs",
     "live:runtime": "node scripts/run_live_runtime_scheduler.mjs",
+    "strategy:runtime:once": "node scripts/run_strategy_evaluation_scheduler_once.mjs",
     "macro:refresh": "node scripts/refresh_macro_calendar.mjs",
     "news:refresh": "node scripts/refresh_news.mjs",
     "telegram:worker": "node scripts/run_telegram_alert_worker.mjs",

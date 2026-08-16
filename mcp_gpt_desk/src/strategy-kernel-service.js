@@ -492,15 +492,19 @@ function schedulerAuditEntity(item) {
 
 async function appendSchedulerAudit(repo, plan, command, now, enabled) {
   if (!enabled) return [];
-  return Promise.all(plan.due.map((item) => repo.appendAuditEvent(auditEvent({
-    aggregateType: "strategy_instance",
-    aggregateId: item.strategy_instance_id,
-    eventType: "STRATEGY_INSTANCE_SCHEDULER_TICK_DUE",
-    entity: schedulerAuditEntity(item),
-    command: schedulerCommand(command, item),
-    now,
-    payload: { scheduler_tick: item, scheduler_plan_hash: plan.scheduler_plan_hash },
-  }))));
+  const audit = [];
+  for (const item of plan.due) {
+    audit.push(await repo.appendAuditEvent(auditEvent({
+      aggregateType: "strategy_instance",
+      aggregateId: item.strategy_instance_id,
+      eventType: "STRATEGY_INSTANCE_SCHEDULER_TICK_DUE",
+      entity: schedulerAuditEntity(item),
+      command: schedulerCommand(command, item),
+      now,
+      payload: { scheduler_tick: item, scheduler_plan_hash: plan.scheduler_plan_hash },
+    })));
+  }
+  return audit;
 }
 
 function schedulerPlanInput(input, instances, now) {

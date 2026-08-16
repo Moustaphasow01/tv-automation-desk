@@ -71,6 +71,7 @@ try {
         live_prewarm: outcome.live_prewarm || null,
         macro_calendar: outcome.macro_calendar || null,
         news: outcome.news || null,
+        strategy_runtime: outcome.strategy_runtime || null,
         optional_dependency_warnings: [
           ...(macroWarning ? ["macro_calendar_provider_degraded_cached_coverage_ready"] : []),
           ...(newsDegraded ? ["news_provider_degraded"] : []),
@@ -105,8 +106,12 @@ async function runDueWork(now) {
       trading_date: marketSession.trading_date,
       macro_calendar: macroCalendar,
       news,
+      strategy_runtime: { status: "MARKET_CLOSED", outcomes: [] },
     };
   }
+  const strategyRuntime = store.strategyEvaluationScheduler
+    ? await store.strategyEvaluationScheduler.runCycle({ now_utc: now.toISOString(), actor: "live-runtime-scheduler" })
+    : { status: "UNAVAILABLE", outcomes: [] };
   const nowMs = now.getTime();
   const engineTimestampParis = floorParisCheckpoint(
     nowMs,
@@ -247,6 +252,7 @@ async function runDueWork(now) {
     live_prewarm: lastPrewarmOutcome,
     macro_calendar: macroCalendar,
     news,
+    strategy_runtime: strategyRuntime,
   };
 }
 

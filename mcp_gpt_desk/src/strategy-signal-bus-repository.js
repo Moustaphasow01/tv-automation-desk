@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { SystemClock } from "@tv-automation/desk-time";
+import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
 
 const STATUS_TO_SQL = Object.freeze({ PENDING: "pending", PUBLISHED: "published", CONSUMED: "consumed", FAILED: "failed", CANCELLED: "cancelled" });
 const STATUS_FROM_SQL = Object.freeze(Object.fromEntries(Object.entries(STATUS_TO_SQL).map(([domain, sql]) => [sql, domain])));
@@ -9,6 +10,7 @@ export class PostgresStrategySignalBusRepository {
   constructor(persistence) {
     this.persistence = persistence;
     this.pool = persistence?.pool || null;
+    this.domainEvents = this.pool ? new DomainEventOutboxRepository(persistence) : null;
   }
 
   get available() { return Boolean(this.pool); }
@@ -20,46 +22,20 @@ export class PostgresStrategySignalBusRepository {
 
   async publish(outbox) {
     await this.ready();
-      const row = await one(this.pool, `INSERT INTO strategy_signal_outbox (
-        signal_outbox_id, signal_id, strategy_instance_id, strategy_version_id, signal_type,
-        instrument, direction, confidence, execution_mode_origin, generated_at_utc, expires_at_utc,
-        correlation_id, payload, payload_hash, dedupe_key, status,
-        strategy_definition_id, timeframe, session, source_data_cutoff_utc,
-        setup, predicates, evidence, reason_codes, signal_quality,
-        proposed_trade_plan, trade_plan_economics, availability
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::strategy_instance_execution_mode,$10,$11,$12,$13::jsonb,$14,$15,$16::strategy_signal_outbox_status,$17,$18,$19,$20,$21::jsonb,$22::jsonb,$23::jsonb,$24,$25::jsonb,$26::jsonb,$27::jsonb,$28)
-      ON CONFLICT (dedupe_key) DO UPDATE SET signal_outbox_id = strategy_signal_outbox.signal_outbox_id
-      RETURNING *`, [
-      outbox.signal_outbox_id || randomUUID(),
-      outbox.signal_id,
-      outbox.strategy_instance_id,
-      outbox.strategy_version_id || null,
-      outbox.signal_type || "signal.emitted",
-      outbox.instrument,
-      outbox.direction,
-      outbox.confidence,
-      String(outbox.execution_mode_origin || "SHADOW").toLowerCase(),
-      outbox.generated_at_utc,
-      outbox.expires_at_utc,
-      outbox.correlation_id,
-      JSON.stringify(outbox.payload || {}),
-      outbox.payload_hash,
-      outbox.dedupe_key,
-      toSqlStatus(outbox.status || "PENDING"),
-      outbox.strategy_definition_id || null,
-      outbox.timeframe || null,
-      outbox.session || null,
-      outbox.source_data_cutoff_utc || null,
-      JSON.stringify(outbox.setup || null),
-      JSON.stringify(outbox.predicates || null),
-      JSON.stringify(outbox.evidence || null),
-      array(outbox.reason_codes),
-      JSON.stringify(outbox.signal_quality || null),
-      JSON.stringify(outbox.proposed_trade_plan || null),
-      JSON.stringify(outbox.trade_plan_economics || null),
-      outbox.availability || null,
-    ]);
-    return normalizeSignalOutboxRow(row);
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const row = await insertSignal(client, outbox);
+      const saved = normalizeSignalOutboxRow(row);
+      await appendSignalCreated(this.domainEvents, client, saved, outbox);
+      await client.query("COMMIT");
+      return saved;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async pollPending({ limit = 100, now_utc = nowUtc() } = {}) {
@@ -70,12 +46,52 @@ export class PostgresStrategySignalBusRepository {
       .then((items) => items.map(normalizeSignalOutboxRow));
   }
 
+  async listRecent({ limit = 100 } = {}) {
+    await this.ready();
+    return rows(this.pool, `SELECT * FROM strategy_signal_outbox
+      ORDER BY generated_at_utc DESC, created_at_utc DESC LIMIT $1`, [bounded(limit)])
+      .then((items) => items.map(normalizeSignalOutboxRow));
+  }
+
   async markConsumed({ signal_outbox_id, consumer_id = "strategy-signal-consumer", now_utc = nowUtc() } = {}) {
     await this.ready();
     return normalizeSignalOutboxRow(await one(this.pool, `UPDATE strategy_signal_outbox
       SET status = 'consumed', consumed_at_utc = COALESCE(consumed_at_utc, $2), consumer_id = $3, updated_at_utc = now()
       WHERE signal_outbox_id = $1 AND status IN ('pending', 'published') RETURNING *`, [signal_outbox_id, now_utc, consumer_id]));
   }
+}
+
+async function insertSignal(client, outbox) {
+  return one(client, `INSERT INTO strategy_signal_outbox (
+    signal_outbox_id, signal_id, strategy_instance_id, strategy_version_id, signal_type,
+    instrument, direction, confidence, execution_mode_origin, generated_at_utc, expires_at_utc,
+    correlation_id, payload, payload_hash, dedupe_key, status,
+    strategy_definition_id, timeframe, session, source_data_cutoff_utc,
+    setup, predicates, evidence, reason_codes, signal_quality,
+    proposed_trade_plan, trade_plan_economics, availability, source_class, certification_run_id
+  ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::strategy_instance_execution_mode,$10,$11,$12,$13::jsonb,$14,$15,$16::strategy_signal_outbox_status,$17,$18,$19,$20,$21::jsonb,$22::jsonb,$23::jsonb,$24,$25::jsonb,$26::jsonb,$27::jsonb,$28,$29,$30)
+  ON CONFLICT (dedupe_key) DO UPDATE SET signal_outbox_id = strategy_signal_outbox.signal_outbox_id RETURNING *`, [
+    outbox.signal_outbox_id || randomUUID(), outbox.signal_id, outbox.strategy_instance_id, outbox.strategy_version_id || null,
+    outbox.signal_type || "signal.emitted", outbox.instrument, outbox.direction, outbox.confidence,
+    String(outbox.execution_mode_origin || "SHADOW").toLowerCase(), outbox.generated_at_utc, outbox.expires_at_utc,
+    outbox.correlation_id, JSON.stringify(outbox.payload || {}), outbox.payload_hash, outbox.dedupe_key,
+    toSqlStatus(outbox.status || "PENDING"), outbox.strategy_definition_id || null, outbox.timeframe || null,
+    outbox.session || null, outbox.source_data_cutoff_utc || null, JSON.stringify(outbox.setup || null),
+    JSON.stringify(outbox.predicates || null), JSON.stringify(outbox.evidence || null), array(outbox.reason_codes),
+    JSON.stringify(outbox.signal_quality || null), JSON.stringify(outbox.proposed_trade_plan || null),
+    JSON.stringify(outbox.trade_plan_economics || null), outbox.availability || null, outbox.source_class || "LIVE",
+    outbox.certification_run_id || null,
+  ]);
+}
+
+async function appendSignalCreated(events, client, saved, outbox) {
+  return events.append({
+    aggregateId: saved.signal_id, aggregateType: "strategy_signal", eventType: "strategy.signal.created",
+    occurredAt: saved.generated_at_utc, correlationId: saved.correlation_id,
+    causationId: outbox.causation_id || saved.payload?.strategy_evaluation_id || saved.payload?.evaluation_id || null,
+    source: "strategy-signal-bus",
+    payload: { signalId: saved.signal_id, strategyDefinitionId: saved.strategy_definition_id, strategyVersionId: saved.strategy_version_id, strategyInstanceId: saved.strategy_instance_id, instrument: saved.instrument, direction: saved.direction, sourceClass: saved.source_class, certificationRunId: saved.certification_run_id, sourceDataCutoff: saved.source_data_cutoff_utc },
+  }, client);
 }
 
 export class InMemoryStrategySignalBusRepository {
@@ -107,6 +123,13 @@ export class InMemoryStrategySignalBusRepository {
       .map(clone);
   }
 
+  async listRecent({ limit = 100 } = {}) {
+    return [...this.outbox.values()]
+      .sort((left, right) => Date.parse(right.generated_at_utc) - Date.parse(left.generated_at_utc))
+      .slice(0, bounded(limit))
+      .map(clone);
+  }
+
   async markConsumed({ signal_outbox_id, consumer_id = "strategy-signal-consumer", now_utc = nowUtc() } = {}) {
     const current = this.outbox.get(signal_outbox_id);
     if (!current || !["PENDING", "PUBLISHED"].includes(current.status)) return null;
@@ -123,6 +146,14 @@ export function createStrategySignalBusRepository(persistence) {
 export function normalizeSignalOutboxRow(row) {
   if (!row) return null;
   return {
+    ...signalIdentity(row),
+    ...signalPayload(row),
+    ...signalDelivery(row),
+  };
+}
+
+function signalIdentity(row) {
+  return {
     signal_outbox_id: row.signal_outbox_id,
     signal_id: row.signal_id,
     strategy_instance_id: row.strategy_instance_id,
@@ -135,11 +166,16 @@ export function normalizeSignalOutboxRow(row) {
     generated_at_utc: iso(row.generated_at_utc),
     expires_at_utc: iso(row.expires_at_utc),
     correlation_id: row.correlation_id,
-    payload: row.payload || {},
     strategy_definition_id: row.strategy_definition_id || null,
     timeframe: row.timeframe || null,
     session: row.session || null,
     source_data_cutoff_utc: iso(row.source_data_cutoff_utc),
+  };
+}
+
+function signalPayload(row) {
+  return {
+    payload: row.payload || {},
     setup: row.setup || null,
     predicates: row.predicates || null,
     evidence: row.evidence || null,
@@ -148,6 +184,13 @@ export function normalizeSignalOutboxRow(row) {
     proposed_trade_plan: row.proposed_trade_plan || null,
     trade_plan_economics: row.trade_plan_economics || null,
     availability: row.availability || null,
+    source_class: row.source_class || "LIVE",
+    certification_run_id: row.certification_run_id || null,
+  };
+}
+
+function signalDelivery(row) {
+  return {
     payload_hash: row.payload_hash,
     dedupe_key: row.dedupe_key,
     status: fromSqlStatus(row.status),

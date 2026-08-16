@@ -1,9 +1,11 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
+import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
 
 export class PostgresAiContextGateRepository {
   constructor(persistence) {
     this.persistence = persistence;
     this.pool = persistence?.pool || null;
+    this.domainEvents = this.pool ? new DomainEventOutboxRepository(persistence) : null;
   }
 
   get available() { return Boolean(this.pool); }
@@ -26,6 +28,25 @@ export class PostgresAiContextGateRepository {
       }
       await insertDecision(client, record);
       await insertEvents(client, record);
+      await this.domainEvents.append({
+        aggregateId: record.ai_context_gate_decision_id,
+        aggregateType: "ai_context_decision",
+        eventType: "ai_context.decision.created",
+        occurredAt: record.decided_at_utc,
+        correlationId: record.correlation_id || `ai-context:${record.ai_context_gate_decision_id}`,
+        causationId: record.signal_id || record.candidate_allocation_id || record.agent_task_id || null,
+        source: "ai-context-gate",
+        payload: {
+          decisionId: record.ai_context_gate_decision_id,
+          signalId: record.signal_id,
+          candidateAllocationId: record.candidate_allocation_id,
+          recommendation: record.recommendation,
+          status: record.status,
+          reasonCodes: record.reason_codes,
+          fallbackApplied: record.fallback_applied,
+          decidedAt: record.decided_at_utc,
+        },
+      }, client);
       await client.query("COMMIT");
       return { status: "RECORDED", decision: record };
     } catch (error) {
@@ -88,6 +109,7 @@ export function normalizeDecisionRecord(input = {}) {
   return {
     ai_context_gate_decision_id: id,
     idempotency_key: idempotencyKey,
+    correlation_id: text(input.correlation_id || input.correlationId) || null,
     ...subjectColumns(input, subject),
     mode: upper(result.mode || "SHADOW"),
     status: upper(result.status || "FALLBACK_WAIT"),

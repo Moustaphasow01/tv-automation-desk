@@ -206,6 +206,24 @@ test("front control plane realtime maps assistant FRONT_REALTIME outbox to Jarvi
   assert.equal(first[0].payload.brokerExecution, false);
 });
 
+test("front control plane realtime preserves durable journal order across aggregate-local sequences", async () => {
+  const store = {
+    async listFrontRealtimeEvents() {
+      return {
+        events: [
+          { eventId: "evt_intent_8", aggregateId: "intent-1", aggregateType: "OrderIntent", eventType: "order_intent.created", occurredAt: "2026-08-11T08:01:00.000Z", correlationId: "corr_1", schemaVersion: "1.0.0", sequence: 8, payload: {} },
+          { eventId: "evt_signal_1", aggregateId: "signal-2", aggregateType: "StrategySignal", eventType: "strategy.signal.created", occurredAt: "2026-08-11T08:02:00.000Z", correlationId: "corr_2", schemaVersion: "1.0.0", sequence: 1, payload: {} },
+        ],
+        resyncRequired: false,
+      };
+    },
+  };
+
+  const events = await loadFrontControlPlaneRealtimeEvents(store, { cursor: "", limit: 10 });
+
+  assert.deepEqual(events.map((event) => event.eventId), ["evt_intent_8", "evt_signal_1"]);
+});
+
 test("front control plane realtime requires snapshot resync when persisted cursor is unknown", async () => {
   const queries = [];
   const store = {
@@ -232,6 +250,7 @@ test("front control plane realtime requires snapshot resync when persisted curso
 test("front control plane live trading exposes canonical semi-manual pipeline without provider side effect", async () => {
   const store = frontControlPlaneStore({
     execution: {
+      safety: { executionEnabled: false, submissionPossible: false, liveAccountAllowed: false, executionAuthorityMode: "semi_auto", entryOperatorApprovalRequired: true },
       providerCommands: [],
       providerEvents: [],
       portfolioOrderIntents: [{
@@ -327,6 +346,90 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
   assert.equal(envelope.data.telegramDrilldown.schemaVersion, "telegram_drilldown_front_v1");
   assert.equal(envelope.data.telegramDrilldown.availability, "KNOWN");
   assert.equal(envelope.data.telegramDrilldown.secretsExposed, false);
+});
+
+test("an OrderIntent without a persisted Human Gate is not exposed as operator-actionable", async () => {
+  const portfolioOrderIntent = {
+    portfolio_order_intent_id: "portfolio_order_intent_without_gate",
+    target_position_id: "target_position_without_gate",
+    target_account_id: "Sim101",
+    target_instrument: "MNQ",
+    risk_approved_net_size: 1,
+    status: "READY",
+    order_intent_hash: "sha256:no-gate",
+    order_intent_payload: { order_intent_id: "portfolio_order_intent_without_gate", instrument: "MNQ", action: "BUY", quantity: 1, status: "READY" },
+  };
+  const store = frontControlPlaneStore({
+    execution: {
+      safety: { executionEnabled: false, submissionPossible: false, liveAccountAllowed: false, executionAuthorityMode: "semi_auto", entryOperatorApprovalRequired: true },
+      portfolioOrderIntents: [portfolioOrderIntent],
+      humanExecutionGates: [],
+      providerCommands: [],
+      providerEvents: [],
+    },
+  });
+  const actor = { kind: "operator_session", scopes: ["desk.read", "desk.write"] };
+  const commandCenter = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/command-center", query: {}, actor });
+  const live = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-trading", query: {}, actor });
+
+  assert.equal(commandCenter.data.humanGate.availability, "CONNECTED_EMPTY");
+  assert.equal(commandCenter.data.humanGate.rows.length, 0);
+  assert.equal(live.data.portfolioOrderIntents[0].humanGate.status, "NOT_CREATED");
+  assert.deepEqual(live.data.portfolioOrderIntents[0].allowedActions.allowedActions, ["VIEW"]);
+  assert.deepEqual(live.data.portfolioOrderIntents[0].allowedActions.denialReasons, ["HUMAN_GATE_NOT_CREATED"]);
+  assert.equal(live.data.canonicalRuntime.pipeline.find((step) => step.stepId === "HUMAN_GATE")?.status, "BLOCKED");
+});
+
+test("certification replay lineage is excluded from nominal Command Center and Live Trading projections", async () => {
+  const certificationIntentId = "portfolio_order_intent_certification_only";
+  const store = frontControlPlaneStore({
+    execution: {
+      portfolioOrderIntents: [{
+        portfolio_order_intent_id: certificationIntentId,
+        target_position_id: "target_position_certification_only",
+        target_account_id: "certification:isolated-run",
+        target_instrument: "MNQ",
+        quantity: 1,
+        status: "READY",
+        broker_submission_allowed: false,
+        execution_terms: { account_id: "certification:isolated-run", instrument: "MNQ", side: "BUY", quantity: 1 },
+      }],
+      humanExecutionGates: [{
+        human_execution_gate_id: "human_gate_certification_only",
+        portfolio_order_intent_id: certificationIntentId,
+        status: "AWAITING_MANUAL_CONFIRMATION",
+        revision: 1,
+      }],
+      providerCommands: [],
+      providerEvents: [],
+    },
+  });
+  store.getStrategyV2Overview = async () => ({
+    definitions: [],
+    versions: [],
+    instances: [],
+    signals: [{
+      signal_id: "signal-certification-only",
+      instrument: "MNQ",
+      direction: "LONG",
+      source_class: "CERTIFICATION_REPLAY",
+      certification_run_id: "isolated-run",
+      created_at_utc: "2026-08-16T01:00:00.000Z",
+    }],
+  });
+
+  const [live, commandCenter] = await Promise.all([
+    handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-trading", query: { mode: "paper" } }),
+    handleFrontControlPlane(store, { pathname: "/front-api/v1/views/command-center", query: { mode: "paper" } }),
+  ]);
+
+  assert.equal(live.data.signals.length, 0);
+  assert.equal(live.data.portfolioOrderIntents.length, 0);
+  assert.equal(live.data.canonicalRuntime.latestSignals.length, 0);
+  assert.equal(live.data.canonicalRuntime.pendingOrderIntents.length, 0);
+  assert.equal(commandCenter.data.signals.rows.length, 0);
+  assert.equal(commandCenter.data.humanGate.rows.length, 0);
+  assert.equal(commandCenter.data.summary.pendingCommands, 0);
 });
 
 test("front control plane audit and incidents use unified backend sources instead of NOT_IMPLEMENTED placeholders", async () => {
@@ -978,7 +1081,7 @@ test("front control plane Human Gate confirm routes through broker service witho
   assert.equal(commandRecord.order_submission_enabled, false);
 });
 
-test("front control plane isolates view loaders and resolves detail views by route identifier", async () => {
+test("front control plane composes Command Center research truth and resolves detail views by route identifier", async () => {
   const store = frontControlPlaneStore();
   const forbiddenCalls = [];
   store.getResearchLabOverview = async () => { forbiddenCalls.push("research"); return {}; };
@@ -992,7 +1095,7 @@ test("front control plane isolates view loaders and resolves detail views by rou
   });
 
   await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/command-center", query: {} });
-  assert.deepEqual(forbiddenCalls, []);
+  assert.deepEqual(forbiddenCalls.sort(), ["data", "research"]);
 
   const first = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "signal-a" } });
   const second = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "signal-b" } });
@@ -1003,6 +1106,43 @@ test("front control plane isolates view loaders and resolves detail views by rou
     () => handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "missing" } }),
     (error) => error.code === "LIVE_SIGNAL_NOT_FOUND" && error.statusCode === 404,
   );
+});
+
+test("Command Center maps canonical incident fields and operational counters without generic placeholders", async () => {
+  const store = frontControlPlaneStore({
+    incidents: {
+      items: [{
+        id: "guardrail:queue-test",
+        kind: "guardrail",
+        title: "Attente en queue hors SLA",
+        severity: "warning",
+        createdAt: "2026-08-11T07:55:00.000Z",
+        source: "observability_guardrail",
+        triage: { nextAction: "assign" },
+        recommendedActions: [{ action: "assign", label: "Assigner owner" }],
+        links: [{ kind: "runbook", label: "Queue SLA" }],
+      }],
+    },
+  });
+  const envelope = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/command-center", query: {} });
+
+  assert.deepEqual(envelope.data.incidents[0], {
+    id: "guardrail:queue-test",
+    severity: "WARNING",
+    detectedAt: "2026-08-11T07:55:00.000Z",
+    resource: "observability_guardrail",
+    title: "Attente en queue hors SLA",
+    runbook: "Queue SLA",
+    action: "assign",
+  });
+  assert.deepEqual(envelope.data.operations, {
+    availability: "KNOWN",
+    queuedTasks: 1,
+    dlqItems: 0,
+    staleFeeds: 0,
+  });
+  assert.equal(envelope.data.research.rows[0].dataset, "NOT_LINKED");
+  assert.equal(envelope.data.research.rows[0].run, "NO_ACTIVE_RUN");
 });
 
 test("front control plane resolves execution drill-downs strictly by requested id", async () => {
@@ -1028,6 +1168,7 @@ test("front control plane resolves execution drill-downs strictly by requested i
 test("front control plane order-detail publishes post-risk portfolio OrderIntent before broker order exists", async () => {
   const store = frontControlPlaneStore({
     execution: {
+      safety: { executionEnabled: false, submissionPossible: false, liveAccountAllowed: false, executionAuthorityMode: "semi_auto", entryOperatorApprovalRequired: true },
       orders: [],
       fills: [],
       portfolioOrderIntents: [{
@@ -1133,7 +1274,7 @@ test("front control plane degrades a view when one source times out", async () =
   assert.equal(envelope.data.risk.activeAlerts, null);
 });
 
-test("front control plane command center publishes compact truth without extra research loaders", async () => {
+test("front control plane command center publishes canonical truth and isolates legacy execution history", async () => {
   const envelope = await handleFrontControlPlane(frontControlPlaneStore(), {
     pathname: "/front-api/v1/views/command-center",
     query: {},
@@ -1141,17 +1282,19 @@ test("front control plane command center publishes compact truth without extra r
 
   assert.equal(envelope.data.mode.environment, "UNKNOWN");
   assert.equal(envelope.data.mode.executionMode, "AUTO");
-  assert.equal(envelope.data.mode.autoExecution, "UNKNOWN");
+  assert.equal(envelope.data.mode.autoExecution, "ON");
   assert.equal(envelope.data.mode.liveBroker, "OFF");
-  assert.equal(envelope.data.summary.providerSafety, "UNAVAILABLE");
+  assert.equal(envelope.data.summary.providerSafety, "POLICY_NOT_PUBLISHED");
   assert.equal(envelope.data.market.status, "FRESH");
   assert.equal(envelope.data.market.rows.length, 0, "feeds without a canonical feed_id must not receive synthetic frontend identifiers");
-  assert.equal(envelope.data.research.available, false);
-  assert.equal(envelope.data.research.hypothesisCount, null);
+  assert.equal(envelope.data.research.available, true);
+  assert.equal(envelope.data.research.hypothesisCount, 0);
+  assert.equal(envelope.data.research.runCount, 1);
   assert.equal(envelope.data.signals.rows[0].id, "signal-1");
-  assert.equal(envelope.data.humanGate.rows[0].allowedActions.length, 0);
-  assert.equal(envelope.data.provider.health, "UNAVAILABLE");
-  assert.equal(envelope.data.provider.events.some((event) => event.stage === "FILL"), true);
+  assert.equal(envelope.data.humanGate.availability, "CONNECTED_EMPTY");
+  assert.equal(envelope.data.humanGate.rows.length, 0, "legacy trade_order_intents must not populate canonical Human Gate");
+  assert.equal(envelope.data.provider.health, "STATE_NOT_PUBLISHED");
+  assert.equal(envelope.data.provider.events.length, 0, "legacy broker orders/fills must not populate canonical provider lifecycle");
   assert.equal(Array.isArray(envelope.data.audit), true);
 });
 
@@ -1216,7 +1359,7 @@ function frontControlPlaneStore(overrides = {}) {
     instances: [{ strategy_instance_id: "strinst-1", strategy_definition_id: "strdef-1", execution_mode: "PAPER" }],
     signals: [{ signal_id: "signal-1", strategy_instance_id: "strinst-1", instrument_code: "MNQ", side: "long", confidence: 72 }],
   };
-  const incidents = {
+  const incidents = overrides.incidents || {
     items: [{ incident_id: "incident-1", title: "Provider warning", severity: "medium", detail: "Heartbeat delayed" }],
   };
   const runtimeTasks = {

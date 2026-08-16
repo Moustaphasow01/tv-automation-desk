@@ -74,7 +74,7 @@ export function signalRow(item) {
     timeframe: text(item.timeframe, "unavailable"),
     session: text(item.session, "unavailable"),
     sourceDataCutoffAt: text(firstValue(item.source_data_cutoff_utc, item.cutoff_at_utc), "unavailable"),
-    symbol: text(firstValue(item.instrument_code, item.symbol), "unavailable"),
+    symbol: text(firstValue(item.instrument, item.instrument_code, item.symbol), "unavailable"),
     direction: upper(firstValue(item.direction, item.side)) === "SHORT" ? "SHORT" : "LONG",
     state: signalState(firstValue(item.state, item.status)),
     confidence: number(item.confidence, 0),
@@ -89,6 +89,9 @@ export function signalRow(item) {
     proposedTradePlan: item.proposed_trade_plan || null,
     tradePlanEconomics: item.trade_plan_economics || null,
     availability: item.availability || null,
+    sourceClass: text(item.source_class, "LIVE").toUpperCase(),
+    certificationRunId: item.certification_run_id || null,
+    correlationId: text(item.correlation_id, "unavailable"),
     ruleHits: stringList(item.rule_hits),
     expectancyR: number(firstValue(item.expectancy_R, item.expectancy_r), 0),
     rewardRisk: number(item.reward_risk, 0),
@@ -109,6 +112,12 @@ function firstValue(...values) {
     if (value !== null && value !== undefined && value !== "") return value;
   }
   return undefined;
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function fillRow(item) {
@@ -148,14 +157,21 @@ export function positionRow(item) {
 
 export function providerRows(execution) {
   return rows(execution?.providers)
-    .filter((item) => item?.provider_id)
+    .filter((item) => item?.provider_id || item?.broker_provider_code)
     .map((item) => ({
-      providerId: text(item.provider_id, ""),
-      label: text(item.label || item.provider_id, "Provider"),
+      providerId: text(firstValue(item.provider_id, item.broker_provider_code), ""),
+      providerCode: text(firstValue(item.broker_provider_code, item.provider_id), ""),
+      label: text(firstValue(item.display_name, item.label, item.broker_provider_code, item.provider_id), "Provider"),
       mode: executionModeState(item.mode),
       status: providerState(item),
-      latencyMs: number(item.latency_ms, 0),
-      lastHeartbeatAt: text(item.last_heartbeat_at_utc, "unavailable"),
+      configured: true,
+      enabled: item.enabled === true,
+      health: providerState(item),
+      policyState: item.enabled === false ? "DISABLED_BY_POLICY" : text(item.policy_state, "UNKNOWN").toUpperCase(),
+      circuitState: text(item.circuit_breaker_state, "UNKNOWN").toUpperCase(),
+      latencyMs: nullableNumber(item.latency_ms),
+      lastHeartbeatAt: text(firstValue(item.last_heartbeat_at_utc, item.updated_at), "unavailable"),
+      asOf: text(firstValue(item.last_heartbeat_at_utc, item.updated_at), "unavailable"),
     }));
 }
 

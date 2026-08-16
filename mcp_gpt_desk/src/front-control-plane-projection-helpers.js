@@ -84,7 +84,10 @@ export function objectFacts(source, keys) {
 export function latestTimestamp(items, keys) {
   return rows(items)
     .flatMap((item) => keys.map((key) => item?.[key]).filter(Boolean))
-    .map(String)
+    .map((value) => {
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? new Date(parsed).toISOString() : String(value);
+    })
     .sort()
     .at(-1) || null;
 }

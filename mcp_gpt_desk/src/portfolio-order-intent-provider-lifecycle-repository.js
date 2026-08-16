@@ -7,10 +7,12 @@ import {
   repositoryError,
   text,
 } from "./portfolio-order-intent-execution-repository-common.js";
+import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
 
 export class PostgresProviderLifecycleRepository {
   constructor(repository) {
     this.repository = repository;
+    this.domainEvents = repository?.persistence ? new DomainEventOutboxRepository(repository.persistence) : null;
   }
 
   get pool() { return this.repository.pool; }
@@ -99,40 +101,14 @@ export class PostgresProviderLifecycleRepository {
         await client.query("COMMIT");
         return { status: "DUPLICATE", event: duplicate, command };
       }
-      const inserted = await one(client, `INSERT INTO broker_provider_events (
-          broker_provider_event_id, execution_provider_command_id, order_intent_id, portfolio_order_intent_id,
-          broker_provider_code, broker_account_id, broker_contract_id, external_event_key, event_type,
-          provider_order_ref, event_status, side, quantity, fill_quantity, fill_price, position_size,
-          occurred_at, payload_hash, payload, raw
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::broker_provider_event_type,$10,$11,$12::order_side,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::jsonb)
-        RETURNING *`, [
-        event.broker_provider_event_id,
-        event.execution_provider_command_id || null,
-        event.order_intent_id || command?.order_intent_id || null,
-        portfolioOrderIntentId,
-        event.provider_id || command?.broker_provider_code,
-        event.account_id || command?.broker_account_id || null,
-        command?.broker_contract_id || null,
-        event.external_event_key,
-        toSqlEventType(event.event_type),
-        event.provider_order_ref || null,
-        event.order_status || null,
-        toSqlSide(event.side),
-        event.quantity,
-        event.fill_quantity,
-        event.fill_price,
-        event.position_size,
-        event.occurred_at_utc,
-        event.payload_hash,
-        json(event.payload),
-        json(event),
-      ]);
+      const inserted = await insertProviderEvent(client, { event, command, portfolioOrderIntentId });
       if (command) await updateCommandFromProviderEvent(client, { command, event, nowUtc });
       if (portfolioOrderIntentId) await upsertExecutionStateWithClient(client, {
         portfolioOrderIntentId,
         commandId: event.execution_provider_command_id || command?.execution_provider_command_id || null,
         event,
       });
+      if (this.domainEvents) await appendProviderEvent(this.domainEvents, client, { inserted, event, command, portfolioOrderIntentId, nowUtc });
       await client.query("COMMIT");
       return { status: "RECORDED", event: inserted, command };
     } catch (error) {
@@ -142,6 +118,33 @@ export class PostgresProviderLifecycleRepository {
       client.release();
     }
   }
+}
+
+async function insertProviderEvent(client, { event, command, portfolioOrderIntentId }) {
+  return one(client, `INSERT INTO broker_provider_events (
+    broker_provider_event_id, execution_provider_command_id, order_intent_id, portfolio_order_intent_id,
+    broker_provider_code, broker_account_id, broker_contract_id, external_event_key, event_type,
+    provider_order_ref, event_status, side, quantity, fill_quantity, fill_price, position_size,
+    occurred_at, payload_hash, payload, raw
+  ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::broker_provider_event_type,$10,$11,$12::order_side,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::jsonb) RETURNING *`, [
+    event.broker_provider_event_id, event.execution_provider_command_id || null,
+    event.order_intent_id || command?.order_intent_id || null, portfolioOrderIntentId,
+    event.provider_id || command?.broker_provider_code, event.account_id || command?.broker_account_id || null,
+    command?.broker_contract_id || null, event.external_event_key, toSqlEventType(event.event_type),
+    event.provider_order_ref || null, event.order_status || null, toSqlSide(event.side), event.quantity,
+    event.fill_quantity, event.fill_price, event.position_size, event.occurred_at_utc, event.payload_hash,
+    json(event.payload), json(event),
+  ]);
+}
+
+async function appendProviderEvent(events, client, { inserted, event, command, portfolioOrderIntentId, nowUtc }) {
+  return events.append({
+    aggregateId: inserted.broker_provider_event_id, aggregateType: "provider_event", eventType: "provider.event.received",
+    occurredAt: event.occurred_at_utc || nowUtc,
+    correlationId: event.correlation_id || command?.payload?.correlation_id || command?.portfolio_order_intent_id || inserted.broker_provider_event_id,
+    causationId: event.execution_provider_command_id || command?.execution_provider_command_id || null, source: "provider-lifecycle",
+    payload: { providerEventId: inserted.broker_provider_event_id, providerCommandId: event.execution_provider_command_id || command?.execution_provider_command_id || null, orderIntentId: portfolioOrderIntentId, providerCode: inserted.broker_provider_code, eventType: String(event.event_type || "").toUpperCase(), eventStatus: event.order_status || null, fillQuantity: event.fill_quantity ?? null, fillPrice: event.fill_price ?? null },
+  }, client);
 }
 
 export class InMemoryProviderLifecycleRepository {

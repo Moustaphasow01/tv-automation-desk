@@ -1,0 +1,58 @@
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
+import { loadFrontMarketSeries } from "../src/front-market-series-service.js";
+
+describe("Front canonical market series", () => {
+  test("publishes bounded OHLCV, deterministic VWAP, gaps, granularities and opaque pagination", async () => {
+    const persistence = fixturePersistence();
+    const result = await loadFrontMarketSeries(persistence, { instrument: "MNQ", timeframe: "M5", as_of: "2026-08-12T14:10:00.000Z", limit: 2 });
+
+    assert.equal(result.availability, "KNOWN");
+    assert.equal(result.seriesId, "market:MNQ:5");
+    assert.deepEqual(result.supportedGranularities, ["1", "5", "15"]);
+    assert.equal(result.defaultGranularity, "5");
+    assert.equal(result.bars.length, 2);
+    assert.equal(result.bars.every((bar) => bar.complete === true), true);
+    assert.equal(result.points[0].timestamp, "2026-08-12T14:00:00.000Z");
+    assert.equal(result.points[1].timestamp, "2026-08-12T14:10:00.000Z");
+    assert.deepEqual(result.vwapSeries.values.map((item) => item.value), [20000.5, 20001]);
+    assert.equal(result.gaps[0].missingIntervals, 1);
+    assert.equal(result.page.hasMore, true);
+    assert.equal(typeof result.page.nextCursor, "string");
+    assert.equal(result.antiLookahead, true);
+  });
+
+  test("returns CONNECTED_EMPTY rather than a false zero series", async () => {
+    const persistence = { initialized: Promise.resolve(), pool: { async query(sql) { return { rows: sql.includes("DISTINCT timeframe") ? [{ timeframe: "5" }] : [] }; } } };
+    const result = await loadFrontMarketSeries(persistence, { instrument: "MNQ", timeframe: "5", as_of: "2026-08-12T14:10:00.000Z" });
+    assert.equal(result.availability, "CONNECTED_EMPTY");
+    assert.deepEqual(result.bars, []);
+    assert.equal(result.asOf, null);
+  });
+
+  test("rejects unsupported timeframes and malformed cursors", async () => {
+    const persistence = fixturePersistence();
+    await assert.rejects(() => loadFrontMarketSeries(persistence, { instrument: "MNQ", timeframe: "2" }), (error) => error.code === "MARKET_SERIES_TIMEFRAME_INVALID");
+    await assert.rejects(() => loadFrontMarketSeries(persistence, { instrument: "MNQ", timeframe: "5", cursor: "not-a-cursor" }), (error) => error.code === "MARKET_SERIES_CURSOR_INVALID");
+  });
+});
+
+function fixturePersistence() {
+  return {
+    initialized: Promise.resolve(),
+    pool: {
+      async query(sql) {
+        if (sql.includes("DISTINCT timeframe")) return { rows: [{ timeframe: "1" }, { timeframe: "5" }, { timeframe: "15" }] };
+        return { rows: [
+          candle("2026-08-12T14:10:00.000Z", 20001, 20001),
+          candle("2026-08-12T14:00:00.000Z", 20000, 20000.5),
+          candle("2026-08-12T13:55:00.000Z", 19999, 20000),
+        ] };
+      },
+    },
+  };
+}
+
+function candle(timestamp, close, vwap) {
+  return { feed_id: `feed-${timestamp}`, timestamp_utc: timestamp, symbol_code: "MNQ", timeframe: "5", trading_date: "2026-08-12", open: close - 1, high: close + 1, low: close - 2, close, volume: 100, source_collection: "market_candles", vwap };
+}

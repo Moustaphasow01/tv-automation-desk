@@ -89,6 +89,7 @@ export class PortfolioOrderIntentExecutionService {
     return this.repository.ensureHumanGate({
       portfolioOrderIntentId: input.portfolioOrderIntentId || input.portfolio_order_intent_id,
       expiresAtUtc: input.expiresAtUtc || input.expires_at_utc || null,
+      correlationId: input.correlationId || input.correlation_id || null,
       nowUtc,
     });
   }

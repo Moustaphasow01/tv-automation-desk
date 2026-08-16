@@ -13,6 +13,9 @@ export function attachStrategySignalBusStoreMethods(StoreClass, helpers = {}) {
   StoreClass.prototype.pollStrategyV2Signals = async function pollStrategyV2Signals(args = {}) {
     return response("DeskStrategySignalPollResultV2", await signalBusService(this).pollPendingSignals(args));
   };
+  StoreClass.prototype.listStrategyV2Signals = async function listStrategyV2Signals(args = {}) {
+    return response("DeskStrategySignalListResultV2", await signalBusService(this).listRecentSignals(args));
+  };
   StoreClass.prototype.consumeStrategyV2Signal = async function consumeStrategyV2Signal({ signal_outbox_id, input = {} } = {}) {
     return response("DeskStrategySignalConsumeResultV2", await signalBusService(this).markConsumed({ signal_outbox_id, ...input }));
   };

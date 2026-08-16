@@ -17,6 +17,9 @@ export class StrategySignalBusService {
     if (!normalized.ok) throw serviceError("STRATEGY_SIGNAL_INVALID", `Strategy signal invalid: ${normalized.reasons.join(", ")}`, normalized);
     const saved = await this.repository.publish({
       ...normalized.signal,
+      source_class: input.source_class || input.sourceClass || "LIVE",
+      certification_run_id: input.certification_run_id || input.certificationRunId || null,
+      causation_id: input.causation_id || input.causationId || input.strategy_evaluation_id || input.strategyEvaluationId || null,
       signal_outbox_id: input.signal_outbox_id || input.signalOutboxId || randomUUID(),
       signal_type: "signal.emitted",
       payload: strategySignalEnvelopeV1(normalized.signal),
@@ -32,6 +35,11 @@ export class StrategySignalBusService {
       limit: input.limit || 100,
       now_utc: input.now_utc || input.nowUtc || this.#nowIso(),
     });
+    return { status: "OK", count: items.length, items };
+  }
+
+  async listRecentSignals(input = {}) {
+    const items = await this.repository.listRecent({ limit: input.limit || 100 });
     return { status: "OK", count: items.length, items };
   }
 

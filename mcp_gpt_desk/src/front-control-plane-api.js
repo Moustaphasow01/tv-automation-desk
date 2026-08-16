@@ -15,11 +15,34 @@ import {
   auditRelations,
   canonicalOrderIntentDossier,
   frontAuditEvents,
+  isNominalLiveSignal,
+  isNominalPortfolioIntent,
   liveCanonicalRuntime,
   portfolioOrderIntentSummaryRow,
   telegramDrilldownFromHealth,
 } from "./front-control-plane-domain-completeness.js";
+import {
+  appendLiveWarnings,
+  canonicalPositionRows,
+  canonicalProviderScope,
+  canonicalProviderCommandRow,
+  canonicalProviderFillRow,
+  isCanonicalFillEvent,
+  liveAssistantAdvisory,
+  liveArbitrations,
+  liveLegacyHistory,
+  liveMacroSession,
+  livePerformanceR,
+  liveReconciliation,
+  liveRiskChecks,
+  liveSession,
+  liveSummary,
+  liveTimeline as canonicalLiveTimeline,
+  marketSessionState,
+  nullableMetric,
+} from "./front-live-trading-support.js";
 import { executionIncidents, incidentRow, incidentSummary } from "./front-control-plane-incident-projection.js";
+import { executionAuthorityMode, orderIntentReconciliation } from "./front-order-detail-support.js";
 import { orderHumanGateProjection, permissions, resourceAllowedActions } from "./front-control-plane-permissions.js";
 import { accountRow, activeOrderRow, fillRow, intentRow, orderFillRow, orderRow, positionRow, providerRows, signalRow } from "./front-control-plane-row-mappers.js";
 import { frontTimeSeriesContracts } from "./front-control-plane-time-series-contracts.js";
@@ -113,7 +136,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "auth-session": [],
   "operator-settings": [],
   "admin-access": ["execution", "incidents"],
-  "command-center": ["execution", "strategy", "incidents", "agent-runtime", "portfolio-risk", "health"],
+  "command-center": ["execution", "strategy", "incidents", "agent-runtime", "assistant-runtime", "research", "data-foundation", "simulation-runs", "portfolio-risk", "ai-context", "performance", "health"],
   "demo-paper-readiness": ["execution", "strategy", "agent-runtime", "data-foundation", "portfolio-risk", "health"],
   "events-audit": ["execution", "strategy", "incidents", "agent-runtime"],
   "operations-queue": ["agent-runtime", "incidents"],
@@ -126,7 +149,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "strategy-center": ["strategy", "research"],
   "strategy-detail": ["strategy", "research", "execution", "incidents"],
   "strategy-compare": ["strategy", "research", "simulation-runs"],
-  "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "health"],
+  "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "front-macro", "front-news", "assistant-runtime", "performance", "health"],
   "live-signal-detail": ["execution", "strategy", "portfolio-risk", "ai-context"],
   "order-detail": ["execution"],
   "position-detail": ["execution"],
@@ -258,6 +281,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     "simulation-runs": () => source("simulation-runs", () => call(store?.operations, "listSimulationRuns", { ...query, limit: 100 })),
     "portfolio-risk": () => source("portfolio-risk", () => buildPortfolioRiskOverviewFromStore(store, query)),
     "ai-context": () => source("ai-context", () => buildAiContextOverviewFromStore(store, query)),
+    "market-series": () => source("market-series", () => call(store, "getFrontMarketSeries", query)),
     sessions: () => source("sessions", async () => {
       const scopes = ["asia_open", "ny_open"].map((session) => ({
         ...normalizeFrontApiScope({ ...query, session }),
@@ -304,6 +328,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     simulationRuns: loaded["simulation-runs"] ?? null,
     risk: loaded["portfolio-risk"] ?? null,
     ai: loaded["ai-context"] ?? null,
+    marketSeries: loaded["market-series"] ?? null,
     sessions: loaded.sessions ?? null,
     liveSession: loaded["live-session"] ?? null,
     macro: loaded["front-macro"] ?? null,
@@ -884,16 +909,17 @@ function observabilityPolicyItems(obsPolicy) {
   })];
 }
 
-function liveTrading({ execution, strategy, incidents, ai, risk, health, query, warnings, nowIso, actor }) {
+function liveTrading({ execution, strategy, incidents, ai, risk, health, marketSeries, macro, news, assistantRuntime, performance: operationsPerformance, query, warnings, nowIso, actor }) {
   const executionValue = execution || {};
   const safety = executionValue.safety || {};
   const performance = executionValue.performance || {};
   const advisorySummary = (ai && ai.summary) || {};
   const scope = normalizeFrontApiScope(query);
-  const signals = rows(strategy?.signals).filter(hasSignalId).map(signalRow);
-  const portfolioOrderIntents = rows(executionValue.portfolioOrderIntents).map((item) => portfolioOrderIntentSummaryRow({ execution: executionValue, item, actor }));
-  const ordersList = rows(executionValue.orders).filter(hasOrderId).map(orderRow);
-  const fills = rows(executionValue.fills).filter(hasFillId).map(fillRow);
+  const signals = rows(strategy?.signals).filter(isNominalLiveSignal).filter(hasSignalId).map(signalRow);
+  const nominalIntentRows = rows(executionValue.portfolioOrderIntents).filter(isNominalPortfolioIntent);
+  const nominalIntentIds = new Set(nominalIntentRows.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
+  const portfolioOrderIntents = nominalIntentRows.map((item) => portfolioOrderIntentSummaryRow({ execution: executionValue, item, actor }));
+  const provider = canonicalProviderScope(executionValue, nominalIntentIds);
   const launchGate = demoPaperLaunchGate({ health, execution: executionValue, nowIso, rows });
   const canonicalRuntime = liveCanonicalRuntime({
     execution: executionValue,
@@ -903,66 +929,38 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, query, 
     launchGate,
     actor,
     nowIso,
+    health,
   });
-  const arbitrations = rows(executionValue.arbitrations).filter((item) => item?.arbitration_id && item?.signal_id).map((item) => ({
-    arbitrationId: String(item.arbitration_id),
-    signalId: String(item.signal_id),
-    decision: ["ACCEPTED", "SCALED", "REJECTED"].includes(upper(item.decision)) ? upper(item.decision) : "REJECTED",
-    targetQuantity: number(item.target_quantity, 0),
-    conflictStatus: text(item.conflict_status, "UNKNOWN"),
-    correlationPct: number(item.correlation_pct, 0),
-    reasonCode: text(item.reason_code, "REASON_UNAVAILABLE"),
-  }));
-  const riskChecks = rows(executionValue.risk_checks).filter((item) => item?.risk_check_id && item?.signal_id).map((item) => ({
-    riskCheckId: String(item.risk_check_id),
-    signalId: String(item.signal_id),
-    status: ["PASS", "WATCH", "BLOCK"].includes(upper(item.status)) ? upper(item.status) : "WATCH",
-    limitLabel: text(item.limit_label, "Limite non publiée"),
-    usedPct: number(item.used_pct, 0),
-    reasonCode: text(item.reason_code, "REASON_UNAVAILABLE"),
-  }));
-  if (!executionValue.session_id) warnings.push("live-session-id:UNAVAILABLE");
-  if (!executionValue.next_monitor_at) warnings.push("live-next-monitor:UNAVAILABLE");
-  if (!executionValue.arbitrations) warnings.push("live-arbitrations:UNAVAILABLE");
-  if (!executionValue.risk_checks) warnings.push("live-risk-checks:UNAVAILABLE");
-  if (safety.correlatedExposurePct == null) warnings.push("live-correlated-exposure:UNAVAILABLE");
-  if (!rows(executionValue.pipeline).length && canonicalRuntime.pipeline.every((item) => item.status === "UNAVAILABLE")) warnings.push("live-pipeline:UNAVAILABLE");
-  if (!rows(executionValue.timeline).length) warnings.push("live-timeline:UNAVAILABLE");
+  const arbitrations = liveArbitrations(executionValue);
+  const riskChecks = liveRiskChecks(executionValue);
+  appendLiveWarnings({ execution: executionValue, safety, canonicalRuntime, warnings });
   return {
-    summary: {
-      signalsToday: signals.length,
-      tradesExecuted: fills.length,
-      acceptanceRatePct: signals.length ? Math.round((portfolioOrderIntents.length / signals.length) * 100) : 0,
-      orderIntentsPending: portfolioOrderIntents.filter((item) => ["READY", "AWAITING_MANUAL_CONFIRMATION", "PENDING"].includes(upper(item.state))).length,
-      providerCommandsCreated: rows(executionValue.providerCommands).length,
-      providerEventsObserved: rows(executionValue.providerEvents).length,
-      riskUsedPct: number(safety.riskPercent, 0),
-      correlatedExposurePct: number(safety.correlatedExposurePct, 0),
-      liveDrawdownR: number(performance.max_drawdown_R, 0),
-    },
-    session: {
-      sessionId: text(executionValue.session_id, "unavailable"),
-      tradingDate: scope.trading_date,
-      phase: scope.session === "ny_open" ? "New York" : "Asia",
-      nextMonitorAt: text(executionValue.next_monitor_at, "unavailable"),
-      marketDataStatus: liveMarketDataStatus(launchGate),
-    },
+    summary: liveSummary({ signals, intents: portfolioOrderIntents, commands: provider.commands, events: provider.events, safety, performance }),
+    session: liveSession({ execution: executionValue, scope, launchGate, health, marketSeries, marketDataStatus: liveMarketDataStatus }),
     launchGate: publicLaunchGate(launchGate),
     pipeline: pipeline(executionValue, launchGate),
     canonicalRuntime,
+    marketSeries: marketSeries || { availability: "UNAVAILABLE", points: [], supportedTimeframes: [], asOf: null, source: "market_candles" },
+    macroSession: liveMacroSession({ macro, news, scope, marketSeries }),
     signals,
     arbitrations,
     riskChecks,
     portfolioOrderIntents,
-    orders: ordersList,
-    fills,
-    positions: rows(executionValue.trades).filter(hasTradeId).map(positionRow),
+    canonicalOrders: provider.commands.map(canonicalProviderCommandRow),
+    canonicalFills: provider.events.filter(isCanonicalFillEvent).map(canonicalProviderFillRow),
+    canonicalPositions: canonicalPositionRows(executionValue.portfolioExecutionStates).filter((item) => nominalIntentIds.has(item.portfolioOrderIntentId)),
+    orders: [],
+    fills: [],
+    positions: [],
+    legacyHistory: liveLegacyHistory(executionValue),
     providers: providerRows(execution),
     incidents: rows(incidents).filter(hasIncidentId).map(incidentSummary),
-    timeline: rows(executionValue.timeline).filter((item) => item?.event_id).map((item) => ({ eventId: String(item.event_id), at: text(item.occurred_at_utc || item.created_at_utc, "unavailable"), step: text(item.step || item.domain, "unavailable"), title: text(item.title || item.event_type, "Événement"), detail: text(item.detail || item.message, "Détail indisponible"), tone: ["HIGH", "WATCH"].includes(upper(item.tone || item.severity)) ? upper(item.tone || item.severity) : "INFO" })),
-    timeSeriesContracts: frontTimeSeriesContracts({ view: "live-trading", execution: executionValue, strategy, risk, nowIso }),
+    timeline: canonicalLiveTimeline(executionValue),
+    reconciliation: liveReconciliation(executionValue, nominalIntentIds),
+    performanceR: livePerformanceR(operationsPerformance),
+    timeSeriesContracts: frontTimeSeriesContracts({ view: "live-trading", execution: executionValue, strategy, risk, marketSeries, performance: operationsPerformance, nowIso }),
     telegramDrilldown: telegramDrilldownFromHealth(health),
-    aiAdvisory: { mode: "ADVISORY", lastContextAt: ai?.generatedAt || nowIso, summary: advisorySummary.status || "AI Context consultatif uniquement." },
+    aiAdvisory: liveAssistantAdvisory({ assistantRuntime, ai, advisorySummary, nowIso }),
   };
 }
 
@@ -1194,7 +1192,7 @@ function orderDetail({ execution, query, warnings, actor, nowIso }) {
     order: effectiveOrder,
     intent: intentSource ? intentRow(intentSource) : null,
     authority: portfolioIntentSource ? orderAuthorityProjection(portfolioIntentSource) : null,
-    canonicalDossier: portfolioIntentSource ? canonicalOrderIntentDossier({ execution, portfolioIntent: portfolioIntentSource, order: effectiveOrder, actor, nowIso }) : null,
+    canonicalDossier: portfolioIntentSource ? canonicalOrderIntentDossier({ execution, portfolioIntent: portfolioIntentSource, order: effectiveOrder, actor, nowIso, health: null }) : null,
     resourceActions: portfolioIntentSource ? resourceAllowedActions({
       resourceType: "OrderIntent",
       status: text(portfolioIntentSource.status || portfolioIntentSource.payload?.status, "READY"),
@@ -1202,7 +1200,9 @@ function orderDetail({ execution, query, warnings, actor, nowIso }) {
       actor,
       expiresAt: text(portfolioIntentSource.expires_at_utc || portfolioIntentSource.payload?.expires_at_utc, ""),
     }) : resourceAllowedActions({ resourceType: "BrokerOrder", status: effectiveOrder.state, actor }),
-    executionMode: portfolioIntentSource ? "SEMI_MANUAL" : null,
+    executionMode: portfolioIntentSource
+      ? executionAuthorityMode(execution?.safety)
+      : null,
     humanGate: portfolioIntentSource ? orderHumanGateProjection({ execution, portfolioIntent: portfolioIntentSource, actor }) : null,
     reconciliation,
     fills,
@@ -1265,7 +1265,6 @@ function orderAuthorityProjection(lineage = {}) {
   const payload = lineage.order_intent_payload || lineage.payload || {};
   const source = payload.source || {};
   const riskDecision = firstRow(lineage.risk_decisions);
-  const candidateIds = rows(lineage.candidate_allocation_ids || source.candidate_allocation_ids).map(String);
   const riskIds = rows(lineage.risk_decision_ids || source.risk_decision_ids).map(String);
   return {
     strategy: {
@@ -1285,21 +1284,21 @@ function orderAuthorityProjection(lineage = {}) {
       reasonCodes: rows(payload.context_gate_reason_codes || payload.ai_context_reason_codes).map(String),
     }),
     portfolioArbitration: authorityStage("Portfolio Arbitration", {
-      decision: candidateIds.length ? "ALLOCATED" : "",
+      decision: text(payload.portfolio_arbitration_decision || source.portfolio_arbitration_decision, ""),
       authorityId: text(lineage.portfolio_arbitration_run_id || payload.portfolio_arbitration_run_id || source.portfolio_arbitration_run_id, ""),
-      version: text(payload.portfolio_arbitration_version, "portfolio_arbitration_v1"),
-      reasonCodes: candidateIds,
+      version: text(payload.portfolio_arbitration_version, ""),
+      reasonCodes: rows(payload.portfolio_arbitration_reason_codes || source.portfolio_arbitration_reason_codes).map(String),
     }),
     globalRisk: authorityStage("Global Risk", {
-      decision: text(riskDecision?.decision, riskIds.length ? "APPROVED" : ""),
+      decision: text(riskDecision?.decision, ""),
       authorityId: text(riskDecision?.risk_decision_id || riskIds[0], ""),
-      version: text(riskDecision?.risk_rule_set_version || payload.risk_rule_set_version, "portfolio_risk_v1"),
-      reasonCodes: rows(riskDecision?.reason_codes || payload.risk_reason_codes || riskIds).map(String),
+      version: text(riskDecision?.risk_rule_set_version || payload.risk_rule_set_version, ""),
+      reasonCodes: rows(riskDecision?.reason_codes || payload.risk_reason_codes).map(String),
     }),
     targetPosition: {
       targetPositionId: text(lineage.target_position_id || payload.target_position_id, "unavailable"),
       account: text(lineage.target_account_id || payload.account_id || payload.broker_account_id, "unavailable"),
-      authorizedQuantity: number(lineage.risk_approved_net_size ?? riskDecision?.approved_size ?? payload.target_net_size ?? payload.quantity, 0),
+      authorizedQuantity: nullableNumber(lineage.risk_approved_net_size ?? riskDecision?.approved_size ?? payload.target_net_size ?? payload.quantity),
     },
   };
 }
@@ -1311,33 +1310,6 @@ function authorityStage(label, { decision, authorityId, version, reasonCodes }) 
     authorityId: text(authorityId, ""),
     version: text(version, ""),
     reasonCodes: rows(reasonCodes).map(String),
-  };
-}
-
-function orderIntentReconciliation({ execution, portfolioIntent, fills }) {
-  const portfolioOrderIntentId = text(portfolioIntent?.portfolio_order_intent_id, "");
-  const state = rows(execution?.portfolioExecutionStates).find((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId) || {};
-  const payload = portfolioIntent.order_intent_payload || portfolioIntent.payload || {};
-  const expectedQuantity = number(payload.quantity || portfolioIntent.quantity, 0);
-  const filledQuantity = number(state.filled_quantity, fills.reduce((sum, item) => sum + item.quantity, 0));
-  const lifecycleStatus = text(state.lifecycle_status, "AWAITING_MANUAL_CONFIRMATION");
-  const mismatches = lifecycleStatus === "FILLED" && filledQuantity !== expectedQuantity
-    ? [{ field: "quantity", expected: String(expectedQuantity), actual: String(filledQuantity), reason: "FILLED_QUANTITY_MISMATCH" }]
-    : [];
-  return {
-    status: mismatches.length ? "MISMATCH" : lifecycleStatus,
-    checkedAt: text(state.updated_at_utc || portfolioIntent.created_at_utc, ""),
-    expected: [
-      { label: "portfolioOrderIntentId", value: portfolioOrderIntentId },
-      { label: "quantity", value: expectedQuantity },
-      { label: "targetPositionId", value: text(portfolioIntent.target_position_id || payload.target_position_id, "") },
-    ],
-    broker: [
-      { label: "filledQuantity", value: filledQuantity },
-      { label: "providerOrderRef", value: text(state.provider_order_ref, "") },
-      { label: "lifecycleStatus", value: lifecycleStatus },
-    ],
-    mismatches,
   };
 }
 

@@ -11,10 +11,8 @@ export function permissions(actor = {}) {
 }
 
 export function orderHumanGateProjection({ execution, portfolioIntent, actor }) {
-  const portfolioOrderIntentId = text(portfolioIntent?.portfolio_order_intent_id, "");
-  const gate = rows(execution?.humanExecutionGates).find((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId)
-    || (portfolioIntent?.human_execution_gate_id ? portfolioIntent : null);
-  const status = upper(gate?.status || portfolioIntent?.human_gate_status || "AWAITING_MANUAL_CONFIRMATION");
+  const gate = findHumanGate(execution, portfolioIntent);
+  const status = gateStatus(gate, portfolioIntent);
   const operatorCanWrite = permissions(actor).some((item) => item.capability === "front.command" && item.allowed);
   return {
     gateId: text(gate?.human_execution_gate_id || portfolioIntent?.human_execution_gate_id, ""),
@@ -23,9 +21,31 @@ export function orderHumanGateProjection({ execution, portfolioIntent, actor }) 
     expiresAt: text(gate?.expires_at_utc || portfolioIntent?.human_gate_expires_at_utc || portfolioIntent?.expires_at_utc, ""),
     confirmedAt: text(gate?.confirmed_at_utc || portfolioIntent?.human_gate_confirmed_at_utc, ""),
     rejectedAt: text(gate?.rejected_at_utc || portfolioIntent?.human_gate_rejected_at_utc, ""),
-    actions: status === "AWAITING_MANUAL_CONFIRMATION" ? humanGateActions({ portfolioIntent, operatorCanWrite }) : [],
-    unavailableReason: operatorCanWrite ? "" : "Session desk.write requise ; le front ne peut pas inventer d'autorisation locale.",
+    actions: gateActions({ gate, status, portfolioIntent, operatorCanWrite }),
+    unavailableReason: gateUnavailableReason(gate, operatorCanWrite),
   };
+}
+
+function findHumanGate(execution, portfolioIntent) {
+  const portfolioOrderIntentId = text(portfolioIntent?.portfolio_order_intent_id, "");
+  return rows(execution?.humanExecutionGates)
+    .find((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId)
+    || (portfolioIntent?.human_execution_gate_id ? portfolioIntent : null);
+}
+
+function gateStatus(gate, portfolioIntent) {
+  return gate ? upper(gate.status || portfolioIntent?.human_gate_status || "UNKNOWN") : "NOT_CREATED";
+}
+
+function gateActions({ gate, status, portfolioIntent, operatorCanWrite }) {
+  return gate && status === "AWAITING_MANUAL_CONFIRMATION"
+    ? humanGateActions({ portfolioIntent, operatorCanWrite })
+    : [];
+}
+
+function gateUnavailableReason(gate, operatorCanWrite) {
+  if (!gate) return "HUMAN_GATE_NOT_CREATED";
+  return operatorCanWrite ? "" : "Session desk.write requise ; le front ne peut pas inventer d'autorisation locale.";
 }
 
 export function resourceAllowedActions({ resourceType, status, revision = "unavailable", actor = {}, expiresAt = "" }) {
@@ -37,6 +57,7 @@ export function resourceAllowedActions({ resourceType, status, revision = "unava
   const awaitingGate = normalizedStatus === "AWAITING_MANUAL_CONFIRMATION" || normalizedStatus === "READY";
   if (["OrderIntent", "HumanGate"].includes(resourceType) && operatorCanWrite && awaitingGate) actions.push("CONFIRM", "REJECT");
   else if (["OrderIntent", "HumanGate"].includes(resourceType) && awaitingGate) denialReasons.push("WRITE_REQUIRES_OPERATOR_SESSION");
+  if (["OrderIntent", "HumanGate"].includes(resourceType) && normalizedStatus === "HUMAN_GATE_NOT_CREATED") denialReasons.push("HUMAN_GATE_NOT_CREATED");
   if (resourceType === "BrokerOrder") denialReasons.push("BROKER_ORDER_DIRECT_MUTATION_DENIED");
   return {
     resourceType,
@@ -83,4 +104,3 @@ function humanGateActions({ portfolioIntent, operatorCanWrite }) {
     },
   ];
 }
-

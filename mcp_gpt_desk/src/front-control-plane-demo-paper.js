@@ -56,6 +56,9 @@ export function demoPaperLaunchGate({ health, execution, nowIso, rows }) {
     components: launchComponents(blockers),
     releaseCheckCommand: "DESK_OPERATOR_ADMIN_PIN=... npm run --silent gate:demo-paper-release -- --json",
     checkedAt: nowIso,
+    marketClosed: dataReadiness.market_closed === true,
+    hasLastKnownMarketData: Array.isArray(dataReadiness.core_feeds)
+      && dataReadiness.core_feeds.some((feed) => Boolean(feed?.latest_timestamp_utc)),
     checks: checkList,
     checksById: Object.fromEntries(checkList.map((check) => [check.id, check])),
     blockers,
@@ -138,6 +141,7 @@ export function publicLaunchGate(gate) {
 }
 
 export function liveMarketDataStatus(launchGate) {
+  if (launchGate.marketClosed === true) return launchGate.hasLastKnownMarketData ? "LAST_KNOWN" : "MARKET_CLOSED";
   if (launchGate.checksById["data.live_fresh"]?.ok === false) return "STALE";
   if (launchGate.checksById["data.source_durable"]?.ok === false) return "DELAYED";
   return "LIVE";

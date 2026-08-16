@@ -11,7 +11,8 @@
         "^desk_pack_objects$",
         "^desk_runtime_migrations$",
         "^desk_schema_migrations$",
-        "^desk_service_heartbeats$"
+        "^desk_service_heartbeats$",
+        "^domain_event_"
       ]
     },
     {

@@ -47,18 +47,19 @@ export function buildPortfolioRiskOverview({ generatedAt, execution, strategy, p
 
 function buildSummary({ execution, strategy, errors }) {
   const safety = execution?.safety || {};
+  const canonicalIntents = nominalPortfolioIntents(execution);
   const counts = {
     accounts: safeArray(execution?.accounts).length,
     openTrades: safeArray(execution?.trades).filter(isOpenTrade).length,
-    pendingIntents: safeArray(execution?.intents).filter(isActiveIntent).length + safeArray(execution?.portfolioOrderIntents).filter(isActivePortfolioIntent).length,
+    pendingIntents: safeArray(execution?.intents).filter(isActiveIntent).length + canonicalIntents.filter(isActivePortfolioIntent).length,
     activeOrders: safeArray(execution?.orders).filter(isActiveOrder).length,
     activeLocks: safeArray(execution?.locks).length,
     reconciliationDivergences: safeArray(execution?.adapterParityRuns).filter((item) => item.status === "diverged").length
       + safeArray(execution?.reconciliations).filter((item) => item.status === "diverged").length,
     liveInstances: safeArray(strategy?.instances).filter((item) => item.execution_mode === "LIVE").length,
     paperInstances: safeArray(strategy?.instances).filter((item) => item.execution_mode === "PAPER").length,
-    pendingTargetPositions: unique(safeArray(execution?.portfolioOrderIntents).map((item) => item.target_position_id).filter(Boolean)).length,
-    pendingHumanGates: safeArray(execution?.humanExecutionGates).filter((item) => String(item.status || "").toUpperCase() === "AWAITING_MANUAL_CONFIRMATION").length,
+    pendingTargetPositions: unique(canonicalIntents.map((item) => item.target_position_id).filter(Boolean)).length,
+    pendingHumanGates: nominalHumanGates(execution, canonicalIntents).filter((item) => String(item.status || "").toUpperCase() === "AWAITING_MANUAL_CONFIRMATION").length,
   };
   return {
     status: portfolioStatus({ counts, errors, submissionPossible: safety.submissionPossible }),
@@ -191,7 +192,7 @@ function exposureRows(execution) {
 
 function portfolioState({ execution, generatedAt }) {
   const brokerPositions = safeArray(execution?.trades).filter(isOpenTrade);
-  const portfolioIntents = safeArray(execution?.portfolioOrderIntents).filter(isActivePortfolioIntent);
+  const portfolioIntents = nominalPortfolioIntents(execution).filter(isActivePortfolioIntent);
   const snapshots = safeArray(execution?.accountSnapshots);
   const pendingRisk = portfolioIntents.map((item) => riskSnapshot(item)).filter((item) => item.availability !== "UNAVAILABLE");
   return {
@@ -237,8 +238,9 @@ function portfolioState({ execution, generatedAt }) {
 }
 
 function riskCenterState({ execution, generatedAt, controls }) {
-  const riskDecisions = safeArray(execution?.portfolioOrderIntents).flatMap((item) => safeArray(item.risk_decisions));
-  const riskSnapshots = safeArray(execution?.portfolioOrderIntents).map(riskSnapshot).filter((item) => item.availability !== "UNAVAILABLE");
+  const canonicalIntents = nominalPortfolioIntents(execution);
+  const riskDecisions = canonicalIntents.flatMap((item) => safeArray(item.risk_decisions));
+  const riskSnapshots = canonicalIntents.map(riskSnapshot).filter((item) => item.availability !== "UNAVAILABLE");
   const breaches = riskDecisions.flatMap((item) => safeArray(item.breaches));
   const limits = riskDecisions.flatMap((item) => safeArray(item.limits));
   const nearestLimits = riskDecisions.map((item) => item.nearest_limit).filter(Boolean);
@@ -267,10 +269,25 @@ function riskCenterState({ execution, generatedAt, controls }) {
       reasonCodes: locks.map((item) => item.reason || item.scope_value).filter(Boolean),
     },
     providerCircuitState: availabilityNode("UNAVAILABLE", "PROVIDER_CIRCUIT_STATE_UNAVAILABLE"),
-    pendingOrderIntents: safeArray(execution?.portfolioOrderIntents).filter(isActivePortfolioIntent).length,
-    pendingTargetPositions: unique(safeArray(execution?.portfolioOrderIntents).map((item) => item.target_position_id).filter(Boolean)).length,
+    pendingOrderIntents: canonicalIntents.filter(isActivePortfolioIntent).length,
+    pendingTargetPositions: unique(canonicalIntents.map((item) => item.target_position_id).filter(Boolean)).length,
     policyVersions: unique(riskDecisions.map((item) => item.risk_rule_set_version).filter(Boolean)),
   };
+}
+
+function nominalPortfolioIntents(execution) {
+  return safeArray(execution?.portfolioOrderIntents).filter((item) => {
+    const payload = item?.order_intent_payload || item?.payload || {};
+    const terms = item?.execution_terms || payload.execution_terms || {};
+    const values = [item?.target_account_id, payload.account_id, payload.broker_account_id, terms.account_id, terms.broker_account_id]
+      .map((value) => String(value || "").toLowerCase());
+    return !values.some((value) => value === "shadow_certification" || value.startsWith("certification:"));
+  });
+}
+
+function nominalHumanGates(execution, intents = nominalPortfolioIntents(execution)) {
+  const ids = new Set(intents.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
+  return safeArray(execution?.humanExecutionGates).filter((item) => ids.has(String(item.portfolio_order_intent_id || "")));
 }
 
 function exposureKey(item, contracts) {
@@ -376,7 +393,7 @@ function orderIntentRows(execution) {
 }
 
 function portfolioOrderIntentRows(execution) {
-  return safeArray(execution?.portfolioOrderIntents).slice(0, 50).map((intent) => {
+  return nominalPortfolioIntents(execution).slice(0, 50).map((intent) => {
     const payload = intent.order_intent_payload || intent.payload || {};
     return {
       order_intent_id: intent.portfolio_order_intent_id || payload.order_intent_id,
