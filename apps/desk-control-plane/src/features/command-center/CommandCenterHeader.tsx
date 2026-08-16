@@ -1,5 +1,6 @@
-import { FaChevronDown, FaCircle, FaUserCircle } from "react-icons/fa";
+import { FaChevronDown, FaCircle } from "react-icons/fa";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
+import { OperatorMenu } from "@/shell/OperatorMenu";
 import type { CommandCenterModel } from "./model";
 import { statusTone } from "./mapper";
 
@@ -26,11 +27,7 @@ export function CommandCenterHeader({ model }: { model: CommandCenterModel }) {
         <FaCircle aria-hidden="true" />
         <span>Market data {mode.marketData.toLowerCase()}</span>
       </div>
-      <div className="cc-header__operator">
-        <span><strong>{session?.principal.displayName ?? "Session non authentifiée"}</strong><small>{session?.principal.roles[0] ?? "Lecture seule"}</small></span>
-        <FaUserCircle aria-hidden="true" />
-        <FaChevronDown aria-hidden="true" />
-      </div>
+      <OperatorMenu variant="command-center" displayName={session?.principal.displayName ?? "Session non authentifiée"} roleLabel={session?.principal.roles[0] ?? "Lecture seule"} />
     </header>
   );
 }

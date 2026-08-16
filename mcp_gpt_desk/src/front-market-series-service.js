@@ -29,8 +29,17 @@ function marketScope(input) {
 
 async function queryMarketSeries(pool, scope) {
   const { instrument, timeframe, asOf, before, limit } = scope;
+  const storageInstrument = canonicalStorageInstrument(instrument);
   const [seriesResult, timeframeResult] = await Promise.all([
-    pool.query(`WITH scoped AS (
+    pool.query(`WITH selected AS MATERIALIZED (
+        SELECT feed_id, timestamp_utc, trading_date
+        FROM market_candles
+        WHERE symbol_code = $1 AND timeframe = $2 AND is_closed = true
+          AND timestamp_utc <= $3
+          AND ($4::timestamptz IS NULL OR timestamp_utc < $4)
+        ORDER BY timestamp_utc DESC
+        LIMIT $5
+      ), scoped AS (
         SELECT feed_id, timestamp_utc, symbol_code, timeframe, trading_date,
           open, high, low, close, volume, source_collection,
           CASE WHEN SUM(COALESCE(volume, 0)) OVER (
@@ -46,15 +55,27 @@ async function queryMarketSeries(pool, scope) {
             )
           ELSE NULL END AS vwap
         FROM market_candles
-        WHERE symbol_code = $1 AND timeframe = $2 AND is_closed = true AND timestamp_utc <= $3
+        WHERE symbol_code = $1 AND timeframe = $2 AND is_closed = true
+          AND timestamp_utc <= $3
+          AND trading_date IN (
+            SELECT DISTINCT selected.trading_date
+            FROM selected
+          )
       )
-      SELECT * FROM scoped
-      WHERE ($4::timestamptz IS NULL OR timestamp_utc < $4)
-      ORDER BY timestamp_utc DESC LIMIT $5`, [instrument, timeframe, asOf, before, limit + 1]),
+      SELECT scoped.*
+      FROM scoped
+      INNER JOIN selected
+        ON selected.feed_id = scoped.feed_id
+        AND selected.timestamp_utc = scoped.timestamp_utc
+      ORDER BY scoped.timestamp_utc DESC`, [storageInstrument, timeframe, asOf, before, limit + 1]),
     pool.query(`SELECT DISTINCT timeframe FROM market_candles
-      WHERE symbol_code = $1 AND is_closed = true ORDER BY timeframe`, [instrument]),
+      WHERE symbol_code = $1 AND is_closed = true ORDER BY timeframe`, [storageInstrument]),
   ]);
   return { series: seriesResult.rows, timeframes: timeframeResult.rows };
+}
+
+function canonicalStorageInstrument(instrument) {
+  return ({ MNQ: "MNQ1!", MES: "MES1!", NQ: "NQ1!", ES: "ES1!" })[instrument] || instrument;
 }
 
 function marketSeriesResponse(scope, result) {

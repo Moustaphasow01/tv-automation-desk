@@ -85,7 +85,7 @@ export function liveCanonicalRuntime({ execution = {}, strategy = {}, ai = {}, r
       providerEvents,
       launchGate,
     }),
-    activeStrategyInstances: activeStrategyInstanceRows(strategy, nowIso),
+    activeStrategyInstances: activeStrategyInstanceRows(strategy, nowIso, health),
     latestSignals: signals.slice(0, 12),
     aiContextGate: aiContextGateRows(gateDecisions),
     pendingOrderIntents: portfolioOrderIntents.map((item) => portfolioOrderIntentSummaryRow({ execution, item, actor })),
@@ -107,6 +107,7 @@ export function isNominalLiveSignal(item = {}) {
 export function isNominalPortfolioIntent(item = {}) {
   const payload = payloadOf(item);
   const terms = item.execution_terms || payload.execution_terms || {};
+  const lineage = item.lineage || payload.lineage || payload.source?.lineage || {};
   const values = [
     item.target_account_id,
     payload.account_id,
@@ -116,7 +117,20 @@ export function isNominalPortfolioIntent(item = {}) {
     item.correlation_id,
     payload.correlation_id,
   ].map((value) => String(value || "").toLowerCase());
-  return !values.some((value) => value === "shadow_certification" || value.startsWith("certification:") || value.startsWith("corr_cert_shadow_"));
+  const strategySignalId = firstValue(
+    item.signal_id,
+    item.strategy_signal_id,
+    payload.signal_id,
+    payload.strategy_signal_id,
+    rows(lineage.strategy_signal_ids)[0],
+  );
+  const strategyInstanceId = firstValue(
+    item.strategy_instance_id,
+    payload.strategy_instance_id,
+    rows(lineage.strategy_instance_ids)[0],
+  );
+  return Boolean(strategySignalId && strategyInstanceId)
+    && !values.some((value) => value === "shadow_certification" || value.startsWith("certification:") || value.startsWith("corr_cert_shadow_"));
 }
 
 export function portfolioOrderIntentSummaryRow({ execution = {}, item = {}, actor = {} }) {
@@ -352,7 +366,10 @@ function nested(source, path) {
   return value;
 }
 
-function activeStrategyInstanceRows(strategy, nowIso) {
+function activeStrategyInstanceRows(strategy, nowIso, health = {}) {
+  const marketClosed = health?.data_readiness?.market_closed === true;
+  const liveScheduler = rows(health?.operations?.services).find((item) => item?.service_kind === "live_runtime_scheduler");
+  const liveSchedulerHealthy = liveScheduler?.healthy === true || ["HEALTHY", "OK", "READY"].includes(String(liveScheduler?.status || "").toUpperCase());
   const definitionByVersion = new Map(rows(strategy?.versions).map((version) => [String(version.strategy_version_id), version.strategy_definition_id]));
   return rows(strategy?.instances).filter(isActiveExecutionMode).map((item) => {
     const lastEvaluationAt = text(item.last_evaluation_at_utc, "");
@@ -361,9 +378,12 @@ function activeStrategyInstanceRows(strategy, nowIso) {
     const observedAt = lastEvaluationAt || lastHeartbeatAt;
     const observedAgeMs = observedAt ? Date.parse(nowIso) - Date.parse(observedAt) : Number.POSITIVE_INFINITY;
     const schedulerHealth = text(item.scheduler_health, observedAt ? "OBSERVED" : "NOT_OBSERVED").toUpperCase();
-    const effectiveRuntimeState = configuredState === "RUNNING" && (schedulerHealth === "NOT_OBSERVED" || !Number.isFinite(observedAgeMs) || observedAgeMs > 20 * 60_000)
-      ? "STALE"
-      : configuredState;
+    const intentionallyIdle = configuredState === "RUNNING" && marketClosed && liveSchedulerHealthy;
+    const effectiveRuntimeState = intentionallyIdle
+      ? "MARKET_CLOSED"
+      : configuredState === "RUNNING" && (schedulerHealth === "NOT_OBSERVED" || !Number.isFinite(observedAgeMs) || observedAgeMs > 20 * 60_000)
+        ? "STALE"
+        : configuredState;
     return {
       strategyInstanceId: text(item.strategy_instance_id, "unavailable"),
       strategyDefinitionId: text(item.strategy_definition_id || definitionByVersion.get(String(item.strategy_version_id)), "unavailable"),
@@ -371,7 +391,7 @@ function activeStrategyInstanceRows(strategy, nowIso) {
       executionMode: executionModeState(item.execution_mode),
       configuredState,
       runtimeState: effectiveRuntimeState,
-      schedulerHealth,
+      schedulerHealth: intentionallyIdle ? "IDLE_MARKET_CLOSED" : schedulerHealth,
       lastHeartbeatAt,
       lastEvaluationAt,
       nextEvaluationAt: text(item.next_evaluation_at_utc || item.next_run_at_utc, ""),
@@ -387,9 +407,10 @@ function nominalRiskCenter(riskCenter, intents) {
   if (!riskCenter) return null;
   if (!intents.length) return {
     ...riskCenter,
-    availability: "UNAVAILABLE",
-    globalStatus: "DATA_UNAVAILABLE",
-    openRisk: { availability: "UNAVAILABLE", value: null, reasonCode: "NO_NOMINAL_RISK_DECISION" },
+    availability: "CONNECTED_EMPTY",
+    globalStatus: "NO_NOMINAL_DECISION",
+    reason: "Aucun OrderIntent nominal ne nécessite une décision Global Risk dans la fenêtre courante.",
+    openRisk: { availability: "CONNECTED_EMPTY", value: null, reasonCode: "NO_NOMINAL_RISK_DECISION" },
     pendingOrderIntents: 0,
     pendingTargetPositions: 0,
   };

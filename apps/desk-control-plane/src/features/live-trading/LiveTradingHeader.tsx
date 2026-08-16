@@ -1,8 +1,9 @@
 import { useContext, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaBell, FaCircle, FaMoon, FaSearch, FaShieldAlt, FaSyncAlt, FaUserCircle } from "react-icons/fa";
+import { FaBell, FaCircle, FaMoon, FaSearch, FaShieldAlt, FaSyncAlt } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
+import { OperatorMenu } from "@/shell/OperatorMenu";
 import type { LiveTradingModel } from "./model";
 
 const searchTargets = [
@@ -39,7 +40,7 @@ export function LiveTradingHeader({ model, onRefresh, refreshing }: { model: Liv
         <time className="lt-header__clock" dateTime={now?.toISOString()}><strong>{now ? formatClock(now) : "—"} ET</strong><small>{now ? formatDate(now) : "Horloge indisponible"}</small></time>
         <button className="lt-icon-button" type="button" aria-label="Thème sombre actif" disabled><FaMoon /></button>
         <button className="lt-icon-button" type="button" aria-label="Notifications indisponibles" disabled><FaBell /><span>—</span></button>
-        <div className="lt-header__operator"><FaUserCircle aria-hidden="true" /><span><strong>{session?.principal.displayName ?? "Session indisponible"}</strong><small>{session?.principal.roles.join(", ") || "Rôle indisponible"}</small></span></div>
+        <OperatorMenu variant="live-trading" displayName={session?.principal.displayName ?? "Session indisponible"} roleLabel={session?.principal.roles.join(", ") || "Rôle indisponible"} />
       </header>
       <section className="lt-policy" aria-label="Politique opérationnelle autoritaire">
         <PolicyChip tone="info">{model.mode.environment}</PolicyChip>

@@ -156,15 +156,11 @@
 .lt-search > div button { min-height: 32px; border: 0; background: transparent; color: var(--lt-secondary); text-align: left; }
 .lt-search > div button:hover { background: var(--lt-surface-3); color: var(--lt-text); }
 .lt-header__environment, .lt-header__clock { display: grid; gap: 2px; align-content: center; height: 36px; padding: 0 9px; border-left: 1px solid var(--lt-border); }
-.lt-header__environment small, .lt-header__clock small, .lt-header__operator small { color: var(--lt-muted); font-size: 8px; }
+.lt-header__environment small, .lt-header__clock small { color: var(--lt-muted); font-size: 8px; }
 .lt-header__environment strong { color: var(--lt-blue); font-size: 9px; }
 .lt-header__clock strong { font-size: 9px; }
 .lt-icon-button { position: relative; display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid var(--lt-border-soft); border-radius: 4px; background: var(--lt-surface-1); color: var(--lt-secondary); }
 .lt-icon-button span { position: absolute; top: -4px; right: -4px; display: grid; width: 13px; height: 13px; place-items: center; border-radius: 50%; background: var(--lt-red); color: #fff; font-size: 7px; }
-.lt-header__operator { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 7px; align-items: center; min-width: 0; }
-.lt-header__operator > svg { width: 28px; height: 28px; color: #8499ad; }
-.lt-header__operator > span { display: grid; min-width: 0; }
-.lt-header__operator strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 
 .lt-policy { display: flex; height: 32px; gap: 5px; align-items: center; padding: 0 9px; border-bottom: 1px solid var(--lt-border); background: var(--lt-bg-policy); }
 .lt-policy-chip { display: inline-flex; min-height: 19px; align-items: center; padding: 0 7px; border: 1px solid currentColor; border-radius: 4px; font-size: 7px; font-weight: 650; white-space: nowrap; }
@@ -349,8 +345,7 @@
   .desk-app-shell--live-trading { grid-template-columns: 76px minmax(0,1fr); }
   .desk-app-shell--live-trading .desk-sidebar { width: 76px; }
   .desk-app-shell--live-trading .nav-link { min-height: 44px; font-size: 7px; }
-  .lt-header { grid-template-columns: minmax(160px,1fr) minmax(260px,380px) 106px 112px 31px 31px; }
-  .lt-header__operator { display: none; }
+  .lt-header { grid-template-columns: minmax(160px,1fr) minmax(260px,380px) 106px 112px 31px 31px 38px; }
   .lt-page { overflow-y: auto; }
   .lt-grid { height: auto; grid-template-columns: minmax(260px,.72fr) minmax(520px,1.28fr); grid-template-rows: auto; padding: 6px 8px 24px; overflow: visible; }
   .lt-left-rail { min-height: 540px; }
@@ -364,10 +359,10 @@
   .desk-app-shell--live-trading .desk-sidebar { display: none; }
   .desk-app-shell--live-trading .desk-content, .desk-app-shell--live-trading .desk-main { height: auto; overflow: visible; }
   .lt-page { height: auto; min-height: 100vh; padding-bottom: 64px; overflow: visible; }
-  .lt-header { position: sticky; top: 0; z-index: 5; height: auto; min-height: 60px; grid-template-columns: minmax(0,1fr) auto auto; padding: 7px 10px; }
+  .lt-header { position: sticky; top: 0; z-index: 5; height: auto; min-height: 60px; grid-template-columns: minmax(0,1fr) auto auto auto; padding: 7px 10px; }
   .lt-header h1 { font-size: 20px; }
   .lt-search { grid-column: 1/-1; grid-row: 2; width: 100%; }
-  .lt-header__clock, .lt-icon-button, .lt-header__operator { display: none; }
+  .lt-header__clock, .lt-icon-button { display: none; }
   .lt-policy { position: sticky; top: 93px; z-index: 4; height: auto; min-height: 34px; overflow-x: auto; }
   .lt-policy__freshness { margin-left: auto; }
   .lt-grid { display: grid; grid-template-columns: 1fr; padding: 6px 8px 72px; }

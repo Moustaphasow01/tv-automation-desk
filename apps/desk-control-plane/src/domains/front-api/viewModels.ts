@@ -270,9 +270,12 @@ export type CommandCenterOrderIntent = {
 
 export type CommandCenterProvider = {
   available: boolean;
+  availability?: string;
   mode: string;
   circuitBreaker: string;
   health: string;
+  physicalExecutionPolicy?: string;
+  source?: string;
   ackLatencyMs: number | null;
   mismatchCount: number | null;
   events: readonly {

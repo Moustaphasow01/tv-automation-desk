@@ -30,6 +30,24 @@ describe("Front canonical market series", () => {
     assert.equal(result.asOf, null);
   });
 
+  test("resolves desk instrument aliases to canonical continuous-contract storage symbols", async () => {
+    const queriedSymbols = [];
+    const persistence = {
+      initialized: Promise.resolve(),
+      pool: {
+        async query(_sql, values) {
+          queriedSymbols.push(values[0]);
+          return { rows: [] };
+        },
+      },
+    };
+
+    const result = await loadFrontMarketSeries(persistence, { instrument: "MNQ", timeframe: "5" });
+
+    assert.deepEqual(queriedSymbols, ["MNQ1!", "MNQ1!"]);
+    assert.equal(result.instrument, "MNQ", "the operator-facing instrument remains the normalized desk symbol");
+  });
+
   test("rejects unsupported timeframes and malformed cursors", async () => {
     const persistence = fixturePersistence();
     await assert.rejects(() => loadFrontMarketSeries(persistence, { instrument: "MNQ", timeframe: "2" }), (error) => error.code === "MARKET_SERIES_TIMEFRAME_INVALID");

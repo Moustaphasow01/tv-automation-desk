@@ -313,6 +313,7 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
   store.listAiContextGateDecisions = async () => ({
     items: [{
       ai_context_gate_decision_id: "ctx-live-1",
+      signal_id: "signal-live-1",
       status: "COMPLETED",
       mode: "SHADOW",
       recommendation: "TAKE",
@@ -346,6 +347,38 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
   assert.equal(envelope.data.telegramDrilldown.schemaVersion, "telegram_drilldown_front_v1");
   assert.equal(envelope.data.telegramDrilldown.availability, "KNOWN");
   assert.equal(envelope.data.telegramDrilldown.secretsExposed, false);
+
+  const commandCenter = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/command-center",
+    query: { trading_date: "2026-08-11", session: "ny_open", mode: "paper" },
+  });
+  assert.equal(commandCenter.data.signals.rows[0].gate, "TAKE");
+  assert.equal(commandCenter.data.signals.rows[0].portfolioDecision, "READY");
+  assert.equal(commandCenter.data.signals.rows[0].riskDecision, "PASS");
+});
+
+test("live trading reports healthy strategy instances as intentionally idle while the market is closed", async () => {
+  const store = frontControlPlaneStore();
+  store.getStrategyV2Overview = async () => ({
+    definitions: [{ strategy_definition_id: "strdef-closed" }],
+    versions: [{ strategy_version_id: "strver-closed", strategy_definition_id: "strdef-closed" }],
+    instances: [{ strategy_instance_id: "strinst-closed", strategy_version_id: "strver-closed", execution_mode: "PAPER", runtime_state: "RUNNING", scheduler_health: "NOT_OBSERVED" }],
+    signals: [],
+  });
+  store.health = async () => ({
+    ...coldStartReadyHealth(),
+    data_readiness: { ...coldStartReadyHealth().data_readiness, ok: true, state: "market_closed", market_closed: true },
+    operations: { services: [{ service_id: "live_runtime_scheduler", service_kind: "live_runtime_scheduler", status: "healthy", healthy: true }] },
+  });
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-trading",
+    query: { trading_date: "2026-08-16", session: "asia_open", mode: "paper" },
+  });
+
+  assert.equal(envelope.data.canonicalRuntime.activeStrategyInstances[0].runtimeState, "MARKET_CLOSED");
+  assert.equal(envelope.data.canonicalRuntime.activeStrategyInstances[0].schedulerHealth, "IDLE_MARKET_CLOSED");
+  assert.equal(envelope.meta.warnings.includes("live-next-monitor:UNAVAILABLE"), false);
 });
 
 test("an OrderIntent without a persisted Human Gate is not exposed as operator-actionable", async () => {
@@ -357,7 +390,15 @@ test("an OrderIntent without a persisted Human Gate is not exposed as operator-a
     risk_approved_net_size: 1,
     status: "READY",
     order_intent_hash: "sha256:no-gate",
-    order_intent_payload: { order_intent_id: "portfolio_order_intent_without_gate", instrument: "MNQ", action: "BUY", quantity: 1, status: "READY" },
+    order_intent_payload: {
+      order_intent_id: "portfolio_order_intent_without_gate",
+      strategy_instance_id: "strategy-instance-without-gate",
+      signal_id: "signal-without-gate",
+      instrument: "MNQ",
+      action: "BUY",
+      quantity: 1,
+      status: "READY",
+    },
   };
   const store = frontControlPlaneStore({
     execution: {
@@ -1180,6 +1221,7 @@ test("Command Center maps canonical incident fields and operational counters wit
   });
   assert.equal(envelope.data.research.rows[0].dataset, "NOT_LINKED");
   assert.equal(envelope.data.research.rows[0].run, "NO_ACTIVE_RUN");
+  assert.equal(envelope.data.summary.criticalIncidents, 0, "warning incidents must not inflate the critical KPI");
 });
 
 test("front control plane resolves execution drill-downs strictly by requested id", async () => {

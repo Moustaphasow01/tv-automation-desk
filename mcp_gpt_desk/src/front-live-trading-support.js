@@ -112,24 +112,28 @@ export function liveSummary({ signals, intents, commands, events, safety = {}, p
   };
 }
 
-export function liveSession({ execution, scope, launchGate, health, marketSeries, marketDataStatus }) {
+export function liveSession({ execution, liveSession: currentLiveSession, scope, launchGate, health, marketSeries, marketDataStatus }) {
   return {
-    sessionId: text(execution.session_id, "unavailable"), tradingDate: scope.trading_date,
-    phase: scope.session === "ny_open" ? "New York" : "Asia", nextMonitorAt: text(execution.next_monitor_at, "unavailable"),
+    sessionId: text(execution.session_id || currentLiveSession?.id, "unavailable"),
+    tradingDate: text(currentLiveSession?.date, scope.trading_date),
+    phase: scope.session === "ny_open" ? "New York" : "Asia",
+    nextMonitorAt: text(execution.next_monitor_at || currentLiveSession?.nextMonitorAt || currentLiveSession?.nextCheckpointAt, "unavailable"),
     marketDataStatus: marketDataStatus(launchGate), marketState: marketSessionState(health?.data_readiness),
     activeSession: text(health?.data_readiness?.active_session || scope.session, "UNKNOWN"),
     exchangeTimezone: text(health?.data_readiness?.exchange_timezone, "America/New_York"), lastKnownAt: text(marketSeries?.asOf, "unavailable"),
   };
 }
 
-export function appendLiveWarnings({ execution, safety, canonicalRuntime, warnings }) {
-  if (!execution.session_id) warnings.push("live-session-id:UNAVAILABLE");
-  if (!execution.next_monitor_at) warnings.push("live-next-monitor:UNAVAILABLE");
-  if (!execution.arbitrations) warnings.push("live-arbitrations:UNAVAILABLE");
-  if (!execution.risk_checks) warnings.push("live-risk-checks:UNAVAILABLE");
-  if (safety.correlatedExposurePct == null) warnings.push("live-correlated-exposure:UNAVAILABLE");
+export function appendLiveWarnings({ execution, safety, canonicalRuntime, liveSession: currentLiveSession, marketClosed = false, warnings }) {
+  const signalCount = rows(canonicalRuntime?.latestSignals).length;
+  const intentCount = rows(canonicalRuntime?.pendingOrderIntents).length;
+  if (!execution.session_id && !currentLiveSession?.id) warnings.push("live-session-id:UNAVAILABLE");
+  if (!marketClosed && !execution.next_monitor_at && !currentLiveSession?.nextMonitorAt && !currentLiveSession?.nextCheckpointAt) warnings.push("live-next-monitor:UNAVAILABLE");
+  if (signalCount && !execution.arbitrations) warnings.push("live-arbitrations:UNAVAILABLE");
+  if (intentCount && !execution.risk_checks) warnings.push("live-risk-checks:UNAVAILABLE");
+  if (intentCount && safety.correlatedExposurePct == null) warnings.push("live-correlated-exposure:UNAVAILABLE");
   if (!rows(execution.pipeline).length && canonicalRuntime.pipeline.every((item) => item.status === "UNAVAILABLE")) warnings.push("live-pipeline:UNAVAILABLE");
-  if (!rows(execution.timeline).length) warnings.push("live-timeline:UNAVAILABLE");
+  if (!marketClosed && (signalCount || intentCount) && !rows(execution.timeline).length && !rows(currentLiveSession?.timeline).length && !rows(currentLiveSession?.operationalTimeline).length) warnings.push("live-timeline:UNAVAILABLE");
 }
 
 export function liveLegacyHistory(execution) {

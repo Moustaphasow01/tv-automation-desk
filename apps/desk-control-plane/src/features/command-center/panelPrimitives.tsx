@@ -14,6 +14,6 @@ export function PanelStatus({ tone, children }: { tone: "success" | "warning" | 
   return <span className={`cc-status cc-status--${tone}`}>{children}</span>;
 }
 
-export function EmptyPanelState({ label = "Données non publiées par le backend" }: { label?: string }) {
-  return <div className="cc-empty"><strong>CONNECTED EMPTY</strong><span>{label}</span></div>;
+export function EmptyPanelState({ label = "Aucune donnée confirmée dans la fenêtre courante", status = "ÉTAT VIDE CONFIRMÉ" }: { label?: string; status?: string }) {
+  return <div className="cc-empty" role="status"><strong>{status}</strong><span>{label}</span></div>;
 }

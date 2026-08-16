@@ -22,7 +22,7 @@ export function buildCommandCenterProjection(context) {
     upcoming: upcomingProjection(nominalContext),
     market: marketProjection(context.health),
     research: researchProjection(nominalContext),
-    signals: signalProjection(strategy),
+    signals: signalProjection(nominalContext),
     humanGate: humanGateProjection(execution, context.actor, context.nowIso),
     provider: providerProjection(execution),
     performance: performanceProjection(context.performance),
@@ -94,7 +94,7 @@ function systemsProjection({ execution, strategy, runtime, risk, warnings, healt
     system("postgres", "PostgreSQL", postgresState(health), postgresDetail(health)),
     system("market-data", "Market Data", marketState(health?.data_readiness), marketDetail(health?.data_readiness)),
     system("research", "Research Scheduler", researchSchedulerState(health, runtime), researchSchedulerDetail(health, runtime)),
-    system("strategy", "Strategy Runtime", strategyRuntimeState(strategy), strategyRuntimeDetail(strategy)),
+    system("strategy", "Strategy Runtime", strategyRuntimeState(strategy, health), strategyRuntimeDetail(strategy, health)),
     system("workers", "Research Workers", workerRuntimeState(health, runtime), workerRuntimeDetail(health, runtime)),
     system("risk", "Risk Engine", risk ? "OK" : "UNAVAILABLE", text(risk?.summary?.status, "Projection indisponible")),
     system("human-gate", "Human Gate", canonicalHumanGateState(execution), countDetail(execution?.humanExecutionGates, "gates canoniques")),
@@ -161,19 +161,32 @@ function researchProjection({ research, runtime, dataFoundation, simulationRuns 
   };
 }
 
-function signalProjection(strategy) {
+function signalProjection({ strategy, execution, ai }) {
+  const contextBySignal = new Map(rows(ai?.decisions).filter((item) => item?.signal_id).map((item) => [String(item.signal_id), item]));
+  const intentBySignal = new Map();
+  for (const intent of rows(execution?.portfolioOrderIntents)) {
+    const payload = intent?.order_intent_payload || intent?.payload || {};
+    const signalIds = [payload.signal_id, ...rows(payload?.source?.lineage?.strategy_signal_ids), ...rows(payload?.lineage?.strategy_signal_ids)].filter(Boolean);
+    for (const signalId of signalIds) intentBySignal.set(String(signalId), intent);
+  }
   return {
     available: Boolean(strategy),
-    rows: rows(strategy?.signals).filter((signal) => signal?.signal_id).slice(0, 6).map((signal) => ({
-      id: String(signal.signal_id),
-      at: text(signal.created_at_utc || signal.created_at, "UNAVAILABLE"),
-      instrument: text(signal.instrument_code || signal.symbol, "UNAVAILABLE"),
-      setup: text(signal.setup_type || signal.signal_type, "UNAVAILABLE"),
-      confidence: nullableNumber(signal.confidence),
-      gate: text(signal.gate || signal.status, "UNAVAILABLE").toUpperCase(),
-      portfolioDecision: "UNAVAILABLE",
-      riskDecision: "UNAVAILABLE",
-    })),
+    rows: rows(strategy?.signals).filter((signal) => signal?.signal_id).slice(0, 6).map((signal) => {
+      const signalId = String(signal.signal_id);
+      const contextDecision = contextBySignal.get(signalId);
+      const intent = intentBySignal.get(signalId);
+      const riskDecision = rows(intent?.risk_decisions)[0];
+      return {
+        id: signalId,
+        at: text(signal.created_at_utc || signal.created_at, "UNAVAILABLE"),
+        instrument: text(signal.instrument_code || signal.symbol, "UNAVAILABLE"),
+        setup: text(signal.setup_type || signal.signal_type, "UNAVAILABLE"),
+        confidence: nullableNumber(signal.confidence),
+        gate: text(contextDecision?.recommendation || contextDecision?.status || signal.gate || signal.status, "PENDING").toUpperCase(),
+        portfolioDecision: text(intent?.status, contextDecision ? "PENDING" : "WAITING_CONTEXT").toUpperCase(),
+        riskDecision: text(riskDecision?.status || riskDecision?.decision, intent ? "PENDING" : "NOT_EVALUATED").toUpperCase(),
+      };
+    }),
   };
 }
 
@@ -397,14 +410,20 @@ function researchSchedulerDetail(health, runtime) {
   return serviceRow ? `${text(serviceRow.status, "STATE_NOT_PUBLISHED")} · ${countDetail(runtime, "tâches agent")}` : `Heartbeat non publié · ${countDetail(runtime, "tâches agent")}`;
 }
 
-function strategyRuntimeState(strategy) {
+function strategyRuntimeState(strategy, health) {
   if (!strategy) return "UNAVAILABLE";
+  const runtimeService = service(health, "live_runtime_scheduler");
+  if (health?.data_readiness?.market_closed === true && runtimeService?.healthy === true) return "MARKET_CLOSED";
+  if (runtimeService?.healthy !== true) return rows(strategy.instances).length ? "DEGRADED" : "UNAVAILABLE";
   const runtimeStates = strategy?.summary?.runtime_states || {};
   if (nullableNumber(runtimeStates.RUNNING) > 0) return "OK";
   return rows(strategy.instances).length ? "DEGRADED" : "OK";
 }
 
-function strategyRuntimeDetail(strategy) {
+function strategyRuntimeDetail(strategy, health) {
+  const runtimeService = service(health, "live_runtime_scheduler");
+  if (health?.data_readiness?.market_closed === true && runtimeService?.healthy === true) return "Runtime sain · marché fermé, évaluations en pause normale";
+  if (runtimeService?.healthy !== true) return `Runtime non observé · ${countDetail(strategy?.instances, "instances configurées")}`;
   const running = nullableNumber(strategy?.summary?.runtime_states?.RUNNING);
   return running === null ? countDetail(strategy?.instances, "instances") : `${running} instance(s) RUNNING`;
 }

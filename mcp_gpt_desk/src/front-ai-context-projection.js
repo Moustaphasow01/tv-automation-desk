@@ -51,6 +51,7 @@ function gateDecisionRows(decisions) {
     const retry = object(payload.retry);
     return {
       decision_id: text(item.ai_context_gate_decision_id || item.decision_id),
+      signal_id: text(item.signal_id || payload.signal_id || decision.signal_id || advisory.signal_id),
       task_id: text(item.agent_task_id),
       mission_key: text(payload.mission_key),
       task_type: text(payload.task_type || "AI_CONTEXT_GATE"),
@@ -96,6 +97,7 @@ function decisionRows(tasks, metrics) {
     const metric = metricByTask.get(task.task_id) || {};
     return {
       decision_id: text(output.execution_hash || task.task_id),
+      signal_id: text(output.signal_id || advisory.signal_id || binding.signal_id),
       task_id: task.task_id,
       mission_key: text(task.mission_key),
       task_type: text(task.task_type),

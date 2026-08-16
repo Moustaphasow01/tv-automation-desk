@@ -149,7 +149,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "strategy-center": ["strategy", "research"],
   "strategy-detail": ["strategy", "research", "execution", "incidents"],
   "strategy-compare": ["strategy", "research", "simulation-runs"],
-  "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "front-macro", "front-news", "assistant-runtime", "performance", "health"],
+  "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "live-session", "front-macro", "front-news", "assistant-runtime", "performance", "health"],
   "live-signal-detail": ["execution", "strategy", "portfolio-risk", "ai-context"],
   "order-detail": ["execution"],
   "position-detail": ["execution"],
@@ -909,7 +909,7 @@ function observabilityPolicyItems(obsPolicy) {
   })];
 }
 
-function liveTrading({ execution, strategy, incidents, ai, risk, health, marketSeries, macro, news, assistantRuntime, performance: operationsPerformance, query, warnings, nowIso, actor }) {
+function liveTrading({ execution, strategy, incidents, ai, risk, health, marketSeries, liveSession: currentLiveSession, macro, news, assistantRuntime, performance: operationsPerformance, query, warnings, nowIso, actor }) {
   const executionValue = execution || {};
   const safety = executionValue.safety || {};
   const performance = executionValue.performance || {};
@@ -933,10 +933,17 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
   });
   const arbitrations = liveArbitrations(executionValue);
   const riskChecks = liveRiskChecks(executionValue);
-  appendLiveWarnings({ execution: executionValue, safety, canonicalRuntime, warnings });
+  appendLiveWarnings({
+    execution: executionValue,
+    safety,
+    canonicalRuntime,
+    liveSession: currentLiveSession,
+    marketClosed: health?.data_readiness?.market_closed === true,
+    warnings,
+  });
   return {
     summary: liveSummary({ signals, intents: portfolioOrderIntents, commands: provider.commands, events: provider.events, safety, performance }),
-    session: liveSession({ execution: executionValue, scope, launchGate, health, marketSeries, marketDataStatus: liveMarketDataStatus }),
+    session: liveSession({ execution: executionValue, liveSession: currentLiveSession, scope, launchGate, health, marketSeries, marketDataStatus: liveMarketDataStatus }),
     launchGate: publicLaunchGate(launchGate),
     pipeline: pipeline(executionValue, launchGate),
     canonicalRuntime,
