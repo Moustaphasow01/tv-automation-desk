@@ -380,6 +380,39 @@ test("an OrderIntent without a persisted Human Gate is not exposed as operator-a
   assert.equal(live.data.canonicalRuntime.pipeline.find((step) => step.stepId === "HUMAN_GATE")?.status, "BLOCKED");
 });
 
+test("live reconciliation ignores historical broker snapshots while physical execution is disabled", async () => {
+  const store = frontControlPlaneStore({
+    execution: {
+      safety: {
+        executionEnabled: false,
+        physicalExecutionEnabled: false,
+        submissionPossible: false,
+        liveAccountAllowed: false,
+        executionAuthorityMode: "semi_auto",
+        entryOperatorApprovalRequired: true,
+      },
+      reconciliations: [{
+        reconciliation_id: "legacy-reconciliation",
+        status: "MATCHED",
+        mismatch_count: 0,
+        broker_snapshot: { account: "Sim101", positions: [] },
+        completed_at: "2026-07-26T17:09:22.000Z",
+      }],
+    },
+  });
+
+  const live = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-trading",
+    query: {},
+  });
+
+  assert.equal(live.data.reconciliation.availability, "NOT_APPLICABLE_CURRENT_MODE");
+  assert.equal(live.data.reconciliation.status, "PHYSICAL_EXECUTION_DISABLED");
+  assert.equal(live.data.reconciliation.mismatchCount, null);
+  assert.equal(live.data.reconciliation.expected, null);
+  assert.deepEqual(live.data.reconciliation.broker, { availability: "NOT_APPLICABLE_CURRENT_MODE" });
+});
+
 test("certification replay lineage is excluded from nominal Command Center and Live Trading projections", async () => {
   const certificationIntentId = "portfolio_order_intent_certification_only";
   const store = frontControlPlaneStore({

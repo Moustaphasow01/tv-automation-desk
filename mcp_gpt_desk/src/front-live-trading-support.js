@@ -19,6 +19,10 @@ export function liveMacroSession({ macro, news, scope, marketSeries }) {
 
 export function liveReconciliation(execution = {}, nominalIntentIds = new Set()) {
   const physical = execution?.safety?.physicalExecutionEnabled === true || execution?.safety?.liveAccountAllowed === true;
+  // A historical broker snapshot is not evidence of a current reconciliation when
+  // physical execution is disabled. Keep legacy history out of the nominal Live
+  // projection and fail closed until the backend policy enables a comparable pair.
+  if (!physical) return emptyReconciliation(false);
   const states = rows(execution.portfolioExecutionStates).filter((item) => nominalIntentIds.has(String(item.portfolio_order_intent_id || "")));
   const latest = rows(execution.reconciliations)[0] || null;
   if (!latest && !states.length) return emptyReconciliation(physical);
