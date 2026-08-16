@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { liveTone, toLiveTradingModel } from "@/features/live-trading/mapper";
+import { liveHumanGateStatus } from "@/features/live-trading/LiveHumanGate";
 import type { LiveTradingView } from "@/domains/front-api/viewModels";
 import { liveTradingView } from "@/mocks/canonicalDataset";
 import type { ViewEnvelope } from "@/shared/contracts";
@@ -38,6 +39,13 @@ describe("Live Trading golden master", () => {
     expect(liveTone("CONNECTED_EMPTY")).toBe("info");
     expect(liveTone("UNAVAILABLE")).toBe("danger");
     expect(liveTone("STALE")).toBe("warning");
+  });
+
+  it("renders an empty Human Gate as connected-empty rather than unavailable", () => {
+    const model = toLiveTradingModel(liveTradingView);
+
+    expect(model.orderIntent).toBeNull();
+    expect(liveHumanGateStatus(model)).toBe("CONNECTED_EMPTY");
   });
 });
 

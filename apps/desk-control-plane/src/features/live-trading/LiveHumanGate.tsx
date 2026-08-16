@@ -18,7 +18,7 @@ export function LiveHumanGate({ model, onSubmit, submittingActionId, command, er
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const confirm = model.gateActions.find((action) => action.action === "CONFIRM");
   const reject = model.gateActions.find((action) => action.action === "REJECT");
-  const status = model.orderIntent?.humanGate.status ?? "UNAVAILABLE";
+  const status = liveHumanGateStatus(model);
 
   const request = (action: HumanGateAction | undefined) => {
     if (!action || action.permission !== "ALLOWED") return;
@@ -65,4 +65,8 @@ export function LiveHumanGate({ model, onSubmit, submittingActionId, command, er
   }, [pending]);
 
   return <LivePanel title="Human Execution Gate" className="lt-panel--gate"><div className="lt-gate-status"><FaHourglassHalf aria-hidden="true" /><strong>{status}</strong><span>{model.orderIntent ? "This OrderIntent will not be sent until the backend accepts an operator decision." : model.gateBlockedReason}</span></div><div className="lt-gate-actions"><button type="button" className="lt-gate-confirm" disabled={!confirm || confirm.permission !== "ALLOWED" || Boolean(submittingActionId)} onClick={() => request(confirm)}><FaCheck />Confirm</button><button type="button" className="lt-gate-reject" disabled={!reject || reject.permission !== "ALLOWED" || Boolean(submittingActionId)} onClick={() => request(reject)}><FaTimes />Reject</button></div><p className="lt-gate-helper"><FaLock aria-hidden="true" />{model.gateActions.length ? "Capability et allowedActions publiés par le backend." : model.gateBlockedReason}</p>{command ? <p className="lt-gate-receipt" role="status">Commande {command.commandId} · {command.status}</p> : null}{error ? <p className="lt-gate-error" role="alert">{error}</p> : null}{pending ? <div ref={dialogRef} className="lt-gate-dialog" role="alertdialog" aria-modal="true" aria-labelledby="lt-gate-dialog-title"><strong id="lt-gate-dialog-title">{pending.label}</strong><p>{pending.impactPreview}</p><dl><div><dt>OrderIntent</dt><dd>{model.orderIntent?.portfolioOrderIntentId}</dd></div><div><dt>Instrument</dt><dd>{model.orderIntent?.symbol}</dd></div><div><dt>Quantity</dt><dd>{model.orderIntent?.quantity}</dd></div><div><dt>Environment</dt><dd>{pending.environment}</dd></div></dl><label>Motif opérateur<input value={reason} onChange={(event) => setReason(event.target.value)} autoFocus /></label><small>Révision attendue : {pending.expectedRevision}</small><div><button type="button" onClick={() => setPending(null)}>Cancel</button><button type="button" disabled={pending.requiresReason && !reason.trim()} onClick={() => void submit()}>Confirm request</button></div></div> : null}</LivePanel>;
+}
+
+export function liveHumanGateStatus(model: LiveTradingModel): string {
+  return model.orderIntent?.humanGate.status ?? "CONNECTED_EMPTY";
 }
