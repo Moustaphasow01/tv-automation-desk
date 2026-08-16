@@ -2,6 +2,9 @@ param(
     [string]$ProjectRoot = "",
     [string]$OutputRoot = "",
     [string]$Version = "",
+    [string]$BackendCommit = "",
+    [string]$FrontCommit = "",
+    [string]$EvidenceCommit = "",
     [switch]$SkipTests,
     [switch]$UsePrebuiltFront,
     [switch]$AllowDirty,
@@ -51,6 +54,12 @@ $dirty = Invoke-DeskCapturedCommand -FilePath $git -Arguments @("-C", $ProjectRo
 if ($dirty -and -not $AllowDirty) { throw "The repository is dirty. Commit/stage the intended release or pass -AllowDirty for an explicitly marked rehearsal artifact." }
 $commit = Invoke-DeskCapturedCommand -FilePath $git -Arguments @("-C", $ProjectRoot, "rev-parse", "HEAD")
 $commit = $commit.Trim()
+if (-not $BackendCommit) { $BackendCommit = $commit }
+if (-not $FrontCommit) { $FrontCommit = $commit }
+if (-not $EvidenceCommit) { $EvidenceCommit = $commit }
+foreach ($namedCommit in @($BackendCommit, $FrontCommit, $EvidenceCommit)) {
+    if ($namedCommit -notmatch "^[0-9a-fA-F]{40}$") { throw "Release commit references must be full 40-character Git SHAs." }
+}
 
 if (-not $SkipTests) {
     Invoke-DeskCommand -FilePath $npm -Arguments @("run", "typecheck") -WorkingDirectory $ProjectRoot
@@ -160,10 +169,29 @@ $files = @()
         size_bytes = $item.Length
     }
 }
+$frontAssetHashes = @(
+    $files |
+        Where-Object { $_.path -like "front/assets/*" } |
+        ForEach-Object { [ordered]@{ path = $_.path; sha256 = $_.sha256 } }
+)
+$migrationLevel = (
+    Get-ChildItem -LiteralPath (Join-Path $ProjectRoot "infra\postgres\init") -File -Filter "*.sql" |
+        Sort-Object Name |
+        Select-Object -Last 1
+).BaseName
+$payloadHashMaterial = $files | ConvertTo-Json -Depth 10 -Compress
+$payloadHasher = [System.Security.Cryptography.SHA256]::Create()
+try {
+    $payloadHashBytes = $payloadHasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($payloadHashMaterial))
+    $artifactPayloadSha256 = ([System.BitConverter]::ToString($payloadHashBytes)).Replace("-", "").ToLowerInvariant()
+} finally {
+    $payloadHasher.Dispose()
+}
+$buildTimestamp = (Get-Date).ToUniversalTime().ToString("o")
 $manifest = [ordered]@{
     schema = "desk_windows_release_v1"
     version = $Version
-    created_at_utc = (Get-Date).ToUniversalTime().ToString("o")
+    created_at_utc = $buildTimestamp
     git_commit = $commit
     dirty = [bool]$dirty
     node_minimum = "20.6.0"
@@ -171,6 +199,21 @@ $manifest = [ordered]@{
     strategy_contract_lock = $strategyLock
     execution_policy_lock = $executionPolicyLock
     files = $files
+    releaseId = $Version
+    backendCommit = $BackendCommit.ToLowerInvariant()
+    frontCommit = $FrontCommit.ToLowerInvariant()
+    evidenceCommit = $EvidenceCommit.ToLowerInvariant()
+    artifactSha256 = $artifactPayloadSha256
+    frontAssetHashes = $frontAssetHashes
+    migrationLevel = $migrationLevel
+    contractVersion = [ordered]@{
+        master = [string]$strategyLock.active_contracts[0].schema_version
+        monitor = [string]$strategyLock.active_contracts[1].schema_version
+        executionPolicy = [string]$executionPolicyLock.policy.schema_version
+    }
+    buildTimestamp = $buildTimestamp
+    AUTO_EXECUTION = $false
+    PHYSICAL_LIVE = $false
 }
 $manifestJson = $manifest | ConvertTo-Json -Depth 20
 [System.IO.File]::WriteAllText(
