@@ -411,6 +411,10 @@ test("live reconciliation ignores historical broker snapshots while physical exe
   assert.equal(live.data.reconciliation.mismatchCount, null);
   assert.equal(live.data.reconciliation.expected, null);
   assert.deepEqual(live.data.reconciliation.broker, { availability: "NOT_APPLICABLE_CURRENT_MODE" });
+
+  const commandCenter = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/command-center", query: {} });
+  assert.equal(commandCenter.data.provider.availability, "NOT_APPLICABLE_CURRENT_MODE");
+  assert.equal(commandCenter.data.provider.mismatchCount, null);
 });
 
 test("certification replay lineage is excluded from nominal Command Center and Live Trading projections", async () => {

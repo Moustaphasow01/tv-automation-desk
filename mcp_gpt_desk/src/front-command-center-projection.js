@@ -216,7 +216,7 @@ function providerProjection(execution) {
     circuitBreaker: providerCircuitBreaker(policyDisabled, provider),
     health: policyDisabled ? "DISABLED_BY_POLICY" : providerHealth(provider),
     ackLatencyMs: nullableNumber(provider?.latency_ms),
-    mismatchCount: reconciliationMismatchCount(execution?.reconciliations),
+    mismatchCount: policyDisabled ? null : reconciliationMismatchCount(execution?.reconciliations),
     events: providerEvents(commands, events),
     source: "broker_provider_commands+broker_provider_events",
     physicalExecutionPolicy: execution?.safety?.submissionPossible === true ? "ENABLED" : "DISABLED_BY_POLICY",
