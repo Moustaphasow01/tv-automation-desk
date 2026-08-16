@@ -15,5 +15,5 @@ export function PanelStatus({ tone, children }: { tone: "success" | "warning" | 
 }
 
 export function EmptyPanelState({ label = "Données non publiées par le backend" }: { label?: string }) {
-  return <div className="cc-empty"><strong>UNAVAILABLE</strong><span>{label}</span></div>;
+  return <div className="cc-empty"><strong>CONNECTED EMPTY</strong><span>{label}</span></div>;
 }

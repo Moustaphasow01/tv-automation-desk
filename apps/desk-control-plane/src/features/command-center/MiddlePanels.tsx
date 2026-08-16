@@ -29,7 +29,7 @@ export function ProviderRuntimePanel({ provider }: { provider: CommandCenterView
 export function ResearchPerformancePanel({ performance }: { performance: CommandCenterView["performance"] }) {
   return (
     <CommandPanel title="Performance Research (Equity Curve)" className="cc-panel--performance" action={<Link to="/performance">30J</Link>}>
-      <div className="cc-performance-metrics"><span><small>Research Equity</small><strong>UNAVAILABLE</strong></span><span><small>PnL 30J</small><strong>{displayDecimal(performance.pnlR, " R")}</strong></span><span><small>Trades</small><strong>{displayNumber(performance.trades)}</strong></span><span><small>Max Drawdown</small><strong>{displayDecimal(performance.maxDrawdownR, " R")}</strong></span></div>
+      <div className="cc-performance-metrics"><span><small>Research Equity</small><strong>{performance.curve.length > 1 ? "Série publiée" : "Non publiée"}</strong></span><span><small>PnL 30J</small><strong>{displayDecimal(performance.pnlR, " R")}</strong></span><span><small>Trades</small><strong>{displayNumber(performance.trades)}</strong></span><span><small>Max Drawdown</small><strong>{displayDecimal(performance.maxDrawdownR, " R")}</strong></span></div>
       {performance.curve.length > 1 ? <div className="cc-equity-curve"><Sparkline points={performance.curve} tone="accent" /></div> : <EmptyPanelState label="Série d'equity officielle non publiée" />}
     </CommandPanel>
   );

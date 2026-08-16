@@ -126,6 +126,10 @@ export type CommandCenterView = {
     executionMode: string;
     autoExecution: "ON" | "OFF" | "UNKNOWN";
     liveBroker: "ON" | "OFF" | "UNKNOWN";
+    autoExecutionEnabled?: boolean;
+    physicalExecutionEnabled?: boolean;
+    humanGateRequired?: boolean;
+    providerSubmissionEnabled?: boolean;
     release: string;
     marketData: string;
   };
@@ -178,6 +182,8 @@ export type CommandCenterView = {
   };
   humanGate: {
     available: boolean;
+    availability?: string;
+    source?: string;
     rows: readonly CommandCenterOrderIntent[];
   };
   provider: CommandCenterProvider;
@@ -189,6 +195,12 @@ export type CommandCenterView = {
     curve: readonly number[];
   };
   incidents: readonly CommandCenterIncident[];
+  operations: {
+    availability: string;
+    queuedTasks: number | null;
+    dlqItems: number | null;
+    staleFeeds: number | null;
+  };
   assistant: {
     available: boolean;
     activeWorkers: number | null;
@@ -305,13 +317,13 @@ export type LiveTradingView = {
   summary: {
     signalsToday: number;
     tradesExecuted: number;
-    acceptanceRatePct: number;
+    acceptanceRatePct: number | null;
     orderIntentsPending?: number;
     providerCommandsCreated?: number;
     providerEventsObserved?: number;
-    riskUsedPct: number;
-    correlatedExposurePct: number;
-    liveDrawdownR: number;
+    riskUsedPct: number | null;
+    correlatedExposurePct: number | null;
+    liveDrawdownR: number | null;
   };
   session: {
     sessionId: string;
@@ -319,6 +331,10 @@ export type LiveTradingView = {
     phase: string;
     nextMonitorAt: string;
     marketDataStatus: "LIVE" | "DELAYED" | "STALE" | "DOWN";
+    marketState?: string;
+    activeSession?: string;
+    exchangeTimezone?: string;
+    lastKnownAt?: string;
   };
   launchGate: {
     status: "READY" | "BLOCKED";
@@ -432,6 +448,50 @@ export type LiveTradingView = {
     pendingTargetPositions: readonly Record<string, unknown>[];
     riskCenter: LiveRiskCenter;
   };
+  marketSeries?: {
+    schemaVersion?: string;
+    availability: string;
+    source: string;
+    sourceClass?: string;
+    instrument?: string | null;
+    timeframe?: string | null;
+    supportedTimeframes: readonly string[];
+    asOf: string | null;
+    points: readonly {
+      timestamp: string;
+      tradingDate?: string | null;
+      open: number | null;
+      high: number | null;
+      low: number | null;
+      close: number | null;
+      volume: number | null;
+      vwap: number | null;
+      source?: string;
+    }[];
+    page?: { limit: number; hasMore: boolean; nextCursor: string | null };
+    antiLookahead?: boolean;
+    reason?: string;
+  };
+  macroSession?: Record<string, unknown>;
+  reconciliation?: {
+    availability: string;
+    status: string;
+    mismatchCount: number | null;
+    expected: Record<string, unknown> | null;
+    broker: Record<string, unknown> | null;
+    asOf: string | null;
+    reason: string | null;
+    source: string;
+  };
+  performanceR?: {
+    availability: string;
+    sourceType: string;
+    totalR: number | null;
+    dailyR: number | null;
+    drawdownR: number | null;
+    sampleSize: number | null;
+    asOf: string;
+  };
   signals: readonly {
     signalId: string;
     strategyId: string;
@@ -499,12 +559,23 @@ export type LiveTradingView = {
     pnlR: number;
     protectionStatus: "PROTECTED" | "PENDING" | "UNPROTECTED";
   }[];
+  canonicalOrders?: readonly Record<string, unknown>[];
+  canonicalFills?: readonly Record<string, unknown>[];
+  canonicalPositions?: readonly Record<string, unknown>[];
+  legacyHistory?: {
+    sourceClass: "LEGACY_HISTORY";
+    canonical: false;
+    readOnly: true;
+    orderIntentCount: number;
+    orderCount: number;
+    tradeCount: number;
+  };
   providers: readonly {
     providerId: string;
     label: string;
     mode: "SHADOW" | "PAPER" | "LIVE";
     status: "OK" | "DEGRADED" | "DOWN";
-    latencyMs: number;
+    latencyMs: number | null;
     lastHeartbeatAt: string;
   }[];
   incidents: readonly {

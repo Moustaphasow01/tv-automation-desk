@@ -3,11 +3,11 @@ import type { CommandCenterView } from "@/domains/front-api/viewModels";
 import { displayNumber, displayTime, statusTone } from "./mapper";
 import { CommandPanel, EmptyPanelState, PanelStatus } from "./panelPrimitives";
 
-export function IncidentsOperationsPanel({ incidents }: { incidents: CommandCenterView["incidents"] }) {
+export function IncidentsOperationsPanel({ incidents, operations }: { incidents: CommandCenterView["incidents"]; operations: CommandCenterView["operations"] }) {
   return (
     <CommandPanel code="A" title="Incidents & Operations" className="cc-panel--incidents" action={<Link to="/execution/incidents">Voir tout</Link>}>
       {incidents.length ? <div className="cc-table-scroll"><table className="cc-table"><thead><tr><th>Sévérité</th><th>Détecté</th><th>Ressource</th><th>Problème</th><th>Runbook</th><th>Action</th></tr></thead><tbody>{incidents.map((incident) => <tr key={incident.id}><td><PanelStatus tone={statusTone(incident.severity) === "danger" ? "danger" : "warning"}>{incident.severity}</PanelStatus></td><td>{displayTime(incident.detectedAt)}</td><td>{incident.resource}</td><td><Link to={`/operations/incidents/${encodeURIComponent(incident.id)}`}>{incident.title}</Link></td><td>{incident.runbook}</td><td>{incident.action}</td></tr>)}</tbody></table></div> : <EmptyPanelState label="Aucun incident ouvert dans la projection" />}
-      <footer className="cc-incident-stats"><span>Queues: <strong>UNAVAILABLE</strong></span><span>DLQ: <strong>UNAVAILABLE</strong></span><span>Stale feeds: <strong>UNAVAILABLE</strong></span></footer>
+      <footer className="cc-incident-stats"><span>Queues: <strong>{displayNumber(operations.queuedTasks)}</strong></span><span>DLQ: <strong>{displayNumber(operations.dlqItems)}</strong></span><span>Stale feeds: <strong>{displayNumber(operations.staleFeeds)}</strong></span></footer>
     </CommandPanel>
   );
 }

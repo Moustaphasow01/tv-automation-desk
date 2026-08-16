@@ -19,7 +19,7 @@ const golden = {
 };
 
 await mkdir(outputRoot, { recursive: true });
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch(browserLaunchOptions());
 const results = [];
 try {
   for (const scenario of scenarios) {
@@ -63,3 +63,12 @@ await writeFile(reportPath, `${JSON.stringify({ generatedAt: new Date().toISOStr
 console.log(`Live Trading visual QA: ${results.length - failures.length}/${results.length} scenarios passed · ${reportPath}`);
 for (const item of results) console.log(`${item.scenario.name}: overflow=${item.measurement.horizontalOverflow} clipped=${item.measurement.clippedInteractiveCount} panels=${item.measurement.panelCount} immutable=${item.measurement.editablePostRiskCount === 0} gateEnabled=${item.measurement.enabledGateActions} geometry=${item.geometryFailures.length} console=${item.consoleErrors.length}`);
 if (failures.length) process.exitCode = 1;
+
+function browserLaunchOptions() {
+  return {
+    headless: true,
+    ...(process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH
+      ? { executablePath: process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH }
+      : {}),
+  };
+}

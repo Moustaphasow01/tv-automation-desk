@@ -14,7 +14,7 @@ export function CommandCenterHeader({ model }: { model: CommandCenterModel }) {
         <p>Centre de contrôle opérationnel du Trading Desk</p>
       </div>
       <div className="cc-header__divider" aria-hidden="true" />
-      <div className="cc-header__modes" aria-label="Contexte opérationnel">
+      <div className="cc-header__modes" role="region" tabIndex={0} aria-label="Contexte opérationnel">
         <span className="cc-header__field">Environnement:</span>
         <span className="cc-header__select">{environment}<FaChevronDown aria-hidden="true" /></span>
         <ModeChip label="Execution Mode" value={mode.executionMode} tone="warning" />
@@ -27,7 +27,7 @@ export function CommandCenterHeader({ model }: { model: CommandCenterModel }) {
         <span>Market data {mode.marketData.toLowerCase()}</span>
       </div>
       <div className="cc-header__operator">
-        <span><strong>{session?.principal.displayName ?? "UNAVAILABLE"}</strong><small>{session?.principal.roles[0] ?? "UNAVAILABLE"}</small></span>
+        <span><strong>{session?.principal.displayName ?? "Session non authentifiée"}</strong><small>{session?.principal.roles[0] ?? "Lecture seule"}</small></span>
         <FaUserCircle aria-hidden="true" />
         <FaChevronDown aria-hidden="true" />
       </div>
@@ -40,6 +40,6 @@ function ModeChip({ label, value, tone }: { label: string; value: string; tone: 
 }
 
 function releaseLabel(value: string) {
-  if (value === "UNAVAILABLE" || value === "UNKNOWN") return `Release ${value}`;
+  if (value === "UNAVAILABLE" || value === "UNKNOWN") return "Release non publiée";
   return `Release .${value.replace(/^release\.?/i, "")}`;
 }

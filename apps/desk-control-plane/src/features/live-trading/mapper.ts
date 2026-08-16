@@ -24,10 +24,14 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
     mode: runtime.mode,
     freshness: runtime.freshness,
     marketSeries: {
-      availability: marketContract?.availability ?? "UNAVAILABLE",
-      source: marketContract?.source ?? "market.ohlcv",
-      reason: marketContract?.reason || "Le BFF ne publie pas de série OHLCV paginée.",
-      asOf: data.timeSeriesContracts.asOf || meta.asOf,
+      availability: data.marketSeries?.availability ?? marketContract?.availability ?? "UNAVAILABLE",
+      source: data.marketSeries?.source ?? marketContract?.source ?? "market.ohlcv",
+      reason: data.marketSeries?.reason || marketContract?.reason || (data.marketSeries?.points.length ? "" : "Aucune bougie clôturée publiée pour la fenêtre."),
+      asOf: data.marketSeries?.asOf ?? data.timeSeriesContracts.asOf ?? meta.asOf,
+      instrument: data.marketSeries?.instrument ?? null,
+      timeframe: data.marketSeries?.timeframe ?? null,
+      supportedTimeframes: data.marketSeries?.supportedTimeframes ?? [],
+      points: data.marketSeries?.points ?? [],
     },
     strategyInstances: runtime.activeStrategyInstances,
     latestSignal,
@@ -43,24 +47,30 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
           : "Aucun OrderIntent en attente de confirmation.",
     provider: data.providers[0] ?? null,
     reconciliation: {
-      status: "UNAVAILABLE",
-      detail: "La vue Live ne publie pas encore l'état expected vs broker. Aucune synchronisation n'est supposée.",
-      asOf: meta.asOf,
+      status: data.reconciliation?.status ?? "UNAVAILABLE",
+      detail: data.reconciliation?.reason || `${data.reconciliation?.mismatchCount ?? "—"} divergence(s) autoritaire(s).`,
+      asOf: data.reconciliation?.asOf ?? meta.asOf,
+      expected: data.reconciliation?.expected ?? null,
+      broker: data.reconciliation?.broker ?? null,
+      mismatchCount: data.reconciliation?.mismatchCount ?? null,
     },
     performance: {
-      availability: performanceContract?.availability ?? "UNAVAILABLE",
-      totalR: null,
-      drawdownR: performanceContract?.availability === "KNOWN" || performanceContract?.availability === "PARTIAL" ? data.summary.liveDrawdownR : null,
+      availability: data.performanceR?.availability ?? performanceContract?.availability ?? "UNAVAILABLE",
+      totalR: data.performanceR?.totalR ?? null,
+      drawdownR: data.performanceR?.drawdownR ?? null,
       reason: performanceContract?.reason || "Aucune série de performance live officielle n'est disponible.",
+      sourceType: data.performanceR?.sourceType ?? "NONE",
+      sampleSize: data.performanceR?.sampleSize ?? null,
     },
   };
 }
 
 export function liveTone(value: string): LiveTone {
   const status = value.trim().toUpperCase();
-  if (["OK", "READY", "KNOWN", "LIVE", "FRESH", "PASS", "FILLED", "CLOSED", "ACTIVE"].includes(status)) return "success";
-  if (["REJECTED", "FAILED", "BLOCKED", "DOWN", "BREACH", "OPEN", "DISCONNECTED"].includes(status)) return "danger";
-  if (["WATCH", "WAITING", "WAITING_OPERATOR", "PARTIAL", "STALE", "DEGRADED", "UNAVAILABLE", "UNKNOWN", "HALF_OPEN"].some((item) => status.includes(item))) return "warning";
+  if (["OK", "READY", "KNOWN", "LIVE", "FRESH", "PASS", "FILLED", "ACTIVE"].includes(status)) return "success";
+  if (["REJECTED", "FAILED", "BLOCKED", "DOWN", "BREACH", "OPEN", "DISCONNECTED", "UNAVAILABLE"].includes(status)) return "danger";
+  if (["CONNECTED_EMPTY", "DISABLED_BY_POLICY", "NOT_APPLICABLE_CURRENT_MODE", "MARKET_CLOSED", "LAST_KNOWN", "CLOSED"].includes(status)) return "info";
+  if (["WATCH", "WAITING", "WAITING_OPERATOR", "PARTIAL", "STALE", "DEGRADED", "UNKNOWN", "HALF_OPEN"].some((item) => status.includes(item))) return "warning";
   return "info";
 }
 

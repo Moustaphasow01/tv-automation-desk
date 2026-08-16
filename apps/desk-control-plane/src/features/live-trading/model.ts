@@ -10,7 +10,16 @@ export type LiveTradingModel = {
   truth: { label: string; tone: LiveTone; detail: string };
   mode: LiveTradingView["canonicalRuntime"]["mode"];
   freshness: LiveTradingView["canonicalRuntime"]["freshness"];
-  marketSeries: { availability: string; source: string; reason: string; asOf: string };
+  marketSeries: {
+    availability: string;
+    source: string;
+    reason: string;
+    asOf: string;
+    instrument: string | null;
+    timeframe: string | null;
+    supportedTimeframes: readonly string[];
+    points: NonNullable<LiveTradingView["marketSeries"]>["points"];
+  };
   strategyInstances: LiveTradingView["canonicalRuntime"]["activeStrategyInstances"];
   latestSignal: LiveTradingView["signals"][number] | null;
   latestContextDecision: LiveTradingView["canonicalRuntime"]["aiContextGate"][number] | null;
@@ -18,8 +27,8 @@ export type LiveTradingModel = {
   gateActions: readonly HumanGateAction[];
   gateBlockedReason: string;
   provider: LiveTradingView["providers"][number] | null;
-  reconciliation: { status: string; detail: string; asOf: string };
-  performance: { availability: string; totalR: number | null; drawdownR: number | null; reason: string };
+  reconciliation: { status: string; detail: string; asOf: string; expected: Record<string, unknown> | null; broker: Record<string, unknown> | null; mismatchCount: number | null };
+  performance: { availability: string; totalR: number | null; drawdownR: number | null; reason: string; sourceType: string; sampleSize: number | null };
 };
 
 export type LiveTradingEnvelope = ViewEnvelope<LiveTradingView>;

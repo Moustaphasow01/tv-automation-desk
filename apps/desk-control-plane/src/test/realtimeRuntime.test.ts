@@ -95,7 +95,31 @@ describe("front realtime event runtime", () => {
     expect(gap.sequenceGapCount).toBe(1);
     expect(unrelatedAggregate.sequenceGapCount).toBe(1);
     expect(noSequence.sequenceGapCount).toBe(1);
-    expect(noSequence.lastSequenceByAggregate["order-intent-1"]).toBe(7);
+    expect(noSequence.lastSequenceByAggregate["OrderIntent:order-intent-1"]).toBe(7);
+  });
+
+  it("isolates sequence tracking by aggregate type as well as aggregate id", () => {
+    const intent = reduceRealtimeEvent(createRealtimeEventState(), {
+      ...eventBase,
+      eventId: "evt_shared_intent",
+      aggregateId: "shared-1",
+      aggregateType: "OrderIntent",
+      eventType: "order_intent.created",
+      sequence: 8,
+    });
+    const signal = reduceRealtimeEvent(intent, {
+      ...eventBase,
+      eventId: "evt_shared_signal",
+      aggregateId: "shared-1",
+      aggregateType: "StrategySignal",
+      eventType: "strategy.signal.created",
+      sequence: 1,
+    });
+
+    expect(signal.outOfOrderCount).toBe(0);
+    expect(signal.sequenceGapCount).toBe(0);
+    expect(signal.lastSequenceByAggregate["OrderIntent:shared-1"]).toBe(8);
+    expect(signal.lastSequenceByAggregate["StrategySignal:shared-1"]).toBe(1);
   });
 
   it("keeps invalid messages visible in runtime counters", () => {
@@ -106,6 +130,22 @@ describe("front realtime event runtime", () => {
   });
 
   it("maps realtime events to the BFF views that must be refreshed", () => {
+    expect(
+      frontViewNamesForRealtimeEvent({
+        ...eventBase,
+        eventId: "evt_risk_canonical",
+        eventType: "risk.decision.created",
+        payload: {}
+      })
+    ).toEqual(expect.arrayContaining(["command-center", "live-trading", "portfolio"]));
+    expect(
+      frontViewNamesForRealtimeEvent({
+        ...eventBase,
+        eventId: "evt_human_gate",
+        eventType: "human_gate.state_changed",
+        payload: {}
+      })
+    ).toEqual(expect.arrayContaining(["command-center", "live-trading", "execution-reconciliation"]));
     expect(
       frontViewNamesForRealtimeEvent({
         ...eventBase,

@@ -24,7 +24,12 @@ const scenarios = [
 ];
 
 await mkdir(outputRoot, { recursive: true });
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  ...(process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH
+    ? { executablePath: process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH }
+    : {}),
+});
 const results = [];
 try {
   for (const scenario of scenarios) {

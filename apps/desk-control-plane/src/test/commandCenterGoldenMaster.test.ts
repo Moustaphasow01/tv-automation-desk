@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toCommandCenterModel } from "@/features/command-center/mapper";
+import { toCommandCenterModel, truthTone } from "@/features/command-center/mapper";
 import type { CommandCenterView } from "@/domains/front-api/viewModels";
 
 describe("Command Center golden master", () => {
@@ -29,6 +29,14 @@ describe("Command Center golden master", () => {
     expect(data.humanGate.rows[0].status).toBe("AWAITING_MANUAL_CONFIRMATION");
     expect(data.humanGate.rows[0].allowedActions).toEqual([]);
   });
+
+  it("distinguishes an intentional empty or policy-disabled source from an outage", () => {
+    expect(truthTone("CONNECTED_EMPTY")).toBe("info");
+    expect(truthTone("DISABLED_BY_POLICY")).toBe("info");
+    expect(truthTone("NOT_APPLICABLE_CURRENT_MODE")).toBe("info");
+    expect(truthTone("UNAVAILABLE")).toBe("danger");
+    expect(truthTone("AVAILABLE", true)).toBe("warning");
+  });
 });
 
 function fixture(): CommandCenterView {
@@ -42,9 +50,10 @@ function fixture(): CommandCenterView {
     research: { available: false, hypothesisCount: 0, experimentCount: 0, runCount: null, candidateCount: 0, activeWorkers: null, expectedWorkers: null, datasetCount: null, artifactCount: null, rows: [] },
     signals: { available: true, rows: [] },
     humanGate: { available: true, rows: [{ orderIntentId: "intent-1", instrument: "MNQ", side: "BUY", quantity: 1, executionMode: "SEMI_MANUAL", status: "AWAITING_MANUAL_CONFIRMATION", allowedActions: [], ageSeconds: 2 }] },
-    provider: { available: true, mode: "PAPER", circuitBreaker: "UNAVAILABLE", health: "HEALTHY", ackLatencyMs: null, mismatchCount: null, events: [] },
+    provider: { available: true, mode: "PAPER", circuitBreaker: "NOT_APPLICABLE_CURRENT_MODE", health: "HEALTHY", ackLatencyMs: null, mismatchCount: null, events: [] },
     performance: { available: false, pnlR: null, trades: null, maxDrawdownR: null, curve: [] },
     incidents: [],
+    operations: { availability: "KNOWN", queuedTasks: 0, dlqItems: 0, staleFeeds: 0 },
     assistant: { available: true, activeWorkers: 0, expectedWorkers: null, runningTasks: 0, latest: [] },
     audit: [],
   };

@@ -16,7 +16,7 @@ const defaultRoutes = [
 const routes = process.env.DESK_A11Y_ROUTES
   ? process.env.DESK_A11Y_ROUTES.split(",").map((route) => route.trim()).filter(Boolean)
   : defaultRoutes;
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch(browserLaunchOptions());
 const findings = [];
 const routeConcurrency = Math.max(1, Number(process.env.DESK_A11Y_ROUTE_CONCURRENCY || 1));
 
@@ -30,6 +30,8 @@ try {
         try {
           await page.goto(`${baseUrl}/#/${route}`, { waitUntil: "domcontentloaded" });
           await page.locator("#main-content > *").first().waitFor({ state: "visible", timeout: 45_000 });
+          const readySelector = route === "command-center" ? ".cc-page" : route === "live" ? ".lt-page" : null;
+          if (readySelector) await page.locator(readySelector).waitFor({ state: "visible", timeout: 45_000 });
           const result = await new AxeBuilder({ page }).analyze();
           findings.push({ viewport: viewport.name, route, violations: result.violations });
         } catch (error) {
@@ -53,4 +55,13 @@ console.log(`Axe: ${findings.length} audits · ${blockers.length} blocker(s) ser
 if (blockers.length) {
   blockers.forEach(({ viewport, route, violation }) => console.error(`${violation.impact} ${viewport} /${route} ${violation.id}: ${violation.help}`));
   process.exitCode = 1;
+}
+
+function browserLaunchOptions() {
+  return {
+    headless: true,
+    ...(process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH
+      ? { executablePath: process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH }
+      : {}),
+  };
 }

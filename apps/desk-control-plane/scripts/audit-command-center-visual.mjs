@@ -30,7 +30,7 @@ const rect = (value) => value ? {
 } : null;
 
 await mkdir(outputRoot, { recursive: true });
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch(browserLaunchOptions());
 const results = [];
 try {
   for (const scenario of scenarios) {
@@ -112,3 +112,12 @@ for (const result of results) {
   console.log(`${result.scenario.name}: overflow=${result.measurement.horizontalOverflow} clipped=${result.measurement.clippedInteractiveCount} panels=${result.measurement.panelCount} geometry=${result.geometryFailures.length} console=${result.consoleErrors.length}`);
 }
 if (failures.length) process.exitCode = 1;
+
+function browserLaunchOptions() {
+  return {
+    headless: true,
+    ...(process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH
+      ? { executablePath: process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH }
+      : {}),
+  };
+}

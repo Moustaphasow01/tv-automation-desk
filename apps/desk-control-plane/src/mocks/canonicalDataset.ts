@@ -875,15 +875,16 @@ export const commandCenterView: ViewEnvelope<CommandCenterView> = {
     humanGate: { available: false, rows: [] },
     provider: {
       available: false,
-      mode: "UNAVAILABLE",
-      circuitBreaker: "UNAVAILABLE",
-      health: "UNAVAILABLE",
+      mode: "DISABLED_BY_POLICY",
+      circuitBreaker: "NOT_APPLICABLE_CURRENT_MODE",
+      health: "DISABLED_BY_POLICY",
       ackLatencyMs: null,
       mismatchCount: null,
       events: []
     },
     performance: { available: false, pnlR: null, trades: null, maxDrawdownR: null, curve: [] },
     incidents: [],
+    operations: { availability: "KNOWN", queuedTasks: 0, dlqItems: 0, staleFeeds: 0 },
     assistant: { available: false, activeWorkers: null, expectedWorkers: null, runningTasks: null, latest: [] },
     audit: []
   }

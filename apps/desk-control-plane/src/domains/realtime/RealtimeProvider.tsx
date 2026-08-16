@@ -1,6 +1,7 @@
-import { createContext, type ReactNode, useEffect, useMemo, useState } from "react";
+import { createContext, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { DeskAppConfig } from "@/app/appConfig";
+import type { FrontViewName } from "@/shared/contracts";
 import { createCommandRuntimeState, reduceCommandEvent, type CommandRuntimeState } from "@/domains/realtime/commandRuntime";
 import {
   createRealtimeEventState,
@@ -18,6 +19,7 @@ export type RealtimeStatus = {
   latestError: string | null;
   events: RealtimeEventState;
   commands: CommandRuntimeState;
+  resyncing: boolean;
 };
 
 export const RealtimeContext = createContext<RealtimeStatus | null>(null);
@@ -34,8 +36,13 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
     "CONNECTING"
   );
   const [latestError, setLatestError] = useState<string | null>(null);
-  const [events, setEvents] = useState<RealtimeEventState>(() => createRealtimeEventState());
+  const [events, setEvents] = useState<RealtimeEventState>(() => loadPersistedRealtimeState(config));
   const [commands, setCommands] = useState<CommandRuntimeState>(() => createCommandRuntimeState());
+  const [resyncing, setResyncing] = useState(false);
+  const connectionStatusRef = useRef<RealtimeTransportStatus>("CONNECTING");
+  const initialEventsRef = useRef(events);
+  const pendingInvalidationsRef = useRef(new Set<FrontViewName>());
+  const invalidationTimerRef = useRef<number | null>(null);
   const transport = useMemo(() => createDeskTransport(config), [config]);
 
   useEffect(() => {
@@ -44,25 +51,70 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
   }, []);
 
   useEffect(() => {
+    const scheduleViewInvalidations = (viewNames: readonly FrontViewName[]) => {
+      viewNames.forEach((viewName) => pendingInvalidationsRef.current.add(viewName));
+      if (invalidationTimerRef.current !== null) return;
+      invalidationTimerRef.current = window.setTimeout(() => {
+        const pending = [...pendingInvalidationsRef.current];
+        pendingInvalidationsRef.current.clear();
+        invalidationTimerRef.current = null;
+        pending.forEach((viewName) => {
+          void queryClient.invalidateQueries({ queryKey: ["front-view", viewName] });
+        });
+      }, 100);
+    };
     const subscription = transport.subscribeEvents({
       onEvent(event: EventEnvelope) {
-        setEvents((current) => reduceRealtimeEvent(current, event));
-        setCommands((current) => reduceCommandEvent(current, event));
-        for (const viewName of frontViewNamesForRealtimeEvent(event)) {
-          void queryClient.invalidateQueries({ queryKey: ["front-view", viewName] });
+        if (event.eventType === "desk.resync_required") {
+          clearPersistedRealtimeCursor(config);
+          setResyncing(true);
+          const affected = frontViewNamesForRealtimeEvent(event);
+          void Promise.all(affected.map((viewName) => queryClient.refetchQueries({ queryKey: ["front-view", viewName] })))
+            .finally(() => {
+              setEvents(createRealtimeEventState());
+              setResyncing(false);
+            });
+          return;
         }
+        setEvents((current) => {
+          const next = reduceRealtimeEvent(current, event);
+          persistRealtimeCursor(config, next.lastEventId);
+          if (next.sequenceGapCount > current.sequenceGapCount) {
+            setResyncing(true);
+            const affected = frontViewNamesForRealtimeEvent(event);
+            void Promise.all(affected.map((viewName) => queryClient.refetchQueries({ queryKey: ["front-view", viewName] })))
+              .finally(() => setResyncing(false));
+          }
+          return next;
+        });
+        setCommands((current) => reduceCommandEvent(current, event));
+        scheduleViewInvalidations(frontViewNamesForRealtimeEvent(event));
         setLatestError(null);
       },
       onStatus(status) {
+        const previous = connectionStatusRef.current;
+        connectionStatusRef.current = status;
         setConnectionStatus(status);
+        if (status === "OPEN" && previous === "RECONNECTING") {
+          setResyncing(true);
+          void Promise.all([
+            queryClient.refetchQueries({ queryKey: ["front-view", "command-center"] }),
+            queryClient.refetchQueries({ queryKey: ["front-view", "live-trading"] }),
+          ]).finally(() => setResyncing(false));
+        }
       },
       onError(error) {
         setLatestError(error.message);
       }
-    });
+    }, initialEventsRef.current);
 
-    return () => subscription.close();
-  }, [queryClient, transport]);
+    return () => {
+      subscription.close();
+      if (invalidationTimerRef.current !== null) window.clearTimeout(invalidationTimerRef.current);
+      invalidationTimerRef.current = null;
+      pendingInvalidationsRef.current.clear();
+    };
+  }, [config, queryClient, transport]);
 
   const value = useMemo<RealtimeStatus>(
     () => ({
@@ -75,10 +127,49 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
       connectionStatus,
       latestError,
       events,
-      commands
+      commands,
+      resyncing
     }),
-    [commands, connectionStatus, events, latestError, now]
+    [commands, connectionStatus, events, latestError, now, resyncing]
   );
 
   return <RealtimeContext.Provider value={value}>{children}</RealtimeContext.Provider>;
+}
+
+const REALTIME_CURSOR_VERSION = 1;
+
+export function realtimeCursorStorageKey(config: DeskAppConfig, origin = typeof window === "undefined" ? "server" : window.location.origin): string {
+  return `desk-vnext:realtime-cursor:v${REALTIME_CURSOR_VERSION}:${origin}:${config.frontApiBaseUrl}`;
+}
+
+export function loadPersistedRealtimeState(config: DeskAppConfig): RealtimeEventState {
+  const empty = createRealtimeEventState();
+  if (typeof window === "undefined" || !window.localStorage) return empty;
+  try {
+    const raw = window.localStorage.getItem(realtimeCursorStorageKey(config));
+    const value = raw ? JSON.parse(raw) as { eventId?: unknown } : null;
+    return typeof value?.eventId === "string" && value.eventId
+      ? { ...empty, lastEventId: value.eventId }
+      : empty;
+  } catch {
+    return empty;
+  }
+}
+
+export function persistRealtimeCursor(config: DeskAppConfig, eventId: string | null): void {
+  if (!eventId || typeof window === "undefined" || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(realtimeCursorStorageKey(config), JSON.stringify({ eventId }));
+  } catch {
+    // Cursor persistence is best-effort and contains no credential or payload.
+  }
+}
+
+export function clearPersistedRealtimeCursor(config: DeskAppConfig): void {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    window.localStorage.removeItem(realtimeCursorStorageKey(config));
+  } catch {
+    // A blocked storage API must not break the read-only realtime surface.
+  }
 }

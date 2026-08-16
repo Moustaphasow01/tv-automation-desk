@@ -84,7 +84,7 @@ function createBffTransport(config: DeskAppConfig): DeskTransport {
       const parseMessage = (data: string) => {
         try {
           const event = assertEventEnvelope(JSON.parse(data));
-          lastEventId = event.eventId;
+          lastEventId = event.eventType === "desk.resync_required" ? null : event.eventId;
           handlers.onEvent(event);
         } catch (error) {
           handlers.onError?.(error instanceof Error ? error : new Error("BFF_EVENTS_INVALID_MESSAGE"));

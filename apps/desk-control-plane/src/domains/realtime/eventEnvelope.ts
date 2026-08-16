@@ -18,6 +18,21 @@ export const FRONT_EVENT_TYPES = [
   "reconciliation.completed",
   "command.status.changed",
   "jarvis.message.created"
+  ,"strategy.evaluation.completed"
+  ,"strategy.signal.created"
+  ,"ai_context.decision.created"
+  ,"portfolio.arbitration.completed"
+  ,"risk.decision.created"
+  ,"target_position.created"
+  ,"order_intent.created"
+  ,"human_gate.created"
+  ,"human_gate.state_changed"
+  ,"provider.command.created"
+  ,"provider.event.received"
+  ,"reconciliation.updated"
+  ,"research.run.updated"
+  ,"assistant.answer.created"
+  ,"desk.resync_required"
 ] as const;
 
 export type FrontEventType = (typeof FRONT_EVENT_TYPES)[number] | (string & {});
@@ -134,7 +149,9 @@ export function reduceRealtimeEvent(
     };
   }
 
-  const sequenceScope = event.aggregateId || "__stream__";
+  const sequenceScope = event.aggregateId
+    ? `${event.aggregateType || "unknown"}:${event.aggregateId}`
+    : "__stream__";
   const previousSequence = state.lastSequenceByAggregate[sequenceScope];
   const isOutOfOrder = typeof event.sequence === "number" && typeof previousSequence === "number" && event.sequence <= previousSequence;
   const hasSequenceGap = typeof event.sequence === "number" && typeof previousSequence === "number" && event.sequence > previousSequence + 1;
@@ -174,13 +191,25 @@ export function frontViewNamesForRealtimeEvent(event: EventEnvelope): readonly F
     case "strategy.lifecycle.changed":
       return ["command-center", "strategy-center", "strategy-deployments", "performance-strategies"];
     case "signal.created":
+    case "strategy.evaluation.completed":
+    case "strategy.signal.created":
+    case "ai_context.decision.created":
     case "arbitration.completed":
+    case "portfolio.arbitration.completed":
     case "risk.warning.created":
+    case "risk.decision.created":
+    case "target_position.created":
       return ["command-center", "live-trading", "live-plan", "live-timeline", "sessions", "portfolio"];
     case "order.status.changed":
+    case "order_intent.created":
+    case "human_gate.created":
+    case "human_gate.state_changed":
+    case "provider.command.created":
+    case "provider.event.received":
     case "fill.created":
     case "position.updated":
     case "reconciliation.completed":
+    case "reconciliation.updated":
       return ["command-center", "live-trading", "live-plan", "live-timeline", "execution-reconciliation", "portfolio", "performance-overview", "performance-calendar", "performance-trades"];
     case "provider.health.changed":
     case "incident.created":
@@ -188,7 +217,12 @@ export function frontViewNamesForRealtimeEvent(event: EventEnvelope): readonly F
     case "command.status.changed":
       return ["command-center"];
     case "jarvis.message.created":
+    case "assistant.answer.created":
       return ["command-center", "jarvis-workspace"];
+    case "research.run.updated":
+      return ["command-center", "research-lab", "research-experiments", "research-candidates"];
+    case "desk.resync_required":
+      return ["command-center", "live-trading", "live-plan", "live-timeline", "sessions", "execution-reconciliation", "portfolio", "operations-observability"];
     default:
       return ["command-center"];
   }

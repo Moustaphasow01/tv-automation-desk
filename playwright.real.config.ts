@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const executablePath = process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH;
+
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "operations-real-stack.spec.ts",
@@ -13,6 +15,7 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:8080",
     browserName: "chromium",
+    ...(executablePath ? { launchOptions: { executablePath } } : {}),
     serviceWorkers: "block",
     viewport: { width: 1280, height: 900 },
     trace: "retain-on-failure",

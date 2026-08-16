@@ -8,7 +8,7 @@ export function toCommandCenterModel(envelope: ViewEnvelope<CommandCenterView>):
     source: envelope.data,
     kpis: kpiProjection(envelope.data),
     truthLabel: envelope.meta.availability ?? (envelope.meta.stale ? "STALE" : "AVAILABLE"),
-    truthTone: envelope.meta.stale || envelope.meta.availability === "PARTIAL" ? "warning" : "success",
+    truthTone: truthTone(envelope.meta.availability, envelope.meta.stale),
   };
 }
 
@@ -73,6 +73,15 @@ export function statusTone(value: string): CommandCenterTone {
   return "info";
 }
 
+export function truthTone(availability: string | undefined, stale = false): CommandCenterTone {
+  if (stale) return "warning";
+  const status = String(availability || "UNKNOWN").toUpperCase();
+  if (["AVAILABLE", "KNOWN", "HEALTHY"].includes(status)) return "success";
+  if (["CONNECTED_EMPTY", "DISABLED_BY_POLICY", "NOT_APPLICABLE_CURRENT_MODE", "MARKET_CLOSED", "LAST_KNOWN"].includes(status)) return "info";
+  if (["UNAVAILABLE", "FAILED", "DOWN"].includes(status)) return "danger";
+  return "warning";
+}
+
 export function displayNumber(value: number | null) {
   return value === null ? "—" : new Intl.NumberFormat("fr-FR").format(value);
 }
@@ -98,9 +107,9 @@ function nullableTone(value: number | null): CommandCenterTone {
 function healthLabel(value: string) {
   if (value === "NOMINAL") return "Healthy";
   if (value === "DEGRADED") return "Degraded";
-  return value === "STOPPED" ? "Stopped" : "Unavailable";
+  return value === "STOPPED" ? "Stopped" : "État non publié";
 }
 
 function providerSafetyLabel(value: string) {
-  return value === "NO_BROKER_SIDE_EFFECT" ? "No broker\nside effect" : "Unavailable";
+  return value === "NO_BROKER_SIDE_EFFECT" ? "No broker\nside effect" : "Politique non publiée";
 }

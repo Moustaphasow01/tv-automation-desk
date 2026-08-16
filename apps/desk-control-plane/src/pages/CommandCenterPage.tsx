@@ -62,7 +62,7 @@ export function CommandCenterPage() {
           <ResearchPerformancePanel performance={data.performance} />
         </section>
         <section className="cc-grid cc-grid--bottom" aria-label="Incidents, assistant et audit">
-          <IncidentsOperationsPanel incidents={data.incidents} />
+          <IncidentsOperationsPanel incidents={data.incidents} operations={data.operations} />
           <JarvisPanel assistant={data.assistant} />
           <AuditTimelinePanel audit={data.audit} />
         </section>

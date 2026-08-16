@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toLiveTradingModel } from "@/features/live-trading/mapper";
+import { liveTone, toLiveTradingModel } from "@/features/live-trading/mapper";
 import type { LiveTradingView } from "@/domains/front-api/viewModels";
 import { liveTradingView } from "@/mocks/canonicalDataset";
 import type { ViewEnvelope } from "@/shared/contracts";
@@ -30,6 +30,14 @@ describe("Live Trading golden master", () => {
     expect(model.gateActions.map((action) => action.action)).toEqual(["CONFIRM", "REJECT"]);
     expect(model.mode.executionMode).toBe("SEMI_MANUAL");
     expect(model.mode.ackIsFill).toBe(false);
+  });
+
+  it("renders market closure and policy disablement as truthful neutral states", () => {
+    expect(liveTone("MARKET_CLOSED")).toBe("info");
+    expect(liveTone("DISABLED_BY_POLICY")).toBe("info");
+    expect(liveTone("CONNECTED_EMPTY")).toBe("info");
+    expect(liveTone("UNAVAILABLE")).toBe("danger");
+    expect(liveTone("STALE")).toBe("warning");
   });
 });
 
