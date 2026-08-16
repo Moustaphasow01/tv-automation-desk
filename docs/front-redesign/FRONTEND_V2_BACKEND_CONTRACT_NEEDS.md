@@ -145,3 +145,125 @@ Security requirement: aucun MFA simulé ou secret stocké dans le Front
 Frontend behavior if unavailable: action step-up bloquée et expliquée
 Blocking: YES lorsque l'action exige un step-up
 ```
+
+## CN-EXE-009
+
+**État observé le 2026-08-16 :** le repository lit désormais le schéma canonique et les tests BFF passent. Le snapshot local ne remonte plus `SQLSTATE 42703`, mais la source `execution` est actuellement `UNAVAILABLE` pour timeout de connexion. La correction de schéma est donc intégrée ; la certification opérationnelle reste à refaire lorsque PostgreSQL est stable.
+
+```text
+CONTRACT NEED
+ID: CN-EXE-009
+Screen: Command Center / OrderIntent / Human Gate / Provider Runtime
+Purpose: rendre la projection d'exécution compatible avec le schéma PostgreSQL canonique réellement déployé.
+
+Backend object: broker execution overview repository
+Required fields: colonnes canoniques portfolio_risk_decisions (requested_size, approved_size, reason_codes, limits_applied, risk_budget_id, risk_rule_set_version, risk_evaluation_hash, payload)
+Required statuses: enums domaine exacts
+Required allowedActions: inchangé ; backend-driven seulement
+Realtime requirement: aucun besoin supplémentaire
+Security requirement: aucune synthèse locale de Risk ou d'allowedActions pour contourner l'échec
+Frontend behavior if unavailable: Execution Mode, Human Gate et Provider restent UNKNOWN / UNAVAILABLE et non actionnables
+Blocking: YES pour la certification du cycle semi-manuel
+Observed failure: SQLSTATE 42703 ; la requête lit des colonnes historiques absentes (requested, authorized, trade_risk, portfolio_before/after, limits, nearest_limit, breaches, risk_economics)
+```
+
+## CN-DATA-001
+
+**État observé le 2026-08-16 :** la projection Live publie `marketData=STALE`, `meta.stale=true` et un `asOf` cohérent. L'incohérence `FRESH` avec âge très ancien n'est pas reproduite. Le besoin reste surveillé comme garde de non-régression.
+
+```text
+CONTRACT NEED
+ID: CN-DATA-001
+Screen: Command Center / Market & Data Freshness
+Purpose: garantir qu'un statut FRESH reste cohérent avec l'âge réel des flux centraux.
+
+Backend object: market data readiness projection
+Required fields: status, asOf, ageSeconds, thresholdSeconds, reasonCodes, source
+Required statuses: FRESH, STALE, UNAVAILABLE ou enums publiés
+Required allowedActions: aucun
+Realtime requirement: invalidation lors du franchissement du seuil
+Security requirement: n/a
+Frontend behavior if unavailable: UNAVAILABLE ; le frontend ne recalcule pas une fraîcheur officielle
+Blocking: YES pour afficher FRESH comme vérité opérateur
+Observed inconsistency: statut FRESH publié alors que l'âge des flux centraux dépasse 220 000 secondes dans l'environnement local observé.
+```
+
+## LT-DATA-001
+
+```text
+FRONT CONTRACT QUESTION
+ID: LT-DATA-001
+Screen: Live Trading
+Section: Instrument Chart / Market Context
+User question: quelles séries réelles doivent alimenter les chandeliers, VWAP, volume, niveaux et sparklines ?
+
+Backend object: paged canonical market time series
+Endpoint: à publier sous /front-api/v1, référencé par timeSeriesContracts.seriesId=market.ohlcv et market.vwap
+Fields found: seriesId, availability, source, unit, sampling, granularity, maxPoints, cursor, schema
+Missing field: endpoint/route résoluble, points[], nextCursor, instrument, timeframe, sourceAsOf, sourceRevision
+Expected enum: availability existante et timeframes backend
+AllowedActions: aucune
+Realtime requirement: invalidation ou append avec eventId/sequence/cursor ; resync en cas de gap
+Frontend behavior if unavailable: chart quadrillé avec UNAVAILABLE, raison/source/asOf ; aucun chandelier, niveau ou sparkline à zéro
+Blocking: NO pour la sûreté du cockpit ; YES pour le chart live fonctionnel
+```
+
+## LT-EXE-001
+
+```text
+FRONT CONTRACT QUESTION
+ID: LT-EXE-001
+Screen: Live Trading
+Section: Position Reconciliation
+User question: la position théorique correspond-elle à la position broker et quelles divergences restent ouvertes ?
+
+Backend object: live order-intent reconciliation projection
+Endpoint: GET /front-api/v1/views/live-trading ou drill-down canonique lié à l'OrderIntent
+Fields found: contrat générique CN-EXE-005 ; aucune projection expected vs broker dans le snapshot Live courant
+Missing field: reconciliationId, status, expected{}, broker{}, mismatches[], checkedAt, source, revision, correlationId
+Expected enum: enums backend exacts ; UNKNOWN_STATUS toléré côté Front
+AllowedActions: remédiations explicites backend uniquement
+Realtime requirement: mismatch persistant jusqu'à événement de résolution et refetch
+Frontend behavior if unavailable: colonnes THEORETICAL/BROKER et résultat marqués UNAVAILABLE ; jamais IN SYNC par défaut
+Blocking: YES pour certifier la fin du lifecycle provider
+```
+
+## LT-PERF-001
+
+```text
+FRONT CONTRACT QUESTION
+ID: LT-PERF-001
+Screen: Live Trading
+Section: Research / Performance (Today)
+User question: quelle performance en R est officiellement publiée pour la séance et selon quelle nature de source ?
+
+Backend object: paged live R-equity series
+Endpoint: à publier sous /front-api/v1, référencé par timeSeriesContracts.seriesId=performance.r_equity
+Fields found: contract schema timestamp/cumulativeR/drawdownR, availability, source
+Missing field: points[], nature (RESEARCH/THEORETICAL/SHADOW/PAPER/BROKER_CONFIRMED), nextCursor, asOf, revision
+Expected enum: nature de performance backend
+AllowedActions: aucune
+Realtime requirement: append ordonné et resync sur gap
+Frontend behavior if unavailable: valeurs et courbe UNAVAILABLE ; aucun R calculé localement
+Blocking: NO pour la sûreté ; YES pour la visualisation de performance live
+```
+
+## LT-RT-001
+
+```text
+FRONT CONTRACT QUESTION
+ID: LT-RT-001
+Screen: Live Trading
+Section: Event Timeline / Provider Runtime
+User question: comment reprendre sans perte ni doublon le lifecycle Signal → Reconciliation après une coupure SSE ?
+
+Backend object: realtime event envelope
+Endpoint: /front-api/v1/realtime
+Fields found: cursor recovery existante et contrat général CN-EXE-007
+Missing field: garantie publiée pour sequence monotone par aggregate, gap marker, aggregateId/type sur chaque événement Live
+Expected enum: eventType backend exact ; code inconnu affiché comme UNKNOWN
+AllowedActions: aucune
+Realtime requirement: eventId, cursor, aggregateId, aggregateType, sequence, revision, occurredAt, receivedAt, correlationId, causationId
+Frontend behavior if unavailable: snapshot/refetch, déduplication connue, état RECONNECTING ; aucune transition provider inventée
+Blocking: NO pour lecture snapshot ; YES pour certification temps réel
+```

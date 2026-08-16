@@ -34,4 +34,26 @@ L'installation ne modifie aucun écran ni comportement métier. Le premier audit
 
 ## Dérogations
 
-Aucune dérogation UI/UX n'est accordée par ce document.
+### OV-CC-001 — densité typographique du golden master Command Center
+
+- **Règle concernée :** `UXR-0161`.
+- **Périmètre strict :** `apps/desk-control-plane/src/features/command-center/command-center.css`, profil desktop workstation uniquement.
+- **Décision produit source :** maquette et spécification Command Center explicitement approuvées comme référence normative le 2026-08-15 ; cette spécification impose une reproduction fidèle de la densité et prévaut sur le référentiel général pour ce rendu.
+- **Écart borné :** microcopy, labels de statut, cellules compactes et métadonnées peuvent utiliser 6–9 px sur le golden master desktop. Le titre, les valeurs KPI et les informations décisionnelles principales restent au-dessus de ce seuil.
+- **Compensations obligatoires :** contraste Axe sans blocker serious/critical, chiffres tabulaires, états non dépendants de la couleur seule, version responsive refluée, absence de clipping, zoom navigateur non neutralisé et détails accessibles par drill-down.
+- **Preuves :** `reports/ui-ux/command-center/command-center-visual-qa.json`, `reports/ui-ux/front-v2-axe.json`, `design-qa.md`.
+- **Expiration/révision :** à réexaminer si la maquette normative change, si une étude opérateur constate une difficulté de lecture, ou avant certification WCAG complète.
+
+Cette dérogation ne désactive ni ne renumérote `UXR-0161`. Le scanner continue de publier les signaux correspondants afin qu'ils restent visibles. Elle n'autorise aucune taille inférieure à 10 px sur les autres écrans ni sur une nouvelle tranche sans décision séparée.
+
+### OV-LT-001 — densité typographique du golden master Live Trading
+
+- **Règle concernée :** `UXR-0161`.
+- **Périmètre strict :** `apps/desk-control-plane/src/features/live-trading/live-trading.css`, profil desktop workstation uniquement.
+- **Décision produit source :** maquette et spécification Live Trading approuvées comme référence normative le 2026-08-16 ; la grille 1 672 × 941, les treize panneaux simultanément visibles et leur hiérarchie imposent la densité observée.
+- **Écart borné :** microcopy, métadonnées, entêtes de tableaux compacts, badges et légende lifecycle peuvent utiliser 5–9 px sur le golden master desktop. Le titre, la recherche et les termes opérateur critiques gardent un niveau supérieur ; les actions Human Gate conservent une cible d'au moins 32 px.
+- **Compensations obligatoires :** reflow mobile dédié, zoom navigateur non neutralisé, résumé textuel du chart, états exprimés par texte et pas uniquement par couleur, focus visible, détails par navigation, absence de clipping et audit Axe sans blocker serious/critical.
+- **Preuves :** `reports/ui-ux/live-trading/live-trading-visual-qa.json`, `reports/ui-ux/front-v2-axe.json`, `docs/front-redesign/LIVE_TRADING_VNEXT_VISUAL_QA.md`.
+- **Expiration/révision :** à réexaminer après test opérateur de lisibilité, changement de maquette ou avant certification WCAG complète.
+
+Cette dérogation ne désactive ni ne renumérote `UXR-0161`. Les détections restent dans le rapport statique ; toute autre règle P0 demeure bloquante.

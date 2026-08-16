@@ -11,6 +11,8 @@
     "lint": "npm run typecheck",
     "audit:a11y": "node scripts/audit-a11y.mjs",
     "audit:visual": "node scripts/capture-visual-qa.mjs",
+    "audit:command-center": "node scripts/audit-command-center-visual.mjs",
+    "audit:live-trading": "node scripts/audit-live-trading-visual.mjs",
     "audit:performance": "node scripts/measure-bff-performance.mjs"
   },
   "dependencies": {

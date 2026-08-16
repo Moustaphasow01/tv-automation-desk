@@ -4,7 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const baseUrl = process.env.DESK_VNEXT_BASE_URL || "http://127.0.0.1:8091";
-const routes = [
+const defaultRoutes = [
   "command-center", "sessions", "live", "live/signals", "live/plan", "live/news", "live/timeline",
   "research", "research/experiments", "research/candidates", "research/agents", "research/data", "research/compute",
   "strategies", "strategies/deployments", "replay", "replay/runs", "replay/compare",
@@ -13,6 +13,9 @@ const routes = [
   "execution/orders", "execution/portfolio", "execution/risk", "execution/providers", "execution/reconciliation",
   "governance/access", "governance/prompts", "governance/policies", "settings", "admin", "jarvis"
 ];
+const routes = process.env.DESK_A11Y_ROUTES
+  ? process.env.DESK_A11Y_ROUTES.split(",").map((route) => route.trim()).filter(Boolean)
+  : defaultRoutes;
 const browser = await chromium.launch({ headless: true });
 const findings = [];
 const routeConcurrency = Math.max(1, Number(process.env.DESK_A11Y_ROUTE_CONCURRENCY || 1));
@@ -26,7 +29,7 @@ try {
         const page = await context.newPage();
         try {
           await page.goto(`${baseUrl}/#/${route}`, { waitUntil: "domcontentloaded" });
-          await page.locator(".operator-page, .portfolio-page, .capability-unavailable-page").first().waitFor({ state: "visible", timeout: 45_000 });
+          await page.locator("#main-content > *").first().waitFor({ state: "visible", timeout: 45_000 });
           const result = await new AxeBuilder({ page }).analyze();
           findings.push({ viewport: viewport.name, route, violations: result.violations });
         } catch (error) {

@@ -804,12 +804,22 @@ export const commandCenterView: ViewEnvelope<CommandCenterView> = {
   meta: commonMeta,
   permissions: commonPermissions,
   data: {
+    mode: {
+      environment: "PAPER",
+      executionMode: "SEMI_MANUAL",
+      autoExecution: "OFF",
+      liveBroker: "OFF",
+      release: "test-fixture",
+      marketData: "FRESH"
+    },
     summary: {
       deskStatus: "NOMINAL",
       activeStrategies: 7,
       activeResearchAgents: 4,
+      expectedResearchAgents: 8,
       criticalIncidents: 0,
-      pendingCommands: 1
+      pendingCommands: 1,
+      providerSafety: "NO_BROKER_SIDE_EFFECT"
     },
     systems: [
       { id: "market-data", label: "Market Data", status: "OK", detail: "9 flux canoniques synchronisés", latencyMs: 18 },
@@ -847,7 +857,35 @@ export const commandCenterView: ViewEnvelope<CommandCenterView> = {
       { id: "evt-2", time: "10:00", title: "Publication PMI", detail: "Impact macro élevé", tone: "HIGH" },
       { id: "evt-3", time: "10:05", title: "Réconciliation provider", detail: "Contrôle PickMyTrade shadow", tone: "WATCH" },
       { id: "evt-4", time: "10:15", title: "Checkpoint recherche", detail: "OOS rolling MNQ", tone: "INFO" }
-    ]
+    ],
+    market: { status: "FRESH", freshnessSeconds: 1, rows: [] },
+    research: {
+      available: false,
+      hypothesisCount: null,
+      experimentCount: null,
+      runCount: null,
+      candidateCount: null,
+      activeWorkers: 4,
+      expectedWorkers: 8,
+      datasetCount: null,
+      artifactCount: null,
+      rows: []
+    },
+    signals: { available: false, rows: [] },
+    humanGate: { available: false, rows: [] },
+    provider: {
+      available: false,
+      mode: "UNAVAILABLE",
+      circuitBreaker: "UNAVAILABLE",
+      health: "UNAVAILABLE",
+      ackLatencyMs: null,
+      mismatchCount: null,
+      events: []
+    },
+    performance: { available: false, pnlR: null, trades: null, maxDrawdownR: null, curve: [] },
+    incidents: [],
+    assistant: { available: false, activeWorkers: null, expectedWorkers: null, runningTasks: null, latest: [] },
+    audit: []
   }
 };
 
@@ -859,6 +897,9 @@ export const liveTradingView: ViewEnvelope<LiveTradingView> = {
       signalsToday: 14,
       tradesExecuted: 3,
       acceptanceRatePct: 42,
+      orderIntentsPending: 0,
+      providerCommandsCreated: 0,
+      providerEventsObserved: 0,
       riskUsedPct: 37.6,
       correlatedExposurePct: 28.2,
       liveDrawdownR: -1.18
@@ -904,6 +945,53 @@ export const liveTradingView: ViewEnvelope<LiveTradingView> = {
       { stepId: "BROKER", label: "Broker", status: "OK", latencyMs: 52, detail: "ACK/Fills synchronisés" },
       { stepId: "RECONCILIATION", label: "Reconciliation", status: "WATCH", latencyMs: 63, detail: "1 écart non critique" }
     ],
+    canonicalRuntime: {
+      schemaVersion: "live_canonical_runtime_v1",
+      mode: {
+        environment: "PAPER",
+        executionMode: "SEMI_MANUAL",
+        autoExecutionEnabled: false,
+        physicalExecutionEnabled: false,
+        humanGateRequired: true,
+        ackIsFill: false
+      },
+      authoritativeSources: [
+        { source: "strategy_signal_outbox", rows: 2, latestAt: "2026-08-10T09:40:55.000Z" },
+        { source: "portfolio_order_intent_lineage", rows: 0, latestAt: null },
+        { source: "broker_provider_events", rows: 0, latestAt: null }
+      ],
+      freshness: {
+        marketData: "LIVE",
+        signalCutoffAt: "2026-08-10T09:40:55.000Z",
+        contextDecisionAt: null,
+        orderIntentAt: null,
+        asOf: "2026-08-10T09:41:02.000Z"
+      },
+      pipeline: [
+        { stepId: "DATA", label: "DATA", status: "OK", detail: "LIVE", source: "health.data_readiness" },
+        { stepId: "STRATEGY_SIGNAL", label: "STRATEGY SIGNAL", status: "OK", detail: "2 signaux publiés", source: "strategy_signal_outbox" },
+        { stepId: "HUMAN_GATE", label: "HUMAN GATE", status: "WAITING", detail: "Aucune intention en attente", source: "human_execution_gates" }
+      ],
+      activeStrategyInstances: [],
+      latestSignals: [],
+      aiContextGate: [],
+      pendingOrderIntents: [],
+      pendingTargetPositions: [],
+      riskCenter: {
+        schemaVersion: "global_risk_center_v1",
+        asOf: "2026-08-10T09:41:02.000Z",
+        source: "portfolio_risk_decisions",
+        availability: "KNOWN",
+        globalStatus: "PASS",
+        killSwitch: { availability: "KNOWN", active: false, source: "broker_execution_locks", reasonCodes: [] },
+        pendingOrderIntents: 0,
+        pendingTargetPositions: 0,
+        limits: [],
+        breaches: [],
+        nearestLimits: [],
+        policyVersions: []
+      }
+    },
     signals: [
       {
         signalId,
@@ -965,6 +1053,7 @@ export const liveTradingView: ViewEnvelope<LiveTradingView> = {
       { riskCheckId: "risk_corr_live_20260810", signalId, status: "WATCH", limitLabel: "Correlated exposure", usedPct: 81, reasonCode: "CORRELATED_EXPOSURE_NEAR_LIMIT" },
       { riskCheckId: "risk_daily_dd_live_20260810", signalId, status: "PASS", limitLabel: "Daily drawdown", usedPct: 33, reasonCode: "DD_WITHIN_LIMIT" }
     ],
+    portfolioOrderIntents: [],
     orders: [
       {
         orderId: "ord_sig_vnext_demo_mnq_0940_001",
@@ -1056,6 +1145,26 @@ export const liveTradingView: ViewEnvelope<LiveTradingView> = {
       { eventId: "tl_order_ack", at: "2026-08-10T09:40:58.000Z", step: "Execution", title: "Order ACK", detail: "Ninja Sim101", tone: "INFO" },
       { eventId: "tl_reconciliation_watch", at: "2026-08-10T09:41:02.000Z", step: "Reconciliation", title: "Delta CL surveillé", detail: "Non bloquant", tone: "WATCH" }
     ],
+    timeSeriesContracts: {
+      schemaVersion: "front_time_series_contracts_v1",
+      view: "live-trading",
+      asOf: "2026-08-10T09:41:02.000Z",
+      series: [
+        { seriesId: "market.ohlcv", label: "OHLCV marché", schema: "ohlcv_series_v1", source: "market_candles", availability: "UNAVAILABLE", reason: "Fixture sans série paginée.", unit: "price", sampling: "SERVER_DEFINED", maxPoints: 2000, cursor: null }
+      ],
+      contracts: [
+        { seriesId: "market.ohlcv", label: "OHLCV marché", schema: "ohlcv_series_v1", source: "market_candles", availability: "UNAVAILABLE", reason: "Fixture sans série paginée.", unit: "price", sampling: "SERVER_DEFINED", maxPoints: 2000, cursor: null }
+      ]
+    },
+    telegramDrilldown: {
+      schemaVersion: "telegram_drilldown_front_v1",
+      availability: "UNAVAILABLE",
+      enabled: false,
+      healthy: false,
+      reason: "Fixture sans service Telegram.",
+      secretsExposed: false,
+      destinations: []
+    },
     aiAdvisory: {
       mode: "SHADOW",
       lastContextAt: "2026-08-10T09:39:50.000Z",

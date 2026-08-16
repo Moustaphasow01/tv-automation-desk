@@ -6,11 +6,14 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
   await page.goto("/#/command-center", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Fil d’Ariane" })).toContainText("Command Center");
+  await expect(page.getByTestId("command-center-golden-master")).toBeVisible();
 
-  await page.getByRole("link", { name: "Live", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Live Trading & Risk" })).toBeVisible();
-  await expect(page.getByText(/Agents PAPER (autorisés|bloqués)/)).toBeVisible();
+  await page.getByRole("link", { name: "Live Trading", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Live Trading", exact: true })).toBeVisible();
+  await expect(page.getByTestId("live-trading-golden-master")).toBeVisible();
+  await expect(page.getByText(/AUTO EXECUTION (ON|OFF)/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Human Execution Gate" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Confirm", exact: true })).toBeDisabled();
 
   const live = await request.get("/front-api/v1/views/live-trading");
   expect(live.ok()).toBeTruthy();

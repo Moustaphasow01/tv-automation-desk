@@ -121,29 +121,39 @@ export type PortfolioView = {
 };
 
 export type CommandCenterView = {
+  mode: {
+    environment: string;
+    executionMode: string;
+    autoExecution: "ON" | "OFF" | "UNKNOWN";
+    liveBroker: "ON" | "OFF" | "UNKNOWN";
+    release: string;
+    marketData: string;
+  };
   summary: {
-    deskStatus: "NOMINAL" | "DEGRADED" | "STOPPED";
-    activeStrategies: number;
-    activeResearchAgents: number;
-    criticalIncidents: number;
-    pendingCommands: number;
+    deskStatus: "NOMINAL" | "DEGRADED" | "STOPPED" | "UNKNOWN";
+    activeStrategies: number | null;
+    activeResearchAgents: number | null;
+    expectedResearchAgents: number | null;
+    criticalIncidents: number | null;
+    pendingCommands: number | null;
+    providerSafety: string;
   };
   systems: readonly {
     id: string;
     label: string;
-    status: "OK" | "DEGRADED" | "DOWN";
+    status: "OK" | "DEGRADED" | "DOWN" | "FRESH" | "STALE" | "UNAVAILABLE";
     detail: string;
-    latencyMs: number;
+    latencyMs: number | null;
   }[];
   activity: readonly CommandCenterActivity[];
   risk: {
-    capitalStatus: "NORMAL" | "WATCH" | "STOP";
-    riskUsagePct: number;
-    maxDrawdownR: number;
-    openPositions: number;
-    healthyLimits: number;
-    totalLimits: number;
-    activeAlerts: number;
+    capitalStatus: "NORMAL" | "WATCH" | "STOP" | "UNKNOWN";
+    riskUsagePct: number | null;
+    maxDrawdownR: number | null;
+    openPositions: number | null;
+    healthyLimits: number | null;
+    totalLimits: number | null;
+    activeAlerts: number | null;
   };
   lanes: readonly {
     id: string;
@@ -160,6 +170,125 @@ export type CommandCenterView = {
     detail: string;
     tone: "INFO" | "WATCH" | "HIGH";
   }[];
+  market: CommandCenterMarket;
+  research: CommandCenterResearch;
+  signals: {
+    available: boolean;
+    rows: readonly CommandCenterSignal[];
+  };
+  humanGate: {
+    available: boolean;
+    rows: readonly CommandCenterOrderIntent[];
+  };
+  provider: CommandCenterProvider;
+  performance: {
+    available: boolean;
+    pnlR: number | null;
+    trades: number | null;
+    maxDrawdownR: number | null;
+    curve: readonly number[];
+  };
+  incidents: readonly CommandCenterIncident[];
+  assistant: {
+    available: boolean;
+    activeWorkers: number | null;
+    expectedWorkers: number | null;
+    runningTasks: number | null;
+    latest: readonly { id: string; role: string; status: string }[];
+  };
+  audit: readonly CommandCenterAuditEvent[];
+};
+
+export type CommandCenterMarket = {
+  status: string;
+  freshnessSeconds: number | null;
+  rows: readonly {
+    id: string;
+    instrument: string;
+    timeframe: string;
+    source: string;
+    asOf: string;
+    freshnessSeconds: number | null;
+    status: string;
+  }[];
+};
+
+export type CommandCenterResearch = {
+  available: boolean;
+  hypothesisCount: number | null;
+  experimentCount: number | null;
+  runCount: number | null;
+  candidateCount: number | null;
+  activeWorkers: number | null;
+  expectedWorkers: number | null;
+  datasetCount: number | null;
+  artifactCount: number | null;
+  rows: readonly {
+    id: string;
+    mission: string;
+    dataset: string;
+    run: string;
+    status: string;
+    workers: number | null;
+    artifacts: number | null;
+  }[];
+};
+
+export type CommandCenterSignal = {
+  id: string;
+  at: string;
+  instrument: string;
+  setup: string;
+  confidence: number | null;
+  gate: string;
+  portfolioDecision: string;
+  riskDecision: string;
+};
+
+export type CommandCenterOrderIntent = {
+  orderIntentId: string;
+  instrument: string;
+  side: string;
+  quantity: number | null;
+  executionMode: string;
+  status: string;
+  allowedActions: readonly string[];
+  ageSeconds: number | null;
+};
+
+export type CommandCenterProvider = {
+  available: boolean;
+  mode: string;
+  circuitBreaker: string;
+  health: string;
+  ackLatencyMs: number | null;
+  mismatchCount: number | null;
+  events: readonly {
+    id: string;
+    at: string;
+    stage: string;
+    detail: string;
+    status: string;
+  }[];
+};
+
+export type CommandCenterIncident = {
+  id: string;
+  severity: string;
+  detectedAt: string;
+  resource: string;
+  title: string;
+  runbook: string;
+  action: string;
+};
+
+export type CommandCenterAuditEvent = {
+  id: string;
+  at: string;
+  eventType: string;
+  detail: string;
+  actor: string;
+  status: string;
 };
 
 export type CommandCenterActivity = {
@@ -177,6 +306,9 @@ export type LiveTradingView = {
     signalsToday: number;
     tradesExecuted: number;
     acceptanceRatePct: number;
+    orderIntentsPending?: number;
+    providerCommandsCreated?: number;
+    providerEventsObserved?: number;
     riskUsedPct: number;
     correlatedExposurePct: number;
     liveDrawdownR: number;
@@ -245,6 +377,61 @@ export type LiveTradingView = {
     latencyMs: number;
     detail: string;
   }[];
+  canonicalRuntime: {
+    schemaVersion: string;
+    mode: {
+      environment: "PAPER" | "LIVE" | "SHADOW" | "MOCK";
+      executionMode: "SHADOW" | "SEMI_MANUAL" | "PAPER" | "LIVE";
+      autoExecutionEnabled: boolean;
+      physicalExecutionEnabled: boolean;
+      humanGateRequired: boolean;
+      ackIsFill: boolean;
+    };
+    authoritativeSources: readonly {
+      source: string;
+      rows: number;
+      latestAt: string | null;
+    }[];
+    freshness: {
+      marketData: string;
+      signalCutoffAt: string | null;
+      contextDecisionAt: string | null;
+      orderIntentAt: string | null;
+      asOf: string;
+    };
+    pipeline: readonly {
+      stepId: string;
+      label: string;
+      status: string;
+      detail: string;
+      source: string;
+    }[];
+    activeStrategyInstances: readonly {
+      strategyInstanceId: string;
+      strategyDefinitionId: string;
+      strategyVersionId: string;
+      executionMode: string;
+      runtimeState: string;
+      lastEvaluationAt: string;
+      nextEvaluationAt: string;
+      scheduler: unknown;
+    }[];
+    latestSignals: readonly LiveTradingView["signals"][number][];
+    aiContextGate: readonly {
+      decisionId: string;
+      status: string;
+      mode: string;
+      recommendation: string;
+      confidence: number | null;
+      riskMultiplier: number | null;
+      reasonCodes: readonly string[];
+      anomalies: readonly string[];
+      decidedAt: string;
+    }[];
+    pendingOrderIntents: readonly LivePortfolioOrderIntent[];
+    pendingTargetPositions: readonly Record<string, unknown>[];
+    riskCenter: LiveRiskCenter;
+  };
   signals: readonly {
     signalId: string;
     strategyId: string;
@@ -279,6 +466,7 @@ export type LiveTradingView = {
     usedPct: number;
     reasonCode: string;
   }[];
+  portfolioOrderIntents: readonly LivePortfolioOrderIntent[];
   orders: readonly {
     orderId: string;
     signalId: string;
@@ -333,11 +521,137 @@ export type LiveTradingView = {
     detail: string;
     tone: "INFO" | "WATCH" | "HIGH";
   }[];
+  timeSeriesContracts: {
+    schemaVersion: string;
+    view: string;
+    asOf: string;
+    series?: readonly LiveTimeSeriesContract[];
+    contracts?: readonly LiveTimeSeriesContract[];
+  };
+  telegramDrilldown: {
+    schemaVersion: string;
+    availability: string;
+    enabled: boolean;
+    healthy: boolean;
+    reason?: string;
+    lastHeartbeatAt?: string;
+    lastDeliveryAt?: string;
+    deliveryStatus?: string;
+    errorReason?: string;
+    secretsExposed: boolean;
+    destinations?: readonly {
+      label: string;
+      configured: boolean;
+      lastDeliveryAt: string;
+      deliveryStatus: string;
+      retryCount: number;
+      errorReason: string;
+    }[];
+  };
   aiAdvisory: {
     mode: "SHADOW" | "ADVISORY" | "OFF";
     lastContextAt: string;
     summary: string;
   };
+};
+
+export type LivePortfolioOrderIntent = {
+  orderIntentId: string;
+  portfolioOrderIntentId: string;
+  signalId: string;
+  strategyInstanceId: string;
+  symbol: string;
+  side: "BUY" | "SELL";
+  type: string;
+  quantity: number;
+  state: string;
+  limitPrice?: number;
+  stopPrice?: number;
+  targetPrice?: number;
+  account?: string;
+  expectedVersion?: string;
+  createdAt?: string;
+  targetPositionId: string;
+  executionTerms: Record<string, unknown> | null;
+  riskSnapshot: Record<string, unknown> | null;
+  immutability: Record<string, unknown> | null;
+  humanGate: {
+    gateId: string | null;
+    status: string;
+    allowedActions: readonly {
+      action: "CONFIRM" | "REJECT";
+      actionId: string;
+      label: string;
+      commandType: string;
+      environment: "MOCK" | "SHADOW" | "PAPER" | "LIVE";
+      permission: "ALLOWED" | "STEP_UP_REQUIRED" | "DENIED";
+      requiresConfirmation: boolean;
+      requiresReason: boolean;
+      expectedRevision: string;
+      impactPreview: string;
+      payload: Readonly<Record<string, string | number | boolean>>;
+    }[];
+  };
+  allowedActions: {
+    resourceType: string;
+    allowedActions: readonly string[];
+    denialReasons: readonly string[];
+    revision: string;
+    requiresStepUp: boolean;
+    reasonRequired: boolean;
+    expiresAt: string | null;
+  };
+  providerCommandCount: number;
+  providerEventCount: number;
+  brokerSubmissionAllowed: boolean;
+  physicalExecutionState: string;
+  ackIsFill: false;
+  route: string;
+};
+
+export type LiveRiskCenter = {
+  schemaVersion: string;
+  asOf?: string;
+  source?: string;
+  availability: string;
+  reason?: string;
+  globalStatus?: string;
+  openRisk?: LiveAvailableMetric;
+  limits?: readonly Record<string, unknown>[];
+  breaches?: readonly Record<string, unknown>[];
+  nearestLimits?: readonly Record<string, unknown>[];
+  dailyLoss?: LiveAvailableMetric;
+  trailingDrawdown?: LiveAvailableMetric;
+  margin?: LiveAvailableMetric;
+  grossExposure?: LiveAvailableMetric;
+  netExposure?: LiveAvailableMetric;
+  concentration?: LiveAvailableMetric;
+  propConstraints?: LiveAvailableMetric;
+  killSwitch?: { availability: string; active: boolean; source: string; reasonCodes: readonly string[] };
+  providerCircuitState?: LiveAvailableMetric;
+  pendingOrderIntents?: number;
+  pendingTargetPositions?: number;
+  policyVersions?: readonly string[];
+};
+
+export type LiveAvailableMetric = {
+  availability: string;
+  value?: string | number | null;
+  currency?: string;
+  reasonCode?: string;
+};
+
+export type LiveTimeSeriesContract = {
+  seriesId: string;
+  label: string;
+  schema?: string;
+  source: string;
+  availability: string;
+  reason?: string | null;
+  unit: string;
+  sampling: string;
+  maxPoints: number;
+  cursor: string | boolean | null;
 };
 
 export type DemoPaperReadinessView = {
@@ -2631,12 +2945,22 @@ export function isAdminAccessView(value: unknown): value is AdminAccessView {
 export function isCommandCenterView(value: unknown): value is CommandCenterView {
   const candidate = value as Partial<CommandCenterView>;
   return Boolean(
-    candidate?.summary &&
+    candidate?.mode &&
+      candidate?.summary &&
       Array.isArray(candidate.systems) &&
       Array.isArray(candidate.activity) &&
       candidate.risk &&
       Array.isArray(candidate.lanes) &&
-      Array.isArray(candidate.upcoming)
+      Array.isArray(candidate.upcoming) &&
+      candidate.market &&
+      candidate.research &&
+      candidate.signals &&
+      candidate.humanGate &&
+      candidate.provider &&
+      candidate.performance &&
+      Array.isArray(candidate.incidents) &&
+      candidate.assistant &&
+      Array.isArray(candidate.audit)
   );
 }
 
@@ -2742,6 +3066,14 @@ export function isLiveTradingView(value: unknown): value is LiveTradingView {
     candidate?.summary &&
       candidate.session &&
       Array.isArray(candidate.pipeline) &&
+      candidate.canonicalRuntime &&
+      candidate.canonicalRuntime.mode &&
+      Array.isArray(candidate.canonicalRuntime.authoritativeSources) &&
+      Array.isArray(candidate.canonicalRuntime.pipeline) &&
+      Array.isArray(candidate.canonicalRuntime.activeStrategyInstances) &&
+      Array.isArray(candidate.canonicalRuntime.latestSignals) &&
+      Array.isArray(candidate.canonicalRuntime.aiContextGate) &&
+      Array.isArray(candidate.canonicalRuntime.pendingOrderIntents) &&
       candidate.launchGate &&
       typeof candidate.launchGate.finalDecision === "string" &&
       typeof candidate.launchGate.releaseCheckCommand === "string" &&
@@ -2752,12 +3084,16 @@ export function isLiveTradingView(value: unknown): value is LiveTradingView {
       Array.isArray(candidate.signals) &&
       Array.isArray(candidate.arbitrations) &&
       Array.isArray(candidate.riskChecks) &&
+      Array.isArray(candidate.portfolioOrderIntents) &&
       Array.isArray(candidate.orders) &&
       Array.isArray(candidate.fills) &&
       Array.isArray(candidate.positions) &&
       Array.isArray(candidate.providers) &&
       Array.isArray(candidate.incidents) &&
       Array.isArray(candidate.timeline) &&
+      candidate.timeSeriesContracts &&
+      (Array.isArray(candidate.timeSeriesContracts.series) || Array.isArray(candidate.timeSeriesContracts.contracts)) &&
+      candidate.telegramDrilldown &&
       candidate.aiAdvisory
   );
 }

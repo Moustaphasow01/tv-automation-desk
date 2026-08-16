@@ -878,6 +878,7 @@ a {
   }
 
   .bottom-nav-link {
+    min-height: 44px;
     overflow: hidden;
     border: 1px solid #21415c;
     border-radius: 0.8rem;

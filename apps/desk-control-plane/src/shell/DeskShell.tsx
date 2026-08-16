@@ -3,20 +3,28 @@ import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate } from "reac
 import type { IconType } from "react-icons";
 import {
   FaBell,
-  FaChartLine,
-  FaChessRook,
+  FaAngleDoubleLeft,
+  FaAngleDoubleRight,
+  FaBolt,
+  FaChartBar,
+  FaClipboardList,
   FaCircle,
   FaCog,
   FaEnvelope,
+  FaExclamationTriangle,
+  FaFileInvoiceDollar,
   FaFlask,
   FaGlobeEurope,
   FaListAlt,
-  FaRegStar,
+  FaPlayCircle,
+  FaProjectDiagram,
+  FaTachometerAlt,
+  FaRobot,
   FaSearch,
   FaShieldAlt,
-  FaStream,
   FaTh,
-  FaUserCircle
+  FaUserCircle,
+  FaWallet
 } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
@@ -31,15 +39,22 @@ type DeskNavItem = {
   group: VNextNavGroup;
 };
 
-const navIcons: Record<VNextNavGroup, IconType> = { pilotage: FaTh, live: FaChartLine, operations: FaChessRook, research: FaFlask, strategy: FaListAlt, replay: FaStream, performance: FaChartLine, execution: FaShieldAlt, governance: FaCog };
-const deskNavItems: readonly DeskNavItem[] = vnextRoutes
-  .filter((route) => !route.path.includes(":") && route.navigation !== false)
-  .map((route) => ({ label: route.label, to: `/${route.path}`, icon: navIcons[route.navGroup], group: route.navGroup, badge: route.path === "jarvis" ? "AI" : undefined }));
-const deskNavGroups = Object.entries(NAV_GROUP_LABELS).map(([group, label]) => ({
-  group: group as VNextNavGroup,
-  label,
-  items: deskNavItems.filter((item) => item.group === group),
-})).filter((group) => group.items.length);
+const deskNavItems: readonly DeskNavItem[] = [
+  { label: "Command Center", to: "/command-center", icon: FaTh, group: "pilotage" },
+  { label: "Live Trading", to: "/live", icon: FaBolt, group: "live" },
+  { label: "Strategy Center", to: "/strategies", icon: FaListAlt, group: "strategy" },
+  { label: "Research Lab", to: "/research", icon: FaFlask, group: "research" },
+  { label: "Replay", to: "/replay", icon: FaPlayCircle, group: "replay" },
+  { label: "Performance", to: "/performance", icon: FaChartBar, group: "performance" },
+  { label: "Portfolio", to: "/portfolio", icon: FaWallet, group: "execution" },
+  { label: "Risk Center", to: "/risk", icon: FaShieldAlt, group: "execution" },
+  { label: "Orders", to: "/orders", icon: FaFileInvoiceDollar, group: "execution" },
+  { label: "Execution", to: "/execution/providers", icon: FaProjectDiagram, group: "execution" },
+  { label: "Incidents", to: "/execution/incidents", icon: FaExclamationTriangle, group: "operations" },
+  { label: "Audit", to: "/events", icon: FaClipboardList, group: "operations" },
+  { label: "Jarvis", to: "/jarvis", icon: FaRobot, group: "governance" },
+  { label: "Settings", to: "/settings", icon: FaCog, group: "governance" },
+];
 
 export function DeskShell() {
   const navigate = useNavigate();
@@ -47,6 +62,7 @@ export function DeskShell() {
   const realtime = useContext(RealtimeContext);
   const { session } = useOperatorSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [liveSidebarCollapsed, setLiveSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const currentRoute = useMemo(
     () => vnextRoutes.find((route) => matchPath({ path: `/${route.path}`, end: true }, location.pathname)),
@@ -74,36 +90,34 @@ export function DeskShell() {
         year: "numeric"
       }).format(realtime.now)
     : "—";
+  const isGoldenCommandCenter = currentRoute?.path === "command-center";
+  const isGoldenLiveTrading = currentRoute?.path === "live";
+  const isGoldenSurface = isGoldenCommandCenter || isGoldenLiveTrading;
+  const visibleDeskNavItems = isGoldenLiveTrading
+    ? deskNavItems.filter((item) => !["/performance", "/events"].includes(item.to))
+    : deskNavItems;
 
   return (
-    <div className="desk-app-shell">
+    <div className={`desk-app-shell${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isGoldenLiveTrading && liveSidebarCollapsed ? " desk-app-shell--live-collapsed" : ""}`}>
       <a className="skip-link" href="#main-content">Aller au contenu principal</a>
       <aside className="desk-sidebar" aria-label="Barre latérale du desk">
         <div className="brand-block">
-          <span className="brand-mark" aria-hidden="true"><FaRegStar /></span>
-          <div>
+          <span className="brand-mark" aria-hidden="true"><FaTachometerAlt /></span>
+          <div className="brand-copy">
             <h1>DESK</h1>
             <p className="eyebrow">Portfolio Control</p>
           </div>
         </div>
         <nav className="sidebar-nav" tabIndex={0} aria-label="Navigation principale">
-          {deskNavGroups.map((group) => (
-            <section className="sidebar-nav-group" key={group.group}>
-              <h2>{group.label}</h2>
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-                >
-                  <item.icon className="nav-icon" aria-hidden="true" />
-                  <span>{item.label}</span>
-                  {item.badge ? <small>{item.badge}</small> : null}
-                </NavLink>
-              ))}
-            </section>
+          {visibleDeskNavItems.map((item) => (
+            <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+              <item.icon className="nav-icon" aria-hidden="true" />
+              <span>{item.label}</span>
+              {item.badge ? <small>{item.badge}</small> : null}
+            </NavLink>
           ))}
         </nav>
+        {isGoldenLiveTrading ? <button className="live-sidebar-collapse" type="button" aria-label={liveSidebarCollapsed ? "Déployer la navigation" : "Réduire la navigation"} aria-pressed={liveSidebarCollapsed} onClick={() => setLiveSidebarCollapsed((value) => !value)}>{liveSidebarCollapsed ? <FaAngleDoubleRight /> : <FaAngleDoubleLeft />}<span>{liveSidebarCollapsed ? "Expand" : "Collapse"}</span></button> : null}
         <div className="sidebar-status-stack">
           <section>
             <p>ENVIRONNEMENT</p>
@@ -119,7 +133,7 @@ export function DeskShell() {
       </aside>
 
       <div className="desk-main">
-        <header className="desk-topbar">
+        {!isGoldenSurface ? <header className="desk-topbar">
           <div className="topbar-time">
             <strong>{realtime?.heartbeatLabel ?? "—"} CET</strong>
             <span>{currentDate}</span>
@@ -147,10 +161,10 @@ export function DeskShell() {
             <span className="notification-chip" title="Messages indisponibles"><FaEnvelope aria-hidden="true" /><small>—</small></span>
             <span className="user-chip"><FaUserCircle aria-hidden="true" /><span>{session?.principal.displayName ?? "Session indisponible"}<small>{session?.principal.roles.join(", ") || "—"}</small></span></span>
           </div>
-        </header>
+        </header> : null}
 
         <main className="desk-content" id="main-content" tabIndex={-1}>
-          {currentRoute ? (
+          {currentRoute && !isGoldenSurface ? (
             <nav className="desk-breadcrumbs" aria-label="Fil d’Ariane">
               <Link to="/command-center">Desk</Link>
               <span aria-hidden="true">/</span>
@@ -162,7 +176,7 @@ export function DeskShell() {
           <Outlet />
         </main>
 
-        <footer className="desk-status-footer">
+        {!isGoldenSurface ? <footer className="desk-status-footer">
           <div>
             <span className={runtimeTone}><FaCircle aria-hidden="true" /> {realtime?.connectionStatus ?? "RUNTIME"}</span>
             <span>asOf {realtime?.heartbeatLabel ?? "—"}</span>
@@ -176,7 +190,7 @@ export function DeskShell() {
             <span>Out-of-order : {realtime?.events.outOfOrderCount ?? 0}</span>
             <span>{realtime?.latestError ? `Runtime : ${realtime.latestError}` : "Runtime : nominal"}</span>
           </div>
-        </footer>
+        </footer> : null}
       </div>
 
       <nav className="desk-bottom-nav" aria-label="Navigation mobile">

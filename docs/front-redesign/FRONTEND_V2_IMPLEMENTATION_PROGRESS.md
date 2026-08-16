@@ -1,6 +1,6 @@
 # Desk Control Plane V2 — Implementation Progress
 
-**Last verified:** 2026-08-14
+**Last verified:** 2026-08-15
 **Application:** `apps/desk-control-plane`
 **Local cutover URL:** `http://127.0.0.1:8090`
 **Legacy comparison URL:** `http://127.0.0.1:8080`
@@ -36,6 +36,19 @@ Verification after this slice: **160/160 Front**, **20/20 BFF/PostgreSQL**, **3/
 | Governance | IMPLEMENTED / PARTIAL DATA | auth, access, settings, administration, prompt parity, policies and Jarvis advisory are wired |
 | Quality | IMPLEMENTED FOR WIRED SLICES | 160 frontend tests, 20 combined BFF/PostgreSQL tests, 3 E2E, 76 Axe audits, 4 visual viewports, 37 performance probes |
 | Cutover | LOCAL PREPROD COMPLETE | separate `control-plane` container on 8090; production VPS not changed |
+
+## Command Center golden master — 2026-08-15
+
+- The approved `1672 × 941` Command Center is implemented as a dedicated feature slice with a real BFF projection.
+- Geometry is locked at ±1 px for the normative desktop and responsive behavior is exercised on Full HD, laptop, tablet and mobile.
+- Runtime content is never copied from the visual reference: unavailable sources remain `UNKNOWN`, `UNAVAILABLE` or `PARTIAL`.
+- `Execution Mode`, `AUTO`, `LIVE Broker`, provider health and Human Gate actions are backend-driven and fail closed.
+- Visual QA: **5/5** scenarios, zero overflow, zero clipped interactive, zero browser-console error.
+- Axe for this slice: **2** audits (workstation/mobile), **0** serious/critical blocker.
+- Command Center BFF performance: five HTTP 200 samples, observed P75 **164 ms** (< 1,000 ms budget).
+- Front component/contract suite: **163/163** assertions passed across the full batch plus the isolated retry of the single worker-start timeout; no logical test failed.
+- Production build: PASS. BFF Command Center contract: **26/26** focused tests PASS.
+- Remaining integration blockers: `CN-EXE-009` (execution repository SQLSTATE 42703) and `CN-DATA-001` (freshness status/age inconsistency), tracked in Jira `TD2-417`.
 
 ## Route inventory
 
