@@ -2,23 +2,25 @@
 
 > **Document maître unique et copiable.** Cette première partie contient la clôture après correction. L’audit initial intégral, ses matrices JSON, ses causes racines et ses preuves réseau sont conservés sans suppression dans la seconde partie du même fichier.
 
-## Résultat de clôture locale
+## Résultat de clôture finale — VPS certifié
 
 ```text
 TWO_SCREEN_CONNECTION_CLOSURE
 
 audit_baseline_commit: 4be0cbc260f6ced5ff76235d347b35b594e305ae
-backend_bff_runtime_commit: 59927cfa1c3e83eef16278eabdc22d975f9cc153
-front_golden_commit: b538ae47bb90ad039611cb6702f6608f422ae752
-evidence_commit: PENDING_THIS_DOCUMENT
-local_certification_timestamp: 2026-08-16T12:19:19+02:00
+backend_bff_runtime_commit: c321f660c95f5917fc95f7d99205e1c8833d5234
+front_golden_commit: d8facd79a82b397edfcc51a7de949ac971304e05
+release_evidence_commit: 53ebff5f2d80376b804fb08058e8b932d61c8cf3
+public_certification_timestamp: 2026-08-16T13:28:12+02:00
+active_vps_release: preprod-v2-two-screen-closure-20260816.3
+active_vps_migration: 057_strategy_runtime_evaluations_domain_events
 
 COMMAND_CENTER:
 view_http: 200
 bff_requests_after_sse_batching: 4
 console_errors: 0
 generic_unavailable: 0
-deep_links_rendered: 37
+deep_links_rendered: 39
 horizontal_overflow: false
 
 LIVE_TRADING:
@@ -26,12 +28,12 @@ view_http: 200
 bff_requests: 3
 console_errors: 0
 generic_unavailable: 0
-deep_links_rendered: 20
+deep_links_rendered: 19
 post_risk_editable_fields: 0
 enabled_human_gate_actions_without_operator_capability: 0
 
 SSE:
-nominal_domain_events_observed: 9
+nominal_domain_events_observed_publicly: 1
 cursor_resume: implemented_and_tested
 aggregate_sequence_tracking: implemented_and_tested
 deduplication: implemented_and_tested
@@ -48,25 +50,84 @@ operator_pin_used: false
 provider_or_broker_side_effect: none
 
 LOCAL_CERTIFICATION: PASSED
-VPS_DEPLOYMENT: PENDING_RELEASE_SECTION
+VPS_DEPLOYMENT: PASSED
+PUBLIC_TWO_SCREEN_CERTIFICATION: PASSED
+GOLDEN_VISUAL_QA: 10/10
+BFF_PRESENT_FRONT_DROPPED_COUNT: 0
+GENERIC_UNAVAILABLE_COUNT: 0
+FORBIDDEN_DIRECT_ENDPOINT_CALLS: 0
+BROKEN_DEEP_LINK_CLASSES: 0
+P0_BACKEND_REMAINING: 0
+P0_BFF_REMAINING: 0
+P0_FRONT_REMAINING: 0
+EXTERNAL_OPERATOR_BLOCKERS: 1
 ```
+
+## Release et déploiement certifiés
+
+| Preuve | Valeur |
+|---|---|
+| Release active | `preprod-v2-two-screen-closure-20260816.3` |
+| Commit backend/BFF/runtime | `c321f660c95f5917fc95f7d99205e1c8833d5234` |
+| Commit Front Golden | `d8facd79a82b397edfcc51a7de949ac971304e05` |
+| Commit evidence inclus au manifeste | `53ebff5f2d80376b804fb08058e8b932d61c8cf3` |
+| SHA-256 archive ZIP | `c6522294d656e705eed084822ddfa4a7d5959a80e973627660cf0e1eebe40762` |
+| SHA-256 contenu manifeste | `5690a1cac806b2fa2918f2346f04c4e92c320ab5a2fa8afc86a2404b820819b9` |
+| Migration active | `057_strategy_runtime_evaluations_domain_events` |
+| Profil | `standard`, worktree propre, `dirty=false` |
+| Verrous de release | `AUTO_EXECUTION=false`, `PHYSICAL_LIVE=false` |
+| Build Front principal | `index-BRwG0VCB.js` / `index-DHtI1qeQ.css` |
+| Build Live Trading | `LiveTradingPage-DepVp-lA.js` / `LiveTradingPage-BU6DBLHQ.css` |
+| URL publique | `https://vps-6d6969db.vps.ovh.net` |
+| Probes | `/healthz`, `/readyz`, `/status`, `/front-api/v1/capabilities` : HTTP 200 |
+| Capabilities anonymes | lecture autorisée ; écriture/PAPER refusées sans session opérateur ; LIVE verrouillé |
+
+### Sauvegardes de rollback réalisées avant la bascule finale
+
+| Artefact VPS | SHA-256 |
+|---|---|
+| `C:\ProgramData\DeskFutures\backups\desk-native-20260816T112139Z.dump` | `5552a08a42d98e1698f680cdaafc32c57281ec22a6a868ec27f2cad689eddc0d` |
+| `C:\ProgramData\DeskFutures\backups\desk-objects-20260816T112306Z.tar.gz` | `463184bd9c247c0699466d9919f814da088f143211f7079674e6ecf330f64e33` |
+
+### État des services après déploiement
+
+- Démarrés et automatiques : `DeskFuturesApi`, `DeskFuturesCaddy`, `DeskFuturesTelegram`.
+- Arrêtés et désactivés : runtime LIVE, préparation Replay, broker management, superviseurs Agent Runtime, workers Codex LIVE/Replay.
+- Les services arrêtés sont une décision de politique, pas une panne : aucun agent ni chemin broker n'a été réactivé par cette livraison.
+- PostgreSQL est prêt, la base fait `4 134 427 671` octets au contrôle public, et les quatre feeds durables MNQ/MES M1/M5 sont présents avec le dernier marché connu du 14 août. Le 16 août est correctement classé `MARKET_CLOSED`.
+
+### Vérité d'exécution observée publiquement
+
+| Champ | Valeur finale |
+|---|---|
+| `Command Center.provider.availability` | `NOT_APPLICABLE_CURRENT_MODE` |
+| `Command Center.provider.mismatchCount` | `null` |
+| `Live Trading.reconciliation.availability` | `NOT_APPLICABLE_CURRENT_MODE` |
+| `Live Trading.reconciliation.mismatchCount` | `null` |
+| `broker_provider_commands` | `0` |
+| `broker_provider_events` | `0` |
+| `autoExecutionEnabled` | `false` sur les deux vues |
+| `physicalExecutionEnabled` | `false` sur les deux vues |
+| `humanGateRequired` | `true` sur les deux vues |
+
+Le correctif final empêche aussi un ancien snapshot de réconciliation de juillet d'être présenté comme une réconciliation broker courante. Quand l'exécution physique est fermée, aucun faux `MATCHED`, aucun faux zéro et aucun objet technique sérialisé ne sont rendus.
 
 ## Décision de clôture par gap initial
 
 | Gap initial | Correction livrée | Preuve actuelle | Résultat |
 |---|---|---|---|
-| Golden Masters absents du VPS | Build VNext commun préparé pour la release intégrée | build production + QA Golden | CLOSED_LOCAL |
-| Runtime Strategy non productif | Scheduler canonique persistant, évaluations idempotentes et événements de domaine | migration 057 + tests scheduler + certification SHADOW | CLOSED_LOCAL |
-| Signal → Context → Portfolio → Risk → Target → Intent → Human Gate non prouvé | Service de certification canonique complet, sans provider side effect | scénario SHADOW et tests BFF/domain | CLOSED_LOCAL |
-| BFF incomplet / mauvaise source / legacy mélangé | Projections canoniques, filtrage certification/legacy, source/asOf et sémantiques d’absence | 1 145 tests backend, 30 tests BFF ciblés | CLOSED_LOCAL |
-| Champs BFF présents mais abandonnés par le Front (19 groupes) | Contrats, validateurs, modèles et mappers Golden enrichis | 171 tests Front + certification DOM | CLOSED_LOCAL |
-| `UNAVAILABLE` générique et faux zéros | États `CONNECTED_EMPTY`, `DISABLED_BY_POLICY`, `NOT_APPLICABLE_CURRENT_MODE`, `LAST_KNOWN` | compteur DOM générique = 0 sur les deux écrans | CLOSED_LOCAL |
-| Lifecycle provider statique | Projection depuis commandes/événements canoniques, état policy-disabled explicite | provider commands/events = 0, aucun faux ACK/FILL | CLOSED_LOCAL |
-| SSE générique sans resync prouvé | Outbox domaine, curseur persistant, séquence par agrégat, déduplication et resync | `desk.resync_required` observé | CLOSED_LOCAL |
-| Tempête de refetch lors du replay SSE initial | Invalidation React Query regroupée par vue sur fenêtre courte | Command Center 29 → 4 requêtes BFF | CLOSED_LOCAL |
-| Deep links heuristiques / timestamp | Routes et IDs canoniques exposés par les projections | 37 + 20 liens rendus, aucun endpoint direct interdit | CLOSED_LOCAL |
-| Marché fermé présenté comme live/stale générique | `MARKET_CLOSED` + `LAST_KNOWN`, fraîcheur et provenance durables | readiness locale et UI Golden | CLOSED_LOCAL |
-| Reconciliation / performance non typées | Projections canoniques, distinction research/theoretical/broker et absence explicite | tests BFF + Live Golden | CLOSED_LOCAL |
+| Golden Masters absents du VPS | Build VNext commun intégré à la release | assets hashés + QA Golden publique | CLOSED_VPS |
+| Runtime Strategy non productif | Scheduler canonique persistant, évaluations idempotentes et événements de domaine | migration 057 + tests scheduler + certification SHADOW | CLOSED_VPS |
+| Signal → Context → Portfolio → Risk → Target → Intent → Human Gate non prouvé | Service de certification canonique complet, sans provider side effect | scénario SHADOW et tests BFF/domain | CLOSED_VPS |
+| BFF incomplet / mauvaise source / legacy mélangé | Projections canoniques, filtrage certification/legacy, source/asOf et sémantiques d’absence | 1 147 tests backend, certification publique | CLOSED_VPS |
+| Champs BFF présents mais abandonnés par le Front (19 groupes) | Contrats, validateurs, modèles et mappers Golden enrichis | 172 tests Front + certification DOM | CLOSED_VPS |
+| `UNAVAILABLE` générique et faux zéros | États `CONNECTED_EMPTY`, `DISABLED_BY_POLICY`, `NOT_APPLICABLE_CURRENT_MODE`, `LAST_KNOWN` | compteur DOM générique = 0 sur les deux écrans ; mismatch non applicable = `null` | CLOSED_VPS |
+| Lifecycle provider statique | Projection depuis commandes/événements canoniques, état policy-disabled explicite | provider commands/events = 0, aucun faux ACK/FILL | CLOSED_VPS |
+| SSE générique sans resync prouvé | Outbox domaine, curseur persistant, séquence par agrégat, déduplication et resync | `desk.resync_required` observé publiquement | CLOSED_VPS |
+| Tempête de refetch lors du replay SSE initial | Invalidation React Query regroupée par vue sur fenêtre courte | Command Center 29 → 4 requêtes BFF | CLOSED_VPS |
+| Deep links heuristiques / timestamp | Routes et IDs canoniques exposés par les projections | 39 + 19 liens rendus, aucun endpoint direct interdit | CLOSED_VPS |
+| Marché fermé présenté comme live/stale générique | `MARKET_CLOSED` + `LAST_KNOWN`, fraîcheur et provenance durables | readiness VPS et UI Golden | CLOSED_VPS |
+| Reconciliation / performance non typées | Projections canoniques, distinction research/theoretical/broker et absence explicite | tests BFF + certification Live Golden | CLOSED_VPS |
 
 ## Pipeline canonique certifié
 
@@ -109,7 +170,7 @@ flowchart LR
 | Live Trading | Target/Intent | TargetPosition + OrderIntent | `orderIntent` | immutable mapper | intent dossier | target/intent events | CONNECTED_EMPTY when absent |
 | Live Trading | Human Gate | canonical gate + allowedActions | `humanGate` | backend-driven actions | gate panel | gate events | actions disabled without capability |
 | Live Trading | Provider | command/event lifecycle | `providerLifecycle` | unknown-safe status registry | lifecycle timeline | provider events | NOT_APPLICABLE_CURRENT_MODE |
-| Live Trading | Reconciliation | expected vs broker snapshot | `reconciliation` | reconciliation mapper | comparison panel | reconciliation events | CONNECTED_EMPTY / policy-disabled |
+| Live Trading | Reconciliation | expected vs broker snapshot | `reconciliation` | reconciliation mapper | comparison panel | reconciliation events | NOT_APPLICABLE_CURRENT_MODE |
 | Live Trading | Timeline | domain event outbox | `timeline` | event mapper | event timeline | SSE | CONNECTED_AND_POPULATED |
 | Live Trading | Performance | typed R ledger | `performance` | performance mapper | R panel | result events | CONNECTED_EMPTY when non publiée |
 
@@ -117,27 +178,27 @@ flowchart LR
 
 | Contrôle | Résultat |
 |---|---|
-| Backend/BFF | 1 146 tests, 1 145 pass, 1 skip POSIX attendu, 0 fail |
+| Backend/BFF | 1 147/1 147, 0 fail |
 | Domain | 467/467 |
-| Front VNext | 171/171 |
+| Front VNext | 172/172 |
 | BFF/PostgreSQL E2E réel | 4/4 |
 | Contrats analytiques | générés à jour + 7/7 |
 | Desk time | 6/6 |
 | Axe | 76 audits, 0 serious/critical |
-| Command Center visual | 5/5 résolutions |
-| Live Trading visual | 5/5 résolutions |
+| Command Center visual publique | 5/5 résolutions, 0 overflow, 0 contrôle tronqué, 0 erreur console |
+| Live Trading visual publique | 5/5 résolutions, 0 overflow, immutabilité post-Risk, 0 erreur console |
 | BFF performance | 37/37 vues, P75 < 1 000 ms |
 | Architecture/guards | tous verts ; complexité ramenée au budget 650 sans rebaseline |
 | Runtime safety | clocks 130/130, idempotency 7, leases 3, optimistic locks 5 |
 | UI/UX Rulebook | 1 000 règles valides ; sélecteur et scanner self-tests verts |
 | Build production | succès |
-| Browser connection certification | PASS, console 0, endpoint direct interdit 0 |
+| Browser connection certification VPS | PASS ; Command Center BFF=4, Live BFF=3, console=0, `genericUnavailable=0`, endpoint direct interdit=0 |
 
 ## Artefacts visuels et réseau après correction
 
-- Command Center : `/mnt/c/Users/CES/Desktop/TV_Automation_PREPROD/output/playwright/two-screen-closure/command-center-full.png` — SHA-256 `20d71e84c3a2394f2e63e085931cd9d6fa7d3b8c0209e1e271272342d049eb5c`
-- Live Trading : `/mnt/c/Users/CES/Desktop/TV_Automation_PREPROD/output/playwright/two-screen-closure/live-trading-full.png` — SHA-256 `ccf459056f16cd7a10e3fe316ed5eb7d14768766ad35b5535eee3bd19af5e4f1`
-- Réseau/SSE : `/mnt/c/Users/CES/Desktop/TV_Automation_PREPROD/output/playwright/two-screen-closure/network-summary.json` — SHA-256 `4b0625505f1dcc8916f165efbb266998b79ffbcb4f01666119521b4acfca6636`
+- Command Center public : `/mnt/c/Users/CES/Desktop/TV_Automation_PREPROD/output/playwright/two-screen-closure/command-center-full.png` — SHA-256 `505e62d49dc63b2091cabfac46dee83559212929ab84de2fe6b3726a687dcdb5`
+- Live Trading public : `/mnt/c/Users/CES/Desktop/TV_Automation_PREPROD/output/playwright/two-screen-closure/live-trading-full.png` — SHA-256 `6c61cb8de7b7628e7124d3b2bbf542253a4ec81790d1d7245f19dca8f484047d`
+- Réseau/SSE public : `/mnt/c/Users/CES/Desktop/TV_Automation_PREPROD/output/playwright/two-screen-closure/network-summary.json` — SHA-256 `de5fafcf9ccc66115109b39a754f21353405fc911728fb364dfc1384f33d5c34`
 
 ## Limite externe explicitement isolée
 
