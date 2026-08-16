@@ -12,6 +12,8 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
   const resourceActions = new Set(orderIntent?.allowedActions.allowedActions ?? []);
   const gateActions = orderIntent?.humanGate.allowedActions.filter((action) => resourceActions.has(action.action)) ?? [];
   const degraded = meta.stale || meta.availability !== "AVAILABLE";
+  const reconciliationNotApplicable = ["NOT_APPLICABLE_CURRENT_MODE", "DISABLED_BY_POLICY"]
+    .includes(String(data.reconciliation?.availability ?? "").toUpperCase());
 
   return {
     meta,
@@ -47,11 +49,13 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
           : "Aucun OrderIntent en attente de confirmation.",
     provider: data.providers[0] ?? null,
     reconciliation: {
-      status: data.reconciliation?.status ?? "UNAVAILABLE",
-      detail: data.reconciliation?.reason || `${data.reconciliation?.mismatchCount ?? "—"} divergence(s) autoritaire(s).`,
+      status: reconciliationNotApplicable ? "EXÉCUTION PHYSIQUE DÉSACTIVÉE" : data.reconciliation?.status ?? "UNAVAILABLE",
+      detail: reconciliationNotApplicable
+        ? "Aucun snapshot broker n'est attendu dans le mode d'exécution courant."
+        : data.reconciliation?.reason || `${data.reconciliation?.mismatchCount ?? "—"} divergence(s) autoritaire(s).`,
       asOf: data.reconciliation?.asOf ?? meta.asOf,
       expected: data.reconciliation?.expected ?? null,
-      broker: data.reconciliation?.broker ?? null,
+      broker: reconciliationNotApplicable ? null : data.reconciliation?.broker ?? null,
       mismatchCount: data.reconciliation?.mismatchCount ?? null,
     },
     performance: {
