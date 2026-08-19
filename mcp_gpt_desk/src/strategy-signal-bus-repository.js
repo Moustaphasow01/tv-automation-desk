@@ -161,6 +161,12 @@ function signalIdentity(row) {
     signal_type: row.signal_type || "signal.emitted",
     instrument: row.instrument,
     direction: row.direction,
+    proposed_size: numberOrNull(firstDefined(
+      row.proposed_size,
+      row.payload?.payload?.proposed_size,
+      row.payload?.signal?.proposed_size,
+      row.payload?.proposed_size,
+    )),
     confidence: row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
     execution_mode_origin: String(row.execution_mode_origin || "SHADOW").toUpperCase(),
     generated_at_utc: iso(row.generated_at_utc),
@@ -216,6 +222,16 @@ function iso(value) { return value ? new Date(value).toISOString() : null; }
 function clone(value) { return value === null || value === undefined ? null : JSON.parse(JSON.stringify(value)); }
 function array(value) { return Array.isArray(value) ? value : []; }
 function nowUtc() { return SIGNAL_BUS_REPOSITORY_CLOCK.now().utc; }
+function firstDefined(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return null;
+}
+function numberOrNull(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 function repositoryError(code, message) {
   const error = new Error(message || code);
   error.code = code;

@@ -24,6 +24,18 @@ export function normalizeStrategySignalV1(input = {}) {
     strategy_version_id: optionalText(firstDefined(input.strategy_version_id, input.strategyVersionId)),
     instrument: requiredText(input.instrument, "instrument", issues).toUpperCase(),
     direction: enumValue(input.direction, STRATEGY_SIGNAL_DIRECTIONS_V1, "direction", issues),
+    proposed_size: positiveNumberOrNull(firstDefined(
+      input.proposed_size,
+      input.proposedSize,
+      input.size,
+      input.quantity,
+      input.contracts,
+      input.payload?.proposed_size,
+      input.payload?.proposedSize,
+      input.payload?.size,
+      input.payload?.quantity,
+      input.payload?.contracts,
+    )),
     confidence: numberOrNull(input.confidence),
     timeframe: optionalText(firstDefined(input.timeframe, input.time_frame, input.timeFrame)),
     session: optionalText(input.session),
@@ -112,6 +124,11 @@ function issueValue(path, issues) {
 function numberOrNull(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function positiveNumberOrNull(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function array(value) {

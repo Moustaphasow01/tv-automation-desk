@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { canonicalJson } from "@tv-automation/desk-domain";
-import { CanonicalStrategyEvaluationScheduler, scopedSchedulerRunKey } from "../src/canonical-strategy-evaluation-scheduler.js";
+import { CanonicalStrategyEvaluationScheduler, schedulerContinuityAnchorUtc, scopedSchedulerRunKey } from "../src/canonical-strategy-evaluation-scheduler.js";
 
 describe("Canonical Strategy Evaluation Scheduler", () => {
   test("wakes a due SHADOW instance and persists a deterministic NO_SIGNAL result", async () => {
@@ -63,6 +63,24 @@ describe("Canonical Strategy Evaluation Scheduler", () => {
     assert.deepEqual(captured[0].last_scheduled_at_by_instance, { nominal: "2026-08-12T14:00:00.000Z" });
   });
 
+  test("anchors failed stale evaluations on completion time instead of stale market cutoff", () => {
+    const stale = schedulerContinuityAnchorUtc({
+      status: "FAILED",
+      source_data_cutoff_utc: "2026-08-12T11:40:00.000Z",
+      completed_at_utc: "2026-08-12T14:05:00.000Z",
+      payload: { availability: "STALE", marketCutoff: "2026-08-12T11:40:00.000Z" },
+    });
+    const healthy = schedulerContinuityAnchorUtc({
+      status: "NO_SIGNAL",
+      source_data_cutoff_utc: "2026-08-12T14:00:00.000Z",
+      completed_at_utc: "2026-08-12T14:05:00.000Z",
+      payload: { availability: "KNOWN", marketCutoff: "2026-08-12T14:00:00.000Z" },
+    });
+
+    assert.equal(stale, "2026-08-12T14:05:00.000Z");
+    assert.equal(healthy, "2026-08-12T14:00:00.000Z");
+  });
+
   test("scopes certification scheduler idempotency to its certification run", () => {
     const nominal = scopedSchedulerRunKey("scheduler:instance:cutoff", { sourceClass: "LIVE" });
     const first = scopedSchedulerRunKey("scheduler:instance:cutoff", { sourceClass: "CERTIFICATION_REPLAY", certificationRunId: "cert-a" });
@@ -109,6 +127,10 @@ function marketPool(asOf) {
   return {
     async query(sql) {
       if (sql.includes("ORDER BY timestamp_utc DESC LIMIT 1")) return { rows: [{ trading_date: "2026-08-12", timestamp_utc: asOf }] };
+      if (sql.includes("INTERVAL '10 days'")) {
+        assert.match(sql, /trading_date::date\s+>=/);
+        assert.match(sql, /trading_date::date\s+<=/);
+      }
       return { rows };
     },
   };

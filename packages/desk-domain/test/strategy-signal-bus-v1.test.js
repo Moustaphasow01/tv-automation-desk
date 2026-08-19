@@ -13,6 +13,7 @@ describe("strategy signal bus V1", () => {
     assert.equal(first.ok, true);
     assert.equal(first.signal.instrument, "MNQ");
     assert.equal(first.signal.direction, "LONG");
+    assert.equal(first.signal.proposed_size, 3);
     assert.equal(first.outbox.dedupe_key, second.outbox.dedupe_key);
     assert.match(first.outbox.payload_hash, /^sha256:[a-f0-9]{64}$/);
   });
@@ -35,6 +36,7 @@ describe("strategy signal bus V1", () => {
     assert.equal(envelope.type, "signal.emitted");
     assert.equal(envelope.aggregate_type, "strategy_signal");
     assert.equal(envelope.payload.strategy_instance_id, normalized.strategy_instance_id);
+    assert.equal(envelope.payload.proposed_size, normalized.proposed_size);
   });
 });
 
@@ -45,6 +47,7 @@ function signalFixture(overrides = {}) {
     strategy_version_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
     instrument: "MNQ",
     direction: "LONG",
+    proposed_size: 3,
     confidence: 0.72,
     execution_mode_origin: "PAPER",
     generated_at_utc: "2026-08-09T08:00:00.000Z",

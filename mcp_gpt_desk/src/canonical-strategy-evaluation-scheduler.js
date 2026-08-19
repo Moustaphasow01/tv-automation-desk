@@ -6,6 +6,7 @@ import {
 } from "@tv-automation/desk-domain";
 import { runCanonicalSimulationV1 } from "@tv-automation/desk-replay-engine";
 import { toParisIso } from "@tv-automation/desk-time";
+import { buildDataDrivenLiveRuntimeBindings } from "./research/data-driven-live-runtime-bindings.js";
 
 const DEFAULT_CADENCE_SECONDS = 300;
 const SYMBOL_BY_INSTRUMENT = Object.freeze({ MNQ: "MNQ1!", MES: "MES1!" });
@@ -35,7 +36,7 @@ export class CanonicalStrategyEvaluationScheduler {
     const planned = await this.store.strategyKernel.planInstanceSchedulerCycle({
       instances,
       now_utc: nowUtc,
-      last_scheduled_at_by_instance: Object.fromEntries([...latestByInstance].map(([id, item]) => [id, item.source_data_cutoff_utc || item.completed_at_utc])),
+      last_scheduled_at_by_instance: Object.fromEntries([...latestByInstance].map(([id, item]) => [id, schedulerContinuityAnchorUtc(item)])),
       default_cadence_seconds: bounded(input.cadence_seconds, DEFAULT_CADENCE_SECONDS),
       default_max_lag_seconds: bounded(input.max_lag_seconds, DEFAULT_CADENCE_SECONDS * 2),
       audit: input.audit !== false,
@@ -150,6 +151,15 @@ export function scopedSchedulerRunKey(baseKey, { sourceClass, certificationRunId
   return `${normalized}:cert:${canonicalSha256(certification).slice(0, 16)}`;
 }
 
+export function schedulerContinuityAnchorUtc(evaluation = {}) {
+  const status = String(evaluation.status || "").toUpperCase();
+  const availability = String(evaluation.payload?.availability || "").toUpperCase();
+  if (status === "FAILED" || availability === "STALE" || availability === "UNAVAILABLE") {
+    return evaluation.completed_at_utc || evaluation.source_data_cutoff_utc || null;
+  }
+  return evaluation.source_data_cutoff_utc || evaluation.completed_at_utc || null;
+}
+
 async function loadMarketDay(pool, { instrument, timeframe, cutoffUtc }) {
   const symbol = SYMBOL_BY_INSTRUMENT[instrument] || `${instrument}1!`;
   const latest = await pool.query(`SELECT trading_date, timestamp_utc FROM market_candles
@@ -159,16 +169,17 @@ async function loadMarketDay(pool, { instrument, timeframe, cutoffUtc }) {
   const result = await pool.query(`SELECT timestamp_utc,timestamp_paris,trading_date,open,high,low,close,volume,is_closed
     FROM market_candles WHERE symbol_code=$1 AND timeframe=$2 AND trading_date=$3 AND is_closed=true AND timestamp_utc <= $4::timestamptz
     ORDER BY timestamp_utc`, [symbol, timeframe, latest.rows[0].trading_date, cutoffUtc]);
-  const rows = result.rows.map((row) => ({
-    instrument,
-    symbol,
-    timeframe: `M${timeframe}`,
-    trading_date: row.trading_date,
-    time: row.timestamp_paris || toParisIso(Date.parse(row.timestamp_utc)),
-    timestamp_utc: iso(row.timestamp_utc),
-    timestamp_paris: row.timestamp_paris || toParisIso(Date.parse(row.timestamp_utc)),
-    open: Number(row.open), high: Number(row.high), low: Number(row.low), close: Number(row.close), volume: Number(row.volume || 0), is_closed: true,
-  }));
+  const context = await pool.query(`SELECT timestamp_utc,timestamp_paris,trading_date,open,high,low,close,volume,is_closed
+    FROM market_candles
+    WHERE symbol_code=$1
+      AND timeframe=$2
+      AND trading_date::date >= $3::date - INTERVAL '10 days'
+      AND trading_date::date <= $3::date
+      AND is_closed=true
+      AND timestamp_utc <= $4::timestamptz
+    ORDER BY timestamp_utc`, [symbol, timeframe, latest.rows[0].trading_date, cutoffUtc]);
+  const rows = result.rows.map((row) => marketRow(row, { instrument, symbol, timeframe }));
+  const contextRows = context.rows.map((row) => marketRow(row, { instrument, symbol, timeframe }));
   const actualCutoff = iso(latest.rows[0].timestamp_utc);
   const identity = { symbol, timeframe, tradingDate: latest.rows[0].trading_date, cutoffUtc: actualCutoff, rows: rows.length };
   const datasetId = `runtime_dataset_${canonicalSha256(identity).slice(0, 24)}`;
@@ -185,6 +196,8 @@ async function loadMarketDay(pool, { instrument, timeframe, cutoffUtc }) {
       time_range: { from_utc: rows[0]?.timestamp_utc, to_utc: actualCutoff, to_paris: toParisIso(Date.parse(actualCutoff)) },
       rows,
     },
+    contextRows,
+    tradingDate: latest.rows[0].trading_date,
   };
 }
 
@@ -192,26 +205,18 @@ function compileRuntimeArtifact({ definition, version, instance, market, instrum
   const dsl = version.metadata?.dsl_source;
   const sample = market.rows.slice(0, Math.min(36, market.rows.length));
   if (!dsl || !sample.length) return { ok: false, reasons: ["STRATEGY_DSL_OR_OPENING_RANGE_MISSING"] };
-  const high = quarter(Math.max(...sample.map((row) => row.high)));
-  const low = quarter(Math.min(...sample.map((row) => row.low)));
-  const setups = array(dsl.setup_templates).map((template) => runtimeBinding(template, { instrument, high, low }));
-  const first = market.rows[0];
+  const dataDrivenBindings = buildDataDrivenLiveRuntimeBindings({ version, dsl, instance, market, instrument });
+  if (looksDataDriven(dsl, version) && !dataDrivenBindings.ok) {
+    return { ok: false, reasons: ["DATA_DRIVEN_RUNTIME_BINDING_FAILED", ...array(dataDrivenBindings.reasons)] };
+  }
+  const bindings = dataDrivenBindings.ok
+    ? dataDrivenBindings.runtime_bindings
+    : genericRuntimeBindings({ dsl, instance, market, instrument, sample });
   return compileStrategyVersionToDeterministicPlanV1({
     strategy_definition: definition,
     strategy_version: { ...version, dsl_source: canonicalJson(dsl) },
     dsl_source: dsl,
-    runtime_bindings: {
-      valid_from_paris: first.timestamp_paris,
-      expires_at_paris: toParisIso(Date.parse(market.cutoffUtc) + 24 * 60 * 60_000),
-      cutoff_paris: toParisIso(Date.parse(market.cutoffUtc)),
-      pack_id: market.dataset.dataset_id,
-      pack_build_id: market.dataset.dataset_hash,
-      plan_id: `runtime_plan_${instance.strategy_instance_id}_${market.rows[0].trading_date}`,
-      session: "canonical_strategy_runtime",
-      trading_date: market.rows[0].trading_date,
-      setup_id_prefix: `runtime_${instance.strategy_instance_id}`,
-      setups,
-    },
+    runtime_bindings: bindings,
     scope: {
       trading_date: market.rows[0].trading_date,
       session: "canonical_strategy_runtime",
@@ -223,6 +228,50 @@ function compileRuntimeArtifact({ definition, version, instance, market, instrum
     },
     source_mode: String(instance.execution_mode || "SHADOW").toUpperCase(),
   });
+}
+
+function marketRow(row, { instrument, symbol, timeframe }) {
+  return {
+    instrument,
+    symbol,
+    timeframe: `M${timeframe}`,
+    trading_date: row.trading_date,
+    time: row.timestamp_paris || toParisIso(Date.parse(row.timestamp_utc)),
+    timestamp_utc: iso(row.timestamp_utc),
+    timestamp_paris: row.timestamp_paris || toParisIso(Date.parse(row.timestamp_utc)),
+    open: Number(row.open),
+    high: Number(row.high),
+    low: Number(row.low),
+    close: Number(row.close),
+    volume: Number(row.volume || 0),
+    is_closed: true,
+  };
+}
+
+function genericRuntimeBindings({ dsl, instance, market, instrument, sample }) {
+  const high = quarter(Math.max(...sample.map((row) => row.high)));
+  const low = quarter(Math.min(...sample.map((row) => row.low)));
+  const setups = array(dsl.setup_templates).map((template) => runtimeBinding(template, { instrument, high, low }));
+  const first = market.rows[0];
+  return {
+    valid_from_paris: first.timestamp_paris,
+    expires_at_paris: toParisIso(Date.parse(market.cutoffUtc) + 24 * 60 * 60_000),
+    cutoff_paris: toParisIso(Date.parse(market.cutoffUtc)),
+    pack_id: market.dataset.dataset_id,
+    pack_build_id: market.dataset.dataset_hash,
+    plan_id: `runtime_plan_${instance.strategy_instance_id}_${market.rows[0].trading_date}`,
+    session: "canonical_strategy_runtime",
+    trading_date: market.rows[0].trading_date,
+    setup_id_prefix: `runtime_${instance.strategy_instance_id}`,
+    setups,
+  };
+}
+
+function looksDataDriven(dsl = {}, version = {}) {
+  const metadata = { ...(version.metadata || {}), ...(dsl.metadata || {}) };
+  return String(metadata.generator || "").includes("data_driven")
+    || String(metadata.family_id || "").length > 0
+    || String(metadata.anchor_kind || "").length > 0;
 }
 
 function runtimeBinding(template, { instrument, high, low }) {

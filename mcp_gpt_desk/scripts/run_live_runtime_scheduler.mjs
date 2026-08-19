@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import process from "node:process";
 import { createDeskStoreFromEnv } from "../src/store.js";
+import { createStrategySignalDecisionPipelineService } from "../src/strategy-signal-decision-pipeline-service.js";
 import { floorParisCheckpoint, liveRunId } from "../src/live-scope.js";
 import { parisMarketSessionState } from "../src/market-session-state.js";
 import {
@@ -20,6 +21,9 @@ const macroCalendarEnabled = process.env.DESK_MACRO_CALENDAR_ENABLED !== "false"
 const newsRefreshMs = boundedNumber(process.env.DESK_NEWS_REFRESH_MS, 15 * 60_000, 60_000, 6 * 60 * 60_000);
 const newsEnabled = process.env.DESK_NEWS_ENABLED !== "false";
 const store = createDeskStoreFromEnv();
+const strategySignalDecisionPipeline = store.persistence?.pool
+  ? createStrategySignalDecisionPipelineService({ store })
+  : null;
 const instanceId = String(process.env.DESK_SERVICE_INSTANCE_ID || `live-runtime-${process.pid}`);
 const releaseVersion = String(process.env.DESK_RELEASE_VERSION || "unversioned");
 let stopped = false;
@@ -72,6 +76,7 @@ try {
         macro_calendar: outcome.macro_calendar || null,
         news: outcome.news || null,
         strategy_runtime: outcome.strategy_runtime || null,
+        strategy_signal_decision_pipeline: outcome.strategy_signal_decision_pipeline || null,
         optional_dependency_warnings: [
           ...(macroWarning ? ["macro_calendar_provider_degraded_cached_coverage_ready"] : []),
           ...(newsDegraded ? ["news_provider_degraded"] : []),
@@ -112,6 +117,14 @@ async function runDueWork(now) {
   const strategyRuntime = store.strategyEvaluationScheduler
     ? await store.strategyEvaluationScheduler.runCycle({ now_utc: now.toISOString(), actor: "live-runtime-scheduler" })
     : { status: "UNAVAILABLE", outcomes: [] };
+  const strategySignalDecision = strategySignalDecisionPipeline
+    ? await strategySignalDecisionPipeline.runOnce({
+      now_utc: now.toISOString(),
+      source_classes: ["LIVE", "SHADOW"],
+      execution_modes: ["SHADOW"],
+      account_id: process.env.DESK_SHADOW_RUNTIME_ACCOUNT_ID || "shadow_live",
+    })
+    : { status: "UNAVAILABLE" };
   const nowMs = now.getTime();
   const engineTimestampParis = floorParisCheckpoint(
     nowMs,
@@ -253,6 +266,7 @@ async function runDueWork(now) {
     macro_calendar: macroCalendar,
     news,
     strategy_runtime: strategyRuntime,
+    strategy_signal_decision_pipeline: strategySignalDecision,
   };
 }
 
