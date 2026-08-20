@@ -469,3 +469,105 @@ values I couldn't confirm against the mockup. If there's more still off
 after this round, the same pattern that worked twice now (you look at
 the real rendered page and point at specific things) will be much faster
 than me iterating blind.
+
+## 5. Menu redesign, clipping bugs, and click-to-expand panels
+
+Third round of user feedback, three items: the sidebar menu is
+disorganized/not centralized (full redesign explicitly authorized);
+Human Gate's Confirm/Reject buttons are cut off and Provider Runtime's
+content overlaps; add a click-to-expand/zoom capability to panels.
+
+### 5.1 Clipping/overlap bug fix (commit `a4585d6`)
+
+Regression from my own previous commit (`3db8367`): adding Human Gate's
+metadata row + "View Audit" link, and enlarging Provider Runtime's
+numbered circles, grew both panels' needed content height without
+checking their containing grid rows still had room. Measured with
+`getBoundingClientRect`/`scrollHeight` this time instead of guessing
+(the mistake last round). Root causes: Provider Runtime's row was a
+hardcoded `94px` that never grew with viewport height while its content
+now needed ~130px; some of my new additions were less compact than
+necessary. Fixed by: bumping the hardcoded row to 130px, tightening the
+new additions (saved ~45px without shrinking any font), and — since even
+after tightening some viewport heights genuinely can't fit every panel's
+natural content with zero slack anywhere to redistribute from — applying
+this app's own existing pattern for exactly that situation
+(`overflow-y: auto`, already used by 4 other panels) so content that
+doesn't fit becomes scrollable instead of invisibly hard-clipped.
+Verified the actual complaint, not just "no CSS overflow flag": Confirm/
+Reject buttons and all 5 provider steps confirmed fully within visible
+bounds at both 850px and 960px viewport heights without needing to
+scroll; confirmed zero pixel gap/overlap between provider steps and the
+panel footer.
+
+### 5.2 Sidebar menu redesign (commit `d15063d`)
+
+Investigated before writing any code: a complete grouped-sidebar system
+already existed — `routes.ts`'s `navGroup` taxonomy, a
+`groupRoutesByNavigation()`/`NAV_GROUP_LABELS` helper in
+`shell/navigation.ts`, and a `.sidebar-nav-group`/`h2` CSS block in the
+design system — but `DeskShell.tsx` just rendered all 14 nav items as one
+flat `.map()`; the grouping data was only ever consumed by the search
+dropdown and breadcrumb, never the persistent sidebar.
+
+Didn't reuse the existing 9-way taxonomy for the sidebar itself (6 of
+those groups have exactly one item each — would render as 6 near-empty
+one-item sections, not more "centralized"). Defined a separate,
+sidebar-specific 5-section grouping instead: **Pilotage** (Command
+Center, Live Trading), **Stratégie** (Strategy Center, Research Lab,
+Replay, Performance), **Exécution** (Portfolio, Risk Center, Orders,
+Execution), **Supervision** (Incidents, Audit), **Système** (Jarvis,
+Settings). `routes.ts`'s own taxonomy is untouched — breadcrumbs/search
+still use it as before.
+
+Wired into all three sidebar widths in the app: default shell (210px,
+full text headers), Command Center's rail (164px, headers fit, added
+matching styling, hidden at its own icon-only collapse breakpoint),
+Live Trading's rail (96px, too narrow for header text at any size — same
+grouping renders as a visual divider instead of a label). Verified
+in-browser on all three: correct labels/order, no horizontal overflow,
+negligible (2px, pre-existing) vertical overflow on Command Center's
+already-scrollable nav.
+
+### 5.3 Click-to-expand panels (commit `b88611c`)
+
+New capability: every panel on Live Trading (all 13, via the shared
+`LivePanel` component) now has an expand button in its header. Clicking
+it grows the same panel to ~920×720px, centered over a semi-transparent
+backdrop (`rgba(2,8,19,.72)`) — the live screen stays visible, dimmed,
+behind it, matching "une pop-up centralisée avec l'écran live derrière"
+exactly. Closes via backdrop click or Escape.
+
+Implementation choice worth recording: no React portal, no content
+duplication. The panel just switches to `position: fixed` in place — same
+component instance, same position in the tree, so no state is lost and no
+double-render/sync risk for panels with local state (Human Gate's confirm
+dialog). `position: fixed` correctly escapes every ancestor's
+`overflow: hidden` (`.lt-grid`, `.lt-execution-rail`, etc.) since none of
+them use a `transform` that would create a new containing block — this is
+the whole reason a portal wasn't needed here.
+
+One real bug caught during verification, not by luck: Human Gate's own
+inner confirm dialog was `z-index: 50`. With the expanded panel at 901,
+the dialog would have rendered *behind* an expanded Human Gate panel —
+bumped it to 950. Only found this by actually exercising the interaction
+(expand the panel → try to open its dialog), not by checking the toggle
+in isolation.
+
+Also hit — twice now — the same stuck-dev-tab artifact from prior
+rounds (rapid HMR reloads leave a tab's module graph in a broken state
+where clicks silently no-op); resolved every time by testing in a freshly
+opened tab instead of debugging the stale one. Worth remembering for next
+time rather than re-diagnosing from scratch.
+
+**Explicitly scoped out, not forgotten:** the user asked for this "pareil
+pour les autres composants du front" (same for the other front
+components). This commit only touches `LivePanel` (Live Trading-only).
+Every other page in the app uses the shared `Card` component from
+`design-system/primitives` instead — extending the identical pattern
+there would make expand-to-zoom available app-wide with one change, and
+is the natural next step, but is a separate, sizeable piece of surface
+area (used across ~20 pages) that wasn't attempted in this pass.
+
+Full suite 173/173, `tsc --noEmit` clean after every commit in this
+section.
