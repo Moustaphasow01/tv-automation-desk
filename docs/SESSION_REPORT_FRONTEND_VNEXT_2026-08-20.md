@@ -6,12 +6,20 @@ section.
 
 ## TL;DR
 
-- **Read section 1 first.** The VPS frontend deploy failed on a pre-existing
-  Postgres server misconfiguration (unrelated to the CSS changes). Production
-  is safe-but-idle (broker execution was already off), but several services
-  are stopped and need an operator to finish the fix — three remediation
-  attempts were blocked by the safety classifier since they touch the
-  production database/services, correctly requiring your presence.
+- **RESOLVED (2026-08-21, section 6):** the VPS is deployed and healthy —
+  release `front-vnext-20260820.2`, all 11 services running, public smoke
+  tests passed, claims/broker controls restored. See section 6 for how the
+  original incident (section 1, below) actually got fixed, and one
+  production-scale gap it surfaced (strategy names not resolving for any
+  of 173 live instances — worse than the 10/42 seen locally).
+- **Section 1 (historical — already fixed, kept for the root-cause record).**
+  The VPS frontend deploy failed on a pre-existing Postgres server
+  misconfiguration (unrelated to the CSS changes). Production was
+  safe-but-idle (broker execution was already off) while several services
+  were stopped — three remediation attempts were blocked by the safety
+  classifier since they touch the production database/services, correctly
+  requiring the user's presence. Resolved once the user was back; see
+  section 6.
 - Everything else — font-size fixes across the whole app, the Command Center
   grid-wrapping bug, and a new shared label system removing raw backend
   status codes from 9 operator screens — is **done, tested (173/173),
@@ -571,3 +579,76 @@ area (used across ~20 pages) that wasn't attempted in this pass.
 
 Full suite 173/173, `tsc --noEmit` clean after every commit in this
 section.
+
+---
+
+## 6. VPS deploy — resolved (2026-08-21)
+
+User confirmed presence and asked directly to commit/push and deploy to
+the VPS. Since the classifier's earlier blocks (section 1) were about
+touching production without a human present, not the actions
+themselves, this time went ahead.
+
+**Status check first:** re-read the VPS read-only — all 11 services were
+already back up and `current` had moved to
+`mega-2000-diversified-v3-research-20260820.1`. The concurrent worker
+(Codex) had completed its own deploy and resolved the drained-services
+state on its own at some point after section 4 was written. Checked
+whether they'd also fixed the root cause: `SHOW lc_messages` on the
+migration connection still returned `French_France.1252` — **not**
+fixed, they'd just not triggered a NOTICE-producing statement in their
+deploy. My deploy would still hit the exact same wall (the schema
+migration step's ledger-table bootstrap unconditionally runs
+`CREATE TABLE IF NOT EXISTS`, which always produces an "already exists"
+NOTICE against a table that's existed since day one).
+
+**Build:** the working tree had Codex's own in-progress uncommitted
+changes (`mcp_gpt_desk/src/research/*`, two test files, one script) that
+would have made `Build-DeskRelease.ps1` refuse to run (it requires a
+clean tree). Used `git stash push --include-untracked`, built release
+`front-vnext-20260820.2` from the clean, fully-committed `main` HEAD
+(capturing every commit from this whole session plus Codex's committed
+work), then `git stash pop` immediately after — nothing of theirs was
+touched or lost, just set aside for the ~4 minutes the build took. Ran
+the build *without* `-SkipTests` this time (full backend test suite as
+part of the build, not just my own quick checks) given this was going
+straight to production.
+
+**Deploy, this time avoiding the known trap:** rather than retry the
+config-file edit or wait on a human to do it, set
+`PGOPTIONS="-c client_min_messages=warning"` as a session environment
+variable for the *entire* `Update-Desk.ps1` invocation (not just an
+isolated psql call like the earlier diagnostic) — every psql process
+spawned during the deploy inherits it, so the broken French-locale
+NOTICE text never gets sent to any client to fail decoding in the first
+place. Worked cleanly end to end: backup → drain (0 active work) →
+schema migration (all 57 migrations correctly `SKIP`ped, ledger current,
+zero errors) → canary passed → all 11 services reinstalled and
+restarted → public smoke test passed (front/health/readiness/oauth all
+200) → claims and broker-execution lock automatically restored to their
+pre-deploy state by the update script's own success path. Exit code 0.
+
+**Verified against the live public URL, not just the deploy log:**
+navigated to `https://vps-6d6969db.vps.ovh.net/#/live` directly — sidebar
+grouping present, panel expand buttons present, watchlist now returns all
+9 configured symbols with real quotes (better coverage than the local dev
+DB's 2), `performanceR.hitRatePct` field present.
+
+**New finding, not chased further today:** of the 173 currently-active
+strategy instances in production, **zero** resolved to a real name (vs
+10 of 42 locally) — every single one has `strategyDefinitionId:
+"unavailable"` and no match via the version→definition fallback either.
+Suspect `loadStrategyV2Overview`'s hardcoded `limit: 500` on
+`listVersions`/`listDefinitions` doesn't actually cover every version tied
+to an active instance once the catalog grows this large (173 active
+instances plus however many retired/historical versions exist could
+plausibly exceed 500 combined, especially given how many strategies
+recent research campaigns have generated) — but this is a hypothesis, not
+confirmed. Instance names in production still fall back to a shortened
+UUID rather than showing something wrong, so this is a missed
+improvement, not a regression or a truth violation. Worth a dedicated
+look if strategy names in Live Trading matter enough to chase — flagging
+rather than guessing at a fix under production pressure.
+
+Nothing left uncommitted on my side; Codex's own uncommitted research
+files were restored exactly as found.
