@@ -937,7 +937,7 @@ a {
 /* VNext desk-compact pass — target: dense operator cockpit, Bloomberg-like. */
 :root {
   color-scheme: dark;
-  font-size: 13px;
+  font-size: 17px;
   --bg: #050d16;
   --panel: #081827;
   --panel-strong: #0a1d2e;
@@ -1009,18 +1009,18 @@ body {
   background:
     linear-gradient(145deg, rgba(34, 211, 197, 0.2), rgba(33, 86, 122, 0.08)),
     rgba(34, 211, 197, 0.08);
-  font-size: 15px;
+  font-size: 19px;
 }
 
 .brand-block h1 {
-  font-size: 20px;
+  font-size: 24px;
   line-height: 1;
   letter-spacing: -0.06em;
 }
 
 .brand-block .eyebrow {
   margin-top: 3px;
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.14em;
 }
 
@@ -1037,7 +1037,7 @@ body {
   border-radius: 7px;
   padding: 0 9px;
   color: #9eb1c2;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -1056,7 +1056,7 @@ body {
   border-radius: 999px;
   padding: 1px 5px;
   color: #d5b7ff;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .nav-marker {
@@ -1068,7 +1068,7 @@ body {
   border-radius: 5px;
   background: rgba(8, 31, 49, 0.9);
   color: #7fd8ff;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.04em;
 }
@@ -1094,12 +1094,12 @@ body {
 .sidebar-status-stack span {
   margin: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
 .sidebar-status-stack strong {
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .status-ok,
@@ -1147,7 +1147,7 @@ body {
 
 .topbar-time strong {
   color: #f1f8ff;
-  font-size: 16px;
+  font-size: 20px;
   letter-spacing: -0.04em;
 }
 
@@ -1155,7 +1155,7 @@ body {
 .topbar-ops span,
 .topbar-ops small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .topbar-search {
@@ -1175,7 +1175,7 @@ body {
   place-items: center;
   border-right: 1px solid rgba(71, 132, 170, 0.24);
   color: #6d879d;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.12em;
 }
@@ -1190,7 +1190,7 @@ body {
   color: var(--text);
   padding: 0 10px;
   font: inherit;
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .topbar-search input::placeholder {
@@ -1218,14 +1218,14 @@ body {
 
 .market-tick strong {
   color: #d8e9f7;
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.06em;
 }
 
 .market-tick span {
   overflow: hidden;
   color: #eef8ff;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 900;
   letter-spacing: -0.05em;
   text-overflow: ellipsis;
@@ -1235,7 +1235,7 @@ body {
 .market-tick small {
   grid-column: 1 / -1;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .market-tick--up small {
@@ -1260,7 +1260,7 @@ body {
   background: rgba(87, 227, 154, 0.08);
   color: var(--success);
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.12em;
 }
 
@@ -1281,7 +1281,7 @@ body {
   border-left: 1px solid rgba(71, 132, 170, 0.28);
   padding-left: 8px;
   color: #dce8f2 !important;
-  font-size: 10px !important;
+  font-size: 14px !important;
   line-height: 1.25;
   text-align: right;
   text-overflow: ellipsis;
@@ -1309,7 +1309,7 @@ body {
   background: rgba(4, 12, 21, 0.98);
   padding: 0 16px;
   color: #8098ac;
-  font-size: 10px;
+  font-size: 14px;
   white-space: nowrap;
 }
 
@@ -1352,7 +1352,7 @@ body {
 .ds-card__body h2 {
   margin: 1px 0 0;
   color: #e9f4fc;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 900;
   letter-spacing: 0.01em;
   text-transform: uppercase;
@@ -1360,7 +1360,7 @@ body {
 
 .ds-card__description {
   margin: 3px 0 0;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.3;
 }
 
@@ -1368,13 +1368,13 @@ body {
   margin-top: 8px;
   border-top: 1px solid rgba(71, 132, 170, 0.2);
   padding-top: 7px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .eyebrow,
 .nav-section-title {
   color: #7890a4;
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.14em;
 }
 
@@ -1382,7 +1382,7 @@ body {
   min-height: 18px;
   border-radius: 5px;
   padding: 0 6px;
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.08em;
 }
 
@@ -1409,7 +1409,7 @@ body {
 
 .data-table {
   min-width: 720px;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .data-table th,
@@ -1422,7 +1422,7 @@ body {
 .data-table th {
   background: rgba(5, 16, 27, 0.98);
   color: #7890a4;
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.1em;
 }
 
@@ -1455,7 +1455,7 @@ body {
 .portfolio-titlebar h1 {
   margin: 0;
   color: #f2f8ff;
-  font-size: 21px;
+  font-size: 25px;
   line-height: 1.05;
   letter-spacing: -0.04em;
 }
@@ -1463,7 +1463,7 @@ body {
 .portfolio-titlebar p {
   margin: 3px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .portfolio-actions {
@@ -1483,7 +1483,7 @@ body {
   color: #bcd1df;
   padding: 0 9px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -1522,14 +1522,14 @@ body {
 
 .kpi-card span {
   color: #839aac;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.12em;
 }
 
 .kpi-card strong {
   color: #f4faff;
-  font-size: clamp(18px, 1.35vw, 24px);
+  font-size: clamp(22px, 1.6vw, 28px);
   line-height: 1;
   letter-spacing: -0.055em;
 }
@@ -1537,7 +1537,7 @@ body {
 .kpi-card small,
 .kpi-card__detail {
   color: #91a9ba;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .portfolio-grid {
@@ -1588,7 +1588,7 @@ body {
 .segmented-tabs button {
   min-height: 22px;
   padding: 0 7px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .exposure-treemap {
@@ -1630,7 +1630,7 @@ body {
 .treemap-tile small {
   overflow: hidden;
   color: #91a9ba;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1638,14 +1638,14 @@ body {
 .treemap-tile strong {
   overflow: hidden;
   color: #eef8ff;
-  font-size: 13px;
+  font-size: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .treemap-tile b {
   color: #f8fcff;
-  font-size: 17px;
+  font-size: 21px;
   letter-spacing: -0.05em;
 }
 
@@ -1655,7 +1655,7 @@ body {
   gap: 10px;
   margin-top: 8px;
   color: #91a9ba;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .treemap-legend span {
@@ -1700,7 +1700,7 @@ body {
   min-height: 25px;
   place-items: center;
   color: #7f95a8;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -1716,7 +1716,7 @@ body {
   border-radius: 5px;
   background: rgba(34, 211, 197, 0.12);
   color: #dce8f2;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -1743,7 +1743,7 @@ body {
   min-height: 26px;
   place-items: center;
   color: #7f95a8;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .correlation-matrix span {
@@ -1754,7 +1754,7 @@ body {
   border-radius: 5px;
   background: rgba(34, 211, 197, 0.12);
   color: #dce8f2;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -1789,7 +1789,7 @@ body {
 .metric-box small {
   overflow: hidden;
   color: #8198ac;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-overflow: ellipsis;
@@ -1799,7 +1799,7 @@ body {
 
 .metric-box strong {
   color: #eef8ff;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   letter-spacing: -0.05em;
 }
@@ -1811,7 +1811,7 @@ body {
   gap: 8px;
   margin-top: 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .attribution-list {
@@ -1828,11 +1828,11 @@ body {
 
 .attribution-list strong {
   color: #dce8f2;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .attribution-list span {
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 900;
 }
 
@@ -1854,18 +1854,18 @@ body {
 }
 
 .timeline__item span {
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .timeline__item strong {
   display: block;
   color: #dce8f2;
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.2;
 }
 
 .timeline__item p {
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -2021,11 +2021,11 @@ body {
     background: transparent;
     color: #287bff;
     filter: drop-shadow(0 0 8px rgba(40, 123, 255, 0.62));
-    font-size: 25px;
+    font-size: 29px;
   }
 
   .brand-block h1 {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 800;
     letter-spacing: 0.015em;
   }
@@ -2041,7 +2041,7 @@ body {
   .brand-block .eyebrow {
     margin-top: 5px;
     color: #7892ad;
-    font-size: 10px;
+    font-size: 14px;
     letter-spacing: 0.19em;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2063,7 +2063,7 @@ body {
     border-radius: 9px;
     padding: 0 13px;
     color: #aebed0;
-    font-size: 12px;
+    font-size: 16px;
     font-weight: 400;
   }
 
@@ -2092,7 +2092,7 @@ body {
     background: #0b315a;
     color: #80c8ff;
     padding: 2px 5px;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .nav-marker {
@@ -2128,7 +2128,7 @@ body {
 
   .sidebar-status-stack p {
     color: #6f879f;
-    font-size: 10px;
+    font-size: 14px;
     letter-spacing: 0.09em;
   }
 
@@ -2136,7 +2136,7 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: 15px;
   }
 
   .sidebar-status-stack strong svg,
@@ -2147,13 +2147,13 @@ body {
   }
 
   .sidebar-status-stack span {
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .sidebar-status-stack > small {
     align-self: end;
     color: #486079;
-    font-size: 10px;
+    font-size: 14px;
     line-height: 1.7;
   }
 
@@ -2175,13 +2175,13 @@ body {
   }
 
   .topbar-time strong {
-    font-size: 14px;
+    font-size: 18px;
     font-weight: 800;
   }
 
   .topbar-time span {
     color: #8ba4bd;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .topbar-search {
@@ -2203,7 +2203,7 @@ body {
 
   .topbar-search input {
     padding: 0 10px;
-    font-size: 11px;
+    font-size: 15px;
   }
 
   .topbar-search input::placeholder {
@@ -2236,19 +2236,19 @@ body {
   }
 
   .market-tick strong {
-    font-size: 10px;
+    font-size: 14px;
     letter-spacing: 0;
   }
 
   .market-tick span {
     color: var(--success);
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 500;
     letter-spacing: 0;
   }
 
   .market-tick small {
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .market-tick--down span,
@@ -2271,12 +2271,12 @@ body {
     place-items: center;
     gap: 2px;
     color: #c3d3e3 !important;
-    font-size: 10px !important;
+    font-size: 14px !important;
   }
 
   .timezone-chip svg {
     color: #09bde8;
-    font-size: 13px;
+    font-size: 17px;
   }
 
   .topbar-ops > strong {
@@ -2288,7 +2288,7 @@ body {
     border-radius: 0;
     background: transparent !important;
     padding: 0;
-    font-size: 10px;
+    font-size: 14px;
     letter-spacing: 0;
   }
 
@@ -2316,7 +2316,7 @@ body {
 
   .notification-chip small {
     color: #dbe8f5;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .user-chip {
@@ -2344,12 +2344,12 @@ body {
   .user-chip > span {
     display: grid;
     gap: 2px;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .user-chip small {
     display: block;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .desk-content {
@@ -2370,7 +2370,7 @@ body {
     border-top-color: #10243a;
     background: #040a12;
     padding: 0 18px;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .desk-status-footer > div {
@@ -2404,7 +2404,7 @@ body {
   }
 
   .portfolio-titlebar h1 {
-    font-size: 22px;
+    font-size: 26px;
     font-weight: 750;
     line-height: 1.08;
     letter-spacing: -0.025em;
@@ -2413,7 +2413,7 @@ body {
   .portfolio-titlebar p {
     margin-top: 5px;
     color: #7790a9;
-    font-size: 11px;
+    font-size: 15px;
   }
 
   .portfolio-actions {
@@ -2430,7 +2430,7 @@ body {
     background: #071724;
     padding: 0 11px;
     color: #c3d3e2;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 500;
   }
 
@@ -2486,13 +2486,13 @@ body {
 
   .kpi-card span {
     color: #8299b0;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 500;
     letter-spacing: 0.07em;
   }
 
   .kpi-card strong {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 750;
     line-height: 1;
     letter-spacing: -0.03em;
@@ -2513,7 +2513,7 @@ body {
 
   .kpi-card > small {
     color: #7891a9;
-    font-size: 10px;
+    font-size: 14px;
     line-height: 1.1;
   }
 
@@ -2596,7 +2596,7 @@ body {
 
   .portfolio-grid .ds-card__header h2 {
     margin: 0;
-    font-size: 11px;
+    font-size: 15px;
     font-weight: 800;
     line-height: 1;
     letter-spacing: 0;
@@ -2636,7 +2636,7 @@ body {
     background: transparent;
     padding: 0;
     color: #299cff;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 500;
   }
 
@@ -2656,7 +2656,7 @@ body {
     background: transparent;
     padding: 0 10px;
     color: #7189a1;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 500;
     white-space: nowrap;
   }
@@ -2735,7 +2735,7 @@ body {
 
   .treemap-tile strong {
     color: #f0f6ff;
-    font-size: 17px;
+    font-size: 21px;
     font-weight: 750;
     line-height: 1.08;
     white-space: normal;
@@ -2743,14 +2743,14 @@ body {
 
   .treemap-tile span {
     color: #c6d9e9;
-    font-size: 10px;
+    font-size: 14px;
     line-height: 1.25;
     white-space: normal;
   }
 
   .treemap-tile div {
     color: #eef6ff;
-    font-size: 14px;
+    font-size: 18px;
     line-height: 1.35;
   }
 
@@ -2770,7 +2770,7 @@ body {
     gap: 12px;
     margin-top: 7px;
     color: #7e96ad;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .treemap-legend span {
@@ -2805,7 +2805,7 @@ body {
     width: 100%;
     min-width: 0;
     table-layout: auto;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .portfolio-grid .data-table th {
@@ -2814,7 +2814,7 @@ body {
     background: transparent;
     padding: 3px 5px;
     color: #7189a2;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: 0.08em;
   }
@@ -2824,7 +2824,7 @@ body {
     border-bottom-color: #122b42;
     padding: 5px;
     color: #cad8e6;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .portfolio-grid--top > .ds-card:nth-child(2) .data-table th,
@@ -2837,7 +2837,7 @@ body {
     min-height: 18px;
     border-radius: 5px;
     padding: 0 6px;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: 0;
   }
@@ -2876,7 +2876,7 @@ body {
   .correlation-axis-label {
     min-height: 17px;
     color: #7189a1;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .correlation-grid span:not(.correlation-corner) {
@@ -2884,7 +2884,7 @@ body {
     border: 0;
     border-radius: 3px;
     color: #dce9f5;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 500;
     opacity: 1;
   }
@@ -2945,14 +2945,14 @@ body {
 
   .metric-box small {
     color: #7189a1;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 500;
     letter-spacing: 0;
     text-transform: none;
   }
 
   .metric-box strong {
-    font-size: 14px;
+    font-size: 18px;
     font-weight: 750;
     letter-spacing: -0.02em;
   }
@@ -2981,12 +2981,12 @@ body {
   }
 
   .strategy-cell strong {
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .strategy-cell small {
     color: #7189a1;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .reconciliation-grid {
@@ -3003,7 +3003,7 @@ body {
   }
 
   .reconciliation-grid .metric-box strong {
-    font-size: 16px;
+    font-size: 20px;
   }
 
   .reconciliation-table-wrap {
@@ -3014,13 +3014,13 @@ body {
     width: 100%;
     border-collapse: collapse;
     color: #c7d7e7;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .reconciliation-table th {
     height: 24px;
     color: #7189a1;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 600;
     letter-spacing: 0.07em;
     text-align: left;
@@ -3041,7 +3041,7 @@ body {
     background: #291a03;
     padding: 4px 10px;
     color: #ffbd58;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .attribution-list {
@@ -3059,7 +3059,7 @@ body {
 
   .attribution-list article > strong,
   .attribution-list article > span {
-    font-size: 10px;
+    font-size: 14px;
     line-height: 1;
   }
 
@@ -3104,7 +3104,7 @@ body {
   }
 
   .attribution-metrics .metric-box strong {
-    font-size: 14px;
+    font-size: 18px;
   }
 
   .portfolio-timeline-card {
@@ -3123,7 +3123,7 @@ body {
   }
 
   .portfolio-timeline-card__header > strong {
-    font-size: 11px;
+    font-size: 15px;
   }
 
   .portfolio-horizontal-timeline {
@@ -3162,14 +3162,14 @@ body {
   .timeline-event small {
     overflow: hidden;
     color: #7189a1;
-    font-size: 10px;
+    font-size: 14px;
     text-overflow: ellipsis;
   }
 
   .timeline-event strong {
     overflow: hidden;
     color: #e4eef8;
-    font-size: 10px;
+    font-size: 14px;
     line-height: 1.2;
   }
 }
@@ -3193,7 +3193,7 @@ body {
 .operator-page-header h1 {
   margin: 0;
   color: #f2f8ff;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 750;
   line-height: 1.08;
   letter-spacing: -0.025em;
@@ -3202,7 +3202,7 @@ body {
 .operator-page-header p {
   margin: 5px 0 0;
   color: #7790a9;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .operator-page-actions {
@@ -3223,7 +3223,7 @@ body {
   padding: 0 11px;
   color: #c3d3e2;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 500;
   text-decoration: none;
 }
@@ -3284,7 +3284,7 @@ body {
 
 .live-launch-gate__summary strong {
   color: #e8f2ff;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .live-launch-gate__summary small,
@@ -3293,7 +3293,7 @@ body {
 .live-launch-gate__checks small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3344,7 +3344,7 @@ body {
 .live-launch-gate__blockers strong {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3383,7 +3383,7 @@ body {
 .live-launch-gate__blockers span {
   overflow: hidden;
   color: #ffb4bd;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3412,7 +3412,7 @@ body {
 
 .operator-grid .ds-card__header h2 {
   margin: 0;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
@@ -3456,7 +3456,7 @@ body {
 .operational-copy strong {
   overflow: hidden;
   color: #e8f2ff;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3467,20 +3467,20 @@ body {
 .operational-copy p {
   margin: 0;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.35;
 }
 
 .operational-detail-list b {
   color: #c9d9e8;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 650;
   white-space: nowrap;
 }
 
 .operational-copy p {
   color: #c1d1e1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .tag-cloud {
@@ -3511,13 +3511,13 @@ body {
 
 .explorer-focus > div:first-child strong {
   color: #e8f2ff;
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .explorer-focus > div:first-child p {
   margin: 0;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.4;
 }
 
@@ -3527,7 +3527,7 @@ body {
   gap: 6px;
   color: #6f879f;
   font-family: var(--font-mono, "JetBrains Mono", monospace);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -3542,7 +3542,7 @@ body {
 
 .explorer-focus > a {
   color: #8ed0ff;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .demo-paper-readiness-page .operator-grid--top {
@@ -3586,7 +3586,7 @@ body {
 .readiness-links strong {
   overflow: hidden;
   color: #e8f2ff;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3599,7 +3599,7 @@ body {
 .readiness-links small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3668,7 +3668,7 @@ body {
   border: 1px solid #1d4266;
   border-radius: 7px;
   color: #9bdcff;
-  font-size: 10px;
+  font-size: 14px;
   text-decoration: none;
 }
 
@@ -3731,7 +3731,7 @@ body {
   border-radius: 6px;
   background: #09271d;
   color: var(--success);
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .system-health-icon--degraded {
@@ -3756,7 +3756,7 @@ body {
 .command-agenda strong,
 .command-shortcuts strong {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .system-health-list small,
@@ -3764,12 +3764,12 @@ body {
 .command-agenda small,
 .command-shortcuts small {
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .system-health-list article > span:nth-last-child(2) {
   color: #88a0b8;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -3800,18 +3800,18 @@ body {
   grid-row: 1 / 3;
   align-self: center;
   color: #29c995;
-  font-size: 18px;
+  font-size: 22px;
 }
 
 .risk-overview__headline small,
 .risk-usage small {
   color: #7189a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .risk-overview__headline strong {
   color: #e6eff8;
-  font-size: 15px;
+  font-size: 19px;
 }
 
 .risk-usage {
@@ -3831,7 +3831,7 @@ body {
 
 .risk-usage strong {
   color: var(--warning);
-  font-size: 14px;
+  font-size: 18px;
 }
 
 .risk-metric-grid {
@@ -3861,7 +3861,7 @@ body {
 
 .operating-lanes article > span {
   color: #d9e6f3;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 700;
   text-align: right;
 }
@@ -3917,7 +3917,7 @@ body {
 
 .desk-control-action strong {
   overflow: hidden;
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3926,7 +3926,7 @@ body {
 .desk-control-action small {
   overflow: hidden;
   color: #7790a9;
-  font-size: 9px;
+  font-size: 13px;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3952,7 +3952,7 @@ body {
   grid-column: 1 / -1;
   margin: 0;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -3982,7 +3982,7 @@ body {
   place-items: center;
   gap: 4px;
   color: #6abcf5;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -4017,7 +4017,7 @@ body {
 
 .command-shortcuts a > svg {
   color: #3f9cff;
-  font-size: 20px;
+  font-size: 24px;
 }
 
 .command-shortcuts a > span {
@@ -4059,7 +4059,7 @@ body {
   border-radius: 6px;
   background: #08223a;
   color: #38bdf8;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-pipeline__stage--done .research-pipeline__icon {
@@ -4083,7 +4083,7 @@ body {
 .research-incidents strong,
 .research-table-link strong {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-pipeline__stage small,
@@ -4096,7 +4096,7 @@ body {
 .research-table-link small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4128,7 +4128,7 @@ body {
 
 .research-progress-cell small {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -4172,7 +4172,7 @@ body {
   border-radius: 6px;
   background: #08223a;
   color: #38bdf8;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-agent-card__status--active {
@@ -4189,7 +4189,7 @@ body {
 
 .research-agent-card > span:nth-of-type(2) {
   color: #d9e6f3;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 800;
   text-align: right;
 }
@@ -4208,12 +4208,12 @@ body {
 .research-incidents article > svg,
 .research-cluster-list article > svg {
   color: #38bdf8;
-  font-size: 13px;
+  font-size: 17px;
 }
 
 .research-coverage-list article > b {
   color: #e8f2ff;
-  font-size: 11px;
+  font-size: 15px;
   text-align: right;
 }
 
@@ -4322,7 +4322,7 @@ body {
 .strategy-events strong,
 .strategy-compare-actions a {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .strategy-table-link small,
@@ -4333,7 +4333,7 @@ body {
 .strategy-events small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4354,7 +4354,7 @@ body {
 
 .strategy-inspector__ids .metric-box strong {
   overflow: hidden;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4362,7 +4362,7 @@ body {
 .strategy-inspector p {
   margin: 0;
   color: #9bb0c4;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.35;
 }
 
@@ -4385,7 +4385,7 @@ body {
 .strategy-rules svg {
   flex: 0 0 auto;
   color: var(--success);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .strategy-gates {
@@ -4447,13 +4447,13 @@ body {
 
 .strategy-lifecycle-list article > span:first-child {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
 }
 
 .strategy-lifecycle-list small {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -4467,7 +4467,7 @@ body {
   background: rgba(255, 157, 46, 0.07);
   padding: 9px;
   color: #b9c9d8;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .strategy-lifecycle-warning svg {
@@ -4502,7 +4502,7 @@ body {
 
 .strategy-family-list article > b {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -4542,13 +4542,13 @@ body {
   border: 1px solid #174f7d;
   border-radius: 6px;
   color: #38bdf8;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 800;
 }
 
 .strategy-top-list a > b {
   color: #e8f2ff;
-  font-size: 13px;
+  font-size: 17px;
   text-align: right;
 }
 
@@ -4578,7 +4578,7 @@ body {
   place-items: center;
   gap: 3px;
   color: #6abcf5;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -4665,7 +4665,7 @@ body {
 .strategy-detail-incidents svg,
 .strategy-detail-actions article > span:first-child {
   color: #38bdf8;
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .strategy-detail-id-grid,
@@ -4685,7 +4685,7 @@ body {
 .strategy-detail-id-grid .metric-box strong,
 .strategy-detail-model-grid .metric-box strong {
   overflow: hidden;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4703,7 +4703,7 @@ body {
   padding: 3px 7px;
   background: rgba(20, 119, 242, 0.08);
   color: #8ed0ff;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -4794,7 +4794,7 @@ body {
 .strategy-detail-actions .action-button {
   min-height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .strategy-detail-command-result {
@@ -4822,14 +4822,14 @@ body {
 .strategy-detail-page strong,
 .strategy-detail-page b {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .strategy-detail-page small,
 .strategy-detail-page span {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .strategy-detail-page article div {
@@ -4884,7 +4884,7 @@ body {
 
 .strategy-compare-version header > span {
   color: #38bdf8;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.1em;
 }
@@ -5006,7 +5006,7 @@ body {
 .strategy-compare-actions .action-button {
   min-height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .strategy-compare-proof {
@@ -5023,7 +5023,7 @@ body {
 .strategy-compare-page b {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5032,7 +5032,7 @@ body {
 .strategy-compare-page span {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .strategy-compare-page article div {
@@ -5083,7 +5083,7 @@ body {
 .live-command-status strong,
 .live-safe-actions a {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .live-table-link small,
@@ -5098,7 +5098,7 @@ body {
 .live-command-status small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5132,7 +5132,7 @@ body {
   border-radius: 5px;
   background: #08223a;
   color: #38bdf8;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .live-pipeline__step--ok > span:first-child {
@@ -5167,7 +5167,7 @@ body {
 
 .live-pipeline__step > b {
   color: #88a0b8;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -5175,7 +5175,7 @@ body {
   justify-self: end;
   min-height: 16px;
   padding: 0 4px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .live-ai-advisory {
@@ -5217,7 +5217,7 @@ body {
 
 .live-arbitration-list article > b {
   color: #e8f2ff;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -5239,7 +5239,7 @@ body {
 
 .live-risk-list article > span {
   color: #e8f2ff;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-align: right;
 }
@@ -5273,7 +5273,7 @@ body {
 }
 
 .live-position-list article > span {
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-align: right;
 }
@@ -5293,7 +5293,7 @@ body {
 
 .live-provider-list article > b {
   color: #88a0b8;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -5343,7 +5343,7 @@ body {
   place-items: center;
   gap: 3px;
   color: #6abcf5;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -5377,7 +5377,7 @@ body {
 .live-signal-page b {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5386,7 +5386,7 @@ body {
 .live-signal-page span {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .live-signal-page article div {
@@ -5449,7 +5449,7 @@ body {
   border-radius: 6px;
   background: #071725;
   color: #cfe0ef;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-decoration: none;
 }
@@ -5560,7 +5560,7 @@ body {
   place-items: center;
   gap: 3px;
   color: #6abcf5;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -5581,7 +5581,7 @@ body {
 
 .live-signal-reason span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5597,7 +5597,7 @@ body {
   color: #dce8f4;
   padding: 5px 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -5622,7 +5622,7 @@ body {
 .live-signal-actions .action-button {
   min-height: 20px;
   padding-inline: 6px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .live-signal-ai-shadow {
@@ -5657,7 +5657,7 @@ body {
 .orders-page b {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5667,7 +5667,7 @@ body {
 .orders-page a:not(.operator-primary-action) {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .orders-page article div,
@@ -5713,7 +5713,7 @@ body {
   background: #071725;
   color: #8fa8c3;
   padding: 0 6px;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -5852,7 +5852,7 @@ body {
 
 .orders-reason span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5868,7 +5868,7 @@ body {
   color: #dce8f4;
   padding: 5px 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -5893,7 +5893,7 @@ body {
 .orders-action-list .action-button {
   min-height: 20px;
   padding-inline: 6px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .risk-page svg {
@@ -5904,7 +5904,7 @@ body {
 .risk-page b {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5914,7 +5914,7 @@ body {
 .risk-page a:not(.operator-primary-action) {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .risk-page article div,
@@ -6087,7 +6087,7 @@ body {
 .risk-page .reason-input span,
 .risk-step-up span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -6103,7 +6103,7 @@ body {
   color: #dce8f4;
   padding: 5px 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -6122,7 +6122,7 @@ body {
   color: #dce8f4;
   padding: 0 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .risk-action-list {
@@ -6155,7 +6155,7 @@ body {
 .risk-action-list .action-button {
   min-height: 20px;
   padding-inline: 6px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .execution-providers-page svg {
@@ -6166,7 +6166,7 @@ body {
 .execution-providers-page b {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -6176,7 +6176,7 @@ body {
 .execution-providers-page a:not(.operator-primary-action) {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .execution-providers-page article div,
@@ -6252,7 +6252,7 @@ body {
   gap: 6px;
   margin: 0;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .provider-adapter-list {
@@ -6378,7 +6378,7 @@ body {
 .execution-providers-page .reason-input span,
 .provider-step-up span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -6394,7 +6394,7 @@ body {
   color: #dce8f4;
   padding: 5px 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -6413,7 +6413,7 @@ body {
   color: #dce8f4;
   padding: 0 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .provider-action-list {
@@ -6439,7 +6439,7 @@ body {
 .provider-action-list .action-button {
   min-height: 20px;
   padding-inline: 6px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .execution-incidents-page svg {
@@ -6450,7 +6450,7 @@ body {
 .execution-incidents-page b {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -6460,7 +6460,7 @@ body {
 .execution-incidents-page a {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .execution-incidents-page article div,
@@ -6589,7 +6589,7 @@ body {
 .execution-incidents-page .reason-input span,
 .incident-step-up span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -6605,7 +6605,7 @@ body {
   color: #dce8f4;
   padding: 5px 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -6624,7 +6624,7 @@ body {
   color: #dce8f4;
   padding: 0 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .incident-action-list {
@@ -6654,7 +6654,7 @@ body {
 .incident-action-list .action-button {
   min-height: 20px;
   padding-inline: 6px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .auth-session-page svg {
@@ -6665,7 +6665,7 @@ body {
 .auth-session-page b {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -6675,7 +6675,7 @@ body {
 .auth-session-page a {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .auth-session-page article div,
@@ -6735,7 +6735,7 @@ body {
 
 .auth-operator-session-control label span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -6751,7 +6751,7 @@ body {
   color: #dce8f4;
   padding: 0 8px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .auth-operator-session-control .action-button {
@@ -6764,7 +6764,7 @@ body {
   margin: 6px 0 0;
   border-radius: 6px;
   padding: 5px 7px;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -6859,7 +6859,7 @@ body {
 .auth-session-page .reason-input span,
 .auth-step-up-input span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -6875,7 +6875,7 @@ body {
   color: #dce8f4;
   padding: 5px 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -6894,7 +6894,7 @@ body {
   color: #dce8f4;
   padding: 0 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .auth-action-list {
@@ -6923,7 +6923,7 @@ body {
 .auth-action-list .action-button {
   min-height: 20px;
   padding-inline: 6px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .operator-settings-page svg {
@@ -6934,7 +6934,7 @@ body {
 .operator-settings-page b {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -6944,7 +6944,7 @@ body {
 .operator-settings-page a:not(.operator-primary-action) {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .operator-settings-page article div,
@@ -7045,7 +7045,7 @@ body {
 .operator-settings-page .reason-input span,
 .settings-step-up span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -7061,7 +7061,7 @@ body {
   color: #dce8f4;
   padding: 5px 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -7080,7 +7080,7 @@ body {
   color: #dce8f4;
   padding: 0 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .settings-guardrail-list {
@@ -7119,7 +7119,7 @@ body {
 .settings-action-list .action-button {
   min-height: 20px;
   padding-inline: 6px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .admin-access-page svg {
@@ -7130,7 +7130,7 @@ body {
 .admin-access-page b {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -7140,7 +7140,7 @@ body {
 .admin-access-page a {
   min-width: 0;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .admin-access-page article div,
@@ -7251,7 +7251,7 @@ body {
 .admin-access-page .reason-input span,
 .admin-step-up span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -7267,7 +7267,7 @@ body {
   color: #dce8f4;
   padding: 5px 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -7286,7 +7286,7 @@ body {
   color: #dce8f4;
   padding: 0 7px;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .admin-action-list {
@@ -7316,7 +7316,7 @@ body {
 .admin-action-list .action-button {
   min-height: 20px;
   padding-inline: 6px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .jarvis-brief-list,
@@ -7370,7 +7370,7 @@ body {
 .jarvis-authority-note > svg,
 .jarvis-voice-card > svg {
   color: #38bdf8;
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .jarvis-brief-list article:has(.status-badge--danger) > span:first-child,
@@ -7406,7 +7406,7 @@ body {
 .jarvis-authority-note {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -7423,7 +7423,7 @@ body {
 .jarvis-message header span {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -7463,7 +7463,7 @@ body {
 
 .jarvis-question-box span {
   color: #8fa8c3;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -7477,7 +7477,7 @@ body {
   background: #030a13;
   color: #e8f2ff;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   outline: none;
 }
 
@@ -7495,7 +7495,7 @@ body {
 .jarvis-question-box .action-button {
   min-height: 30px;
   padding-inline: 9px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .jarvis-message {
@@ -7524,7 +7524,7 @@ body {
   margin: 0;
   overflow: hidden;
   color: #9bb0c4;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.3;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -7547,7 +7547,7 @@ body {
   background: rgba(20, 119, 242, 0.1);
   padding: 2px 6px;
   color: #8ed0ff;
-  font-size: 10px;
+  font-size: 14px;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7563,7 +7563,7 @@ body {
 .jarvis-action-list .desk-button {
   min-height: 25px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .jarvis-voice-card {
@@ -7598,7 +7598,7 @@ body {
 }
 
 .jarvis-snapshot-grid .metric-box strong {
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .jarvis-mission-list {
@@ -7622,7 +7622,7 @@ body {
   border-radius: 5px;
   background: #08223a;
   color: #38bdf8;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .jarvis-source-list a {
@@ -7641,7 +7641,7 @@ body {
 
 .jarvis-source-list a > svg {
   color: #6abcf5;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .jarvis-alert-list a {
@@ -7673,7 +7673,7 @@ body {
   background: rgba(148, 84, 233, 0.08);
   padding: 8px;
   color: #b9c9d8;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
 }
 
@@ -7729,7 +7729,7 @@ body {
 .operations-autonomy-flow article > svg,
 .operations-autonomy-note > svg {
   color: #38bdf8;
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .operations-mission--dlq > span:first-child,
@@ -7766,7 +7766,7 @@ body {
 .operations-autonomy-note {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -7781,7 +7781,7 @@ body {
 .operations-command-result small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -7791,7 +7791,7 @@ body {
 .operations-dlq-list b,
 .operations-incident-list a > span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-align: right;
 }
@@ -7831,7 +7831,7 @@ body {
 .operations-command-actions .action-button {
   min-height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .operations-budget-grid {
@@ -7889,7 +7889,7 @@ body {
 }
 
 .operations-autonomy-flow article > svg {
-  font-size: 14px;
+  font-size: 18px;
 }
 
 .operations-autonomy-note {
@@ -7903,7 +7903,7 @@ body {
   background: rgba(148, 84, 233, 0.08);
   padding: 8px;
   color: #b9c9d8;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.3;
 }
 
@@ -7967,7 +7967,7 @@ body {
 .research-experiment-command-result > svg,
 .research-experiment-proof > svg {
   color: #38bdf8;
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .research-experiment-warning > svg {
@@ -7999,7 +7999,7 @@ body {
 .research-experiment-command-result strong {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8016,7 +8016,7 @@ body {
 .research-experiment-command-result small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8071,7 +8071,7 @@ body {
   background: rgba(20, 119, 242, 0.08);
   color: #91cef8;
   padding: 5px 7px;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8105,7 +8105,7 @@ body {
 
 .research-iteration-list article > span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-align: right;
 }
@@ -8132,7 +8132,7 @@ body {
 
 .research-segment-grid article b {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -8165,7 +8165,7 @@ body {
 .research-experiment-actions .action-button {
   min-height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-experiment-command-result {
@@ -8187,7 +8187,7 @@ body {
   background: rgba(148, 84, 233, 0.08);
   padding: 8px;
   color: #b9c9d8;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.3;
 }
 
@@ -8259,7 +8259,7 @@ body {
 
 .research-run-page .metric-box strong {
   overflow: hidden;
-  font-size: 11px !important;
+  font-size: 15px !important;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8314,7 +8314,7 @@ body {
 .research-run-actions article > span:first-child,
 .research-run-command-result > svg {
   color: #38bdf8;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .research-run-regimes article > div,
@@ -8337,7 +8337,7 @@ body {
 .research-run-hours strong {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8352,20 +8352,20 @@ body {
 .research-run-hours small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .research-run-regimes b,
 .research-run-distribution b {
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
 .research-run-hours span {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-run-trade-list article {
@@ -8377,7 +8377,7 @@ body {
 .research-run-trade-list article > span {
   overflow: hidden;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-align: right;
   text-overflow: ellipsis;
@@ -8405,7 +8405,7 @@ body {
 .research-run-actions .action-button {
   min-height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-run-command-result {
@@ -8427,7 +8427,7 @@ body {
   background: rgba(148, 84, 233, 0.08);
   padding: 8px;
   color: #b9c9d8;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.3;
 }
 
@@ -8503,7 +8503,7 @@ body {
 .research-agent-actions article > span:first-child,
 .research-agent-command-result > svg {
   color: #38bdf8;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .research-agent-fleet-card p {
@@ -8511,7 +8511,7 @@ body {
   overflow: hidden;
   margin: 0;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.25;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
@@ -8539,7 +8539,7 @@ body {
 .research-agent-proof strong {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8555,7 +8555,7 @@ body {
 .research-agent-proof small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8564,7 +8564,7 @@ body {
 .research-agent-fleet-card__task {
   grid-template-columns: 16px minmax(0, 1fr);
   color: #b9c9d8;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-agent-fleet-card__task span {
@@ -8587,7 +8587,7 @@ body {
 
 .research-agent-fleet-budget-grid b {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -8600,7 +8600,7 @@ body {
 .research-agent-queue article > span {
   overflow: hidden;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-align: right;
   text-overflow: ellipsis;
@@ -8616,7 +8616,7 @@ body {
 .research-agent-lease-list span {
   overflow: hidden;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8665,7 +8665,7 @@ body {
 .research-agent-actions .action-button {
   min-height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-agent-command-result {
@@ -8746,7 +8746,7 @@ body {
 .research-data-command-result > svg,
 .research-data-proof > svg {
   color: #38bdf8;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .research-data-dataset-card header > div,
@@ -8772,7 +8772,7 @@ body {
 .research-data-proof strong {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8788,7 +8788,7 @@ body {
 .research-data-proof small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8798,7 +8798,7 @@ body {
   overflow: hidden;
   margin: 0;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8818,7 +8818,7 @@ body {
 
 .research-data-page .metric-box strong {
   overflow: hidden;
-  font-size: 10px !important;
+  font-size: 14px !important;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8838,7 +8838,7 @@ body {
 .research-data-feature-list span {
   overflow: hidden;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8893,7 +8893,7 @@ body {
 .research-data-actions .action-button {
   min-height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-data-command-result {
@@ -8975,7 +8975,7 @@ body {
 .research-compute-command-result > svg,
 .research-compute-proof > svg {
   color: #38bdf8;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .research-compute-pool-card header > div,
@@ -9001,7 +9001,7 @@ body {
 .research-compute-proof strong {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9017,7 +9017,7 @@ body {
 .research-compute-proof small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9037,7 +9037,7 @@ body {
 
 .research-compute-pool-bars b {
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -9052,7 +9052,7 @@ body {
 .research-compute-reservation-list span {
   overflow: hidden;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-align: right;
   text-overflow: ellipsis;
@@ -9111,7 +9111,7 @@ body {
 .research-compute-actions .action-button {
   min-height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .research-compute-command-result {
@@ -9146,7 +9146,7 @@ body {
   background: transparent;
   color: #dbeaf7;
   font: inherit;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -9186,7 +9186,7 @@ body {
   min-height: 18px;
   margin: 0 0 6px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .desk-breadcrumbs a {
@@ -9275,7 +9275,7 @@ body {
   border-radius: 6px;
   background: rgba(20, 119, 242, 0.1);
   color: #38bdf8;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .events-lane-dot--advisory {
@@ -9309,7 +9309,7 @@ body {
 .events-command-result strong {
   overflow: hidden;
   color: #dce8f4;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -9323,14 +9323,14 @@ body {
 .events-command-result small {
   overflow: hidden;
   color: #7089a1;
-  font-size: 10px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .events-timeline-list b {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -9350,7 +9350,7 @@ body {
   align-items: center;
   gap: 6px;
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.08em;
 }
@@ -9384,7 +9384,7 @@ body {
 
 .events-path article > span:first-child {
   color: #38bdf8;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -9446,7 +9446,7 @@ body {
 .events-command-actions article > span:first-child,
 .events-command-result > svg {
   color: #38bdf8;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .events-command-actions article {
@@ -9460,7 +9460,7 @@ body {
 .events-command-actions .action-button {
   min-height: 22px;
   padding-inline: 8px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .events-command-result {
@@ -9509,14 +9509,14 @@ body {
   .operator-grid .data-table {
     min-width: 0;
     table-layout: fixed;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .operator-grid .data-table th {
     height: 27px;
     background: transparent;
     padding: 4px 6px;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .operator-grid .data-table td {
@@ -9524,7 +9524,7 @@ body {
     overflow: hidden;
     padding: 4px 6px;
     border-bottom-color: #17324a;
-    font-size: 10px;
+    font-size: 14px;
     text-overflow: ellipsis;
   }
 
@@ -10064,7 +10064,7 @@ body {
 
 .sidebar-status-stack > small {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -10089,7 +10089,7 @@ body {
   border-radius: 8px;
   background: #0d1c2b;
   color: #dceaff;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .view-truth-banner--partial {
@@ -10163,7 +10163,7 @@ body {
 
 .command-receipt > small {
   color: #9fb2c8;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .desk-sidebar {
@@ -10189,7 +10189,7 @@ body {
 .sidebar-nav-group h2 {
   margin: 4px 10px 2px;
   color: #6f879f;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -10224,7 +10224,7 @@ body {
 
 .capability-unavailable dt {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
   text-transform: uppercase;
 }
 
@@ -10275,7 +10275,7 @@ body {
 
 .topbar-search-results small {
   color: #8fa8c3;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 /* Final workstation containment gate: later than all legacy/sidebar layers. */
