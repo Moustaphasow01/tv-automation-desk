@@ -1,14 +1,32 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { FaCheck, FaExclamationTriangle, FaInfoCircle, FaLock, FaRobot, FaTimes } from "react-icons/fa";
+import { FaCheck, FaCompress, FaExclamationTriangle, FaExpand, FaInfoCircle, FaLock, FaRobot, FaTimes } from "react-icons/fa";
 import { StatusBadge } from "@/design-system/primitives";
 import { presentAvailability, presentExecutionMode, presentGeneric, presentRuntimeStatus, presentSignalState } from "@/design-system/labels";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import { displayTime, displayValue, liveTone, recordValue } from "./mapper";
 import type { LiveTradingModel } from "./model";
 
-export function LivePanel({ title, className = "", action, children }: { title: string; className?: string; action?: ReactNode; children: ReactNode }) {
-  return <section className={`lt-panel ${className}`}><header><h2>{title}</h2><FaInfoCircle aria-hidden="true" />{action ? <div>{action}</div> : null}</header><div className="lt-panel__body">{children}</div></section>;
+export function LivePanel({ title, className = "", action, children, expandable = true }: { title: string; className?: string; action?: ReactNode; children: ReactNode; expandable?: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setExpanded(false); };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [expanded]);
+  return <>
+    {expanded ? <div className="lt-panel-backdrop" onClick={() => setExpanded(false)} aria-hidden="true" /> : null}
+    <section className={`lt-panel ${className}${expanded ? " lt-panel--expanded" : ""}`} role={expanded ? "dialog" : undefined} aria-modal={expanded || undefined} aria-label={expanded ? title : undefined}>
+      <header>
+        <h2>{title}</h2>
+        {expandable ? <button type="button" className="lt-panel-expand" onClick={() => setExpanded((value) => !value)} aria-label={expanded ? `Réduire ${title}` : `Agrandir ${title}`}>{expanded ? <FaCompress /> : <FaExpand />}</button> : null}
+        <FaInfoCircle aria-hidden="true" />
+        {action ? <div>{action}</div> : null}
+      </header>
+      <div className="lt-panel__body">{children}</div>
+    </section>
+  </>;
 }
 
 export function MarketContextPanel({ model }: { model: LiveTradingModel }) {
