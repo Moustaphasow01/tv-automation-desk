@@ -1,0 +1,1837 @@
+{
+  "schema_version": "data_driven_robust_pass_cohort_v1",
+  "generated_at_utc": "2026-08-20T13:30:10.141Z",
+  "batch_id": "mega-1000-mes-m5-diversified-v2-20260820-001",
+  "dataset_key": null,
+  "selection": {
+    "policy": "ALL_ROBUSTNESS_PASS_NO_TOP_K_CAP",
+    "top_k_cap": null,
+    "retained_all_robustness_pass": true,
+    "retained_count": 35,
+    "robustness_pass_count": 35,
+    "oos_pass_count": 35,
+    "oos_not_pass_count": 0,
+    "promotion_ready_count": 0,
+    "promotion_operator_review_count": 0
+  },
+  "safety": {
+    "broker_execution_enabled": false,
+    "automatic_promotion_enabled": false,
+    "broker_provider_commands_matching_batch": 0,
+    "execution_mode": "RESEARCH_ONLY"
+  },
+  "aggregate": {
+    "total_r": 147.5266,
+    "closed_trade_count": 115,
+    "open_or_marked_position_count": 0,
+    "win_rate": 0.7478,
+    "profit_factor": 5.9217,
+    "max_drawdown_r": -4.1399,
+    "trading_days_with_activity": 33,
+    "max_same_day_candidate_activity": 9
+  },
+  "family_distribution": [
+    {
+      "family_id": "ny_opening_mid_reject_short",
+      "candidate_count": 3,
+      "closed_trade_count": 13,
+      "total_r": 15.416,
+      "oos_pass_count": 3
+    },
+    {
+      "family_id": "previous_day_low_break",
+      "candidate_count": 4,
+      "closed_trade_count": 11,
+      "total_r": 14.9018,
+      "oos_pass_count": 4
+    },
+    {
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "candidate_count": 4,
+      "closed_trade_count": 14,
+      "total_r": 14.3783,
+      "oos_pass_count": 4
+    },
+    {
+      "family_id": "prior_close_reject_short",
+      "candidate_count": 2,
+      "closed_trade_count": 9,
+      "total_r": 12.4305,
+      "oos_pass_count": 2
+    },
+    {
+      "family_id": "prior_close_reclaim_long",
+      "candidate_count": 2,
+      "closed_trade_count": 8,
+      "total_r": 12.4143,
+      "oos_pass_count": 2
+    },
+    {
+      "family_id": "previous_day_low_reclaim_long",
+      "candidate_count": 2,
+      "closed_trade_count": 4,
+      "total_r": 9.0679,
+      "oos_pass_count": 2
+    },
+    {
+      "family_id": "previous_day_high_reject_short",
+      "candidate_count": 2,
+      "closed_trade_count": 4,
+      "total_r": 8.86,
+      "oos_pass_count": 2
+    },
+    {
+      "family_id": "previous_day_lower_quartile_break_short",
+      "candidate_count": 2,
+      "closed_trade_count": 7,
+      "total_r": 8.3687,
+      "oos_pass_count": 2
+    },
+    {
+      "family_id": "opening_range_breakout_short",
+      "candidate_count": 2,
+      "closed_trade_count": 7,
+      "total_r": 7.2944,
+      "oos_pass_count": 2
+    },
+    {
+      "family_id": "vwap_deviation_fade_short",
+      "candidate_count": 2,
+      "closed_trade_count": 5,
+      "total_r": 7.1698,
+      "oos_pass_count": 2
+    },
+    {
+      "family_id": "session_open_drive_long",
+      "candidate_count": 1,
+      "closed_trade_count": 4,
+      "total_r": 4.7803,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "previous_day_mid_reject_short",
+      "candidate_count": 1,
+      "closed_trade_count": 4,
+      "total_r": 4.5333,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "vwap_proxy_reclaim_long",
+      "candidate_count": 1,
+      "closed_trade_count": 4,
+      "total_r": 4.4816,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "vwap_deviation_fade_long",
+      "candidate_count": 1,
+      "closed_trade_count": 2,
+      "total_r": 3.9872,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "asia_mid_reject_short",
+      "candidate_count": 1,
+      "closed_trade_count": 3,
+      "total_r": 3.8358,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "compression_breakout_short",
+      "candidate_count": 1,
+      "closed_trade_count": 3,
+      "total_r": 3.6715,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "ny_opening_drive_short",
+      "candidate_count": 1,
+      "closed_trade_count": 3,
+      "total_r": 3.5454,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "opening_mid_reject_short",
+      "candidate_count": 1,
+      "closed_trade_count": 4,
+      "total_r": 3.4128,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "rolling_three_day_mean_reject_short",
+      "candidate_count": 1,
+      "closed_trade_count": 4,
+      "total_r": 2.7178,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "previous_day_lower_quartile_reclaim_long",
+      "candidate_count": 1,
+      "closed_trade_count": 2,
+      "total_r": 2.2592,
+      "oos_pass_count": 1
+    }
+  ],
+  "daily_correlation": {
+    "pair_count": 595,
+    "computable_pair_count": 589,
+    "skipped_sparse_pair_count": 6,
+    "min_pair_active_dates_for_correlation": 4,
+    "max_abs_correlation": 1,
+    "avg_abs_correlation": 0.3823,
+    "high_correlation_pair_count": 58,
+    "high_correlation_edges": [
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:rolling_three_day_mean_reject_short:v021",
+        "active_dates": 4,
+        "correlation": 0.9969,
+        "abs_correlation": 0.9969
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9961,
+        "abs_correlation": 0.9961
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9961,
+        "abs_correlation": 0.9961
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9961,
+        "abs_correlation": 0.9961
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 4,
+        "correlation": -0.9948,
+        "abs_correlation": 0.9948
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 4,
+        "correlation": -0.9948,
+        "abs_correlation": 0.9948
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 4,
+        "correlation": -0.9948,
+        "abs_correlation": 0.9948
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 4,
+        "correlation": -0.9948,
+        "abs_correlation": 0.9948
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9944,
+        "abs_correlation": 0.9944
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9944,
+        "abs_correlation": 0.9944
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9944,
+        "abs_correlation": 0.9944
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9944,
+        "abs_correlation": 0.9944
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9909,
+        "abs_correlation": 0.9909
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9905,
+        "abs_correlation": 0.9905
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "active_dates": 6,
+        "correlation": -0.9899,
+        "abs_correlation": 0.9899
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "active_dates": 6,
+        "correlation": -0.9899,
+        "abs_correlation": 0.9899
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "active_dates": 6,
+        "correlation": -0.9899,
+        "abs_correlation": 0.9899
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v013",
+        "active_dates": 4,
+        "correlation": 0.9893,
+        "abs_correlation": 0.9893
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9892,
+        "abs_correlation": 0.9892
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 6,
+        "correlation": -0.987,
+        "abs_correlation": 0.987
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 6,
+        "correlation": -0.986,
+        "abs_correlation": 0.986
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 5,
+        "correlation": -0.9794,
+        "abs_correlation": 0.9794
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v025",
+        "active_dates": 4,
+        "correlation": -0.9766,
+        "abs_correlation": 0.9766
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 4,
+        "correlation": -0.9759,
+        "abs_correlation": 0.9759
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9731,
+        "abs_correlation": 0.9731
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9731,
+        "abs_correlation": 0.9731
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9731,
+        "abs_correlation": 0.9731
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 6,
+        "correlation": -0.9697,
+        "abs_correlation": 0.9697
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9693,
+        "abs_correlation": 0.9693
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9681,
+        "abs_correlation": 0.9681
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9677,
+        "abs_correlation": 0.9677
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_drive_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9675,
+        "abs_correlation": 0.9675
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+        "active_dates": 5,
+        "correlation": -0.9612,
+        "abs_correlation": 0.9612
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v007",
+        "active_dates": 5,
+        "correlation": -0.9567,
+        "abs_correlation": 0.9567
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+        "active_dates": 6,
+        "correlation": -0.9516,
+        "abs_correlation": 0.9516
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "active_dates": 4,
+        "correlation": 0.9237,
+        "abs_correlation": 0.9237
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 5,
+        "correlation": -0.919,
+        "abs_correlation": 0.919
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9175,
+        "abs_correlation": 0.9175
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "active_dates": 5,
+        "correlation": -0.9015,
+        "abs_correlation": 0.9015
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:asia_mid_reject_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_drive_short:v020",
+        "active_dates": 4,
+        "correlation": 0.8752,
+        "abs_correlation": 0.8752
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v015",
+        "active_dates": 5,
+        "correlation": 0.8682,
+        "abs_correlation": 0.8682
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.8354,
+        "abs_correlation": 0.8354
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:asia_mid_reject_short:v005",
+        "active_dates": 5,
+        "correlation": 0.8302,
+        "abs_correlation": 0.8302
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_drive_short:v020",
+        "active_dates": 5,
+        "correlation": 0.8247,
+        "abs_correlation": 0.8247
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+        "active_dates": 5,
+        "correlation": -0.7998,
+        "abs_correlation": 0.7998
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+        "active_dates": 5,
+        "correlation": -0.7998,
+        "abs_correlation": 0.7998
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+        "active_dates": 5,
+        "correlation": -0.7998,
+        "abs_correlation": 0.7998
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 5,
+        "correlation": -0.7972,
+        "abs_correlation": 0.7972
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 5,
+        "correlation": -0.7963,
+        "abs_correlation": 0.7963
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 5,
+        "correlation": -0.7961,
+        "abs_correlation": 0.7961
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reject_short:v006",
+        "active_dates": 5,
+        "correlation": 0.7894,
+        "abs_correlation": 0.7894
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v012",
+        "active_dates": 5,
+        "correlation": 0.7646,
+        "abs_correlation": 0.7646
+      }
+    ],
+    "high_correlation_pairs": [
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:rolling_three_day_mean_reject_short:v021",
+        "active_dates": 4,
+        "correlation": 0.9969,
+        "abs_correlation": 0.9969
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9961,
+        "abs_correlation": 0.9961
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9961,
+        "abs_correlation": 0.9961
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9961,
+        "abs_correlation": 0.9961
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 4,
+        "correlation": -0.9948,
+        "abs_correlation": 0.9948
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 4,
+        "correlation": -0.9948,
+        "abs_correlation": 0.9948
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 4,
+        "correlation": -0.9948,
+        "abs_correlation": 0.9948
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 4,
+        "correlation": -0.9948,
+        "abs_correlation": 0.9948
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9944,
+        "abs_correlation": 0.9944
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9944,
+        "abs_correlation": 0.9944
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9944,
+        "abs_correlation": 0.9944
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9944,
+        "abs_correlation": 0.9944
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9909,
+        "abs_correlation": 0.9909
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9905,
+        "abs_correlation": 0.9905
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "active_dates": 6,
+        "correlation": -0.9899,
+        "abs_correlation": 0.9899
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "active_dates": 6,
+        "correlation": -0.9899,
+        "abs_correlation": 0.9899
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "active_dates": 6,
+        "correlation": -0.9899,
+        "abs_correlation": 0.9899
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v013",
+        "active_dates": 4,
+        "correlation": 0.9893,
+        "abs_correlation": 0.9893
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9892,
+        "abs_correlation": 0.9892
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 6,
+        "correlation": -0.987,
+        "abs_correlation": 0.987
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "active_dates": 6,
+        "correlation": -0.986,
+        "abs_correlation": 0.986
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 5,
+        "correlation": -0.9794,
+        "abs_correlation": 0.9794
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v025",
+        "active_dates": 4,
+        "correlation": -0.9766,
+        "abs_correlation": 0.9766
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 4,
+        "correlation": -0.9759,
+        "abs_correlation": 0.9759
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9731,
+        "abs_correlation": 0.9731
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9731,
+        "abs_correlation": 0.9731
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9731,
+        "abs_correlation": 0.9731
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 6,
+        "correlation": -0.9697,
+        "abs_correlation": 0.9697
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9693,
+        "abs_correlation": 0.9693
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "active_dates": 4,
+        "correlation": -0.9681,
+        "abs_correlation": 0.9681
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.9677,
+        "abs_correlation": 0.9677
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_drive_short:v020",
+        "active_dates": 4,
+        "correlation": -0.9675,
+        "abs_correlation": 0.9675
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+        "active_dates": 5,
+        "correlation": -0.9612,
+        "abs_correlation": 0.9612
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v007",
+        "active_dates": 5,
+        "correlation": -0.9567,
+        "abs_correlation": 0.9567
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+        "active_dates": 6,
+        "correlation": -0.9516,
+        "abs_correlation": 0.9516
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "active_dates": 4,
+        "correlation": 0.9237,
+        "abs_correlation": 0.9237
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+        "active_dates": 5,
+        "correlation": -0.919,
+        "abs_correlation": 0.919
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9175,
+        "abs_correlation": 0.9175
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "active_dates": 5,
+        "correlation": -0.9015,
+        "abs_correlation": 0.9015
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:asia_mid_reject_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_drive_short:v020",
+        "active_dates": 4,
+        "correlation": 0.8752,
+        "abs_correlation": 0.8752
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v015",
+        "active_dates": 5,
+        "correlation": 0.8682,
+        "abs_correlation": 0.8682
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+        "active_dates": 4,
+        "correlation": -0.8354,
+        "abs_correlation": 0.8354
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:asia_mid_reject_short:v005",
+        "active_dates": 5,
+        "correlation": 0.8302,
+        "abs_correlation": 0.8302
+      },
+      {
+        "left": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+        "right": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_drive_short:v020",
+        "active_dates": 5,
+        "correlation": 0.8247,
+        "abs_correlation": 0.8247
+      }
+    ]
+  },
+  "diversification": {
+    "policy": "HIGH_CORRELATION_CLUSTERING_REVIEW_ONLY_NO_DISCARD",
+    "cluster_count": 3,
+    "clustered_candidate_count": 25,
+    "unclustered_candidate_count": 10,
+    "largest_cluster_size": 21,
+    "clusters": [
+      {
+        "cluster_id": "corr_cluster_001",
+        "candidate_count": 21,
+        "family_ids": [
+          "asia_mid_reject_short",
+          "ny_opening_drive_short",
+          "opening_range_breakout_short",
+          "previous_day_high_reject_short",
+          "previous_day_low_break",
+          "previous_day_low_reclaim_long",
+          "previous_day_lower_quartile_break_short",
+          "previous_day_lower_quartile_reclaim_long",
+          "previous_day_mid_reject_short",
+          "previous_day_upper_quartile_reject_short",
+          "prior_close_reclaim_long",
+          "rolling_three_day_mean_reject_short",
+          "vwap_deviation_fade_long",
+          "vwap_deviation_fade_short"
+        ],
+        "total_r": 83.9654,
+        "representative_candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+        "representative_robustness_score": 0.9422,
+        "candidate_keys": [
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v015",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v025",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v003",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:asia_mid_reject_short:v005",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_drive_short:v020",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v007",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v007",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:rolling_three_day_mean_reject_short:v021",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v012"
+        ]
+      },
+      {
+        "cluster_id": "corr_cluster_002",
+        "candidate_count": 2,
+        "family_ids": [
+          "prior_close_reject_short"
+        ],
+        "total_r": 12.4305,
+        "representative_candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reject_short:v013",
+        "representative_robustness_score": 0.9313,
+        "candidate_keys": [
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reject_short:v013",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reject_short:v006"
+        ]
+      },
+      {
+        "cluster_id": "corr_cluster_003",
+        "candidate_count": 2,
+        "family_ids": [
+          "ny_opening_mid_reject_short",
+          "previous_day_lower_quartile_break_short"
+        ],
+        "total_r": 8.3977,
+        "representative_candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v013",
+        "representative_robustness_score": 0.8961,
+        "candidate_keys": [
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v013",
+          "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v013"
+        ]
+      }
+    ]
+  },
+  "blocker_summary": {
+    "reason_counts": {
+      "PRIORITY_DEFER:0.2": 35,
+      "OPERATOR_APPROVAL_PENDING": 35,
+      "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY": 35,
+      "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY": 11,
+      "PORTFOLIO_CORRELATION_NOT_PROVEN": 35,
+      "PORTFOLIO_RISK_BUDGET_NOT_PROVEN": 35
+    }
+  },
+  "cohort_gate": {
+    "verdict": "NEEDS_REVIEW",
+    "decision": "PORTFOLIO_COHORT_REVIEW_REQUIRED",
+    "reasons": [
+      "COHORT_DAILY_CORRELATION_REQUIRES_CLUSTERING_REVIEW"
+    ],
+    "policy": {
+      "selection_policy": "ALL_ROBUSTNESS_PASS_NO_TOP_K_CAP",
+      "min_candidate_count": 1,
+      "min_family_count_for_portfolio_review": 4,
+      "min_aggregate_trade_count_for_portfolio_review": 30,
+      "min_aggregate_total_r": 0,
+      "min_pair_active_dates_for_correlation": 4,
+      "max_abs_daily_correlation_review": 0.75
+    }
+  },
+  "retained_candidates": [
+    {
+      "research_candidate_id": "1973c2e5-1102-4ac9-bdcd-874f6f00c93c",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+      "strategy_version_id": "fb4d0865-332b-486b-881d-d1d5558e8d13",
+      "simulation_run_id": "8048f1ad-be68-4c87-8c27-6e047c3689df",
+      "family_id": "prior_close_reclaim_long",
+      "variant_index": 22,
+      "robustness_score": 0.9422,
+      "oos_verdict": "PASS",
+      "oos_score": 0.9122,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 7.3752,
+      "closed_trade_count": 4,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "4eafd35c-ddb9-4858-a3e5-1c02f834cf24",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reject_short:v013",
+      "strategy_version_id": "661bbc49-ced6-471d-a784-236cc66da351",
+      "simulation_run_id": "3e128583-0f52-452a-9a8d-73a3cfdbf856",
+      "family_id": "prior_close_reject_short",
+      "variant_index": 13,
+      "robustness_score": 0.9313,
+      "oos_verdict": "PASS",
+      "oos_score": 0.9013,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 7.3246,
+      "closed_trade_count": 5,
+      "profit_factor": 8.1404,
+      "max_drawdown_r": -1.0258
+    },
+    {
+      "research_candidate_id": "02586bb6-e7e5-4f60-9769-24c9accfc7e2",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+      "strategy_version_id": "d5f44853-a9fc-46d8-88b5-d5c082af238c",
+      "simulation_run_id": "900d5fda-6604-4a08-bfcd-3e1fd9c57775",
+      "family_id": "previous_day_low_reclaim_long",
+      "variant_index": 4,
+      "robustness_score": 0.9172,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8872,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 5.375,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "40b1813b-0b84-432b-b67c-8505a6d9f31a",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+      "strategy_version_id": "0245d59e-da63-4cfa-8076-60adc1b1d92e",
+      "simulation_run_id": "fb362400-c7dc-41e7-bedd-fdba54737aea",
+      "family_id": "previous_day_high_reject_short",
+      "variant_index": 13,
+      "robustness_score": 0.9152,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8852,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 5.213,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "7a9a0ac7-bd82-452f-a242-a404d33865d4",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v006",
+      "strategy_version_id": "65a9a5e6-ffc2-448e-bd0f-e19ee612b1ea",
+      "simulation_run_id": "cb4bf492-d190-4b45-9a68-0e4ece12ac91",
+      "family_id": "ny_opening_mid_reject_short",
+      "variant_index": 6,
+      "robustness_score": 0.9139,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8839,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 5.9376,
+      "closed_trade_count": 4,
+      "profit_factor": 6.7468,
+      "max_drawdown_r": -1.0332
+    },
+    {
+      "research_candidate_id": "70737cb3-45d4-4f5a-b782-3ccddd8e5979",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reject_short:v006",
+      "strategy_version_id": "ee47386f-ae17-4f7d-ab6f-a1096a49be47",
+      "simulation_run_id": "fd01cf00-f7d2-4eff-a096-56d0e52269b4",
+      "family_id": "prior_close_reject_short",
+      "variant_index": 6,
+      "robustness_score": 0.9035,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8735,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 5.1059,
+      "closed_trade_count": 4,
+      "profit_factor": 5.963,
+      "max_drawdown_r": -1.0288
+    },
+    {
+      "research_candidate_id": "f8f75baf-bfa7-49bf-aa31-a547a666aa75",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v015",
+      "strategy_version_id": "d0aed613-0a76-4a99-93bf-842777b06ec0",
+      "simulation_run_id": "66c0e14d-7c57-4860-87be-522d71893404",
+      "family_id": "prior_close_reclaim_long",
+      "variant_index": 15,
+      "robustness_score": 0.9027,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8727,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 5.0391,
+      "closed_trade_count": 4,
+      "profit_factor": 5.8772,
+      "max_drawdown_r": -1.0332
+    },
+    {
+      "research_candidate_id": "48326a8f-f754-4c7a-9632-665ec270005f",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v016",
+      "strategy_version_id": "7b84742c-4895-485b-b7e9-58a2b0fd1954",
+      "simulation_run_id": "cdb498d4-b94f-4fc4-9089-3c3a6f4b94b9",
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "variant_index": 16,
+      "robustness_score": 0.901,
+      "oos_verdict": "PASS",
+      "oos_score": 0.871,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.9279,
+      "closed_trade_count": 3,
+      "profit_factor": 5.6661,
+      "max_drawdown_r": -1.0561
+    },
+    {
+      "research_candidate_id": "42fcb49a-5c21-4686-9692-f32811cad4c8",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+      "strategy_version_id": "17ef517a-4d4d-4581-9879-16100b1072cf",
+      "simulation_run_id": "23ae990c-30d9-4928-bb0d-eb661a52a80f",
+      "family_id": "previous_day_low_break",
+      "variant_index": 14,
+      "robustness_score": 0.8998,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8698,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.9872,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "57aa6e3f-f6a4-4d84-97ec-0591abe2b078",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+      "strategy_version_id": "ab9ee459-91c8-4bfa-85c7-e1972a140843",
+      "simulation_run_id": "417ef201-638f-4415-b523-561e9f7b716f",
+      "family_id": "vwap_deviation_fade_long",
+      "variant_index": 21,
+      "robustness_score": 0.8998,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8698,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.9872,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "0a8ad710-a4cd-4ad9-9309-050d9fbc17e6",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:session_open_drive_long:v008",
+      "strategy_version_id": "216e1e0f-cc6e-4cdf-875c-870323fd5115",
+      "simulation_run_id": "90da0310-9a25-4794-b838-af780e99dbd5",
+      "family_id": "session_open_drive_long",
+      "variant_index": 8,
+      "robustness_score": 0.8994,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8694,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.7803,
+      "closed_trade_count": 4,
+      "profit_factor": 5.6222,
+      "max_drawdown_r": -1.0342
+    },
+    {
+      "research_candidate_id": "62924914-a541-49ed-acac-548c53e04b39",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+      "strategy_version_id": "cf7da64d-f8e2-4945-8e7f-30fe83ee6729",
+      "simulation_run_id": "df26438d-0a5b-4eab-b122-d46f8cc856a2",
+      "family_id": "opening_range_breakout_short",
+      "variant_index": 5,
+      "robustness_score": 0.8982,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8682,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.6763,
+      "closed_trade_count": 4,
+      "profit_factor": 5.5392,
+      "max_drawdown_r": -1.0302
+    },
+    {
+      "research_candidate_id": "ef697482-23c5-4fee-b72a-bb1009fe017d",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+      "strategy_version_id": "7c569c08-4153-413c-bf9c-cee62f684f3f",
+      "simulation_run_id": "c0368234-800c-49c2-8d64-8220ec2ad820",
+      "family_id": "previous_day_low_break",
+      "variant_index": 21,
+      "robustness_score": 0.8982,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8682,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.857,
+      "closed_trade_count": 3,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "41a7e7be-e8da-4a18-be3e-6aad35c2093c",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v025",
+      "strategy_version_id": "d1af86d0-91e5-406c-8d07-08669f8c7207",
+      "simulation_run_id": "aa10c7be-7d46-4388-a26f-7dfd86067e33",
+      "family_id": "previous_day_low_break",
+      "variant_index": 25,
+      "robustness_score": 0.8969,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8669,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.5735,
+      "closed_trade_count": 3,
+      "profit_factor": 5.4559,
+      "max_drawdown_r": -1.0264
+    },
+    {
+      "research_candidate_id": "ef9fce3a-8f4b-48dc-93e1-d7a900c51ad7",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+      "strategy_version_id": "ed4ca35c-4f3d-48ef-8227-d13a8608adf4",
+      "simulation_run_id": "a3418140-7293-4467-9e21-abeeab6239ba",
+      "family_id": "previous_day_mid_reject_short",
+      "variant_index": 5,
+      "robustness_score": 0.8964,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8664,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.5333,
+      "closed_trade_count": 4,
+      "profit_factor": 5.3991,
+      "max_drawdown_r": -1.0305
+    },
+    {
+      "research_candidate_id": "31f95287-3d6d-471f-a447-b3d8e974a639",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+      "strategy_version_id": "db24604a-118d-424c-ba26-22ca012d52a8",
+      "simulation_run_id": "5a407d84-4c35-4529-9211-ecf0f3e082ef",
+      "family_id": "previous_day_low_reclaim_long",
+      "variant_index": 9,
+      "robustness_score": 0.8962,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8662,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.6929,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "b7ff37c4-c2d6-4a42-a00c-1786d9346165",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v013",
+      "strategy_version_id": "3e591383-1595-4e57-8ddb-926e41b3f316",
+      "simulation_run_id": "66279925-2cdf-4a5e-b99a-2bedb023e86b",
+      "family_id": "ny_opening_mid_reject_short",
+      "variant_index": 13,
+      "robustness_score": 0.8961,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8661,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.5163,
+      "closed_trade_count": 4,
+      "profit_factor": 5.3822,
+      "max_drawdown_r": -1.0306
+    },
+    {
+      "research_candidate_id": "3547a424-77a0-4148-b253-86273469663e",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v003",
+      "strategy_version_id": "dbe32183-ad6b-4960-8c8e-95d8f637249f",
+      "simulation_run_id": "ec8bd1bc-db3d-420f-b28e-2ed44af32b5a",
+      "family_id": "previous_day_lower_quartile_break_short",
+      "variant_index": 3,
+      "robustness_score": 0.8958,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8658,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.4873,
+      "closed_trade_count": 3,
+      "profit_factor": 5.371,
+      "max_drawdown_r": -1.0266
+    },
+    {
+      "research_candidate_id": "f482e982-e3a5-430e-a00a-68552fefb047",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_proxy_reclaim_long:v004",
+      "strategy_version_id": "8d54cf18-2b90-4429-a012-b39a2a42fbee",
+      "simulation_run_id": "6690da06-33f2-47e1-8f41-965547f97cf4",
+      "family_id": "vwap_proxy_reclaim_long",
+      "variant_index": 4,
+      "robustness_score": 0.8956,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8656,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.4816,
+      "closed_trade_count": 4,
+      "profit_factor": 5.2927,
+      "max_drawdown_r": -1.044
+    },
+    {
+      "research_candidate_id": "9dfbe4c5-d850-4f9c-bed7-b506d4f1eb35",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+      "strategy_version_id": "d8597fd0-7e9e-45e6-a257-5bd253e029d7",
+      "simulation_run_id": "66e45c7b-7e63-42f6-950c-e87fcc0585a1",
+      "family_id": "previous_day_high_reject_short",
+      "variant_index": 20,
+      "robustness_score": 0.8956,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8656,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.647,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "ae2b56dd-0ad5-4a27-90ad-591e168138e6",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+      "strategy_version_id": "23923c0a-4cbf-49e1-b873-da3e67c7b75a",
+      "simulation_run_id": "195e4e02-2553-415f-a377-0a4039936112",
+      "family_id": "vwap_deviation_fade_short",
+      "variant_index": 21,
+      "robustness_score": 0.8935,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8635,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.4802,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "2ccec4bd-ba50-4b88-8fec-33f565da6481",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v020",
+      "strategy_version_id": "956d2294-6153-434d-b22d-24b980e4b819",
+      "simulation_run_id": "1e4b972b-eef3-4aca-a420-364132d8685a",
+      "family_id": "ny_opening_mid_reject_short",
+      "variant_index": 20,
+      "robustness_score": 0.8915,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8615,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.9621,
+      "closed_trade_count": 5,
+      "profit_factor": 3.4116,
+      "max_drawdown_r": -2.0576
+    },
+    {
+      "research_candidate_id": "22aca974-8472-406c-99da-8fb291c56e77",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v013",
+      "strategy_version_id": "6f8ded40-e988-46e8-8728-8f536fab7816",
+      "simulation_run_id": "3636db5f-9a8b-44b8-a576-06277ee7c266",
+      "family_id": "previous_day_lower_quartile_break_short",
+      "variant_index": 13,
+      "robustness_score": 0.8882,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8582,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.8814,
+      "closed_trade_count": 4,
+      "profit_factor": 4.7691,
+      "max_drawdown_r": -1.0298
+    },
+    {
+      "research_candidate_id": "7a79e5b4-f840-48da-ab92-f098fb3f8be4",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:asia_mid_reject_short:v005",
+      "strategy_version_id": "0603afb2-3185-46f5-b95a-ff4631452714",
+      "simulation_run_id": "0b9c148d-17eb-47e2-a012-d8a4f15ea594",
+      "family_id": "asia_mid_reject_short",
+      "variant_index": 5,
+      "robustness_score": 0.8876,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8576,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.8358,
+      "closed_trade_count": 3,
+      "profit_factor": 4.7097,
+      "max_drawdown_r": -1.034
+    },
+    {
+      "research_candidate_id": "8c9bcd5a-b74c-48dc-9522-c244f554cb49",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v023",
+      "strategy_version_id": "7948f7b2-8a82-4cf3-a3fc-eb06f9d664a9",
+      "simulation_run_id": "bfc2201a-8138-424d-9d32-8e74957e50e5",
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "variant_index": 23,
+      "robustness_score": 0.8875,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8575,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.8361,
+      "closed_trade_count": 3,
+      "profit_factor": 4.6744,
+      "max_drawdown_r": -1.044
+    },
+    {
+      "research_candidate_id": "2906c9c0-c467-4d02-8e92-19fd6678899b",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v023",
+      "strategy_version_id": "17fa9d52-d177-401c-868a-87b0ae0c2820",
+      "simulation_run_id": "71e4baa4-321f-4815-bebf-517d6699ee5d",
+      "family_id": "vwap_deviation_fade_short",
+      "variant_index": 23,
+      "robustness_score": 0.8857,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8557,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.6896,
+      "closed_trade_count": 3,
+      "profit_factor": 4.5532,
+      "max_drawdown_r": -1.0384
+    },
+    {
+      "research_candidate_id": "a78c8865-0920-47f5-92f6-435f5e597b0a",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:compression_breakout_short:v005",
+      "strategy_version_id": "c33e2320-fcaf-4a21-acc7-23e888252d83",
+      "simulation_run_id": "4a076ee7-7fca-4888-95b0-5005489e070e",
+      "family_id": "compression_breakout_short",
+      "variant_index": 5,
+      "robustness_score": 0.8856,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8556,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.6715,
+      "closed_trade_count": 3,
+      "profit_factor": 4.5625,
+      "max_drawdown_r": -1.0306
+    },
+    {
+      "research_candidate_id": "43b73694-2c85-4ebc-8d38-c0fa4ec5a990",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_drive_short:v020",
+      "strategy_version_id": "d0a2bd7e-1825-428e-b14c-53e2313f1cf0",
+      "simulation_run_id": "9299bf52-32a6-4f7b-9dc2-e139b2f2ad56",
+      "family_id": "ny_opening_drive_short",
+      "variant_index": 20,
+      "robustness_score": 0.8839,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8539,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.5454,
+      "closed_trade_count": 3,
+      "profit_factor": 4.4077,
+      "max_drawdown_r": -1.0404
+    },
+    {
+      "research_candidate_id": "3bb27114-cfb1-4325-b364-8df27304cf0e",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v007",
+      "strategy_version_id": "d1722682-d4e9-4179-a7e4-154aa25e1ea7",
+      "simulation_run_id": "1cd1e1c7-f915-4e94-9f28-d74f21de18e8",
+      "family_id": "previous_day_low_break",
+      "variant_index": 7,
+      "robustness_score": 0.8811,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8511,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.4841,
+      "closed_trade_count": 3,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "017f13d3-3ec4-48a3-9c86-332da13317d0",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+      "strategy_version_id": "61d21cd9-1cca-40b6-8634-03fb1ae8d469",
+      "simulation_run_id": "e37437ed-3c5b-4eab-90d8-a01aa23b7b49",
+      "family_id": "previous_day_lower_quartile_reclaim_long",
+      "variant_index": 22,
+      "robustness_score": 0.8782,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8482,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.2592,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "89508a3c-2f58-42d2-aa8a-ef168543f7f5",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v007",
+      "strategy_version_id": "ed588fb6-23cd-478d-a4b0-8342118cf846",
+      "simulation_run_id": "294fe6b5-5c08-4399-b03b-800bf581471c",
+      "family_id": "opening_range_breakout_short",
+      "variant_index": 7,
+      "robustness_score": 0.8724,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8424,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.6181,
+      "closed_trade_count": 3,
+      "profit_factor": 3.5266,
+      "max_drawdown_r": -1.0362
+    },
+    {
+      "research_candidate_id": "5b1b82be-dfc6-4f01-8f72-a047d941c403",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_mid_reject_short:v016",
+      "strategy_version_id": "ead6ac90-63b3-418a-9478-20f78e2e1630",
+      "simulation_run_id": "b07d2026-3a55-4abc-9d00-810414a77124",
+      "family_id": "opening_mid_reject_short",
+      "variant_index": 16,
+      "robustness_score": 0.8721,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8421,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.4128,
+      "closed_trade_count": 4,
+      "profit_factor": 2.6586,
+      "max_drawdown_r": -2.0576
+    },
+    {
+      "research_candidate_id": "c5cd9493-52a4-4933-83f3-85677c47b017",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v009",
+      "strategy_version_id": "008a684f-f68c-40bb-bfb8-405296031318",
+      "simulation_run_id": "584a075c-79f3-438c-9709-d0c3158a5929",
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "variant_index": 9,
+      "robustness_score": 0.8674,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8374,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.0335,
+      "closed_trade_count": 4,
+      "profit_factor": 2.4774,
+      "max_drawdown_r": -2.0533
+    },
+    {
+      "research_candidate_id": "04bf4d91-b279-47c3-9f33-21eceecc59e5",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:rolling_three_day_mean_reject_short:v021",
+      "strategy_version_id": "b5fbb4d2-9367-4b75-8f89-3e227c98d158",
+      "simulation_run_id": "dd54099b-ca93-408d-8cca-277a451b813d",
+      "family_id": "rolling_three_day_mean_reject_short",
+      "variant_index": 21,
+      "robustness_score": 0.8631,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8331,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.7178,
+      "closed_trade_count": 4,
+      "profit_factor": 2.3025,
+      "max_drawdown_r": -2.0866
+    },
+    {
+      "research_candidate_id": "5261e432-92c7-4a0d-a236-36664e25aa66",
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v012",
+      "strategy_version_id": "c0e72619-a287-4908-afde-5eed11c78962",
+      "simulation_run_id": "f7f7e12b-e388-4270-83c4-3d68c7ab5137",
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "variant_index": 12,
+      "robustness_score": 0.8616,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8316,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.5808,
+      "closed_trade_count": 4,
+      "profit_factor": 2.2489,
+      "max_drawdown_r": -2.0664
+    }
+  ]
+}

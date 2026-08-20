@@ -1,0 +1,1360 @@
+{
+  "schema_version": "data_driven_robust_cohort_full_history_validation_v1",
+  "generated_at_utc": "2026-08-20T13:35:13.101Z",
+  "status": "READY",
+  "input": {
+    "cohort_path": "reports/research/mega-1000-mes-m5-diversified-v2-20260820-001-robust-pass-cohort.json",
+    "symbol_code": "MES1!",
+    "instrument": "MES",
+    "timeframe": "5",
+    "start_utc": "2026-06-01T00:00:00.000Z",
+    "end_utc": "2026-08-18T00:00:00.000Z",
+    "full_days_only": true,
+    "min_full_day_rows": 240
+  },
+  "dataset": {
+    "symbol_code": "MES1!",
+    "instrument": "MES",
+    "timeframe": "5",
+    "requested_start_utc": "2026-06-01T00:00:00.000Z",
+    "requested_end_utc": "2026-08-18T00:00:00.000Z",
+    "effective_start_utc": "2026-06-01T00:00:00.000Z",
+    "effective_end_utc": "2026-08-18T00:00:00.000Z",
+    "raw_trading_days": 36,
+    "selected_trading_days": 33,
+    "selected_rows": 9077,
+    "full_days_only": true,
+    "min_full_day_rows": 240,
+    "first_day": "2026-06-01",
+    "last_day": "2026-07-17",
+    "excluded_days": [
+      {
+        "trading_date": "2026-06-19",
+        "rows": 228
+      },
+      {
+        "trading_date": "2026-07-03",
+        "rows": 228
+      },
+      {
+        "trading_date": "2026-08-12",
+        "rows": 188
+      }
+    ]
+  },
+  "summary": {
+    "candidate_count": 35,
+    "completed_count": 35,
+    "failed_count": 0,
+    "raw_trading_days": 36,
+    "selected_trading_days": 33,
+    "selected_rows": 9077,
+    "aggregate_closed_trade_count": 564,
+    "average_closed_trade_count": 16.1143,
+    "aggregate_total_r": 76.2735,
+    "survivors_min_8_trades": 22,
+    "survivors_min_15_trades": 11,
+    "trade_count_distribution": {
+      "4": 1,
+      "7": 1,
+      "8": 1,
+      "9": 2,
+      "10": 2,
+      "12": 3,
+      "13": 1,
+      "14": 4,
+      "15": 2,
+      "16": 3,
+      "17": 1,
+      "18": 3,
+      "19": 1,
+      "20": 1,
+      "21": 2,
+      "22": 1,
+      "23": 3,
+      "25": 1,
+      "27": 1,
+      "29": 1
+    }
+  },
+  "results": [
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v023",
+      "strategy_version_id": "17fa9d52-d177-401c-868a-87b0ae0c2820",
+      "family_id": "vwap_deviation_fade_short",
+      "variant_index": 23,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.6896,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8857,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 16.8965,
+        "closed_trade_count": 14,
+        "win_rate": 0.7143,
+        "profit_factor": 5.0597,
+        "max_drawdown_r": -2.0768,
+        "expectancy_r": 1.2069
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_short:v021",
+      "strategy_version_id": "23923c0a-4cbf-49e1-b873-da3e67c7b75a",
+      "family_id": "vwap_deviation_fade_short",
+      "variant_index": 21,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.4802,
+        "closed_trade_count": 2,
+        "robustness_score": 0.8935,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 12.1278,
+        "closed_trade_count": 19,
+        "win_rate": 0.5789,
+        "profit_factor": 2.4672,
+        "max_drawdown_r": -4.136,
+        "expectancy_r": 0.6383
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": []
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v023",
+      "strategy_version_id": "7948f7b2-8a82-4cf3-a3fc-eb06f9d664a9",
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "variant_index": 23,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.8361,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8875,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 9.8885,
+        "closed_trade_count": 12,
+        "win_rate": 0.5,
+        "profit_factor": 2.5836,
+        "max_drawdown_r": -2.0818,
+        "expectancy_r": 0.824
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v012",
+      "strategy_version_id": "c0e72619-a287-4908-afde-5eed11c78962",
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "variant_index": 12,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 2.5808,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8616,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 9.0328,
+        "closed_trade_count": 14,
+        "win_rate": 0.5,
+        "profit_factor": 2.2489,
+        "max_drawdown_r": -4.1328,
+        "expectancy_r": 0.6452
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v009",
+      "strategy_version_id": "008a684f-f68c-40bb-bfb8-405296031318",
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "variant_index": 9,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.0335,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8674,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 8.7731,
+        "closed_trade_count": 10,
+        "win_rate": 0.6,
+        "profit_factor": 3.1369,
+        "max_drawdown_r": -2.4656,
+        "expectancy_r": 0.8773
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_mid_reject_short:v016",
+      "strategy_version_id": "ead6ac90-63b3-418a-9478-20f78e2e1630",
+      "family_id": "opening_mid_reject_short",
+      "variant_index": 16,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.4128,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8721,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 8.5072,
+        "closed_trade_count": 21,
+        "win_rate": 0.381,
+        "profit_factor": 1.6361,
+        "max_drawdown_r": -4.1152,
+        "expectancy_r": 0.4051
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": []
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reject_short:v013",
+      "strategy_version_id": "661bbc49-ced6-471d-a784-236cc66da351",
+      "family_id": "prior_close_reject_short",
+      "variant_index": 13,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 7.3246,
+        "closed_trade_count": 5,
+        "robustness_score": 0.9313,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 7.0989,
+        "closed_trade_count": 15,
+        "win_rate": 0.5333,
+        "profit_factor": 1.9881,
+        "max_drawdown_r": -3.0796,
+        "expectancy_r": 0.4733
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": []
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v013",
+      "strategy_version_id": "0245d59e-da63-4cfa-8076-60adc1b1d92e",
+      "family_id": "previous_day_high_reject_short",
+      "variant_index": 13,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 5.213,
+        "closed_trade_count": 2,
+        "robustness_score": 0.9152,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 6.7634,
+        "closed_trade_count": 4,
+        "win_rate": 0.75,
+        "profit_factor": 7.4041,
+        "max_drawdown_r": -1.0561,
+        "expectancy_r": 1.6909
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_8",
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_deviation_fade_long:v021",
+      "strategy_version_id": "ab9ee459-91c8-4bfa-85c7-e1972a140843",
+      "family_id": "vwap_deviation_fade_long",
+      "variant_index": 21,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.9872,
+        "closed_trade_count": 2,
+        "robustness_score": 0.8998,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 6.6724,
+        "closed_trade_count": 14,
+        "win_rate": 0.5,
+        "profit_factor": 1.9162,
+        "max_drawdown_r": -2.0808,
+        "expectancy_r": 0.4766
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_upper_quartile_reject_short:v016",
+      "strategy_version_id": "7b84742c-4895-485b-b7e9-58a2b0fd1954",
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "variant_index": 16,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 4.9279,
+        "closed_trade_count": 3,
+        "robustness_score": 0.901,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 6.5112,
+        "closed_trade_count": 13,
+        "win_rate": 0.3846,
+        "profit_factor": 1.7707,
+        "max_drawdown_r": -4.2244,
+        "expectancy_r": 0.5009
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v013",
+      "strategy_version_id": "3e591383-1595-4e57-8ddb-926e41b3f316",
+      "family_id": "ny_opening_mid_reject_short",
+      "variant_index": 13,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 4.5163,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8961,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 6.2938,
+        "closed_trade_count": 23,
+        "win_rate": 0.4783,
+        "profit_factor": 1.5094,
+        "max_drawdown_r": -4.0983,
+        "expectancy_r": 0.2736
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": []
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:compression_breakout_short:v005",
+      "strategy_version_id": "c33e2320-fcaf-4a21-acc7-23e888252d83",
+      "family_id": "compression_breakout_short",
+      "variant_index": 5,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.6715,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8856,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 5.1969,
+        "closed_trade_count": 12,
+        "win_rate": 0.4167,
+        "profit_factor": 1.7206,
+        "max_drawdown_r": -3.0897,
+        "expectancy_r": 0.4331
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_high_reject_short:v020",
+      "strategy_version_id": "d8597fd0-7e9e-45e6-a257-5bd253e029d7",
+      "family_id": "previous_day_high_reject_short",
+      "variant_index": 20,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.647,
+        "closed_trade_count": 2,
+        "robustness_score": 0.8956,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 4.9249,
+        "closed_trade_count": 8,
+        "win_rate": 0.625,
+        "profit_factor": 2.5849,
+        "max_drawdown_r": -3.1073,
+        "expectancy_r": 0.6156
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v009",
+      "strategy_version_id": "db24604a-118d-424c-ba26-22ca012d52a8",
+      "family_id": "previous_day_low_reclaim_long",
+      "variant_index": 9,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.6929,
+        "closed_trade_count": 2,
+        "robustness_score": 0.8962,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 4.3995,
+        "closed_trade_count": 9,
+        "win_rate": 0.5556,
+        "profit_factor": 2.0689,
+        "max_drawdown_r": -2.0588,
+        "expectancy_r": 0.4888
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_mid_reject_short:v005",
+      "strategy_version_id": "ed4ca35c-4f3d-48ef-8227-d13a8608adf4",
+      "family_id": "previous_day_mid_reject_short",
+      "variant_index": 5,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 4.5333,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8964,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 4.3708,
+        "closed_trade_count": 15,
+        "win_rate": 0.4667,
+        "profit_factor": 1.5305,
+        "max_drawdown_r": -3.0901,
+        "expectancy_r": 0.2914
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": []
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_reclaim_long:v004",
+      "strategy_version_id": "d5f44853-a9fc-46d8-88b5-d5c082af238c",
+      "family_id": "previous_day_low_reclaim_long",
+      "variant_index": 4,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 5.375,
+        "closed_trade_count": 2,
+        "robustness_score": 0.9172,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 3.9009,
+        "closed_trade_count": 7,
+        "win_rate": 0.4286,
+        "profit_factor": 1.9374,
+        "max_drawdown_r": -2.0808,
+        "expectancy_r": 0.5573
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_8",
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v025",
+      "strategy_version_id": "d1af86d0-91e5-406c-8d07-08669f8c7207",
+      "family_id": "previous_day_low_break",
+      "variant_index": 25,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 4.5735,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8969,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 3.7439,
+        "closed_trade_count": 10,
+        "win_rate": 0.4,
+        "profit_factor": 1.608,
+        "max_drawdown_r": -5.1318,
+        "expectancy_r": 0.3744
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v007",
+      "strategy_version_id": "ed588fb6-23cd-478d-a4b0-8342118cf846",
+      "family_id": "opening_range_breakout_short",
+      "variant_index": 7,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 2.6181,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8724,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 2.4487,
+        "closed_trade_count": 29,
+        "win_rate": 0.3793,
+        "profit_factor": 1.1314,
+        "max_drawdown_r": -7.2502,
+        "expectancy_r": 0.0844
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": [
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reject_short:v006",
+      "strategy_version_id": "ee47386f-ae17-4f7d-ab6f-a1096a49be47",
+      "family_id": "prior_close_reject_short",
+      "variant_index": 6,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 5.1059,
+        "closed_trade_count": 4,
+        "robustness_score": 0.9035,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 1.956,
+        "closed_trade_count": 22,
+        "win_rate": 0.3636,
+        "profit_factor": 1.1358,
+        "max_drawdown_r": -6.1855,
+        "expectancy_r": 0.0889
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": [
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:opening_range_breakout_short:v005",
+      "strategy_version_id": "cf7da64d-f8e2-4945-8e7f-30fe83ee6729",
+      "family_id": "opening_range_breakout_short",
+      "variant_index": 5,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 4.6763,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8982,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 1.9348,
+        "closed_trade_count": 23,
+        "win_rate": 0.3913,
+        "profit_factor": 1.1341,
+        "max_drawdown_r": -6.1163,
+        "expectancy_r": 0.0841
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": [
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v013",
+      "strategy_version_id": "6f8ded40-e988-46e8-8728-8f536fab7816",
+      "family_id": "previous_day_lower_quartile_break_short",
+      "variant_index": 13,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.8814,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8882,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 0.5981,
+        "closed_trade_count": 16,
+        "win_rate": 0.375,
+        "profit_factor": 1.0581,
+        "max_drawdown_r": -4.3034,
+        "expectancy_r": 0.0374
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": [
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_break_short:v003",
+      "strategy_version_id": "dbe32183-ad6b-4960-8c8e-95d8f637249f",
+      "family_id": "previous_day_lower_quartile_break_short",
+      "variant_index": 3,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 4.4873,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8958,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 0.5532,
+        "closed_trade_count": 9,
+        "win_rate": 0.3333,
+        "profit_factor": 1.0899,
+        "max_drawdown_r": -3.3401,
+        "expectancy_r": 0.0615
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:asia_mid_reject_short:v005",
+      "strategy_version_id": "0603afb2-3185-46f5-b95a-ff4631452714",
+      "family_id": "asia_mid_reject_short",
+      "variant_index": 5,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.8358,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8876,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 0.5441,
+        "closed_trade_count": 18,
+        "win_rate": 0.3333,
+        "profit_factor": 1.0438,
+        "max_drawdown_r": -6.9583,
+        "expectancy_r": 0.0302
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": [
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v006",
+      "strategy_version_id": "65a9a5e6-ffc2-448e-bd0f-e19ee612b1ea",
+      "family_id": "ny_opening_mid_reject_short",
+      "variant_index": 6,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 5.9376,
+        "closed_trade_count": 4,
+        "robustness_score": 0.9139,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": 0.3065,
+        "closed_trade_count": 18,
+        "win_rate": 0.3333,
+        "profit_factor": 1.0247,
+        "max_drawdown_r": -6.9752,
+        "expectancy_r": 0.017
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": true,
+        "min_15_trade_gate": true,
+        "reasons": [
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:rolling_three_day_mean_reject_short:v021",
+      "strategy_version_id": "b5fbb4d2-9367-4b75-8f89-3e227c98d158",
+      "family_id": "rolling_three_day_mean_reject_short",
+      "variant_index": 21,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 2.7178,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8631,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -1.0882,
+        "closed_trade_count": 17,
+        "win_rate": 0.2941,
+        "profit_factor": 0.9131,
+        "max_drawdown_r": -7.9549,
+        "expectancy_r": -0.064
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "NON_POSITIVE_TOTAL_R",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v014",
+      "strategy_version_id": "17ef517a-4d4d-4581-9879-16100b1072cf",
+      "family_id": "previous_day_low_break",
+      "variant_index": 14,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.9872,
+        "closed_trade_count": 2,
+        "robustness_score": 0.8998,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -1.4764,
+        "closed_trade_count": 16,
+        "win_rate": 0.3125,
+        "profit_factor": 0.871,
+        "max_drawdown_r": -6.3296,
+        "expectancy_r": -0.0923
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "NON_POSITIVE_TOTAL_R",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v021",
+      "strategy_version_id": "7c569c08-4153-413c-bf9c-cee62f684f3f",
+      "family_id": "previous_day_low_break",
+      "variant_index": 21,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.857,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8982,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -1.5944,
+        "closed_trade_count": 16,
+        "win_rate": 0.375,
+        "profit_factor": 0.8459,
+        "max_drawdown_r": -5.7455,
+        "expectancy_r": -0.0996
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "NON_POSITIVE_TOTAL_R",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_low_break:v007",
+      "strategy_version_id": "d1722682-d4e9-4179-a7e4-154aa25e1ea7",
+      "family_id": "previous_day_low_break",
+      "variant_index": 7,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 2.4841,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8811,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -2.2406,
+        "closed_trade_count": 12,
+        "win_rate": 0.4167,
+        "profit_factor": 0.6926,
+        "max_drawdown_r": -4.7112,
+        "expectancy_r": -0.1867
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15",
+          "NON_POSITIVE_TOTAL_R",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v022",
+      "strategy_version_id": "fb4d0865-332b-486b-881d-d1d5558e8d13",
+      "family_id": "prior_close_reclaim_long",
+      "variant_index": 22,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 7.3752,
+        "closed_trade_count": 4,
+        "robustness_score": 0.9422,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -4.2213,
+        "closed_trade_count": 23,
+        "win_rate": 0.3043,
+        "profit_factor": 0.744,
+        "max_drawdown_r": -6.6112,
+        "expectancy_r": -0.1835
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "NON_POSITIVE_TOTAL_R",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:prior_close_reclaim_long:v015",
+      "strategy_version_id": "d0aed613-0a76-4a99-93bf-842777b06ec0",
+      "family_id": "prior_close_reclaim_long",
+      "variant_index": 15,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 5.0391,
+        "closed_trade_count": 4,
+        "robustness_score": 0.9027,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -4.4289,
+        "closed_trade_count": 25,
+        "win_rate": 0.28,
+        "profit_factor": 0.7619,
+        "max_drawdown_r": -10.3743,
+        "expectancy_r": -0.1772
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "NON_POSITIVE_TOTAL_R",
+          "DRAWDOWN_BELOW_FLOOR",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:session_open_drive_long:v008",
+      "strategy_version_id": "216e1e0f-cc6e-4cdf-875c-870323fd5115",
+      "family_id": "session_open_drive_long",
+      "variant_index": 8,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 4.7803,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8994,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -4.8194,
+        "closed_trade_count": 27,
+        "win_rate": 0.2593,
+        "profit_factor": 0.7674,
+        "max_drawdown_r": -8.3092,
+        "expectancy_r": -0.1785
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "NON_POSITIVE_TOTAL_R",
+          "DRAWDOWN_BELOW_FLOOR",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:previous_day_lower_quartile_reclaim_long:v022",
+      "strategy_version_id": "61d21cd9-1cca-40b6-8634-03fb1ae8d469",
+      "family_id": "previous_day_lower_quartile_reclaim_long",
+      "variant_index": 22,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 2.2592,
+        "closed_trade_count": 2,
+        "robustness_score": 0.8782,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -5.3347,
+        "closed_trade_count": 14,
+        "win_rate": 0.2857,
+        "profit_factor": 0.4847,
+        "max_drawdown_r": -7.0285,
+        "expectancy_r": -0.381
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "TRADE_COUNT_BELOW_15",
+          "NON_POSITIVE_TOTAL_R",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_mid_reject_short:v020",
+      "strategy_version_id": "956d2294-6153-434d-b22d-24b980e4b819",
+      "family_id": "ny_opening_mid_reject_short",
+      "variant_index": 20,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 4.9621,
+        "closed_trade_count": 5,
+        "robustness_score": 0.8915,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -6.895,
+        "closed_trade_count": 18,
+        "win_rate": 0.2222,
+        "profit_factor": 0.5213,
+        "max_drawdown_r": -11.3168,
+        "expectancy_r": -0.3831
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "NON_POSITIVE_TOTAL_R",
+          "DRAWDOWN_BELOW_FLOOR",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:vwap_proxy_reclaim_long:v004",
+      "strategy_version_id": "8d54cf18-2b90-4429-a012-b39a2a42fbee",
+      "family_id": "vwap_proxy_reclaim_long",
+      "variant_index": 4,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 4.4816,
+        "closed_trade_count": 4,
+        "robustness_score": 0.8956,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -9.8897,
+        "closed_trade_count": 20,
+        "win_rate": 0.25,
+        "profit_factor": 0.3684,
+        "max_drawdown_r": -10.7359,
+        "expectancy_r": -0.4945
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "NON_POSITIVE_TOTAL_R",
+          "DRAWDOWN_BELOW_FLOOR",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    },
+    {
+      "candidate_key": "mega:mega-1000-mes-m5-diversified-v2-20260820-001:ny_opening_drive_short:v020",
+      "strategy_version_id": "d0a2bd7e-1825-428e-b14c-53e2313f1cf0",
+      "family_id": "ny_opening_drive_short",
+      "variant_index": 20,
+      "status": "COMPLETED",
+      "original": {
+        "total_r": 3.5454,
+        "closed_trade_count": 3,
+        "robustness_score": 0.8839,
+        "promotion_decision": "BLOCKED"
+      },
+      "full_history": {
+        "setup_count": 33,
+        "chunk_count": 7,
+        "total_r": -15.1818,
+        "closed_trade_count": 21,
+        "win_rate": 0.0952,
+        "profit_factor": 0.232,
+        "max_drawdown_r": -15.1818,
+        "expectancy_r": -0.7229
+      },
+      "promotion_readiness": {
+        "min_8_trade_gate": false,
+        "min_15_trade_gate": false,
+        "reasons": [
+          "NON_POSITIVE_TOTAL_R",
+          "DRAWDOWN_BELOW_FLOOR",
+          "PROFIT_FACTOR_BELOW_1_2"
+        ]
+      },
+      "simulation_quality": {
+        "chunk_statuses": {
+          "COMPLETED": 7
+        }
+      },
+      "reasons": []
+    }
+  ],
+  "safety": {
+    "broker_execution_enabled": false,
+    "strategy_instances_created": 0,
+    "strategy_signals_emitted": 0,
+    "database_writes": 0,
+    "mode": "READ_ONLY_CERTIFICATION"
+  }
+}
