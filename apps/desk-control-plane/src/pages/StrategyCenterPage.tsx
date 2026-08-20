@@ -14,6 +14,15 @@ import {
 import { DataTable, MobileDataList } from "@/design-system/data";
 import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import {
+  presentCommandEligibility,
+  presentEventTone,
+  presentExecutionMode,
+  presentGateState,
+  presentHealth,
+  presentRuntimeStatus,
+  presentVersionStatus
+} from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -102,7 +111,7 @@ export function StrategyCenterPage() {
             rows={data.strategies}
             rowKey={(row) => row.strategyId}
             renderTitle={(row) => row.name}
-            renderMeta={(row) => `${row.lifecycle} · ${row.executionMode} · ${row.runtimeStatus}`}
+            renderMeta={(row) => `${row.lifecycle} · ${presentExecutionMode(row.executionMode).label} · ${presentRuntimeStatus(row.runtimeStatus).label}`}
             renderBody={(row) => `${row.instruments.join("/")} · PF ${row.profitFactor} · ${formatSignedR(row.lastOosR)}`}
           />
         </Card>
@@ -126,14 +135,14 @@ export function StrategyCenterPage() {
                 <article key={gate.label}>
                   <span>{gateIcon(gate.state)}</span>
                   <div><strong>{gate.label}</strong></div>
-                  <StatusBadge tone={gateTone(gate.state)}>{gate.state}</StatusBadge>
+                  <StatusBadge tone={presentGateState(gate.state).tone}>{presentGateState(gate.state).label}</StatusBadge>
                 </article>
               ))}
             </div>
             <div className="strategy-command-box">
               <div>
                 <small>Éligibilité commande</small>
-                <strong>{inspector.currentCommandEligibility}</strong>
+                <strong>{presentCommandEligibility(inspector.currentCommandEligibility).label}</strong>
                 {command ? <span className="text-success">Acceptée · {command.commandId}</span> : null}
                 {commandError ? <span className="text-danger">{commandError}</span> : null}
               </div>
@@ -196,7 +205,7 @@ export function StrategyCenterPage() {
               <li key={event.eventId}>
                 <span><FaBolt />{formatTime(event.at)}</span>
                 <div><strong>{event.title}</strong><small>{event.detail}</small></div>
-                <StatusBadge tone={event.tone === "HIGH" ? "danger" : event.tone === "WATCH" ? "warning" : "accent"}>{event.tone}</StatusBadge>
+                <StatusBadge tone={event.tone === "HIGH" ? "danger" : event.tone === "WATCH" ? "warning" : "accent"}>{presentEventTone(event.tone).label}</StatusBadge>
               </li>
             ))}
           </ol>
@@ -231,14 +240,14 @@ export function buildStrategyShadowTestCommand(
 const strategyColumns = [
   { key: "name", header: "Stratégie", render: (row: StrategyRow) => <StrategyNameCell row={row} /> },
   { key: "family", header: "Famille", render: (row: StrategyRow) => row.family },
-  { key: "mode", header: "Mode", render: (row: StrategyRow) => <StatusBadge tone={modeTone(row.executionMode)}>{row.executionMode}</StatusBadge> },
-  { key: "version", header: "Version", render: (row: StrategyRow) => <StatusBadge tone={versionTone(row.versionStatus)}>{row.versionStatus}</StatusBadge> },
-  { key: "runtime", header: "Runtime", render: (row: StrategyRow) => <StatusBadge tone={runtimeTone(row.runtimeStatus)}>{row.runtimeStatus}</StatusBadge> },
+  { key: "mode", header: "Mode", render: (row: StrategyRow) => <StatusBadge tone={modeTone(row.executionMode)}>{presentExecutionMode(row.executionMode).label}</StatusBadge> },
+  { key: "version", header: "Version", render: (row: StrategyRow) => <StatusBadge tone={versionTone(row.versionStatus)}>{presentVersionStatus(row.versionStatus).label}</StatusBadge> },
+  { key: "runtime", header: "Runtime", render: (row: StrategyRow) => <StatusBadge tone={runtimeTone(row.runtimeStatus)}>{presentRuntimeStatus(row.runtimeStatus).label}</StatusBadge> },
   { key: "tier", header: "Tier", render: (row: StrategyRow) => row.tier },
   { key: "pf", header: "PF", align: "right" as const, render: (row: StrategyRow) => row.profitFactor.toFixed(2) },
   { key: "win", header: "Win", align: "right" as const, render: (row: StrategyRow) => `${row.winRatePct}%` },
   { key: "dd", header: "DD", align: "right" as const, render: (row: StrategyRow) => <span className="text-warning">{formatSignedR(row.maxDrawdownR)}</span> },
-  { key: "health", header: "Santé", render: (row: StrategyRow) => <StatusBadge tone={healthTone(row.liveHealth)}>{row.liveHealth}</StatusBadge> }
+  { key: "health", header: "Santé", render: (row: StrategyRow) => <StatusBadge tone={healthTone(row.liveHealth)}>{presentHealth(row.liveHealth).label}</StatusBadge> }
 ] as const;
 
 function StrategyNameCell({ row }: { row: StrategyRow }) {

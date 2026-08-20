@@ -15,7 +15,7 @@
   background: color-mix(in srgb, var(--warning) 9%, var(--panel));
   padding: 8px 12px;
   color: var(--text);
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .order-dossier__degraded span,
@@ -45,7 +45,7 @@
   background: color-mix(in srgb, var(--panel-strong) 78%, transparent);
   padding: 6px 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 750;
   text-transform: uppercase;
 }
@@ -87,7 +87,7 @@
 .order-dossier__data-line small,
 .order-dossier__terms dt {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -97,7 +97,7 @@
 .order-dossier__terms dd {
   overflow-wrap: anywhere;
   color: var(--text);
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .order-dossier-page .order-dossier__unavailable {
@@ -120,7 +120,7 @@
   border-radius: 999px;
   padding: 3px 6px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .order-dossier__immutable-banner,
@@ -131,7 +131,7 @@
   background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
   padding: 8px 10px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -167,7 +167,7 @@
 .order-dossier__impact-preview p {
   margin: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .order-dossier__gate-actions {
@@ -186,7 +186,7 @@
 .order-dossier__action-with-reason small {
   max-width: 210px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   text-align: right;
 }
 
@@ -212,7 +212,7 @@
 .order-dossier__timeline-item time,
 .order-dossier__timeline-item small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .order-dossier__timeline-marker {
@@ -242,7 +242,7 @@
 .order-dossier__timeline-item p {
   margin: 2px 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .order-dossier__reconciliation-heading {
@@ -261,7 +261,7 @@
 .order-dossier__comparison h3 {
   margin: 10px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   text-transform: uppercase;
 }
 
@@ -279,7 +279,7 @@
 .order-dossier__fill-list small,
 .order-dossier__fill-list time {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .order-dossier__fill-list span {
@@ -290,7 +290,7 @@
 .order-dossier__technical > summary {
   cursor: pointer;
   color: var(--text);
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 750;
 }
 

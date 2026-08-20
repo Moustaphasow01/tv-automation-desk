@@ -26,8 +26,8 @@
 .operator-menu__avatar { width: 29px; height: 29px; color: #8499ad; }
 .operator-menu__copy { display: grid; min-width: 0; line-height: 1.2; }
 .operator-menu__copy strong, .operator-menu__copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.operator-menu__copy strong { font-size: 9px; font-weight: 650; }
-.operator-menu__copy small { color: #71879b; font-size: 8px; }
+.operator-menu__copy strong { font-size: 13px; font-weight: 650; }
+.operator-menu__copy small { color: #71879b; font-size: 12px; }
 .operator-menu__chevron { width: 8px; color: #71879b; transition: transform 140ms ease-out; }
 .operator-menu__trigger[aria-expanded="true"] .operator-menu__chevron { transform: rotate(180deg); }
 
@@ -54,7 +54,7 @@
   padding: 0 9px;
   border-radius: 4px;
   color: #a8b8c8;
-  font-size: 9px;
+  font-size: 13px;
   text-decoration: none;
 }
 
