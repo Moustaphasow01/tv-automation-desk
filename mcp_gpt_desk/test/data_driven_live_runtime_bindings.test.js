@@ -29,6 +29,34 @@ test("data-driven live runtime bindings preserve family-specific previous close 
   assert.equal(setup.order_type, "MARKET");
 });
 
+test("data-driven live runtime bindings support diversified v2 family catalog", () => {
+  const market = marketFixture();
+  const result = buildDataDrivenLiveRuntimeBindings({
+    version: {
+      strategy_version_id: "strategy-version-v2",
+      metadata: {
+        family_set: "diversified_v2",
+        family_id: "previous_day_high_reject_short",
+        family_index: 21,
+        variant_index: 3,
+        dsl_source: diversifiedDslSource(),
+      },
+    },
+    dsl: diversifiedDslSource(),
+    instance: { strategy_instance_id: "instance-v2-001" },
+    market,
+    instrument: "MNQ",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.descriptor.family_set, "diversified_v2");
+  const setup = result.runtime_bindings.setups[0];
+  assert.equal(setup.metadata.anchor_kind, "PREVIOUS_DAY_HIGH");
+  assert.equal(setup.metadata.anchor_source, "previous_day_high");
+  assert.equal(setup.break_level, 15067);
+  assert.equal(setup.direction, "short");
+});
+
 function dslSource() {
   return {
     schema_version: "strategy_dsl_v1",
@@ -50,6 +78,34 @@ function dslSource() {
       template_id: "prior_close_reject_short_short",
       tolerance_points: 12,
       require_rejection_confirmation: true,
+    }],
+  };
+}
+
+function diversifiedDslSource() {
+  return {
+    schema_version: "strategy_dsl_v1",
+    pattern: "BREAKOUT_RETEST",
+    metadata: {
+      family_set: "diversified_v2",
+      family_id: "previous_day_high_reject_short",
+      family_index: 21,
+      variant_index: 3,
+      generator: "data_driven_mega_research_batch_v1",
+      anchor_kind: "PREVIOUS_DAY_HIGH",
+    },
+    setup_templates: [{
+      rank: 1,
+      max_bars: 36,
+      risk_pct: 0.25,
+      direction: "short",
+      timeframe: "M5",
+      instrument: "MNQ",
+      order_type: "LIMIT",
+      rr_minimum: 2,
+      template_id: "previous_day_high_reject_short_short",
+      tolerance_points: 4,
+      require_rejection_confirmation: false,
     }],
   };
 }

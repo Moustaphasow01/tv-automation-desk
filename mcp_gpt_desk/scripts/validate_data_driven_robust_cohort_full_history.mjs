@@ -10,6 +10,12 @@ import {
 import { buildVersionedSimulationMetricsV1, runCanonicalSimulationV1 } from "@tv-automation/desk-replay-engine";
 import { toParisIso } from "@tv-automation/desk-time";
 import { createDeskStoreFromEnv } from "../src/store.js";
+import {
+  DATA_DRIVEN_FAMILY_SET_DIVERSIFIED_V2,
+  dataDrivenAnchorForFamily,
+  dataDrivenParameterCombination,
+  getDataDrivenStrategyFamilies,
+} from "../src/research/data-driven-strategy-family-catalog.js";
 
 const VERSION = "data_driven_robust_cohort_full_history_validation_v1";
 
@@ -48,6 +54,7 @@ const FAMILIES = Object.freeze([
   family("weekly_anchor_breakout_long", "Weekly anchor breakout long", "long", "ROLLING_WEEK_HIGH"),
   family("weekly_anchor_breakout_short", "Weekly anchor breakout short", "short", "ROLLING_WEEK_LOW"),
 ]);
+const FULL_HISTORY_FAMILIES = getDataDrivenStrategyFamilies(DATA_DRIVEN_FAMILY_SET_DIVERSIFIED_V2);
 
 const PARAMETER_GRID = Object.freeze({
   openingBars: [4, 6, 8, 12, 18],
@@ -102,7 +109,7 @@ async function validateFullHistory({ pool, input }) {
   const results = [];
   for (const candidate of retained) {
     const versionRow = versionById.get(candidate.strategy_version_id);
-    const familySpec = FAMILIES.find((item) => item.family_id === candidate.family_id);
+    const familySpec = FULL_HISTORY_FAMILIES.find((item) => item.family_id === candidate.family_id);
     if (!versionRow || !familySpec) {
       results.push({
         candidate_key: candidate.candidate_key,
@@ -115,7 +122,7 @@ async function validateFullHistory({ pool, input }) {
       continue;
     }
     const variantIndexZeroBased = Number(candidate.variant_index) - 1;
-    const familyIndex = FAMILIES.findIndex((item) => item.family_id === candidate.family_id);
+    const familyIndex = FULL_HISTORY_FAMILIES.findIndex((item) => item.family_id === candidate.family_id);
     const parameters = parameterCombination(familyIndex, variantIndexZeroBased);
     const setups = buildDailySetups({
       familySpec,
@@ -415,29 +422,7 @@ function buildDailySetups({ familySpec, parameters, tradingDays, input, familyVa
 }
 
 function anchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex }) {
-  const previous = day.previous || tradingDays[Math.max(0, dayIndex - 1)] || null;
-  const week = tradingDays.slice(Math.max(0, dayIndex - 5), dayIndex + 1);
-  const compression = previous && previous.range <= day.dataset_stats.range_p35;
-  switch (familySpec.anchor_kind) {
-    case "OPENING_RANGE_HIGH": return priceAnchor(day.opening(parameters.opening_bars).high, "opening_range_high");
-    case "OPENING_RANGE_LOW": return priceAnchor(day.opening(parameters.opening_bars).low, "opening_range_low");
-    case "ASIA_RANGE_HIGH": return priceAnchor(day.asia.high ?? day.opening(parameters.opening_bars).high, "asia_range_high");
-    case "ASIA_RANGE_LOW": return priceAnchor(day.asia.low ?? day.opening(parameters.opening_bars).low, "asia_range_low");
-    case "NY_OPENING_HIGH": return priceAnchor(day.nyOpening.high ?? day.opening(parameters.opening_bars).high, "ny_opening_high");
-    case "NY_OPENING_LOW": return priceAnchor(day.nyOpening.low ?? day.opening(parameters.opening_bars).low, "ny_opening_low");
-    case "PREVIOUS_DAY_HIGH": return previous ? priceAnchor(previous.high, "previous_day_high") : null;
-    case "PREVIOUS_DAY_LOW": return previous ? priceAnchor(previous.low, "previous_day_low") : null;
-    case "PREVIOUS_DAY_MID": return previous ? priceAnchor((previous.high + previous.low) / 2, "previous_day_mid") : null;
-    case "PREVIOUS_DAY_CLOSE": return previous ? priceAnchor(previous.close, "previous_day_close") : null;
-    case "ROLLING_VWAP": return priceAnchor(day.vwap, "daily_vwap_proxy");
-    case "VWAP_LOWER_DEVIATION": return priceAnchor(day.vwap - day.range * deviationMultiplier(parameters), "vwap_lower_deviation");
-    case "VWAP_UPPER_DEVIATION": return priceAnchor(day.vwap + day.range * deviationMultiplier(parameters), "vwap_upper_deviation");
-    case "COMPRESSION_HIGH": return compression ? priceAnchor(day.opening(parameters.opening_bars).high, "compression_high") : priceAnchor(day.dataset_stats.range_p35_high, "fallback_compression_high");
-    case "COMPRESSION_LOW": return compression ? priceAnchor(day.opening(parameters.opening_bars).low, "compression_low") : priceAnchor(day.dataset_stats.range_p35_low, "fallback_compression_low");
-    case "ROLLING_WEEK_HIGH": return week.length ? priceAnchor(Math.max(...week.map((item) => item.high)), "rolling_week_high") : null;
-    case "ROLLING_WEEK_LOW": return week.length ? priceAnchor(Math.min(...week.map((item) => item.low)), "rolling_week_low") : null;
-    default: return null;
-  }
+  return dataDrivenAnchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex });
 }
 
 function strategyDsl({ input, familySpec, parameters }) {
@@ -644,16 +629,7 @@ function normalizeInput(args) {
 }
 
 function parameterCombination(familyIndex, index) {
-  return {
-    opening_bars: pick(PARAMETER_GRID.openingBars, index + familyIndex),
-    tolerance_points: pick(PARAMETER_GRID.tolerancePoints, index * 3 + familyIndex),
-    max_bars: pick(PARAMETER_GRID.maxBars, index * 5 + familyIndex),
-    risk_points: pick(PARAMETER_GRID.riskPoints, index * 7 + familyIndex),
-    target_rr: pick(PARAMETER_GRID.targetRr, index * 11 + familyIndex),
-    break_offset_points: pick(PARAMETER_GRID.offsets, index * 13 + familyIndex),
-    order_type: pick(PARAMETER_GRID.orderTypes, index + familyIndex),
-    require_rejection_confirmation: pick(PARAMETER_GRID.requireRejection, index * 17 + familyIndex),
-  };
+  return dataDrivenParameterCombination(familyIndex, index);
 }
 
 function marketRow(row, input) {

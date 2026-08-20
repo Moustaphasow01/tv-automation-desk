@@ -4,6 +4,7 @@ import {
   DATA_DRIVEN_STRATEGY_FAMILIES,
   buildDataDrivenMegaResearchPlan,
 } from "../src/research/data-driven-mega-research-batch.js";
+import { getDataDrivenStrategyFamilies } from "../src/research/data-driven-strategy-family-catalog.js";
 
 test("mega research plan generates 1000 variants across distinct data-driven families", () => {
   const scope = {
@@ -32,6 +33,37 @@ test("mega research plan generates 1000 variants across distinct data-driven fam
   assert.ok(variants.every((variant) => variant.runtime_setups.length <= 5));
   assert.ok(variants.every((variant) => variant.runtime_setups.length >= 1));
   assert.ok(variants.every((variant) => variant.runtime_setups.every((setup) => setup.break_level > 10_000)));
+});
+
+test("diversified v2 mega research plan expands families without changing v1 ordering", () => {
+  const scope = {
+    batch_id: "mega-test-v2",
+    instrument: "MNQ",
+    timeframe: "5",
+    start_utc: "2026-06-01T00:00:00.000Z",
+    end_utc: "2026-07-01T00:00:00.000Z",
+    family_set: "diversified_v2",
+    setups_per_variant: 5,
+  };
+  const dataset = { dataset_key: "dataset-test-v2", dataset_id: "dataset-id-v2", cutoff_paris: "2026-07-01T02:00:00.000+02:00" };
+  const tradingDays = Array.from({ length: 24 }, (_, index) => fakeTradingDay(index));
+  const v1Families = DATA_DRIVEN_STRATEGY_FAMILIES.map((item) => item.family_id);
+  const v2Families = getDataDrivenStrategyFamilies("diversified_v2");
+
+  const variants = buildDataDrivenMegaResearchPlan({ scope, dataset, tradingDays, count: 1_000 });
+
+  assert.equal(v2Families.length, 40);
+  assert.deepEqual(v2Families.slice(0, v1Families.length).map((item) => item.family_id), v1Families);
+  assert.equal(variants.length, 1_000);
+  assert.equal(new Set(variants.map((variant) => variant.family_id)).size, 40);
+  assert.deepEqual(
+    [...familyCounts(variants).values()].sort((left, right) => left - right),
+    Array.from({ length: 40 }, () => 25),
+  );
+  assert.ok(variants.some((variant) => variant.family_id === "previous_day_high_reject_short"));
+  assert.ok(variants.some((variant) => variant.family_id === "rolling_three_day_mean_reclaim_long"));
+  assert.ok(variants.every((variant) => variant.runtime_setups.length <= 5));
+  assert.ok(variants.every((variant) => variant.runtime_setups.length >= 1));
 });
 
 function familyCounts(variants) {
@@ -73,6 +105,7 @@ function fakeTradingDay(index) {
     opening: (bars) => rangeSummary(rows.slice(0, Math.max(1, bars))),
   };
   daySummary.previous = index === 0 ? null : {
+    open: base - 18,
     high: base + 70,
     low: base - 45,
     close: base - 5,

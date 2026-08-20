@@ -1,41 +1,16 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { toParisIso } from "@tv-automation/desk-time";
+import {
+  DATA_DRIVEN_FAMILY_SET_DIVERSIFIED_V2,
+  DATA_DRIVEN_FAMILY_SET_V1,
+  dataDrivenAnchorForFamily,
+  dataDrivenParameterCombination,
+  findDataDrivenStrategyFamily,
+  getDataDrivenStrategyFamilyIndex,
+  normalizeDataDrivenFamilySet,
+} from "./data-driven-strategy-family-catalog.js";
 
 export const DATA_DRIVEN_LIVE_RUNTIME_BINDINGS_VERSION = "data_driven_live_runtime_bindings_v1";
-
-const FAMILY_SPECS = Object.freeze([
-  family("opening_range_breakout_long", "long", "OPENING_RANGE_HIGH"),
-  family("opening_range_breakout_short", "short", "OPENING_RANGE_LOW"),
-  family("asia_range_breakout_long", "long", "ASIA_RANGE_HIGH"),
-  family("asia_range_breakout_short", "short", "ASIA_RANGE_LOW"),
-  family("ny_opening_drive_long", "long", "NY_OPENING_HIGH"),
-  family("ny_opening_drive_short", "short", "NY_OPENING_LOW"),
-  family("previous_day_high_reclaim", "long", "PREVIOUS_DAY_HIGH"),
-  family("previous_day_low_break", "short", "PREVIOUS_DAY_LOW"),
-  family("previous_day_mid_reclaim_long", "long", "PREVIOUS_DAY_MID"),
-  family("previous_day_mid_reject_short", "short", "PREVIOUS_DAY_MID"),
-  family("prior_close_reclaim_long", "long", "PREVIOUS_DAY_CLOSE"),
-  family("prior_close_reject_short", "short", "PREVIOUS_DAY_CLOSE"),
-  family("vwap_proxy_reclaim_long", "long", "ROLLING_VWAP"),
-  family("vwap_proxy_reject_short", "short", "ROLLING_VWAP"),
-  family("vwap_deviation_fade_long", "long", "VWAP_LOWER_DEVIATION"),
-  family("vwap_deviation_fade_short", "short", "VWAP_UPPER_DEVIATION"),
-  family("compression_breakout_long", "long", "COMPRESSION_HIGH"),
-  family("compression_breakout_short", "short", "COMPRESSION_LOW"),
-  family("weekly_anchor_breakout_long", "long", "ROLLING_WEEK_HIGH"),
-  family("weekly_anchor_breakout_short", "short", "ROLLING_WEEK_LOW"),
-]);
-
-const PARAMETER_GRID = Object.freeze({
-  openingBars: Object.freeze([4, 6, 8, 12, 18]),
-  tolerancePoints: Object.freeze([2, 3, 4, 5, 6, 8, 10, 12]),
-  maxBars: Object.freeze([12, 18, 24, 36, 48, 72, 96, 144]),
-  riskPoints: Object.freeze([10, 14, 18, 22, 28, 34, 42, 55]),
-  targetRr: Object.freeze([1.2, 1.5, 1.8, 2.1, 2.4, 2.8, 3.2]),
-  offsets: Object.freeze([-6, -3, 0, 3, 6]),
-  orderTypes: Object.freeze(["LIMIT", "MARKET"]),
-  requireRejection: Object.freeze([false, true]),
-});
 
 export function buildDataDrivenLiveRuntimeBindings({
   version = {},
@@ -54,10 +29,9 @@ export function buildDataDrivenLiveRuntimeBindings({
   const dayIndex = tradingDays.findIndex((day) => day.trading_date === currentDate);
   if (dayIndex < 0) return rejected(["DATA_DRIVEN_RUNTIME_DAY_NOT_FOUND"]);
 
-  const familyIndex = FAMILY_SPECS.findIndex((item) => item.family_id === descriptor.family_id);
-  const familySpec = FAMILY_SPECS[familyIndex];
+  const familySpec = descriptor.family_spec;
   const parameters = mergeTemplateParameters(
-    parameterCombination(familyIndex, descriptor.variant_index - 1),
+    parameterCombination(descriptor.family_index_zero_based, descriptor.variant_index - 1),
     firstTemplate(dsl),
   );
   const setup = dataDrivenSetup({
@@ -99,14 +73,26 @@ function dataDrivenDescriptor(version = {}, dsl = {}) {
   const metadata = { ...(version.metadata || {}), ...(dsl.metadata || {}) };
   const familyId = text(metadata.family_id);
   const variantIndex = integer(metadata.variant_index ?? version.metadata?.variant_index, null);
-  const familySpec = FAMILY_SPECS.find((item) => item.family_id === familyId);
+  const familySet = normalizeDataDrivenFamilySet(metadata.family_set || metadata.familySet || DATA_DRIVEN_FAMILY_SET_V1);
+  const familySpec = findDataDrivenStrategyFamily(familyId);
+  const explicitFamilyIndex = integer(metadata.family_index ?? metadata.familyIndex, null);
+  const fallbackFamilyIndex = getDataDrivenStrategyFamilyIndex(
+    familyId,
+    familySet === DATA_DRIVEN_FAMILY_SET_DIVERSIFIED_V2 ? DATA_DRIVEN_FAMILY_SET_DIVERSIFIED_V2 : DATA_DRIVEN_FAMILY_SET_V1,
+  ) + 1;
+  const familyIndex = explicitFamilyIndex || fallbackFamilyIndex;
   if (!familySpec) return rejected(["DATA_DRIVEN_RUNTIME_FAMILY_UNKNOWN"]);
   if (!Number.isInteger(variantIndex) || variantIndex < 1) return rejected(["DATA_DRIVEN_RUNTIME_VARIANT_INDEX_MISSING"]);
+  if (!Number.isInteger(familyIndex) || familyIndex < 1) return rejected(["DATA_DRIVEN_RUNTIME_FAMILY_INDEX_MISSING"]);
   return {
     ok: true,
+    family_set: familySet,
     family_id: familyId,
+    family_index: familyIndex,
+    family_index_zero_based: familyIndex - 1,
     variant_index: variantIndex,
     anchor_kind: metadata.anchor_kind || familySpec.anchor_kind,
+    family_spec: familySpec,
   };
 }
 
@@ -159,29 +145,7 @@ function dataDrivenSetup({ day, dayIndex, tradingDays, familySpec, parameters, f
 }
 
 function anchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex }) {
-  const previous = day.previous || tradingDays[Math.max(0, dayIndex - 1)] || null;
-  const week = tradingDays.slice(Math.max(0, dayIndex - 5), dayIndex + 1);
-  const compression = previous && previous.range <= day.dataset_stats.range_p35;
-  switch (familySpec.anchor_kind) {
-    case "OPENING_RANGE_HIGH": return priceAnchor(day.opening(parameters.opening_bars).high, "opening_range_high");
-    case "OPENING_RANGE_LOW": return priceAnchor(day.opening(parameters.opening_bars).low, "opening_range_low");
-    case "ASIA_RANGE_HIGH": return priceAnchor(day.asia.high ?? day.opening(parameters.opening_bars).high, "asia_range_high");
-    case "ASIA_RANGE_LOW": return priceAnchor(day.asia.low ?? day.opening(parameters.opening_bars).low, "asia_range_low");
-    case "NY_OPENING_HIGH": return priceAnchor(day.nyOpening.high ?? day.opening(parameters.opening_bars).high, "ny_opening_high");
-    case "NY_OPENING_LOW": return priceAnchor(day.nyOpening.low ?? day.opening(parameters.opening_bars).low, "ny_opening_low");
-    case "PREVIOUS_DAY_HIGH": return previous ? priceAnchor(previous.high, "previous_day_high") : null;
-    case "PREVIOUS_DAY_LOW": return previous ? priceAnchor(previous.low, "previous_day_low") : null;
-    case "PREVIOUS_DAY_MID": return previous ? priceAnchor((previous.high + previous.low) / 2, "previous_day_mid") : null;
-    case "PREVIOUS_DAY_CLOSE": return previous ? priceAnchor(previous.close, "previous_day_close") : null;
-    case "ROLLING_VWAP": return priceAnchor(day.vwap, "daily_vwap_proxy");
-    case "VWAP_LOWER_DEVIATION": return priceAnchor(day.vwap - day.range * deviationMultiplier(parameters), "vwap_lower_deviation");
-    case "VWAP_UPPER_DEVIATION": return priceAnchor(day.vwap + day.range * deviationMultiplier(parameters), "vwap_upper_deviation");
-    case "COMPRESSION_HIGH": return compression ? priceAnchor(day.opening(parameters.opening_bars).high, "compression_high") : priceAnchor(day.dataset_stats.range_p35_high, "fallback_compression_high");
-    case "COMPRESSION_LOW": return compression ? priceAnchor(day.opening(parameters.opening_bars).low, "compression_low") : priceAnchor(day.dataset_stats.range_p35_low, "fallback_compression_low");
-    case "ROLLING_WEEK_HIGH": return week.length ? priceAnchor(Math.max(...week.map((item) => item.high)), "rolling_week_high") : null;
-    case "ROLLING_WEEK_LOW": return week.length ? priceAnchor(Math.min(...week.map((item) => item.low)), "rolling_week_low") : null;
-    default: return null;
-  }
+  return dataDrivenAnchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex });
 }
 
 function buildTradingDays(rows) {
@@ -231,16 +195,7 @@ function summarizeDay(trading_date, rows) {
 }
 
 function parameterCombination(familyIndex, index) {
-  return {
-    opening_bars: pick(PARAMETER_GRID.openingBars, index + familyIndex),
-    tolerance_points: pick(PARAMETER_GRID.tolerancePoints, index * 3 + familyIndex),
-    max_bars: pick(PARAMETER_GRID.maxBars, index * 5 + familyIndex),
-    risk_points: pick(PARAMETER_GRID.riskPoints, index * 7 + familyIndex),
-    target_rr: pick(PARAMETER_GRID.targetRr, index * 11 + familyIndex),
-    break_offset_points: pick(PARAMETER_GRID.offsets, index * 13 + familyIndex),
-    order_type: pick(PARAMETER_GRID.orderTypes, index + familyIndex),
-    require_rejection_confirmation: pick(PARAMETER_GRID.requireRejection, index * 17 + familyIndex),
-  };
+  return dataDrivenParameterCombination(familyIndex, index);
 }
 
 function mergeTemplateParameters(parameters, template) {
@@ -287,11 +242,7 @@ function sessionRows(rows, fromHm, toHm) {
   });
 }
 
-function family(family_id, direction, anchor_kind) { return Object.freeze({ family_id, direction, anchor_kind }); }
 function firstTemplate(dsl) { return Array.isArray(dsl?.setup_templates) ? dsl.setup_templates[0] || {} : {}; }
-function priceAnchor(level, source) { return Number.isFinite(Number(level)) ? { level: Number(level), source } : null; }
-function deviationMultiplier(parameters) { return Math.max(0.15, Math.min(0.9, Number(parameters.tolerance_points || 4) / 20)); }
-function pick(values, index) { return values[Math.abs(index) % values.length]; }
 function percentile(values, ratio) { if (!values.length) return null; const index = Math.min(values.length - 1, Math.max(0, Math.floor(values.length * ratio))); return values[index]; }
 function roundPrice(value) { return Math.round(Number(value) * 4) / 4; }
 function integer(value, fallback = 0) { const parsed = Number(value); return Number.isInteger(parsed) ? parsed : fallback; }

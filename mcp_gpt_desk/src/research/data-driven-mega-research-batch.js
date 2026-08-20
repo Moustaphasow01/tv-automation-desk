@@ -9,8 +9,17 @@ import { runCanonicalSimulationV1 } from "@tv-automation/desk-replay-engine";
 import { toParisIso } from "@tv-automation/desk-time";
 import { createResearchExperimentRegistryService } from "../research-experiment-registry-service.js";
 import { enqueueResearchAgentTask } from "./research-agent-task-queue.js";
+import {
+  DATA_DRIVEN_FAMILY_SET_V1,
+  DATA_DRIVEN_STRATEGY_FAMILIES,
+  dataDrivenAnchorForFamily,
+  dataDrivenParameterCombination,
+  getDataDrivenStrategyFamilies,
+  normalizeDataDrivenFamilySet,
+} from "./data-driven-strategy-family-catalog.js";
 
 export const DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION = "data_driven_mega_research_batch_v1";
+export { DATA_DRIVEN_STRATEGY_FAMILIES } from "./data-driven-strategy-family-catalog.js";
 
 const DEFAULT_SCOPE = Object.freeze({
   batch_id: "mega-1000-mnq-m5",
@@ -21,57 +30,27 @@ const DEFAULT_SCOPE = Object.freeze({
   end_utc: "2026-08-17T00:00:00.000Z",
   dataset_key: "data-driven-mega.mnq.m5.2026-06-01_2026-08-17",
   count: 1_000,
-});
-
-export const DATA_DRIVEN_STRATEGY_FAMILIES = Object.freeze([
-  family("opening_range_breakout_long", "Opening range breakout long", "long", "OPENING_RANGE_HIGH"),
-  family("opening_range_breakout_short", "Opening range breakout short", "short", "OPENING_RANGE_LOW"),
-  family("asia_range_breakout_long", "Asia range breakout long", "long", "ASIA_RANGE_HIGH"),
-  family("asia_range_breakout_short", "Asia range breakout short", "short", "ASIA_RANGE_LOW"),
-  family("ny_opening_drive_long", "NY opening drive long", "long", "NY_OPENING_HIGH"),
-  family("ny_opening_drive_short", "NY opening drive short", "short", "NY_OPENING_LOW"),
-  family("previous_day_high_reclaim", "Previous day high reclaim", "long", "PREVIOUS_DAY_HIGH"),
-  family("previous_day_low_break", "Previous day low break", "short", "PREVIOUS_DAY_LOW"),
-  family("previous_day_mid_reclaim_long", "Previous day midpoint reclaim long", "long", "PREVIOUS_DAY_MID"),
-  family("previous_day_mid_reject_short", "Previous day midpoint reject short", "short", "PREVIOUS_DAY_MID"),
-  family("prior_close_reclaim_long", "Prior close reclaim long", "long", "PREVIOUS_DAY_CLOSE"),
-  family("prior_close_reject_short", "Prior close reject short", "short", "PREVIOUS_DAY_CLOSE"),
-  family("vwap_proxy_reclaim_long", "VWAP proxy reclaim long", "long", "ROLLING_VWAP"),
-  family("vwap_proxy_reject_short", "VWAP proxy reject short", "short", "ROLLING_VWAP"),
-  family("vwap_deviation_fade_long", "VWAP lower deviation fade long", "long", "VWAP_LOWER_DEVIATION"),
-  family("vwap_deviation_fade_short", "VWAP upper deviation fade short", "short", "VWAP_UPPER_DEVIATION"),
-  family("compression_breakout_long", "Compression breakout long", "long", "COMPRESSION_HIGH"),
-  family("compression_breakout_short", "Compression breakout short", "short", "COMPRESSION_LOW"),
-  family("weekly_anchor_breakout_long", "Weekly anchor breakout long", "long", "ROLLING_WEEK_HIGH"),
-  family("weekly_anchor_breakout_short", "Weekly anchor breakout short", "short", "ROLLING_WEEK_LOW"),
-]);
-
-const PARAMETER_GRID = Object.freeze({
-  openingBars: [4, 6, 8, 12, 18],
-  tolerancePoints: [2, 3, 4, 5, 6, 8, 10, 12],
-  maxBars: [12, 18, 24, 36, 48, 72, 96, 144],
-  riskPoints: [10, 14, 18, 22, 28, 34, 42, 55],
-  targetRr: [1.2, 1.5, 1.8, 2.1, 2.4, 2.8, 3.2],
-  offsets: [-6, -3, 0, 3, 6],
-  orderTypes: ["LIMIT", "MARKET"],
-  requireRejection: [false, true],
+  family_set: DATA_DRIVEN_FAMILY_SET_V1,
+  setups_per_variant: 5,
 });
 
 export async function bootstrapDataDrivenMegaResearchBatch({ store, input = {}, actor = {} } = {}) {
   assertStore(store);
   const scope = normalizeScope(input);
   const operationTime = operationTimestamp(store);
+  const maxConcurrency = boundedInteger(input.max_concurrency || input.maxConcurrency, 1, 1, 12);
   const rows = await loadMarketRows(store.persistence.pool, scope);
   assertResearchCoverage(rows, scope);
   const dataset = buildDataset(scope, rows);
   await upsertDataset(store.persistence.pool, dataset);
 
   const tradingDays = buildTradingDays(rows);
+  const familySpecs = getDataDrivenStrategyFamilies(scope.family_set);
   const experimentIds = stableExperimentIds(scope);
   const registry = store.researchRegistry || createResearchExperimentRegistryService({ persistence: store.persistence, clock: store.clock });
   const command = commandContext(actor, input, experimentIds);
   await registry.registerExperiment(buildExperiment({ scope, dataset, ids: experimentIds, timestamp: operationTime }), command);
-  const hypotheses = await registerFamilyHypotheses({ registry, scope, dataset, ids: experimentIds, timestamp: operationTime, command });
+  const hypotheses = await registerFamilyHypotheses({ registry, scope, ids: experimentIds, familySpecs, timestamp: operationTime, command });
   const variants = buildDataDrivenMegaResearchPlan({ scope, dataset, tradingDays, count: scope.count });
 
   const counters = {
@@ -91,7 +70,7 @@ export async function bootstrapDataDrivenMegaResearchBatch({ store, input = {}, 
   const best = [];
   const failures = [];
 
-  for (const variant of variants) {
+  await processVariantsWithConcurrency(variants, maxConcurrency, async (variant) => {
     try {
       const familyIds = hypotheses.get(variant.family_id);
       const ids = stableVariantIds(scope, variant);
@@ -125,7 +104,7 @@ export async function bootstrapDataDrivenMegaResearchBatch({ store, input = {}, 
         });
       }
     }
-  }
+  });
 
   store.researchRegistry = registry;
   return {
@@ -135,10 +114,14 @@ export async function bootstrapDataDrivenMegaResearchBatch({ store, input = {}, 
     scope,
     dataset: datasetSummary(dataset, rows),
     diversity: {
-      family_count: DATA_DRIVEN_STRATEGY_FAMILIES.length,
+      family_set: scope.family_set,
+      family_count: familySpecs.length,
       families: [...byFamily.values()].sort((left, right) => left.family_id.localeCompare(right.family_id)),
     },
     counters,
+    processing: {
+      max_concurrency: maxConcurrency,
+    },
     top_initial_results: best.sort((left, right) => right.total_r - left.total_r).slice(0, 20),
     failures,
     safety: {
@@ -151,9 +134,10 @@ export async function bootstrapDataDrivenMegaResearchBatch({ store, input = {}, 
 }
 
 export function buildDataDrivenMegaResearchPlan({ scope = {}, dataset = {}, tradingDays = [], count = 1_000 } = {}) {
-  const perFamily = Math.ceil(count / DATA_DRIVEN_STRATEGY_FAMILIES.length);
+  const familySpecs = getDataDrivenStrategyFamilies(scope.family_set);
+  const perFamily = Math.ceil(count / familySpecs.length);
   const variants = [];
-  for (const [familyIndex, familySpec] of DATA_DRIVEN_STRATEGY_FAMILIES.entries()) {
+  for (const [familyIndex, familySpec] of familySpecs.entries()) {
     for (let familyVariantIndex = 0; familyVariantIndex < perFamily && variants.length < count; familyVariantIndex += 1) {
       const parameters = parameterCombination(familyIndex, familyVariantIndex);
       const dailySetups = buildDailySetups({ familySpec, parameters, tradingDays, scope, familyVariantIndex });
@@ -178,25 +162,25 @@ export function buildDataDrivenMegaResearchPlan({ scope = {}, dataset = {}, trad
   return variants.slice(0, count);
 }
 
-function family(family_id, label, direction, anchor_kind) {
-  return Object.freeze({ family_id, label, direction, anchor_kind });
+async function processVariantsWithConcurrency(variants, maxConcurrency, processVariant) {
+  const items = Array.isArray(variants) ? variants : [];
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, maxConcurrency), items.length || 1);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const variant = items[nextIndex];
+      nextIndex += 1;
+      await processVariant(variant);
+    }
+  }));
 }
 
 function parameterCombination(familyIndex, index) {
-  return {
-    opening_bars: pick(PARAMETER_GRID.openingBars, index + familyIndex),
-    tolerance_points: pick(PARAMETER_GRID.tolerancePoints, index * 3 + familyIndex),
-    max_bars: pick(PARAMETER_GRID.maxBars, index * 5 + familyIndex),
-    risk_points: pick(PARAMETER_GRID.riskPoints, index * 7 + familyIndex),
-    target_rr: pick(PARAMETER_GRID.targetRr, index * 11 + familyIndex),
-    break_offset_points: pick(PARAMETER_GRID.offsets, index * 13 + familyIndex),
-    order_type: pick(PARAMETER_GRID.orderTypes, index + familyIndex),
-    require_rejection_confirmation: pick(PARAMETER_GRID.requireRejection, index * 17 + familyIndex),
-  };
+  return dataDrivenParameterCombination(familyIndex, index);
 }
 
 function buildDailySetups({ familySpec, parameters, tradingDays, scope, familyVariantIndex }) {
-  return selectTradingDaysForVariant(tradingDays, familyVariantIndex, 5).flatMap(({ day, dayIndex }) => {
+  return selectTradingDaysForVariant(tradingDays, familyVariantIndex, scope.setups_per_variant || DEFAULT_SCOPE.setups_per_variant).flatMap(({ day, dayIndex }) => {
     const anchor = anchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex });
     if (!anchor) return [];
     const level = roundPrice(anchor.level + parameters.break_offset_points);
@@ -262,44 +246,7 @@ function selectTradingDaysForVariant(tradingDays, familyVariantIndex, maxSetups)
 }
 
 function anchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex }) {
-  const previous = day.previous || tradingDays[Math.max(0, dayIndex - 1)] || null;
-  const week = rollingWindow(tradingDays, dayIndex, 5);
-  const compression = previous && previous.range <= day.dataset_stats.range_p35;
-  switch (familySpec.anchor_kind) {
-    case "OPENING_RANGE_HIGH": return priceAnchor(day.opening(parameters.opening_bars).high, "opening_range_high");
-    case "OPENING_RANGE_LOW": return priceAnchor(day.opening(parameters.opening_bars).low, "opening_range_low");
-    case "ASIA_RANGE_HIGH": return priceAnchor(day.asia.high ?? day.opening(parameters.opening_bars).high, "asia_range_high");
-    case "ASIA_RANGE_LOW": return priceAnchor(day.asia.low ?? day.opening(parameters.opening_bars).low, "asia_range_low");
-    case "NY_OPENING_HIGH": return priceAnchor(day.nyOpening.high ?? day.opening(parameters.opening_bars).high, "ny_opening_high");
-    case "NY_OPENING_LOW": return priceAnchor(day.nyOpening.low ?? day.opening(parameters.opening_bars).low, "ny_opening_low");
-    case "PREVIOUS_DAY_HIGH": return previous ? priceAnchor(previous.high, "previous_day_high") : null;
-    case "PREVIOUS_DAY_LOW": return previous ? priceAnchor(previous.low, "previous_day_low") : null;
-    case "PREVIOUS_DAY_MID": return previous ? priceAnchor((previous.high + previous.low) / 2, "previous_day_mid") : null;
-    case "PREVIOUS_DAY_CLOSE": return previous ? priceAnchor(previous.close, "previous_day_close") : null;
-    case "ROLLING_VWAP": return priceAnchor(day.vwap, "daily_vwap_proxy");
-    case "VWAP_LOWER_DEVIATION": return priceAnchor(day.vwap - day.range * deviationMultiplier(parameters), "vwap_lower_deviation");
-    case "VWAP_UPPER_DEVIATION": return priceAnchor(day.vwap + day.range * deviationMultiplier(parameters), "vwap_upper_deviation");
-    case "COMPRESSION_HIGH": return compression ? priceAnchor(day.opening(parameters.opening_bars).high, "compression_high") : priceAnchor(day.dataset_stats.range_p35_high, "fallback_compression_high");
-    case "COMPRESSION_LOW": return compression ? priceAnchor(day.opening(parameters.opening_bars).low, "compression_low") : priceAnchor(day.dataset_stats.range_p35_low, "fallback_compression_low");
-    case "ROLLING_WEEK_HIGH": return week.length ? priceAnchor(Math.max(...week.map((item) => item.high)), "rolling_week_high") : null;
-    case "ROLLING_WEEK_LOW": return week.length ? priceAnchor(Math.min(...week.map((item) => item.low)), "rolling_week_low") : null;
-    default: return null;
-  }
-}
-
-function deviationMultiplier(parameters) {
-  return 0.18 + (parameters.tolerance_points % 5) * 0.04;
-}
-
-function priceAnchor(level, source) {
-  if (level === null || level === undefined || level === "") return null;
-  const parsed = Number(level);
-  if (!Number.isFinite(parsed)) return null;
-  return { level: parsed, source };
-}
-
-function rollingWindow(items, index, size) {
-  return items.slice(Math.max(0, index - size), index + 1);
+  return dataDrivenAnchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex });
 }
 
 function entryZone({ direction, retest, tolerance, orderType }) {
@@ -330,6 +277,7 @@ function normalizeScope(input = {}) {
   const instrument = text(input.instrument, DEFAULT_SCOPE.instrument).toUpperCase();
   const timeframe = text(input.timeframe, DEFAULT_SCOPE.timeframe);
   const batch = safeKey(text(input.batch_id || input.batchId, DEFAULT_SCOPE.batch_id));
+  const familySet = normalizeDataDrivenFamilySet(input.family_set || input.familySet || DEFAULT_SCOPE.family_set);
   return {
     batch_id: batch,
     symbol_code: text(input.symbol_code || input.symbolCode, DEFAULT_SCOPE.symbol_code),
@@ -339,6 +287,13 @@ function normalizeScope(input = {}) {
     end_utc: end,
     dataset_key: safeKey(text(input.dataset_key || input.datasetKey, `${batch}.${instrument.toLowerCase()}.m${timeframe}.${start.slice(0, 10)}_${end.slice(0, 10)}`)),
     count: boundedInteger(input.count, DEFAULT_SCOPE.count, 1, 10_000),
+    family_set: familySet,
+    setups_per_variant: boundedInteger(
+      input.setups_per_variant || input.setupsPerVariant,
+      DEFAULT_SCOPE.setups_per_variant,
+      1,
+      5,
+    ),
   };
 }
 
@@ -387,7 +342,15 @@ function buildDataset(scope, rows) {
     content_hash: contentHash,
     provenance_hash: hashValue({ source: "market_candles", content_hash: contentHash }),
     build_parameters_hash: buildHash,
-    metadata: { instrument: scope.instrument, symbol_code: scope.symbol_code, timeframe: `M${scope.timeframe}`, rows: rows.length, generator: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION },
+    metadata: {
+      instrument: scope.instrument,
+      symbol_code: scope.symbol_code,
+      timeframe: `M${scope.timeframe}`,
+      rows: rows.length,
+      generator: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION,
+      family_set: scope.family_set,
+      setups_per_variant: scope.setups_per_variant,
+    },
   };
 }
 
@@ -490,15 +453,21 @@ function buildExperiment({ scope, dataset, ids, timestamp }) {
     comparison_metric: "total_r",
     candidate_selection_cutoff_utc: dataset.cutoff_utc,
     budget: { max_candidates: scope.count, max_compute_jobs: scope.count, broker_execution_enabled: false },
-    metadata: { dataset_key: dataset.dataset_key, batch_id: scope.batch_id, generator: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION },
+    metadata: {
+      dataset_key: dataset.dataset_key,
+      batch_id: scope.batch_id,
+      generator: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION,
+      family_set: scope.family_set,
+      setups_per_variant: scope.setups_per_variant,
+    },
     created_at_utc: timestamp,
     updated_at_utc: timestamp,
   };
 }
 
-async function registerFamilyHypotheses({ registry, scope, ids, timestamp, command }) {
+async function registerFamilyHypotheses({ registry, scope, ids, familySpecs = DATA_DRIVEN_STRATEGY_FAMILIES, timestamp, command }) {
   const results = new Map();
-  for (const familySpec of DATA_DRIVEN_STRATEGY_FAMILIES) {
+  for (const familySpec of familySpecs) {
     const hypothesisId = uuidFromValue({ kind: "research_hypothesis", experiment: ids.experimentId, family: familySpec.family_id });
     await registry.registerHypothesis({
       research_hypothesis_id: hypothesisId,
@@ -508,12 +477,12 @@ async function registerFamilyHypotheses({ registry, scope, ids, timestamp, comma
       instrument_scope: [scope.instrument],
       timeframe_scope: [`M${scope.timeframe}`],
       population_scope: "mega_data_driven_cumulative_research",
-      variable_set: { family_id: familySpec.family_id, anchor_kind: familySpec.anchor_kind, direction: familySpec.direction },
+      variable_set: { family_set: scope.family_set, family_id: familySpec.family_id, anchor_kind: familySpec.anchor_kind, direction: familySpec.direction },
       expected_outcome: "Au moins 2 trades fermés, total R positif, drawdown supérieur au floor research.",
       invalidation_criteria: "Total R non positif, drawdown sous le floor ou échantillon insuffisant.",
       status: "TESTING",
       confidence_score: 0.5,
-      metadata: { generator: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION, family: familySpec },
+      metadata: { generator: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION, family_set: scope.family_set, family: familySpec },
       created_at_utc: timestamp,
       updated_at_utc: timestamp,
     }, command);
@@ -561,6 +530,9 @@ function variantStrategyDsl({ scope, variant }) {
       generator: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION,
       family_id: variant.family_id,
       family_label: variant.family_label,
+      family_set: scope.family_set,
+      family_index: variant.family_index,
+      variant_index: variant.variant_index,
       anchor_kind: variant.anchor_kind,
       note: "Compiler currently supports BREAKOUT_RETEST primitives; research family diversity is expressed through data-derived anchors and runtime bindings.",
     },
@@ -598,7 +570,9 @@ async function registerDefinition(store, seed, command) {
       batch_id: seed.scope.batch_id,
       dataset_key: seed.dataset.dataset_key,
       generator: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION,
+      family_set: seed.scope.family_set,
       family_id: seed.variant.family_id,
+      family_index: seed.variant.family_index,
       anchor_kind: seed.variant.anchor_kind,
     },
     created_at: seed.timestamp,
@@ -625,7 +599,9 @@ async function registerVersion(store, seed, command) {
       validation_scope: "mega_data_driven_research",
       research_candidate_id: seed.ids.candidateId,
       batch_id: seed.scope.batch_id,
+      family_set: seed.scope.family_set,
       family_id: seed.variant.family_id,
+      family_index: seed.variant.family_index,
       variant_index: seed.variant.variant_index,
     },
     created_at: seed.timestamp,
@@ -676,8 +652,10 @@ async function registerSimulation(store, seed, dataset, simulation, compilation,
       source: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION,
       batch_id: seed.scope.batch_id,
       dataset_key: dataset.dataset_key,
+      family_set: seed.scope.family_set,
       family_id: seed.variant.family_id,
       family_label: seed.variant.family_label,
+      family_index: seed.variant.family_index,
       variant_index: seed.variant.variant_index,
       total_rows: simulation?.data_quality?.consumed_rows || 0,
       metrics: simulation.metrics || {},
@@ -731,8 +709,10 @@ async function ensureCandidate(registry, seed, command) {
       generator: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION,
       batch_id: seed.scope.batch_id,
       dataset_key: seed.dataset.dataset_key,
+      family_set: seed.scope.family_set,
       family_id: seed.variant.family_id,
       family_label: seed.variant.family_label,
+      family_index: seed.variant.family_index,
       anchor_kind: seed.variant.anchor_kind,
       variant_index: seed.variant.variant_index,
       global_index: seed.variant.global_index,
@@ -761,6 +741,7 @@ function buildEvaluation(seed, run, metrics) {
       max_drawdown_floor_r: -8,
       decision: verdict === "PASS" ? "READY_FOR_CONTRADICTORY_REVIEW" : "REJECT_OR_REVIEW",
       reasons: evaluationReasons(metrics),
+      family_set: seed.scope.family_set,
       family_id: seed.variant.family_id,
       anchor_kind: seed.variant.anchor_kind,
     },
@@ -772,6 +753,7 @@ function buildEvaluation(seed, run, metrics) {
       dataset_id: seed.dataset.dataset_id,
       dataset_key: seed.dataset.dataset_key,
       strategy_version_id: seed.ids.versionId,
+      family_set: seed.scope.family_set,
       family_id: seed.variant.family_id,
       variant_index: seed.variant.variant_index,
     },
@@ -795,6 +777,7 @@ async function enqueueReviewTask(pool, { seed, dataset, registered, research, op
         source: DATA_DRIVEN_MEGA_RESEARCH_BATCH_VERSION,
         simulation_run_id: registered.run.simulation_run_id,
         strategy_version_id: seed.ids.versionId,
+        family_set: seed.scope.family_set,
         family_id: seed.variant.family_id,
       },
       created_at_utc: operationTime,
@@ -821,8 +804,10 @@ async function enqueueReviewTask(pool, { seed, dataset, registered, research, op
         max_variants: 1,
         metrics: registered.run.metadata?.metrics || {},
         family: {
+          family_set: seed.scope.family_set,
           family_id: seed.variant.family_id,
           family_label: seed.variant.family_label,
+          family_index: seed.variant.family_index,
           anchor_kind: seed.variant.anchor_kind,
           parameters: seed.variant.parameters,
         },
@@ -928,6 +913,7 @@ function pushBest(best, seed, metrics, run) {
     candidate_id: seed.ids.candidateId,
     strategy_version_id: seed.ids.versionId,
     simulation_run_id: run.simulation_run_id,
+    family_set: seed.scope.family_set,
     family_id: seed.variant.family_id,
     variant_index: seed.variant.variant_index,
     total_r: number(metrics.total_r),
@@ -1000,10 +986,6 @@ function operationTimestamp(store) {
   const now = store?.clock && typeof store.clock.now === "function" ? store.clock.now() : null;
   if (now?.utc) return new Date(now.utc).toISOString();
   return new Date().toISOString();
-}
-
-function pick(values, index) {
-  return values[Math.abs(index) % values.length];
 }
 
 function boundedInteger(value, fallback, min = 0, max = 1_000) {

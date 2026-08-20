@@ -1,0 +1,1767 @@
+{
+  "schema_version": "data_driven_robust_pass_cohort_v1",
+  "generated_at_utc": "2026-08-20T10:59:55.255Z",
+  "batch_id": "mega-1000-mnq-m5-diversified-v2-20260820-005",
+  "dataset_key": null,
+  "selection": {
+    "policy": "ALL_ROBUSTNESS_PASS_NO_TOP_K_CAP",
+    "top_k_cap": null,
+    "retained_all_robustness_pass": true,
+    "retained_count": 24,
+    "robustness_pass_count": 24,
+    "oos_pass_count": 24,
+    "oos_not_pass_count": 0,
+    "promotion_ready_count": 0,
+    "promotion_operator_review_count": 0
+  },
+  "safety": {
+    "broker_execution_enabled": false,
+    "automatic_promotion_enabled": false,
+    "broker_provider_commands_matching_batch": 0,
+    "execution_mode": "RESEARCH_ONLY"
+  },
+  "aggregate": {
+    "total_r": 96.1639,
+    "closed_trade_count": 68,
+    "open_or_marked_position_count": 0,
+    "win_rate": 0.8971,
+    "profit_factor": 14.2532,
+    "max_drawdown_r": -2.0664,
+    "trading_days_with_activity": 29,
+    "max_same_day_candidate_activity": 6
+  },
+  "family_distribution": [
+    {
+      "family_id": "vwap_deviation_fade_long",
+      "candidate_count": 3,
+      "closed_trade_count": 9,
+      "total_r": 17.7976,
+      "oos_pass_count": 3
+    },
+    {
+      "family_id": "vwap_proxy_reject_short",
+      "candidate_count": 3,
+      "closed_trade_count": 9,
+      "total_r": 16.3626,
+      "oos_pass_count": 3
+    },
+    {
+      "family_id": "compression_breakout_short",
+      "candidate_count": 3,
+      "closed_trade_count": 8,
+      "total_r": 9.19,
+      "oos_pass_count": 3
+    },
+    {
+      "family_id": "asia_mid_reject_short",
+      "candidate_count": 1,
+      "closed_trade_count": 5,
+      "total_r": 6.8591,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "session_open_drive_short",
+      "candidate_count": 1,
+      "closed_trade_count": 4,
+      "total_r": 5.8596,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "vwap_deviation_fade_short",
+      "candidate_count": 2,
+      "closed_trade_count": 4,
+      "total_r": 5.853,
+      "oos_pass_count": 2
+    },
+    {
+      "family_id": "session_open_drive_long",
+      "candidate_count": 1,
+      "closed_trade_count": 3,
+      "total_r": 4.3346,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "opening_range_breakout_long",
+      "candidate_count": 1,
+      "closed_trade_count": 3,
+      "total_r": 4.1569,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "previous_day_lower_quartile_break_short",
+      "candidate_count": 1,
+      "closed_trade_count": 2,
+      "total_r": 3.9226,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "ny_opening_mid_reject_short",
+      "candidate_count": 1,
+      "closed_trade_count": 2,
+      "total_r": 3.3863,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "opening_range_breakout_short",
+      "candidate_count": 1,
+      "closed_trade_count": 4,
+      "total_r": 3.1437,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "previous_day_high_reject_short",
+      "candidate_count": 1,
+      "closed_trade_count": 2,
+      "total_r": 2.9616,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "rolling_three_day_mean_reject_short",
+      "candidate_count": 1,
+      "closed_trade_count": 2,
+      "total_r": 2.8492,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "candidate_count": 1,
+      "closed_trade_count": 2,
+      "total_r": 2.7058,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "asia_mid_reclaim_long",
+      "candidate_count": 1,
+      "closed_trade_count": 4,
+      "total_r": 2.5808,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "previous_day_upper_quartile_reclaim_long",
+      "candidate_count": 1,
+      "closed_trade_count": 2,
+      "total_r": 2.1248,
+      "oos_pass_count": 1
+    },
+    {
+      "family_id": "previous_day_mid_reclaim_long",
+      "candidate_count": 1,
+      "closed_trade_count": 3,
+      "total_r": 2.0757,
+      "oos_pass_count": 1
+    }
+  ],
+  "daily_correlation": {
+    "pair_count": 276,
+    "computable_pair_count": 267,
+    "skipped_sparse_pair_count": 9,
+    "min_pair_active_dates_for_correlation": 4,
+    "max_abs_correlation": 1,
+    "avg_abs_correlation": 0.5915,
+    "high_correlation_pair_count": 87,
+    "high_correlation_edges": [
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v024",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v017",
+        "active_dates": 4,
+        "correlation": -0.9991,
+        "abs_correlation": 0.9991
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9964,
+        "abs_correlation": 0.9964
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9964,
+        "abs_correlation": 0.9964
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 4,
+        "correlation": -0.9912,
+        "abs_correlation": 0.9912
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 4,
+        "correlation": -0.9912,
+        "abs_correlation": 0.9912
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9876,
+        "abs_correlation": 0.9876
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_long:v001",
+        "active_dates": 5,
+        "correlation": -0.9843,
+        "abs_correlation": 0.9843
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "active_dates": 6,
+        "correlation": -0.9778,
+        "abs_correlation": 0.9778
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 6,
+        "correlation": -0.9778,
+        "abs_correlation": 0.9778
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 6,
+        "correlation": -0.9752,
+        "abs_correlation": 0.9752
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 6,
+        "correlation": -0.9713,
+        "abs_correlation": 0.9713
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "active_dates": 5,
+        "correlation": -0.9699,
+        "abs_correlation": 0.9699
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 5,
+        "correlation": -0.9699,
+        "abs_correlation": 0.9699
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 5,
+        "correlation": -0.9684,
+        "abs_correlation": 0.9684
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 5,
+        "correlation": -0.967,
+        "abs_correlation": 0.967
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 5,
+        "correlation": -0.9633,
+        "abs_correlation": 0.9633
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 5,
+        "correlation": -0.9627,
+        "abs_correlation": 0.9627
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 4,
+        "correlation": -0.9619,
+        "abs_correlation": 0.9619
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 4,
+        "correlation": -0.9619,
+        "abs_correlation": 0.9619
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9584,
+        "abs_correlation": 0.9584
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "active_dates": 7,
+        "correlation": -0.957,
+        "abs_correlation": 0.957
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 5,
+        "correlation": -0.9562,
+        "abs_correlation": 0.9562
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 4,
+        "correlation": -0.9534,
+        "abs_correlation": 0.9534
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 4,
+        "correlation": -0.9532,
+        "abs_correlation": 0.9532
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 4,
+        "correlation": -0.9532,
+        "abs_correlation": 0.9532
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9526,
+        "abs_correlation": 0.9526
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9526,
+        "abs_correlation": 0.9526
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9498,
+        "abs_correlation": 0.9498
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9492,
+        "abs_correlation": 0.9492
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "active_dates": 6,
+        "correlation": -0.9468,
+        "abs_correlation": 0.9468
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 4,
+        "correlation": -0.9447,
+        "abs_correlation": 0.9447
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9442,
+        "abs_correlation": 0.9442
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 6,
+        "correlation": -0.9425,
+        "abs_correlation": 0.9425
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 4,
+        "correlation": -0.9393,
+        "abs_correlation": 0.9393
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 4,
+        "correlation": -0.9393,
+        "abs_correlation": 0.9393
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 5,
+        "correlation": -0.9388,
+        "abs_correlation": 0.9388
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9359,
+        "abs_correlation": 0.9359
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 5,
+        "correlation": -0.9324,
+        "abs_correlation": 0.9324
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 6,
+        "correlation": -0.9323,
+        "abs_correlation": 0.9323
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 5,
+        "correlation": -0.9312,
+        "abs_correlation": 0.9312
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 5,
+        "correlation": -0.9253,
+        "abs_correlation": 0.9253
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 5,
+        "correlation": -0.9248,
+        "abs_correlation": 0.9248
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 5,
+        "correlation": -0.9201,
+        "abs_correlation": 0.9201
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 4,
+        "correlation": -0.9168,
+        "abs_correlation": 0.9168
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9163,
+        "abs_correlation": 0.9163
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:opening_range_breakout_short:v019",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 5,
+        "correlation": -0.9142,
+        "abs_correlation": 0.9142
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 5,
+        "correlation": -0.9138,
+        "abs_correlation": 0.9138
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 4,
+        "correlation": -0.9035,
+        "abs_correlation": 0.9035
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "active_dates": 7,
+        "correlation": -0.899,
+        "abs_correlation": 0.899
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 7,
+        "correlation": -0.899,
+        "abs_correlation": 0.899
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "active_dates": 8,
+        "correlation": -0.8983,
+        "abs_correlation": 0.8983
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "active_dates": 6,
+        "correlation": -0.8974,
+        "abs_correlation": 0.8974
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 6,
+        "correlation": -0.8974,
+        "abs_correlation": 0.8974
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 7,
+        "correlation": -0.8968,
+        "abs_correlation": 0.8968
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 4,
+        "correlation": -0.8953,
+        "abs_correlation": 0.8953
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 6,
+        "correlation": -0.895,
+        "abs_correlation": 0.895
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.8948,
+        "abs_correlation": 0.8948
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 7,
+        "correlation": -0.8935,
+        "abs_correlation": 0.8935
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "active_dates": 7,
+        "correlation": -0.8935,
+        "abs_correlation": 0.8935
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 6,
+        "correlation": -0.8915,
+        "abs_correlation": 0.8915
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 7,
+        "correlation": -0.8686,
+        "abs_correlation": 0.8686
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 6,
+        "correlation": -0.865,
+        "abs_correlation": 0.865
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_long:v001",
+        "active_dates": 6,
+        "correlation": -0.8601,
+        "abs_correlation": 0.8601
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 7,
+        "correlation": -0.8598,
+        "abs_correlation": 0.8598
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 6,
+        "correlation": -0.8556,
+        "abs_correlation": 0.8556
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+        "active_dates": 7,
+        "correlation": -0.8093,
+        "abs_correlation": 0.8093
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+        "active_dates": 6,
+        "correlation": -0.7858,
+        "abs_correlation": 0.7858
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v007",
+        "active_dates": 6,
+        "correlation": -0.785,
+        "abs_correlation": 0.785
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+        "active_dates": 6,
+        "correlation": -0.7814,
+        "abs_correlation": 0.7814
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reject_short:v005",
+        "active_dates": 6,
+        "correlation": -0.7772,
+        "abs_correlation": 0.7772
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+        "active_dates": 5,
+        "correlation": -0.7721,
+        "abs_correlation": 0.7721
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+        "active_dates": 5,
+        "correlation": -0.7721,
+        "abs_correlation": 0.7721
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+        "active_dates": 5,
+        "correlation": -0.7698,
+        "abs_correlation": 0.7698
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+        "active_dates": 8,
+        "correlation": -0.7686,
+        "abs_correlation": 0.7686
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+        "active_dates": 5,
+        "correlation": -0.7664,
+        "abs_correlation": 0.7664
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v007",
+        "active_dates": 5,
+        "correlation": -0.7637,
+        "abs_correlation": 0.7637
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v007",
+        "active_dates": 4,
+        "correlation": -0.7591,
+        "abs_correlation": 0.7591
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v007",
+        "active_dates": 5,
+        "correlation": -0.7585,
+        "abs_correlation": 0.7585
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_long:v001",
+        "active_dates": 6,
+        "correlation": -0.7578,
+        "abs_correlation": 0.7578
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v007",
+        "active_dates": 4,
+        "correlation": -0.7564,
+        "abs_correlation": 0.7564
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+        "active_dates": 7,
+        "correlation": -0.7557,
+        "abs_correlation": 0.7557
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reject_short:v005",
+        "active_dates": 5,
+        "correlation": -0.7556,
+        "abs_correlation": 0.7556
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v007",
+        "active_dates": 4,
+        "correlation": -0.7524,
+        "abs_correlation": 0.7524
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reject_short:v005",
+        "active_dates": 5,
+        "correlation": -0.7505,
+        "abs_correlation": 0.7505
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reject_short:v005",
+        "active_dates": 4,
+        "correlation": -0.7501,
+        "abs_correlation": 0.7501
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reject_short:v005",
+        "active_dates": 4,
+        "correlation": -0.7501,
+        "abs_correlation": 0.7501
+      }
+    ],
+    "high_correlation_pairs": [
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 4,
+        "correlation": -1,
+        "abs_correlation": 1
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v024",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v017",
+        "active_dates": 4,
+        "correlation": -0.9991,
+        "abs_correlation": 0.9991
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9964,
+        "abs_correlation": 0.9964
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9964,
+        "abs_correlation": 0.9964
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 4,
+        "correlation": -0.9912,
+        "abs_correlation": 0.9912
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 4,
+        "correlation": -0.9912,
+        "abs_correlation": 0.9912
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9876,
+        "abs_correlation": 0.9876
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_long:v001",
+        "active_dates": 5,
+        "correlation": -0.9843,
+        "abs_correlation": 0.9843
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "active_dates": 6,
+        "correlation": -0.9778,
+        "abs_correlation": 0.9778
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 6,
+        "correlation": -0.9778,
+        "abs_correlation": 0.9778
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 6,
+        "correlation": -0.9752,
+        "abs_correlation": 0.9752
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 6,
+        "correlation": -0.9713,
+        "abs_correlation": 0.9713
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "active_dates": 5,
+        "correlation": -0.9699,
+        "abs_correlation": 0.9699
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 5,
+        "correlation": -0.9699,
+        "abs_correlation": 0.9699
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 5,
+        "correlation": -0.9684,
+        "abs_correlation": 0.9684
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 5,
+        "correlation": -0.967,
+        "abs_correlation": 0.967
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "active_dates": 5,
+        "correlation": -0.9633,
+        "abs_correlation": 0.9633
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 5,
+        "correlation": -0.9627,
+        "abs_correlation": 0.9627
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 4,
+        "correlation": -0.9619,
+        "abs_correlation": 0.9619
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 4,
+        "correlation": -0.9619,
+        "abs_correlation": 0.9619
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9584,
+        "abs_correlation": 0.9584
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "active_dates": 7,
+        "correlation": -0.957,
+        "abs_correlation": 0.957
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "active_dates": 5,
+        "correlation": -0.9562,
+        "abs_correlation": 0.9562
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 4,
+        "correlation": -0.9534,
+        "abs_correlation": 0.9534
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 4,
+        "correlation": -0.9532,
+        "abs_correlation": 0.9532
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 4,
+        "correlation": -0.9532,
+        "abs_correlation": 0.9532
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9526,
+        "abs_correlation": 0.9526
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9526,
+        "abs_correlation": 0.9526
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9498,
+        "abs_correlation": 0.9498
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9492,
+        "abs_correlation": 0.9492
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "active_dates": 6,
+        "correlation": -0.9468,
+        "abs_correlation": 0.9468
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 4,
+        "correlation": -0.9447,
+        "abs_correlation": 0.9447
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9442,
+        "abs_correlation": 0.9442
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 6,
+        "correlation": -0.9425,
+        "abs_correlation": 0.9425
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 4,
+        "correlation": -0.9393,
+        "abs_correlation": 0.9393
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 4,
+        "correlation": -0.9393,
+        "abs_correlation": 0.9393
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 5,
+        "correlation": -0.9388,
+        "abs_correlation": 0.9388
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 4,
+        "correlation": -0.9359,
+        "abs_correlation": 0.9359
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 5,
+        "correlation": -0.9324,
+        "abs_correlation": 0.9324
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 6,
+        "correlation": -0.9323,
+        "abs_correlation": 0.9323
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 5,
+        "correlation": -0.9312,
+        "abs_correlation": 0.9312
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "active_dates": 5,
+        "correlation": -0.9253,
+        "abs_correlation": 0.9253
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 5,
+        "correlation": -0.9248,
+        "abs_correlation": 0.9248
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 5,
+        "correlation": -0.9201,
+        "abs_correlation": 0.9201
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "active_dates": 4,
+        "correlation": -0.9168,
+        "abs_correlation": 0.9168
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+        "active_dates": 4,
+        "correlation": -0.9163,
+        "abs_correlation": 0.9163
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:opening_range_breakout_short:v019",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+        "active_dates": 5,
+        "correlation": -0.9142,
+        "abs_correlation": 0.9142
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 5,
+        "correlation": -0.9138,
+        "abs_correlation": 0.9138
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+        "active_dates": 4,
+        "correlation": -0.9035,
+        "abs_correlation": 0.9035
+      },
+      {
+        "left": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+        "right": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+        "active_dates": 7,
+        "correlation": -0.899,
+        "abs_correlation": 0.899
+      }
+    ]
+  },
+  "diversification": {
+    "policy": "HIGH_CORRELATION_CLUSTERING_REVIEW_ONLY_NO_DISCARD",
+    "cluster_count": 2,
+    "clustered_candidate_count": 20,
+    "unclustered_candidate_count": 4,
+    "largest_cluster_size": 18,
+    "clusters": [
+      {
+        "cluster_id": "corr_cluster_001",
+        "candidate_count": 18,
+        "family_ids": [
+          "asia_mid_reject_short",
+          "compression_breakout_short",
+          "ny_opening_mid_reject_short",
+          "opening_range_breakout_short",
+          "previous_day_high_reject_short",
+          "previous_day_lower_quartile_break_short",
+          "previous_day_mid_reclaim_long",
+          "previous_day_upper_quartile_reclaim_long",
+          "previous_day_upper_quartile_reject_short",
+          "rolling_three_day_mean_reject_short",
+          "session_open_drive_long",
+          "session_open_drive_short",
+          "vwap_deviation_fade_long",
+          "vwap_deviation_fade_short",
+          "vwap_proxy_reject_short"
+        ],
+        "total_r": 72.6742,
+        "representative_candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+        "representative_robustness_score": 0.9389,
+        "candidate_keys": [
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_long:v001",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reject_short:v005",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:opening_range_breakout_short:v019",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v007"
+        ]
+      },
+      {
+        "cluster_id": "corr_cluster_002",
+        "candidate_count": 2,
+        "family_ids": [
+          "compression_breakout_short"
+        ],
+        "total_r": 6.6933,
+        "representative_candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v024",
+        "representative_robustness_score": 0.9126,
+        "candidate_keys": [
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v024",
+          "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v017"
+        ]
+      }
+    ]
+  },
+  "blocker_summary": {
+    "reason_counts": {
+      "PRIORITY_DEFER:0.2": 24,
+      "OPERATOR_APPROVAL_PENDING": 24,
+      "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY": 24,
+      "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY": 18,
+      "PORTFOLIO_CORRELATION_NOT_PROVEN": 24,
+      "PORTFOLIO_RISK_BUDGET_NOT_PROVEN": 24
+    }
+  },
+  "cohort_gate": {
+    "verdict": "NEEDS_REVIEW",
+    "decision": "PORTFOLIO_COHORT_REVIEW_REQUIRED",
+    "reasons": [
+      "COHORT_DAILY_CORRELATION_REQUIRES_CLUSTERING_REVIEW"
+    ],
+    "policy": {
+      "selection_policy": "ALL_ROBUSTNESS_PASS_NO_TOP_K_CAP",
+      "min_candidate_count": 1,
+      "min_family_count_for_portfolio_review": 4,
+      "min_aggregate_trade_count_for_portfolio_review": 30,
+      "min_aggregate_total_r": 0,
+      "min_pair_active_dates_for_correlation": 4,
+      "max_abs_daily_correlation_review": 0.75
+    }
+  },
+  "retained_candidates": [
+    {
+      "research_candidate_id": "0fe95802-ddec-4bb0-bda9-2dd2106c458c",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v001",
+      "strategy_version_id": "a3cbcf3e-ba15-4bfb-b0a0-5b65b9fa8ded",
+      "simulation_run_id": "a9d347fa-dcbd-4e43-906d-8ca1be3ba0ed",
+      "family_id": "vwap_proxy_reject_short",
+      "variant_index": 1,
+      "robustness_score": 0.9389,
+      "oos_verdict": "PASS",
+      "oos_score": 0.9089,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 7.1122,
+      "closed_trade_count": 3,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "3f561269-5d35-40ab-9552-00b62c339261",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reject_short:v001",
+      "strategy_version_id": "04561ae6-ab3a-487c-8cd7-f48ea2d7e186",
+      "simulation_run_id": "dabda666-4271-4b17-b961-c723e1e6f50a",
+      "family_id": "asia_mid_reject_short",
+      "variant_index": 1,
+      "robustness_score": 0.9357,
+      "oos_verdict": "PASS",
+      "oos_score": 0.9057,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 6.8591,
+      "closed_trade_count": 5,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "69ffeb6e-1b28-4fe0-a146-4e127668e314",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v023",
+      "strategy_version_id": "76cd1c6a-b8f3-4b32-b2f9-3625fc3d5e40",
+      "simulation_run_id": "c449497c-ec2b-4265-a394-9361c423f4c8",
+      "family_id": "vwap_proxy_reject_short",
+      "variant_index": 23,
+      "robustness_score": 0.9296,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8996,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 6.3685,
+      "closed_trade_count": 4,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "27c11f2d-8f2b-43b3-aaa1-30fd981c2658",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v025",
+      "strategy_version_id": "60c1bfd5-94c1-4fca-bd0a-238b4155a467",
+      "simulation_run_id": "d2f2bbd9-183a-471f-95e2-4b11d3e8f756",
+      "family_id": "vwap_deviation_fade_long",
+      "variant_index": 25,
+      "robustness_score": 0.9294,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8994,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 7.1768,
+      "closed_trade_count": 4,
+      "profit_factor": 7.9759,
+      "max_drawdown_r": -1.0288
+    },
+    {
+      "research_candidate_id": "7cbd7688-c7c2-4b80-a341-e78ae10f1886",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_short:v023",
+      "strategy_version_id": "9769c758-5753-4127-b87b-550c8b0dc871",
+      "simulation_run_id": "232f106d-7801-4801-aeac-abc6e17cb12c",
+      "family_id": "session_open_drive_short",
+      "variant_index": 23,
+      "robustness_score": 0.9232,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8932,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 5.8596,
+      "closed_trade_count": 4,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "bff96c8c-61a6-411c-8cd5-8cc7e11738a7",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v011",
+      "strategy_version_id": "cad86566-6380-4de6-b355-9b177910ea3f",
+      "simulation_run_id": "d20825e0-aa5c-49d9-8e72-b1c533bab99d",
+      "family_id": "vwap_deviation_fade_long",
+      "variant_index": 11,
+      "robustness_score": 0.918,
+      "oos_verdict": "PASS",
+      "oos_score": 0.888,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 5.4402,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "80cf14a5-0e1b-4f4e-a749-f7ac5d1269e8",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_long:v004",
+      "strategy_version_id": "0b4f9f49-a020-4552-80f1-377b64e4185c",
+      "simulation_run_id": "1b4b672a-0088-4299-8a5a-a35848e637e7",
+      "family_id": "vwap_deviation_fade_long",
+      "variant_index": 4,
+      "robustness_score": 0.9148,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8848,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 5.1806,
+      "closed_trade_count": 3,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "c4c72331-50cf-4460-8693-7936a09ae9a3",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v024",
+      "strategy_version_id": "c68ee698-f834-4cb4-bdb3-bd7abd6f3945",
+      "simulation_run_id": "90b2c75d-cfc8-4062-9c35-0bb3071a208d",
+      "family_id": "compression_breakout_short",
+      "variant_index": 24,
+      "robustness_score": 0.9126,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8826,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 5.8383,
+      "closed_trade_count": 4,
+      "profit_factor": 6.6116,
+      "max_drawdown_r": -1.0404
+    },
+    {
+      "research_candidate_id": "1d7a58ae-3eb4-40e3-9152-acabbbed1de8",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v014",
+      "strategy_version_id": "9f43ffa8-cf5d-4810-a138-0cfd2926f56d",
+      "simulation_run_id": "4f9551b7-d802-4e5a-8a44-941c7e896015",
+      "family_id": "vwap_deviation_fade_short",
+      "variant_index": 14,
+      "robustness_score": 0.9073,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8773,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.5858,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "64283214-e93c-40cc-b351-dcf2492068c3",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_lower_quartile_break_short:v003",
+      "strategy_version_id": "f0669a90-faff-4b3b-8998-6d9e08864ca4",
+      "simulation_run_id": "4f856e8c-3773-4a09-8938-d826a8421a38",
+      "family_id": "previous_day_lower_quartile_break_short",
+      "variant_index": 3,
+      "robustness_score": 0.899,
+      "oos_verdict": "PASS",
+      "oos_score": 0.869,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.9226,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "9619094f-c440-4a40-bc7b-f52693100b73",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:session_open_drive_long:v001",
+      "strategy_version_id": "7ac39cc4-654c-4be7-9f2d-0dafb6297644",
+      "simulation_run_id": "8da1c9f1-9784-4a54-a91b-bf42f74c75f9",
+      "family_id": "session_open_drive_long",
+      "variant_index": 1,
+      "robustness_score": 0.8938,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8638,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.3346,
+      "closed_trade_count": 3,
+      "profit_factor": 5.1663,
+      "max_drawdown_r": -1.0404
+    },
+    {
+      "research_candidate_id": "06e1b4d1-0996-4610-a6b0-c5b3bb9805ca",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:ny_opening_mid_reject_short:v015",
+      "strategy_version_id": "aa3b9287-df98-462a-9817-33badba19ea7",
+      "simulation_run_id": "4e8fb5da-3f4f-472f-b35e-47ccf7ea44ea",
+      "family_id": "ny_opening_mid_reject_short",
+      "variant_index": 15,
+      "robustness_score": 0.8923,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8623,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.3863,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "5d18c74e-3ef6-485f-acc4-0b98c55487c3",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:opening_range_breakout_long:v025",
+      "strategy_version_id": "b96eb9b0-ad43-4d15-b2ab-b518116187b6",
+      "simulation_run_id": "e50b3c99-8ed3-4b96-b2bd-f1ea6e729816",
+      "family_id": "opening_range_breakout_long",
+      "variant_index": 25,
+      "robustness_score": 0.8914,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8614,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 4.1569,
+      "closed_trade_count": 3,
+      "profit_factor": 4.9361,
+      "max_drawdown_r": -1.0561
+    },
+    {
+      "research_candidate_id": "56cc0cd9-6661-4894-92cf-33738c5d05fb",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_high_reject_short:v008",
+      "strategy_version_id": "b0ed690e-ad4c-4979-8214-4711f416dad8",
+      "simulation_run_id": "ecc65913-ea2f-4f52-8b96-74c4cf6bef4f",
+      "family_id": "previous_day_high_reject_short",
+      "variant_index": 8,
+      "robustness_score": 0.887,
+      "oos_verdict": "PASS",
+      "oos_score": 0.857,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.9616,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "d44a68a7-5b40-4599-bd92-31c8f9182358",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_proxy_reject_short:v015",
+      "strategy_version_id": "313dc751-bf21-44c1-8c2a-71d257ad047c",
+      "simulation_run_id": "9262d799-5865-4db6-80b7-dcb84d0ae4f8",
+      "family_id": "vwap_proxy_reject_short",
+      "variant_index": 15,
+      "robustness_score": 0.886,
+      "oos_verdict": "PASS",
+      "oos_score": 0.856,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.8819,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "bcbbf106-9240-4b0b-b16b-004ca0be9c29",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:rolling_three_day_mean_reject_short:v017",
+      "strategy_version_id": "8bac794b-4b0e-4612-8005-e611dfcf7360",
+      "simulation_run_id": "e0ae23e4-1e21-4552-be5b-a4f4f4552ab1",
+      "family_id": "rolling_three_day_mean_reject_short",
+      "variant_index": 17,
+      "robustness_score": 0.8856,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8556,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.8492,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "cd93648a-2a3d-41b4-bff8-4e5518052824",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reject_short:v005",
+      "strategy_version_id": "f199be1a-9d8c-4187-977d-9710d439b2a2",
+      "simulation_run_id": "e0939c17-918e-4e8e-852c-b662bbbdb8ff",
+      "family_id": "previous_day_upper_quartile_reject_short",
+      "variant_index": 5,
+      "robustness_score": 0.8838,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8538,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.7058,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "0f0de6c8-168f-4210-ad28-072bde6c1094",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v007",
+      "strategy_version_id": "dd7fc3f5-ca90-4cbb-9948-7ee6272e1672",
+      "simulation_run_id": "5a5cbac8-5a7c-4d1c-a4cc-740566bb0992",
+      "family_id": "compression_breakout_short",
+      "variant_index": 7,
+      "robustness_score": 0.8812,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8512,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.4967,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "2f901719-df6d-4dec-9910-7ea1b59eede7",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:opening_range_breakout_short:v019",
+      "strategy_version_id": "bfc7fb26-c247-42e7-8b5e-67abd298a478",
+      "simulation_run_id": "dd30365b-0459-479f-b678-b8cc0b063903",
+      "family_id": "opening_range_breakout_short",
+      "variant_index": 19,
+      "robustness_score": 0.8791,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8491,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 3.1437,
+      "closed_trade_count": 4,
+      "profit_factor": 4.0706,
+      "max_drawdown_r": -1.0238
+    },
+    {
+      "research_candidate_id": "09cf47c2-30b7-4f74-8dc2-c8b5e3d0fe4c",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_upper_quartile_reclaim_long:v012",
+      "strategy_version_id": "00884251-246e-439c-98eb-5756634a6f0b",
+      "simulation_run_id": "e4b8904a-1a30-490c-a07d-be8f44a3aa5c",
+      "family_id": "previous_day_upper_quartile_reclaim_long",
+      "variant_index": 12,
+      "robustness_score": 0.8766,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8466,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.1248,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "3c0766a4-0f5f-43fd-a45a-97bd5cce7d75",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:previous_day_mid_reclaim_long:v014",
+      "strategy_version_id": "e5706708-0030-4e52-85f3-f24b14b9bbe7",
+      "simulation_run_id": "b48cb1c5-8f09-44c3-851b-13f98a98b4fd",
+      "family_id": "previous_day_mid_reclaim_long",
+      "variant_index": 14,
+      "robustness_score": 0.8759,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8459,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.0757,
+      "closed_trade_count": 3,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "8c65b4cd-f306-4f06-aded-8c05b14b95cc",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:vwap_deviation_fade_short:v007",
+      "strategy_version_id": "6e91927b-db9d-4847-8f5b-c8b77d0f7b78",
+      "simulation_run_id": "5aaa46b6-b6f9-474b-89ab-9066e49a5988",
+      "family_id": "vwap_deviation_fade_short",
+      "variant_index": 7,
+      "robustness_score": 0.8658,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8358,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 1.2672,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    },
+    {
+      "research_candidate_id": "9512bd35-5e3a-482b-a99e-83b125f485db",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:asia_mid_reclaim_long:v019",
+      "strategy_version_id": "e0c36a8d-5ca7-45b7-b961-fb28ca2757fc",
+      "simulation_run_id": "649fbd25-5000-4132-b84d-a17aed156e7f",
+      "family_id": "asia_mid_reclaim_long",
+      "variant_index": 19,
+      "robustness_score": 0.8616,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8316,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 2.5808,
+      "closed_trade_count": 4,
+      "profit_factor": 2.2489,
+      "max_drawdown_r": -2.0664
+    },
+    {
+      "research_candidate_id": "a2165636-1616-40aa-af09-f6ae9b36dcaa",
+      "candidate_key": "mega:mega-1000-mnq-m5-diversified-v2-20260820-005:compression_breakout_short:v017",
+      "strategy_version_id": "d9cdb02c-b7a3-4563-a13e-bd2a5b48f94e",
+      "simulation_run_id": "02a61ea1-336d-43b8-93a7-1c16c2cf86c2",
+      "family_id": "compression_breakout_short",
+      "variant_index": 17,
+      "robustness_score": 0.8607,
+      "oos_verdict": "PASS",
+      "oos_score": 0.8307,
+      "promotion_verdict": "FAIL",
+      "promotion_decision": "BLOCKED",
+      "portfolio_fit_reasons": [
+        "PORTFOLIO_FIT_TRADE_COUNT_BELOW_POLICY",
+        "PORTFOLIO_FIT_PROFIT_FACTOR_BELOW_POLICY",
+        "PORTFOLIO_CORRELATION_NOT_PROVEN",
+        "PORTFOLIO_RISK_BUDGET_NOT_PROVEN"
+      ],
+      "total_r": 0.855,
+      "closed_trade_count": 2,
+      "profit_factor": null,
+      "max_drawdown_r": 0
+    }
+  ]
+}
