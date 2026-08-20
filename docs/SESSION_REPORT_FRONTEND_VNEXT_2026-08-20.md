@@ -277,14 +277,22 @@ Measured card widths at 1100px and 1920px viewports: ~275px either way,
 consistent, no dead space, no wrapping. Left as-is — this one turned out to
 already be fine, unlike Command Center's.
 
-### 3.4 Note: concurrent modifications to unrelated files
+### 3.4 Note: concurrent modifications to unrelated files (confirmed)
 
 While working, `git status` repeatedly showed uncommitted changes
 accumulating in `mcp_gpt_desk/src/research/*` and
-`mcp_gpt_desk/test/*` — files I never touched this session. This looks
-like another automated process (a Codex/AI worker, per this repo's
-existing autonomous-worker setup) actively modifying the research
-pipeline concurrently with this session. I left these files alone and
-did not include them in any commit — worth checking what that process is
-doing when you're back, since it's editing the working tree at the same
-time as this session.
+`mcp_gpt_desk/test/*` — files I never touched this session. I left these
+alone and excluded them from every commit above.
+
+**Confirmed, not just suspected:** a `git push` at the end of this session
+came back as `22a4066..f750b2d` instead of the `4657227..f750b2d` I
+expected — meaning another process pushed commit `22a4066
+feat(research): add diversified v2 strategy cohort` to `main` directly,
+in between my own pushes, while this session was running. This is almost
+certainly the same autonomous research/Codex worker referenced elsewhere
+in this repo's docs, actively running its own campaign and shipping to
+`main` concurrently with this session. It merged cleanly (fast-forward,
+no conflict), so no action was needed from me, but it's worth knowing two
+agents were writing to the same branch at the same time this session —
+and it may also explain the mysterious recurring `Test-DeskLocalHealth.ps1`
+process noted in section 1 (theory (b) there).
