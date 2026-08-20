@@ -26,7 +26,12 @@ export function MacroSessionPanel({ model }: { model: LiveTradingModel }) {
 export function InstrumentChartPanel({ model }: { model: LiveTradingModel }) {
   const signal = model.latestSignal;
   const instrument = model.marketSeries.instrument ?? signal?.symbol ?? "Instrument";
-  return <LivePanel title={`${instrument} · ${model.marketSeries.timeframe ? `M${model.marketSeries.timeframe}` : "futures"}`} className="lt-panel--chart" action={<Link to="/events">Audit</Link>}><div className="lt-chart-toolbar"><span>{model.marketSeries.supportedTimeframes.map((frame) => <b key={frame} aria-current={frame === model.marketSeries.timeframe ? "true" : undefined}>{frame === "60" ? "H1" : frame === "240" ? "H4" : `M${frame}`}</b>)}</span><span>OHLCV · VWAP · signals · intents</span></div><div className="lt-chart-frame" data-availability={model.marketSeries.availability}>{model.marketSeries.points.length ? <CandlestickChart points={model.marketSeries.points} /> : <><div className="lt-chart-grid" aria-hidden="true" /><div className="lt-chart-empty" role="status"><strong>{presentAvailability(model.marketSeries.availability).label}</strong><span>{model.marketSeries.reason}</span><small>{model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</small></div></>}</div><footer className="lt-chart-footer"><span>{model.marketSeries.points.length} bougies clôturées · source {model.marketSeries.source}</span><StatusBadge tone={presentAvailability(model.marketSeries.availability).tone}>{presentAvailability(model.marketSeries.availability).label}</StatusBadge></footer></LivePanel>;
+  const intent = model.orderIntent;
+  const levels: { label: string; price: number; tone: "success" | "danger" | "info" }[] = [];
+  if (intent?.limitPrice != null) levels.push({ label: "ENTRÉE", price: intent.limitPrice, tone: "info" });
+  if (intent?.stopPrice != null) levels.push({ label: "STOP", price: intent.stopPrice, tone: "danger" });
+  if (intent?.targetPrice != null) levels.push({ label: "TARGET", price: intent.targetPrice, tone: "success" });
+  return <LivePanel title={`${instrument} · ${model.marketSeries.timeframe ? `M${model.marketSeries.timeframe}` : "futures"}`} className="lt-panel--chart" action={<Link to="/events">Audit</Link>}><div className="lt-chart-toolbar"><span>{model.marketSeries.supportedTimeframes.map((frame) => <b key={frame} aria-current={frame === model.marketSeries.timeframe ? "true" : undefined}>{frame === "60" ? "H1" : frame === "240" ? "H4" : `M${frame}`}</b>)}</span><span>OHLCV · VWAP · signals · intents</span></div><div className="lt-chart-frame" data-availability={model.marketSeries.availability}>{model.marketSeries.points.length ? <CandlestickChart points={model.marketSeries.points} levels={levels} /> : <><div className="lt-chart-grid" aria-hidden="true" /><div className="lt-chart-empty" role="status"><strong>{presentAvailability(model.marketSeries.availability).label}</strong><span>{model.marketSeries.reason}</span><small>{model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</small></div></>}</div><footer className="lt-chart-footer"><span>{model.marketSeries.points.length} bougies clôturées · source {model.marketSeries.source}</span><StatusBadge tone={presentAvailability(model.marketSeries.availability).tone}>{presentAvailability(model.marketSeries.availability).label}</StatusBadge></footer></LivePanel>;
 }
 
 export function LatestSignalPanel({ model }: { model: LiveTradingModel }) {
@@ -53,7 +58,13 @@ export function ProviderRuntimePanel({ model }: { model: LiveTradingModel }) {
 }
 
 export function ReconciliationPanel({ model }: { model: LiveTradingModel }) {
-  return <LivePanel title="Position Reconciliation" className="lt-panel--reconciliation"><div className="lt-reconciliation"><section><h3>Expected State</h3>{model.reconciliation.expected ? <pre>{compactRecord(model.reconciliation.expected)}</pre> : <TruthEmpty status="AUCUNE POSITION THÉORIQUE" label="Aucune position théorique canonique n'est ouverte." />}</section><section><h3>Broker State</h3>{model.reconciliation.broker ? <pre>{compactRecord(model.reconciliation.broker)}</pre> : <TruthEmpty status="NON APPLICABLE" label="L'exécution physique est désactivée ; aucun snapshot broker n'est attendu." />}</section><aside><strong>{presentBackendStatus(model.reconciliation.status).known ? presentBackendStatus(model.reconciliation.status).label : model.reconciliation.status}</strong><span>{model.reconciliation.detail}</span><small>asOf {displayTime(model.reconciliation.asOf)}</small></aside></div></LivePanel>;
+  const inSync = model.reconciliation.status === "PASS" || model.reconciliation.status === "MATCHED";
+  return <LivePanel title="Position Reconciliation" className="lt-panel--reconciliation"><div className="lt-reconciliation"><section><h3>Theoretical Position (System)</h3>{model.reconciliation.expected ? <RecordTable record={model.reconciliation.expected} /> : <TruthEmpty status="AUCUNE POSITION THÉORIQUE" label="Aucune position théorique canonique n'est ouverte." />}</section><section><h3>Broker Position (Simulated)</h3>{model.reconciliation.broker ? <RecordTable record={model.reconciliation.broker} /> : <TruthEmpty status="NON APPLICABLE" label="L'exécution physique est désactivée ; aucun snapshot broker n'est attendu." />}</section><aside className={inSync ? "lt-reconciliation__badge--sync" : "lt-reconciliation__badge--diff"}><span className="lt-reconciliation__icon">{inSync ? <FaCheck /> : <FaExclamationTriangle />}</span><strong>{presentBackendStatus(model.reconciliation.status).known ? presentBackendStatus(model.reconciliation.status).label : model.reconciliation.status}</strong><span>{model.reconciliation.detail}</span><small>asOf {displayTime(model.reconciliation.asOf)}</small></aside></div></LivePanel>;
+}
+
+function RecordTable({ record }: { record: Record<string, unknown> }) {
+  const entries = Object.entries(record).slice(0, 6);
+  return <table className="lt-reconciliation__table"><tbody>{entries.map(([key, value]) => <tr key={key}><th>{presentGeneric(key).label}</th><td>{displayValue(value)}</td></tr>)}</tbody></table>;
 }
 
 export function AuditTimelinePanel({ model }: { model: LiveTradingModel }) {
@@ -73,20 +84,21 @@ function Pair({ label, value }: { label: string; value: string }) { return <div>
 function TruthEmpty({ when = true, label, status = "ÉTAT VIDE CONFIRMÉ" }: { when?: boolean; label: string; status?: string }) { return when ? <div className="lt-empty" role="status"><FaTimes aria-hidden="true" /><strong>{status}</strong><span>{label}</span></div> : null; }
 function shortId(value: string) { return value.length > 25 ? `${value.slice(0, 22)}…` : value; }
 function priceValue(value: unknown): unknown { if (!value || typeof value !== "object") return value; const record = value as Record<string, unknown>; return record.price ?? record.value; }
-function compactRecord(value: Record<string, unknown>) { return Object.entries(value).slice(0, 5).map(([key, item]) => `${key}: ${displayValue(item)}`).join("\n"); }
 
-function CandlestickChart({ points }: { points: LiveTradingModel["marketSeries"]["points"] }) {
+function CandlestickChart({ points, levels = [] }: { points: LiveTradingModel["marketSeries"]["points"]; levels?: { label: string; price: number; tone: "success" | "danger" | "info" }[] }) {
   const drawable = points.filter((point) => [point.open, point.high, point.low, point.close].every((value) => typeof value === "number"));
   if (!drawable.length) return <div className="lt-chart-empty" role="status"><strong>CONNECTED EMPTY</strong><span>Aucune bougie complète à tracer.</span></div>;
   const lows = drawable.map((point) => point.low as number);
   const highs = drawable.map((point) => point.high as number);
-  const min = Math.min(...lows);
-  const max = Math.max(...highs);
+  const levelPrices = levels.map((level) => level.price);
+  const min = Math.min(...lows, ...levelPrices);
+  const max = Math.max(...highs, ...levelPrices);
   const span = Math.max(max - min, 0.0001);
   const width = 900;
   const height = 300;
-  const step = width / drawable.length;
+  const rightGutter = levels.length ? 96 : 0;
+  const step = (width - rightGutter) / drawable.length;
   const y = (value: number) => height - ((value - min) / span) * (height - 20) - 10;
   const vwap = drawable.map((point, index) => point.vwap === null ? null : `${index * step + step / 2},${y(point.vwap)}`).filter(Boolean).join(" ");
-  return <svg className="lt-market-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${drawable.length} bougies OHLCV clôturées avec VWAP`} preserveAspectRatio="none"><g className="lt-market-chart__candles">{drawable.map((point, index) => { const x = index * step + step / 2; const open = point.open as number; const high = point.high as number; const low = point.low as number; const close = point.close as number; const up = close >= open; return <g key={point.timestamp} className={up ? "is-up" : "is-down"}><line x1={x} x2={x} y1={y(high)} y2={y(low)} /><rect x={x - Math.max(1, step * 0.28)} y={Math.min(y(open), y(close))} width={Math.max(2, step * 0.56)} height={Math.max(1, Math.abs(y(open) - y(close)))} /></g>; })}</g>{vwap ? <polyline className="lt-market-chart__vwap" points={vwap} fill="none" /> : null}</svg>;
+  return <svg className="lt-market-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${drawable.length} bougies OHLCV clôturées avec VWAP`} preserveAspectRatio="none"><g className="lt-market-chart__candles">{drawable.map((point, index) => { const x = index * step + step / 2; const open = point.open as number; const high = point.high as number; const low = point.low as number; const close = point.close as number; const up = close >= open; return <g key={point.timestamp} className={up ? "is-up" : "is-down"}><line x1={x} x2={x} y1={y(high)} y2={y(low)} /><rect x={x - Math.max(1, step * 0.28)} y={Math.min(y(open), y(close))} width={Math.max(2, step * 0.56)} height={Math.max(1, Math.abs(y(open) - y(close)))} /></g>; })}</g>{vwap ? <polyline className="lt-market-chart__vwap" points={vwap} fill="none" /> : null}<g className="lt-market-chart__levels">{levels.map((level) => { const levelY = y(level.price); const lineWidth = width - rightGutter; return <g key={level.label} className={`lt-market-chart__level lt-market-chart__level--${level.tone}`}><line x1={0} x2={lineWidth} y1={levelY} y2={levelY} strokeDasharray="6 5" /><rect x={lineWidth + 3} y={levelY - 11} width={rightGutter - 6} height={22} rx={3} /><text x={lineWidth + rightGutter / 2} y={levelY + 4} textAnchor="middle">{level.label} {level.price.toFixed(2)}</text></g>; })}</g></svg>;
 }
