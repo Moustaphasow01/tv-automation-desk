@@ -4,6 +4,23 @@ Working document, updated live during an autonomous session. Written for the
 user to review on return; most recent entries are at the bottom of each
 section.
 
+## TL;DR
+
+- **Read section 1 first.** The VPS frontend deploy failed on a pre-existing
+  Postgres server misconfiguration (unrelated to the CSS changes). Production
+  is safe-but-idle (broker execution was already off), but several services
+  are stopped and need an operator to finish the fix — three remediation
+  attempts were blocked by the safety classifier since they touch the
+  production database/services, correctly requiring your presence.
+- Everything else — font-size fixes across the whole app, the Command Center
+  grid-wrapping bug, and a new shared label system removing raw backend
+  status codes from 9 operator screens — is **done, tested (173/173),
+  committed, and pushed to `main`** (commits `9771bc1` → `4657227`). None of
+  it is live on the VPS yet, pending the deploy fix in section 1.
+- Section 3.4 flags uncommitted, unrelated changes accumulating in
+  `mcp_gpt_desk/src/research/*` from what looks like a concurrent automated
+  process — not something I touched, worth a look.
+
 ---
 
 ## 1. Incident: VPS frontend deploy failed, production left in a drained state
@@ -68,17 +85,20 @@ nothing about trade risk, it was already impossible for an order to reach a
 broker. The actual impact is availability: live signal processing, research
 task claiming, and Telegram alerting are not running until this is resolved.
 
-There is also one **unexplained still-running process** on the VPS observed
-at the last status check: `Test-DeskLocalHealth.ps1` (PID 2964, started
-11:28:20), which is a step that only runs *after* `Install-Desk.ps1`
-succeeds (line 196 of `Update-Desk.ps1`) — later than where both of my
-attempts failed. This is most likely an orphaned tail of the very *first*
-deploy attempt (started 11:03, originally assumed killed by an 8-minute
-tool-timeout) that kept running detached from the SSH channel and has been
-slowly making progress in the background for ~25 minutes. It was left
-untouched — do not assume it has failed or succeeded without checking fresh
-service/DB state first, since it may resolve this incident on its own, or it
-may be stuck on something else entirely.
+There is also an **unexplained recurring process** on the VPS:
+`Test-DeskLocalHealth.ps1` was observed running at 11:28:20 (PID 2964) and
+again, as a *different* process, at 13:08:20 (PID 7116) — both times with
+services still stopped and the symlink still on the old release. This step
+only runs *after* `Install-Desk.ps1` succeeds (line 196 of
+`Update-Desk.ps1`), later than where my own attempts failed, so this isn't
+my own process. Two working theories, unconfirmed: (a) an orphaned tail of
+my very first attempt (started 11:03) that's been retrying/hanging for
+hours, or (b) **a separate automated process — possibly the same worker
+responsible for the concurrent `mcp_gpt_desk/src/research/*` changes noted
+below — independently attempting its own recovery deploy.** Either way, I
+left it untouched and took no further VPS action. Get a fresh status read
+before assuming anything about its outcome; it may resolve the incident on
+its own, or it may need to be killed if it's stuck.
 
 ### What I attempted and why it stopped
 
@@ -231,12 +251,31 @@ earlier this session):
   `READ_ONLY`/`LOCKED`/`ALLOW`/`DENY` now render as *"Lecture seule"*/
   *"Verrouillé"*/*"Autorisé"*/*"Refusé"*.
 
-Commits `673dd2a` (labels.ts + LiveTrading + StrategyCenter) and `e9d1c82`
-(the four screens above).
+- `RiskCenterPage.tsx` — exposure/correlation/constraint/breach status,
+  stress-test state, risk-check result, free-form reason codes.
+- `LiveSignalDetailPage.tsx` — signal lifecycle state, predicate/feature-
+  snapshot status, arbitration decision, conflict resolution, linked-order
+  state, AI advisory mode/recommendation.
 
-**Not yet covered** (flagged by the audit, not yet migrated — next up if
-time allows): `RiskCenterPage.tsx` and `LiveSignalDetailPage.tsx` surface
-raw backend `reasonCode` strings directly as user-facing copy.
+Commits `673dd2a` (labels.ts + LiveTrading + StrategyCenter), `e9d1c82`
+(Operations Queue, Execution Providers, Admin Access, Auth Session), and
+`4657227` (Risk Center, Live Signal Detail). **All 9 pages the audit
+flagged as raw-string-dense are now migrated.** Full test suite (173/173)
+and `tsc --noEmit` clean after every commit in this section.
+
+### 3.5 Shared KPI-strip width check (done — no bug found)
+
+Checked whether the shared `.operator-kpi-strip` class (used by all 7 of
+the pages above, defined once in `design-system/styles.css`) had the same
+rigid-column bug as Command Center's original KPI row: it's a
+`@container`-based (not `@media`) responsive rule, fixed 3 columns below
+a 1281px container width and fixed 6 columns above it. This pattern *can*
+produce the same dead-space bug Command Center had, but every one of these
+7 pages renders exactly 6 `KpiCard`s (confirmed via grep), which divides
+evenly into both 3 and 6 columns — no uneven trailing row is possible.
+Measured card widths at 1100px and 1920px viewports: ~275px either way,
+consistent, no dead space, no wrapping. Left as-is — this one turned out to
+already be fine, unlike Command Center's.
 
 ### 3.4 Note: concurrent modifications to unrelated files
 
