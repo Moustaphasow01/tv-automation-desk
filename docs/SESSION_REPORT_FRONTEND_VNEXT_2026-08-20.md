@@ -148,6 +148,20 @@ read-only status checks were run after that point.
    `Invoke-DeskDrain.ps1 -Action Resume -DeploymentId deploy-20260820T092138Z-2c4e06e4 -DatabaseUrl <DATABASE_URL>`
    to restore claims/broker-lock to their pre-deploy state.
 
+### Update (15:39 local, read-only recheck)
+
+Partial recovery in progress, presumably by the concurrent worker (another
+`Test-DeskLocalHealth.ps1` process observed, PID 1692 this time — a third
+distinct instance). `DeskFuturesAgentRuntimeResearch`,
+`DeskFuturesAgentRuntimeSupervisor`, `DeskFuturesLiveRuntime`, and
+`DeskFuturesTelegram` are now **Running** again (they were stopped at
+11:29). Still **Stopped**: `DeskFuturesBrokerManagement`,
+`DeskFuturesCodexLive01`, `DeskFuturesCodexLive02`,
+`DeskFuturesReplayPreparation`. The `current` symlink still points at the
+old release — the frontend deploy itself has not completed. I only ran a
+read-only status check here, no write actions, per the reasoning in this
+section.
+
 ---
 
 ## 2. Frontend fixes shipped this session (committed, pushed to `main`, NOT yet live on VPS)
