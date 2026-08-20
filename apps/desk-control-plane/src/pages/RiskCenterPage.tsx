@@ -16,6 +16,7 @@ import {
 import { DataTable, MobileDataList } from "@/design-system/data";
 import { DeskButton, ReasonInput } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import { presentGeneric, presentPermission, presentQueueStatus, presentRuntimeStatus, presentSeverity } from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -121,7 +122,7 @@ export function RiskCenterPage() {
               <article key={exposure.exposureId} className={`risk-exposure-map__tile risk-exposure-map__tile--${exposure.status.toLowerCase()}`}>
                 <header>
                   <strong>{exposure.assetClass}</strong>
-                  <StatusBadge tone={statusTone(exposure.status)}>{exposure.status}</StatusBadge>
+                  <StatusBadge tone={statusTone(exposure.status)}>{presentQueueStatus(exposure.status).label}</StatusBadge>
                 </header>
                 <b>{formatCurrency(exposure.grossUsd)}</b>
                 <small>{exposure.topInstrument} · net {formatCurrency(exposure.netUsd)}</small>
@@ -141,9 +142,9 @@ export function RiskCenterPage() {
             {data.correlations.map((correlation) => (
               <article key={correlation.correlationId}>
                 <FaProjectDiagram />
-                <div><strong>{correlation.pair}</strong><small>{correlation.reasonCode}</small></div>
+                <div><strong>{correlation.pair}</strong><small>{presentGeneric(correlation.reasonCode).label}</small></div>
                 <b>{correlation.value.toFixed(2)}</b>
-                <StatusBadge tone={statusTone(correlation.status)}>{correlation.status}</StatusBadge>
+                <StatusBadge tone={statusTone(correlation.status)}>{presentQueueStatus(correlation.status).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -153,7 +154,7 @@ export function RiskCenterPage() {
                 <FaShieldAlt />
                 <div><strong>{constraint.label}</strong><small>{constraint.rule} · reset {formatTime(constraint.nextResetAt)}</small></div>
                 <span>{formatRiskValue(constraint.usedValue, constraint.unit)} / {formatRiskValue(constraint.limitValue, constraint.unit)}</span>
-                <StatusBadge tone={statusTone(constraint.status)}>{constraint.status}</StatusBadge>
+                <StatusBadge tone={statusTone(constraint.status)}>{presentQueueStatus(constraint.status).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -168,7 +169,7 @@ export function RiskCenterPage() {
                 <FaChartLine />
                 <div><strong>{stress.scenario}</strong><small>{stress.stressTestId} · {stress.completedAt ? formatTime(stress.completedAt) : "en cours"}</small></div>
                 <span>{formatSignedR(stress.lossR)}</span>
-                <StatusBadge tone={stress.state === "PASSED" ? "success" : stress.state === "FAILED" ? "danger" : "warning"}>{stress.state}</StatusBadge>
+                <StatusBadge tone={stress.state === "PASSED" ? "success" : stress.state === "FAILED" ? "danger" : "warning"}>{presentRuntimeStatus(stress.state).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -185,7 +186,7 @@ export function RiskCenterPage() {
               <li key={breach.breachId}>
                 <span><FaExclamationTriangle />{formatTime(breach.openedAt)}</span>
                 <div><strong>{breach.title}</strong><small>{breach.detail}</small></div>
-                <StatusBadge tone={breach.severity === "EMERGENCY" || breach.severity === "HIGH" ? "danger" : breach.severity === "MEDIUM" ? "warning" : "accent"}>{breach.status}</StatusBadge>
+                <StatusBadge tone={breach.severity === "EMERGENCY" || breach.severity === "HIGH" ? "danger" : breach.severity === "MEDIUM" ? "warning" : "accent"}>{presentQueueStatus(breach.status).label}</StatusBadge>
               </li>
             ))}
           </ol>
@@ -201,7 +202,7 @@ export function RiskCenterPage() {
             <FaFingerprint />
             <div>
               <small>Dernière commande risk</small>
-              <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+              <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
@@ -219,7 +220,7 @@ export function RiskCenterPage() {
               <article key={action.actionId} className={action.criticality === "EMERGENCY" ? "risk-action-list__emergency" : undefined}>
                 <span>{actionIcon(action)}</span>
                 <div><strong>{action.label}</strong><small>{action.commandType} · {action.impactSummary}</small></div>
-                <StatusBadge tone={permissionTone(action.permission)}>{action.permission}</StatusBadge>
+                <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                 <DeskButton
                   variant={action.criticality === "EMERGENCY" ? "emergency" : action.criticality === "HIGH" ? "danger" : "primary"}
                   disabled={isActionDisabled(action, reason, stepUpToken) || submittingActionId === action.actionId}
@@ -273,14 +274,14 @@ const limitColumns = [
   { key: "limitValue", header: "Limite", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.limitValue, row.unit) },
   { key: "pct", header: "%", align: "right" as const, render: (row: RiskLimit) => `${row.usedPct.toFixed(1)}%` },
   { key: "headroom", header: "Headroom", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.headroomValue, row.unit) },
-  { key: "status", header: "Statut", render: (row: RiskLimit) => <StatusBadge tone={statusTone(row.status)}>{row.status}</StatusBadge> }
+  { key: "status", header: "Statut", render: (row: RiskLimit) => <StatusBadge tone={statusTone(row.status)}>{presentQueueStatus(row.status).label}</StatusBadge> }
 ] as const;
 
 function LimitCell({ row }: { row: RiskLimit }) {
   return (
     <div className="risk-limit-cell">
       <strong>{row.label}</strong>
-      <small>{row.officialSource} · {row.reasonCodes.join(", ")}</small>
+      <small>{row.officialSource} · {row.reasonCodes.map((code) => presentGeneric(code).label).join(", ")}</small>
     </div>
   );
 }

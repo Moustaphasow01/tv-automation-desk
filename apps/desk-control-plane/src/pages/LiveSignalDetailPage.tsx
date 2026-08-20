@@ -15,6 +15,22 @@ import {
 } from "react-icons/fa";
 import { DeskButton, TrackedCommandReceipt } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import {
+  presentArbitrationDecision,
+  presentConflictResolution,
+  presentConflictStatus,
+  presentContextTone,
+  presentEventLane,
+  presentExecutionMode,
+  presentFreshness,
+  presentGateState,
+  presentGeneric,
+  presentPermission,
+  presentQueueStatus,
+  presentSignalState,
+  presentTradeDecision
+} from "@/design-system/labels";
+import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -90,8 +106,8 @@ export function LiveSignalDetailPage() {
         <KpiCard label="EXPIRATION" value={remainingSec > 0 ? formatDuration(remainingSec) : "EXPIRED"} delta={formatTime(data.signal.expiresAt)} tone={remainingSec > 0 ? "warning" : "danger"} />
         <KpiCard label="PROBA ACCEPT." value={`${data.summary.acceptanceProbabilityPct}%`} delta="DTO backend" tone="success" />
         <KpiCard label="TAILLE CIBLE" value={`${data.summary.targetQuantity}`} delta={`arrondi ${data.riskCheck.roundedQuantity} contrats`} tone="info" />
-        <KpiCard label="RISQUE UTILISÉ" value={`${data.summary.riskUsedPct}%`} delta={data.riskCheck.reasonCode} detail={<ProgressBar value={data.summary.riskUsedPct} tone="success" />} tone="success" />
-        <KpiCard label="CONFLITS" value={`${data.summary.conflictCount}`} delta={data.arbitration.conflictStatus} tone={data.summary.conflictCount > 0 ? "warning" : "success"} />
+        <KpiCard label="RISQUE UTILISÉ" value={`${data.summary.riskUsedPct}%`} delta={presentGeneric(data.riskCheck.reasonCode).label} detail={<ProgressBar value={data.summary.riskUsedPct} tone="success" />} tone="success" />
+        <KpiCard label="CONFLITS" value={`${data.summary.conflictCount}`} delta={presentConflictStatus(data.arbitration.conflictStatus).label} tone={data.summary.conflictCount > 0 ? "warning" : "success"} />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Contexte, prédicats et risk check">
@@ -103,7 +119,7 @@ export function LiveSignalDetailPage() {
                 <strong>{data.signal.symbol} {data.signal.direction}</strong>
                 <small>{formatTime(data.signal.generatedAt)} → {formatTime(data.signal.expiresAt)}</small>
               </div>
-              <StatusBadge tone={signalStateTone(data.signal.state)}>{data.signal.state}</StatusBadge>
+              <StatusBadge tone={signalStateTone(data.signal.state)}>{presentSignalState(data.signal.state).label}</StatusBadge>
             </article>
             <div className="live-signal-price-grid">
               <MetricBox label="Entry low" value={formatPrice(data.signal.entryZoneLow)} />
@@ -128,7 +144,7 @@ export function LiveSignalDetailPage() {
                 <FaCheckCircle />
                 <div><strong>{predicate.label}</strong><small>{predicate.enumCode} · {predicate.observedValue}</small></div>
                 <span>{predicate.threshold}</span>
-                <StatusBadge tone={predicate.status === "PASS" ? "success" : predicate.status === "FAIL" ? "danger" : "warning"}>{predicate.status}</StatusBadge>
+                <StatusBadge tone={predicate.status === "PASS" ? "success" : predicate.status === "FAIL" ? "danger" : "warning"}>{presentGateState(predicate.status).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -139,7 +155,7 @@ export function LiveSignalDetailPage() {
               <small>{data.featureSnapshot.datasetId} · {data.featureSnapshot.hash} · cutoff {formatTime(data.featureSnapshot.cutoffAt)}</small>
             </div>
             <StatusBadge tone={data.featureSnapshot.freshness === "FRESH" ? "success" : data.featureSnapshot.freshness === "STALE" ? "danger" : "warning"}>
-              {data.featureSnapshot.freshness}
+              {presentFreshness(data.featureSnapshot.freshness).label}
             </StatusBadge>
           </div>
         </Card>
@@ -148,13 +164,13 @@ export function LiveSignalDetailPage() {
           <div className="live-signal-risk-hero">
             <article>
               <FaExchangeAlt />
-              <div><strong>{data.arbitration.decision} · {data.arbitration.targetQuantity} contrats</strong><small>{data.arbitration.reasonCode}</small></div>
+              <div><strong>{presentArbitrationDecision(data.arbitration.decision).label} · {data.arbitration.targetQuantity} contrats</strong><small>{presentGeneric(data.arbitration.reasonCode).label}</small></div>
               <b>{data.arbitration.correlationPct}%</b>
-              <StatusBadge tone={data.arbitration.decision === "ACCEPTED" ? "success" : data.arbitration.decision === "SCALED" ? "warning" : "danger"}>{data.arbitration.conflictStatus}</StatusBadge>
+              <StatusBadge tone={data.arbitration.decision === "ACCEPTED" ? "success" : data.arbitration.decision === "SCALED" ? "warning" : "danger"}>{presentConflictStatus(data.arbitration.conflictStatus).label}</StatusBadge>
             </article>
             <article>
               <FaShieldAlt />
-              <div><strong>{data.riskCheck.status} · {data.riskCheck.limitLabel}</strong><small>{data.riskCheck.reasonCode}</small></div>
+              <div><strong>{presentQueueStatus(data.riskCheck.status).label} · {data.riskCheck.limitLabel}</strong><small>{presentGeneric(data.riskCheck.reasonCode).label}</small></div>
               <b>{data.riskCheck.usedPct}%</b>
               <ProgressBar value={data.riskCheck.usedPct} tone={data.riskCheck.status === "PASS" ? "success" : data.riskCheck.status === "BLOCK" ? "danger" : "warning"} />
             </article>
@@ -169,7 +185,7 @@ export function LiveSignalDetailPage() {
             {data.conflicts.map((conflict) => (
               <article key={conflict.conflictId}>
                 <div><strong>{conflict.label}</strong><small>{conflict.kind} · {conflict.targetId}</small></div>
-                <StatusBadge tone={conflict.severity === "HIGH" ? "danger" : conflict.severity === "MEDIUM" ? "warning" : "accent"}>{conflict.resolution}</StatusBadge>
+                <StatusBadge tone={conflict.severity === "HIGH" ? "danger" : conflict.severity === "MEDIUM" ? "warning" : "accent"}>{presentConflictResolution(conflict.resolution).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -183,7 +199,7 @@ export function LiveSignalDetailPage() {
               <article key={item.contextId}>
                 <div><strong>{item.label}</strong><small>{item.interpretation}</small></div>
                 <b className={contextToneClass(item.tone)}>{item.value}</b>
-                <StatusBadge tone={contextTone(item.tone)}>{item.tone}</StatusBadge>
+                <StatusBadge tone={contextTone(item.tone)}>{presentContextTone(item.tone).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -205,7 +221,7 @@ export function LiveSignalDetailPage() {
               <article key={order.orderId}>
                 <div><strong>{order.side} {order.quantity} · {order.type}</strong><small>{order.orderId} · {order.brokerOrderId}</small></div>
                 <span>{order.limitPrice ? formatPrice(order.limitPrice) : "MKT"}</span>
-                <StatusBadge tone={order.state === "ACKED" || order.state === "FILLED" ? "success" : order.state === "REJECTED" ? "danger" : "warning"}>{order.state}</StatusBadge>
+                <StatusBadge tone={order.state === "ACKED" || order.state === "FILLED" ? "success" : order.state === "REJECTED" ? "danger" : "warning"}>{presentBackendStatus(order.state).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -214,7 +230,7 @@ export function LiveSignalDetailPage() {
               <li key={event.eventId} className={event.lane === "ADVISORY" ? "live-signal-audit-list__advisory" : undefined}>
                 <span><FaClock />{formatTime(event.at)}</span>
                 <div><strong>{event.title}</strong><small>{event.domain} · {event.eventId}</small></div>
-                <StatusBadge tone={event.lane === "ADVISORY" ? "accent" : "success"}>{event.lane}</StatusBadge>
+                <StatusBadge tone={event.lane === "ADVISORY" ? "accent" : "success"}>{presentEventLane(event.lane).label}</StatusBadge>
               </li>
             ))}
           </ol>
@@ -225,7 +241,7 @@ export function LiveSignalDetailPage() {
             <FaFingerprint />
             <div>
               <small>Dernière décision signal</small>
-              <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+              <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
@@ -239,7 +255,7 @@ export function LiveSignalDetailPage() {
               <article key={action.actionId}>
                 <span>{actionIcon(action.decision)}</span>
                 <div><strong>{action.label}</strong><small>{action.capability} · expected {compactId(data.identity.expectedVersion)}</small></div>
-                <StatusBadge tone={permissionTone(action.permission)}>{action.permission}</StatusBadge>
+                <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                 <DeskButton
                   variant="primary"
                   disabled={action.permission !== "ALLOWED" || reason.trim().length === 0 || submittingActionId === action.actionId}
@@ -253,10 +269,10 @@ export function LiveSignalDetailPage() {
           <div className="live-signal-ai-shadow">
             <FaRobot />
             <div>
-              <strong>AI Context Gate · {data.aiAdvisory.mode} · authority {data.aiAdvisory.authority}</strong>
+              <strong>AI Context Gate · {presentExecutionMode(data.aiAdvisory.mode).label} · authority {data.aiAdvisory.authority}</strong>
               <small>{data.aiAdvisory.summary}</small>
             </div>
-            <StatusBadge tone="accent">{data.aiAdvisory.recommendation}</StatusBadge>
+            <StatusBadge tone="accent">{presentTradeDecision(data.aiAdvisory.recommendation).label}</StatusBadge>
           </div>
         </Card>
       </section>

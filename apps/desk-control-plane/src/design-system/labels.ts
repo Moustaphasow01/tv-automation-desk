@@ -32,6 +32,8 @@ export const presentExecutionMode = makePresenter({
   PAPER: { label: "Simulation (papier)", tone: "accent" },
   SEMI_MANUAL: { label: "Semi-manuel", tone: "warning" },
   LIVE: { label: "Réel", tone: "danger" },
+  ADVISORY: { label: "Consultatif", tone: "accent" },
+  OFF: { label: "Inactif", tone: "neutral" },
 });
 
 /** Statut de validation d'une version de stratégie dans son cycle de vie. */
@@ -55,6 +57,8 @@ export const presentRuntimeStatus = makePresenter({
   WAITING: { label: "En attente", tone: "info" },
   MARKET_CLOSED: { label: "Marché fermé", tone: "neutral" },
   FAILED: { label: "En échec", tone: "danger" },
+  QUEUED: { label: "En file", tone: "info" },
+  PASSED: { label: "Validé", tone: "success" },
 });
 
 /** Santé opérationnelle live d'une stratégie ou d'un composant. */
@@ -99,6 +103,45 @@ export const presentFreshness = makePresenter({
   FRESH: { label: "À jour", tone: "success" },
   STALE: { label: "Périmée", tone: "warning" },
   PARTIAL: { label: "Partielle", tone: "warning" },
+  WATCH: { label: "À surveiller", tone: "warning" },
+});
+
+/** Orientation d'un facteur de contexte marché (positif/négatif pour le signal). */
+export const presentContextTone = makePresenter({
+  POSITIVE: { label: "Favorable", tone: "success" },
+  NEUTRAL: { label: "Neutre", tone: "neutral" },
+  NEGATIVE: { label: "Défavorable", tone: "danger" },
+  WATCH: { label: "À surveiller", tone: "warning" },
+});
+
+/** Résolution d'un conflit de portefeuille (corrélation, position, budget risque). */
+export const presentConflictResolution = makePresenter({
+  CLEAR: { label: "Levé", tone: "success" },
+  SCALED: { label: "Réduit", tone: "warning" },
+  BLOCKED: { label: "Bloqué", tone: "danger" },
+  WATCH: { label: "À surveiller", tone: "warning" },
+});
+
+/** Décision d'arbitrage portefeuille sur un signal. */
+export const presentArbitrationDecision = makePresenter({
+  ACCEPTED: { label: "Accepté", tone: "success" },
+  REJECTED: { label: "Rejeté", tone: "danger" },
+  SCALED: { label: "Réduit", tone: "warning" },
+});
+
+/** État de conflit global d'un arbitrage portefeuille. */
+export const presentConflictStatus = makePresenter({
+  CLEAR: { label: "Aucun conflit", tone: "success" },
+  CORRELATED: { label: "Corrélé", tone: "warning" },
+  CONFLICT: { label: "Conflit", tone: "danger" },
+});
+
+/** Décision opérateur ou conseil IA sur un signal (take/reduce/wait/reject). */
+export const presentTradeDecision = makePresenter({
+  TAKE: { label: "Prendre", tone: "success" },
+  TAKE_REDUCED: { label: "Prendre (réduit)", tone: "warning" },
+  WAIT: { label: "Attendre", tone: "info" },
+  REJECT: { label: "Rejeter", tone: "danger" },
 });
 
 /** Droit d'accès d'un opérateur sur une action ou une ressource. */
@@ -116,6 +159,7 @@ export const presentSeverity = makePresenter({
   MEDIUM: { label: "Moyenne", tone: "warning" },
   HIGH: { label: "Élevée", tone: "danger" },
   CRITICAL: { label: "Critique", tone: "danger" },
+  EMERGENCY: { label: "Urgence", tone: "danger" },
 });
 
 /** Statut d'un item dans une file d'opérations (missions, événements, gates). */
@@ -134,6 +178,11 @@ export const presentQueueStatus = makePresenter({
   READY: { label: "Prêt", tone: "success" },
   OK: { label: "OK", tone: "success" },
   WATCH: { label: "À surveiller", tone: "warning" },
+  BREACH: { label: "Dépassement", tone: "danger" },
+  OPEN: { label: "Ouvert", tone: "danger" },
+  ACKED: { label: "Pris en compte", tone: "warning" },
+  MITIGATED: { label: "Atténué", tone: "success" },
+  BLOCK: { label: "Bloqué", tone: "danger" },
 });
 
 /** État d'un signal de stratégie dans son cycle de vie. */
@@ -203,6 +252,12 @@ export const presentAuditStatus = makePresenter({
   DENIED: { label: "Refusée", tone: "danger" },
   APPLIED: { label: "Appliquée", tone: "success" },
   FAILED: { label: "Échouée", tone: "danger" },
+});
+
+/** Voie d'un événement d'audit : source de vérité ou avis consultatif. */
+export const presentEventLane = makePresenter({
+  AUTHORITATIVE: { label: "Autoritaire", tone: "success" },
+  ADVISORY: { label: "Consultatif", tone: "accent" },
 });
 
 /** Fallback générique : humanise n'importe quel code SCREAMING_SNAKE_CASE

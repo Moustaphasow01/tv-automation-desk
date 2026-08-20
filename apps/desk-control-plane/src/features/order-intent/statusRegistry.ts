@@ -11,6 +11,8 @@ export type StatusPresentation = {
 
 const REGISTRY: Readonly<Record<string, Omit<StatusPresentation, "code" | "known">>> = {
   AWAITING_MANUAL_CONFIRMATION: { label: "Confirmation requise", helper: "Aucune transmission provider n'est encore autorisée.", tone: "warning", severity: "WARNING" },
+  INTENT: { label: "Intention", helper: "L'ordre n'a pas encore été transmis à un provider.", tone: "neutral", severity: "INFO" },
+  CANCELLED: { label: "Annulé", helper: "L'ordre a été annulé avant exécution complète.", tone: "neutral", severity: "INFO" },
   CONFIRMED: { label: "Confirmé par l'opérateur", helper: "La confirmation n'est ni un ACK ni un fill broker.", tone: "info", severity: "INFO" },
   REJECTED: { label: "Rejeté", helper: "Le cycle est arrêté par l'autorité qui publie cet état.", tone: "danger", severity: "DANGER" },
   EXPIRED: { label: "Expiré", helper: "L'intention n'est plus exécutable.", tone: "warning", severity: "WARNING" },

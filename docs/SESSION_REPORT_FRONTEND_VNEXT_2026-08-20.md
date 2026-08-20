@@ -171,4 +171,81 @@ containers), component widths, a naming formatter to remove backend
 technical names from the UI, general polish, and the same pass on the Live
 Trading screen.
 
-*(This section will be filled in as work proceeds.)*
+### 3.1 Remaining illegible fonts (done)
+
+Beyond Command Center, three more CSS files had the same 5-11px
+illegibility problem: `live-trading.css` (worst — down to **5px**),
+`order-intent.css`, `operator-menu.css`. Scaled all 74 remaining
+declarations with the same monotonic mapping used for Command Center.
+Commit `673dd2a`.
+
+### 3.2 Live Trading layout check (done — no bug found)
+
+Checked whether Live Trading has the same rigid-grid dead-space/wrapping
+bug as Command Center's KPI row. It doesn't: `.lt-grid` uses fixed-px side
+rails + one flexible middle column (not proportional `fr` units across
+uniform cards), which doesn't produce the same failure mode. Measured no
+horizontal overflow at 1920px or 1550px. The "same problems" the user
+reported on this screen were the font-size issue, now fixed.
+
+### 3.3 Technical-name removal — shared label system (in progress)
+
+Dispatched a research pass that mapped where raw backend enum codes
+(`SHADOW`, `RUNNING`, `DEPLOYMENT_DRAIN`, etc.) get rendered directly to
+the operator. Findings: a decent pattern already existed
+(`features/order-intent/statusRegistry.ts`, French labels + tone) but only
+covered order-lifecycle statuses in 2 files; ~8 other vocabularies
+(strategy execution mode, deployment/ops status, provider availability,
+RBAC permissions/decisions, incident severity, gate state, session state)
+rendered raw across ~10+ pages.
+
+Built [`design-system/labels.ts`](apps/desk-control-plane/src/design-system/labels.ts):
+a set of `presentX(rawCode)` functions, one per vocabulary domain, each
+returning `{ label, tone }` — French label for known codes, and for any
+code without an explicit entry, a **humanized fallback** (spaces instead
+of underscores, capitalized) so nothing ever renders as raw
+`SCREAMING_SNAKE_CASE`, even for codes not yet catalogued.
+
+**Wired in so far** (verified via `tsc --noEmit`, the full test suite —
+173/173 passing throughout — and live browser checks against real BFF
+data, including the actual 67-strategy data-driven catalog deployed
+earlier this session):
+- `LiveTradingPanels.tsx` / `LiveHumanGate.tsx` — worst offender, most
+  operator-critical screen (runtime state, availability, signal state,
+  reconciliation, provider status, kill switch, AI advisory mode).
+- `StrategyCenterPage.tsx` — execution mode, version status, runtime
+  status, live health, gate state, command eligibility, event severity.
+  Confirmed live: `SHADOW`/`DRAFT`/`STOPPED`/`OFF` now render as
+  *"Observation seule"*/*"Brouillon"*/*"Arrêtée"*/*"Inactive"*.
+- `OperationsQueuePage.tsx` — mission/event/gate state, permission,
+  incident severity. Removed the page's own weak local label helpers
+  (`stateLabel`/`eventLabel`/`gateLabel`/`permissionLabel`) now
+  superseded by the shared registry.
+- `ExecutionProvidersPage.tsx` — provider/account/adapter availability,
+  health-check result, switch-workflow state, event status, incident
+  severity, permission.
+- `AdminAccessPage.tsx` — access mode, user status, MFA state, RBAC
+  decision, provider access level, audit outcome, risk level.
+- `AuthSessionPage.tsx` — session state, environment status, step-up
+  method availability, RBAC decision, audit event status. Confirmed live:
+  `READ_ONLY`/`LOCKED`/`ALLOW`/`DENY` now render as *"Lecture seule"*/
+  *"Verrouillé"*/*"Autorisé"*/*"Refusé"*.
+
+Commits `673dd2a` (labels.ts + LiveTrading + StrategyCenter) and `e9d1c82`
+(the four screens above).
+
+**Not yet covered** (flagged by the audit, not yet migrated — next up if
+time allows): `RiskCenterPage.tsx` and `LiveSignalDetailPage.tsx` surface
+raw backend `reasonCode` strings directly as user-facing copy.
+
+### 3.4 Note: concurrent modifications to unrelated files
+
+While working, `git status` repeatedly showed uncommitted changes
+accumulating in `mcp_gpt_desk/src/research/*` and
+`mcp_gpt_desk/test/*` — files I never touched this session. This looks
+like another automated process (a Codex/AI worker, per this repo's
+existing autonomous-worker setup) actively modifying the research
+pipeline concurrently with this session. I left these files alone and
+did not include them in any commit — worth checking what that process is
+doing when you're back, since it's editing the working tree at the same
+time as this session.
