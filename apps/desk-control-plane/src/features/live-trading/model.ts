@@ -20,6 +20,7 @@ export type LiveTradingModel = {
     supportedTimeframes: readonly string[];
     points: NonNullable<LiveTradingView["marketSeries"]>["points"];
   };
+  watchlist: NonNullable<LiveTradingView["watchlist"]>;
   strategyInstances: LiveTradingView["canonicalRuntime"]["activeStrategyInstances"];
   latestSignal: LiveTradingView["signals"][number] | null;
   latestContextDecision: LiveTradingView["canonicalRuntime"]["aiContextGate"][number] | null;
@@ -28,7 +29,16 @@ export type LiveTradingModel = {
   gateBlockedReason: string;
   provider: LiveTradingView["providers"][number] | null;
   reconciliation: { status: string; detail: string; asOf: string; expected: Record<string, unknown> | null; broker: Record<string, unknown> | null; mismatchCount: number | null };
-  performance: { availability: string; totalR: number | null; drawdownR: number | null; reason: string; sourceType: string; sampleSize: number | null };
+  performance: {
+    availability: string;
+    totalR: number | null;
+    drawdownR: number | null;
+    reason: string;
+    sourceType: string;
+    sampleSize: number | null;
+    hitRatePct: number | null;
+    series: readonly { sequence: number; at: string; resultR: number; cumulativeR: number; drawdownR: number }[];
+  };
 };
 
 export type LiveTradingEnvelope = ViewEnvelope<LiveTradingView>;

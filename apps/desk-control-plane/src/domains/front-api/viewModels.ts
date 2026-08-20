@@ -434,6 +434,8 @@ export type LiveTradingView = {
       lastEvaluationAt: string;
       nextEvaluationAt: string;
       scheduler: unknown;
+      confidence: number | null;
+      confidenceSourceSignalId: string | null;
     }[];
     latestSignals: readonly LiveTradingView["signals"][number][];
     aiContextGate: readonly {
@@ -475,6 +477,14 @@ export type LiveTradingView = {
     antiLookahead?: boolean;
     reason?: string;
   };
+  watchlist?: readonly {
+    symbol: string;
+    last: number | null;
+    changePct: number | null;
+    trend: readonly number[];
+    asOf: string;
+    availability: string;
+  }[];
   macroSession?: Record<string, unknown>;
   reconciliation?: {
     availability: string;
@@ -493,6 +503,14 @@ export type LiveTradingView = {
     dailyR: number | null;
     drawdownR: number | null;
     sampleSize: number | null;
+    hitRatePct: number | null;
+    series: readonly {
+      sequence: number;
+      at: string;
+      resultR: number;
+      cumulativeR: number;
+      drawdownR: number;
+    }[];
     asOf: string;
   };
   signals: readonly {

@@ -52,15 +52,63 @@ function knownReconciliation(latest, states) {
   };
 }
 
+export function liveInstanceConfidence(instances = [], signals = [], nowIso = null) {
+  const nowMs = Date.parse(nowIso || "");
+  const byInstance = new Map();
+  for (const signal of signals) {
+    const key = signal.strategyInstanceId;
+    if (!key || key === "unavailable") continue;
+    const expiresMs = Date.parse(signal.expiresAt || "");
+    if (Number.isFinite(nowMs) && Number.isFinite(expiresMs) && expiresMs <= nowMs) continue;
+    const createdMs = Date.parse(signal.createdAt || "");
+    const existing = byInstance.get(key);
+    if (!existing || (Number.isFinite(createdMs) && createdMs > existing.createdMs)) {
+      byInstance.set(key, { signalId: signal.signalId, confidence: signal.confidence, createdMs: Number.isFinite(createdMs) ? createdMs : -Infinity });
+    }
+  }
+  return rows(instances).map((instance) => {
+    const match = byInstance.get(instance.strategyInstanceId);
+    return { ...instance, confidence: match ? match.confidence : null, confidenceSourceSignalId: match ? match.signalId : null };
+  });
+}
+
+export function liveWatchlist(liveMarketSnapshot = null) {
+  const instruments = liveMarketSnapshot?.instruments || {};
+  return Object.values(instruments)
+    .filter((item) => item && item.symbol)
+    .map((item) => ({
+      symbol: text(item.symbol, "unavailable"),
+      last: nullableMetric(item.latest_close),
+      changePct: nullableMetric(item.change_pct),
+      trend: rows(item.intraday_series).slice(-30).map((point) => nullableMetric(point.close)).filter((value) => value !== null),
+      asOf: text(item.latest_timestamp_paris, "unavailable"),
+      availability: text(item.availability, "UNAVAILABLE").toUpperCase(),
+    }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol));
+}
+
 export function livePerformanceR(performance = null) {
-  if (!performance) return { availability: "UNAVAILABLE", sourceType: "NONE", totalR: null, dailyR: null, drawdownR: null, sampleSize: null, asOf: null };
+  if (!performance) return { availability: "UNAVAILABLE", sourceType: "NONE", totalR: null, dailyR: null, drawdownR: null, sampleSize: null, hitRatePct: null, series: [], asOf: null };
   const totals = performance.totals || performance.summary || {};
+  const winRate = nullableMetric(totals.winRate ?? totals.win_rate);
   return {
     availability: "KNOWN", sourceType: text(performance.sourceType || performance.source_type, "RESEARCH").toUpperCase(),
     totalR: nullableMetric(totals.totalR ?? totals.total_r), dailyR: nullableMetric(totals.dailyR ?? totals.daily_r),
     drawdownR: nullableMetric(performance.summary?.max_drawdown_R ?? totals.max_drawdown_r), sampleSize: nullableMetric(totals.trades ?? totals.trade_count),
+    hitRatePct: winRate === null ? null : Math.round(winRate * 1000) / 10,
+    series: liveEquitySeries(performance.equity),
     asOf: text(performance.asOf || performance.generated_at_utc, "unavailable"),
   };
+}
+
+function liveEquitySeries(equity) {
+  return rows(equity).slice(-60).map((point) => ({
+    sequence: nullableMetric(point.sequence) ?? 0,
+    at: text(point.at || point.date, "unavailable"),
+    resultR: nullableMetric(point.resultR ?? point.result_R ?? point.result_r) ?? 0,
+    cumulativeR: nullableMetric(point.cumulativeR ?? point.cumulative_R ?? point.cumulative_r) ?? 0,
+    drawdownR: nullableMetric(point.drawdownR ?? point.drawdown_R ?? point.drawdown_r) ?? 0,
+  }));
 }
 
 export function liveAssistantAdvisory({ assistantRuntime, ai, advisorySummary, nowIso }) {

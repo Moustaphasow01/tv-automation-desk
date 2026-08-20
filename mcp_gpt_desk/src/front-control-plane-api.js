@@ -30,6 +30,7 @@ import {
   isCanonicalFillEvent,
   liveAssistantAdvisory,
   liveArbitrations,
+  liveInstanceConfidence,
   liveLegacyHistory,
   liveMacroSession,
   livePerformanceR,
@@ -38,6 +39,7 @@ import {
   liveSession,
   liveSummary,
   liveTimeline as canonicalLiveTimeline,
+  liveWatchlist,
   marketSessionState,
   nullableMetric,
 } from "./front-live-trading-support.js";
@@ -149,7 +151,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "strategy-center": ["strategy", "research"],
   "strategy-detail": ["strategy", "research", "execution", "incidents"],
   "strategy-compare": ["strategy", "research", "simulation-runs"],
-  "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "live-session", "front-macro", "front-news", "assistant-runtime", "performance", "health"],
+  "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "live-market-snapshot", "live-session", "front-macro", "front-news", "assistant-runtime", "performance", "health"],
   "live-signal-detail": ["execution", "strategy", "portfolio-risk", "ai-context"],
   "order-detail": ["execution"],
   "position-detail": ["execution"],
@@ -282,6 +284,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     "portfolio-risk": () => source("portfolio-risk", () => buildPortfolioRiskOverviewFromStore(store, query)),
     "ai-context": () => source("ai-context", () => buildAiContextOverviewFromStore(store, query)),
     "market-series": () => source("market-series", () => call(store, "getFrontMarketSeries", query)),
+    "live-market-snapshot": () => source("live-market-snapshot", () => call(store, "getFrontLiveMarketSnapshot", query)),
     sessions: () => source("sessions", async () => {
       const scopes = ["asia_open", "ny_open"].map((session) => ({
         ...normalizeFrontApiScope({ ...query, session }),
@@ -329,6 +332,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     risk: loaded["portfolio-risk"] ?? null,
     ai: loaded["ai-context"] ?? null,
     marketSeries: loaded["market-series"] ?? null,
+    liveMarketSnapshot: loaded["live-market-snapshot"] ?? null,
     sessions: loaded.sessions ?? null,
     liveSession: loaded["live-session"] ?? null,
     macro: loaded["front-macro"] ?? null,
@@ -909,7 +913,7 @@ function observabilityPolicyItems(obsPolicy) {
   })];
 }
 
-function liveTrading({ execution, strategy, incidents, ai, risk, health, marketSeries, liveSession: currentLiveSession, macro, news, assistantRuntime, performance: operationsPerformance, query, warnings, nowIso, actor }) {
+function liveTrading({ execution, strategy, incidents, ai, risk, health, marketSeries, liveMarketSnapshot, liveSession: currentLiveSession, macro, news, assistantRuntime, performance: operationsPerformance, query, warnings, nowIso, actor }) {
   const executionValue = execution || {};
   const safety = executionValue.safety || {};
   const performance = executionValue.performance || {};
@@ -931,6 +935,7 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
     nowIso,
     health,
   });
+  const instancesWithConfidence = liveInstanceConfidence(canonicalRuntime.activeStrategyInstances, signals, nowIso);
   const arbitrations = liveArbitrations(executionValue);
   const riskChecks = liveRiskChecks(executionValue);
   appendLiveWarnings({
@@ -946,8 +951,9 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
     session: liveSession({ execution: executionValue, liveSession: currentLiveSession, scope, launchGate, health, marketSeries, marketDataStatus: liveMarketDataStatus }),
     launchGate: publicLaunchGate(launchGate),
     pipeline: pipeline(executionValue, launchGate),
-    canonicalRuntime,
+    canonicalRuntime: { ...canonicalRuntime, activeStrategyInstances: instancesWithConfidence },
     marketSeries: marketSeries || { availability: "UNAVAILABLE", points: [], supportedTimeframes: [], asOf: null, source: "market_candles" },
+    watchlist: liveWatchlist(liveMarketSnapshot),
     macroSession: liveMacroSession({ macro, news, scope, marketSeries }),
     signals,
     arbitrations,

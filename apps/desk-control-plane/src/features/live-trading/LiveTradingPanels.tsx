@@ -12,11 +12,23 @@ export function LivePanel({ title, className = "", action, children }: { title: 
 }
 
 export function MarketContextPanel({ model }: { model: LiveTradingModel }) {
-  return <LivePanel title="Market Context" className="lt-panel--market"><table><thead><tr><th>Source</th><th>Rows</th><th>Dernier</th></tr></thead><tbody>{model.source.canonicalRuntime.authoritativeSources.slice(0, 5).map((source) => <tr key={source.source}><td>{source.source.replaceAll("_", " ")}</td><td>{source.rows}</td><td>{displayTime(source.latestAt)}</td></tr>)}</tbody></table><TruthEmpty when={!model.source.canonicalRuntime.authoritativeSources.length} status="SOURCES NON PUBLIÉES" label="Aucune source autoritaire n'est disponible." /><footer><StatusBadge tone={presentAvailability(model.freshness.marketData).tone}>{presentAvailability(model.freshness.marketData).label}</StatusBadge><span>Fraîcheur de la source de marché</span></footer></LivePanel>;
+  return <LivePanel title="Market Context" className="lt-panel--market"><table><thead><tr><th>Symbol</th><th>Last</th><th>Chg%</th><th>Trend</th></tr></thead><tbody>{model.watchlist.map((item) => <tr key={item.symbol}><td>{item.symbol}</td><td>{item.last === null ? "—" : item.last.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}</td><td className={item.changePct === null ? "" : `lt-tone--${item.changePct >= 0 ? "success" : "danger"}`}>{item.changePct === null ? "—" : `${item.changePct >= 0 ? "+" : ""}${item.changePct.toFixed(2)}%`}</td><td><Sparkline values={item.trend} positive={(item.changePct ?? 0) >= 0} /></td></tr>)}</tbody></table><TruthEmpty when={!model.watchlist.length} status="WATCHLIST NON PUBLIÉE" label="Aucun instantané de marché live n'est disponible." /><footer><StatusBadge tone={presentAvailability(model.freshness.marketData).tone}>{presentAvailability(model.freshness.marketData).label}</StatusBadge><span>Fraîcheur de la source de marché</span></footer></LivePanel>;
+}
+
+function Sparkline({ values, positive }: { values: readonly number[]; positive: boolean }) {
+  if (values.length < 2) return <span className="lt-sparkline-empty">—</span>;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(max - min, 0.0001);
+  const width = 64;
+  const height = 22;
+  const step = width / (values.length - 1);
+  const points = values.map((value, index) => `${index * step},${height - ((value - min) / span) * (height - 4) - 2}`).join(" ");
+  return <svg className={`lt-sparkline ${positive ? "is-positive" : "is-negative"}`} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true"><polyline points={points} fill="none" /></svg>;
 }
 
 export function StrategyInstancesPanel({ model }: { model: LiveTradingModel }) {
-  return <LivePanel title="Active Strategy Instances" className="lt-panel--strategies"><table><thead><tr><th>Instance</th><th>Status</th><th>Next eval</th></tr></thead><tbody>{model.strategyInstances.slice(0, 4).map((item) => <tr key={item.strategyInstanceId}><td><Link to={`/strategies/${encodeURIComponent(item.strategyDefinitionId)}?instanceId=${encodeURIComponent(item.strategyInstanceId)}`}>{shortId(item.strategyInstanceId)}</Link></td><td><StatusBadge tone={presentRuntimeStatus(item.runtimeState).tone}>{presentRuntimeStatus(item.runtimeState).label}</StatusBadge></td><td>{item.runtimeState === "MARKET_CLOSED" ? "À la réouverture" : displayTime(item.nextEvaluationAt)}</td></tr>)}</tbody></table><TruthEmpty when={!model.strategyInstances.length} status="AUCUNE INSTANCE ACTIVE" label="Aucune Strategy Instance active n'est publiée par le registre." /></LivePanel>;
+  return <LivePanel title="Active Strategy Instances" className="lt-panel--strategies"><table><thead><tr><th>Instance</th><th>Status</th><th>Next eval</th><th>Confidence</th></tr></thead><tbody>{model.strategyInstances.slice(0, 4).map((item) => <tr key={item.strategyInstanceId}><td><Link to={`/strategies/${encodeURIComponent(item.strategyDefinitionId)}?instanceId=${encodeURIComponent(item.strategyInstanceId)}`}>{shortId(item.strategyInstanceId)}</Link></td><td><StatusBadge tone={presentRuntimeStatus(item.runtimeState).tone}>{presentRuntimeStatus(item.runtimeState).label}</StatusBadge></td><td>{item.runtimeState === "MARKET_CLOSED" ? "À la réouverture" : displayTime(item.nextEvaluationAt)}</td><td>{typeof item.confidence !== "number" || Number.isNaN(item.confidence) ? <span className="lt-confidence-empty" title="Aucun signal actif pour cette instance">—</span> : <span className="lt-confidence-chip" title="Confiance du dernier signal actif de cette instance">{Math.round(item.confidence)}%</span>}</td></tr>)}</tbody></table><TruthEmpty when={!model.strategyInstances.length} status="AUCUNE INSTANCE ACTIVE" label="Aucune Strategy Instance active n'est publiée par le registre." /></LivePanel>;
 }
 
 export function MacroSessionPanel({ model }: { model: LiveTradingModel }) {
@@ -72,7 +84,24 @@ export function AuditTimelinePanel({ model }: { model: LiveTradingModel }) {
 }
 
 export function PerformancePanel({ model }: { model: LiveTradingModel }) {
-  return <LivePanel title="Research / Performance (Today)" className="lt-panel--performance"><div className="lt-performance-metrics"><span><small>Total R</small><strong>{model.performance.totalR === null ? "—" : `${model.performance.totalR.toFixed(2)}R`}</strong></span><span><small>Drawdown R</small><strong>{model.performance.drawdownR === null ? "—" : `${model.performance.drawdownR.toFixed(2)}R`}</strong></span><span><small>Sample</small><strong>{displayValue(model.performance.sampleSize)}</strong></span></div><div className="lt-performance-empty"><strong>{presentAvailability(model.performance.availability).label} · {presentGeneric(model.performance.sourceType).label}</strong><span>{model.performance.reason}</span></div></LivePanel>;
+  const perf = model.performance;
+  const hasSeries = perf.series.length > 0;
+  return <LivePanel title="Research / Performance (Today)" className="lt-panel--performance"><div className="lt-performance-metrics"><span><small>Sample</small><strong>{displayValue(perf.sampleSize)}</strong></span><span><small>Hit Rate</small><strong>{perf.hitRatePct === null ? "—" : `${perf.hitRatePct.toFixed(1)}%`}</strong></span><span><small>Total R</small><strong>{perf.totalR === null ? "—" : `${perf.totalR.toFixed(2)}R`}</strong></span><span><small>Drawdown R</small><strong>{perf.drawdownR === null ? "—" : `${perf.drawdownR.toFixed(2)}R`}</strong></span></div>{hasSeries ? <EquityCurve series={perf.series} /> : <div className="lt-performance-empty"><strong>{presentAvailability(perf.availability).label} · {presentGeneric(perf.sourceType).label}</strong><span>{perf.reason}</span></div>}</LivePanel>;
+}
+
+function EquityCurve({ series }: { series: LiveTradingModel["performance"]["series"] }) {
+  const values = series.map((point) => point.cumulativeR);
+  const min = Math.min(0, ...values);
+  const max = Math.max(0, ...values);
+  const span = Math.max(max - min, 0.0001);
+  const width = 600;
+  const height = 120;
+  const step = series.length > 1 ? width / (series.length - 1) : 0;
+  const y = (value: number) => height - ((value - min) / span) * (height - 12) - 6;
+  const points = series.map((point, index) => `${index * step},${y(point.cumulativeR)}`).join(" ");
+  const zeroY = y(0);
+  const latest = values.at(-1) ?? 0;
+  return <div className="lt-equity-curve"><svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Courbe R cumulé, ${series.length} points, dernière valeur ${latest.toFixed(2)}R`} preserveAspectRatio="none"><line className="lt-equity-curve__zero" x1={0} x2={width} y1={zeroY} y2={zeroY} /><polyline className={`lt-equity-curve__line ${latest >= 0 ? "is-positive" : "is-negative"}`} points={points} fill="none" /></svg></div>;
 }
 
 export function JarvisPanel({ model }: { model: LiveTradingModel }) {

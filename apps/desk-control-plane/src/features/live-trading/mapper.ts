@@ -35,6 +35,7 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
       supportedTimeframes: data.marketSeries?.supportedTimeframes ?? [],
       points: data.marketSeries?.points ?? [],
     },
+    watchlist: data.watchlist ?? [],
     strategyInstances: runtime.activeStrategyInstances,
     latestSignal,
     latestContextDecision: runtime.aiContextGate[0] ?? null,
@@ -65,6 +66,8 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
       reason: performanceContract?.reason || "Aucune série de performance live officielle n'est disponible.",
       sourceType: data.performanceR?.sourceType ?? "NONE",
       sampleSize: data.performanceR?.sampleSize ?? null,
+      hitRatePct: data.performanceR?.hitRatePct ?? null,
+      series: data.performanceR?.series ?? [],
     },
   };
 }

@@ -229,6 +229,13 @@
 .lt-market-chart__candles .is-up line, .lt-market-chart__candles .is-up rect { stroke: #20d39b; fill: #20d39b; }
 .lt-market-chart__candles .is-down line, .lt-market-chart__candles .is-down rect { stroke: #f05c68; fill: #f05c68; }
 .lt-market-chart__vwap { stroke: #f3b54a; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.lt-sparkline { width: 64px; height: 22px; display: block; }
+.lt-sparkline polyline { stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.lt-sparkline.is-positive polyline { stroke: var(--lt-green); }
+.lt-sparkline.is-negative polyline { stroke: var(--lt-red); }
+.lt-sparkline-empty { color: var(--lt-muted); }
+.lt-confidence-chip { display: inline-flex; min-height: 17px; align-items: center; padding: 0 6px; border-radius: 3px; background: rgba(32,211,155,.14); color: var(--lt-green); font-size: 12px; font-weight: 700; }
+.lt-confidence-empty { color: var(--lt-muted); }
 .lt-market-chart__level line { stroke-width: 1; vector-effect: non-scaling-stroke; }
 .lt-market-chart__level text { font-size: 15px; font-weight: 700; vector-effect: non-scaling-stroke; }
 .lt-market-chart__level--success line { stroke: #20d39b; }
@@ -267,7 +274,8 @@
 .lt-authority-stack small { color: var(--lt-muted); font-size: 12px; }
 .lt-authority-stack strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .lt-authority-stack p { margin: 0; overflow: hidden; color: var(--lt-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.lt-risk-comparison, .lt-performance-metrics { display: grid; grid-template-columns: repeat(3,1fr); border-top: 1px solid var(--lt-border); }
+.lt-risk-comparison { display: grid; grid-template-columns: repeat(3,1fr); border-top: 1px solid var(--lt-border); }
+.lt-performance-metrics { display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid var(--lt-border); }
 .lt-risk-comparison span, .lt-performance-metrics span { display: grid; gap: 3px; align-content: center; padding: 0 8px; border-right: 1px solid var(--lt-border-soft); }
 .lt-risk-comparison strong, .lt-performance-metrics strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -335,6 +343,12 @@
 .lt-performance-empty { display: grid; place-content: center; gap: 5px; padding: 9px; text-align: center; }
 .lt-performance-empty strong { color: var(--lt-amber); font-size: 12px; }
 .lt-performance-empty span { max-width: 38ch; color: var(--lt-muted); font-size: 12px; }
+.lt-equity-curve { min-height: 0; padding: 8px; }
+.lt-equity-curve svg { width: 100%; height: 100%; display: block; }
+.lt-equity-curve__zero { stroke: var(--lt-border-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.lt-equity-curve__line { stroke-width: 1.75; vector-effect: non-scaling-stroke; }
+.lt-equity-curve__line.is-positive { stroke: var(--lt-green); }
+.lt-equity-curve__line.is-negative { stroke: var(--lt-red); }
 .lt-panel--jarvis .lt-panel__body { display: grid; grid-template-rows: minmax(0,1fr) 25px; }
 .lt-jarvis { display: grid; grid-template-columns: 25px minmax(0,1fr); gap: 7px; align-content: start; padding: 10px; }
 .lt-jarvis > svg { width: 20px; height: 20px; color: var(--lt-purple); }
