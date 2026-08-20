@@ -31,29 +31,34 @@ import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { vnextRoutes, type VNextNavGroup } from "@/app/routes";
 import { NAV_GROUP_LABELS } from "@/shell/navigation";
 
+type SidebarSection = "Pilotage" | "Stratégie" | "Exécution" | "Supervision" | "Système";
+
 type DeskNavItem = {
   label: string;
   to: string;
   icon: IconType;
   badge?: string;
   group: VNextNavGroup;
+  section: SidebarSection;
 };
 
+const SIDEBAR_SECTIONS: readonly SidebarSection[] = ["Pilotage", "Stratégie", "Exécution", "Supervision", "Système"];
+
 const deskNavItems: readonly DeskNavItem[] = [
-  { label: "Command Center", to: "/command-center", icon: FaTh, group: "pilotage" },
-  { label: "Live Trading", to: "/live", icon: FaBolt, group: "live" },
-  { label: "Strategy Center", to: "/strategies", icon: FaListAlt, group: "strategy" },
-  { label: "Research Lab", to: "/research", icon: FaFlask, group: "research" },
-  { label: "Replay", to: "/replay", icon: FaPlayCircle, group: "replay" },
-  { label: "Performance", to: "/performance", icon: FaChartBar, group: "performance" },
-  { label: "Portfolio", to: "/portfolio", icon: FaWallet, group: "execution" },
-  { label: "Risk Center", to: "/risk", icon: FaShieldAlt, group: "execution" },
-  { label: "Orders", to: "/orders", icon: FaFileInvoiceDollar, group: "execution" },
-  { label: "Execution", to: "/execution/providers", icon: FaProjectDiagram, group: "execution" },
-  { label: "Incidents", to: "/execution/incidents", icon: FaExclamationTriangle, group: "operations" },
-  { label: "Audit", to: "/events", icon: FaClipboardList, group: "operations" },
-  { label: "Jarvis", to: "/jarvis", icon: FaRobot, group: "governance" },
-  { label: "Settings", to: "/settings", icon: FaCog, group: "governance" },
+  { label: "Command Center", to: "/command-center", icon: FaTh, group: "pilotage", section: "Pilotage" },
+  { label: "Live Trading", to: "/live", icon: FaBolt, group: "live", section: "Pilotage" },
+  { label: "Strategy Center", to: "/strategies", icon: FaListAlt, group: "strategy", section: "Stratégie" },
+  { label: "Research Lab", to: "/research", icon: FaFlask, group: "research", section: "Stratégie" },
+  { label: "Replay", to: "/replay", icon: FaPlayCircle, group: "replay", section: "Stratégie" },
+  { label: "Performance", to: "/performance", icon: FaChartBar, group: "performance", section: "Stratégie" },
+  { label: "Portfolio", to: "/portfolio", icon: FaWallet, group: "execution", section: "Exécution" },
+  { label: "Risk Center", to: "/risk", icon: FaShieldAlt, group: "execution", section: "Exécution" },
+  { label: "Orders", to: "/orders", icon: FaFileInvoiceDollar, group: "execution", section: "Exécution" },
+  { label: "Execution", to: "/execution/providers", icon: FaProjectDiagram, group: "execution", section: "Exécution" },
+  { label: "Incidents", to: "/execution/incidents", icon: FaExclamationTriangle, group: "operations", section: "Supervision" },
+  { label: "Audit", to: "/events", icon: FaClipboardList, group: "operations", section: "Supervision" },
+  { label: "Jarvis", to: "/jarvis", icon: FaRobot, group: "governance", section: "Système" },
+  { label: "Settings", to: "/settings", icon: FaCog, group: "governance", section: "Système" },
 ];
 
 export function DeskShell() {
@@ -96,6 +101,9 @@ export function DeskShell() {
   const visibleDeskNavItems = isGoldenLiveTrading
     ? deskNavItems.filter((item) => !["/performance", "/events"].includes(item.to))
     : deskNavItems;
+  const visibleNavSections = SIDEBAR_SECTIONS
+    .map((section) => ({ section, items: visibleDeskNavItems.filter((item) => item.section === section) }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <div className={`desk-app-shell${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isGoldenLiveTrading && liveSidebarCollapsed ? " desk-app-shell--live-collapsed" : ""}`}>
@@ -109,12 +117,17 @@ export function DeskShell() {
           </div>
         </div>
         <nav className="sidebar-nav" tabIndex={0} aria-label="Navigation principale">
-          {visibleDeskNavItems.map((item) => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
-              <item.icon className="nav-icon" aria-hidden="true" />
-              <span>{item.label}</span>
-              {item.badge ? <small>{item.badge}</small> : null}
-            </NavLink>
+          {visibleNavSections.map(({ section, items }) => (
+            <div className="sidebar-nav-group" key={section}>
+              <h2>{section}</h2>
+              {items.map((item) => (
+                <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+                  <item.icon className="nav-icon" aria-hidden="true" />
+                  <span>{item.label}</span>
+                  {item.badge ? <small>{item.badge}</small> : null}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         {isGoldenLiveTrading ? <button className="live-sidebar-collapse" type="button" aria-label={liveSidebarCollapsed ? "Déployer la navigation" : "Réduire la navigation"} aria-pressed={liveSidebarCollapsed} onClick={() => setLiveSidebarCollapsed((value) => !value)}>{liveSidebarCollapsed ? <FaAngleDoubleRight /> : <FaAngleDoubleLeft />}<span>{liveSidebarCollapsed ? "Expand" : "Collapse"}</span></button> : null}
