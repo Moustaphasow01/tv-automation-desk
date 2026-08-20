@@ -20,6 +20,13 @@ section.
 - Section 3.4 flags uncommitted, unrelated changes accumulating in
   `mcp_gpt_desk/src/research/*` from what looks like a concurrent automated
   process — not something I touched, worth a look.
+- **Section 4 (new):** rebuilt Live Trading toward the reference mockup you
+  shared, backend included — real market watchlist, hit-rate/cumulative-R
+  chart, per-instance signal confidence now wired end-to-end and verified
+  against the live local backend (commits `65bb847`, `aff6e9d`). One gap
+  (second take-profit target) deliberately left unwired — the join needed
+  to attribute it correctly wasn't confirmed reliable, and a wrong trade
+  price is worse than a missing one.
 
 ---
 
@@ -310,3 +317,96 @@ no conflict), so no action was needed from me, but it's worth knowing two
 agents were writing to the same branch at the same time this session —
 and it may also explain the mysterious recurring `Test-DeskLocalHealth.ps1`
 process noted in section 1 (theory (b) there).
+
+---
+
+## 4. Live Trading redesign against the user-provided reference mockup
+
+The user shared a screenshot of the original target design for Live
+Trading (the mockup Codex was meant to implement) and asked for the
+screen to be rebuilt toward it, backend included. Commits `65bb847`
+(frontend structural fixes) and `aff6e9d` (backend data wiring).
+
+### 4.1 Frontend structural fixes (commit `65bb847`)
+
+Three data-backed gaps closed using data the frontend already had:
+- Instrument chart now overlays Entry/Stop/Target as labeled dashed price
+  lines (from the pending OrderIntent's existing limitPrice/stopPrice/
+  targetPrice — previously only shown as plain text elsewhere, never
+  drawn on the chart).
+- Position Reconciliation: replaced the raw `<pre>{key: value}</pre>` JSON
+  dump with a proper two-column table per side plus a circular sync/diff
+  status badge.
+- Human Execution Gate: added Initiated By / Requested At / Expires In
+  (live countdown) directly on the main panel.
+
+### 4.2 Backend evolution (commit `aff6e9d`)
+
+Investigated where the remaining mockup gaps' data actually lived in the
+backend before writing anything (see the dispatched investigation — full
+findings not reproduced here, only the outcome). Three of four gaps had
+real data sitting unused elsewhere in the backend; wired all three in:
+
+- **Watchlist** (`liveWatchlist()` in `front-live-trading-support.js`):
+  `getFrontLiveMarketSnapshot()` already computed per-symbol
+  last/change%/intraday-series for MNQ, MES, CL, NVDA, AAPL, MSFT, TSLA,
+  SMH, SOXX — used only by the Sessions view until now. Added as a
+  `live-trading` resource dependency, replaced Market Context's old
+  pipeline-health table (which was showing internal source names under a
+  misleading "Market Context" label) with the real watchlist + sparklines.
+  **Note:** the mockup's exact symbol list (adds VIX, QQQ) isn't fully
+  covered — those two aren't in the configured instrument specs and I did
+  not confirm real market-feed data exists for them, so they're left out
+  rather than added blind. In the local dev DB only MNQ and MES currently
+  have data; the other 7 configured symbols return no rows there (expected
+  for a dev database, not a bug).
+- **Hit-rate + cumulative-R chart**: `getOperationsPerformance()` already
+  returns `totals.winRate` and a proper cumulative-R equity series, but
+  `livePerformanceR()` was silently dropping both. Extended it to surface
+  `hitRatePct` and a capped 60-point series; added a cumulative-R
+  sparkline to the Performance panel.
+- **Per-instance confidence**: no direct field exists on strategy
+  instances. Derived it (`liveInstanceConfidence()`) by joining each
+  active instance to its own most recent **non-expired** signal's
+  confidence — both already loaded in the same view-builder call, joined
+  on `strategyInstanceId` (the same key used throughout this codebase).
+  Returns `null` (rendered as "—") when an instance has no current active
+  signal, rather than showing a stale number.
+- **Explicitly not attempted**: a second take-profit target on the order
+  intent. The data exists (`setup.take_profit_2`/`tp2` in the session/
+  thesis domain, confirmed via `front-session-projection.js`) but wiring
+  it requires a new resource dependency plus a join key between an order
+  intent and its originating setup that I could not confirm is reliable.
+  Getting a trade price wrong is worse than omitting it — left for a
+  follow-up with more careful backend investigation rather than guessed
+  at here.
+
+### 4.3 Verification
+
+The local `api` Docker container (`tv-automation-preprod-api-1`) runs
+from a built image, not a live source mount — had to `docker compose
+build api && docker compose up -d api` to pick up the backend changes
+before they'd show up (worth knowing for next time: editing
+`mcp_gpt_desk/src/*.js` alone does nothing to the running local backend
+until it's rebuilt). Verified via direct `fetch()` against the running
+endpoint, not just type-checks:
+- Watchlist: real MNQ/MES quotes + 30-point sparklines confirmed in the
+  live response.
+- `hitRatePct`/`series`: correctly `null`/`[]` (no closed trades in the
+  local dev DB — honest empty state, not a bug).
+- Confidence: correctly `null` → renders "—" for all 42 currently-active
+  instances (0 active signals in this environment right now, also an
+  honest empty state).
+- Caught and fixed one real bug during verification: the confidence cell
+  briefly rendered `"NaN%"` because the original `=== null` check didn't
+  account for the value arriving as `undefined` from a stale cached
+  response during the container restart window. Fixed to check
+  `typeof === "number"` instead, reverified clean via hard reload.
+- Backend test suite 32/32, frontend suite 173/173, `tsc --noEmit` clean
+  on both sides, throughout.
+- The `tv-automation-preprod-api-1` container shows Docker health status
+  "(unhealthy)" — confirmed this predates my changes (it was already
+  unhealthy the first time I checked, before touching anything) and the
+  API demonstrably serves correct requests despite the label. Not
+  something I chased down — out of scope for this task, flagging it here
+  in case it's actually meaningful and worth a separate look.
