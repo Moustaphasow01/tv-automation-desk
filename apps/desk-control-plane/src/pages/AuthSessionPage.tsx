@@ -15,6 +15,7 @@ import {
 import { DeskButton, ReasonInput, TrackedCommandReceipt } from "@/design-system/actions";
 import { DataTable, MobileDataList } from "@/design-system/data";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import { presentAccessState, presentAvailability, presentDecision, presentPermission, presentQueueStatus } from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useCapabilityCatalog, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -158,12 +159,12 @@ export function AuthSessionPage() {
       />
 
       <section className="operator-kpi-strip" aria-label="Indicateurs Auth Session">
-        <KpiCard label="SESSION" value={data.summary.sessionState} delta={data.summary.authenticated ? "authentifiée" : "inactive"} tone={data.summary.authenticated ? "success" : "danger"} />
+        <KpiCard label="SESSION" value={presentAccessState(data.summary.sessionState).label} delta={data.summary.authenticated ? "authentifiée" : "inactive"} tone={data.summary.authenticated ? "success" : "danger"} />
         <KpiCard label="ENV" value={data.summary.environment} delta={data.summary.readOnly ? "read-only" : "write gated"} tone={data.summary.environment === "LIVE" ? "danger" : "success"} />
         <KpiCard label="EXPIRY" value={`${data.summary.minutesToExpiry} min`} delta={`refresh ${formatTime(data.session.refreshAfterAt)}`} detail={<ProgressBar value={Math.min(100, (data.summary.minutesToExpiry / 90) * 100)} tone="success" />} tone="warning" />
         <KpiCard label="ALLOW" value={`${data.summary.permissionsGranted}`} delta={`${data.summary.permissionsDenied} denied`} tone="info" />
-        <KpiCard label="STEP-UP" value={data.summary.stepUpReady ? "READY" : "BLOCKED"} delta={`${data.stepUp.methods.length} méthodes`} tone={data.summary.stepUpReady ? "success" : "danger"} />
-        <KpiCard label="BROWSER" value={data.session.browserMaterialExposure} delta={data.session.httpOnlySession ? "httpOnly" : "exposed"} tone={data.session.browserMaterialExposure === "NONE" ? "success" : "danger"} />
+        <KpiCard label="STEP-UP" value={data.summary.stepUpReady ? "Prêt" : "Bloqué"} delta={`${data.stepUp.methods.length} méthodes`} tone={data.summary.stepUpReady ? "success" : "danger"} />
+        <KpiCard label="BROWSER" value={data.session.browserMaterialExposure === "NONE" ? "Aucune" : data.session.browserMaterialExposure} delta={data.session.httpOnlySession ? "httpOnly" : "exposed"} tone={data.session.browserMaterialExposure === "NONE" ? "success" : "danger"} />
       </section>
 
       {command || commandError ? (
@@ -181,7 +182,7 @@ export function AuthSessionPage() {
               <strong>{data.principal.displayName}</strong>
               <small>{data.principal.maskedEmail} · {data.principal.userId}</small>
             </div>
-            <StatusBadge tone={data.summary.authenticated ? "success" : "danger"}>{data.summary.sessionState}</StatusBadge>
+            <StatusBadge tone={data.summary.authenticated ? "success" : "danger"}>{presentAccessState(data.summary.sessionState).label}</StatusBadge>
           </div>
           <div className="auth-metric-grid">
             <MetricBox label="Roles" value={data.principal.roles.join(", ")} />
@@ -228,8 +229,8 @@ export function AuthSessionPage() {
               <article key={environment.environment} className={environment.current ? "auth-environment-list__current" : undefined}>
                 <FaDoorOpen />
                 <div><strong>{environment.label}</strong><small>{environment.riskProfile} · {environment.accountIds.join(", ") || "no account"}</small></div>
-                <span>{environment.writeEnabled ? "WRITE" : "READ"}</span>
-                <StatusBadge tone={environmentTone(environment)}>{environment.status}</StatusBadge>
+                <span>{environment.writeEnabled ? "Écriture" : "Lecture"}</span>
+                <StatusBadge tone={environmentTone(environment)}>{presentAccessState(environment.status).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -240,7 +241,7 @@ export function AuthSessionPage() {
           <MobileDataList
             rows={data.permissions}
             rowKey={(row) => row.capability}
-            renderTitle={(row) => `${row.label} · ${row.decision}`}
+            renderTitle={(row) => `${row.label} · ${presentDecision(row.decision).label}`}
             renderMeta={(row) => `${row.domain} · ${row.capability}`}
             renderBody={(row) => `${row.reason} · step-up ${row.requiresStepUp ? "oui" : "non"}`}
           />
@@ -254,7 +255,7 @@ export function AuthSessionPage() {
               <article key={method.methodId}>
                 <FaKey />
                 <div><strong>{method.label}</strong><small>{method.methodId} · {method.lastVerifiedAt ? formatTime(method.lastVerifiedAt) : "non vérifié"}</small></div>
-                <StatusBadge tone={method.state === "AVAILABLE" ? "success" : method.state === "DEGRADED" ? "warning" : "danger"}>{method.state}</StatusBadge>
+                <StatusBadge tone={method.state === "AVAILABLE" ? "success" : method.state === "DEGRADED" ? "warning" : "danger"}>{presentAvailability(method.state).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -269,7 +270,7 @@ export function AuthSessionPage() {
               <li key={`${guard.route}:${guard.capability}`}>
                 <span><FaRoute /></span>
                 <div><strong>{guard.route}</strong><small>{guard.capability} · {guard.reason}</small></div>
-                <StatusBadge tone={decisionTone(guard.decision)}>{guard.decision}</StatusBadge>
+                <StatusBadge tone={decisionTone(guard.decision)}>{presentDecision(guard.decision).label}</StatusBadge>
               </li>
             ))}
           </ol>
@@ -278,7 +279,7 @@ export function AuthSessionPage() {
               <article key={event.eventId}>
                 <FaClock />
                 <div><strong>{event.title}</strong><small>{event.eventType} · {formatTime(event.at)}</small></div>
-                <StatusBadge tone={event.status === "OK" ? "success" : "warning"}>{event.status}</StatusBadge>
+                <StatusBadge tone={event.status === "OK" ? "success" : "warning"}>{presentQueueStatus(event.status).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -289,7 +290,7 @@ export function AuthSessionPage() {
             <FaFingerprint />
             <div>
               <small>Dernière commande auth</small>
-              <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+              <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
@@ -303,7 +304,7 @@ export function AuthSessionPage() {
               <article key={action.actionId} className={action.commandType.includes("logout") ? "auth-action-list__logout" : undefined}>
                 <span>{actionIcon(action)}</span>
                 <div><strong>{action.label}</strong><small>{action.commandType} · {action.impactSummary}</small></div>
-                <StatusBadge tone={permissionTone(action.permission)}>{action.permission}</StatusBadge>
+                <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                 <DeskButton
                   variant={action.criticality === "HIGH" ? "danger" : "primary"}
                   disabled={isActionDisabled(action, reason, stepUpToken) || submittingActionId === action.actionId}
@@ -352,8 +353,8 @@ export function buildAuthSessionCommand(action: AuthAction, reason: string, step
 const permissionColumns = [
   { key: "capability", header: "Capability", render: (row: AuthPermission) => <PermissionCell row={row} /> },
   { key: "domain", header: "Domain", render: (row: AuthPermission) => row.domain },
-  { key: "decision", header: "Decision", render: (row: AuthPermission) => <StatusBadge tone={decisionTone(row.decision)}>{row.decision}</StatusBadge> },
-  { key: "stepup", header: "Step-up", render: (row: AuthPermission) => row.requiresStepUp ? "YES" : "NO" }
+  { key: "decision", header: "Decision", render: (row: AuthPermission) => <StatusBadge tone={decisionTone(row.decision)}>{presentDecision(row.decision).label}</StatusBadge> },
+  { key: "stepup", header: "Step-up", render: (row: AuthPermission) => row.requiresStepUp ? "Oui" : "Non" }
 ] as const;
 
 function PermissionCell({ row }: { row: AuthPermission }) {

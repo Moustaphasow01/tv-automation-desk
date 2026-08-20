@@ -85,6 +85,12 @@ export const presentAvailability = makePresenter({
   ORDER_INTENT_PUBLISHED: { label: "Intention publiée", tone: "info" },
   ACTIVE: { label: "Active", tone: "danger" },
   OFF: { label: "Inactive", tone: "neutral" },
+  NOT_CONFIGURED: { label: "Non configuré", tone: "neutral" },
+  DEMO: { label: "Démo", tone: "info" },
+  STANDBY: { label: "En réserve", tone: "info" },
+  READY: { label: "Prêt", tone: "success" },
+  MISSING: { label: "Manquant", tone: "danger" },
+  DISABLED: { label: "Désactivé", tone: "neutral" },
 });
 
 /** Fraîcheur d'une projection ou d'un flux de données. */
@@ -112,13 +118,22 @@ export const presentSeverity = makePresenter({
   CRITICAL: { label: "Critique", tone: "danger" },
 });
 
-/** Statut d'un item dans une file d'opérations (queue). */
+/** Statut d'un item dans une file d'opérations (missions, événements, gates). */
 export const presentQueueStatus = makePresenter({
   OPERATOR_GATE_REQUIRED: { label: "Validation opérateur requise", tone: "warning" },
   WAITING_EVENT: { label: "En attente d'événement", tone: "info" },
   DLQ: { label: "File d'erreurs", tone: "danger" },
   RETRYING: { label: "Nouvelle tentative…", tone: "warning" },
   DONE: { label: "Terminé", tone: "success" },
+  RUNNING: { label: "En cours", tone: "success" },
+  BLOCKED: { label: "Bloqué", tone: "danger" },
+  PASS: { label: "Validé", tone: "success" },
+  RECEIVED: { label: "Reçu", tone: "success" },
+  EXPECTED: { label: "Attendu", tone: "info" },
+  STALE: { label: "Périmé", tone: "warning" },
+  READY: { label: "Prêt", tone: "success" },
+  OK: { label: "OK", tone: "success" },
+  WATCH: { label: "À surveiller", tone: "warning" },
 });
 
 /** État d'un signal de stratégie dans son cycle de vie. */
@@ -150,6 +165,44 @@ export const presentEventTone = makePresenter({
   INFO: { label: "Info", tone: "accent" },
   WATCH: { label: "À surveiller", tone: "warning" },
   HIGH: { label: "Important", tone: "danger" },
+});
+
+/** Portée d'accès admin d'un opérateur ou d'un groupe de comptes. */
+export const presentAccessState = makePresenter({
+  FULL_ADMIN: { label: "Administration complète", tone: "danger" },
+  READ_ONLY: { label: "Lecture seule", tone: "neutral" },
+  DENIED: { label: "Refusé", tone: "danger" },
+  ACTIVE: { label: "Actif", tone: "success" },
+  LOCKED: { label: "Verrouillé", tone: "danger" },
+  INVITED: { label: "Invité", tone: "info" },
+  REVOKED: { label: "Révoqué", tone: "danger" },
+  REQUIRED: { label: "Requis", tone: "warning" },
+  READY: { label: "Prêt", tone: "success" },
+  EXPIRING: { label: "Expire bientôt", tone: "warning" },
+  AVAILABLE: { label: "Disponible", tone: "success" },
+});
+
+/** Décision d'autorisation RBAC sur une capability (permet/refuse/conditionne). */
+export const presentDecision = makePresenter({
+  ALLOW: { label: "Autorisé", tone: "success" },
+  DENY: { label: "Refusé", tone: "danger" },
+  READ_ONLY: { label: "Lecture seule", tone: "neutral" },
+  STEP_UP_REQUIRED: { label: "Vérification renforcée requise", tone: "warning" },
+});
+
+/** Niveau d'accès d'un opérateur à un provider d'exécution. */
+export const presentAccessLevel = makePresenter({
+  READ: { label: "Lecture", tone: "neutral" },
+  COMMAND: { label: "Commande", tone: "warning" },
+  DENIED: { label: "Refusé", tone: "danger" },
+});
+
+/** Résultat d'un événement d'audit (accès, commande admin). */
+export const presentAuditStatus = makePresenter({
+  ACCEPTED: { label: "Acceptée", tone: "success" },
+  DENIED: { label: "Refusée", tone: "danger" },
+  APPLIED: { label: "Appliquée", tone: "success" },
+  FAILED: { label: "Échouée", tone: "danger" },
 });
 
 /** Fallback générique : humanise n'importe quel code SCREAMING_SNAKE_CASE

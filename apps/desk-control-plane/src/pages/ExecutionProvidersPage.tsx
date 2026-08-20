@@ -17,6 +17,7 @@ import {
 import { DataTable, MobileDataList } from "@/design-system/data";
 import { DeskButton, ReasonInput } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import { presentAvailability, presentGateState, presentPermission, presentQueueStatus, presentSeverity } from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -119,7 +120,7 @@ export function ExecutionProvidersPage() {
                 <header>
                   <FaServer />
                   <div><strong>{provider.label}</strong><small>{provider.providerId} · {provider.adapter}</small></div>
-                  <StatusBadge tone={providerStateTone(provider.state)}>{provider.state}</StatusBadge>
+                  <StatusBadge tone={providerStateTone(provider.state)}>{presentAvailability(provider.state).label}</StatusBadge>
                 </header>
                 <div className="provider-card__metrics">
                   <MetricBox label="Role" value={provider.role} />
@@ -138,7 +139,7 @@ export function ExecutionProvidersPage() {
             rows={data.accounts}
             rowKey={(row) => row.accountId}
             renderTitle={(row) => `${row.label} · ${row.mode}`}
-            renderMeta={(row) => `${row.providerId} · ${row.state}`}
+            renderMeta={(row) => `${row.providerId} · ${presentAvailability(row.state).label}`}
             renderBody={(row) => `${formatCurrency(row.netLiqUsd)} net liq · ${row.openPositions} positions · ${row.ordersToday} ordres`}
           />
           <div className="provider-adapter-list">
@@ -147,7 +148,7 @@ export function ExecutionProvidersPage() {
                 <FaPlug />
                 <div><strong>{adapter.label}</strong><small>{adapter.version} · {adapter.availableStates.join(", ")}</small></div>
                 <span>{adapter.capabilityCount} caps</span>
-                <StatusBadge tone={adapter.installed ? "success" : "danger"}>{adapter.installed ? "INSTALLED" : "MISSING"}</StatusBadge>
+                <StatusBadge tone={adapter.installed ? "success" : "danger"}>{adapter.installed ? "Installé" : "Manquant"}</StatusBadge>
               </article>
             ))}
           </div>
@@ -160,13 +161,13 @@ export function ExecutionProvidersPage() {
                 <FaNetworkWired />
                 <div><strong>{check.label}</strong><small>{check.detail}</small></div>
                 <span>{check.latencyMs} ms</span>
-                <StatusBadge tone={check.status === "PASS" ? "success" : check.status === "WATCH" ? "warning" : "danger"}>{check.status}</StatusBadge>
+                <StatusBadge tone={presentGateState(check.status).tone}>{presentGateState(check.status).label}</StatusBadge>
               </article>
             ))}
           </div>
           <div className="provider-state-cloud" aria-label="États PickMyTrade supportés">
             {pickMyTradeStates.map((state) => (
-              <StatusBadge key={state} tone={state === "DEGRADED" || state === "VALIDATION_PENDING" ? "warning" : state === "DISCONNECTED" || state === "DISABLED" ? "danger" : "accent"}>{state}</StatusBadge>
+              <StatusBadge key={state} tone={state === "DEGRADED" || state === "VALIDATION_PENDING" ? "warning" : state === "DISCONNECTED" || state === "DISABLED" ? "danger" : "accent"}>{presentAvailability(state).label}</StatusBadge>
             ))}
           </div>
         </Card>
@@ -179,7 +180,7 @@ export function ExecutionProvidersPage() {
               <li key={step.stepId}>
                 <span>{step.order}</span>
                 <div><strong>{step.label}</strong><small>{step.detail}</small></div>
-                <StatusBadge tone={workflowTone(step.state)}>{step.state}</StatusBadge>
+                <StatusBadge tone={workflowTone(step.state)}>{presentQueueStatus(step.state).label}</StatusBadge>
               </li>
             ))}
           </ol>
@@ -195,7 +196,7 @@ export function ExecutionProvidersPage() {
               <li key={event.eventId}>
                 <span>{formatTime(event.at)}</span>
                 <div><strong>{event.title}</strong><small>{event.eventType} · {event.correlationId}</small></div>
-                <StatusBadge tone={event.status === "RECEIVED" ? "success" : event.status === "EXPECTED" ? "accent" : "warning"}>{event.status}</StatusBadge>
+                <StatusBadge tone={event.status === "RECEIVED" ? "success" : event.status === "EXPECTED" ? "accent" : "warning"}>{presentQueueStatus(event.status).label}</StatusBadge>
               </li>
             ))}
           </ol>
@@ -204,7 +205,7 @@ export function ExecutionProvidersPage() {
               <Link key={incident.incidentId} to={incident.route}>
                 <FaBroadcastTower />
                 <div><strong>{incident.title}</strong><small>{incident.detail}</small></div>
-                <StatusBadge tone={incident.severity === "HIGH" ? "danger" : "warning"}>{incident.severity}</StatusBadge>
+                <StatusBadge tone={incident.severity === "HIGH" ? "danger" : "warning"}>{presentSeverity(incident.severity).label}</StatusBadge>
               </Link>
             ))}
           </div>
@@ -215,7 +216,7 @@ export function ExecutionProvidersPage() {
             <FaFingerprint />
             <div>
               <small>Dernière commande provider</small>
-              <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+              <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
@@ -229,7 +230,7 @@ export function ExecutionProvidersPage() {
               <article key={action.actionId} className={action.commandType.includes("switch") ? "provider-action-list__switch" : undefined}>
                 <span>{actionIcon(action)}</span>
                 <div><strong>{action.label}</strong><small>{action.commandType} · {action.impactSummary}</small></div>
-                <StatusBadge tone={permissionTone(action.permission)}>{action.permission}</StatusBadge>
+                <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                 <DeskButton
                   variant={action.commandType.includes("switch") ? "warning" : action.permission === "DENIED" ? "danger" : "primary"}
                   disabled={isActionDisabled(action, reason, stepUpToken) || submittingActionId === action.actionId}
@@ -281,7 +282,7 @@ const accountColumns = [
   { key: "mode", header: "Mode", render: (row: ProviderAccount) => row.mode },
   { key: "netliq", header: "Net Liq", align: "right" as const, render: (row: ProviderAccount) => formatCurrency(row.netLiqUsd) },
   { key: "positions", header: "Pos", align: "right" as const, render: (row: ProviderAccount) => row.openPositions },
-  { key: "state", header: "État", render: (row: ProviderAccount) => <StatusBadge tone={row.state === "AVAILABLE" ? "success" : row.state === "RECONCILING" ? "warning" : "danger"}>{row.state}</StatusBadge> }
+  { key: "state", header: "État", render: (row: ProviderAccount) => <StatusBadge tone={row.state === "AVAILABLE" ? "success" : row.state === "RECONCILING" ? "warning" : "danger"}>{presentAvailability(row.state).label}</StatusBadge> }
 ] as const;
 
 function AccountCell({ row }: { row: ProviderAccount }) {

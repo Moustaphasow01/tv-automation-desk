@@ -13,6 +13,7 @@ import {
 } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import { presentPermission, presentQueueStatus, presentSeverity } from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -102,7 +103,7 @@ export function OperationsQueuePage() {
                   <strong>{mission.title}</strong>
                   <small>{mission.ownerAgent} · {mission.currentTask}</small>
                 </div>
-                <StatusBadge tone={stateTone(mission.state)}>{stateLabel(mission.state)}</StatusBadge>
+                <StatusBadge tone={stateTone(mission.state)}>{presentQueueStatus(mission.state).label}</StatusBadge>
                 <small>{mission.retryCount}/{mission.maxRetries}</small>
                 <ProgressBar value={mission.computeBudgetPct} label={`Compute ${mission.computeBudgetPct}%`} tone={mission.computeBudgetPct > 70 ? "warning" : "accent"} />
               </article>
@@ -120,7 +121,7 @@ export function OperationsQueuePage() {
                   <small>{event.correlationId} · {formatTime(event.at)}</small>
                 </div>
                 <b>{event.latencyMs ? `${event.latencyMs}ms` : "—"}</b>
-                <StatusBadge tone={eventTone(event.status)}>{eventLabel(event.status)}</StatusBadge>
+                <StatusBadge tone={eventTone(event.status)}>{presentQueueStatus(event.status).label}</StatusBadge>
               </Link>
             ))}
           </div>
@@ -135,7 +136,7 @@ export function OperationsQueuePage() {
                   <strong>{gate.label}</strong>
                   <small>{gate.reason}</small>
                 </div>
-                <StatusBadge tone={gateTone(gate.state)}>{gateLabel(gate.state)}</StatusBadge>
+                <StatusBadge tone={gateTone(gate.state)}>{presentQueueStatus(gate.state).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -146,7 +147,7 @@ export function OperationsQueuePage() {
                   <strong>{action.label}</strong>
                   <small>{action.commandType} · {action.missionId}</small>
                 </div>
-                <StatusBadge tone={action.permission === "ALLOWED" ? "success" : action.permission === "STEP_UP_REQUIRED" ? "warning" : "danger"}>{permissionLabel(action.permission)}</StatusBadge>
+                <StatusBadge tone={action.permission === "ALLOWED" ? "success" : action.permission === "STEP_UP_REQUIRED" ? "warning" : "danger"}>{presentPermission(action.permission).label}</StatusBadge>
                 <DeskButton
                   variant="primary"
                   disabled={action.permission !== "ALLOWED" || submittingActionId === action.actionId}
@@ -177,7 +178,7 @@ export function OperationsQueuePage() {
                   <small>{item.dlqId} · {item.lastErrorCode}</small>
                 </div>
                 <b>{item.ageMinutes}m</b>
-                <StatusBadge tone={item.retryable ? "warning" : "danger"}>{item.retryable ? "RETRYABLE" : "FINAL"}</StatusBadge>
+                <StatusBadge tone={item.retryable ? "warning" : "danger"}>{item.retryable ? "Réessayable" : "Définitif"}</StatusBadge>
               </article>
             ))}
           </div>
@@ -193,13 +194,13 @@ export function OperationsQueuePage() {
                   <small>{incident.incidentId} · {incident.missionId}</small>
                 </div>
                 <span>{incident.domain}</span>
-                <StatusBadge tone={incidentTone(incident.severity)}>{incident.severity}</StatusBadge>
+                <StatusBadge tone={incidentTone(incident.severity)}>{presentSeverity(incident.severity).label}</StatusBadge>
               </Link>
             ))}
           </div>
           <div className="operations-command-result">
             <small>Dernière commande Operations</small>
-            <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+            <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
             {commandError ? <span className="text-danger">{commandError}</span> : null}
           </div>
         </Card>
@@ -238,19 +239,11 @@ function stateTone(state: OperationsQueueView["missions"][number]["state"]) {
   return "accent";
 }
 
-function stateLabel(state: OperationsQueueView["missions"][number]["state"]) {
-  return state === "OPERATOR_GATE_REQUIRED" ? "OP GATE" : state === "WAITING_EVENT" ? "WAITING" : state;
-}
-
 function eventTone(status: OperationsQueueView["eventFlow"][number]["status"]) {
   if (status === "RECEIVED") return "success";
   if (status === "BLOCKED") return "danger";
   if (status === "STALE") return "warning";
   return "accent";
-}
-
-function eventLabel(status: OperationsQueueView["eventFlow"][number]["status"]) {
-  return status === "EXPECTED" ? "NEXT" : status;
 }
 
 function gateTone(state: OperationsQueueView["policyGates"][number]["state"]) {
@@ -260,18 +253,10 @@ function gateTone(state: OperationsQueueView["policyGates"][number]["state"]) {
   return "accent";
 }
 
-function gateLabel(state: OperationsQueueView["policyGates"][number]["state"]) {
-  return state === "OPERATOR_GATE_REQUIRED" ? "OP GATE" : state;
-}
-
 function incidentTone(severity: OperationsQueueView["incidents"][number]["severity"]) {
   if (severity === "CRITICAL" || severity === "HIGH") return "danger";
   if (severity === "MEDIUM") return "warning";
   return "accent";
-}
-
-function permissionLabel(permission: OperationsQueueView["commandActions"][number]["permission"]) {
-  return permission === "STEP_UP_REQUIRED" ? "STEP-UP" : permission;
 }
 
 function formatTime(value: string) {

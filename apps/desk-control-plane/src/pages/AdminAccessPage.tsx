@@ -17,6 +17,14 @@ import {
 import { DeskButton, ReasonInput } from "@/design-system/actions";
 import { DataTable, MobileDataList } from "@/design-system/data";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import {
+  presentAccessLevel,
+  presentAccessState,
+  presentAuditStatus,
+  presentDecision,
+  presentPermission,
+  presentSeverity
+} from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -92,7 +100,7 @@ export function AdminAccessPage() {
       />
 
       <section className="operator-kpi-strip" aria-label="Indicateurs Admin Access">
-        <KpiCard label="ACCESS" value={data.summary.accessMode} delta={data.currentAccess.readOnlyReason ?? "admin scope"} tone={data.summary.accessMode === "READ_ONLY" ? "warning" : "success"} />
+        <KpiCard label="ACCESS" value={presentAccessState(data.summary.accessMode).label} delta={data.currentAccess.readOnlyReason ?? "admin scope"} tone={data.summary.accessMode === "READ_ONLY" ? "warning" : "success"} />
         <KpiCard label="USERS" value={`${data.summary.users}`} delta={`${data.summary.activeUsers} actifs`} tone="info" />
         <KpiCard label="ROLES" value={`${data.summary.roles}`} delta={`${data.summary.capabilities} capabilities`} tone="accent" />
         <KpiCard label="GROUPS" value={`${data.summary.accountGroups}`} delta="account scopes" tone="success" />
@@ -106,9 +114,9 @@ export function AdminAccessPage() {
           <MobileDataList
             rows={data.users}
             rowKey={(row) => row.userId}
-            renderTitle={(row) => `${row.displayName} · ${row.status}`}
+            renderTitle={(row) => `${row.displayName} · ${presentAccessState(row.status).label}`}
             renderMeta={(row) => `${row.roles.join(", ")} · ${row.maskedEmail}`}
-            renderBody={(row) => `${row.accountGroupIds.join(", ")} · MFA ${row.mfaState}`}
+            renderBody={(row) => `${row.accountGroupIds.join(", ")} · MFA ${presentAccessState(row.mfaState).label}`}
           />
         </Card>
 
@@ -119,7 +127,7 @@ export function AdminAccessPage() {
                 <FaUserCog />
                 <div><strong>{role.label}</strong><small>{role.description} · {role.capabilityCount} caps</small></div>
                 <span>{role.userCount} users</span>
-                <StatusBadge tone={role.riskLevel === "HIGH" ? "danger" : role.riskLevel === "MEDIUM" ? "warning" : "accent"}>{role.riskLevel}</StatusBadge>
+                <StatusBadge tone={role.riskLevel === "HIGH" ? "danger" : role.riskLevel === "MEDIUM" ? "warning" : "accent"}>{presentSeverity(role.riskLevel).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -128,7 +136,7 @@ export function AdminAccessPage() {
               <article key={policy.policyId}>
                 <FaShieldAlt />
                 <div><strong>{policy.label}</strong><small>{policy.scope} · {policy.confirmationMode}</small></div>
-                <StatusBadge tone={policy.status === "PASS" ? "success" : "warning"}>{policy.enabled ? "ENABLED" : "OFF"}</StatusBadge>
+                <StatusBadge tone={policy.status === "PASS" ? "success" : "warning"}>{policy.enabled ? "Activée" : "Désactivée"}</StatusBadge>
               </article>
             ))}
           </div>
@@ -140,7 +148,7 @@ export function AdminAccessPage() {
               <article key={capability.capability}>
                 <FaKey />
                 <div><strong>{capability.capability}</strong><small>{capability.domain} · {capability.reason}</small></div>
-                <StatusBadge tone={decisionTone(capability.decision)}>{capability.decision}</StatusBadge>
+                <StatusBadge tone={decisionTone(capability.decision)}>{presentDecision(capability.decision).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -149,7 +157,7 @@ export function AdminAccessPage() {
               <article key={provider.providerId}>
                 <FaNetworkWired />
                 <div><strong>{provider.label}</strong><small>{provider.providerId} · {provider.environment} · exposure {provider.browserMaterialExposure}</small></div>
-                <StatusBadge tone={provider.access === "DENIED" ? "danger" : provider.access === "COMMAND" ? "warning" : "success"}>{provider.access}</StatusBadge>
+                <StatusBadge tone={provider.access === "DENIED" ? "danger" : provider.access === "COMMAND" ? "warning" : "success"}>{presentAccessLevel(provider.access).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -163,7 +171,7 @@ export function AdminAccessPage() {
               <article key={group.groupId}>
                 <FaLayerGroup />
                 <div><strong>{group.label}</strong><small>{group.environment} · accounts {group.accountIds.join(", ") || "none"} · providers {group.providerIds.join(", ") || "none"}</small></div>
-                <StatusBadge tone={group.status === "ACTIVE" ? "success" : group.status === "READ_ONLY" ? "warning" : "danger"}>{group.status}</StatusBadge>
+                <StatusBadge tone={group.status === "ACTIVE" ? "success" : group.status === "READ_ONLY" ? "warning" : "danger"}>{presentAccessState(group.status).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -179,7 +187,7 @@ export function AdminAccessPage() {
               <li key={event.auditId}>
                 <span>{formatTime(event.at)}</span>
                 <div><strong>{event.action}</strong><small>{event.actorUserId} → {event.target} · {event.correlationId}</small></div>
-                <StatusBadge tone={event.status === "DENIED" || event.status === "FAILED" ? "danger" : "success"}>{event.status}</StatusBadge>
+                <StatusBadge tone={event.status === "DENIED" || event.status === "FAILED" ? "danger" : "success"}>{presentAuditStatus(event.status).label}</StatusBadge>
               </li>
             ))}
           </ol>
@@ -190,7 +198,7 @@ export function AdminAccessPage() {
             <FaFingerprint />
             <div>
               <small>Dernière commande admin</small>
-              <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+              <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
@@ -204,7 +212,7 @@ export function AdminAccessPage() {
               <article key={action.actionId} className={action.permission === "DENIED" ? "admin-action-list__denied" : undefined}>
                 <span>{actionIcon(action)}</span>
                 <div><strong>{action.label}</strong><small>{action.commandType} · {action.impactSummary}</small></div>
-                <StatusBadge tone={permissionTone(action.permission)}>{action.permission}</StatusBadge>
+                <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                 <DeskButton
                   variant={action.criticality === "HIGH" ? "danger" : "primary"}
                   disabled={isActionDisabled(action, reason, stepUpToken) || submittingActionId === action.actionId}
@@ -252,8 +260,8 @@ export function buildAdminAccessCommand(action: AdminAction, reason: string, ste
 const userColumns = [
   { key: "user", header: "Utilisateur", render: (row: AdminUser) => <UserCell row={row} /> },
   { key: "roles", header: "Rôles", render: (row: AdminUser) => row.roles.join(", ") },
-  { key: "mfa", header: "MFA", render: (row: AdminUser) => <StatusBadge tone={row.mfaState === "READY" ? "success" : row.mfaState === "REQUIRED" ? "warning" : "danger"}>{row.mfaState}</StatusBadge> },
-  { key: "status", header: "Status", render: (row: AdminUser) => <StatusBadge tone={row.status === "ACTIVE" ? "success" : row.status === "INVITED" ? "warning" : "danger"}>{row.status}</StatusBadge> }
+  { key: "mfa", header: "MFA", render: (row: AdminUser) => <StatusBadge tone={row.mfaState === "READY" ? "success" : row.mfaState === "REQUIRED" ? "warning" : "danger"}>{presentAccessState(row.mfaState).label}</StatusBadge> },
+  { key: "status", header: "Status", render: (row: AdminUser) => <StatusBadge tone={row.status === "ACTIVE" ? "success" : row.status === "INVITED" ? "warning" : "danger"}>{presentAccessState(row.status).label}</StatusBadge> }
 ] as const;
 
 function UserCell({ row }: { row: AdminUser }) {
