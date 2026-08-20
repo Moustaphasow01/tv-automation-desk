@@ -429,6 +429,7 @@ export type LiveTradingView = {
       strategyInstanceId: string;
       strategyDefinitionId: string;
       strategyVersionId: string;
+      name: string | null;
       executionMode: string;
       runtimeState: string;
       lastEvaluationAt: string;

@@ -371,6 +371,7 @@ function activeStrategyInstanceRows(strategy, nowIso, health = {}) {
   const liveScheduler = rows(health?.operations?.services).find((item) => item?.service_kind === "live_runtime_scheduler");
   const liveSchedulerHealthy = liveScheduler?.healthy === true || ["HEALTHY", "OK", "READY"].includes(String(liveScheduler?.status || "").toUpperCase());
   const definitionByVersion = new Map(rows(strategy?.versions).map((version) => [String(version.strategy_version_id), version.strategy_definition_id]));
+  const nameByDefinition = new Map(rows(strategy?.definitions).map((definition) => [String(definition.strategy_definition_id || definition.strategy_id), definition.name || definition.label]).filter(([, name]) => Boolean(name)));
   return rows(strategy?.instances).filter(isActiveExecutionMode).map((item) => {
     const lastEvaluationAt = text(item.last_evaluation_at_utc, "");
     const lastHeartbeatAt = text(item.last_heartbeat_at || item.last_heartbeat_at_utc, "");
@@ -384,10 +385,12 @@ function activeStrategyInstanceRows(strategy, nowIso, health = {}) {
       : configuredState === "RUNNING" && (schedulerHealth === "NOT_OBSERVED" || !Number.isFinite(observedAgeMs) || observedAgeMs > 20 * 60_000)
         ? "STALE"
         : configuredState;
+    const resolvedDefinitionId = text(item.strategy_definition_id || definitionByVersion.get(String(item.strategy_version_id)), "unavailable");
     return {
       strategyInstanceId: text(item.strategy_instance_id, "unavailable"),
-      strategyDefinitionId: text(item.strategy_definition_id || definitionByVersion.get(String(item.strategy_version_id)), "unavailable"),
+      strategyDefinitionId: resolvedDefinitionId,
       strategyVersionId: text(item.strategy_version_id, "unavailable"),
+      name: nameByDefinition.get(resolvedDefinitionId) || null,
       executionMode: executionModeState(item.execution_mode),
       configuredState,
       runtimeState: effectiveRuntimeState,

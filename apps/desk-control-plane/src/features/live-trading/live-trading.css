@@ -178,7 +178,7 @@
   height: calc(100% - 84px);
   min-width: 0;
   min-height: 0;
-  grid-template-columns: 316px minmax(560px, 1fr) 256px 332px;
+  grid-template-columns: minmax(260px, 1.25fr) minmax(480px, 2.5fr) minmax(210px, 1fr) minmax(260px, 1.25fr);
   grid-template-rows: minmax(0, 2.04fr) minmax(0, 1fr);
   gap: 6px;
   padding: 4px 30px 27px 6px;
@@ -212,7 +212,7 @@
 .lt-definition-list { display: grid; gap: 0; margin: 0; }
 .lt-definition-list div { display: flex; min-height: 23px; align-items: center; justify-content: space-between; gap: 6px; padding: 0 8px; border-bottom: 1px solid rgba(18,42,61,.72); }
 .lt-definition-list dt { color: var(--lt-muted); font-size: 12px; }
-.lt-definition-list dd { margin: 0; overflow: hidden; color: var(--lt-secondary); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.lt-definition-list dd { margin: 0; overflow: hidden; color: var(--lt-secondary); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .lt-definition-list--terms { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .lt-definition-list--terms div:nth-child(odd) { border-right: 1px solid var(--lt-border-soft); }
 
@@ -374,7 +374,7 @@
 
 @media (max-width: 1599px) {
   .lt-header { grid-template-columns: minmax(170px,1fr) minmax(280px,400px) 108px 118px 31px 31px 142px; }
-  .lt-grid { grid-template-columns: 280px minmax(440px,1fr) 230px 300px; padding-right: 10px; }
+  .lt-grid { grid-template-columns: minmax(230px, 1.25fr) minmax(400px, 2.5fr) minmax(190px, 1fr) minmax(230px, 1.25fr); padding-right: 10px; }
   .lt-lower-row { grid-template-columns: minmax(330px,1.3fr) minmax(280px,1fr) minmax(260px,.9fr) minmax(280px,1fr); }
 }
 
