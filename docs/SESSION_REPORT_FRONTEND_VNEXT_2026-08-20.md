@@ -410,3 +410,62 @@ endpoint, not just type-checks:
   API demonstrably serves correct requests despite the label. Not
   something I chased down — out of scope for this task, flagging it here
   in case it's actually meaningful and worth a separate look.
+
+### 4.4 Second round after live feedback on the actual rendered screen (commits `371beaf`, `3db8367`)
+
+User checked the rendered screen against the mockup and gave four
+concrete, specific complaints — much more actionable than guessing at
+pixel fidelity, and all four were real:
+
+1. **Strategy names unreadable** (raw UUIDs like `a28b6e39` in Active
+   Strategy Instances). Fixed by resolving each instance's
+   `strategy_definition_id` (or its version's, via the existing
+   version→definition map) against `strategy.definitions`' real `name`
+   column — the same mechanism Strategy Center already uses. Backend
+   change in `activeStrategyInstanceRows()`
+   (`front-control-plane-domain-completeness.js`). Real result in the
+   local dev DB: 10 of 42 instances resolve to a real name (e.g.
+   *"Data-driven MES — VWAP upper deviation fade short"*); the other 32
+   have a genuinely unavailable `strategy_definition_id` in the
+   underlying data — a real gap, not hidden, falls back to a shortened id.
+2. **Chart dominating the whole right side of the screen.** Root cause:
+   `.lt-grid`'s chart column used `minmax(560px, 1fr)` while the other
+   three columns were fixed pixels, so on any viewport wider than the
+   1599px breakpoint, 100% of the extra space went to the chart alone.
+   Measured the mockup's actual column proportions (~290:580:230:290px)
+   and changed all four columns to `minmax(floor, fr)` with matching fr
+   ratios (1.25 : 2.5 : 1 : 1.25) so the whole row scales together.
+   Verified: 274:547:219:274px at 1400px viewport, ratio held, no
+   overflow.
+3. **Macro/Session card too wide.** Switched to the already-existing
+   2-column definition-list layout (`Session|Market state`,
+   `Trading date|Timezone`, `Last known|Signal cutoff`) instead of one
+   pair per row, matching the mockup's denser layout; bumped value text
+   12px → 13px since the layout is more compact now.
+4. **General style fidelity** ("really respect the mockup — layout,
+   width, style, colors, down to the details"). Did a second, more
+   targeted pass on the specific components most visually far from the
+   mockup: Provider Runtime's tiny unlabeled 11px dots replaced with
+   large numbered circles (1, 2, 3…) on a connecting line, matching the
+   mockup's stepper; Human Execution Gate's status text turned into a
+   proper uppercase badge instead of plain bold text, plus added the
+   "View Audit" link the mockup always shows (was missing entirely);
+   AI Context/Portfolio/Global Risk's authority rows now render their
+   status as colored `StatusBadge` chips instead of plain text, matching
+   the mockup's badge-heavy visual language.
+
+Verified in a **fresh browser tab** — an existing tab had accumulated so
+many rapid HMR reloads across this session that it got stuck in a broken
+dev-only state (`"signal is aborted without reason"`); confirmed via a
+clean tab load this was a Vite dev artifact, not a real bug, before
+concluding anything. Full suite 173/173, `tsc --noEmit` clean throughout.
+
+**Where this stands:** the structural/proportional fidelity issues (the
+ones a screenshot comparison can actually catch precisely) are fixed and
+verified. Further fine visual-detail matching (exact border-radius,
+exact spacing values, etc.) is harder to verify reliably without a
+proper side-by-side comparison tool — I did not keep guessing at pixel
+values I couldn't confirm against the mockup. If there's more still off
+after this round, the same pattern that worked twice now (you look at
+the real rendered page and point at specific things) will be much faster
+than me iterating blind.
