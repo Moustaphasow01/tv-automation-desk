@@ -3,10 +3,14 @@ import { firstNumber, isConnectedAddonSnapshot, positionKey, validTimestamp } fr
 import { evaluateBrokerProtectionSnapshot } from "./broker-protection-snapshot.js";
 import {
   latestClosedCandleForIntent as latestTheoreticalClosedCandleForIntent,
+  latestClosedCandleForPortfolioIntent as latestTheoreticalClosedCandleForPortfolioIntent,
   latestClosedCandleForTrade as latestTheoreticalClosedCandleForTrade,
+  listPortfolioTheoreticalEntryCandidates as listPortfolioTheoreticalEntryCandidatesRepository,
   listTheoreticalEntryCandidates as listTheoreticalEntryCandidatesRepository,
   listTheoreticalOpenTrades as listTheoreticalOpenTradesRepository,
   recordManualExecutionEvent as recordManualExecutionEventRepository,
+  recordPortfolioTheoreticalEntryExpired as recordPortfolioTheoreticalEntryExpiredRepository,
+  recordPortfolioTheoreticalEntryFill as recordPortfolioTheoreticalEntryFillRepository,
   recordTheoreticalEntryExpired as recordTheoreticalEntryExpiredRepository,
   recordTheoreticalEntryFill as recordTheoreticalEntryFillRepository,
   recordTheoreticalExitFill as recordTheoreticalExitFillRepository,
@@ -342,6 +346,10 @@ export class PostgresBrokerExecutionRepository {
   async latestClosedCandleForIntent(intent) { return latestTheoreticalClosedCandleForIntent(this, intent); }
   async recordTheoreticalEntryFill({ result, now }) { return recordTheoreticalEntryFillRepository(this, { result, now }); }
   async recordTheoreticalEntryExpired({ result, now }) { return recordTheoreticalEntryExpiredRepository(this, { result, now }); }
+  async listPortfolioTheoreticalEntryCandidates({ limit = 100 } = {}) { return listPortfolioTheoreticalEntryCandidatesRepository(this, { limit }); }
+  async latestClosedCandleForPortfolioIntent(intent) { return latestTheoreticalClosedCandleForPortfolioIntent(this, intent); }
+  async recordPortfolioTheoreticalEntryFill({ result, now }) { return recordPortfolioTheoreticalEntryFillRepository(this, { result, now }); }
+  async recordPortfolioTheoreticalEntryExpired({ result, now }) { return recordPortfolioTheoreticalEntryExpiredRepository(this, { result, now }); }
   async listTheoreticalOpenTrades({ limit = 100 } = {}) { return listTheoreticalOpenTradesRepository(this, { limit }); }
   async latestClosedCandleForTrade(trade) { return latestTheoreticalClosedCandleForTrade(this, trade); }
   async recordTheoreticalExitFill({ result, now }) { return recordTheoreticalExitFillRepository(this, { result, now }); }

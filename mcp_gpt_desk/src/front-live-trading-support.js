@@ -1,7 +1,9 @@
 export function marketSessionState(readiness = {}) {
   if (readiness.market_closed === true) return "MARKET_CLOSED";
-  const state = upper(readiness.market_state || readiness.state);
-  if (["OPEN", "PREOPEN", "HALTED", "CLOSED"].includes(state)) return state;
+  const sessionState = upper(readiness.market_session?.state || readiness.market_state);
+  if (["OPEN", "PREOPEN", "HALTED", "CLOSED", "TRADING_DAY", "SESSION_OPEN"].includes(sessionState)) return sessionState;
+  const state = upper(readiness.state);
+  if (["FRESH", "STALE", "DELAYED", "DOWN"].includes(state)) return state;
   return readiness.ok === true ? "OPEN" : "UNKNOWN";
 }
 
@@ -14,6 +16,34 @@ export function liveMacroSession({ macro, news, scope, marketSeries }) {
     volatilityRegime: "UNAVAILABLE", nextScheduledEvent: macroItems[0] || null,
     macroEvents: macroItems.slice(0, 20), news: newsItems.slice(0, 20), dataCutoff: marketSeries?.asOf || null,
     macroSource: macro ? "front_macro_resource" : null, newsSource: news ? "front_news_headlines_resource" : null,
+  };
+}
+
+export function liveTheoreticalExecution(execution = {}, nominalIntentIds = new Set()) {
+  const intents = rows(execution.portfolioOrderIntents).filter((item) => nominalIntentIds.has(String(item.portfolio_order_intent_id || "")));
+  const events = rows(execution.theoreticalEvents).filter((item) => nominalIntentIds.has(String(item.portfolio_order_intent_id || "")));
+  const trades = rows(execution.trades).filter((item) => nominalIntentIds.has(String(item.portfolio_order_intent_id || "")));
+  const eventsByIntent = groupBy(events, "portfolio_order_intent_id");
+  const tradeByIntent = latestBy(trades, "portfolio_order_intent_id", (item) => item.updated_at || item.created_at);
+  const projectedRows = intents.map((intent) => theoreticalIntentRow({
+    intent,
+    events: eventsByIntent.get(String(intent.portfolio_order_intent_id || "")) || [],
+    trade: tradeByIntent.get(String(intent.portfolio_order_intent_id || "")) || null,
+  }));
+  const asOf = latestTimestamp([
+    ...events.map((item) => item.event_at_utc || item.created_at_utc),
+    ...trades.map((item) => item.updated_at || item.created_at),
+    ...intents.map((item) => item.updated_at_utc || item.created_at_utc),
+  ]);
+  const summary = theoreticalSummary(projectedRows);
+  return {
+    schemaVersion: "live_theoretical_execution_v1",
+    availability: intents.length ? "KNOWN" : "CONNECTED_EMPTY",
+    status: summary.openTrades > 0 ? "TRACKING_OPEN" : projectedRows.length ? "TRACKING" : "NO_ORDER_INTENT",
+    source: "portfolio_order_intent_lineage+trade_theoretical_execution_events+trades",
+    asOf,
+    summary,
+    rows: projectedRows,
   };
 }
 
@@ -148,6 +178,126 @@ function providerEventMatches(item, intentIds, commandIds) {
   const intentMatches = !item.portfolio_order_intent_id || intentIds.has(String(item.portfolio_order_intent_id));
   const commandMatches = !item.execution_provider_command_id || commandIds.has(String(item.execution_provider_command_id));
   return intentMatches && commandMatches;
+}
+
+function theoreticalIntentRow({ intent, events, trade }) {
+  const payload = intent.payload || {};
+  const terms = payload.execution_terms || {};
+  const latestEvent = latestByTimestamp(events, (item) => item.event_at_utc || item.created_at_utc);
+  const latestPayload = latestEvent?.payload || {};
+  const status = theoreticalStatus({ latestEvent, trade });
+  const side = text(payload.action || payload.side || intent.side, "UNAVAILABLE").toUpperCase();
+  const orderType = text(payload.order_type || terms.order_type, "UNAVAILABLE").toUpperCase();
+  const targets = Array.isArray(payload.targets) ? payload.targets : Array.isArray(terms.targets) ? terms.targets : [];
+  return {
+    portfolioOrderIntentId: text(intent.portfolio_order_intent_id, ""),
+    targetPositionId: text(intent.target_position_id, ""),
+    strategySignalId: text(payload.signal_id || payload.strategy_signal_id, ""),
+    strategyId: text(payload.strategy_id, ""),
+    strategyInstanceId: text(payload.strategy_instance_id || payload.source?.lineage?.strategy_instance_ids?.[0], ""),
+    instrument: text(payload.instrument || intent.target_instrument, "UNAVAILABLE"),
+    side,
+    orderType,
+    quantity: nullableMetric(payload.quantity ?? intent.quantity),
+    entry: nullableMetric(first(payload.entry?.price, terms.entry?.price, payload.limit_price)),
+    stop: nullableMetric(first(payload.protection?.stop_price, terms.stop?.price, payload.stop_price)),
+    targets: targets.map((target, index) => ({ label: text(target.label, `T${index + 1}`), price: nullableMetric(first(target.price, target.value)), ratioR: nullableMetric(first(target.ratioR, target.ratio_r)) })),
+    expectedR: nullableMetric(first(payload.expected_r, payload.expectedR)),
+    status,
+    latestEventType: text(latestEvent?.event_type, "NONE").toUpperCase(),
+    latestEventAt: text(latestEvent?.event_at_utc, ""),
+    entryFilledAt: firstEventAt(events, "entry_filled"),
+    entryFillPrice: nullableMetric(firstEvent(events, "entry_filled")?.price),
+    exitAt: theoreticalExitAt(events),
+    exitPrice: nullableMetric(latestPayload.price ?? latestEvent?.price),
+    resultR: nullableMetric(first(trade?.result_r, trade?.realized_r, trade?.payload?.result_r)),
+    tradeId: text(trade?.trade_id, ""),
+    tradeStatus: text(trade?.status, "NONE").toUpperCase(),
+    sourceCandleAt: text(latestEvent?.source_candle_timestamp_utc || latestPayload.candle?.timestamp_utc, ""),
+    sourceTimeframe: text(latestPayload.candle?.timeframe, ""),
+    physicalExecutionCreated: false,
+    brokerEvidence: "NONE",
+  };
+}
+
+function theoreticalSummary(projectedRows) {
+  return {
+    trackedIntents: projectedRows.length,
+    working: projectedRows.filter((item) => item.status === "WORKING").length,
+    entryFilled: projectedRows.filter((item) => item.status === "ENTRY_FILLED").length,
+    targetHit: projectedRows.filter((item) => item.status === "TARGET_HIT").length,
+    stopHit: projectedRows.filter((item) => item.status === "STOP_HIT").length,
+    expired: projectedRows.filter((item) => item.status === "EXPIRED").length,
+    reviewRequired: projectedRows.filter((item) => item.status === "REVIEW_REQUIRED").length,
+    openTrades: projectedRows.filter((item) => ["ENTRY_FILLED", "OPEN"].includes(item.status)).length,
+    closedTrades: projectedRows.filter((item) => ["TARGET_HIT", "STOP_HIT"].includes(item.status)).length,
+    totalClosedR: Math.round(projectedRows.reduce((sum, item) => sum + (["TARGET_HIT", "STOP_HIT"].includes(item.status) ? Number(item.resultR) || 0 : 0), 0) * 100) / 100,
+  };
+}
+
+function theoreticalStatus({ latestEvent, trade }) {
+  const eventType = upper(latestEvent?.event_type);
+  if (eventType === "ENTRY_EXPIRED") return "EXPIRED";
+  if (eventType === "TARGET_HIT") return "TARGET_HIT";
+  if (eventType === "STOP_HIT") return "STOP_HIT";
+  if (eventType === "EXIT_REVIEW_REQUIRED") return "REVIEW_REQUIRED";
+  if (eventType === "ENTRY_FILLED") return "ENTRY_FILLED";
+  if (upper(trade?.status) === "CLOSED") return "CLOSED";
+  if (trade?.trade_id) return "OPEN";
+  return "WORKING";
+}
+
+function firstEvent(events, eventType) {
+  return events.find((item) => upper(item?.event_type) === upper(eventType)) || null;
+}
+
+function firstEventAt(events, eventType) {
+  return text(firstEvent(events, eventType)?.event_at_utc, "");
+}
+
+function theoreticalExitAt(events) {
+  return text(firstEvent(events, "target_hit")?.event_at_utc || firstEvent(events, "stop_hit")?.event_at_utc || firstEvent(events, "exit_review_required")?.event_at_utc, "");
+}
+
+function groupBy(items, key) {
+  const map = new Map();
+  for (const item of rows(items)) {
+    const value = String(item?.[key] || "");
+    if (!value) continue;
+    const bucket = map.get(value) || [];
+    bucket.push(item);
+    map.set(value, bucket);
+  }
+  return map;
+}
+
+function latestBy(items, key, at) {
+  const map = new Map();
+  for (const item of rows(items)) {
+    const value = String(item?.[key] || "");
+    if (!value) continue;
+    const existing = map.get(value);
+    if (!existing || timestamp(at(item)) >= timestamp(at(existing))) map.set(value, item);
+  }
+  return map;
+}
+
+function latestByTimestamp(items, at) {
+  let latest = null;
+  for (const item of rows(items)) {
+    if (!latest || timestamp(at(item)) >= timestamp(at(latest))) latest = item;
+  }
+  return latest;
+}
+
+function latestTimestamp(values) {
+  const valid = values.map(timestamp).filter(Number.isFinite);
+  return valid.length ? new Date(Math.max(...valid)).toISOString() : null;
+}
+
+function timestamp(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : -Infinity;
 }
 
 export function liveSummary({ signals, intents, commands, events, safety = {}, performance = {} }) {

@@ -38,6 +38,7 @@ import {
   liveRiskChecks,
   liveSession,
   liveSummary,
+  liveTheoreticalExecution,
   liveTimeline as canonicalLiveTimeline,
   liveWatchlist,
   marketSessionState,
@@ -67,6 +68,7 @@ const COMMAND_PATH = /^\/front-api\/v1\/commands\/([a-zA-Z0-9_-]+)$/;
 // expensive PostgreSQL projections from being rebuilt for every card/refetch.
 const FRONT_SOURCE_CACHE_TTL_MS = 5_000;
 const FRONT_SOURCE_TIMEOUT_MS = 3_500;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sourceCacheByStore = new WeakMap();
 const VIEW_NAMES = new Set([
   "auth-session", "operator-settings", "admin-access", "command-center", "demo-paper-readiness", "events-audit",
@@ -147,8 +149,8 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "research-data-catalog": ["data-foundation"],
   "research-experiment-detail": ["research", "agent-runtime", "simulation-runs", "data-foundation"],
   "research-run-detail": ["research", "simulation-runs"],
-  "research-lab": ["agent-runtime", "research", "data-foundation", "simulation-runs", "incidents"],
-  "strategy-center": ["strategy", "research"],
+  "research-lab": ["agent-runtime", "agent-events", "research", "data-foundation", "simulation-runs", "incidents"],
+  "strategy-center": ["strategy", "performance", "strategy-promotion-lineage"],
   "strategy-detail": ["strategy", "research", "execution", "incidents"],
   "strategy-compare": ["strategy", "research", "simulation-runs"],
   "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "live-market-snapshot", "live-session", "front-macro", "front-news", "assistant-runtime", "performance", "health"],
@@ -278,7 +280,11 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     performance: () => source("performance", () => call(store, "getOperationsPerformance", query)),
     incidents: () => source("incidents", () => call(store, "listOperationsIncidents", { ...query, limit: 50 })),
     "agent-runtime": () => source("agent-runtime", () => call(store, "listAgentRuntimeTasks", { ...query, limit: 50 })),
+    "agent-events": () => source("agent-events", () => call(store, "listAgentRuntimeEvents", { limit: 50 })),
     research: () => source("research", () => call(store, "getResearchLabOverview", { ...query, limit: 100 })),
+    "strategy-promotion-lineage": () => UUID_PATTERN.test(String(query.strategyVersionId || ""))
+      ? source("strategy-promotion-lineage", () => call(store, "getStrategyPromotionLineage", { strategyVersionId: query.strategyVersionId }))
+      : Promise.resolve(null),
     "data-foundation": () => source("data-foundation", () => call(store, "listDataFoundationDatasets", { ...query, limit: 100 })),
     "simulation-runs": () => source("simulation-runs", () => call(store?.operations, "listSimulationRuns", { ...query, limit: 100 })),
     "portfolio-risk": () => source("portfolio-risk", () => buildPortfolioRiskOverviewFromStore(store, query)),
@@ -326,7 +332,9 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     performance: loaded.performance ?? null,
     incidents: loaded.incidents ?? null,
     runtime: loaded["agent-runtime"] ?? null,
+    agentEvents: loaded["agent-events"] ?? null,
     research: loaded.research ?? null,
+    strategyPromotionLineage: loaded["strategy-promotion-lineage"] ?? null,
     dataFoundation: loaded["data-foundation"] ?? null,
     simulationRuns: loaded["simulation-runs"] ?? null,
     risk: loaded["portfolio-risk"] ?? null,
@@ -720,12 +728,15 @@ function researchDatasetDetailExplorer({ dataFoundation, query }) {
 
 function strategyDeploymentsExplorer({ strategy }) {
   const versions = new Map(rows(strategy?.versions).map((item) => [item.strategy_version_id, item]));
+  const definitions = new Map(rows(strategy?.definitions).map((item) => [item.strategy_definition_id, item]));
   const items = rows(strategy?.instances).filter((item) => item?.strategy_instance_id).map((item) => {
     const version = versions.get(item.strategy_version_id) || {};
+    const definition = definitions.get(version.strategy_definition_id) || {};
+    const label = strategyInstanceDisplayName({ definition, version, instance: item });
     return explorerItem({
       id: item.strategy_instance_id,
-      title: text(item.strategy_instance_id, "Instance stratégie"),
-      subtitle: `${text(item.execution_mode, "—")} · version ${text(version.version_label || item.strategy_version_id, "—")}`,
+      title: label,
+      subtitle: `Instance ${shortId(item.strategy_instance_id)} · ${text(item.execution_mode, "—")} · version ${text(version.version_label || item.strategy_version_id, "—")}`,
       status: item.runtime_state,
       primary: text(item.last_heartbeat_at, "Heartbeat indisponible"),
       secondary: item.triple_lock_validated ? "Triple lock validé" : "Triple lock non validé",
@@ -969,6 +980,7 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
     providers: providerRows(execution),
     incidents: rows(incidents).filter(hasIncidentId).map(incidentSummary),
     timeline: canonicalLiveTimeline(executionValue),
+    theoreticalExecution: liveTheoreticalExecution(executionValue, nominalIntentIds),
     reconciliation: liveReconciliation(executionValue, nominalIntentIds),
     performanceR: livePerformanceR(operationsPerformance),
     timeSeriesContracts: frontTimeSeriesContracts({ view: "live-trading", execution: executionValue, strategy, risk, marketSeries, performance: operationsPerformance, nowIso }),
@@ -1499,7 +1511,7 @@ function executionProviderHealthRow(item) {
 }
 function primaryOrStandby(index) { return index === 0 ? "PRIMARY" : "STANDBY"; }
 
-function researchLab({ runtime, research, dataFoundation, simulationRuns, incidents, actor }) {
+function researchLab({ runtime, agentEvents, research, dataFoundation, simulationRuns, incidents, actor }) {
   const experiments = rows(research?.experiments).filter((item) => item?.research_experiment_id).map(researchExperimentRow);
   const candidates = rows(research?.candidates).filter((item) => item?.research_candidate_id);
   const reports = rows(research?.evaluation_reports).filter((item) => item?.research_evaluation_report_id);
@@ -1522,44 +1534,167 @@ function researchLab({ runtime, research, dataFoundation, simulationRuns, incide
     computeQueue: rows(simulationRuns).filter((item) => item?.simulation_run_id || item?.simulationRunId).map(researchLabComputeRow),
     datasets: rows(dataFoundation).filter((item) => item?.dataset_id).map(researchDatasetRow),
     incidents: rows(incidents).filter(hasIncidentId).map((item) => ({ incidentId: text(item.incident_id, ""), severity: severity(item.severity), title: text(item.title, "Incident"), detail: text(item.detail || item.message, "Incident backend"), openedAt: text(item.created_at_utc, "unavailable") })),
+    activityStream: rows(agentEvents?.items).map(researchActivityEventRow),
     commandActions: [researchBootstrapAction(actor)],
+  };
+}
+
+function researchActivityEventRow(item) {
+  return {
+    eventId: text(item.event_id, ""),
+    eventType: text(item.event_type, "unavailable"),
+    missionKey: text(item.mission_key || item.mission_id, "unavailable"),
+    taskKey: text(item.task_key || item.task_type, "unavailable"),
+    detail: text(item.actor, ""),
+    at: text(item.created_at_utc, "unavailable"),
   };
 }
 function researchAgentFleet({ runtime, warnings }) { warnings.push("agent-conversations:NOT_IMPLEMENTED"); const agents = rows(runtime).filter((item) => item?.worker_id || item?.task_id).map(agentRow); return { summary: { totalAgents: agents.length, activeAgents: countBy(agents, (item) => item.status === "ACTIVE"), waitingAgents: countBy(agents, (item) => item.status === "WAITING"), queueDepth: agents.reduce((sum, item) => sum + item.queueDepth, 0), lockedLeases: countBy(runtime, (item) => Boolean(item.lease_id || item.lease_token)), avgSuccessRatePct: average(rows(runtime).map((item) => number(item.success_rate_pct, NaN))) }, agents, queue: [], conversations: [], incidents: [], commandActions: [] }; }
 function researchDataCatalog({ dataFoundation, incidents }) { const datasets = rows(dataFoundation).filter((item) => item?.dataset_id).map(researchDataCatalogDatasetRow); return { summary: { datasets: datasets.length, instruments: new Set(datasets.map((item) => item.instrument)).size, features: 0, lineageEdges: datasets.length, qualityOkPct: datasets.length ? Math.round(countBy(datasets, (item) => item.quality === "OK") / datasets.length * 100) : 0, openGaps: countBy(datasets, (item) => item.quality !== "OK") }, datasets, instruments: researchInstruments(datasets), features: [], lineage: researchLineage(datasets), incidents: rows(incidents).filter(hasIncidentId).map(dataCatalogIncident), commandActions: [] }; }
 function researchCompute({ runtime, simulationRuns }) { const sourceWorkers = rows(runtime).filter((item) => item?.worker_id || item?.task_id); const jobs = rows(simulationRuns).filter((item) => item?.simulation_run_id || item?.simulationRunId).map(simulationComputeJobRow); return { summary: { activeWorkers: sourceWorkers.length, runningJobs: countBy(jobs, (item) => item.state === "RUNNING"), queuedJobs: countBy(jobs, (item) => item.state === "QUEUED"), waitingJobs: countBy(sourceWorkers, (item) => upper(item.status) === "READY"), dlqItems: 0, researchUsedPct: average(sourceWorkers.map((item) => number(item.cpu_pct, NaN))), liveReservedPct: 0, costTodayUsd: sourceWorkers.reduce((sum, item) => sum + number(item.cost_usd_hour, 0), 0) }, pools: researchComputePools(jobs), workers: sourceWorkers.map(researchComputeWorkerRow), jobs, reservations: [], dlq: [], commandActions: [] }; }
-function strategyCenter({ strategy }) {
-  const strategies = rows(strategy?.definitions).map(strategyRow);
-  const selected = strategies[0] || strategyRow({});
+function strategyCenter({ strategy, strategyPromotionLineage, performance, query, nowIso }) {
+  const sourceRows = rows(strategy?.strategies).length ? rows(strategy?.strategies) : rows(strategy?.definitions);
+  const strategies = sourceRows.map(strategyRow);
+  const requestedId = text(query?.strategyId, "");
+  const selected = (requestedId && strategies.find((item) => item.strategyId === requestedId))
+    || strategies.find((item) => item.runtimeStatus === "RUNNING") || strategies[0] || strategyRow({});
+  const selectedRaw = sourceRows.find((item) => text(item.strategy_definition_id || item.strategy_id, "none") === selected.strategyId) || {};
+  const selectedInstances = rows(selectedRaw.instances);
+  const primaryInstance = selectStrategyInstance(selectedRaw, selectedInstances);
+  const selectedVersion = selectStrategyVersion(selectedRaw, primaryInstance);
+  const lineageMatch = strategyPromotionLineage?.candidate?.candidate?.strategy_version_id === selected.strategyVersionId
+    ? strategyPromotionLineage.candidate
+    : null;
+  const candidate = lineageMatch?.candidate || null;
+  const gateReport = candidate
+    ? rows(lineageMatch?.evaluation_reports)
+        .filter((item) => item.report_kind === "PROMOTION_MATRIX")
+        .sort((a, b) => String(b.created_at_utc).localeCompare(String(a.created_at_utc)))[0] || null
+    : null;
+  const hypothesis = lineageMatch?.hypothesis || null;
+  const experiment = lineageMatch?.experiment || null;
   return {
     summary: {
       totalStrategies: strategies.length,
       liveStrategies: countBy(strategy?.instances, (item) => upper(item.execution_mode) === "LIVE"),
       paperStrategies: countBy(strategy?.instances, (item) => upper(item.execution_mode) === "PAPER"),
-      suspendedStrategies: 0,
-      watchlistStrategies: 0,
-      averageExpectancyR: 0,
-      averageProfitFactor: 0,
-      averageDrawdownR: 0,
+      suspendedStrategies: countBy(strategy?.instances, (item) => ["PAUSED", "STOPPED"].includes(upper(item.runtime_state))),
+      watchlistStrategies: strategies.filter((item) => item.lifecycle === "SHADOW").length,
+      averageExpectancyR: averageStrategyMetric(strategies, "expectancyR"),
+      averageProfitFactor: averageStrategyMetric(strategies, "profitFactor"),
+      averageDrawdownR: averageStrategyMetric(strategies, "maxDrawdownR"),
     },
     strategies,
-    lifecycleDistribution: [],
-    performanceByFamily: [],
-    topStrategies: [],
-    recentEvents: [],
+    lifecycleDistribution: strategyLifecycleDistribution(strategies),
+    performanceByFamily: strategyPerformanceByFamily(strategies),
+    topStrategies: topStrategyRows(strategies),
+    recentEvents: strategyRecentEvents(strategy?.audit),
     selectedInspector: {
       strategyId: selected.strategyId,
       strategyDefinitionId: selected.strategyDefinitionId,
       strategyVersionId: selected.strategyVersionId,
       strategyInstanceId: selected.strategyInstanceId,
       runtimeBundleId: selected.runtimeBundleId,
-      thesis: "Projection BFF read-only : aucun inspector canonique publié pour cette stratégie.",
-      rulesSummary: [],
-      gates: [],
-      riskAllocationPct: 0,
-      currentCommandEligibility: "READ_ONLY",
+      thesis: text(selectedRaw.description || selectedRaw.metadata?.thesis, "Thèse non publiée par le Strategy Kernel."),
+      rulesSummary: rows(selectedVersion?.metadata?.strategy_spec?.rules).map((rule) => text(rule.label || rule.name, "")).filter(Boolean),
+      meta: strategyCenterMetaRow({ definition: selectedRaw, version: selectedVersion, instance: primaryInstance }),
+      spec: strategySpecProjection(selectedVersion?.metadata?.strategy_spec || selectedRaw.strategy_spec),
+      gates: strategyCenterGateRows(gateReport),
+      lineage: strategyCenterLineageRows({ hypothesis, experiment, candidate, version: selectedVersion, instances: selectedInstances }),
+      runtimeInstances: selectedInstances.map((item) => strategyCenterInstanceRow(item, strategy?.signals, nowIso)),
+      performance: strategyCenterPerformanceBlock(selected, performance),
+      riskAllocationPct: number(primaryInstance?.risk_allocation_pct || primaryInstance?.metadata?.risk_allocation_pct, 0),
+      currentCommandEligibility: strategyCenterCommandEligibility(selected),
     },
   };
+}
+
+function strategyCenterMetaRow({ definition = {}, version, instance }) {
+  return {
+    instruments: strategyInstruments(definition, instance),
+    timeframe: text(firstValue(version?.metadata?.timeframe, instance?.metadata?.timeframe, definition.timeframe), "unavailable"),
+    sessionScope: stringList(instance?.session_scope),
+    owner: text(definition.owner, "unavailable"),
+    publishedAt: text(version?.published_at, "unavailable"),
+    compiledArtifactHash: text(version?.compiled_artifact_hash || version?.dsl_source_hash, "unavailable"),
+    executionMode: executionModeState(instance?.execution_mode),
+    accountScope: text(instance?.account_scope, "unavailable"),
+  };
+}
+
+const STRATEGY_CENTER_GATE_ORDER = [
+  ["G0_DATASET_VERSIONED", "G0 · Données versionnées"],
+  ["G1_VALIDATION_EVIDENCE", "G1 · Preuves de validation"],
+  ["G2_ROBUSTNESS", "G2 · Robustesse"],
+  ["G3_OUT_OF_SAMPLE", "G3 · Hors échantillon"],
+  ["G4_PORTFOLIO_FIT", "G4 · Cohérence portefeuille"],
+  ["G5_PROMOTION_MATRIX", "G5 · Matrice de promotion"],
+  ["G6_OPERATOR_APPROVAL", "G6 · Approbation opérateur"],
+  ["G7_LIVE_AUTHORIZATION", "G7 · Autorisation live"],
+];
+
+function strategyCenterGateRows(gateReport) {
+  const gates = gateReport?.criteria?.gates || null;
+  return STRATEGY_CENTER_GATE_ORDER.map(([key, label]) => {
+    if (!gates || !gates[key]) return { label, state: "PENDING", detail: "Aucun rapport de gate publié pour cette version." };
+    const entry = gates[key];
+    return { label, state: entry.ok ? "PASS" : "FAIL", detail: text(Array.isArray(entry.detail) ? entry.detail.join(", ") : entry.detail, "") };
+  });
+}
+
+function strategyCenterLineageRows({ hypothesis, experiment, candidate, version, instances }) {
+  const nodes = [];
+  if (hypothesis) nodes.push({ nodeType: "HYPOTHESIS", id: text(hypothesis.research_hypothesis_id, "unavailable"), at: text(hypothesis.created_at_utc, "unavailable") });
+  if (experiment) nodes.push({ nodeType: "EXPERIMENT", id: text(experiment.research_experiment_id, "unavailable"), at: text(experiment.created_at_utc, "unavailable") });
+  if (experiment?.winner_simulation_run_id) nodes.push({ nodeType: "RUN", id: text(experiment.winner_simulation_run_id, "unavailable"), at: "unavailable" });
+  if (candidate) nodes.push({ nodeType: "CANDIDATE", id: text(candidate.research_candidate_id, "unavailable"), at: text(candidate.created_at_utc, "unavailable") });
+  if (version) nodes.push({ nodeType: "STRATEGY_VERSION", id: text(version.strategy_version_id, "unavailable"), at: text(version.published_at || version.created_at, "unavailable") });
+  const deployedInstance = instances.find((item) => item.strategy_version_id === version?.strategy_version_id);
+  if (deployedInstance) nodes.push({ nodeType: "INSTANCE", id: text(deployedInstance.strategy_instance_id, "unavailable"), at: text(deployedInstance.started_at || deployedInstance.created_at, "unavailable") });
+  return nodes;
+}
+
+function strategyCenterInstanceRow(item, signals, nowIso) {
+  const instanceId = String(item.strategy_instance_id);
+  const today = text(nowIso, "").slice(0, 10);
+  const signalsToday = today
+    ? countBy(signals, (signal) => String(signal.strategy_instance_id) === instanceId && text(signal.created_at_utc || signal.created_at, "").slice(0, 10) === today)
+    : 0;
+  return {
+    strategyInstanceId: instanceId,
+    instruments: stringList(item.instrument_scope),
+    mode: executionModeState(item.execution_mode),
+    runtimeStatus: runtimeState(item.runtime_state || item.status),
+    health: strategyLiveHealth({ runtimeStatus: runtimeState(item.runtime_state || item.status), executionMode: executionModeState(item.execution_mode) }),
+    lastHeartbeatAt: text(item.last_heartbeat_at, "unavailable"),
+    signalsToday,
+  };
+}
+
+function strategyCenterPerformanceBlock(selected, performance) {
+  const totals = performance?.totals || {};
+  const matches = rows(performance?.equity).length > 0 || Number.isFinite(Number(totals.totalR));
+  return {
+    availability: matches ? "AVAILABLE" : "UNAVAILABLE",
+    expectancyR: selected.expectancyR,
+    profitFactor: selected.profitFactor,
+    winRatePct: selected.winRatePct,
+    maxDrawdownR: selected.maxDrawdownR,
+    oosR: selected.lastOosR,
+    series: rows(performance?.equity).map((point, index) => ({
+      sequence: index + 1,
+      at: text(point.date || point.at, "unavailable"),
+      cumulativeR: number(point.cumulativeR, 0),
+      drawdownR: number(point.drawdownR, 0),
+    })),
+  };
+}
+
+function strategyCenterCommandEligibility(selected) {
+  if (selected.lifecycle === "LIVE" || selected.lifecycle === "PAPER") return "READ_ONLY";
+  if (selected.versionStatus === "VALIDATED" && selected.lifecycle === "SHADOW") return "CAN_REQUEST_PAPER";
+  if (selected.versionStatus === "VALIDATED") return "CAN_REQUEST_SHADOW";
+  return "READ_ONLY";
 }
 
 function operatorSettings({ warnings }) { warnings.push("operator-settings-store:NOT_IMPLEMENTED"); return { summary: { theme: "dark", density: "compact", language: "fr", timezone: "Europe/Paris", notificationsEnabled: false, voiceState: "OFF", activeDevices: 0, activeSessions: 0, privacyMode: "STRICT" }, cockpitPreferences: [], widgets: [], notificationRules: [], jarvis: { pushToTalkEnabled: false, wakeWordEnabled: false, voiceState: "OFF", lastVoiceCheckAt: "unavailable", transcriptRetention: "NONE" }, shortcuts: [], devices: [], privacy: [], guardrails: [], commandActions: [] }; }
@@ -1785,12 +1920,22 @@ function pipeline(execution, launchGate) {
     .filter((item) => item.status)
     .map((item) => ({ stepId: item.stepId, label: item.stepId.replaceAll("_", " "), status: item.status, latencyMs: 0, detail: item.detail || "État issu du launch gate autoritaire" }));
 }
-function agentRow(item) { return { agentId: text(item.worker_id || item.task_id, ""), name: text(item.worker_id, "Agent runtime"), role: text(item.task_type, "agent-runtime"), status: upper(item.status) === "READY" ? "WAITING" : upper(item.status) === "FAILED" ? "FAILED" : "ACTIVE", missionId: text(item.mission_id, "unavailable"), task: text(item.status, "unavailable"), model: text(item.model, "unavailable"), reasoningLevel: text(item.reasoning_level, "unavailable"), queueDepth: number(item.queue_depth, 0), tokenBudgetPct: number(item.token_budget_pct, 0) }; }
+function agentRow(item) { return { agentId: text(item.assigned_worker_id || item.worker_id || item.task_id, ""), taskId: text(item.task_id, ""), name: text(item.assigned_worker_id || item.worker_id, "Agent runtime"), role: text(item.task_type, "agent-runtime"), status: upper(item.status) === "READY" ? "WAITING" : upper(item.status) === "FAILED" ? "FAILED" : "ACTIVE", missionId: text(item.mission_id, "unavailable"), missionKey: text(item.mission_key, "unavailable"), task: text(item.task_key || item.status, "unavailable"), model: text(item.model, "unavailable"), reasoningLevel: text(item.reasoning_level, "unavailable"), queueDepth: number(item.queue_depth, 0), tokenBudgetPct: number(item.token_budget_pct, 0), leaseActive: item.lease_active === true, leaseExpiresAt: text(item.lease_expires_at_utc, "unavailable"), lastHeartbeatAt: text(item.updated_at_utc, "unavailable") }; }
 function researchExperimentRow(item) { const reports = number(item.counts?.evaluation_reports, 0); return { experimentId: text(item.research_experiment_id, ""), missionId: text(item.metadata?.mission_id, "unavailable"), runId: text(item.winner_simulation_run_id, "unavailable"), title: text(item.name, "Expérience recherche"), hypothesis: text(item.objective, "Hypothèse non publiée"), ownerAgent: text(item.owner, "unavailable"), stage: stageFromResearch(item), status: statusFromResearch(item), progressPct: researchProgress(item, Array.from({ length: reports }), []), score: number(item.metadata?.score, 0), eta: "unavailable", currentTask: text(item.comparison_metric, "unavailable"), expectedEvent: text(item.expected_event, "unavailable"), tokenBudgetPct: number(item.token_budget_pct, 0), computeBudgetPct: number(item.compute_budget_pct, 0) }; }
 function researchPipelineRows({ experiments, reports, candidates }) { return ["IDEA", "BASELINE", "ITERATION", "ROBUSTNESS", "OOS", "PAPER_READY"].map((stage) => ({ stageId: stage, label: stage.replace("_", " "), state: pipelineState(stage, { experiments, reports, candidates }), activeExperiments: countBy(experiments, (item) => item.stage === stage), promoted: countBy(candidates, (item) => upper(item.status) === "PROMOTION_READY"), rejected: countBy(candidates, (item) => upper(item.status) === "REJECTED"), budgetUsedPct: stage === "BASELINE" ? Math.min(100, reports.length * 25) : 0 })); }
 function researchCoverageRows(dataFoundation) { return rows(dataFoundation).filter((item) => item?.dataset_id).map((item) => ({ coverageId: text(item.dataset_id, ""), label: text(item.name || item.dataset_key, "Dataset"), coveragePct: upper(item.status) === "READY" ? 100 : number(item.coverage_pct, 0), detail: `${text(item.dataset_key, "dataset")} · ${timeLabel(item.cutoff_utc)}`, quality: upper(item.status) === "READY" ? "OK" : "WATCH" })); }
 function researchDatasetRow(item) { return { datasetId: text(item.dataset_id, ""), label: text(item.name || item.dataset_key, "Dataset"), lineage: text(item.provenance_hash, "unavailable"), coverage: `${text(item.time_range_start_utc, "unavailable").slice(0, 10)} → ${text(item.time_range_end_utc, "unavailable").slice(0, 10)}`, pointInTime: Boolean(item.cutoff_utc), quality: upper(item.status) === "READY" ? "OK" : "WATCH" }; }
-function researchResultRow(report) { const metrics = report.metrics || report.metric_snapshot || {}; const decision = upper(report.verdict) === "PASS" ? "PROMOTED" : upper(report.verdict) === "FAIL" ? "REJECTED" : "REVIEW"; return { resultId: text(report.research_evaluation_report_id, ""), experimentId: text(report.research_experiment_id, "unavailable"), strategyId: text(report.research_candidate_id, "unavailable"), title: text(report.report_kind, "Validation"), decision, oosR: number(metrics.total_r, 0), sharpe: number(metrics.sharpe_r, 0), robustnessScore: Math.round(number(report.score, 0) * 100), decidedAt: text(report.created_at_utc, "unavailable") }; }
+function researchResultRow(report) {
+  const metrics = report.metrics || report.metric_snapshot || {};
+  const decision = upper(report.verdict) === "PASS" ? "PROMOTED" : upper(report.verdict) === "FAIL" ? "REJECTED" : "REVIEW";
+  const oosR = number(metrics.total_r, 0);
+  const sharpe = number(metrics.sharpe_r, 0);
+  const robustnessScore = Math.round(number(report.score, 0) * 100);
+  // Composite ranking blends robustness (primary gate signal), OOS return, and Sharpe so the
+  // "Top candidates" list isn't dominated by a single noisy metric.
+  const compositeScore = Math.round(robustnessScore * 0.5 + Math.max(0, oosR) * 10 * 0.3 + Math.max(0, sharpe) * 20 * 0.2);
+  return { resultId: text(report.research_evaluation_report_id, ""), experimentId: text(report.research_experiment_id, "unavailable"), strategyId: text(report.research_candidate_id, "unavailable"), title: text(report.report_kind, "Validation"), decision, oosR, sharpe, robustnessScore, compositeScore, decidedAt: text(report.created_at_utc, "unavailable") };
+}
 function researchKnowledgeGraph(research) { const summary = research?.knowledge_graph?.summary || {}; return { clusters: [{ clusterId: "research_graph", label: "Candidats stratégie", experiments: number(summary.nodes || rows(research?.experiments).length, 0), similarityPct: 0, signal: "NOVEL" }], strongestLink: text(research?.knowledge_graph?.graph_hash, "—"), noveltyScore: 50 }; }
 function researchBootstrapAction(actor) { const allowed = permissions(actor).some((item) => item.capability === "front.command" && item.allowed); return { actionId: "act_research_bootstrap_demo_paper", label: "Amorcer backtest 1 mois", commandType: "research.bootstrap_demo_paper", permission: allowed ? "ALLOWED" : "DENIED", requiresConfirmation: true, impactSummary: allowed ? "Crée dataset, stratégie seed, simulation 1 mois, candidate research et tâche agent." : "Session opérateur desk.write requise.", payload: { symbol_code: "MNQ1!", instrument: "MNQ", timeframe: "5", start_utc: "2026-06-01T00:00:00.000Z", end_utc: "2026-07-01T00:00:00.000Z", dataset_key: "demo-paper.mnq.m5.2026-06-01_2026-07-01" } }; }
 function researchLabComputeRow(item) { return { jobId: text(item.simulation_run_id || item.simulationRunId, ""), missionId: text(item.metadata?.mission_id, "unavailable"), label: `Simulation ${text(item.source_run_id || item.status, "research")}`, status: terminalSimulation(item.status) ? "DONE" : computeState(item.status) === "RUNNING" ? "RUNNING" : "QUEUED", progressPct: terminalSimulation(item.status) ? 100 : number(item.progress_pct, 0), worker: text(item.worker_id, "unavailable"), eta: text(item.eta, "unavailable"), costUsd: number(item.cost_usd, 0) }; }
@@ -1803,30 +1948,133 @@ function researchComputePools(jobs) { return [{ poolId: "research-cpu", label: "
 function researchComputeWorkerRow(item) { return { workerId: text(item.worker_id || item.task_id, ""), poolId: text(item.pool_id, "unavailable"), kind: ["CPU", "GPU"].includes(upper(item.kind)) ? upper(item.kind) : "LLM_ORCHESTRATOR", status: upper(item.status) === "READY" ? "WAITING" : upper(item.status) === "FAILED" ? "DEGRADED" : "RUNNING", currentJobId: text(item.task_id, undefined), heartbeatAt: text(item.updated_at_utc || item.created_at_utc, "unavailable"), cpuPct: number(item.cpu_pct, 0), memoryPct: number(item.memory_pct, 0), gpuPct: number(item.gpu_pct, 0), costUsdHour: number(item.cost_usd_hour, 0) }; }
 function researchReservations() { return [{ reservationId: "reserve_live_default", label: "LIVE protected capacity", poolId: "live-reserve", scope: "LIVE", reservedPct: 50, active: true, reason: "Les jobs research ne doivent pas affamer le live." }]; }
 function strategyRow(item) {
+  const instances = rows(item.instances);
+  const selectedInstance = selectStrategyInstance(item, instances);
+  const selectedVersion = selectStrategyVersion(item, selectedInstance);
   const strategyId = text(item.strategy_definition_id || item.strategy_id, "none");
+  const metrics = selectedVersion?.metadata?.metrics || selectedVersion?.metadata?.validated_metrics || {};
+  const runtimeStatusValue = runtimeState(selectedInstance?.runtime_state || selectedInstance?.status);
+  const executionModeValue = executionModeState(selectedInstance?.execution_mode);
+  const versionStatusValue = versionStatus(selectedVersion?.status);
   return {
     strategyId,
     strategyDefinitionId: strategyId,
-    strategyVersionId: text(item.strategy_version_id, "none"),
-    strategyInstanceId: text(item.strategy_instance_id, "none"),
-    runtimeBundleId: text(item.runtime_bundle_id, "none"),
-    name: text(item.name || item.label, "Aucune stratégie"),
-    family: strategyFamily(item.family),
-    instruments: Array.isArray(item.instruments) ? item.instruments.map(String) : [],
-    timeframe: text(item.timeframe, "—"),
-    scientificStatus: "CANDIDATE",
-    versionStatus: "DRAFT",
-    runtimeStatus: "STOPPED",
-    executionMode: "SHADOW",
-    tier: "WATCH",
-    expectancyR: 0,
-    profitFactor: 0,
-    winRatePct: 0,
-    maxDrawdownR: 0,
-    liveHealth: "OFF",
-    lifecycle: "DRAFT",
-    lastOosR: 0,
+    strategyVersionId: text(selectedVersion?.strategy_version_id, "none"),
+    strategyInstanceId: text(selectedInstance?.strategy_instance_id, "none"),
+    runtimeBundleId: text(selectedVersion?.runtime_contract_bundle_version || selectedInstance?.metadata?.runtime_bundle_id, "none"),
+    name: strategyInstanceDisplayName({ definition: item, version: selectedVersion, instance: selectedInstance }),
+    family: strategyFamily(firstValue(item.family, item.metadata?.family_id, item.external_key)),
+    instruments: strategyInstruments(item, selectedInstance),
+    timeframe: text(firstValue(selectedVersion?.metadata?.timeframe, selectedInstance?.metadata?.timeframe, item.timeframe), "—"),
+    scientificStatus: scientificStatus(firstValue(item.scientific_status, item.status, item.metadata?.scientific_status)),
+    versionStatus: versionStatusValue,
+    runtimeStatus: runtimeStatusValue,
+    executionMode: executionModeValue,
+    tier: strategyTier(item.tier || item.metadata?.tier),
+    expectancyR: number(firstValue(metrics.expectancy_r, metrics.expectancyR), 0),
+    profitFactor: number(firstValue(metrics.profit_factor, metrics.profitFactor), 0),
+    winRatePct: number(firstValue(metrics.win_rate_pct, metrics.winRatePct), 0),
+    maxDrawdownR: number(firstValue(metrics.max_drawdown_r, metrics.maxDrawdownR), 0),
+    liveHealth: strategyLiveHealth({ runtimeStatus: runtimeStatusValue, executionMode: executionModeValue }),
+    lifecycle: strategyLifecycle({ runtimeStatus: runtimeStatusValue, executionMode: executionModeValue, versionStatus: versionStatusValue }),
+    lastOosR: number(firstValue(metrics.oos_r, metrics.total_r, metrics.totalR), 0),
   };
+}
+
+function selectStrategyInstance(item, instances) {
+  return instances.find((candidate) => runtimeState(candidate.runtime_state || candidate.status) === "RUNNING")
+    || instances.find((candidate) => runtimeState(candidate.runtime_state || candidate.status) === "PAUSED")
+    || item.live_instance || item.paper_instance || instances[0] || null;
+}
+
+function selectStrategyVersion(item, selectedInstance) {
+  const versions = rows(item.versions);
+  return versions.find((candidate) => candidate.strategy_version_id === selectedInstance?.strategy_version_id)
+    || item.published_version || item.latest_version || versions[0]
+    || (item.strategy_version_id ? item : null);
+}
+
+function strategyInstanceDisplayName({ definition = {}, version = {}, instance = {} } = {}) {
+  const base = text(definition.name || definition.label || definition.external_key, "Stratégie sans nom");
+  const versionLabel = text(version?.version_label, "");
+  const instanceId = text(instance?.strategy_instance_id, "");
+  if (!instanceId && !versionLabel) return base;
+  if (versionLabel) return `${base} · ${versionLabel}`;
+  return `${base} · ${shortId(instanceId)}`;
+}
+
+function strategyInstruments(definition, instance) {
+  return stringList(firstValue(instance?.instrument_scope, definition.default_instruments, definition.instruments, definition.metadata?.instrument));
+}
+
+function strategyLiveHealth({ runtimeStatus, executionMode }) {
+  if (executionMode !== "LIVE") return runtimeStatus === "RUNNING" ? "OK" : "OFF";
+  if (runtimeStatus === "RUNNING") return "OK";
+  if (runtimeStatus === "PAUSED") return "WATCH";
+  return "DEGRADED";
+}
+
+function strategyLifecycle({ runtimeStatus, executionMode, versionStatus }) {
+  if (runtimeStatus === "RUNNING" || runtimeStatus === "PAUSED") return executionMode;
+  if (versionStatus === "VALIDATED") return "RESEARCH";
+  return "DRAFT";
+}
+
+function strategyLifecycleDistribution(strategies) {
+  const total = Math.max(strategies.length, 1);
+  return ["DRAFT", "RESEARCH", "SHADOW", "PAPER", "LIVE"].map((label) => {
+    const count = strategies.filter((item) => item.lifecycle === label).length;
+    return { label, count, pct: Math.round((count / total) * 100) };
+  }).filter((item) => item.count > 0);
+}
+
+function strategyPerformanceByFamily(strategies) {
+  return [...groupRows(strategies, (item) => item.family).entries()].map(([family, items]) => ({
+    family,
+    strategies: items.length,
+    averageProfitFactor: averageStrategyMetric(items, "profitFactor"),
+    expectancyR: averageStrategyMetric(items, "expectancyR"),
+    drawdownR: averageStrategyMetric(items, "maxDrawdownR"),
+  }));
+}
+
+function topStrategyRows(strategies) {
+  return strategies.filter((item) => item.strategyInstanceId !== "none").slice(0, 5).map((item) => ({
+    strategyId: item.strategyId,
+    name: item.name,
+    score: Math.round(Math.max(item.profitFactor, 0) * 25),
+    oosR: item.lastOosR,
+    liveParityPct: item.runtimeStatus === "RUNNING" ? 100 : 0,
+  }));
+}
+
+function strategyRecentEvents(audit) {
+  return rows(audit).slice(0, 8).map((item) => ({
+    eventId: text(item.strategy_kernel_audit_event_id || item.event_id, "strategy_event"),
+    at: text(item.created_at, currentUtc()),
+    title: text(item.event_type, "Événement stratégie"),
+    detail: text(item.reason || item.aggregate_id, "Audit Strategy Kernel"),
+    tone: upper(item.next_runtime_state) === "FAILED" ? "HIGH" : "INFO",
+  }));
+}
+
+function averageStrategyMetric(items, key) {
+  const values = items.map((item) => Number(item[key])).filter(Number.isFinite);
+  if (!values.length) return 0;
+  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
+}
+
+function groupRows(items, keyFn) {
+  return items.reduce((groups, item) => {
+    const key = keyFn(item);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+    return groups;
+  }, new Map());
+}
+
+function shortId(value) {
+  return text(value, "none").slice(0, 8);
 }
 
 function stringList(value) {
@@ -1852,6 +2100,7 @@ function executionModeState(value) {
 
 function versionStatus(value) {
   const status = upper(value);
+  if (status === "PUBLISHED") return "VALIDATED";
   if (["VALIDATED", "REJECTED", "DEPRECATED", "RETIRED"].includes(status)) return status;
   return "DRAFT";
 }

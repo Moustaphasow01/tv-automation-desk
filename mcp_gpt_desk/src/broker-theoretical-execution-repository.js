@@ -26,6 +26,37 @@ export async function listTheoreticalEntryCandidates(repository, { limit = 100 }
       LIMIT $1`, [bounded]);
 }
 
+export async function listPortfolioTheoreticalEntryCandidates(repository, { limit = 100 } = {}) {
+  await repository.ready();
+  const bounded = boundLimit(limit);
+  return rows(repository.pool, `SELECT l.portfolio_order_intent_id, l.payload AS order_intent_payload,
+        l.created_at_utc, l.status AS lineage_status, l.broker_submission_allowed,
+        t.account_id AS target_account_id, t.instrument AS target_instrument,
+        t.net_direction, t.trading_date, t.payload AS target_position_payload,
+        c.broker_contract_id, c.broker_symbol, c.instrument_code AS contract_instrument_code,
+        c.tick_size, c.point_value
+      FROM portfolio_order_intent_lineage l
+      JOIN portfolio_target_positions t ON t.target_position_id = l.target_position_id
+      LEFT JOIN broker_contracts c ON c.broker_contract_id = COALESCE(
+          l.payload #>> '{provider_contract_ref,provider_contract_id}',
+          l.payload->>'broker_contract_id'
+        )
+      WHERE l.status = 'READY'
+        AND l.broker_submission_allowed = true
+        AND NOT EXISTS (
+          SELECT 1 FROM trade_theoretical_execution_events e
+          WHERE e.portfolio_order_intent_id = l.portfolio_order_intent_id
+            AND e.event_type IN ('entry_filled','entry_expired')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM trades t2
+          WHERE t2.portfolio_order_intent_id = l.portfolio_order_intent_id
+            AND t2.status NOT IN ('cancelled','rejected','expired','error')
+        )
+      ORDER BY l.created_at_utc ASC
+      LIMIT $1`, [bounded]).then((items) => items.map(portfolioLineageAsTheoreticalCandidate));
+}
+
 export async function latestClosedCandleForIntent(repository, intent) {
   await repository.ready();
   const candles = await rows(repository.pool, `SELECT mc.*
@@ -41,6 +72,16 @@ export async function latestClosedCandleForIntent(repository, intent) {
     intent.requested_at,
   ]);
   return candles.find((candle) => intentEntryTouched(intent, candle)) || candles.at(-1) || null;
+}
+
+export async function latestClosedCandleForPortfolioIntent(repository, intent) {
+  await repository.ready();
+  const instrument = intent.contract_instrument_code || intent.instrument_code;
+  const requestedAt = intent.requested_at || intent.created_at_utc;
+  const m1 = await closedCandlesForTheoreticalIntent(repository, { instrument, requestedAt, timeframe: "1" });
+  if (m1.length) return m1.find((candle) => intentEntryTouched(intent, candle)) || m1.at(-1) || null;
+  const m5 = await closedCandlesForTheoreticalIntent(repository, { instrument, requestedAt, timeframe: "5" });
+  return m5.find((candle) => intentEntryTouched(intent, candle)) || m5.at(-1) || null;
 }
 
 export async function recordTheoreticalEntryFill(repository, { result, now }) {
@@ -85,6 +126,61 @@ export async function recordTheoreticalEntryExpired(repository, { result, now })
     const event = await insertTheoreticalEvent(client, {
       eventType: "entry_expired",
       orderIntentId: intent.order_intent_id,
+      tradeId: null,
+      eventAt,
+      result,
+    });
+    await client.query("COMMIT");
+    return { event, idempotent: false };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function recordPortfolioTheoreticalEntryFill(repository, { result, now }) {
+  await repository.ready();
+  const client = await repository.pool.connect();
+  try {
+    await client.query("BEGIN");
+    const existing = await latestPortfolioTheoreticalEntryFill(client, result.portfolio_order_intent_id);
+    if (existing) return await commitValue(client, { event: existing, idempotent: true });
+    const lineage = await lockedPortfolioIntent(client, result.portfolio_order_intent_id);
+    const trade = buildPortfolioTheoreticalEntryTrade({ lineage, result, now });
+    await upsertPortfolioTheoreticalTrade(client, trade);
+    await insertPortfolioTheoreticalEntryFill(client, { trade, result });
+    await insertPortfolioTheoreticalTradeEvent(client, { trade, result });
+    const event = await insertTheoreticalEvent(client, {
+      eventType: "entry_filled",
+      orderIntentId: null,
+      portfolioOrderIntentId: lineage.portfolio_order_intent_id,
+      tradeId: trade.tradeId,
+      eventAt: trade.eventAt,
+      result,
+    });
+    await client.query("COMMIT");
+    return { event, trade_id: trade.tradeId, idempotent: false };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function recordPortfolioTheoreticalEntryExpired(repository, { result, now }) {
+  await repository.ready();
+  const client = await repository.pool.connect();
+  try {
+    await client.query("BEGIN");
+    const lineage = await lockedPortfolioIntent(client, result.portfolio_order_intent_id);
+    const eventAt = result.event_at_utc || now;
+    const event = await insertTheoreticalEvent(client, {
+      eventType: "entry_expired",
+      orderIntentId: null,
+      portfolioOrderIntentId: lineage.portfolio_order_intent_id,
       tradeId: null,
       eventAt,
       result,
@@ -206,10 +302,34 @@ async function latestTheoreticalEntryFill(client, orderIntentId) {
     ORDER BY event_at_utc DESC LIMIT 1`, [orderIntentId]);
 }
 
+async function latestPortfolioTheoreticalEntryFill(client, portfolioOrderIntentId) {
+  return one(client, `SELECT * FROM trade_theoretical_execution_events
+    WHERE portfolio_order_intent_id = $1 AND event_type = 'entry_filled'
+    ORDER BY event_at_utc DESC LIMIT 1`, [portfolioOrderIntentId]);
+}
+
 async function lockedIntent(client, orderIntentId) {
   const intent = await one(client, "SELECT * FROM trade_order_intents WHERE order_intent_id = $1 FOR UPDATE", [orderIntentId]);
   if (!intent) throw repositoryError("ORDER_INTENT_NOT_FOUND", `Order intent not found: ${orderIntentId}.`);
   return intent;
+}
+
+async function lockedPortfolioIntent(client, portfolioOrderIntentId) {
+  const lineage = await one(client, `SELECT l.*, l.payload AS order_intent_payload,
+        t.account_id AS target_account_id, t.instrument AS target_instrument,
+        t.net_direction, t.payload AS target_position_payload,
+        c.broker_contract_id, c.broker_symbol, c.instrument_code AS contract_instrument_code,
+        c.tick_size, c.point_value
+      FROM portfolio_order_intent_lineage l
+      JOIN portfolio_target_positions t ON t.target_position_id = l.target_position_id
+      LEFT JOIN broker_contracts c ON c.broker_contract_id = COALESCE(
+        l.payload #>> '{provider_contract_ref,provider_contract_id}',
+        l.payload->>'broker_contract_id'
+      )
+      WHERE l.portfolio_order_intent_id = $1
+      FOR UPDATE OF l`, [portfolioOrderIntentId]);
+  if (!lineage) throw repositoryError("PORTFOLIO_ORDER_INTENT_NOT_FOUND", `Portfolio OrderIntent not found: ${portfolioOrderIntentId}.`);
+  return portfolioLineageAsTheoreticalCandidate(lineage);
 }
 
 async function lockedOpenTrade(client, tradeId) {
@@ -235,6 +355,31 @@ function buildTheoreticalEntryTrade({ intent, decision, result, now }) {
     session: decision?.session || null,
     strategyId: decision?.strategy_id || null,
     raw: theoreticalRaw(result),
+  };
+}
+
+function buildPortfolioTheoreticalEntryTrade({ lineage, result, now }) {
+  const eventAt = result.event_at_utc || now;
+  return {
+    lineage,
+    result,
+    tradeId: `trade_${lineage.portfolio_order_intent_id}`,
+    eventAt,
+    side: lineage.side === "sell" ? "short" : "long",
+    stopPrice: lineage.bracket?.stop_price || null,
+    targetPrice: lineage.bracket?.target_price || null,
+    tradingDate: lineage.trading_date || null,
+    session: lineage.session || null,
+    strategyId: lineage.strategy_id || null,
+    strategyInstanceId: lineage.strategy_instance_id || null,
+    raw: {
+      ...theoreticalRaw(result),
+      portfolio_order_intent_id: lineage.portfolio_order_intent_id,
+      strategy_signal_id: lineage.strategy_signal_id || null,
+      strategy_instance_id: lineage.strategy_instance_id || null,
+      human_gate_confirmation_required: true,
+      physical_execution_created: false,
+    },
   };
 }
 
@@ -269,12 +414,46 @@ async function upsertTheoreticalTrade(client, trade) {
   );
 }
 
+async function upsertPortfolioTheoreticalTrade(client, trade) {
+  await client.query(
+    `INSERT INTO trades (
+      trade_id, trade_decision_id, order_intent_id, portfolio_order_intent_id,
+      broker_account_id, broker_contract_id, status, side,
+      quantity_planned, quantity_open, avg_entry_price, initial_stop_price, current_stop_price,
+      current_target_price, opened_at, trading_date, session, strategy_id, strategy_instance_id, raw
+    ) VALUES ($1,NULL,NULL,$2,$3,$4,'open',$5::trade_side,$6,$6,$7,$8,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)
+    ON CONFLICT (trade_id) DO UPDATE SET status = 'open',
+      portfolio_order_intent_id = EXCLUDED.portfolio_order_intent_id,
+      quantity_open = EXCLUDED.quantity_open,
+      avg_entry_price = EXCLUDED.avg_entry_price,
+      initial_stop_price = COALESCE(trades.initial_stop_price, EXCLUDED.initial_stop_price),
+      current_stop_price = COALESCE(trades.current_stop_price, EXCLUDED.current_stop_price),
+      current_target_price = COALESCE(trades.current_target_price, EXCLUDED.current_target_price),
+      raw = trades.raw || EXCLUDED.raw,
+      updated_at = now()`,
+    [trade.tradeId, trade.lineage.portfolio_order_intent_id, trade.lineage.broker_account_id,
+      trade.lineage.broker_contract_id, trade.side, trade.result.quantity, trade.result.price,
+      trade.stopPrice, trade.targetPrice, trade.eventAt, trade.tradingDate, trade.session,
+      trade.strategyId, trade.strategyInstanceId, json(trade.raw)],
+  );
+}
+
 async function insertTheoreticalEntryFill(client, { intent, trade, result }) {
   await client.query(
     `INSERT INTO trade_fills (trade_fill_id, trade_id, broker_order_id, broker_fill_ref, side, quantity, price, filled_at, liquidity, raw)
      VALUES ($1,$2,NULL,$3,$4::order_side,$5,$6,$7,'unknown',$8::jsonb)`,
     [`trade_fill_${cryptoId()}`, trade.tradeId, `theoretical:${result.order_intent_id}:entry`,
       intent.side, result.quantity, result.price, trade.eventAt, json(trade.raw)],
+  );
+}
+
+async function insertPortfolioTheoreticalEntryFill(client, { trade, result }) {
+  await client.query(
+    `INSERT INTO trade_fills (trade_fill_id, trade_id, broker_order_id, broker_fill_ref, side, quantity, price, filled_at, liquidity, raw)
+     VALUES ($1,$2,NULL,$3,$4::order_side,$5,$6,$7,'unknown',$8::jsonb)
+     ON CONFLICT DO NOTHING`,
+    [`trade_fill_${cryptoId()}`, trade.tradeId, `theoretical:${trade.lineage.portfolio_order_intent_id}:entry`,
+      trade.lineage.side, result.quantity, result.price, trade.eventAt, json(trade.raw)],
   );
 }
 
@@ -288,6 +467,16 @@ async function insertTheoreticalTradeEvent(client, { trade, result, intent }) {
      VALUES ($1,$2,'order_filled','open',$3,$4::jsonb,$5::jsonb)`,
     [`trade_event_${cryptoId()}`, trade.tradeId, trade.eventAt,
       json({ quantity: result.quantity, price: result.price, order_type: intent.order_type, theoretical: true }),
+      json(trade.raw)],
+  );
+}
+
+async function insertPortfolioTheoreticalTradeEvent(client, { trade, result }) {
+  await client.query(
+    `INSERT INTO trade_events (trade_event_id, trade_id, event_type, status, occurred_at, payload, raw)
+     VALUES ($1,$2,'order_filled','open',$3,$4::jsonb,$5::jsonb)`,
+    [`trade_event_${cryptoId()}`, trade.tradeId, trade.eventAt,
+      json({ quantity: result.quantity, price: result.price, order_type: trade.lineage.order_type, theoretical: true, portfolio_order_intent_id: trade.lineage.portfolio_order_intent_id }),
       json(trade.raw)],
   );
 }
@@ -358,24 +547,91 @@ async function insertTheoreticalExitTradeEvent(client, { trade, exit }) {
   );
 }
 
-async function insertTheoreticalEvent(client, { eventType, orderIntentId = null, tradeId = null, eventAt, result }) {
+async function insertTheoreticalEvent(client, { eventType, orderIntentId = null, portfolioOrderIntentId = null, tradeId = null, eventAt, result }) {
   const payload = theoreticalEventPayload(result);
   const row = await one(client, `INSERT INTO trade_theoretical_execution_events (
-      theoretical_execution_event_id, order_intent_id, trade_id, event_type, event_at_utc,
+      theoretical_execution_event_id, order_intent_id, portfolio_order_intent_id, trade_id, event_type, event_at_utc,
       source_candle_feed_id, source_candle_timestamp_utc, quantity, price, idempotency_key, payload, raw
-    ) VALUES ($1,$2,$3,$4::theoretical_execution_event_type,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb)
+    ) VALUES ($1,$2,$3,$4,$5::theoretical_execution_event_type,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb)
     ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL
     DO UPDATE SET payload = trade_theoretical_execution_events.payload || EXCLUDED.payload,
       raw = trade_theoretical_execution_events.raw || EXCLUDED.raw,
       updated_at_utc = now()
     RETURNING *`, [
-    `theoretical_execution_event_${cryptoId()}`, orderIntentId, tradeId, eventType, eventAt,
+    `theoretical_execution_event_${cryptoId()}`, orderIntentId, portfolioOrderIntentId, tradeId, eventType, eventAt,
     nested(result, "candle", "feed_id"), nested(result, "candle", "timestamp_utc"),
     value(result, "quantity"), value(result, "price"),
-    `theoretical:${eventType}:${orderIntentId || tradeId}:${eventAt}`,
+    `theoretical:${eventType}:${portfolioOrderIntentId || orderIntentId || tradeId}:${eventAt}`,
     json(payload), json(result),
   ]);
   return row;
+}
+
+function portfolioLineageAsTheoreticalCandidate(lineage = {}) {
+  const payload = lineage.order_intent_payload || lineage.payload || {};
+  const terms = payload.execution_terms || lineage.execution_terms || {};
+  const entry = payload.entry || terms.entry || {};
+  const protection = payload.protection || {};
+  const targets = Array.isArray(payload.targets) ? payload.targets : Array.isArray(terms.targets) ? terms.targets : [];
+  const side = orderSide(payload.action || payload.side || terms.side);
+  const orderType = orderTypeSql(payload.order_type || terms.order_type);
+  const entryPrice = finite(firstValue(entry.price, entry.value, payload.limit_price, terms.limit_price));
+  const stopTriggerPrice = finite(firstValue(entry.trigger_price, entry.stop_price, payload.stop_price, terms.stop_price));
+  const targetPrice = finite(firstValue(protection.target_price, targets[0]?.price, targets[0]?.value));
+  const stopPrice = finite(firstValue(protection.stop_price, terms.stop?.price, terms.stop?.value));
+  return {
+    portfolio_order_intent_id: String(lineage.portfolio_order_intent_id || payload.order_intent_id || ""),
+    order_intent_id: String(lineage.portfolio_order_intent_id || payload.order_intent_id || ""),
+    broker_account_id: payload.broker_account_id || payload.account_id || lineage.target_account_id || null,
+    broker_contract_id: lineage.broker_contract_id || payload.provider_contract_ref?.provider_contract_id || payload.broker_contract_id || null,
+    contract_instrument_code: lineage.contract_instrument_code || payload.instrument || lineage.target_instrument || null,
+    broker_symbol: lineage.broker_symbol || payload.provider_contract_ref?.provider_symbol || null,
+    tick_size: lineage.tick_size || null,
+    point_value: lineage.point_value || null,
+    instrument_code: payload.instrument || lineage.target_instrument || null,
+    strategy_id: payload.strategy_id || null,
+    strategy_instance_id: payload.strategy_instance_id || payload.source?.lineage?.strategy_instance_ids?.[0] || null,
+    strategy_signal_id: payload.signal_id || payload.source?.lineage?.strategy_signal_ids?.[0] || null,
+    trading_date: payload.trading_date || payload.tradingDate || null,
+    session: payload.session || null,
+    side,
+    decision_side: side === "sell" ? "short" : "long",
+    order_type: orderType,
+    quantity: Number(payload.quantity || lineage.quantity || 0),
+    limit_price: orderType === "limit" || orderType === "stop_limit" ? entryPrice : null,
+    stop_price: orderType === "stop_market" || orderType === "stop_limit" ? stopTriggerPrice || entryPrice : null,
+    requested_at: payload.requested_at_utc || payload.requested_at || lineage.created_at_utc,
+    expires_at: payload.expires_at_utc || payload.expires_at || null,
+    bracket: { stop_price: stopPrice, target_price: targetPrice },
+    entry_plan: { order_type: orderType, entry_price: entryPrice, limit_price: entryPrice, stop_price: stopTriggerPrice },
+    risk_plan: { stop_price: stopPrice, target_price: targetPrice },
+    payload,
+  };
+}
+
+async function closedCandlesForTheoreticalIntent(repository, { instrument, requestedAt, timeframe }) {
+  return rows(repository.pool, `SELECT mc.*
+      FROM market_candles mc
+      JOIN market_feeds mf ON mf.feed_id = mc.feed_id
+      WHERE mf.instrument_code = $1
+        AND mc.timeframe = $2
+        AND mc.is_closed = true
+        AND mc.timestamp_utc >= $3::timestamptz
+      ORDER BY mc.timestamp_utc ASC
+      LIMIT 500`, [instrument, timeframe, requestedAt]);
+}
+
+function orderSide(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return ["SELL", "SHORT"].includes(normalized) ? "sell" : "buy";
+}
+
+function orderTypeSql(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "MARKET") return "market";
+  if (normalized === "STOP_MARKET" || normalized === "STOP") return "stop_market";
+  if (normalized === "STOP_LIMIT") return "stop_limit";
+  return "limit";
 }
 
 function theoreticalEventPayload(result) {
@@ -452,6 +708,13 @@ function boundLimit(limit) { return Math.max(1, Math.min(Number(limit) || 100, 5
 function entrySide(intent) { return String(intent?.side || "").toLowerCase(); }
 function candleHigh(candle) { return Number(candle?.high); }
 function candleLow(candle) { return Number(candle?.low); }
+function firstValue(...values) {
+  return values.find((candidate) => candidate !== undefined && candidate !== null && candidate !== "");
+}
+function finite(valueToNormalize) {
+  const number = Number(valueToNormalize);
+  return Number.isFinite(number) ? number : null;
+}
 function value(object, key) {
   if (!object) return null;
   const actual = object[key];

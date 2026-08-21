@@ -12,13 +12,16 @@ export async function processTheoreticalExecution(service, { entryLimit = 100, e
     return skipped("THEORETICAL_EXECUTION_ONLY_IN_MANUAL_TELEGRAM_MODE");
   }
   const entries = await processTheoreticalEntries(service, { entryLimit });
+  const portfolioEntries = await processPortfolioTheoreticalEntries(service, { entryLimit });
   const exits = await processTheoreticalExits(service, { exitLimit });
   const materialized = countMaterialized(entries, ["fill_entry", "expire_entry"])
+    + countMaterialized(portfolioEntries, ["fill_entry", "expire_entry"])
     + countMaterialized(exits, ["fill_exit", "review_exit"]);
   return {
     ok: true,
     status: materialized > 0 ? "MATERIALIZED" : "NO_THEORETICAL_FILL",
     entries,
+    portfolioEntries,
     exits,
     materialized,
   };
@@ -106,8 +109,31 @@ async function processTheoreticalEntries(service, { entryLimit }) {
   return entries;
 }
 
+async function processPortfolioTheoreticalEntries(service, { entryLimit }) {
+  const candidates = typeof service.repository.listPortfolioTheoreticalEntryCandidates === "function"
+    ? await service.repository.listPortfolioTheoreticalEntryCandidates({ limit: entryLimit })
+    : [];
+  const entries = [];
+  for (const candidate of candidates) {
+    const evaluated = await evaluatePortfolioTheoreticalEntry(service, candidate);
+    entries.push(await persistPortfolioTheoreticalEntryAction(service, evaluated));
+  }
+  return entries;
+}
+
 async function evaluateTheoreticalEntry(service, candidate) {
   const candle = await service.repository.latestClosedCandleForIntent(candidate);
+  return evaluateTheoreticalEntryIntent({
+    intent: candidate,
+    decision: candidateDecision(candidate),
+    contract: candidateContract(candidate),
+    candle,
+    now: service.now(),
+  });
+}
+
+async function evaluatePortfolioTheoreticalEntry(service, candidate) {
+  const candle = await service.repository.latestClosedCandleForPortfolioIntent(candidate);
   return evaluateTheoreticalEntryIntent({
     intent: candidate,
     decision: candidateDecision(candidate),
@@ -123,6 +149,16 @@ async function persistTheoreticalEntryAction(service, evaluated) {
   }
   if (evaluated.action === "expire_entry") {
     return { ...evaluated, persisted: await service.repository.recordTheoreticalEntryExpired({ result: evaluated, now: service.now() }) };
+  }
+  return evaluated;
+}
+
+async function persistPortfolioTheoreticalEntryAction(service, evaluated) {
+  if (evaluated.action === "fill_entry") {
+    return { ...evaluated, persisted: await service.repository.recordPortfolioTheoreticalEntryFill({ result: evaluated, now: service.now() }) };
+  }
+  if (evaluated.action === "expire_entry") {
+    return { ...evaluated, persisted: await service.repository.recordPortfolioTheoreticalEntryExpired({ result: evaluated, now: service.now() }) };
   }
   return evaluated;
 }
@@ -198,7 +234,7 @@ function countMaterialized(items, actions) {
   return items.filter((item) => actions.includes(item.action)).length;
 }
 
-function skipped(reason) { return { ok: true, status: "SKIPPED", reason, entries: [], exits: [] }; }
+function skipped(reason) { return { ok: true, status: "SKIPPED", reason, entries: [], portfolioEntries: [], exits: [] }; }
 function normalizeManualEventType(input) { return String(input.eventType || input.event_type || "").trim().toLowerCase(); }
 function validIso(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
 function serviceError(code, message) { const error = new Error(message); error.code = code; error.statusCode = 400; return error; }

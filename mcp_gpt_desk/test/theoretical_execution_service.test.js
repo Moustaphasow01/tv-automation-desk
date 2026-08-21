@@ -62,15 +62,37 @@ test("operator manual filled event is recorded separately and does not create a 
   assert.equal(repository.entryFill, null);
 });
 
+test("service tracks a VNext portfolio OrderIntent theoretically before human confirmation", async () => {
+  const repository = new TheoreticalFakeRepository({
+    entryCandle: candle({ low: 100.25 }),
+    portfolioEntryCandle: candle({ low: 99.75 }),
+    portfolioCandidates: [portfolioEntryCandidate()],
+  });
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: manualEnvironment });
+
+  const result = await service.processTheoreticalExecution();
+
+  assert.equal(result.status, "MATERIALIZED");
+  assert.equal(result.portfolioEntries[0].action, "fill_entry");
+  assert.equal(result.portfolioEntries[0].portfolio_order_intent_id, "portfolio_order_intent_1");
+  assert.equal(repository.portfolioEntryFill.result.price, 100);
+  assert.equal(repository.providerCommandsCreated, 0);
+});
+
 class TheoreticalFakeRepository {
-  constructor({ entryCandle = null } = {}) {
+  constructor({ entryCandle = null, portfolioEntryCandle = null, portfolioCandidates = [] } = {}) {
     this.available = true;
     this.entryCandle = entryCandle;
+    this.portfolioEntryCandle = portfolioEntryCandle;
+    this.portfolioCandidates = portfolioCandidates;
     this.entryFill = null;
     this.entryExpired = null;
+    this.portfolioEntryFill = null;
+    this.portfolioEntryExpired = null;
     this.exitFill = null;
     this.review = null;
     this.manualEvents = [];
+    this.providerCommandsCreated = 0;
   }
 
   async listTheoreticalEntryCandidates() {
@@ -89,6 +111,24 @@ class TheoreticalFakeRepository {
   async recordTheoreticalEntryExpired(input) {
     this.entryExpired = input;
     return { event: { theoretical_execution_event_id: "theoretical_event_expired" } };
+  }
+
+  async listPortfolioTheoreticalEntryCandidates() {
+    return this.portfolioCandidates;
+  }
+
+  async latestClosedCandleForPortfolioIntent() {
+    return this.portfolioEntryCandle;
+  }
+
+  async recordPortfolioTheoreticalEntryFill(input) {
+    this.portfolioEntryFill = input;
+    return { trade: { trade_id: "trade_portfolio_order_intent_1" }, event: { theoretical_execution_event_id: "theoretical_event_portfolio_1" } };
+  }
+
+  async recordPortfolioTheoreticalEntryExpired(input) {
+    this.portfolioEntryExpired = input;
+    return { event: { theoretical_execution_event_id: "theoretical_event_portfolio_expired" } };
   }
 
   async listTheoreticalOpenTrades() {
@@ -134,6 +174,29 @@ function entryCandidate() {
     strategy_id: "ny_open_1530",
     entry_plan: { order_type: "limit", entry_price: 100, limit_price: 100 },
     risk_plan: { stop_price: 95, target_price: 110 },
+  };
+}
+
+function portfolioEntryCandidate() {
+  return {
+    ...entryCandidate(),
+    portfolio_order_intent_id: "portfolio_order_intent_1",
+    order_intent_id: "portfolio_order_intent_1",
+    trade_decision_id: null,
+    strategy_signal_id: "strategy_signal_1",
+    strategy_instance_id: "strategy_instance_1",
+    payload: {
+      instrument: "MNQ",
+      action: "BUY",
+      quantity: 1,
+      order_type: "LIMIT",
+      entry: { price: 100 },
+      protection: { stop_price: 95, target_price: 110 },
+      targets: [{ label: "T1", price: 110 }],
+      strategy_id: "research_breakout",
+      strategy_instance_id: "strategy_instance_1",
+      signal_id: "strategy_signal_1",
+    },
   };
 }
 
