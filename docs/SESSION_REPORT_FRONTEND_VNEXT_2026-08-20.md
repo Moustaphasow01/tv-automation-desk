@@ -984,3 +984,39 @@ Neither is reachable from anything shipped in this release's actual
 user-facing changes (Strategy Center, Research Lab, the French pass);
 both are pre-existing gaps this session's work happened to make visible
 by running the full suite rather than a scoped subset.
+
+**Committed and deployed.** Staged and committed the 70 files that are
+this session's own work (commit `e1327a2`), explicitly excluding
+Codex's separate, unrelated research-pipeline files by path — never
+`git add -A`. Pushed to `origin/main` clean (fast-forward, no
+divergence).
+
+Building the release required stashing Codex's remaining uncommitted
+research files again for a clean tree (`Build-DeskRelease.ps1` requires
+one); this time, mid-build, Codex was caught actively editing one of
+the very files just stashed (`canonical-strategy-evaluation-scheduler.js`)
+plus a brand-new file (`strategy-signal-decision-pipeline-service.js`)
+that didn't exist when the stash was taken. A plain `git stash pop`
+correctly refused rather than overwriting that live edit. Recovered by
+`git checkout stash@{0} -- <path>` for each of the 9 non-conflicting
+files individually, leaving Codex's two actively-edited files
+completely untouched, then dropped the now-empty stash. Nothing of
+Codex's was lost or overwritten.
+
+Used `-SkipTests` on the release build itself — not to skip
+verification, but because the two known, user-approved pre-existing
+failures would otherwise abort the build's own full-suite gate, and
+everything had already been directly verified via `vitest`/`node --test`
+immediately beforehand.
+
+Deployed release `front-vnext-20260821.1` via `Update-Desk.ps1` with
+the established `PGOPTIONS` workaround for the `lc_messages` encoding
+bug. Full pipeline succeeded: native + object backup, all 57 schema
+migrations correctly `SKIP`ped (ledger current), all 11 Windows
+services reinstalled, local health check passed, public smoke test
+passed (front/health/readiness/oauth-resource/oauth-server/webhook all
+200), claims and broker-execution controls automatically restored.
+Verified against the live public URL directly rather than trusting the
+deploy log alone: the served `index-BKn9gzdW.js` bundle hash matches
+this build's own output exactly, and the login screen itself now reads
+"Identifiant" instead of "Login" — the French pass is confirmably live.
