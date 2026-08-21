@@ -74,12 +74,12 @@ describe("OrderIntent dossier semi-manual contract", () => {
   it("renders post-Risk trade terms as definitions without editable controls", () => {
     const html = renderToStaticMarkup(<ReadonlyTradeTerms dossier={buildOrderIntentDossier(orderDetailEnvelope())} />);
 
-    expect(html).toContain("READ-ONLY APRÈS RISK");
+    expect(html).toContain("LECTURE SEULE APRÈS RISQUE");
     expect(html).toContain("Instrument");
     expect(html).toContain("Quantité autorisée");
     expect(html).toContain("Entrée");
     expect(html).toContain("Stop");
-    expect(html).toContain("Target 1");
+    expect(html).toContain("Cible 1");
     expect(html).not.toMatch(/<(input|select|textarea)\b/i);
     expect(html).not.toContain("contenteditable");
   });
@@ -142,7 +142,7 @@ describe("OrderIntent dossier semi-manual contract", () => {
       mismatches: [{ field: "quantity", expected: "2", actual: "1", reason: "PARTIAL_FILL" }],
     }} />);
 
-    expect(html).toContain("RECONCILIATION MISMATCH");
+    expect(html).toContain("ÉCART DE RÉCONCILIATION");
     expect(html).toContain("PARTIAL_FILL");
     expect(html).toContain('role="alert"');
   });

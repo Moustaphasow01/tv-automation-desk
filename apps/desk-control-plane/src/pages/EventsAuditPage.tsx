@@ -17,6 +17,7 @@ import {
 } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, StatusBadge } from "@/design-system/primitives";
+import { presentDomain, presentPermission, presentQueueStatus, presentRelationKind } from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -85,8 +86,8 @@ export function EventsAuditPage() {
     <div className="operator-page events-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Timeline & Audit"
-        description={`Correlation active ${compactId(requestedCorrelationId)} · fenêtre ${data.filters.windowLabel} · projection ${meta.latencyMs} ms.`}
+        title="Chronologie & Audit"
+        description={`Corrélation active ${compactId(requestedCorrelationId)} · fenêtre ${data.filters.windowLabel} · projection ${meta.latencyMs} ms.`}
         actions={
           <>
             <label className="events-search" aria-label="Recherche correlationId">
@@ -99,16 +100,16 @@ export function EventsAuditPage() {
       />
 
       <section className="operator-kpi-strip" aria-label="Indicateurs Timeline Audit">
-        <KpiCard label="EVENTS" value={`${data.summary.totalEvents}`} delta={`${data.summary.correlations} correlations`} tone="info" />
+        <KpiCard label="ÉVÉNEMENTS" value={`${data.summary.totalEvents}`} delta={`${data.summary.correlations} correlations`} tone="info" />
         <KpiCard label="CHEMIN AUTH" value={`${data.summary.authoritativeSteps}`} delta="Ordre déterministe" tone="success" />
-        <KpiCard label="IA ADVISORY" value={`${data.summary.advisoryBranches}`} delta="Hors chemin ordre" tone="warning" />
+        <KpiCard label="IA CONSULTATIF" value={`${data.summary.advisoryBranches}`} delta="Hors chemin ordre" tone="warning" />
         <KpiCard label="LATENCE AVG" value={`${data.summary.avgLatencyMs}ms`} delta={`${selected.totalLatencyMs} ms total`} tone="info" />
         <KpiCard label="PAYLOADS" value={`${data.summary.exportablePayloads}`} delta="copie/export autorisé" tone="success" />
         <KpiCard label="ROOT" value={rootEvent ? formatTime(rootEvent.at) : "—"} delta={compactId(selected.rootEventId)} tone="info" />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Timeline, chemin et payload">
-        <Card title="Timeline chronologique" actions={<InlineAction>Deep-links</InlineAction>} density="compact">
+        <Card title="Timeline chronologique" actions={<InlineAction>Liens directs</InlineAction>} density="compact">
           <div className="events-timeline-list">
             {shownEvents.map((event) => (
               <Link key={event.eventId} to={`${event.route}?eventId=${event.eventId}&correlationId=${event.correlationId}`}>
@@ -124,10 +125,10 @@ export function EventsAuditPage() {
           </div>
         </Card>
 
-        <Card title="Chemin autoritaire vs advisory" actions={<InlineAction>Correlation</InlineAction>} density="compact">
+        <Card title="Chemin autoritaire vs consultatif" actions={<InlineAction>Corrélation</InlineAction>} density="compact">
           <div className="events-correlation-chain">
             <section className="events-path events-path--authoritative">
-              <header><FaShieldAlt /><strong>AUTHORITATIVE ORDER PATH</strong><span>{selected.authoritativePath.length}</span></header>
+              <header><FaShieldAlt /><strong>CHEMIN D'ORDRE AUTORITAIRE</strong><span>{selected.authoritativePath.length}</span></header>
               {selected.authoritativePath.map((eventId, index) => {
                 const event = eventById.get(eventId);
                 return (
@@ -135,15 +136,15 @@ export function EventsAuditPage() {
                     <span>{String(index + 1).padStart(2, "0")}</span>
                     <div>
                       <strong>{event?.eventType ?? eventId}</strong>
-                      <small>{event ? `${event.domain} · ${event.schemaVersion}` : "missing"}</small>
+                      <small>{event ? `${presentDomain(event.domain).label} · ${event.schemaVersion}` : "manquant"}</small>
                     </div>
-                    <StatusBadge tone={event ? statusTone(event.status) : "danger"}>{event ? statusLabel(event.status) : "MISS"}</StatusBadge>
+                    <StatusBadge tone={event ? statusTone(event.status) : "danger"}>{event ? statusLabel(event.status) : "MANQUANT"}</StatusBadge>
                   </article>
                 );
               })}
             </section>
             <section className="events-path events-path--advisory">
-              <header><FaRobot /><strong>AI SHADOW / ADVISORY</strong><span>{selected.advisoryPath.length}</span></header>
+              <header><FaRobot /><strong>IA SHADOW / CONSULTATIF</strong><span>{selected.advisoryPath.length}</span></header>
               {selected.advisoryPath.map((eventId) => {
                 const event = eventById.get(eventId);
                 return (
@@ -188,7 +189,7 @@ export function EventsAuditPage() {
         <Card title="Filtres et index audit" actions={<InlineAction>Filtres</InlineAction>} density="compact">
           <div className="events-filter-grid">
             <MetricBox label="Correlation" value={compactId(data.filters.activeCorrelationId)} />
-            <MetricBox label="Window" value={data.filters.windowLabel} />
+            <MetricBox label="Fenêtre" value={data.filters.windowLabel} />
             <MetricBox label="Domaines" value={data.filters.domains.length} />
             <MetricBox label="Statuts" value={data.filters.statuses.length} />
           </div>
@@ -198,33 +199,33 @@ export function EventsAuditPage() {
           </div>
         </Card>
 
-        <Card title="Relations eventId / causationId" actions={<InlineAction>Graph</InlineAction>} density="compact">
+        <Card title="Relations eventId / causationId" actions={<InlineAction>Graphe</InlineAction>} density="compact">
           <div className="events-relations-list">
             {data.relations.map((relation) => (
               <article key={`${relation.fromEventId}:${relation.toEventId}`}>
                 <span><FaBezierCurve /></span>
                 <div>
                   <strong>{compactId(relation.fromEventId)}</strong>
-                  <small>{relation.relation}</small>
+                  <small>{presentRelationKind(relation.relation).label}</small>
                 </div>
                 <FaArrowRight />
                 <div>
                   <strong>{compactId(relation.toEventId)}</strong>
-                  <small>{eventById.get(relation.toEventId)?.domain ?? "UNKNOWN"}</small>
+                  <small>{presentDomain(eventById.get(relation.toEventId)?.domain).label}</small>
                 </div>
               </article>
             ))}
           </div>
         </Card>
 
-        <Card title="Export & commandes audit" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Export & commandes audit" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="events-command-actions">
             {data.commandActions.map((action) => (
               <article key={action.actionId}>
                 <span>{action.commandType.includes("export") ? <FaDownload /> : action.commandType.includes("copy") ? <FaDatabase /> : <FaProjectDiagram />}</span>
                 <div>
                   <strong>{action.label}</strong>
-                  <small>{action.commandType} · {action.requiresConfirmation ? "confirm" : "instant"}</small>
+                  <small>{action.commandType} · {action.requiresConfirmation ? "confirmer" : "instantané"}</small>
                 </div>
                 <StatusBadge tone={permissionTone(action.permission)}>{permissionLabel(action.permission)}</StatusBadge>
                 <DeskButton
@@ -241,7 +242,7 @@ export function EventsAuditPage() {
             <FaFingerprint />
             <div>
               <small>Dernière commande audit</small>
-              <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+              <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
@@ -275,7 +276,7 @@ function statusTone(status: AuditEvent["status"]) {
 }
 
 function statusLabel(status: AuditEvent["status"]) {
-  return status === "FAILED" ? "FAIL" : status === "EXPECTED" ? "NEXT" : status;
+  return presentQueueStatus(status).label;
 }
 
 function permissionTone(permission: AuditAction["permission"]) {
@@ -285,12 +286,11 @@ function permissionTone(permission: AuditAction["permission"]) {
 }
 
 function permissionLabel(permission: AuditAction["permission"]) {
-  if (permission === "STEP_UP_REQUIRED") return "STEP-UP";
-  return permission;
+  return presentPermission(permission).label;
 }
 
 function domainLabel(domain: EventsAuditView["filters"]["domains"][number]) {
-  return domain === "PORTFOLIO" ? "PORTF" : domain === "EXECUTION" ? "EXEC" : domain;
+  return presentDomain(domain).label;
 }
 
 function compactId(value: string) {

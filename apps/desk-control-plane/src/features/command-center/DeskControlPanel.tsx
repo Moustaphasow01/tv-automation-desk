@@ -1,14 +1,15 @@
 import { FaClock, FaGlobe, FaPlay, FaRedo, FaStethoscope, FaStop, FaSyncAlt } from "react-icons/fa";
 import type { CommandSnapshot } from "@/domains/realtime/commandRuntime";
 import type { DeskControlCapability, DeskControlCommand } from "./model";
+import { healthLabel } from "./mapper";
 import { CommandPanel, PanelStatus } from "./panelPrimitives";
 
 const ACTIONS: readonly { commandType: DeskControlCommand; label: string; icon: JSX.Element }[] = [
-  { commandType: "desk.status", label: "Status", icon: <FaGlobe /> },
-  { commandType: "desk.doctor", label: "Doctor", icon: <FaStethoscope /> },
-  { commandType: "desk.start", label: "Start (plan)", icon: <FaPlay /> },
-  { commandType: "desk.stop", label: "Stop (plan)", icon: <FaStop /> },
-  { commandType: "desk.restart", label: "Restart (plan)", icon: <FaRedo /> },
+  { commandType: "desk.status", label: "Statut", icon: <FaGlobe /> },
+  { commandType: "desk.doctor", label: "Diagnostic", icon: <FaStethoscope /> },
+  { commandType: "desk.start", label: "Démarrer (plan)", icon: <FaPlay /> },
+  { commandType: "desk.stop", label: "Arrêter (plan)", icon: <FaStop /> },
+  { commandType: "desk.restart", label: "Redémarrer (plan)", icon: <FaRedo /> },
 ];
 
 type DeskControlPanelProps = {
@@ -27,8 +28,8 @@ export function DeskControlPanel(props: DeskControlPanelProps) {
     <CommandPanel title="Contrôle du Desk" className="cc-panel--desk-control">
       <div className="cc-desk-state">
         <span>Statut du desk</span>
-        <strong>{props.deskStatus}</strong>
-        <PanelStatus tone="success">Plan-only control</PanelStatus>
+        <strong>{healthLabel(props.deskStatus)}</strong>
+        <PanelStatus tone="success">Contrôle plan uniquement</PanelStatus>
       </div>
       <div className="cc-desk-actions">
         {ACTIONS.map((action) => {
@@ -41,7 +42,7 @@ export function DeskControlPanel(props: DeskControlPanelProps) {
           );
         })}
       </div>
-      <p className="cc-desk-note">Les commandes Start/Stop/Restart restent fail-closed et n’activent ni AUTO ni LIVE.</p>
+      <p className="cc-desk-note">Les commandes Démarrer/Arrêter/Redémarrer restent fail-closed et n’activent ni AUTO ni LIVE.</p>
       {props.lastCommand ? <p className="cc-command-result">Dernière commande: <strong>{props.lastCommand.status}</strong></p> : null}
       {props.error ? <p className="cc-command-error" role="alert">{props.error}</p> : null}
       <SystemHealthGrid systems={props.systems} />

@@ -14,6 +14,7 @@ import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
+import { presentPermission } from "@/design-system/labels";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import type { StrategyCompareView } from "@/domains/front-api/viewModels";
@@ -69,7 +70,7 @@ export function StrategyComparePage() {
     <div className="operator-page strategy-compare-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Strategy Compare"
+        title="Comparaison de stratégies"
         description={`${data.strategy.name} · ${data.summary.baseVersionId} → ${data.summary.candidateVersionId} · projection ${meta.latencyMs} ms.`}
         actions={
           <>
@@ -81,7 +82,7 @@ export function StrategyComparePage() {
 
       <section className="operator-kpi-strip" aria-label="Indicateurs comparaison stratégie">
         <KpiCard label="VERDICT" value={data.summary.verdict} delta={`${data.strategy.family} · ${data.strategy.strategyDefinitionId}`} tone={data.summary.verdict === "PROMOTE" ? "success" : "warning"} />
-        <KpiCard label="NET IMPROVEMENT" value={formatSignedR(data.summary.netImprovementR)} delta="candidate vs baseline" tone="success" />
+        <KpiCard label="AMÉLIORATION NETTE" value={formatSignedR(data.summary.netImprovementR)} delta="candidat vs référence" tone="success" />
         <KpiCard label="EXPECTANCY Δ" value={formatSignedR(data.summary.expectancyDeltaR)} delta="R par trade" tone="success" />
         <KpiCard label="PF Δ" value={data.summary.profitFactorDelta.toFixed(2)} delta="profit factor" tone="success" />
         <KpiCard label="DD Δ" value={formatSignedR(data.summary.drawdownDeltaR)} delta="drawdown réduit" tone="success" />
@@ -89,7 +90,7 @@ export function StrategyComparePage() {
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Versions et diff déterministe">
-        <Card title="Versions comparées" actions={<InlineAction>{idMismatch ? "ID mismatch" : "Version pair"}</InlineAction>} density="compact" tone={idMismatch ? "warning" : "neutral"}>
+        <Card title="Versions comparées" actions={<InlineAction>{idMismatch ? "Incohérence ID" : "Paire de versions"}</InlineAction>} density="compact" tone={idMismatch ? "warning" : "neutral"}>
           <div className="strategy-compare-version-grid">
             {data.versions.map((version) => (
               <article key={version.strategyVersionId} className={`strategy-compare-version strategy-compare-version--${version.role.toLowerCase()}`}>
@@ -115,7 +116,7 @@ export function StrategyComparePage() {
           </div>
         </Card>
 
-        <Card title="Diff Strategy Spec" actions={<InlineAction>Spec diff</InlineAction>} density="compact">
+        <Card title="Diff Spec stratégie" actions={<InlineAction>Spec diff</InlineAction>} density="compact">
           <div className="strategy-compare-diff-list">
             {data.specDiffs.map((diff) => (
               <article key={diff.diffId}>
@@ -151,7 +152,7 @@ export function StrategyComparePage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Régimes, divergences, coûts et actions">
-        <Card title="Régimes & parité" actions={<InlineAction>Regimes</InlineAction>} density="compact">
+        <Card title="Régimes & parité" actions={<InlineAction>Régimes</InlineAction>} density="compact">
           <div className="strategy-compare-regime-list">
             {data.regimeComparison.map((regime) => (
               <article key={regime.regimeId}>
@@ -188,14 +189,14 @@ export function StrategyComparePage() {
             {data.costs.map((cost) => (
               <article key={cost.scope}>
                 <strong>{cost.scope}</strong>
-                <small>cost {formatSignedR(cost.baseCostR)} → {formatSignedR(cost.candidateCostR)} · slip Δ {formatSignedR(cost.slippageDeltaR)}</small>
+                <small>coût {formatSignedR(cost.baseCostR)} → {formatSignedR(cost.candidateCostR)} · glissement Δ {formatSignedR(cost.slippageDeltaR)}</small>
                 <StatusBadge tone={verdictTone(cost.verdict)}>{cost.verdict}</StatusBadge>
               </article>
             ))}
           </div>
         </Card>
 
-        <Card title="Actions comparaison" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions comparaison" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="strategy-compare-command-result">
             <FaFingerprint />
             <div>
@@ -276,7 +277,7 @@ function permissionTone(permission: CompareAction["permission"]) {
 }
 
 function permissionLabel(permission: CompareAction["permission"]) {
-  return permission === "STEP_UP_REQUIRED" ? "STEP-UP" : permission;
+  return presentPermission(permission).label;
 }
 
 function compactId(value: string) {

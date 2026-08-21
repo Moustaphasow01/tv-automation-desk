@@ -177,6 +177,7 @@ export const presentQueueStatus = makePresenter({
   STALE: { label: "Périmé", tone: "warning" },
   READY: { label: "Prêt", tone: "success" },
   OK: { label: "OK", tone: "success" },
+  FAILED: { label: "En échec", tone: "danger" },
   WATCH: { label: "À surveiller", tone: "warning" },
   BREACH: { label: "Dépassement", tone: "danger" },
   OPEN: { label: "Ouvert", tone: "danger" },
@@ -200,6 +201,7 @@ export const presentGateState = makePresenter({
   PASS: { label: "Validée", tone: "success" },
   WATCH: { label: "À surveiller", tone: "warning" },
   FAIL: { label: "Échec", tone: "danger" },
+  PENDING: { label: "En attente", tone: "neutral" },
 });
 
 /** Ce qu'un opérateur est autorisé à demander pour une stratégie donnée. */
@@ -258,6 +260,124 @@ export const presentAuditStatus = makePresenter({
 export const presentEventLane = makePresenter({
   AUTHORITATIVE: { label: "Autoritaire", tone: "success" },
   ADVISORY: { label: "Consultatif", tone: "accent" },
+});
+
+/** Domaine métier d'un événement d'audit ou d'une relation causale (events-audit). */
+export const presentDomain = makePresenter({
+  RESEARCH: { label: "Recherche", tone: "info" },
+  STRATEGY: { label: "Stratégie", tone: "accent" },
+  LIVE: { label: "Direct", tone: "danger" },
+  PORTFOLIO: { label: "Portefeuille", tone: "accent" },
+  RISK: { label: "Risque", tone: "warning" },
+  EXECUTION: { label: "Exécution", tone: "info" },
+  JARVIS: { label: "Jarvis", tone: "accent" },
+  SYSTEM: { label: "Système", tone: "neutral" },
+});
+
+/** Type de relation causale entre deux événements d'audit (events-audit). */
+export const presentRelationKind = makePresenter({
+  CAUSES: { label: "Cause", tone: "accent" },
+  FOLLOWS: { label: "Suit", tone: "neutral" },
+  ADVISES: { label: "Conseille", tone: "info" },
+  BLOCKS: { label: "Bloque", tone: "danger" },
+});
+
+/** État de la connexion temps réel (flux SSE du Control Plane). */
+export const presentConnectionStatus = makePresenter({
+  CONNECTING: { label: "Connexion...", tone: "warning" },
+  OPEN: { label: "Connecté", tone: "success" },
+  RECONNECTING: { label: "Reconnexion...", tone: "warning" },
+  CLOSED: { label: "Fermé", tone: "neutral" },
+  FAILED: { label: "Échec", tone: "danger" },
+});
+
+/** Verdict de validation d'un candidat de recherche (rapport d'évaluation). */
+export const presentResearchDecision = makePresenter({
+  PROMOTED: { label: "Promu", tone: "success" },
+  REJECTED: { label: "Rejeté", tone: "danger" },
+  REVIEW: { label: "En revue", tone: "warning" },
+});
+
+/** Statut du cycle de vie d'une commande opérateur suivie (front-control-plane). */
+export const presentCommandStatus = makePresenter({
+  REQUESTED: { label: "Demandée", tone: "neutral" },
+  ACCEPTED: { label: "Acceptée", tone: "info" },
+  RUNNING: { label: "En cours", tone: "accent" },
+  SUCCEEDED: { label: "Réussie", tone: "success" },
+  FAILED: { label: "Échouée", tone: "danger" },
+  CONFLICT: { label: "Conflit", tone: "warning" },
+  REJECTED: { label: "Rejetée", tone: "danger" },
+  CANCELLED: { label: "Annulée", tone: "neutral" },
+  TIMED_OUT: { label: "Expirée", tone: "warning" },
+});
+
+/** Statut d'un incident d'exécution dans son cycle de vie (execution-incidents). */
+export const presentIncidentStatus = makePresenter({
+  OPEN: { label: "Ouvert", tone: "accent" },
+  ACKNOWLEDGED: { label: "Pris en compte", tone: "accent" },
+  RECONCILING: { label: "Réconciliation en cours", tone: "warning" },
+  RETRYING: { label: "Nouvelle tentative…", tone: "warning" },
+  RESOLVED: { label: "Résolu", tone: "success" },
+  ESCALATED: { label: "Remonté", tone: "danger" },
+  DLQ: { label: "File d'erreurs", tone: "danger" },
+});
+
+/** Domaine fonctionnel touché par un incident d'exécution. */
+export const presentIncidentDomain = makePresenter({
+  LIVE: { label: "Live", tone: "danger" },
+  ORDER: { label: "Ordre", tone: "accent" },
+  POSITION: { label: "Position", tone: "accent" },
+  RISK: { label: "Risque", tone: "warning" },
+  PROVIDER: { label: "Fournisseur", tone: "accent" },
+  STRATEGY: { label: "Stratégie", tone: "accent" },
+  SYSTEM: { label: "Système", tone: "neutral" },
+});
+
+/** État d'une étape de chronologie incident (post-mortem, replay). */
+export const presentChronologyState = makePresenter({
+  DONE: { label: "Terminée", tone: "success" },
+  WAITING: { label: "En attente", tone: "info" },
+  FAILED: { label: "Échouée", tone: "danger" },
+  SKIPPED: { label: "Ignorée", tone: "neutral" },
+});
+
+/** État d'une tentative de retry (file de dead letters incident). */
+export const presentRetryState = makePresenter({
+  SCHEDULED: { label: "Planifiée", tone: "info" },
+  RUNNING: { label: "En cours", tone: "accent" },
+  FAILED: { label: "Échouée", tone: "danger" },
+  SUCCEEDED: { label: "Réussie", tone: "success" },
+  ABANDONED: { label: "Abandonnée", tone: "danger" },
+});
+
+/** Résultat d'une vérification de réconciliation (orders/fills/positions). */
+export const presentReconciliationStatus = makePresenter({
+  MATCH: { label: "Conforme", tone: "success" },
+  DELTA: { label: "Écart", tone: "warning" },
+  MISSING: { label: "Manquant", tone: "danger" },
+  REPAIRED: { label: "Réparé", tone: "success" },
+});
+
+/** Niveau de gate opérateur requis pour agir sur un incident. */
+export const presentOperatorGate = makePresenter({
+  NONE: { label: "Aucune", tone: "neutral" },
+  OPTIONAL: { label: "Optionnelle", tone: "info" },
+  REQUIRED: { label: "Requise", tone: "warning" },
+  EMERGENCY_ONLY: { label: "Urgence uniquement", tone: "danger" },
+});
+
+/** Sévérité d'une règle de notification opérateur (operator-settings). */
+export const presentNotificationSeverity = makePresenter({
+  INFO: { label: "Info", tone: "accent" },
+  WARNING: { label: "Avertissement", tone: "warning" },
+  CRITICAL: { label: "Critique", tone: "danger" },
+});
+
+/** État d'un appareil enregistré (settings desk opérateur). */
+export const presentDeviceState = makePresenter({
+  ACTIVE: { label: "Active", tone: "success" },
+  STALE: { label: "Périmée", tone: "warning" },
+  REVOKABLE: { label: "Révocable", tone: "warning" },
 });
 
 /** Fallback générique : humanise n'importe quel code SCREAMING_SNAKE_CASE

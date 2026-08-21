@@ -26,10 +26,14 @@ export type LiveTradingModel = {
   latestSignal: LiveTradingView["signals"][number] | null;
   latestContextDecision: LiveTradingView["canonicalRuntime"]["aiContextGate"][number] | null;
   orderIntent: LivePortfolioOrderIntent | null;
+  targetPosition: Record<string, unknown> | null;
+  theoreticalExecution: NonNullable<LiveTradingView["theoreticalExecution"]> | null;
+  selectedTheoreticalExecution: NonNullable<LiveTradingView["theoreticalExecution"]>["rows"][number] | null;
   gateActions: readonly HumanGateAction[];
   gateBlockedReason: string;
   provider: LiveTradingView["providers"][number] | null;
   reconciliation: { status: string; detail: string; asOf: string; expected: Record<string, unknown> | null; broker: Record<string, unknown> | null; mismatchCount: number | null };
+  timeline: LiveTradingView["timeline"];
   performance: {
     availability: string;
     totalR: number | null;

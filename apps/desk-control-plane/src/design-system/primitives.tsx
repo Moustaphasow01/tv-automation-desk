@@ -93,7 +93,7 @@ export function DataFreshnessBanner({
 }) {
   return (
     <div className={`freshness-banner${stale ? " freshness-banner--stale" : ""}`}>
-      <StatusBadge tone={stale ? "warning" : "success"}>{stale ? "Stale" : "Fresh"}</StatusBadge>
+      <StatusBadge tone={stale ? "warning" : "success"}>{stale ? "Périmé" : "À jour"}</StatusBadge>
       <span>Généré {formatDateTime(generatedAt)}</span>
       {typeof latencyMs === "number" ? <span>{latencyMs} ms</span> : null}
     </div>
@@ -133,7 +133,7 @@ export function Sparkline({ points, tone = "accent" }: { points: readonly number
     .join(" ");
 
   return (
-    <svg className={`sparkline sparkline--${tone}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Sparkline">
+    <svg className={`sparkline sparkline--${tone}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Mini-graphique">
       <path d={d} />
     </svg>
   );

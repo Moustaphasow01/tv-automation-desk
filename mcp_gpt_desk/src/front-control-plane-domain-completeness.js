@@ -343,7 +343,7 @@ function stopTerm(payload = {}) {
 }
 function dataPipelineStatus(launchGate) {
   if (nested(launchGate, ["status"]) === "READY") return "OK";
-  return liveMarketDataStatus(launchGate) === "FRESH" ? "OK" : "BLOCKED";
+  return ["FRESH", "LIVE"].includes(upper(liveMarketDataStatus(launchGate))) ? "OK" : "BLOCKED";
 }
 function riskPipelineStatus(riskCenter) {
   if (nested(riskCenter, ["availability"]) === "KNOWN") return "OK";

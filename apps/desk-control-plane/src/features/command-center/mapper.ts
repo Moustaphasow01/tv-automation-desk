@@ -24,7 +24,7 @@ function kpiProjection(data: CommandCenterView): readonly CommandCenterKpi[] {
     },
     {
       id: "workers",
-      label: "Research Workers",
+      label: "Workers de recherche",
       value: pair(data.summary.activeResearchAgents, data.summary.expectedResearchAgents),
       detail: "actifs / attendus",
       tone: nullableTone(data.summary.activeResearchAgents),
@@ -32,7 +32,7 @@ function kpiProjection(data: CommandCenterView): readonly CommandCenterKpi[] {
     },
     {
       id: "strategies",
-      label: "Strategy Instances (SHADOW)",
+      label: "Instances de stratégie (SHADOW)",
       value: displayNumber(data.summary.activeStrategies),
       detail: "instances actives",
       tone: nullableTone(data.summary.activeStrategies),
@@ -40,7 +40,7 @@ function kpiProjection(data: CommandCenterView): readonly CommandCenterKpi[] {
     },
     {
       id: "human-gate",
-      label: "Human Gate queue",
+      label: "File Human Gate",
       value: displayNumber(data.summary.pendingCommands),
       detail: "OrderIntent en attente",
       tone: data.summary.pendingCommands ? "warning" : nullableTone(data.summary.pendingCommands),
@@ -56,7 +56,7 @@ function kpiProjection(data: CommandCenterView): readonly CommandCenterKpi[] {
     },
     {
       id: "provider-safety",
-      label: "Provider safety",
+      label: "Sécurité Provider",
       value: providerSafetyLabel(data.summary.providerSafety),
       detail: data.summary.providerSafety === "NO_BROKER_SIDE_EFFECT" ? "Aucun effet côté courtier" : "Contrat non publié",
       tone: data.summary.providerSafety === "NO_BROKER_SIDE_EFFECT" ? "success" : "warning",
@@ -104,12 +104,12 @@ function nullableTone(value: number | null): CommandCenterTone {
   return value === null ? "warning" : "info";
 }
 
-function healthLabel(value: string) {
-  if (value === "NOMINAL") return "Healthy";
-  if (value === "DEGRADED") return "Degraded";
-  return value === "STOPPED" ? "Stopped" : "État non publié";
+export function healthLabel(value: string) {
+  if (value === "NOMINAL") return "Opérationnelle";
+  if (value === "DEGRADED") return "Dégradée";
+  return value === "STOPPED" ? "Arrêtée" : "État non publié";
 }
 
 function providerSafetyLabel(value: string) {
-  return value === "NO_BROKER_SIDE_EFFECT" ? "No broker\nside effect" : "Politique non publiée";
+  return value === "NO_BROKER_SIDE_EFFECT" ? "Aucun effet\ncôté broker" : "Politique non publiée";
 }

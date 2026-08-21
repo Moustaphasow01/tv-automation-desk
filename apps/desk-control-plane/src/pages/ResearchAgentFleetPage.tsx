@@ -18,6 +18,7 @@ import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
+import { presentPermission } from "@/design-system/labels";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { ResearchAgentFleetView } from "@/domains/front-api/viewModels";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
@@ -78,7 +79,7 @@ export function ResearchAgentFleetPage() {
     <div className="operator-page research-agent-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="AI Agent Fleet"
+        title="Flotte d'agents IA"
         description={`Supervision IA Research uniquement · leases, conversations, files et budgets · projection ${meta.latencyMs} ms.`}
         actions={
           <>
@@ -90,10 +91,10 @@ export function ResearchAgentFleetPage() {
 
       <section className="operator-kpi-strip" aria-label="Indicateurs flotte agents research">
         <KpiCard label="AGENTS IA" value={`${data.summary.totalAgents}`} delta={`${data.summary.activeAgents} actifs`} tone="info" />
-        <KpiCard label="WAITING" value={`${data.summary.waitingAgents}`} delta="attente événement" tone={data.summary.waitingAgents > 0 ? "warning" : "success"} />
+        <KpiCard label="EN ATTENTE" value={`${data.summary.waitingAgents}`} delta="attente événement" tone={data.summary.waitingAgents > 0 ? "warning" : "success"} />
         <KpiCard label="LEASES" value={`${data.summary.lockedLeases}`} delta="locks protégés" tone="success" />
-        <KpiCard label="QUEUE" value={`${data.summary.queueDepth}`} delta="items recherche" tone="accent" />
-        <KpiCard label="SUCCESS" value={`${data.summary.avgSuccessRatePct}%`} delta="moyenne rolling" tone="success" />
+        <KpiCard label="FILE" value={`${data.summary.queueDepth}`} delta="items recherche" tone="accent" />
+        <KpiCard label="SUCCÈS" value={`${data.summary.avgSuccessRatePct}%`} delta="moyenne rolling" tone="success" />
         <KpiCard label="SOURCE" value="BFF" delta="aucun moteur déterministe ici" tone="neutral" />
       </section>
 
@@ -128,7 +129,7 @@ export function ResearchAgentFleetPage() {
           </div>
         </Card>
 
-        <Card title="Mission queue & attentes" actions={<InlineAction>File</InlineAction>} density="compact">
+        <Card title="Mission file & attentes" actions={<InlineAction>File</InlineAction>} density="compact">
           <div className="research-agent-queue">
             {data.queue.map((item) => (
               <QueueItem key={item.queueItemId} item={item} agent={agentById(data.agents, item.agentId)} />
@@ -197,7 +198,7 @@ export function ResearchAgentFleetPage() {
           </div>
         </Card>
 
-        <Card title="Actions agent" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions agent" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="research-agent-actions">
             {data.commandActions.map((action) => {
               const agent = agentById(data.agents, action.agentId);
@@ -236,7 +237,7 @@ export function ResearchAgentFleetPage() {
 function ResearchAgentFleetLoading() {
   return (
     <div className="operator-page research-agent-page">
-      <OperatorPageHeader title="AI Agent Fleet" description="Chargement de la projection agents research." />
+      <OperatorPageHeader title="Flotte d'agents IA" description="Chargement de la projection agents research." />
       <section className="operator-kpi-strip">
         {Array.from({ length: 6 }).map((_, index) => (
           <KpiCard key={index} label="LOADING" value="—" state="loading" />
@@ -318,9 +319,7 @@ function permissionTone(permission: AgentAction["permission"]) {
 }
 
 function permissionLabel(permission: AgentAction["permission"]) {
-  if (permission === "ALLOWED") return "OK";
-  if (permission === "STEP_UP_REQUIRED") return "STEP-UP";
-  return "DENIED";
+  return presentPermission(permission).label;
 }
 
 function formatTime(value?: string) {

@@ -37,7 +37,7 @@ type AdminAction = AdminAccessView["commandActions"][number];
 export function AdminAccessPage() {
   const query = useFrontView("admin-access");
   const repository = useFrontViewRepository();
-  const [reason, setReason] = useState("Contrôle opérateur : action admin via BFF Command Runtime, audit obligatoire.");
+  const [reason, setReason] = useState("Contrôle opérateur : action admin via le flux de commande BFF, audit obligatoire.");
   const [stepUpToken, setStepUpToken] = useState("");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -84,31 +84,31 @@ export function AdminAccessPage() {
     <div className="operator-page admin-access-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Admin Access"
-        description={`RBAC BFF · ${data.summary.accessMode} · ${data.summary.users} users · projection ${meta.latencyMs} ms · provider material exposure NONE.`}
+        title="Accès administrateur"
+        description={`RBAC BFF · ${presentAccessState(data.summary.accessMode).label} · ${data.summary.users} utilisateurs · projection ${meta.latencyMs} ms · exposition matérielle fournisseur : aucune.`}
         actions={
           <>
-            <Link to="/auth">Auth</Link>
-            <Link to="/settings">Settings</Link>
+            <Link to="/auth">Authentification</Link>
+            <Link to="/settings">Réglages</Link>
             {exportAction ? (
               <DeskButton variant="primary" disabled={isActionDisabled(exportAction, reason, stepUpToken)} onClick={() => confirmAction(exportAction)}>
-                Export audit
+                Exporter l'audit
               </DeskButton>
             ) : null}
           </>
         }
       />
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Admin Access">
-        <KpiCard label="ACCESS" value={presentAccessState(data.summary.accessMode).label} delta={data.currentAccess.readOnlyReason ?? "admin scope"} tone={data.summary.accessMode === "READ_ONLY" ? "warning" : "success"} />
-        <KpiCard label="USERS" value={`${data.summary.users}`} delta={`${data.summary.activeUsers} actifs`} tone="info" />
-        <KpiCard label="ROLES" value={`${data.summary.roles}`} delta={`${data.summary.capabilities} capabilities`} tone="accent" />
-        <KpiCard label="GROUPS" value={`${data.summary.accountGroups}`} delta="account scopes" tone="success" />
-        <KpiCard label="PENDING" value={`${data.summary.pendingChanges}`} delta="admin changes" tone="warning" />
-        <KpiCard label="AUDIT" value={`${data.summary.auditEvents}`} delta="events" detail={<ProgressBar value={100} tone="success" />} tone="success" />
+      <section className="operator-kpi-strip" aria-label="Indicateurs Accès administrateur">
+        <KpiCard label="ACCESS" value={presentAccessState(data.summary.accessMode).label} delta={data.currentAccess.readOnlyReason ?? "périmètre admin"} tone={data.summary.accessMode === "READ_ONLY" ? "warning" : "success"} />
+        <KpiCard label="UTILISATEURS" value={`${data.summary.users}`} delta={`${data.summary.activeUsers} actifs`} tone="info" />
+        <KpiCard label="RÔLES" value={`${data.summary.roles}`} delta={`${data.summary.capabilities} capacités`} tone="accent" />
+        <KpiCard label="GROUPES" value={`${data.summary.accountGroups}`} delta="périmètres de comptes" tone="success" />
+        <KpiCard label="EN ATTENTE" value={`${data.summary.pendingChanges}`} delta="modifications admin" tone="warning" />
+        <KpiCard label="AUDIT" value={`${data.summary.auditEvents}`} delta="événements" detail={<ProgressBar value={100} tone="success" />} tone="success" />
       </section>
 
-      <section className="operator-grid operator-grid--top" aria-label="Utilisateurs, rôles et capabilities">
+      <section className="operator-grid operator-grid--top" aria-label="Utilisateurs, rôles et capacités">
         <Card title="Utilisateurs & accès" actions={<InlineAction>{data.currentAccess.userId}</InlineAction>} density="compact">
           <DataTable rows={data.users} rowKey={(row) => row.userId} columns={userColumns} />
           <MobileDataList
@@ -125,8 +125,8 @@ export function AdminAccessPage() {
             {data.roles.map((role) => (
               <article key={role.roleId}>
                 <FaUserCog />
-                <div><strong>{role.label}</strong><small>{role.description} · {role.capabilityCount} caps</small></div>
-                <span>{role.userCount} users</span>
+                <div><strong>{role.label}</strong><small>{role.description} · {role.capabilityCount} capacités</small></div>
+                <span>{role.userCount} utilisateurs</span>
                 <StatusBadge tone={role.riskLevel === "HIGH" ? "danger" : role.riskLevel === "MEDIUM" ? "warning" : "accent"}>{presentSeverity(role.riskLevel).label}</StatusBadge>
               </article>
             ))}
@@ -142,8 +142,8 @@ export function AdminAccessPage() {
           </div>
         </Card>
 
-        <Card title="Capabilities & provider access" actions={<InlineAction>Read-only</InlineAction>} density="compact">
-          <div className="admin-capability-list" tabIndex={0} aria-label="Capabilities et droits d’accès défilables">
+        <Card title="Capacités & accès fournisseur" actions={<InlineAction>Lecture seule</InlineAction>} density="compact">
+          <div className="admin-capability-list" tabIndex={0} aria-label="Capacités et droits d’accès défilables">
             {data.capabilities.map((capability) => (
               <article key={capability.capability}>
                 <FaKey />
@@ -156,7 +156,7 @@ export function AdminAccessPage() {
             {data.providerAccess.map((provider) => (
               <article key={provider.providerId}>
                 <FaNetworkWired />
-                <div><strong>{provider.label}</strong><small>{provider.providerId} · {provider.environment} · exposure {provider.browserMaterialExposure}</small></div>
+                <div><strong>{provider.label}</strong><small>{provider.providerId} · {provider.environment} · exposition {provider.browserMaterialExposure}</small></div>
                 <StatusBadge tone={provider.access === "DENIED" ? "danger" : provider.access === "COMMAND" ? "warning" : "success"}>{presentAccessLevel(provider.access).label}</StatusBadge>
               </article>
             ))}
@@ -165,23 +165,23 @@ export function AdminAccessPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Groupes comptes, audit et actions">
-        <Card title="Account groups & environnements" actions={<InlineAction>{data.accountGroups.length} groups</InlineAction>} density="compact">
+        <Card title="Groupes de comptes & environnements" actions={<InlineAction>{data.accountGroups.length} groupes</InlineAction>} density="compact">
           <div className="admin-group-list">
             {data.accountGroups.map((group) => (
               <article key={group.groupId}>
                 <FaLayerGroup />
-                <div><strong>{group.label}</strong><small>{group.environment} · accounts {group.accountIds.join(", ") || "none"} · providers {group.providerIds.join(", ") || "none"}</small></div>
+                <div><strong>{group.label}</strong><small>{group.environment} · comptes {group.accountIds.join(", ") || "aucun"} · fournisseurs {group.providerIds.join(", ") || "aucun"}</small></div>
                 <StatusBadge tone={group.status === "ACTIVE" ? "success" : group.status === "READ_ONLY" ? "warning" : "danger"}>{presentAccessState(group.status).label}</StatusBadge>
               </article>
             ))}
           </div>
           <div className="admin-access-proof">
             <FaLock />
-            <span>Current user is read-only for admin mutations. Every mutation requires BFF permission + expectedVersion + step-up.</span>
+            <span>L'utilisateur actuel est en lecture seule pour les mutations admin. Toute mutation requiert une permission BFF + expectedVersion + step-up.</span>
           </div>
         </Card>
 
-        <Card title="Audit accès & commandes" actions={<InlineAction>{data.auditEvents.length} events</InlineAction>} density="compact">
+        <Card title="Audit accès & commandes" actions={<InlineAction>{data.auditEvents.length} événements</InlineAction>} density="compact">
           <ol className="admin-audit-list">
             {data.auditEvents.map((event) => (
               <li key={event.auditId}>
@@ -193,7 +193,7 @@ export function AdminAccessPage() {
           </ol>
         </Card>
 
-        <Card title="Actions admin" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions admin" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="admin-command-result">
             <FaFingerprint />
             <div>
@@ -202,7 +202,7 @@ export function AdminAccessPage() {
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
-          <ReasonInput label="Reason obligatoire" value={reason} onChange={setReason} />
+          <ReasonInput label="Motif obligatoire" value={reason} onChange={setReason} />
           <label className="admin-step-up">
             <span>Step-up phrase pour mutation admin</span>
             <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder={stepUpAction?.actionId ?? "actionId step-up"} />
@@ -261,14 +261,14 @@ const userColumns = [
   { key: "user", header: "Utilisateur", render: (row: AdminUser) => <UserCell row={row} /> },
   { key: "roles", header: "Rôles", render: (row: AdminUser) => row.roles.join(", ") },
   { key: "mfa", header: "MFA", render: (row: AdminUser) => <StatusBadge tone={row.mfaState === "READY" ? "success" : row.mfaState === "REQUIRED" ? "warning" : "danger"}>{presentAccessState(row.mfaState).label}</StatusBadge> },
-  { key: "status", header: "Status", render: (row: AdminUser) => <StatusBadge tone={row.status === "ACTIVE" ? "success" : row.status === "INVITED" ? "warning" : "danger"}>{presentAccessState(row.status).label}</StatusBadge> }
+  { key: "status", header: "Statut", render: (row: AdminUser) => <StatusBadge tone={row.status === "ACTIVE" ? "success" : row.status === "INVITED" ? "warning" : "danger"}>{presentAccessState(row.status).label}</StatusBadge> }
 ] as const;
 
 function UserCell({ row }: { row: AdminUser }) {
   return (
     <div className="admin-user-cell">
       <strong>{row.displayName}</strong>
-      <small>{row.maskedEmail} · {row.userId} · {row.lastSeenAt ? formatTime(row.lastSeenAt) : "never"}</small>
+      <small>{row.maskedEmail} · {row.userId} · {row.lastSeenAt ? formatTime(row.lastSeenAt) : "jamais"}</small>
     </div>
   );
 }

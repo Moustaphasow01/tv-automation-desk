@@ -111,28 +111,28 @@ export function JarvisWorkspacePage() {
     <div className="operator-page jarvis-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Jarvis Workspace"
+        title="Espace Jarvis"
         description="Assistant opérateur : brief, citations, conversation et actions contrôlées via Command Runtime."
         actions={
           <>
             <span title="Création de brief non exposée par le backend">Nouveau brief indisponible</span>
             <span title="Commande vocale non exposée par le backend">Push-to-talk indisponible</span>
-            <Link className="operator-primary-action" to="/command-center">Retour Command Center</Link>
+            <Link className="operator-primary-action" to="/command-center">Retour Centre de contrôle</Link>
           </>
         }
       />
 
       <section className="operator-kpi-strip" aria-label="Indicateurs Jarvis">
-        <KpiCard label="MORNING BRIEF" value={data.summary.morningBriefStatus} delta={`${data.morningBrief.length} sections`} tone="success" />
+        <KpiCard label="BRIEF MATINAL" value={data.summary.morningBriefStatus} delta={`${data.morningBrief.length} sections`} tone="success" />
         <KpiCard label="SUGGESTIONS" value={`${data.summary.openSuggestions}`} delta="Propositions contextuelles" tone="info" />
-        <KpiCard label="PENDING ACTIONS" value={`${data.summary.pendingActions}`} delta="Confirmation opérateur requise" tone="warning" />
+        <KpiCard label="ACTIONS EN ATTENTE" value={`${data.summary.pendingActions}`} delta="Confirmation opérateur requise" tone="warning" />
         <KpiCard label="AGENTS IA ACTIFS" value={`${data.summary.activeAgents}`} delta={`${data.missions.length} missions visibles`} tone="info" />
-        <KpiCard label="VOICE SERVICE" value={data.summary.voiceStatus} delta={data.voice.degradationReason ?? "Push-to-talk prêt"} tone={data.summary.voiceStatus === "READY" ? "success" : "warning"} />
-        <KpiCard label="FRESHNESS" value={`${data.summary.freshnessSeconds}s`} delta={`Projection ${meta.latencyMs} ms`} tone="success" />
+        <KpiCard label="SERVICE VOCAL" value={data.summary.voiceStatus} delta={data.voice.degradationReason ?? "Push-to-talk prêt"} tone={data.summary.voiceStatus === "READY" ? "success" : "warning"} />
+        <KpiCard label="FRAÎCHEUR" value={`${data.summary.freshnessSeconds}s`} delta={`Projection ${meta.latencyMs} ms`} tone="success" />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Brief, conversation et actions Jarvis">
-        <Card title="Morning Brief structuré" actions={<InlineAction>Brief complet</InlineAction>} density="compact">
+        <Card title="Brief matinal structuré" actions={<InlineAction>Brief complet</InlineAction>} density="compact">
           <div className="jarvis-brief-list">
             {data.morningBrief.map((section) => (
               <article key={section.sectionId}>
@@ -211,13 +211,13 @@ export function JarvisWorkspacePage() {
           <div className="jarvis-voice-card">
             {data.voice.pushToTalkAvailable ? <FaMicrophone /> : <FaVolumeMute />}
             <div>
-              <strong>Voice · {data.voice.serviceStatus}</strong>
+              <strong>Voix · {data.voice.serviceStatus}</strong>
               <small>{data.voice.degradationReason ?? data.voice.lastTranscript ?? "Push-to-talk accessible"}</small>
             </div>
           </div>
           <div className="jarvis-command-result">
             <small>Résultat commande</small>
-            <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande Jarvis confirmée"}</strong>
+            <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande Jarvis confirmée"}</strong>
             {commandError ? <span className="text-danger">{commandError}</span> : null}
           </div>
         </Card>
@@ -274,7 +274,7 @@ export function JarvisWorkspacePage() {
           </div>
           <div className="jarvis-authority-note">
             <FaShieldAlt />
-            <span>Jarvis propose → Action Pending → confirmation UI → Command Runtime. Aucun bypass Risk/Execution/PermissionGate.</span>
+            <span>Jarvis propose → Action en attente → confirmation interface → Flux de commande. Aucun contournement Risque/Exécution/PermissionGate.</span>
           </div>
         </Card>
       </section>

@@ -14,6 +14,7 @@ import {
   FaTools
 } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
+import { presentGateState, presentPermission } from "@/design-system/labels";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
@@ -38,7 +39,7 @@ export function ResearchDataCatalogPage() {
 
   if (query.isError) {
     return (
-      <Card title="Data Catalog indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+      <Card title="Catalogue données & features indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
         <p>{(query.error as Error).message}</p>
       </Card>
     );
@@ -77,8 +78,8 @@ export function ResearchDataCatalogPage() {
     <div className="operator-page research-data-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Data & Feature Catalog"
-        description={`Datasets, instruments, features, lineage et qualité point-in-time · projection ${meta.latencyMs} ms.`}
+        title="Catalogue données & features"
+        description={`Datasets, instruments, features, lignée et qualité point-in-time · projection ${meta.latencyMs} ms.`}
         actions={
           <>
             <Link to="/research">Research Lab</Link>
@@ -87,17 +88,17 @@ export function ResearchDataCatalogPage() {
         }
       />
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Data Catalog">
-        <KpiCard label="DATASETS" value={`${data.summary.datasets}`} delta="source of truth" tone="info" />
+      <section className="operator-kpi-strip" aria-label="Indicateurs Catalogue données & features">
+        <KpiCard label="DATASETS" value={`${data.summary.datasets}`} delta="source de vérité" tone="info" />
         <KpiCard label="INSTRUMENTS" value={`${data.summary.instruments}`} delta="catalogués" tone="accent" />
         <KpiCard label="FEATURES" value={`${data.summary.features}`} delta="versionnées" tone="success" />
-        <KpiCard label="QUALITY" value={`${data.summary.qualityOkPct}%`} delta="OK weighted" tone="success" />
+        <KpiCard label="QUALITY" value={`${data.summary.qualityOkPct}%`} delta="OK pondéré" tone="success" />
         <KpiCard label="GAPS" value={`${data.summary.openGaps}`} delta="ouverts" tone={data.summary.openGaps > 0 ? "warning" : "success"} />
         <KpiCard label="LINEAGE" value={`${data.summary.lineageEdges}`} delta="edges vérifiés" tone="neutral" />
       </section>
 
-      <section className="operator-grid operator-grid--top" aria-label="Datasets, instruments et lineage">
-        <Card title="Datasets canoniques" actions={<InlineAction>Dataset zoom</InlineAction>} density="compact">
+      <section className="operator-grid operator-grid--top" aria-label="Datasets, instruments et lignée">
+        <Card title="Datasets canoniques" actions={<InlineAction>Zoom dataset</InlineAction>} density="compact">
           <div className="research-data-dataset-list">
             {data.datasets.map((dataset) => (
               <DatasetCard key={dataset.datasetId} dataset={dataset} />
@@ -115,14 +116,14 @@ export function ResearchDataCatalogPage() {
                   <small>{instrument.assetClass} · {instrument.sessionTemplate}</small>
                   <span>{compactId(instrument.primaryDatasetId)} · {instrument.timezone}</span>
                 </div>
-                <ProgressBar value={instrument.coveragePct} label={`${instrument.symbol} coverage`} tone={instrument.coveragePct >= 90 ? "success" : "warning"} />
+                <ProgressBar value={instrument.coveragePct} label={`${instrument.symbol} couverture`} tone={instrument.coveragePct >= 90 ? "success" : "warning"} />
                 <StatusBadge tone={qualityTone(instrument.quality)}>{instrument.quality}</StatusBadge>
               </article>
             ))}
           </div>
         </Card>
 
-        <Card title="Lineage point-in-time" actions={<InlineAction>Graph</InlineAction>} density="compact">
+        <Card title="Lignée point-in-time" actions={<InlineAction>Graphe</InlineAction>} density="compact">
           <div className="research-data-lineage">
             {data.lineage.map((edge) => (
               <article key={edge.edgeId}>
@@ -139,7 +140,7 @@ export function ResearchDataCatalogPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Features, incidents et actions data">
-        <Card title="Feature catalog" actions={<InlineAction>Features</InlineAction>} density="compact">
+        <Card title="Catalogue de features" actions={<InlineAction>Features</InlineAction>} density="compact">
           <div className="research-data-feature-list">
             {data.features.map((feature) => (
               <FeatureCard key={feature.featureId} feature={feature} dataset={datasetById(data.datasets, feature.datasetId)} />
@@ -147,7 +148,7 @@ export function ResearchDataCatalogPage() {
           </div>
         </Card>
 
-        <Card title="Qualité, gaps & no-lookahead" actions={<InlineAction>Audit</InlineAction>} density="compact">
+        <Card title="Qualité, gaps & anti-anticipation" actions={<InlineAction>Audit</InlineAction>} density="compact">
           <div className="research-data-quality-panel">
             <div className="research-data-quality-grid">
               {data.datasets.map((dataset) => (
@@ -166,7 +167,7 @@ export function ResearchDataCatalogPage() {
                     <FaExclamationTriangle />
                     <div>
                       <strong>{incident.title}</strong>
-                      <small>{dataset?.label ?? incident.datasetId} · {incident.retryable ? "retryable" : "manual"}</small>
+                      <small>{dataset?.label ?? incident.datasetId} · {incident.retryable ? "réessayable" : "manuel"}</small>
                     </div>
                     <StatusBadge tone={severityTone(incident.severity)}>{incident.severity}</StatusBadge>
                   </article>
@@ -176,14 +177,14 @@ export function ResearchDataCatalogPage() {
             <article className="research-data-proof">
               <FaShieldAlt />
               <div>
-                <strong>No-lookahead guard</strong>
+                <strong>Garde anti-anticipation</strong>
                 <small>Chaque dataset/feature expose `pointInTime`, provenance, cutoff status et version pour préserver la parité run/replay/live.</small>
               </div>
             </article>
           </div>
         </Card>
 
-        <Card title="Actions data" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions data" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="research-data-actions">
             {data.commandActions.map((action) => {
               const dataset = datasetById(data.datasets, action.datasetId);
@@ -194,7 +195,7 @@ export function ResearchDataCatalogPage() {
                     <strong>{action.label}</strong>
                     <small>{dataset?.label ?? action.datasetId} · {action.commandType}</small>
                   </div>
-                  <StatusBadge tone={permissionTone(action.permission)}>{permissionLabel(action.permission)}</StatusBadge>
+                  <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                   <DeskButton
                     variant="primary"
                     disabled={action.permission !== "ALLOWED" || submittingActionId === action.actionId}
@@ -222,7 +223,7 @@ export function ResearchDataCatalogPage() {
 function ResearchDataLoading() {
   return (
     <div className="operator-page research-data-page">
-      <OperatorPageHeader title="Data & Feature Catalog" description="Chargement de la projection data foundation." />
+      <OperatorPageHeader title="Catalogue données & features" description="Chargement de la projection data foundation." />
       <section className="operator-kpi-strip">
         {Array.from({ length: 6 }).map((_, index) => (
           <KpiCard key={index} label="LOADING" value="—" state="loading" />
@@ -245,10 +246,10 @@ function DatasetCard({ dataset }: { dataset: DatasetRow }) {
       </header>
       <p>{dataset.source}</p>
       <div className="research-data-dataset-meta">
-        <MetricBox label="Period" value={dataset.period} />
-        <MetricBox label="Fresh" value={dataset.freshness} />
-        <MetricBox label="PIT" value={dataset.pointInTime ? "PASS" : "FAIL"} />
-        <MetricBox label="Lookahead" value={dataset.lookaheadStatus} />
+        <MetricBox label="Période" value={dataset.period} />
+        <MetricBox label="Frais" value={dataset.freshness} />
+        <MetricBox label="PIT" value={presentGateState(dataset.pointInTime ? "PASS" : "FAIL").label} />
+        <MetricBox label="Anticipation" value={dataset.lookaheadStatus} />
       </div>
     </article>
   );
@@ -308,12 +309,6 @@ function permissionTone(permission: DataAction["permission"]) {
   if (permission === "ALLOWED") return "success";
   if (permission === "STEP_UP_REQUIRED") return "warning";
   return "danger";
-}
-
-function permissionLabel(permission: DataAction["permission"]) {
-  if (permission === "ALLOWED") return "OK";
-  if (permission === "STEP_UP_REQUIRED") return "STEP-UP";
-  return "DENIED";
 }
 
 function compactId(value: string) {

@@ -6,14 +6,21 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
   const { data, meta } = envelope;
   const runtime = data.canonicalRuntime;
   const latestSignal = runtime.latestSignals[0] ?? data.signals[0] ?? null;
-  const orderIntent = runtime.pendingOrderIntents[0] ?? data.portfolioOrderIntents[0] ?? null;
+  const selectedInstrument = normalizeInstrument(data.marketSeries?.instrument ?? latestSignal?.symbol ?? null);
+  const orderIntent = selectOrderIntent([...runtime.pendingOrderIntents, ...data.portfolioOrderIntents], selectedInstrument);
+  const targetPosition = selectTargetPosition(runtime.pendingTargetPositions ?? [], orderIntent, selectedInstrument);
   const marketContract = seriesContracts(data).find((item) => item.seriesId === "market.ohlcv");
   const performanceContract = seriesContracts(data).find((item) => item.seriesId === "performance.r_equity");
-  const resourceActions = new Set(orderIntent?.allowedActions.allowedActions ?? []);
-  const gateActions = orderIntent?.humanGate.allowedActions.filter((action) => resourceActions.has(action.action)) ?? [];
+  const resourceActions = new Set((orderIntent?.allowedActions.allowedActions ?? []).map((action) => String(action).trim().toUpperCase()));
+  const gateActions = orderIntent?.humanGate.allowedActions
+    .map(normalizeHumanGateAction)
+    .filter((action) => resourceActions.has(action.action)) ?? [];
   const degraded = meta.stale || meta.availability !== "AVAILABLE";
+  const actionsUnavailable = meta.stale || meta.availability === "UNAVAILABLE";
   const reconciliationNotApplicable = ["NOT_APPLICABLE_CURRENT_MODE", "DISABLED_BY_POLICY"]
     .includes(String(data.reconciliation?.availability ?? "").toUpperCase());
+  const selectedTheoreticalExecution = selectTheoreticalExecution(data.theoreticalExecution?.rows ?? [], orderIntent, selectedInstrument);
+  const theoreticalExpected = data.reconciliation?.expected ?? selectedTheoreticalExecution;
 
   return {
     meta,
@@ -41,25 +48,33 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
     latestSignal,
     latestContextDecision: runtime.aiContextGate[0] ?? null,
     orderIntent,
-    gateActions: degraded ? [] : gateActions as readonly HumanGateAction[],
-    gateBlockedReason: degraded
-      ? `Projection ${meta.stale ? "stale" : meta.availability ?? "partielle"} : les actions sensibles restent fermées.`
+    targetPosition,
+    theoreticalExecution: data.theoreticalExecution ?? null,
+    selectedTheoreticalExecution,
+    gateActions: actionsUnavailable ? [] : gateActions as readonly HumanGateAction[],
+    gateBlockedReason: actionsUnavailable
+      ? `Projection ${meta.stale ? "stale" : meta.availability ?? "indisponible"} : les actions sensibles restent fermées.`
       : orderIntent?.allowedActions.denialReasons.length
         ? orderIntent.allowedActions.denialReasons.join(" · ")
         : orderIntent?.humanGate.allowedActions.length
-          ? "Le backend ne publie pas simultanément la capability ressource et l'action Human Gate."
+          ? meta.availability !== "AVAILABLE"
+            ? `Projection ${meta.availability ?? "partielle"} : actions autorisées seulement si elles sont publiées explicitement par le backend.`
+            : "Le backend ne publie pas simultanément la capability ressource et l'action Human Gate."
           : "Aucun OrderIntent en attente de confirmation.",
     provider: data.providers[0] ?? null,
     reconciliation: {
       status: reconciliationNotApplicable ? "EXÉCUTION PHYSIQUE DÉSACTIVÉE" : data.reconciliation?.status ?? "UNAVAILABLE",
       detail: reconciliationNotApplicable
-        ? "Aucun snapshot broker n'est attendu dans le mode d'exécution courant."
+        ? theoreticalExpected
+          ? "Exécution physique désactivée : le broker est non applicable, mais le suivi théorique backend est publié."
+          : "Aucun snapshot broker n'est attendu dans le mode d'exécution courant ; aucun suivi théorique backend n'est encore publié."
         : data.reconciliation?.reason || `${data.reconciliation?.mismatchCount ?? "—"} divergence(s) autoritaire(s).`,
       asOf: data.reconciliation?.asOf ?? meta.asOf,
-      expected: data.reconciliation?.expected ?? null,
+      expected: theoreticalExpected,
       broker: reconciliationNotApplicable ? null : data.reconciliation?.broker ?? null,
       mismatchCount: data.reconciliation?.mismatchCount ?? null,
     },
+    timeline: deriveAuditTimeline(data),
     performance: {
       availability: data.performanceR?.availability ?? performanceContract?.availability ?? "UNAVAILABLE",
       totalR: data.performanceR?.totalR ?? null,
@@ -71,6 +86,153 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
       series: data.performanceR?.series ?? [],
     },
   };
+}
+
+function normalizeHumanGateAction(action: HumanGateAction): HumanGateAction {
+  return {
+    ...action,
+    action: String(action.action).trim().toUpperCase() as HumanGateAction["action"],
+    permission: String(action.permission).trim().toUpperCase() as HumanGateAction["permission"],
+    environment: String(action.environment).trim().toUpperCase() as HumanGateAction["environment"],
+  };
+}
+
+function selectOrderIntent(
+  intents: readonly NonNullable<LiveTradingEnvelope["data"]["canonicalRuntime"]["pendingOrderIntents"]>[number][],
+  selectedInstrument: string | null,
+) {
+  const unique = uniqueBy(intents, (item) => item.portfolioOrderIntentId || item.orderIntentId);
+  if (!unique.length) return null;
+  const awaiting = unique.filter((item) => normalizeInstrument(item.humanGate.status) === "AWAITING_MANUAL_CONFIRMATION" || item.humanGate.allowedActions.length);
+  const pool = awaiting.length ? awaiting : unique;
+  if (selectedInstrument) {
+    const sameInstrument = pool.find((item) => normalizeInstrument(intentInstrument(item)) === selectedInstrument);
+    if (sameInstrument) return sameInstrument;
+  }
+  return pool[0] ?? null;
+}
+
+function selectTargetPosition(
+  targetPositions: readonly Record<string, unknown>[],
+  orderIntent: LiveTradingModel["orderIntent"],
+  selectedInstrument: string | null,
+) {
+  if (!targetPositions.length) return null;
+  const targetId = normalizeText(orderIntent?.targetPositionId);
+  const byId = targetId
+    ? targetPositions.find((item) => normalizeText(recordValue(item, ["targetPositionId", "target_position_id", "target_position_id"])) === targetId)
+    : null;
+  if (byId) return byId;
+  const intentSymbol = normalizeInstrument(intentInstrument(orderIntent));
+  const wantedInstrument = intentSymbol || selectedInstrument;
+  if (wantedInstrument) {
+    const byInstrument = targetPositions.find((item) => normalizeInstrument(recordValue(item, ["instrument", "targetInstrument", "target_instrument", "symbol"])) === wantedInstrument);
+    if (byInstrument) return byInstrument;
+  }
+  return targetPositions[0] ?? null;
+}
+
+function selectTheoreticalExecution(
+  rows: readonly NonNullable<LiveTradingModel["theoreticalExecution"]>["rows"][number][],
+  orderIntent: LiveTradingModel["orderIntent"],
+  selectedInstrument: string | null,
+): NonNullable<LiveTradingModel["theoreticalExecution"]>["rows"][number] | null {
+  if (!rows.length) return null;
+  const intentId = normalizeText(orderIntent?.portfolioOrderIntentId ?? orderIntent?.orderIntentId);
+  if (intentId) {
+    const byIntent = rows.find((item) => normalizeText(item.portfolioOrderIntentId) === intentId);
+    if (byIntent) return byIntent;
+  }
+  if (selectedInstrument) {
+    const byInstrument = rows.find((item) => normalizeInstrument(item.instrument) === selectedInstrument);
+    if (byInstrument) return byInstrument;
+  }
+  return rows[0] ?? null;
+}
+
+function deriveAuditTimeline(data: LiveTradingEnvelope["data"]): LiveTradingEnvelope["data"]["timeline"] {
+  if ((data.timeline ?? []).length) return data.timeline;
+  const events: Array<LiveTradingEnvelope["data"]["timeline"][number]> = [];
+  for (const signal of (data.canonicalRuntime.latestSignals ?? []).slice(0, 4)) {
+    events.push({
+      eventId: `signal:${signal.signalId}`,
+      at: signal.createdAt,
+      step: "STRATEGY_SIGNAL",
+      title: `${signal.direction} ${signal.symbol}`,
+      detail: `${signal.strategyInstanceId} · confiance ${signal.confidence}%`,
+      tone: "INFO",
+    });
+  }
+  for (const decision of (data.canonicalRuntime.aiContextGate ?? []).slice(0, 4)) {
+    events.push({
+      eventId: `context:${decision.decisionId}`,
+      at: decision.decidedAt,
+      step: "AI_CONTEXT_GATE",
+      title: decision.recommendation || decision.status,
+      detail: decision.reasonCodes.join(", ") || "Décision contextuelle publiée",
+      tone: decision.status === "PASS" ? "INFO" : "WATCH",
+    });
+  }
+  for (const intent of (data.canonicalRuntime.pendingOrderIntents ?? []).slice(0, 6)) {
+    events.push({
+      eventId: `intent:${intent.portfolioOrderIntentId}`,
+      at: intent.createdAt ?? data.canonicalRuntime.freshness.orderIntentAt ?? data.canonicalRuntime.freshness.asOf,
+      step: "ORDER_INTENT",
+      title: `${intent.side} ${intentInstrument(intent)}`,
+      detail: `${intent.humanGate.status} · qty ${intent.quantity}`,
+      tone: intent.humanGate.allowedActions.length ? "WATCH" : "INFO",
+    });
+    if (intent.humanGate.gateId) {
+      events.push({
+        eventId: `human_gate:${intent.humanGate.gateId}`,
+        at: intent.createdAt ?? data.canonicalRuntime.freshness.orderIntentAt ?? data.canonicalRuntime.freshness.asOf,
+        step: "HUMAN_GATE",
+        title: "Confirmation opérateur requise",
+        detail: intent.allowedActions.allowedActions.join(", ") || "Aucune action autorisée",
+        tone: "WATCH",
+      });
+    }
+  }
+  for (const row of (data.theoreticalExecution?.rows ?? []).slice(0, 8)) {
+    if (!row.latestEventAt) continue;
+    events.push({
+      eventId: `theoretical:${row.portfolioOrderIntentId}:${row.latestEventType}`,
+      at: row.latestEventAt,
+      step: "THEORETICAL_EXECUTION",
+      title: `${row.status} · ${row.instrument}`,
+      detail: `${row.side} ${row.quantity ?? "—"} · R ${row.resultR ?? "—"}`,
+      tone: ["TARGET_HIT", "ENTRY_FILLED"].includes(row.status) ? "INFO" : row.status === "STOP_HIT" ? "HIGH" : "WATCH",
+    });
+  }
+  return uniqueBy(events.filter((event) => event.at && event.at !== "unavailable"), (event) => event.eventId)
+    .sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime())
+    .slice(0, 24);
+}
+
+function intentInstrument(intent: LiveTradingModel["orderIntent"]): unknown {
+  if (!intent) return null;
+  return intent.symbol ?? (intent as { instrument?: string }).instrument ?? recordValue(intent.executionTerms, ["instrument", "instrument_code", "symbol"]);
+}
+
+function normalizeInstrument(value: unknown): string | null {
+  const normalized = normalizeText(value);
+  return normalized ? normalized.toUpperCase() : null;
+}
+
+function normalizeText(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+function uniqueBy<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of items) {
+    const key = keyOf(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
 }
 
 export function liveTone(value: string): LiveTone {

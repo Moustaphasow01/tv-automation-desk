@@ -41,7 +41,7 @@ export function RiskCenterPage() {
 
   if (query.isError) {
     return (
-      <Card title="Risk Center indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+      <Card title="Centre de risque indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
         <p>{(query.error as Error).message}</p>
       </Card>
     );
@@ -76,39 +76,39 @@ export function RiskCenterPage() {
     <div className="operator-page risk-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Risk Center"
+        title="Centre de risque"
         description={`Global Risk Engine · statut ${data.summary.globalStatus} · projection ${meta.latencyMs} ms · aucune règle recalculée côté front.`}
         actions={
           <>
-            <Link to="/portfolio">Portfolio</Link>
-            <Link to="/orders">Orders</Link>
+            <Link to="/portfolio">Portefeuille</Link>
+            <Link to="/orders">Ordres</Link>
             {primaryStressAction ? (
               <DeskButton variant="primary" disabled={submittingActionId === primaryStressAction.actionId} onClick={() => confirmAction(primaryStressAction)}>
-                {submittingActionId === primaryStressAction.actionId ? "Envoi..." : "Stress test"}
+                {submittingActionId === primaryStressAction.actionId ? "Envoi..." : "Test de stress"}
               </DeskButton>
             ) : null}
           </>
         }
       />
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Risk Center">
-        <KpiCard label="GLOBAL STATUS" value={data.summary.globalStatus} delta="Décision backend" tone={data.summary.globalStatus === "PASS" ? "success" : "warning"} />
+      <section className="operator-kpi-strip" aria-label="Indicateurs Centre de risque">
+        <KpiCard label="STATUT GLOBAL" value={data.summary.globalStatus} delta="Décision backend" tone={data.summary.globalStatus === "PASS" ? "success" : "warning"} />
         <KpiCard label="RISQUE UTILISÉ" value={formatPercent(data.summary.riskUsedPct)} delta={`${formatCurrency(data.summary.grossExposureUsd)} gross`} detail={<ProgressBar value={data.summary.riskUsedPct} tone="warning" />} tone="warning" />
-        <KpiCard label="DAILY LOSS" value={formatSignedR(data.summary.dailyLossR)} delta={`limite ${formatSignedR(data.summary.dailyLossLimitR)}`} tone="success" />
+        <KpiCard label="PERTE JOURNALIÈRE" value={formatSignedR(data.summary.dailyLossR)} delta={`limite ${formatSignedR(data.summary.dailyLossLimitR)}`} tone="success" />
         <KpiCard label="MAX DD" value={formatSignedR(data.summary.maxDrawdownR)} delta={`trail ${formatSignedR(data.summary.trailingDrawdownR)}`} tone="warning" />
-        <KpiCard label="LEVERAGE" value={`${data.summary.leverage.toFixed(2)}×`} delta={`${formatCurrency(data.summary.netExposureUsd)} net`} tone="info" />
-        <KpiCard label="BREACHES" value={`${data.summary.activeBreaches}`} delta={`${data.summary.stressTestsToday} stress tests`} tone={data.summary.activeBreaches > 0 ? "warning" : "success"} />
+        <KpiCard label="LEVIER" value={`${data.summary.leverage.toFixed(2)}×`} delta={`${formatCurrency(data.summary.netExposureUsd)} net`} tone="info" />
+        <KpiCard label="DÉPASSEMENTS" value={`${data.summary.activeBreaches}`} delta={`${data.summary.stressTestsToday} stress tests`} tone={data.summary.activeBreaches > 0 ? "warning" : "success"} />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Limites, expositions et contraintes">
-        <Card title="Limites officielles" actions={<InlineAction>Backend only</InlineAction>} density="compact">
+        <Card title="Limites officielles" actions={<InlineAction>Backend uniquement</InlineAction>} density="compact">
           <DataTable rows={data.limits} rowKey={(row) => row.limitId} columns={limitColumns} />
           <MobileDataList
             rows={data.limits}
             rowKey={(row) => row.limitId}
             renderTitle={(row) => `${row.label} · ${row.status}`}
             renderMeta={(row) => `${row.scope} · ${row.officialSource}`}
-            renderBody={(row) => `${formatRiskValue(row.usedValue, row.unit)} / ${formatRiskValue(row.limitValue, row.unit)} · headroom ${formatRiskValue(row.headroomValue, row.unit)}`}
+            renderBody={(row) => `${formatRiskValue(row.usedValue, row.unit)} / ${formatRiskValue(row.limitValue, row.unit)} · marge ${formatRiskValue(row.headroomValue, row.unit)}`}
           />
           <div className="risk-source-proof">
             <FaLock />
@@ -131,13 +131,13 @@ export function RiskCenterPage() {
             ))}
           </div>
           <div className="risk-exposure-metrics">
-            <MetricBox label="Gross" value={formatCurrency(data.summary.grossExposureUsd)} />
+            <MetricBox label="Brut" value={formatCurrency(data.summary.grossExposureUsd)} />
             <MetricBox label="Net" value={formatCurrency(data.summary.netExposureUsd)} />
-            <MetricBox label="Top pair" value={<span className="text-warning">ES/NQ · 0,82</span>} />
+            <MetricBox label="Paire principale" value={<span className="text-warning">ES/NQ · 0,82</span>} />
           </div>
         </Card>
 
-        <Card title="Corrélation & Prop constraints" actions={<InlineAction>Contraintes</InlineAction>} density="compact">
+        <Card title="Corrélation & contraintes prop" actions={<InlineAction>Contraintes</InlineAction>} density="compact">
           <div className="risk-correlation-list">
             {data.correlations.map((correlation) => (
               <article key={correlation.correlationId}>
@@ -162,7 +162,7 @@ export function RiskCenterPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Stress, breaches et commandes">
-        <Card title="Stress tests" actions={<InlineAction>Scénarios</InlineAction>} density="compact">
+        <Card title="Tests de stress" actions={<InlineAction>Scénarios</InlineAction>} density="compact">
           <div className="risk-stress-list">
             {data.stressTests.map((stress) => (
               <article key={stress.stressTestId}>
@@ -180,7 +180,7 @@ export function RiskCenterPage() {
           </div>
         </Card>
 
-        <Card title="Breaches & historique" actions={<InlineAction>{data.breaches.length} alertes</InlineAction>} density="compact">
+        <Card title="Dépassements & historique" actions={<InlineAction>{data.breaches.length} alertes</InlineAction>} density="compact">
           <ol className="risk-breach-list">
             {data.breaches.map((breach) => (
               <li key={breach.breachId}>
@@ -191,13 +191,13 @@ export function RiskCenterPage() {
             ))}
           </ol>
           <div className="risk-linked-paths">
-            <Link to="/live">Live path</Link>
-            <Link to="/orders">Order path</Link>
-            <Link to="/events">Audit path</Link>
+            <Link to="/live">Chemin Live</Link>
+            <Link to="/orders">Chemin Ordres</Link>
+            <Link to="/events">Chemin d'audit</Link>
           </div>
         </Card>
 
-        <Card title="Actions Risk" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions Risque" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="risk-command-result">
             <FaFingerprint />
             <div>
@@ -206,7 +206,7 @@ export function RiskCenterPage() {
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
-          <ReasonInput label="Reason obligatoire" value={reason} onChange={setReason} />
+          <ReasonInput label="Motif obligatoire" value={reason} onChange={setReason} />
           <label className="risk-step-up">
             <span>Step-up phrase pour actions critiques</span>
             <input
@@ -269,11 +269,11 @@ export function buildRiskCommand(action: RiskAction, reason: string, stepUpToken
 
 const limitColumns = [
   { key: "limit", header: "Limite", render: (row: RiskLimit) => <LimitCell row={row} /> },
-  { key: "scope", header: "Scope", render: (row: RiskLimit) => row.scope },
+  { key: "scope", header: "Périmètre", render: (row: RiskLimit) => row.scope },
   { key: "used", header: "Utilisé", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.usedValue, row.unit) },
   { key: "limitValue", header: "Limite", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.limitValue, row.unit) },
   { key: "pct", header: "%", align: "right" as const, render: (row: RiskLimit) => `${row.usedPct.toFixed(1)}%` },
-  { key: "headroom", header: "Headroom", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.headroomValue, row.unit) },
+  { key: "headroom", header: "Marge disponible", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.headroomValue, row.unit) },
   { key: "status", header: "Statut", render: (row: RiskLimit) => <StatusBadge tone={statusTone(row.status)}>{presentQueueStatus(row.status).label}</StatusBadge> }
 ] as const;
 

@@ -38,7 +38,7 @@ export function OrdersPage() {
 
   if (query.isError) {
     return (
-      <Card title="Orders indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+      <Card title="Ordres indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
         <p>{(query.error as Error).message}</p>
       </Card>
     );
@@ -71,28 +71,28 @@ export function OrdersPage() {
     <div className="operator-page orders-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Orders"
+        title="Ordres"
         description={`Order Intents, provider orders, fills et protections · projection ${meta.latencyMs} ms.`}
         actions={
           <>
-            <Link to="/live">Live Trading</Link>
+            <Link to="/live">Trading en direct</Link>
             <Link to="/events">Timeline</Link>
-            <Link className="operator-primary-action" to="/execution/providers">Providers</Link>
+            <Link className="operator-primary-action" to="/execution/providers">Fournisseurs</Link>
           </>
         }
       />
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Orders">
-        <KpiCard label="ORDER INTENTS" value={`${data.summary.orderIntents}`} delta={`${data.orderIntents.length} visibles`} tone="info" />
+      <section className="operator-kpi-strip" aria-label="Indicateurs Ordres">
+        <KpiCard label="INTENTIONS D'ORDRE" value={`${data.summary.orderIntents}`} delta={`${data.orderIntents.length} visibles`} tone="info" />
         <KpiCard label="ORDRES ACTIFS" value={`${data.summary.activeOrders}`} delta={`${data.activeOrders.filter((order) => order.state === "ACKED").length} ACKED`} tone="success" />
         <KpiCard label="FILLS RÉCENTS" value={`${data.summary.recentFills}`} delta={`${formatSignedR(totalSlippage(data.fills))} slip`} tone="success" />
-        <KpiCard label="PARTIALS" value={`${data.summary.partialOrders}`} delta="surveillance provider" tone="warning" />
-        <KpiCard label="REJECTED" value={`${data.summary.rejectedOrders}`} delta="DLQ opérable" tone="danger" />
-        <KpiCard label="PROTECTION" value={`${data.summary.protectedOrdersPct}%`} delta="brackets/trails" detail={<ProgressBar value={data.summary.protectedOrdersPct} tone="success" />} tone="success" />
+        <KpiCard label="PARTIELS" value={`${data.summary.partialOrders}`} delta="surveillance provider" tone="warning" />
+        <KpiCard label="REJETÉS" value={`${data.summary.rejectedOrders}`} delta="DLQ opérable" tone="danger" />
+        <KpiCard label="PROTECTION" value={`${data.summary.protectedOrdersPct}%`} delta="protections/trailing" detail={<ProgressBar value={data.summary.protectedOrdersPct} tone="success" />} tone="success" />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Intents, ordres actifs et protections">
-        <Card title="Order Intents" actions={<InlineAction>INTENTS</InlineAction>} density="compact">
+        <Card title="Intentions d'ordre" actions={<InlineAction>INTENTIONS</InlineAction>} density="compact">
           <div className="orders-intent-list">
             {data.orderIntents.map((intent) => (
               <article key={intent.orderIntentId}>
@@ -105,7 +105,7 @@ export function OrdersPage() {
           </div>
         </Card>
 
-        <Card title="Ordres actifs provider/broker" actions={<InlineAction>Active</InlineAction>} density="compact">
+        <Card title="Ordres actifs provider/broker" actions={<InlineAction>Actifs</InlineAction>} density="compact">
           <div className="orders-active-list">
             {data.activeOrders.map((order) => (
               <article key={order.orderId}>
@@ -129,7 +129,7 @@ export function OrdersPage() {
           </div>
         </Card>
 
-        <Card title="Protection & state machine" actions={<InlineAction>Protection</InlineAction>} density="compact">
+        <Card title="Protection & machine à états" actions={<InlineAction>Protection</InlineAction>} density="compact">
           <div className="orders-protection-list">
             {data.protections.map((protection) => (
               <article key={protection.protectionId}>
@@ -153,7 +153,7 @@ export function OrdersPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Fills, providers, historique et commandes">
-        <Card title="Fills, commissions & slippage" actions={<InlineAction>Fills</InlineAction>} density="compact">
+        <Card title="Fills, commissions et slippage" actions={<InlineAction>Fills</InlineAction>} density="compact">
           <div className="orders-fill-list">
             {data.fills.map((fill) => (
               <article key={fill.fillId}>
@@ -176,7 +176,7 @@ export function OrdersPage() {
           </div>
         </Card>
 
-        <Card title="Historique execution" actions={<InlineAction>Events</InlineAction>} density="compact">
+        <Card title="Historique d'exécution" actions={<InlineAction>Événements</InlineAction>} density="compact">
           <ol className="orders-history-list">
             {data.history.map((event) => (
               <li key={event.eventId}>
@@ -188,11 +188,11 @@ export function OrdersPage() {
           </ol>
           <div className="orders-runtime-proof">
             <FaStream />
-            <span>Les IDs order/fill/provider sont ceux du Live, des Events et de la projection Signal Detail.</span>
+            <span>Les IDs order/fill/provider sont ceux du Trading en direct, de l'Explorateur d'événements et de la projection Détail signal live.</span>
           </div>
         </Card>
 
-        <Card title="Actions Orders" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions Ordres" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="orders-command-result">
             <FaFingerprint />
             <div>
@@ -203,7 +203,7 @@ export function OrdersPage() {
             </div>
           </div>
           <label className="orders-reason">
-            <span>Reason obligatoire</span>
+            <span>Motif obligatoire</span>
             <textarea value={reason} onChange={(event) => setReason(event.target.value)} />
           </label>
           <div className="orders-action-list">

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FaBolt, FaBroadcastTower, FaCheckCircle, FaClipboardCheck, FaPlug, FaShieldAlt, FaTimesCircle } from "react-icons/fa";
 import { Card, KpiCard, StatusBadge } from "@/design-system/primitives";
+import { presentFreshness } from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView } from "@/domains/front-api/repositories";
@@ -17,7 +18,7 @@ export function DemoPaperReadinessPage() {
 
   if (query.isError) {
     return (
-      <Card title="Readiness indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+      <Card title="Préparation indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
         <p>{(query.error as Error).message}</p>
       </Card>
     );
@@ -38,12 +39,12 @@ export function DemoPaperReadinessPage() {
     <div className="operator-page demo-paper-readiness-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Demo/PAPER Readiness"
+        title="Préparation Démo/PAPIER"
         description={`${data.summary.tradingDate} · ${data.summary.session} · décision ${data.summary.finalDecision} · projection ${meta.latencyMs} ms.`}
         actions={
           <>
-            <Link to="/live">Live Trading</Link>
-            <Link to="/execution/providers">Execution</Link>
+            <Link to="/live">Trading en direct</Link>
+            <Link to="/execution/providers">Exécution</Link>
             <Link className="operator-primary-action" to="/events">Preuves</Link>
           </>
         }
@@ -51,10 +52,10 @@ export function DemoPaperReadinessPage() {
 
       <section className="operator-kpi-strip" aria-label="Indicateurs readiness démo paper">
         <KpiCard label="DÉCISION" value={ready ? "OUVRIR" : "FERMÉ"} delta={data.summary.finalDecision} tone={ready ? "success" : "danger"} />
-        <KpiCard label="BLOCKERS" value={`${data.summary.blockersCount}`} delta={ready ? "aucun blocker" : "agents fermés/shadow"} tone={ready ? "success" : "danger"} />
+        <KpiCard label="BLOCAGES" value={`${data.summary.blockersCount}`} delta={ready ? "aucun blocker" : "agents fermés/shadow"} tone={ready ? "success" : "danger"} />
         <KpiCard label="FLUX MARCHÉ" value={data.marketData.state.toUpperCase()} delta={`${data.marketData.coreAgeSeconds}s · durable=${String(data.marketData.sourceDurable)}`} tone={data.marketData.sourceDurable ? "success" : "danger"} />
         <KpiCard label="SIM101" value={data.broker.sim101Account ? "OK" : "BLOCK"} delta={`${data.broker.accountName} · ${data.broker.addonStatus}`} tone={data.broker.sim101Account && data.broker.commandEnabled ? "success" : "danger"} />
-        <KpiCard label="ADDON" value={data.broker.addonHeartbeatFresh ? "FRESH" : "STALE"} delta={`connected=${String(data.broker.addonConnected)} · command=${String(data.broker.commandEnabled)}`} tone={data.broker.addonHeartbeatFresh && data.broker.commandEnabled ? "success" : "danger"} />
+        <KpiCard label="ADDON" value={presentFreshness(data.broker.addonHeartbeatFresh ? "FRESH" : "STALE").label} delta={`connected=${String(data.broker.addonConnected)} · command=${String(data.broker.commandEnabled)}`} tone={data.broker.addonHeartbeatFresh && data.broker.commandEnabled ? "success" : "danger"} />
         <KpiCard label="GATE" value={data.summary.status} delta={formatTime(data.summary.checkedAt)} tone={ready ? "success" : "danger"} />
       </section>
 
@@ -86,7 +87,7 @@ export function DemoPaperReadinessPage() {
           </div>
         </Card>
 
-        <Card title="Actions à terminer" eyebrow="Operator checklist" density="compact" actions={<InlineAction>{data.actionItems.length} actions</InlineAction>}>
+        <Card title="Actions à terminer" eyebrow="Checklist opérateur" density="compact" actions={<InlineAction>{data.actionItems.length} actions</InlineAction>}>
           {data.actionItems.length ? (
             <ol className="readiness-actions">
               {data.actionItems.map((action) => <ReadinessAction key={action.actionId} action={action} />)}
@@ -96,7 +97,7 @@ export function DemoPaperReadinessPage() {
           )}
         </Card>
 
-        <Card title="Commandes de vérification" eyebrow="CLI truth" density="compact">
+        <Card title="Commandes de vérification" eyebrow="Vérité CLI" density="compact">
           <div className="readiness-command-list">
             {Object.entries(data.commands).map(([key, command]) => (
               <article key={key}>
@@ -130,13 +131,13 @@ export function DemoPaperReadinessPage() {
         <Card title="NinjaTrader / AddOn" density="compact">
           <div className="readiness-broker-grid">
             <MetricBox label="Compte" value={data.broker.accountName} />
-            <MetricBox label="Startup" value={data.broker.startupState} />
+            <MetricBox label="Démarrage" value={data.broker.startupState} />
             <MetricBox label="Login requis" value={String(data.broker.loginRequired)} />
-            <MetricBox label="Simulation ready" value={String(data.broker.connectionReady)} />
+            <MetricBox label="Simulation prête" value={String(data.broker.connectionReady)} />
             <MetricBox label="Heartbeat" value={String(data.broker.addonHeartbeatFresh)} />
             <MetricBox label="Commandes" value={String(data.broker.commandEnabled)} />
-            <MetricBox label="Authority" value={data.broker.executionAuthorityMode} />
-            <MetricBox label="Approval entrée" value={String(data.broker.entryOperatorApprovalRequired)} />
+            <MetricBox label="Autorité" value={data.broker.executionAuthorityMode} />
+            <MetricBox label="Approbation entrée" value={String(data.broker.entryOperatorApprovalRequired)} />
           </div>
         </Card>
 
@@ -173,7 +174,7 @@ function ReadinessAction({ action }: { action: ActionItem }) {
 function DemoPaperReadinessLoading() {
   return (
     <div className="operator-page demo-paper-readiness-page">
-      <OperatorPageHeader title="Demo/PAPER Readiness" description="Chargement du gate release et des preuves opérateur." />
+      <OperatorPageHeader title="Préparation Démo/PAPIER" description="Chargement du gate release et des preuves opérateur." />
       <section className="operator-kpi-strip">
         {Array.from({ length: 6 }).map((_, index) => <KpiCard key={index} label="LOADING" value="—" delta="projection en cours" />)}
       </section>

@@ -15,6 +15,7 @@ import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, Sparkline, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
+import { presentPermission } from "@/design-system/labels";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
 import type { ResearchRunDetailView } from "@/domains/front-api/viewModels";
@@ -77,7 +78,7 @@ export function ResearchRunDetailPage() {
     <div className="operator-page research-run-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Run Report"
+        title="Rapport de run"
         description={`${compactId(data.run.runId)} · ${data.run.reproducibility} · ${data.run.engineVersion} · projection ${meta.latencyMs} ms.`}
         actions={
           <>
@@ -90,14 +91,14 @@ export function ResearchRunDetailPage() {
       <section className="operator-kpi-strip" aria-label="Indicateurs run detail">
         <KpiCard label="TOTAL R" value={formatSignedR(data.summary.totalR)} delta={`${data.summary.trades} trades`} tone={data.summary.totalR >= 0 ? "success" : "danger"} />
         <KpiCard label="MAX DD" value={formatSignedR(data.summary.maxDrawdownR)} delta="drawdown officiel" tone="warning" />
-        <KpiCard label="WIN RATE" value={`${data.summary.winRatePct}%`} delta={`PF ${data.summary.profitFactor.toFixed(2)}`} tone="info" />
+        <KpiCard label="TAUX DE GAIN" value={`${data.summary.winRatePct}%`} delta={`PF ${data.summary.profitFactor.toFixed(2)}`} tone="info" />
         <KpiCard label="SHARPE" value={data.summary.sharpe.toFixed(2)} delta={`MAE ${formatSignedR(data.summary.avgMaeR)}`} tone="info" />
-        <KpiCard label="COSTS" value={formatSignedR(data.summary.costR + data.summary.slippageR)} delta="slippage + frais" tone="warning" />
-        <KpiCard label="LOCK" value={data.run.reproducibility} delta={`seed ${data.run.seed}`} tone={data.run.reproducibility === "LOCKED" ? "success" : "warning"} />
+        <KpiCard label="COÛTS" value={formatSignedR(data.summary.costR + data.summary.slippageR)} delta="slippage + frais" tone="warning" />
+        <KpiCard label="VERROU" value={data.run.reproducibility} delta={`seed ${data.run.seed}`} tone={data.run.reproducibility === "LOCKED" ? "success" : "warning"} />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Reproductibilité, equity et distributions">
-        <Card title="Run identity & reproducibility" actions={<InlineAction>Hashes</InlineAction>} density="compact" tone={idMismatch ? "warning" : "neutral"}>
+        <Card title="Identité du run & reproductibilité" actions={<InlineAction>Hashes</InlineAction>} density="compact" tone={idMismatch ? "warning" : "neutral"}>
           <div className="research-run-identity">
             {idMismatch ? (
               <article className="research-run-warning">
@@ -109,9 +110,9 @@ export function ResearchRunDetailPage() {
               <MetricBox label="Run" value={compactId(data.run.runId)} />
               <MetricBox label="Dataset" value={data.run.datasetId} />
               <MetricBox label="Hash" value={data.run.datasetHash} />
-              <MetricBox label="Strategy version" value={data.run.strategyVersionId} />
+              <MetricBox label="Version stratégie" value={data.run.strategyVersionId} />
               <MetricBox label="Runtime" value={data.run.runtimeVersion} />
-              <MetricBox label="Status" value={data.run.status} />
+              <MetricBox label="Statut" value={data.run.status} />
             </div>
             <div className="research-run-params">
               {data.parameters.map((param) => (
@@ -128,7 +129,7 @@ export function ResearchRunDetailPage() {
           <div className="research-run-equity">
             <Sparkline points={data.equityCurve} tone={data.summary.totalR >= 0 ? "success" : "danger"} />
             <div className="research-run-benchmark">
-              <MetricBox label="Baseline" value={compactId(data.benchmark.baselineRunId)} />
+              <MetricBox label="Référence" value={compactId(data.benchmark.baselineRunId)} />
               <MetricBox label="Delta R" value={formatSignedR(data.benchmark.deltaR)} />
               <MetricBox label="Delta DD" value={formatSignedR(data.benchmark.deltaDrawdownR)} />
               <MetricBox label="Verdict" value={data.benchmark.verdict} />
@@ -169,14 +170,14 @@ export function ResearchRunDetailPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Trades, ambiguïtés et commandes">
-        <Card title="Trade list officielle" actions={<InlineAction>Trades</InlineAction>} density="compact">
+        <Card title="Liste de trades officielle" actions={<InlineAction>Trades</InlineAction>} density="compact">
           <div className="research-run-trade-list">
             {data.trades.map((trade) => (
               <article key={trade.tradeId}>
                 <FaExchangeAlt />
                 <div><strong>{trade.symbol} {trade.side} · {formatSignedR(trade.pnlR)}</strong><small>{formatTime(trade.openedAt)}→{formatTime(trade.closedAt)} · {trade.regime}</small></div>
                 <span>{trade.entry.toFixed(2)}→{trade.exit.toFixed(2)}</span>
-                <StatusBadge tone={trade.pnlR >= 0 ? "success" : "danger"}>{trade.pnlR >= 0 ? "WIN" : "LOSS"}</StatusBadge>
+                <StatusBadge tone={trade.pnlR >= 0 ? "success" : "danger"}>{trade.pnlR >= 0 ? "GAIN" : "PERTE"}</StatusBadge>
               </article>
             ))}
           </div>
@@ -184,8 +185,8 @@ export function ResearchRunDetailPage() {
 
         <Card title="MAE/MFE, coûts & ambiguïtés" actions={<InlineAction>Intrabar</InlineAction>} density="compact">
           <div className="research-run-risk-grid">
-            <MetricBox label="Avg MAE" value={formatSignedR(data.summary.avgMaeR)} />
-            <MetricBox label="Avg MFE" value={formatSignedR(data.summary.avgMfeR)} />
+            <MetricBox label="MAE moy." value={formatSignedR(data.summary.avgMaeR)} />
+            <MetricBox label="MFE moy." value={formatSignedR(data.summary.avgMfeR)} />
             <MetricBox label="Slippage" value={formatSignedR(data.summary.slippageR)} />
             <MetricBox label="Frais" value={formatSignedR(data.summary.costR)} />
           </div>
@@ -200,7 +201,7 @@ export function ResearchRunDetailPage() {
           </div>
         </Card>
 
-        <Card title="Actions run" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions run" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="research-run-actions">
             {data.commandActions.map((action) => (
               <article key={action.actionId}>
@@ -258,7 +259,7 @@ function permissionTone(permission: RunAction["permission"]) {
 }
 
 function permissionLabel(permission: RunAction["permission"]) {
-  return permission === "STEP_UP_REQUIRED" ? "STEP-UP" : permission;
+  return presentPermission(permission).label;
 }
 
 function compactId(value: string) {

@@ -459,7 +459,7 @@ export const AGENT_TASK_RUN_OUTCOMES_V1: readonly ["COMPLETED", "FAILED_RETRYABL
 export function buildAgentTaskRunMetricV1(input?: Record<string, unknown>): Record<string, unknown>;
 
 export const AGENT_RUNTIME_ADMIN_POLICY_VERSION_V1: "1.0.0";
-export const AGENT_RUNTIME_ADMIN_ACTIONS_V1: readonly ["READ_OVERVIEW", "READ_TASK", "LIST_TASKS", "LIST_DEAD_LETTERS", "LIST_METRICS", "LIST_POOLS", "REQUEUE_DEAD_LETTER", "CANCEL_TASK"];
+export const AGENT_RUNTIME_ADMIN_ACTIONS_V1: readonly ["READ_OVERVIEW", "READ_TASK", "LIST_TASKS", "LIST_DEAD_LETTERS", "LIST_METRICS", "LIST_POOLS", "LIST_EVENTS", "REQUEUE_DEAD_LETTER", "CANCEL_TASK"];
 export function authorizeAgentRuntimeAdminActionV1(input?: Record<string, unknown>): {
   ok: boolean;
   status: "accepted" | "rejected";

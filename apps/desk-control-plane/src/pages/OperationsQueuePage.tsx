@@ -74,23 +74,23 @@ export function OperationsQueuePage() {
     <div className="operator-page operations-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Autonomous Operations Queue"
+        title="File d'opérations autonomes"
         description="Missions IA, événements attendus, transitions automatiques, retries et DLQ — sans assignation humaine."
         actions={
           <>
             <Link to="/events">Voir les événements</Link>
-            <Link className="operator-primary-action" to="/events">Timeline audit</Link>
+            <Link className="operator-primary-action" to="/events">Chronologie d'audit</Link>
           </>
         }
       />
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Operations">
-        <KpiCard label="MISSIONS ACTIVES" value={`${data.summary.activeMissions}`} delta="Owner = agent IA" tone="success" />
-        <KpiCard label="EVENTS ATTENDUS" value={`${data.summary.waitingEvents}`} delta="Transitions en attente" tone="info" />
+      <section className="operator-kpi-strip" aria-label="Indicateurs Opérations">
+        <KpiCard label="MISSIONS ACTIVES" value={`${data.summary.activeMissions}`} delta="Propriétaire = agent IA" tone="success" />
+        <KpiCard label="ÉVÉNEMENTS ATTENDUS" value={`${data.summary.waitingEvents}`} delta="Transitions en attente" tone="info" />
         <KpiCard label="GATES BLOQUANTS" value={`${data.summary.blockedGates}`} delta="Operator gate exceptionnel" tone={data.summary.blockedGates > 0 ? "warning" : "success"} />
-        <KpiCard label="RETRY BACKLOG" value={`${data.summary.retryBacklog}`} delta="Backoff contrôlé" tone="warning" />
+        <KpiCard label="BACKLOG DE TENTATIVES" value={`${data.summary.retryBacklog}`} delta="Backoff contrôlé" tone="warning" />
         <KpiCard label="DLQ" value={`${data.summary.dlqItems}`} delta="À investiguer" tone={data.summary.dlqItems > 0 ? "danger" : "success"} />
-        <KpiCard label="BUDGET USED" value={`${data.summary.budgetUsedPct}%`} delta={`Projection ${meta.latencyMs} ms`} tone="info" />
+        <KpiCard label="BUDGET UTILISÉ" value={`${data.summary.budgetUsedPct}%`} delta={`Projection ${meta.latencyMs} ms`} tone="info" />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Queue autonome et événements">
@@ -111,7 +111,7 @@ export function OperationsQueuePage() {
           </div>
         </Card>
 
-        <Card title="Events attendus/reçus" actions={<InlineAction>Correlation IDs</InlineAction>} density="compact">
+        <Card title="Events attendus/reçus" actions={<InlineAction>IDs de corrélation</InlineAction>} density="compact">
           <div className="operations-event-flow">
             {data.eventFlow.map((event, index) => (
               <Link key={uniqueViewKey(event.eventId, index)} to={`/events?correlationId=${event.correlationId}`}>
@@ -127,7 +127,7 @@ export function OperationsQueuePage() {
           </div>
         </Card>
 
-        <Card title="Policy gates & commandes" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Gates de politique & commandes" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="operations-gate-list">
             {data.policyGates.map((gate, index) => (
               <article key={uniqueViewKey(gate.gateId, index)}>
@@ -162,7 +162,7 @@ export function OperationsQueuePage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="DLQ, incidents et preuve d'autonomie">
-        <Card title="Retries, DLQ & budgets" actions={<InlineAction>Backoff</InlineAction>} density="compact">
+        <Card title="Tentatives, DLQ & budgets" actions={<InlineAction>Backoff</InlineAction>} density="compact">
           <div className="operations-budget-grid">
             <MetricBox label="Budget tokens max" value={`${Math.max(...data.missions.map((mission) => mission.tokenBudgetPct))}%`} />
             <MetricBox label="Budget compute max" value={`${Math.max(...data.missions.map((mission) => mission.computeBudgetPct))}%`} />
@@ -210,7 +210,7 @@ export function OperationsQueuePage() {
             <article><FaRoute /><strong>Mission</strong><small>Objectif métier atomique</small></article>
             <article><FaRobot /><strong>Agent IA</strong><small>Owner logique, pas humain</small></article>
             <article><FaClock /><strong>Event attendu</strong><small>Transition déclenchée par événement</small></article>
-            <article><FaRandom /><strong>Next transition</strong><small>Automatique ou gate explicite</small></article>
+            <article><FaRandom /><strong>Prochaine transition</strong><small>Automatique ou gate explicite</small></article>
           </div>
           <div className="operations-autonomy-note">
             <FaProjectDiagram />

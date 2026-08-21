@@ -37,6 +37,33 @@ describe("Live Trading golden master", () => {
     expect(model.mode.ackIsFill).toBe(false);
   });
 
+  it("keeps explicitly allowed Human Gate actions available on a partial but fresh projection", () => {
+    const envelope = withOrderIntent(false);
+    envelope.meta = { ...envelope.meta, availability: "PARTIAL", stale: false, warnings: ["live-risk-checks:UNAVAILABLE"] };
+    const model = toLiveTradingModel(envelope);
+
+    expect(model.truth.label).toBe("PARTIAL");
+    expect(model.gateActions.map((action) => action.action)).toEqual(["CONFIRM", "REJECT"]);
+  });
+
+  it("projects a theoretical TargetPosition and derived audit timeline before broker execution", () => {
+    const envelope = withOrderIntent(false);
+    envelope.data.canonicalRuntime.pendingTargetPositions = [{
+      targetPositionId: "target-1",
+      instrument: "MNQ",
+      targetNetSize: 2,
+      deltaSize: 2,
+    }];
+    envelope.data.timeline = [];
+    const model = toLiveTradingModel(envelope);
+
+    expect(model.targetPosition?.targetPositionId).toBe("target-1");
+    expect(model.reconciliation.expected?.lifecycle).toBe("THEORETICAL_TARGET_PENDING_HUMAN_GATE");
+    expect(model.reconciliation.expected?.targetNetSize).toBe(2);
+    expect(model.timeline.map((event) => event.step)).toContain("ORDER_INTENT");
+    expect(model.timeline.map((event) => event.step)).toContain("HUMAN_GATE");
+  });
+
   it("renders market closure and policy disablement as truthful neutral states", () => {
     expect(liveTone("MARKET_CLOSED")).toBe("info");
     expect(liveTone("DISABLED_BY_POLICY")).toBe("info");
@@ -91,6 +118,44 @@ describe("Live Trading golden master", () => {
     expect(markup).toContain("M1");
     expect(markup).toContain("M5");
     expect(markup).toContain("aria-pressed=\"true\"");
+  });
+
+  it("does not draw zero or cross-instrument trade levels over the active market chart", () => {
+    const envelope = withOrderIntent(false);
+    const intent = envelope.data.canonicalRuntime.pendingOrderIntents[0];
+    envelope.data.canonicalRuntime.pendingOrderIntents = [{
+      ...intent,
+      symbol: "MES",
+      limitPrice: 0,
+      stopPrice: 7654.25,
+      targetPrice: 7710,
+      executionTerms: { instrument: "MES", order_type: "LIMIT", entry: { price: 7672.25 }, stop: { price: 7654.25 }, targets: [{ price: 7710 }] },
+    }];
+    envelope.data.portfolioOrderIntents = envelope.data.canonicalRuntime.pendingOrderIntents;
+    envelope.data.marketSeries = {
+      schemaVersion: "front_market_series_v1",
+      availability: "KNOWN",
+      source: "market_candles",
+      instrument: "MNQ",
+      timeframe: "5",
+      supportedInstruments: ["MNQ", "MES"],
+      supportedTimeframes: ["1", "5", "15"],
+      asOf: "2026-08-10T09:40:00.000Z",
+      points: [
+        { timestamp: "2026-08-10T09:30:00.000Z", open: 29320, high: 29340, low: 29310, close: 29334, volume: 100, vwap: 29325 },
+        { timestamp: "2026-08-10T09:35:00.000Z", open: 29334, high: 29348, low: 29318, close: 29322, volume: 120, vwap: 29330 },
+        { timestamp: "2026-08-10T09:40:00.000Z", open: 29322, high: 29355, low: 29320, close: 29350, volume: 130, vwap: 29338 },
+      ],
+    };
+    const model = toLiveTradingModel(envelope);
+    const markup = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(InstrumentChartPanel, { model }))
+    );
+
+    expect(markup).toContain("Prix de 29310.00 à 29355.00");
+    expect(markup).toContain("Niveaux MES masqués sur chart MNQ");
+    expect(markup).not.toContain("ENTRÉE 0.00");
+    expect(markup).not.toContain("7710.00");
   });
 });
 

@@ -7,11 +7,11 @@ import { OperatorMenu } from "@/shell/OperatorMenu";
 import type { LiveTradingModel } from "./model";
 
 const searchTargets = [
-  { label: "Strategy Center", keywords: "strategy stratégies instances", route: "/strategies" },
-  { label: "Portfolio", keywords: "portfolio positions exposition", route: "/portfolio" },
-  { label: "Risk", keywords: "risk risque limites", route: "/risk" },
+  { label: "Centre des stratégies", keywords: "strategy stratégies instances", route: "/strategies" },
+  { label: "Portefeuille", keywords: "portfolio positions exposition", route: "/portfolio" },
+  { label: "Risque", keywords: "risk risque limites", route: "/risk" },
   { label: "OrderIntents", keywords: "orders ordres intentions", route: "/orders" },
-  { label: "Execution", keywords: "provider execution broker", route: "/execution/providers" },
+  { label: "Exécution", keywords: "provider execution broker", route: "/execution/providers" },
 ];
 
 export function LiveTradingHeader({ model, onRefresh, refreshing }: { model: LiveTradingModel; onRefresh(): void; refreshing: boolean }) {
@@ -29,14 +29,14 @@ export function LiveTradingHeader({ model, onRefresh, refreshing }: { model: Liv
   return (
     <>
       <header className="lt-header">
-        <h1>Live Trading</h1>
+        <h1>Trading en direct</h1>
         <form className="lt-search" role="search" onSubmit={(event) => { event.preventDefault(); if (results[0]) navigate(results[0].route); }}>
           <FaSearch aria-hidden="true" />
-          <input aria-label="Rechercher dans les espaces du desk" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search instruments, strategies, portfolios..." autoComplete="off" />
+          <input aria-label="Rechercher dans les espaces du desk" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher instruments, stratégies, portefeuilles..." autoComplete="off" />
           <kbd>⌘ K</kbd>
           {results.length ? <div role="listbox" aria-label="Résultats de recherche">{results.map((item) => <button key={item.route} type="button" role="option" onClick={() => navigate(item.route)}>{item.label}</button>)}</div> : null}
         </form>
-        <div className="lt-header__environment"><small>Environment</small><strong>{model.mode.environment}</strong></div>
+        <div className="lt-header__environment"><small>Environnement</small><strong>{model.mode.environment}</strong></div>
         <time className="lt-header__clock" dateTime={now?.toISOString()}><strong>{now ? formatClock(now) : "—"} ET</strong><small>{now ? formatDate(now) : "Horloge indisponible"}</small></time>
         <button className="lt-icon-button" type="button" aria-label="Thème sombre actif" disabled><FaMoon /></button>
         <button className="lt-icon-button" type="button" aria-label="Notifications indisponibles" disabled><FaBell /><span>—</span></button>
@@ -45,10 +45,10 @@ export function LiveTradingHeader({ model, onRefresh, refreshing }: { model: Liv
       <section className="lt-policy" aria-label="Politique opérationnelle autoritaire">
         <PolicyChip tone="info">{model.mode.environment}</PolicyChip>
         <PolicyChip tone="info">{model.mode.executionMode.replace("_", "-")}</PolicyChip>
-        <PolicyChip tone={model.mode.autoExecutionEnabled ? "danger" : "warning"}>AUTO EXECUTION {model.mode.autoExecutionEnabled ? "ON" : "OFF"}</PolicyChip>
-        <PolicyChip tone={model.mode.physicalExecutionEnabled ? "danger" : "danger"}>LIVE BROKER {model.mode.physicalExecutionEnabled ? "ON" : "OFF"}</PolicyChip>
-        <PolicyChip tone={model.mode.humanGateRequired ? "warning" : "danger"}>Human Gate {model.mode.humanGateRequired ? "Required" : "Not required"}</PolicyChip>
-        <span className={`lt-policy__freshness lt-tone--${model.truth.tone}`}><FaCircle aria-hidden="true" />Data {model.freshness.marketData.toLowerCase()} · asOf {formatTimestamp(model.meta.asOf)}</span>
+        <PolicyChip tone={model.mode.autoExecutionEnabled ? "danger" : "warning"}>EXÉCUTION AUTO {model.mode.autoExecutionEnabled ? "ACTIVÉE" : "DÉSACTIVÉE"}</PolicyChip>
+        <PolicyChip tone={model.mode.physicalExecutionEnabled ? "danger" : "danger"}>BROKER LIVE {model.mode.physicalExecutionEnabled ? "ACTIVÉ" : "DÉSACTIVÉ"}</PolicyChip>
+        <PolicyChip tone={model.mode.humanGateRequired ? "warning" : "danger"}>Human Gate {model.mode.humanGateRequired ? "Requis" : "Non requis"}</PolicyChip>
+        <span className={`lt-policy__freshness lt-tone--${model.truth.tone}`}><FaCircle aria-hidden="true" />Données {model.freshness.marketData.toLowerCase()} · asOf {formatTimestamp(model.meta.asOf)}</span>
         <button type="button" className="lt-policy__refresh" onClick={onRefresh} disabled={refreshing} aria-label="Actualiser la projection Live"><FaSyncAlt className={refreshing ? "is-spinning" : ""} /></button>
         <FaShieldAlt className="lt-policy__shield" aria-label="Politique backend active" />
       </section>

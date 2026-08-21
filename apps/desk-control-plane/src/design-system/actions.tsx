@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { DeskTone } from "@/design-system/tokens";
 import { useCommandStatus } from "@/domains/front-api/repositories";
 import type { CommandAccepted, CommandStatus } from "@/domains/realtime/commandRuntime";
+import { presentCommandStatus } from "@/design-system/labels";
 
 export type DeskButtonVariant = "primary" | "secondary" | "ghost" | "warning" | "danger" | "emergency";
 
@@ -43,7 +44,7 @@ export function DrawerShell({
   return (
     <aside className={`drawer-shell drawer-shell--${tone}${open ? " drawer-shell--open" : ""}`} aria-hidden={!open}>
       <header>
-        <p className="eyebrow">Drawer</p>
+        <p className="eyebrow">Panneau</p>
         <h2>{title}</h2>
       </header>
       {children}
@@ -60,7 +61,7 @@ export function CommandProgressToast({
 }) {
   return (
     <div className={`command-toast command-toast--${status.toLowerCase()}`} role="status">
-      <span>{status}</span>
+      <span>{presentCommandStatus(status).label}</span>
       <strong>{commandId}</strong>
     </div>
   );
@@ -79,7 +80,7 @@ function TrackedCommandReceiptContent({ command }: { command: CommandAccepted })
     <div className="command-receipt" aria-live="polite">
       <CommandProgressToast commandId={command.commandId} status={snapshot?.status ?? command.status} />
       {snapshot?.status === "SUCCEEDED" ? (
-        <small>Audit Receipt · {snapshot.auditId ?? "identifiant audit indisponible"}</small>
+        <small>Reçu d'audit · {snapshot.auditId ?? "identifiant audit indisponible"}</small>
       ) : null}
       {snapshot?.message ? <small>{snapshot.message}</small> : null}
     </div>

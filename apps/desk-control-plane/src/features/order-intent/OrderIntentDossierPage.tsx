@@ -78,24 +78,24 @@ export function OrderIntentDossierPage() {
       </section>
 
       <nav className="order-dossier__lineage" aria-label="Lineage du dossier" tabIndex={0}>
-        {["Signal", "Context Gate", "Portfolio", "Global Risk", "Target", "OrderIntent", "Human Gate", "Provider", "Broker", "Réconciliation"].map((label, index) => (
+        {["Signal", "Filtre de contexte", "Portefeuille", "Risque global", "Cible", "OrderIntent", "Human Gate", "Fournisseur", "Broker", "Réconciliation"].map((label, index) => (
           <span key={label}><b>{String(index + 1).padStart(2, "0")}</b>{label}</span>
         ))}
       </nav>
 
       <section className="order-dossier__overview-grid" aria-label="Identité, stratégie et autorité">
-        <Card title="Identity & strategy lineage" eyebrow="CANONICAL IDS" density="compact">
+        <Card title="Identité & lignée de la stratégie" eyebrow="IDS CANONIQUES" density="compact">
           <div className="order-dossier__metrics-grid">
             <DataMetric label="OrderIntent" value={dossier.identity.orderIntentId} />
-            <DataMetric label="Order" value={dossier.identity.orderId} />
-            <DataMetric label="Strategy" value={dossier.strategy.strategyId} />
+            <DataMetric label="Ordre" value={dossier.identity.orderId} />
+            <DataMetric label="Stratégie" value={dossier.strategy.strategyId} />
             <DataMetric label="Instance" value={dossier.strategy.strategyInstanceId} />
             <DataMetric label="Version" value={dossier.strategy.strategyVersion} />
             <DataMetric label="Signal" value={dossier.signal.signalId} />
           </div>
         </Card>
         <ExecutionAuthorityPanel dossier={dossier} />
-        <Card title="Target Position" eyebrow="RISK OUTPUT" density="compact" state="partial">
+        <Card title="Position cible" eyebrow="SORTIE RISQUE" density="compact" state="partial">
           <div className="order-dossier__metrics-grid">
             <DataMetric label="TargetPosition" value={dossier.targetPosition.targetPositionId} />
             <DataMetric label="Compte" value={dossier.targetPosition.account} />
@@ -117,10 +117,10 @@ export function OrderIntentDossierPage() {
       </section>
 
       <section className="order-dossier__evidence-grid" aria-label="Provider, broker et réconciliation">
-        <Card title="Provider Lifecycle" eyebrow="EVENTS BACKEND" density="compact" state={dossier.providerLifecycle.length ? "nominal" : "partial"}>
+        <Card title="Cycle de vie fournisseur" eyebrow="ÉVÉNEMENTS BACKEND" density="compact" state={dossier.providerLifecycle.length ? "nominal" : "partial"}>
           <ProviderLifecycleTimeline events={dossier.providerLifecycle} />
         </Card>
-        <Card title="Broker evidence" eyebrow="FILLS" density="compact" state={dossier.fills.length ? "nominal" : "empty"}>
+        <Card title="Preuves broker" eyebrow="FILLS" density="compact" state={dossier.fills.length ? "nominal" : "empty"}>
           {dossier.fills.length ? (
             <div className="order-dossier__fill-list">
               {dossier.fills.map((fill) => <article key={fill.fillId}><span><strong>{fill.quantity} @ {fill.price}</strong><small>{fill.fillId}</small></span><time dateTime={fill.filledAt}>{formatTime(fill.filledAt)}</time></article>)}
@@ -131,10 +131,10 @@ export function OrderIntentDossierPage() {
       </section>
 
       <section className="order-dossier__audit-grid" aria-label="Relations et audit">
-        <Card title="Cross navigation" eyebrow="LINEAGE" density="compact">
+        <Card title="Navigation croisée" eyebrow="LIGNÉE" density="compact">
           {dossier.relations.length ? <div className="zoom-link-list">{dossier.relations.map((relation) => <Link key={`${relation.label}-${relation.id}`} to={relation.route}><strong>{relation.label}</strong><small>{relation.id}</small></Link>)}</div> : <p className="empty-state">Aucune relation canonique publiée.</p>}
         </Card>
-        <Card title="Audit & provenance" eyebrow="TECHNICAL" density="compact"><TechnicalInspector dossier={dossier} /></Card>
+        <Card title="Audit & provenance" eyebrow="TECHNIQUE" density="compact"><TechnicalInspector dossier={dossier} /></Card>
       </section>
     </div>
   );

@@ -85,7 +85,8 @@ export class PostgresResearchExperimentRegistryRepository {
         AND ($2::uuid IS NULL OR research_hypothesis_id = $2)
         AND ($3::uuid IS NULL OR research_candidate_id = $3)
         AND ($4::research_candidate_status IS NULL OR status = $4::research_candidate_status)
-      ORDER BY created_at_utc DESC LIMIT $5`, [emptyToNull(filters.researchExperimentId), emptyToNull(filters.researchHypothesisId), emptyToNull(filters.researchCandidateId), filters.status || null, bounded(filters.limit)])
+        AND ($6::uuid IS NULL OR strategy_version_id = $6)
+      ORDER BY created_at_utc DESC LIMIT $5`, [emptyToNull(filters.researchExperimentId), emptyToNull(filters.researchHypothesisId), emptyToNull(filters.researchCandidateId), filters.status || null, bounded(filters.limit), emptyToNull(filters.strategyVersionId)])
       .then((items) => items.map(normalizeCandidateRow));
   }
 

@@ -29,6 +29,10 @@ const agentRuntimeStoreMethods = {
   async listAgentRuntimeDeadLetters(args = {}) {
     return adminService(this).listDeadLetters(args);
   },
+
+  async listAgentRuntimeEvents(args = {}) {
+    return adminService(this).listEvents(args);
+  },
 };
 
 function adminService(store) {

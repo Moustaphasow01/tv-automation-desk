@@ -652,3 +652,335 @@ rather than guessing at a fix under production pressure.
 
 Nothing left uncommitted on my side; Codex's own uncommitted research
 files were restored exactly as found.
+
+## Section 6 — Strategy Center and Research Lab rebuilt to match new mockups
+
+After Live Trading, the user shared two new reference mockups (Research
+Lab, Strategy Center) with the same standing instruction as before:
+match structure/colors/sizing exactly to what was built for Live
+Trading, evolve the backend as needed, don't invent data. Dispatched a
+background investigation agent first to map, item by item against both
+mockups, what backend data already existed vs needed new wiring vs
+didn't exist at all — its report (12 mockup items across both screens)
+drove every decision below instead of guessing.
+
+### Strategy Center
+
+**Backend (`mcp_gpt_desk/src/front-control-plane-api.js`,
+`strategyCenter()`):** previously a near-stub — `selectedInspector.gates`
+was hardcoded to `[]` and `thesis` a static placeholder. Rebuilt to
+thread a new `strategy-promotion-lineage` dependency (see below) plus
+`performance` into the view, and now returns, for the operator-selected
+strategy:
+- **Meta grid** — owner, published date, build hash, session scope,
+  deployment mode, entry/stop/target/risk model (reusing the existing
+  `strategySpecProjection` helper). Two fields (Volatility Filter, Max
+  Trades/Session) have no backing column anywhere in the schema —
+  verified by grep, not fabricated, and simply not rendered rather than
+  invented.
+- **Gate Progression (G0–G7)** — real data from
+  `research_evaluation_reports.criteria_snapshot.gates`, keyed to the
+  exact `research_candidate_id` for the *selected strategy version*
+  (not just "some recent candidate"). Relabeled the eight raw gate keys
+  (`G0_DATASET_VERSIONED` → "G0 · Données versionnées", etc.) to French
+  without changing their underlying semantics.
+- **Validation & Performance** — equity curve and expectancy/PF/win-rate/
+  max-DD sourced from `getPerformanceOverview({ strategyId })`, the same
+  persisted trade/equity data already used by the Performance pages.
+- **Runtime Instances table** — reuses the strategy's own `instances[]`
+  (already loaded, previously discarded after picking one "primary"
+  instance), enriched with a real per-instance "signals today" count.
+- **Research Lineage flow** — a genuinely new join: candidate →
+  hypothesis → experiment → (winner run, if any) → strategy version →
+  instance, each with a real timestamp.
+
+**The interesting bug this surfaced:** the obvious way to fetch gates
+(reuse the `research` dependency already loaded for the Research Lab
+view) silently returns nothing for almost every strategy, because that
+dependency is capped at `limit: 100` out of **3,335** candidates and
+**5,850** evaluation reports — any candidate outside the newest 100 is
+invisible to it. Confirmed this by direct Postgres query before writing
+a single line of fix, per the debugging discipline used all session:
+counted the real table sizes, found a candidate a strategy actually
+resolved to, and verified it fell well outside the top-100 slice.
+Fixed properly rather than just raising the limit (which caps at 500 in
+the repository regardless, still not enough): added a `strategyVersionId`
+filter all the way down through
+`research-experiment-registry-repository.js` →
+`research-experiment-registry-service.js`, added a new targeted store
+method `getStrategyPromotionLineage({ strategyVersionId })`, and a new
+front-control-plane dependency that only fires when the frontend passes
+a concrete `strategyVersionId` — which it now does, via a two-phase
+fetch (load once with no selection to learn the backend's own default
+pick, then immediately refetch scoped to that exact strategy so gates/
+equity/lineage all resolve correctly on first paint, exactly mirroring
+what happens when an operator clicks a different row).
+
+**Second bug caught in the same pass:** the frontend's initial "click a
+strategy" handler forwarded `strategyVersionId: "none"` verbatim for any
+strategy that has no published version yet (a real, valid state — 105
+of 127 current strategies are still DRAFT). `"none"` is not a UUID, and
+it was landing straight in a Postgres `::uuid` cast two different ways
+(one in the new lineage lookup, one already-existing in
+`loadStrategyV2Overview`), producing a `22P02 invalid_text_representation`
+error that the source-degradation system caught gracefully but still
+blanked the entire strategy catalog for that render. Fixed by only
+forwarding a `strategyVersionId` when it's a real, non-sentinel value
+(both in the React state setter and as a defense-in-depth UUID-shape
+regex guard server-side, since a malformed query param should degrade
+one dependency, not silently produce a confusing "0 strategies" flash).
+
+**Frontend:** new `features/strategy-center/strategy-center.css`
+golden-surface stylesheet, reusing the exact same token palette as
+Live Trading (`--sc-*` aliasing the same hex values as `--lt-*`, per the
+user's "respect what was built" instruction) rather than inventing a
+fourth look. `StrategyCenterPage.tsx` rebuilt around a two-column
+cockpit: catalog (clickable, searchable-by-scroll list of all 127
+strategies) on the left, and a stacked inspector (meta → gates → equity
+chart w/ R-Multiple/Distribution tabs → runtime instances → lineage
+flow) on the right, keeping the existing "performance by family / top
+strategies / recent events" analytical row underneath largely as-is.
+Wired a new `desk-app-shell--strategy-center` golden-surface class into
+`DeskShell.tsx` alongside Command Center/Live Trading's.
+
+**A CSS bug caught before calling it done:** first render showed the
+header correctly but a completely blank body below it. Root cause (found
+by comparing computed styles against Command Center's working pattern,
+not guessing): the golden-surface override that gives `.desk-content`
+`height:100%; overflow:hidden` so the page's *own* single child can
+fill and scroll independently didn't exist yet for
+`--strategy-center` — the generic default `.desk-main` grid
+(`64px topbar-row / 1fr / 30px footer-row`) was still active, and with
+no topbar/footer rendered (golden surfaces suppress those), the page's
+lone child collapsed into just the first 64px row. Added the same
+`.desk-main`/`.desk-content` override Command Center already has.
+
+### Research Lab
+
+**Backend:** additive only — nothing removed, so the existing
+experiment/pipeline-shaped view keeps working for any other consumer.
+Added:
+- A real **Research Activity Stream**: `agent_events` had been written
+  to on every task claim/complete/fail since early in the project but
+  never read back anywhere. Added `LIST_EVENTS` to the (fixed, enum-style)
+  `AGENT_RUNTIME_ADMIN_ACTIONS_V1` policy whitelist in
+  `packages/desk-domain`, a `listEvents()` method on
+  `AgentRuntimeAdminService`, and wired it through as a new
+  `activityStream[]` field.
+- **Active Workers heartbeat/lease** — the columns
+  (`lease_expires_at_utc`, `updated_at_utc`) already existed on
+  `agent_tasks`, just weren't threaded through `projectTask()`'s mapping;
+  now exposed as `leaseActive`/`leaseExpiresAt`/`lastHeartbeatAt`.
+- **Candidate composite score** — a transparent weighted blend
+  (`robustness × 0.5 + max(0, OOS R) × 10 × 0.3 + max(0, Sharpe) × 20 × 0.2`)
+  computed from data the view already carried, so "Candidate Ranking"
+  isn't dominated by one noisy metric.
+
+**A second, more subtle key-collision bug, only visible with real
+production-scale data:** `agentRow()`'s `agentId` field had silently
+always been the *task* id, because the code was reading
+`item.worker_id`, a field that doesn't exist on the actual query result
+(`projectTask()` returns `assigned_worker_id`) — a pre-existing typo bug.
+Fixed the field name (so `agentId` now genuinely identifies the worker),
+but that surfaced a real consequence at scale: one batch-runner worker
+identity (`data-driven-mes-v2-robustness-batch-001`) legitimately owns
+44 of the 50 rows shown, so using `agentId` as the React list key
+produced 44 duplicate-key warnings and (per React's own docs) undefined
+child identity. Added a `taskId` field specifically for list-key use
+(genuinely unique per row) rather than repurposing `agentId` back into
+a dual-meaning field. Caught by reading the *browser console*, not just
+the rendered screenshot — the visual output looked fine even while
+React was warning underneath, and a stale HMR tab briefly made the fix
+look like it hadn't taken effect until verified in a fresh tab (the
+same recurring artifact noted earlier this session).
+
+**Frontend:** new `features/research-lab/research-lab.css` (same
+token-palette-reuse approach as Strategy Center). `ResearchLabPage.tsx`
+rebuilt around: KPI strip → horizontal pipeline tracker → a two-column
+grid (Mission Queue table + click-to-inspect "Selected Mission" panel
+on the left; Active Workers, Candidate Ranking, and the new Activity
+Stream on the right) → the existing Datasets/Knowledge-Graph/Compute-
+queue/Incidents analytical row kept underneath, re-skinned into the new
+panel style rather than rebuilt from scratch.
+
+**Verification:** both screens checked against the real local Docker
+backend (rebuilt after every backend change) with actual production-
+scale data — 127 strategies, 3,335 research candidates, 5,850
+evaluation reports, 50 active agent-runtime rows — not synthetic
+fixtures. Full test suites green throughout: 36/36 backend
+(`front_control_plane_api`, `research_lab_front_projection`), 3/3
+`desk-domain` policy tests, 179/179 frontend (`vitest`), plus a clean
+`tsc --noEmit` (caught, the hard way, that piping `tsc` through `head`
+silently hides a non-zero exit code — re-ran capturing the real exit
+code after a first pass wrongly looked clean).
+
+## Section 7 — Full French-translation pass
+
+The user's final, explicitly emphasized ask for this round: no English
+text left anywhere in the front-end. Before touching anything, dispatched
+a read-only investigation agent to inventory every remaining English
+string across all ~48 non-test, non-mock frontend files — it came back
+with a large, precise file:line list plus several cross-cutting patterns
+(the same `<InlineAction>Command Runtime</InlineAction>` eyebrow repeated
+in 16 files; `"Reason obligatoire"` — a mixed English/French form label —
+in 8 files; local `permissionLabel()`/`statusLabel()` helpers in half a
+dozen research/strategy pages that duplicated, in raw English, what the
+shared `design-system/labels.ts` registry already does correctly in
+French elsewhere).
+
+**One judgment call worth recording:** the four main section names
+("Command Center", "Live Trading", "Strategy Center", "Research Lab")
+are used constantly throughout the app as page titles, nav entries, and
+cross-links. Given the user has used exactly these English names
+themselves while speaking French about this app, it was genuinely
+ambiguous whether they were living jargon/branding or leftover English —
+asked directly rather than guessing on something that pervasive.
+Answer: translate them too, no exceptions. Settled on Centre de
+contrôle / Trading en direct / Centre des stratégies / Laboratoire de
+recherche, plus Rejeu for "Replay" and Centre de risque for "Risk
+Center" — applied consistently everywhere those names appear (routes,
+sidebar, headers, breadcrumbs, cross-page links, search targets).
+
+**Execution:** handled the shared, high-blast-radius files directly
+(`app/routes.ts`, `shell/navigation.ts`, `shell/DeskShell.tsx`,
+`design-system/{primitives,states,actions,labels}.tsx`,
+`domains/permissions/PermissionGate.tsx`) plus every file touched
+earlier this session (Live Trading panels/header/human-gate, Strategy
+Center, Research Lab) myself, for consistency with what was already
+built. Dispatched 6 parallel background agents for the remaining page
+clusters (Command Center panels; the 6-subpage `OperationalP0Pages.tsx`;
+Orders/Risk/Execution/Admin/Auth/Settings; order-intent + live-signal +
+position/incident detail; the remaining research/strategy detail pages;
+audit/ops/Jarvis/explorer), each given the exact file:line findings,
+the settled naming conventions, and firm guardrails (display text only,
+never touch backend field names/command types/payload keys, wire raw
+badges through the existing `presentX()` labelers instead of hardcoding
+French, verify with `tsc`+`vitest` before reporting back).
+
+**What went sideways, and how it was caught:** partway through, the
+session hit its usage limit and all 6 agents were killed mid-work; some
+had only read files without editing yet, others had edited several
+files and were mid-verification. Rather than trust the "reset, please
+continue" cue at face value, checked `git status` to see exactly which
+files had real edits, then re-diffed against `HEAD` file-by-file for
+anything ambiguous. That surfaced something important: `mapper.ts`,
+`model.ts`, and the golden-master test in `features/live-trading/` had
+a large, unrelated, uncommitted diff — Codex's own in-progress feature
+(`targetPosition`, `theoreticalExecution`, `deriveAuditTimeline`) sitting
+in the same working tree, already producing one pre-existing test
+failure before any translation work touched it. Confirmed it wasn't
+mine, left it untouched, and made sure every subsequently re-dispatched
+agent was told explicitly to leave that one test alone rather than
+"fix" someone else's in-flight work.
+
+Translating did legitimately break 3 (different, mine) test assertions
+that hardcoded the old English strings — expected, since the strings
+themselves changed. Fixed the assertions to match the new French text
+rather than reverting the translation.
+
+**Post-agent audit:** rather than take the six "done" reports at face
+value, ran repeated global greps across the whole `src/pages` and
+`src/features` trees afterward (`title="..."`, `aria-label="..."`,
+`placeholder="..."`, all-caps `label="..."`) looking for anything still
+English. Found and fixed a real, if smaller, tail the agents' scoped
+instructions hadn't covered: the `Command Runtime` eyebrow in 6 files
+none of the prompts had explicitly listed it for; two of my own
+Strategy Center/Research Lab panel headers where the visible `<h2>`
+still said the English name while the `aria-label` right next to it
+already said the French one; `PortfolioPage.tsx` (never assigned to any
+agent) still rendering raw `executionMode`/`health` enum codes and an
+English "Strategy instance" column header; a handful of `aria-label`s
+still carrying the untranslated section names (`"Indicateurs Risk
+Center"`, `"Indicateurs Orders"`, etc.); "Replay" left untranslated in
+`ExplorerPages.tsx`'s route definitions even after the app-wide rename
+to "Rejeu"; and 10 leftover English mock `label:` strings in
+`canonicalDataset.ts`.
+
+**Verification:** `npx tsc --noEmit` clean throughout every round.
+`npx vitest run` at 180/181 passing at every checkpoint — the sole,
+constant exception being the one Codex-owned pre-existing failure,
+confirmed unrelated and deliberately left alone. `design-system/labels.ts`
+grew by roughly a dozen new `presentX()` entries over the course of
+this pass (`presentConnectionStatus`, `presentCommandStatus`,
+`presentResearchDecision`, `presentDomain`, `presentRelationKind`,
+`presentDeviceState`, `presentNotificationSeverity`,
+`presentIncidentStatus`, `presentIncidentDomain`, `presentChronologyState`,
+`presentRetryState`, `presentReconciliationStatus`, `presentOperatorGate`),
+each replacing a spot that had been silently rendering a raw backend
+enum code instead of a French label.
+
+Not yet done: committing/deploying this work — pending, same as every
+other round this session, on the user being present to authorize a
+VPS-touching deploy.
+
+## Section 8 — Backend work silently reverted, reconstructed; commit and deploy
+
+The user said "YES" to committing and deploying everything above. Before
+running any git command, did the usual pre-flight `git status` — and
+found that `mcp_gpt_desk/src/front-control-plane-api.js` had **zero
+diff against HEAD**: `strategyCenter()` was back to a bare stub
+(`gates: []`, `lifecycleDistribution: []`, hardcoded zeros), `agentRow()`
+back to its pre-fix, mis-keyed version, the whole `research-lab`
+`agent-events` wiring gone. Confirmed via `git show HEAD` that this
+exact stub *is* what's committed — none of Section 6's backend work
+(Tasks around gates/lineage/instances/equity/composite-score) had ever
+actually landed in git; it had only ever existed as uncommitted
+working-tree content, and something wiped it back to HEAD.
+
+**Root cause, found via `git reflog`:** three entries mid-session —
+`checkout: moving from main to codex/theoretical-execution-hotfix-20260821`,
+a commit on that branch, then `checkout: moving from
+codex/theoretical-execution-hotfix-20260821 to main`. Codex operates in
+this same physical working tree (not a separate clone), and switching
+branches there discarded uncommitted changes to any tracked file that
+differed from the target branch — collateral damage to a completely
+unrelated part of the same file, not anything adversarial. Checked
+`git fsck --unreachable --dangling` for a recoverable stash/commit
+first, before assuming the worst; the dangling objects found all
+predated this backend work by hours, so recovery had to come from
+directly re-deriving the code from earlier in this same conversation
+rather than from git.
+
+**Recovery:** rebuilt `strategyRow` (with the `selectStrategyInstance`/
+`selectStrategyVersion` derivation helpers), `strategyCenter()` and its
+six new helpers (meta row, the 8-gate mapping, lineage, runtime
+instances, performance block, command eligibility), `agentRow`'s field
+fix, and `researchLab`'s `activityStream`/`researchResultRow`'s
+composite score — all from the exact code already produced earlier in
+this conversation, not reconstructed from memory of intent. Verified
+with the same rigor as the first time: `node --check` for syntax, then
+the full backend suite (not just the two files touched) —
+**1171/1173 passing**, one unrelated pre-existing failure, one skip.
+
+**That one remaining backend failure turned out to be a second,
+separate pre-existing gap**, surfaced only by running the full suite
+instead of just the files touched today: `front_control_plane_api.test.js`
+expects `marketSessionState()` (in `front-live-trading-support.js`, a
+file with zero uncommitted diff of its own) to map
+`market_session.state: "trading_day"` to `"TRADING_DAY"`; the committed
+function only recognizes `OPEN/PREOPEN/HALTED/CLOSED` and reads a
+different field path, so it falls through to `"UNKNOWN"`. Confirmed
+this can't be something introduced by tonight's work (never touched
+`marketSessionState`/`liveSession`/the `liveTrading()` builder) —
+flagged it to the user directly rather than quietly shipping past it or
+scope-creeping into fixing an unfamiliar feature under deploy pressure.
+Asked the same way as the Codex test: ship with it documented, or stop
+and investigate first. Same answer both times: ship, document.
+
+**Frontend re-verified one more time after all of the above:**
+`tsc --noEmit` clean, `vitest run` 180/181 (the one Codex-owned
+failure, unchanged, still the only frontend exception).
+
+Two known, pre-existing, out-of-scope failures ship with this release,
+by explicit user decision after being shown each one directly rather
+than discovered after the fact:
+1. `src/test/liveTradingGoldenMaster.test.ts` — Codex's own in-progress
+   `targetPosition`/`theoreticalExecution` feature, its own test not yet
+   wired up on its end.
+2. `mcp_gpt_desk/test/front_control_plane_api.test.js` — the
+   `marketSessionState`/`TRADING_DAY` gap above.
+
+Neither is reachable from anything shipped in this release's actual
+user-facing changes (Strategy Center, Research Lab, the French pass);
+both are pre-existing gaps this session's work happened to make visible
+by running the full suite rather than a scoped subset.

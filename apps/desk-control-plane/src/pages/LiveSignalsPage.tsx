@@ -5,6 +5,7 @@ import { Card, KpiCard, StatusBadge } from "@/design-system/primitives";
 import { ViewTruthBanner } from "@/design-system/states";
 import { OperatorPageHeader } from "@/design-system/workspace";
 import { useFrontView } from "@/domains/front-api/repositories";
+import { presentSignalState } from "@/design-system/labels";
 import type { LiveTradingView } from "@/domains/front-api/viewModels";
 
 type Signal = LiveTradingView["signals"][number];
@@ -42,7 +43,7 @@ export function LiveSignalsPage() {
         <KpiCard label="FILLS" value={`${data.fills.length}`} delta="Exécutions visibles" tone="info" />
         <KpiCard label="LATENCE BFF" value={`${meta.latencyMs} ms`} delta={`asOf ${formatTime(meta.asOf)}`} />
       </section>
-      <Card title="Signal Bus" eyebrow="DRILL-DOWN PAR ID" density="compact">
+      <Card title="Signal Bus" eyebrow="ZOOM PAR ID" density="compact">
         <label className="table-search"><span>Rechercher</span><input value={search} onChange={(event) => { const value = event.target.value; setSearchParams(value ? { q: value } : {}, { replace: true }); }} placeholder="Symbole, stratégie, état…" /></label>
         {signals.length ? (
           <>
@@ -58,7 +59,7 @@ export function LiveSignalsPage() {
 const columns = [
   { key: "signal", header: "Signal", render: (row: Signal) => <Link className="live-table-link" to={`/live/signals/${row.signalId}`}><strong>{row.symbol} {row.direction}</strong><small>{row.signalId}</small></Link> },
   { key: "strategy", header: "Stratégie", render: (row: Signal) => row.strategyId },
-  { key: "state", header: "État", render: (row: Signal) => <StatusBadge tone={signalTone(row.state)}>{row.state}</StatusBadge> },
+  { key: "state", header: "État", render: (row: Signal) => <StatusBadge tone={signalTone(row.state)}>{presentSignalState(row.state).label}</StatusBadge> },
   { key: "confidence", header: "Confiance", align: "right" as const, render: (row: Signal) => `${row.confidence}%` },
   { key: "expectancy", header: "Expectancy", align: "right" as const, render: (row: Signal) => `${row.expectancyR.toFixed(2)} R` },
   { key: "created", header: "Créé", render: (row: Signal) => formatTime(row.createdAt) },

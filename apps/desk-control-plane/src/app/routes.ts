@@ -39,8 +39,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "command-center",
-    label: "Command Center",
-    title: "Command Center",
+    label: "Centre de contrôle",
+    title: "Centre de contrôle",
     description: "Vue globale lisible : santé, activité, risques, prochains événements et raccourcis de zoom.",
     navGroup: "pilotage",
     capability: "command-center.read",
@@ -51,7 +51,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "operations",
     label: "Opérations",
-    title: "Operations Hub",
+    title: "Centre d'opérations",
     description: "Files de travail, incidents, workers, claims et événements techniques exploitables.",
     navGroup: "operations",
     capability: "operations.read",
@@ -62,7 +62,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "events",
     label: "Événements",
-    title: "Event Explorer",
+    title: "Explorateur d'événements",
     description: "Journal transversal des événements métier et système, pensé pour le debug opérateur.",
     navGroup: "operations",
     capability: "events.read",
@@ -73,8 +73,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "research",
-    label: "Research Lab",
-    title: "Research Lab",
+    label: "Laboratoire de recherche",
+    title: "Laboratoire de recherche",
     description: "Pilotage des expérimentations, backtests, datasets et agent researchers.",
     navGroup: "research",
     capability: "research.read",
@@ -107,7 +107,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "research/agents",
     label: "Agents",
-    title: "Agents Research",
+    title: "Agents de recherche",
     description: "Rôles, files, conversations et budgets d’intelligence des agents de recherche.",
     navGroup: "research",
     capability: "research.agents.read",
@@ -118,7 +118,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "research/data",
     label: "Données",
-    title: "Data Foundation",
+    title: "Fondation données",
     description: "Datasets, lineage, couverture, splits temporels et qualité de données point-in-time.",
     navGroup: "research",
     capability: "research.data.read",
@@ -129,7 +129,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "research/compute",
     label: "Compute",
-    title: "Compute Lab",
+    title: "Laboratoire compute",
     description: "Suivi des batches, workers compute, coûts, files et capacité de simulation.",
     navGroup: "research",
     capability: "research.compute.read",
@@ -139,8 +139,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "strategies",
-    label: "Stratégies",
-    title: "Strategy Center",
+    label: "Centre des stratégies",
+    title: "Centre des stratégies",
     description: "Catalogue des stratégies, versions, instances, kernels et statuts de promotion.",
     navGroup: "strategy",
     capability: "strategies.read",
@@ -172,8 +172,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "live",
-    label: "Live",
-    title: "Live Trading",
+    label: "Trading en direct",
+    title: "Trading en direct",
     description: "Session live, signaux déterministes, état de marché, décisions IA et exécution simulée/live.",
     navGroup: "live",
     capability: "live.read",
@@ -184,7 +184,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "demo-paper-readiness",
     label: "Readiness",
-    title: "Demo/PAPER Readiness",
+    title: "Préparation Démo/PAPIER",
     description: "Porte de lancement opérateur : flux durable, Sim101/AddOn, gate release et actions restantes.",
     navGroup: "pilotage",
     capability: "demo-paper.readiness.read",
@@ -206,7 +206,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "portfolio",
     label: "Portefeuille",
-    title: "Portfolio",
+    title: "Portefeuille",
     description: "Risque global, allocation, netting, positions cibles et exposition multi-stratégies.",
     navGroup: "execution",
     capability: "portfolio.read",
@@ -218,7 +218,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "orders",
     label: "Ordres",
-    title: "Orders",
+    title: "Ordres",
     description: "Intentions d’ordre, états broker, fills, protections post-fill et réconciliation.",
     navGroup: "execution",
     capability: "orders.read",
@@ -230,7 +230,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "risk",
     label: "Risque",
-    title: "Risk Center",
+    title: "Centre de risque",
     description: "Budgets, limites, circuit breakers, règles prop firm et contrôles opérateur.",
     navGroup: "execution",
     capability: "risk.read",
@@ -242,7 +242,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "execution/providers",
     label: "Providers",
-    title: "Execution Providers",
+    title: "Fournisseurs d'exécution",
     description: "NinjaTrader, PickMyTrade, shadow mode, cutover, santé provider et fallback.",
     navGroup: "execution",
     capability: "execution.providers.read",
@@ -253,7 +253,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "execution/incidents",
     label: "Incidents",
-    title: "Execution Incidents",
+    title: "Incidents d'exécution",
     description: "Incidents d’exécution, dead letters, retries, runbooks et preuves de résolution.",
     navGroup: "operations",
     capability: "execution.incidents.read",
@@ -265,7 +265,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "jarvis",
     label: "Jarvis",
-    title: "Jarvis Workspace",
+    title: "Espace Jarvis",
     description: "Espace agentique pour orchestrer recherches, décisions, prompts et actions longues.",
     navGroup: "governance",
     capability: "jarvis.read",
@@ -276,7 +276,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "settings",
     label: "Réglages",
-    title: "Settings",
+    title: "Réglages",
     description: "Feature flags, modes d’environnement, préférences d’affichage et configuration opérateur.",
     navGroup: "governance",
     capability: "settings.read",
@@ -303,7 +303,7 @@ const backendGapRoutes: readonly VNextRoute[] = [
   wired("operations/events", "Événements & Audit", "Événements et audit", "operations", "Journal transversal et corrélations.", "/views/events-audit"),
   wired("execution/orders", "Ordres", "Ordres", "execution", "Intentions, ordres, fills et protections.", "/views/orders"),
   wired("execution/portfolio", "Portefeuille", "Portefeuille", "execution", "Expositions, positions et netting.", "/views/portfolio"),
-  wired("execution/risk", "Risk Center", "Risk Center", "execution", "Budgets, limites et breaches.", "/views/risk"),
+  wired("execution/risk", "Centre de risque", "Centre de risque", "execution", "Budgets, limites et dépassements.", "/views/risk"),
   wired("governance/access", "Accès & Rôles", "Accès et rôles", "governance", "Session, permissions et accès courants.", "/views/admin-access"),
   wired("governance/administration", "Administration", "Administration", "governance", "Administration protégée et audit d'accès.", "/views/admin-access"),
   wired("sessions", "Sessions", "Sessions de trading", "pilotage", "Sessions, calendrier opérationnel et historique d'ouverture.", "/views/sessions"),
@@ -315,15 +315,15 @@ const backendGapRoutes: readonly VNextRoute[] = [
   wired("research/candidates", "Candidats", "Candidats stratégie", "research", "Candidats, verdicts, promotions et rejets.", "/views/research-candidates"),
   wired("research/data/:datasetId", "Dataset", "Détail dataset", "research", "Lineage, couverture et qualité d'un dataset par identifiant.", "/views/research-dataset-detail"),
   wired("strategies/deployments", "Déploiements", "Déploiements stratégie", "strategy", "Instances, environnements et historique de déploiement.", "/views/strategy-deployments"),
-  wired("replay", "Replay Overview", "Replay", "replay", "Vue globale des runs et de leur progression.", "/views/replay-overview"),
-  wired("replay/runs", "Runs Replay", "Runs Replay", "replay", "Liste et filtres des runs Replay.", "/views/replay-runs"),
-  wired("replay/runs/:runId", "Replay Run", "Détail Replay", "replay", "Jour, sessions, processus GPT et trades du run.", "/views/replay-run-detail"),
-  wired("replay/compare", "Comparer Replay", "Comparaison Replay", "replay", "Comparaison de baselines et variantes.", "/views/replay-compare"),
+  wired("replay", "Vue d'ensemble Rejeu", "Rejeu", "replay", "Vue globale des runs et de leur progression.", "/views/replay-overview"),
+  wired("replay/runs", "Runs Rejeu", "Runs Rejeu", "replay", "Liste et filtres des runs Rejeu.", "/views/replay-runs"),
+  wired("replay/runs/:runId", "Run Rejeu", "Détail Rejeu", "replay", "Jour, sessions, processus GPT et trades du run.", "/views/replay-run-detail"),
+  wired("replay/compare", "Comparer Rejeu", "Comparaison Rejeu", "replay", "Comparaison de baselines et variantes.", "/views/replay-compare"),
   wired("performance", "Performance", "Performance", "performance", "Vue consolidée, PnL en R et drawdowns.", "/views/performance-overview"),
   wired("performance/calendar", "Calendrier", "Calendrier de performance", "performance", "Résultats et drill-down par journée.", "/views/performance-calendar"),
   wired("performance/days/:dayId", "Journée", "Détail performance jour", "performance", "Trades et attribution d'une journée.", "/views/performance-day-detail"),
   wired("performance/strategies", "Par stratégie", "Performance stratégies", "performance", "Comparaison de performance par stratégie.", "/views/performance-strategies"),
-  wired("performance/trades", "Trades", "Trade tape", "performance", "Liste officielle des trades et résultats.", "/views/performance-trades"),
+  wired("performance/trades", "Trades", "Historique des trades", "performance", "Liste officielle des trades et résultats.", "/views/performance-trades"),
   wired("operations/workflows/:workflowId", "Workflow", "Détail workflow", "operations", "État, claims, transitions et audit d'un workflow.", "/views/workflow-detail"),
   wired("operations/incidents/:incidentId", "Incident", "Détail incident", "operations", "Chronologie et remédiation d'un incident par identifiant.", "/views/incident-detail"),
   wired("operations/events/:eventId", "Événement", "Détail événement", "operations", "Payload, causalité et corrélation d'un événement.", "/views/event-detail"),
@@ -333,7 +333,7 @@ const backendGapRoutes: readonly VNextRoute[] = [
   wired("execution/portfolio/positions/:positionId", "Position", "Détail position", "execution", "Cycle de vie, risque et management d'une position.", "/views/position-detail"),
   wired("execution/reconciliation", "Réconciliation", "Réconciliation", "execution", "Écarts desk/broker et preuves de réconciliation.", "/views/execution-reconciliation"),
   wired("governance/prompts", "Prompts & IA", "Prompts et contexte IA", "governance", "Registre versionné des prompts, politiques et affectations.", "/views/governance-prompts"),
-  wired("governance/policies", "Policies", "Policies", "governance", "Politiques de risque, exécution et gouvernance.", "/views/governance-policies"),
+  wired("governance/policies", "Politiques", "Politiques", "governance", "Politiques de risque, exécution et gouvernance.", "/views/governance-policies"),
 ];
 
 export const vnextRoutes: readonly VNextRoute[] = [...implementedRoutes, ...backendGapRoutes];

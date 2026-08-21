@@ -2,6 +2,7 @@ import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { DataTable, MobileDataList } from "@/design-system/data";
 import { Card, KpiCard, ProgressBar, Sparkline, StatusBadge } from "@/design-system/primitives";
+import { presentExecutionMode, presentHealth } from "@/design-system/labels";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView } from "@/domains/front-api/repositories";
 import type { BrokerPosition, VirtualAllocation } from "@/domains/front-api/viewModels";
@@ -277,14 +278,14 @@ const brokerColumns = [
 ] as const;
 
 const allocationColumns = [
-  { key: "strategy", header: "Strategy instance", render: (row: VirtualAllocation) => <StrategyCell row={row} /> },
+  { key: "strategy", header: "Instance stratégie", render: (row: VirtualAllocation) => <StrategyCell row={row} /> },
   { key: "instrument", header: "Instrument", render: (row: VirtualAllocation) => row.instrument },
   { key: "quantity", header: "Qté virtuelle", align: "right" as const, render: (row: VirtualAllocation) => row.virtualQuantity > 0 ? `+${row.virtualQuantity}` : row.virtualQuantity },
   { key: "exposure", header: "Exposition", align: "right" as const, render: (row: VirtualAllocation) => formatCurrencyCompact(row.exposureUsd) },
   { key: "pnl", header: "PnL attribué", align: "right" as const, render: (row: VirtualAllocation) => <span className={row.attributedPnlR >= 0 ? "text-success" : "text-danger"}>{formatAllocationPnl(row)}</span> },
   { key: "risk", header: "Risque", align: "right" as const, render: (row: VirtualAllocation) => `${formatDecimal(row.riskPct)} M €` },
-  { key: "mode", header: "Mode", render: (row: VirtualAllocation) => <StatusBadge tone={row.executionMode === "LIVE" ? "success" : row.executionMode === "PAPER" ? "accent" : "neutral"}>{row.executionMode}</StatusBadge> },
-  { key: "health", header: "État", render: (row: VirtualAllocation) => <StatusBadge tone={row.health === "OK" ? "success" : "warning"}>{row.health === "OK" ? "HEALTHY" : row.health}</StatusBadge> }
+  { key: "mode", header: "Mode", render: (row: VirtualAllocation) => <StatusBadge tone={row.executionMode === "LIVE" ? "success" : row.executionMode === "PAPER" ? "accent" : "neutral"}>{presentExecutionMode(row.executionMode).label}</StatusBadge> },
+  { key: "health", header: "État", render: (row: VirtualAllocation) => <StatusBadge tone={row.health === "OK" ? "success" : "warning"}>{presentHealth(row.health).label}</StatusBadge> }
 ] as const;
 
 function StrategyCell({ row }: { row: VirtualAllocation }) {

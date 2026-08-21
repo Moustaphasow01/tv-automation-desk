@@ -19,6 +19,7 @@ import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
+import { presentPermission } from "@/design-system/labels";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
 import type { ResearchExperimentDetailView } from "@/domains/front-api/viewModels";
@@ -81,7 +82,7 @@ export function ResearchExperimentDetailPage() {
     <div className="operator-page research-experiment-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Experiment Dossier"
+        title="Dossier d'expérience"
         description={`${data.experiment.title} · ${data.experiment.stage} · ${data.experiment.currentTask} · projection ${meta.latencyMs} ms.`}
         actions={
           <>
@@ -94,7 +95,7 @@ export function ResearchExperimentDetailPage() {
       <section className="operator-kpi-strip" aria-label="Indicateurs détail expérience">
         <KpiCard label="SCORE" value={`${data.experiment.score}`} delta={`${data.experiment.status} · ${data.experiment.stage}`} tone={data.experiment.score >= 70 ? "success" : "warning"} />
         <KpiCard label="PROGRESSION" value={`${data.experiment.progressPct}%`} delta={data.experiment.expectedEvent} detail={<ProgressBar value={data.experiment.progressPct} tone="accent" />} tone="info" />
-        <KpiCard label="TOKEN BUDGET" value={`${data.ownership.tokenBudgetPct}%`} delta={data.ownership.ownerAgentName} tone="warning" />
+        <KpiCard label="BUDGET TOKENS" value={`${data.ownership.tokenBudgetPct}%`} delta={data.ownership.ownerAgentName} tone="warning" />
         <KpiCard label="COMPUTE" value={`${data.ownership.computeBudgetPct}%`} delta={data.ownership.leaseId} tone="warning" />
         <KpiCard label="DATASETS" value={`${data.datasets.length}`} delta={`${data.datasets.filter((dataset) => dataset.pointInTime).length} point-in-time`} tone="success" />
         <KpiCard label="SEGMENTS" value={`${data.segmentedMetrics.length}`} delta={`${data.segmentedMetrics.filter((segment) => segment.verdict === "PASS").length} pass`} tone="info" />
@@ -125,7 +126,7 @@ export function ResearchExperimentDetailPage() {
           </div>
         </Card>
 
-        <Card title="Strategy Spec & versions" actions={<InlineAction>Spec</InlineAction>} density="compact">
+        <Card title="Spec stratégie & versions" actions={<InlineAction>Spec</InlineAction>} density="compact">
           <div className="research-spec-card">
             <article>
               <FaProjectDiagram />
@@ -153,7 +154,7 @@ export function ResearchExperimentDetailPage() {
           </div>
         </Card>
 
-        <Card title="Datasets & lineage" actions={<InlineAction>Data Catalog</InlineAction>} density="compact">
+        <Card title="Datasets & lignée" actions={<InlineAction>Catalogue de données</InlineAction>} density="compact">
           <div className="research-dataset-list">
             {data.datasets.map((dataset) => (
               <Link key={dataset.datasetId} to="/research/data">
@@ -170,7 +171,7 @@ export function ResearchExperimentDetailPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Résultats, journal et actions">
-        <Card title="Iterations & métriques segmentées" actions={<InlineAction>Run</InlineAction>} density="compact">
+        <Card title="Itérations & métriques segmentées" actions={<InlineAction>Run</InlineAction>} density="compact">
           <div className="research-iteration-list">
             {data.iterations.map((iteration) => (
               <article key={iteration.iterationId}>
@@ -193,7 +194,7 @@ export function ResearchExperimentDetailPage() {
           </div>
         </Card>
 
-        <Card title="Journal agent & connaissances" actions={<InlineAction>Knowledge</InlineAction>} density="compact">
+        <Card title="Journal agent & connaissances" actions={<InlineAction>Connaissances</InlineAction>} density="compact">
           <div className="research-agent-journal">
             {data.agentJournal.map((entry) => (
               <article key={entry.journalId}>
@@ -213,7 +214,7 @@ export function ResearchExperimentDetailPage() {
           </div>
         </Card>
 
-        <Card title="Actions automatiques" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions automatiques" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="research-experiment-actions">
             {data.commandActions.map((action) => (
               <article key={action.actionId}>
@@ -271,7 +272,7 @@ function permissionTone(permission: ExperimentAction["permission"]) {
 }
 
 function permissionLabel(permission: ExperimentAction["permission"]) {
-  return permission === "STEP_UP_REQUIRED" ? "STEP-UP" : permission;
+  return presentPermission(permission).label;
 }
 
 function compactId(value: string) {

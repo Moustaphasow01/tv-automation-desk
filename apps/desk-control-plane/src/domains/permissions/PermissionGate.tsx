@@ -103,7 +103,7 @@ export function OperatorLoginGate({ children }: { children: ReactNode }) {
     <OperatorLoginShell status="Accès opérateur requis">
       <form className="operator-login-gate__form" onSubmit={submit}>
         <label>
-          <span>Login</span>
+          <span>Identifiant</span>
           <input
             autoComplete="username"
             autoFocus

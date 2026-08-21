@@ -97,6 +97,55 @@ test("front control plane returns stable envelopes for every VNext view", async 
   }
 });
 
+test("strategy center resolves running shadow instances through Definition Version Instance lineage", async () => {
+  const definition = {
+    strategy_definition_id: "strdef-shadow",
+    name: "Data-driven MNQ — VWAP proxy reject short",
+    family: "vwap_proxy_reject_short",
+    default_instruments: ["MNQ"],
+  };
+  const version = {
+    strategy_version_id: "strver-shadow",
+    strategy_definition_id: "strdef-shadow",
+    version_label: "1.14.15+runtime",
+    status: "VALIDATED",
+    runtime_contract_bundle_version: "strategy-runtime-v4",
+    metadata: { timeframe: "5", metrics: { total_r: 4.25, profit_factor: 1.42, win_rate_pct: 61, max_drawdown_r: -1.2 } },
+  };
+  const instance = {
+    strategy_instance_id: "strinst-shadow",
+    strategy_version_id: "strver-shadow",
+    runtime_state: "RUNNING",
+    execution_mode: "SHADOW",
+    instrument_scope: ["MNQ"],
+  };
+
+  const envelope = await handleFrontControlPlane(frontControlPlaneStore({
+    strategy: {
+      summary: { definitions: 1, versions: 1, instances: 1 },
+      definitions: [definition],
+      versions: [version],
+      instances: [instance],
+      strategies: [{ ...definition, latest_version: version, versions: [version], instances: [instance] }],
+      audit: [],
+    },
+  }), {
+    pathname: "/front-api/v1/views/strategy-center",
+    method: "GET",
+  });
+
+  const [row] = envelope.data.strategies;
+  assert.equal(row.name, "Data-driven MNQ — VWAP proxy reject short · 1.14.15+runtime");
+  assert.equal(row.strategyDefinitionId, "strdef-shadow");
+  assert.equal(row.strategyVersionId, "strver-shadow");
+  assert.equal(row.strategyInstanceId, "strinst-shadow");
+  assert.equal(row.runtimeBundleId, "strategy-runtime-v4");
+  assert.equal(row.executionMode, "SHADOW");
+  assert.equal(row.runtimeStatus, "RUNNING");
+  assert.deepEqual(row.instruments, ["MNQ"]);
+  assert.deepEqual(envelope.data.lifecycleDistribution, [{ label: "SHADOW", count: 1, pct: 100 }]);
+});
+
 test("front control plane Jarvis workspace is a grounded read-only supervisor", async () => {
   const envelope = await handleFrontControlPlane(frontControlPlaneStore(), {
     pathname: "/front-api/v1/views/jarvis-workspace",
@@ -379,6 +428,40 @@ test("live trading reports healthy strategy instances as intentionally idle whil
   assert.equal(envelope.data.canonicalRuntime.activeStrategyInstances[0].runtimeState, "MARKET_CLOSED");
   assert.equal(envelope.data.canonicalRuntime.activeStrategyInstances[0].schedulerHealth, "IDLE_MARKET_CLOSED");
   assert.equal(envelope.meta.warnings.includes("live-next-monitor:UNAVAILABLE"), false);
+});
+
+test("front control plane preserves stale market feeds as stale, not unavailable or unknown", async () => {
+  const store = frontControlPlaneStore({
+    health: {
+      ...coldStartReadyHealth(),
+      data_readiness: {
+        ok: false,
+        state: "stale",
+        market_closed: false,
+        market_session: { state: "trading_day" },
+        freshness_policy: { max_age_seconds: 900 },
+        core_age_seconds: 1800,
+        effective_market_date: "2026-08-11",
+        source_health: { durable: true, non_durable_feeds: [] },
+        core_feeds: [{
+          feed_id: "prod__tradingview__MNQ1!__5",
+          instrument: "MNQ",
+          timeframe: "5",
+          latest_timestamp_utc: "2026-08-11T07:30:00.000Z",
+          age_seconds: 1800,
+          provenance: { durable: true, classification: "durable_alert" },
+        }],
+      },
+    },
+  });
+
+  const commandCenter = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/command-center", query: {} });
+  const live = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-trading", query: {} });
+
+  assert.equal(commandCenter.data.market.status, "STALE");
+  assert.equal(commandCenter.data.market.rows[0].status, "STALE");
+  assert.equal(live.data.session.marketDataStatus, "STALE");
+  assert.equal(live.data.session.marketState, "TRADING_DAY");
 });
 
 test("an OrderIntent without a persisted Human Gate is not exposed as operator-actionable", async () => {
@@ -1425,7 +1508,7 @@ function frontControlPlaneStore(overrides = {}) {
     bridges: [{ adapter_kind: "addon", account_name: "Sim101", command_enabled: true, status: "armed", last_seen_at: "2026-08-11T08:00:00.000Z" }],
     ...overrides.execution,
   };
-  const strategy = {
+  const strategy = overrides.strategy || {
     definitions: [
       { strategy_definition_id: "strdef-1", name: "Breakout Retest", family: "index" },
       { strategy_definition_id: "strdef-compare", name: "Compare Retest", family: "momentum" },

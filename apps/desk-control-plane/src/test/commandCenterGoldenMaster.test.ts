@@ -21,7 +21,7 @@ describe("Command Center golden master", () => {
     expect(model.kpis).toHaveLength(6);
     expect(model.kpis.find((item) => item.id === "workers")?.value).toBe("— / —");
     expect(model.kpis.find((item) => item.id === "human-gate")?.value).toBe("1");
-    expect(model.kpis.find((item) => item.id === "provider-safety")?.value).toContain("No broker");
+    expect(model.kpis.find((item) => item.id === "provider-safety")?.value).toContain("Aucun effet");
   });
 
   it("never derives Human Gate actions from an OrderIntent status", () => {

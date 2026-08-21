@@ -54,7 +54,7 @@ export function ExecutionProvidersPage() {
 
   if (query.isError) {
     return (
-      <Card title="Providers indisponibles" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+      <Card title="Fournisseurs indisponibles" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
         <p>{(query.error as Error).message}</p>
       </Card>
     );
@@ -62,7 +62,7 @@ export function ExecutionProvidersPage() {
 
   if (!query.data) {
     return (
-      <Card title="Aucune donnée providers" eyebrow="EMPTY" state="empty" density="compact">
+      <Card title="Aucune donnée fournisseurs" eyebrow="EMPTY" state="empty" density="compact">
         <p>Le BFF ne retourne pas encore la projection `/views/execution-providers`.</p>
       </Card>
     );
@@ -88,32 +88,32 @@ export function ExecutionProvidersPage() {
     <div className="operator-page execution-providers-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Execution Providers"
+        title="Fournisseurs d'exécution"
         description={`Provider primaire ${data.summary.primaryProviderId} · standby ${data.summary.standbyProviderId} · projection ${meta.latencyMs} ms · aucune donnée sensible navigateur.`}
         actions={
           <>
-            <Link to="/orders">Orders</Link>
-            <Link to="/risk">Risk Center</Link>
+            <Link to="/orders">Ordres</Link>
+            <Link to="/risk">Centre de risque</Link>
             {switchAction ? (
               <DeskButton variant="warning" disabled={isActionDisabled(switchAction, reason, stepUpToken)} onClick={() => confirmAction(switchAction)}>
-                Switch simulation
+                Basculer simulation
               </DeskButton>
             ) : null}
           </>
         }
       />
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Execution Providers">
-        <KpiCard label="PRIMARY" value={providerShort(data.summary.primaryProviderId)} delta="backend state only" tone="success" />
-        <KpiCard label="STANDBY" value={providerShort(data.summary.standbyProviderId)} delta="PickMyTrade shadow" tone="warning" />
+      <section className="operator-kpi-strip" aria-label="Indicateurs Fournisseurs d'exécution">
+        <KpiCard label="PRINCIPAL" value={providerShort(data.summary.primaryProviderId)} delta="backend state only" tone="success" />
+        <KpiCard label="RÉSERVE" value={providerShort(data.summary.standbyProviderId)} delta="PickMyTrade shadow" tone="warning" />
         <KpiCard label="PROVIDERS ACTIFS" value={`${data.summary.activeProviders}`} delta={`${data.summary.degradedProviders} degraded`} tone="info" />
         <KpiCard label="LATENCE AVG" value={`${data.summary.avgLatencyMs} ms`} delta="ACK provider" tone="warning" />
-        <KpiCard label="FILL RATE" value={formatPercent(data.summary.fillRatePct)} delta={`${formatSignedR(data.summary.slippageR)} slip`} detail={<ProgressBar value={data.summary.fillRatePct} tone="success" />} tone="success" />
+        <KpiCard label="TAUX DE FILL" value={formatPercent(data.summary.fillRatePct)} delta={`${formatSignedR(data.summary.slippageR)} slip`} detail={<ProgressBar value={data.summary.fillRatePct} tone="success" />} tone="success" />
         <KpiCard label="INCIDENTS" value={`${data.summary.openIncidents}`} delta={`${data.summary.accounts} comptes`} tone={data.summary.openIncidents > 0 ? "warning" : "success"} />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Providers, comptes et santé">
-        <Card title="Providers & rôles" actions={<InlineAction>{data.providers.length} providers</InlineAction>} density="compact">
+        <Card title="Fournisseurs & rôles" actions={<InlineAction>{data.providers.length} fournisseurs</InlineAction>} density="compact">
           <div className="provider-roster">
             {data.providers.map((provider) => (
               <article key={provider.providerId} className={`provider-card provider-card--${provider.state.toLowerCase()}`}>
@@ -123,17 +123,17 @@ export function ExecutionProvidersPage() {
                   <StatusBadge tone={providerStateTone(provider.state)}>{presentAvailability(provider.state).label}</StatusBadge>
                 </header>
                 <div className="provider-card__metrics">
-                  <MetricBox label="Role" value={provider.role} />
-                  <MetricBox label="Latency" value={`${provider.latencyMs} ms`} />
+                  <MetricBox label="Rôle" value={provider.role} />
+                  <MetricBox label="Latence" value={`${provider.latencyMs} ms`} />
                   <MetricBox label="Fill" value={formatPercent(provider.fillRatePct)} />
                 </div>
-                <p><FaKey /> Browser exposure: {provider.browserExposure}</p>
+                <p><FaKey /> Exposition navigateur : {provider.browserExposure}</p>
               </article>
             ))}
           </div>
         </Card>
 
-        <Card title="Comptes & adapters" actions={<InlineAction>Accounts</InlineAction>} density="compact">
+        <Card title="Comptes & adapters" actions={<InlineAction>Comptes</InlineAction>} density="compact">
           <DataTable rows={data.accounts} rowKey={(row) => row.accountId} columns={accountColumns} />
           <MobileDataList
             rows={data.accounts}
@@ -154,7 +154,7 @@ export function ExecutionProvidersPage() {
           </div>
         </Card>
 
-        <Card title="Santé, capabilities & PickMyTrade states" actions={<InlineAction>Health</InlineAction>} density="compact">
+        <Card title="Santé, capacités & états PickMyTrade" actions={<InlineAction>Santé</InlineAction>} density="compact">
           <div className="provider-health-list">
             {data.healthChecks.map((check) => (
               <article key={check.checkId}>
@@ -174,7 +174,7 @@ export function ExecutionProvidersPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Switch workflow, events et commandes">
-        <Card title="Provider switch workflow" actions={<InlineAction>Simulation only</InlineAction>} density="compact">
+        <Card title="Workflow de bascule fournisseur" actions={<InlineAction>Simulation uniquement</InlineAction>} density="compact">
           <ol className="provider-switch-workflow">
             {data.switchWorkflow.map((step) => (
               <li key={step.stepId}>
@@ -186,11 +186,11 @@ export function ExecutionProvidersPage() {
           </ol>
           <div className="provider-switch-proof">
             <FaShieldAlt />
-            <span>Switch critique : freeze new orders → position check → sync → activate target → reconcile → resume. Step-up obligatoire.</span>
+            <span>Bascule critique : gel des nouveaux ordres → vérification position → synchronisation → activation cible → réconciliation → reprise. Step-up obligatoire.</span>
           </div>
         </Card>
 
-        <Card title="Provider events & incidents" actions={<InlineAction>Audit</InlineAction>} density="compact">
+        <Card title="Événements & incidents fournisseur" actions={<InlineAction>Audit</InlineAction>} density="compact">
           <ol className="provider-events-list">
             {data.events.map((event) => (
               <li key={event.eventId}>
@@ -211,7 +211,7 @@ export function ExecutionProvidersPage() {
           </div>
         </Card>
 
-        <Card title="Actions providers" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions fournisseurs" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="provider-command-result">
             <FaFingerprint />
             <div>
@@ -220,7 +220,7 @@ export function ExecutionProvidersPage() {
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
-          <ReasonInput label="Reason obligatoire" value={reason} onChange={setReason} />
+          <ReasonInput label="Motif obligatoire" value={reason} onChange={setReason} />
           <label className="provider-step-up">
             <span>Step-up phrase pour switch/disable</span>
             <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder={switchAction?.actionId ?? "actionId step-up"} />
@@ -278,9 +278,9 @@ export function buildExecutionProviderCommand(action: ProviderAction, reason: st
 
 const accountColumns = [
   { key: "account", header: "Compte", render: (row: ProviderAccount) => <AccountCell row={row} /> },
-  { key: "provider", header: "Provider", render: (row: ProviderAccount) => providerShort(row.providerId) },
+  { key: "provider", header: "Fournisseur", render: (row: ProviderAccount) => providerShort(row.providerId) },
   { key: "mode", header: "Mode", render: (row: ProviderAccount) => row.mode },
-  { key: "netliq", header: "Net Liq", align: "right" as const, render: (row: ProviderAccount) => formatCurrency(row.netLiqUsd) },
+  { key: "netliq", header: "Liquidité nette", align: "right" as const, render: (row: ProviderAccount) => formatCurrency(row.netLiqUsd) },
   { key: "positions", header: "Pos", align: "right" as const, render: (row: ProviderAccount) => row.openPositions },
   { key: "state", header: "État", render: (row: ProviderAccount) => <StatusBadge tone={row.state === "AVAILABLE" ? "success" : row.state === "RECONCILING" ? "warning" : "danger"}>{presentAvailability(row.state).label}</StatusBadge> }
 ] as const;

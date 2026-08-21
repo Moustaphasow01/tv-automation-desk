@@ -245,7 +245,7 @@ export class InMemoryResearchExperimentRegistryRepository {
   async upsertRunLink(entity) { this.runLinks.set(entity.research_experiment_run_link_id, clone(entity)); return clone(entity); }
   async listExperiments(filters = {}) { return filtered(this.experiments, filters, { researchExperimentId: "research_experiment_id", status: "status", owner: "owner" }); }
   async listHypotheses(filters = {}) { return filtered(this.hypotheses, filters, { researchExperimentId: "research_experiment_id", status: "status" }); }
-  async listCandidates(filters = {}) { return filtered(this.candidates, filters, { researchExperimentId: "research_experiment_id", researchHypothesisId: "research_hypothesis_id", researchCandidateId: "research_candidate_id", status: "status" }); }
+  async listCandidates(filters = {}) { return filtered(this.candidates, filters, { researchExperimentId: "research_experiment_id", researchHypothesisId: "research_hypothesis_id", researchCandidateId: "research_candidate_id", status: "status", strategyVersionId: "strategy_version_id" }); }
   async listEvaluationReports(filters = {}) { return filtered(this.evaluationReports, filters, { researchExperimentId: "research_experiment_id", researchCandidateId: "research_candidate_id", verdict: "verdict", reportKind: "report_kind" }); }
 
   async appendAuditEvent(event) {
@@ -264,6 +264,7 @@ export function normalizeResearchFilters(filters = {}) {
     researchExperimentId: text(filters.researchExperimentId || filters.research_experiment_id || filters.experiment_id),
     researchHypothesisId: text(filters.researchHypothesisId || filters.research_hypothesis_id || filters.hypothesis_id),
     researchCandidateId: text(filters.researchCandidateId || filters.research_candidate_id || filters.candidate_id),
+    strategyVersionId: text(filters.strategyVersionId || filters.strategy_version_id),
     status: upper(filters.status),
     verdict: upper(filters.verdict),
     reportKind: upper(filters.reportKind || filters.report_kind),

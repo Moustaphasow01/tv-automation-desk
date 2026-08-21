@@ -18,6 +18,16 @@ import {
 import { DeskButton, ReasonInput } from "@/design-system/actions";
 import { DataTable, MobileDataList } from "@/design-system/data";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import {
+  presentChronologyState,
+  presentIncidentDomain,
+  presentIncidentStatus,
+  presentOperatorGate,
+  presentPermission,
+  presentReconciliationStatus,
+  presentRetryState,
+  presentSeverity
+} from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -31,7 +41,7 @@ type ReconciliationResult = ExecutionIncidentsView["selectedIncident"]["reconcil
 export function ExecutionIncidentsPage() {
   const query = useFrontView("execution-incidents");
   const repository = useFrontViewRepository();
-  const [reason, setReason] = useState("Contrôle opérateur : traitement incident via Command Runtime, sans action broker directe.");
+  const [reason, setReason] = useState("Contrôle opérateur : traitement incident via le flux de commande, sans action broker directe.");
   const [stepUpToken, setStepUpToken] = useState("");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -78,45 +88,45 @@ export function ExecutionIncidentsPage() {
     <div className="operator-page execution-incidents-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Execution Incidents"
-        description={`Incidents, reconciliation et post-mortem · ${data.summary.openIncidents} ouverts · projection ${meta.latencyMs} ms · gate opérateur exceptionnel uniquement.`}
+        title="Incidents d'exécution"
+        description={`Incidents, réconciliation et post-mortem · ${data.summary.openIncidents} ouverts · projection ${meta.latencyMs} ms · gate opérateur exceptionnel uniquement.`}
         actions={
           <>
-            <Link to="/execution/providers">Providers</Link>
-            <Link to="/orders">Orders</Link>
-            <Link to="/events">Events</Link>
+            <Link to="/execution/providers">Fournisseurs</Link>
+            <Link to="/orders">Ordres</Link>
+            <Link to="/events">Événements</Link>
             {reconcileAction ? (
               <DeskButton variant="primary" disabled={isActionDisabled(reconcileAction, reason, stepUpToken)} onClick={() => confirmAction(reconcileAction)}>
-                Reconcile
+                Réconcilier
               </DeskButton>
             ) : null}
           </>
         }
       />
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Execution Incidents">
-        <KpiCard label="OUVERTS" value={`${data.summary.openIncidents}`} delta={`${data.summary.criticalIncidents} critical`} tone={data.summary.criticalIncidents > 0 ? "danger" : "warning"} />
-        <KpiCard label="HIGH" value={`${data.summary.highIncidents}`} delta="sévérité max" tone={data.summary.highIncidents > 0 ? "danger" : "success"} />
-        <KpiCard label="RECONCILE" value={`${data.summary.pendingReconciliations}`} delta="pending checks" tone="warning" />
-        <KpiCard label="RETRYABLE" value={`${data.summary.retryableIncidents}`} delta={`âge moyen ${data.summary.avgAgeMinutes} min`} tone="info" />
-        <KpiCard label="ORDRES TOUCHÉS" value={`${data.summary.impactedOrders}`} delta="provider/order path" tone="accent" />
+      <section className="operator-kpi-strip" aria-label="Indicateurs Incidents d'exécution">
+        <KpiCard label="OUVERTS" value={`${data.summary.openIncidents}`} delta={`${data.summary.criticalIncidents} critiques`} tone={data.summary.criticalIncidents > 0 ? "danger" : "warning"} />
+        <KpiCard label="ÉLEVÉS" value={`${data.summary.highIncidents}`} delta="sévérité max" tone={data.summary.highIncidents > 0 ? "danger" : "success"} />
+        <KpiCard label="RÉCONCILIATION" value={`${data.summary.pendingReconciliations}`} delta="contrôles en attente" tone="warning" />
+        <KpiCard label="RÉESSAYABLES" value={`${data.summary.retryableIncidents}`} delta={`âge moyen ${data.summary.avgAgeMinutes} min`} tone="info" />
+        <KpiCard label="ORDRES TOUCHÉS" value={`${data.summary.impactedOrders}`} delta="chemin provider/ordre" tone="accent" />
         <KpiCard label="IMPACT R" value={formatSignedR(data.summary.impactR)} delta="calcul backend" detail={<ProgressBar value={Math.min(100, Math.abs(data.summary.impactR) * 1000)} tone="warning" />} tone="warning" />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Incidents, payload et réconciliation">
         <Card title="File incidents filtrable" actions={<InlineAction>{data.filters.searchHint}</InlineAction>} density="compact">
           <div className="incident-filter-strip">
-            <StatusBadge tone="accent">Severity {data.filters.activeSeverity}</StatusBadge>
-            <StatusBadge tone="accent">Domain {data.filters.activeDomain}</StatusBadge>
-            {data.filters.statuses.map((status) => <StatusBadge key={status} tone={statusTone(status)}>{status}</StatusBadge>)}
+            <StatusBadge tone="accent">Sévérité {data.filters.activeSeverity === "ALL" ? "Toutes" : presentSeverity(data.filters.activeSeverity).label}</StatusBadge>
+            <StatusBadge tone="accent">Domaine {data.filters.activeDomain === "ALL" ? "Tous" : presentIncidentDomain(data.filters.activeDomain).label}</StatusBadge>
+            {data.filters.statuses.map((status) => <StatusBadge key={status} tone={statusTone(status)}>{presentIncidentStatus(status).label}</StatusBadge>)}
           </div>
           <DataTable rows={data.incidents} rowKey={(row) => row.incidentId} columns={incidentColumns} />
           <MobileDataList
             rows={data.incidents}
             rowKey={(row) => row.incidentId}
-            renderTitle={(row) => `${row.title} · ${row.severity}`}
-            renderMeta={(row) => `${row.domain} · ${row.status} · ${row.correlationId}`}
-            renderBody={(row) => `${row.impactSummary} · retry ${row.retryCount} · gate ${row.operatorGate}`}
+            renderTitle={(row) => `${row.title} · ${presentSeverity(row.severity).label}`}
+            renderMeta={(row) => `${presentIncidentDomain(row.domain).label} · ${presentIncidentStatus(row.status).label} · ${row.correlationId}`}
+            renderBody={(row) => `${row.impactSummary} · tentative ${row.retryCount} · gate ${presentOperatorGate(row.operatorGate).label}`}
           />
         </Card>
 
@@ -136,31 +146,31 @@ export function ExecutionIncidentsPage() {
           </div>
         </Card>
 
-        <Card title="Reconciliation results" actions={<InlineAction>Backend checks</InlineAction>} density="compact">
+        <Card title="Résultats de réconciliation" actions={<InlineAction>Contrôles backend</InlineAction>} density="compact">
           <div className="incident-reconcile-list">
             {data.selectedIncident.reconciliationResults.map((result) => (
               <article key={result.resultId} className={`incident-reconcile-list__${result.status.toLowerCase()}`}>
                 <FaSyncAlt />
-                <div><strong>{result.label}</strong><small>Expected {result.expected} · Actual {result.actual}</small></div>
-                <StatusBadge tone={reconciliationTone(result)}>{result.status}</StatusBadge>
+                <div><strong>{result.label}</strong><small>Attendu {result.expected} · Réel {result.actual}</small></div>
+                <StatusBadge tone={reconciliationTone(result)}>{presentReconciliationStatus(result.status).label}</StatusBadge>
               </article>
             ))}
           </div>
           <div className="incident-reconcile-proof">
             <FaShieldAlt />
-            <span>Le front affiche les résultats officiels. Il ne réconcilie pas localement orders, fills ou positions.</span>
+            <span>Le front affiche les résultats officiels. Il ne réconcilie pas localement ordres, exécutions ou positions.</span>
           </div>
         </Card>
       </section>
 
-      <section className="operator-grid operator-grid--bottom" aria-label="Chronologie, retries et actions">
-        <Card title="Chronologie zoom incident" actions={<InlineAction>Drill-down</InlineAction>} density="compact">
+      <section className="operator-grid operator-grid--bottom" aria-label="Chronologie, tentatives et actions">
+        <Card title="Chronologie zoom incident" actions={<InlineAction>Détail pas à pas</InlineAction>} density="compact">
           <ol className="incident-chronology-list">
             {data.selectedIncident.chronology.map((step) => (
               <li key={step.stepId}>
                 <span>{formatTime(step.at)}</span>
                 <div><strong>{step.title}</strong><small>{step.detail}{step.eventId ? ` · ${step.eventId}` : ""}</small></div>
-                <StatusBadge tone={step.state === "DONE" ? "success" : step.state === "FAILED" ? "danger" : "warning"}>{step.state}</StatusBadge>
+                <StatusBadge tone={step.state === "DONE" ? "success" : step.state === "FAILED" ? "danger" : "warning"}>{presentChronologyState(step.state).label}</StatusBadge>
               </li>
             ))}
           </ol>
@@ -173,14 +183,14 @@ export function ExecutionIncidentsPage() {
           </div>
         </Card>
 
-        <Card title="Retries & dead letters" actions={<InlineAction>{data.retries.length} retries</InlineAction>} density="compact">
+        <Card title="Tentatives & DLQ" actions={<InlineAction>{data.retries.length} tentatives</InlineAction>} density="compact">
           <div className="incident-retry-list">
             {data.retries.map((retry) => (
               <article key={retry.retryId}>
                 <FaRedoAlt />
-                <div><strong>{retry.retryId}</strong><small>{retry.incidentId} · attempt {retry.attempt} · backoff {retry.backoffSeconds}s</small></div>
+                <div><strong>{retry.retryId}</strong><small>{retry.incidentId} · tentative {retry.attempt} · backoff {retry.backoffSeconds}s</small></div>
                 <span>{retry.nextRunAt ? formatTime(retry.nextRunAt) : retry.lastErrorCode ?? "—"}</span>
-                <StatusBadge tone={retry.state === "SUCCEEDED" ? "success" : retry.state === "ABANDONED" || retry.state === "FAILED" ? "danger" : "warning"}>{retry.state}</StatusBadge>
+                <StatusBadge tone={retry.state === "SUCCEEDED" ? "success" : retry.state === "ABANDONED" || retry.state === "FAILED" ? "danger" : "warning"}>{presentRetryState(retry.state).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -190,16 +200,16 @@ export function ExecutionIncidentsPage() {
           </div>
         </Card>
 
-        <Card title="Actions incidents" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions incidents" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="incident-command-result">
             <FaFingerprint />
             <div>
               <small>Dernière commande incident</small>
-              <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+              <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
-          <ReasonInput label="Reason obligatoire" value={reason} onChange={setReason} />
+          <ReasonInput label="Motif obligatoire" value={reason} onChange={setReason} />
           <label className="incident-step-up">
             <span>Step-up phrase pour resolve/suspend</span>
             <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder={stepUpAction?.actionId ?? "actionId step-up"} />
@@ -209,7 +219,7 @@ export function ExecutionIncidentsPage() {
               <article key={action.actionId} className={action.criticality === "EMERGENCY" ? "incident-action-list__emergency" : undefined}>
                 <span>{actionIcon(action)}</span>
                 <div><strong>{action.label}</strong><small>{action.commandType} · {action.impactSummary}</small></div>
-                <StatusBadge tone={permissionTone(action.permission)}>{action.permission}</StatusBadge>
+                <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                 <DeskButton
                   variant={action.criticality === "EMERGENCY" ? "emergency" : action.criticality === "HIGH" ? "danger" : "primary"}
                   disabled={isActionDisabled(action, reason, stepUpToken) || submittingActionId === action.actionId}
@@ -258,18 +268,18 @@ export function buildExecutionIncidentCommand(action: IncidentAction, reason: st
 
 const incidentColumns = [
   { key: "incident", header: "Incident", render: (row: ExecutionIncident) => <IncidentCell row={row} /> },
-  { key: "severity", header: "Sev", render: (row: ExecutionIncident) => <StatusBadge tone={severityTone(row.severity)}>{row.severity}</StatusBadge> },
-  { key: "domain", header: "Domain", render: (row: ExecutionIncident) => row.domain },
-  { key: "status", header: "Status", render: (row: ExecutionIncident) => <StatusBadge tone={statusTone(row.status)}>{row.status}</StatusBadge> },
+  { key: "severity", header: "Sév.", render: (row: ExecutionIncident) => <StatusBadge tone={severityTone(row.severity)}>{presentSeverity(row.severity).label}</StatusBadge> },
+  { key: "domain", header: "Domaine", render: (row: ExecutionIncident) => presentIncidentDomain(row.domain).label },
+  { key: "status", header: "Statut", render: (row: ExecutionIncident) => <StatusBadge tone={statusTone(row.status)}>{presentIncidentStatus(row.status).label}</StatusBadge> },
   { key: "impact", header: "Impact", align: "right" as const, render: (row: ExecutionIncident) => formatSignedR(row.impactR) },
-  { key: "gate", header: "Gate", render: (row: ExecutionIncident) => row.operatorGate }
+  { key: "gate", header: "Gate", render: (row: ExecutionIncident) => presentOperatorGate(row.operatorGate).label }
 ] as const;
 
 function IncidentCell({ row }: { row: ExecutionIncident }) {
   return (
     <div className="incident-cell">
       <strong><Link to={`/operations/incidents/${encodeURIComponent(row.incidentId)}`}>{row.title}</Link></strong>
-      <small>{row.incidentId} · {row.providerId ?? row.strategyInstanceId ?? "system"} · {formatTime(row.openedAt)}</small>
+      <small>{row.incidentId} · {row.providerId ?? row.strategyInstanceId ?? "système"} · {formatTime(row.openedAt)}</small>
     </div>
   );
 }

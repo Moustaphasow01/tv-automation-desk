@@ -18,6 +18,7 @@ import { DeskButton, TrackedCommandReceipt } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
+import { presentPermission } from "@/design-system/labels";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import type { StrategyDetailView } from "@/domains/front-api/viewModels";
@@ -89,12 +90,12 @@ export function StrategyDetailPage() {
         <KpiCard label="NET 30J" value={formatSignedR(data.summary.netR30d)} delta={`${data.summary.trades30d} trades`} tone="success" />
         <KpiCard label="PARITÉ LIVE/REPLAY" value={`${data.summary.liveParityPct}%`} delta="Gate LIVE backend" tone={data.summary.liveParityPct >= 90 ? "success" : "warning"} />
         <KpiCard label="RISQUE ALLOUÉ" value={`${data.summary.riskAllocationPct}%`} delta={`${data.riskAllocation.usedPct}% utilisé`} tone="warning" />
-        <KpiCard label="INSTANCES RUNNING" value={`${data.summary.runningInstances}`} delta={`${data.summary.activeVersions} versions actives`} tone="info" />
+        <KpiCard label="INSTANCES EN COURS" value={`${data.summary.runningInstances}`} delta={`${data.summary.activeVersions} versions actives`} tone="info" />
         <KpiCard label="SIGNAUX OUVERTS" value={`${data.summary.openSignals}`} delta={`${data.identity.strategyInstanceId}`} tone="accent" />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Identité, spec et runtime">
-        <Card title="Identity & lineage" actions={<InlineAction>Definition</InlineAction>} density="compact" tone={idMismatch ? "warning" : "neutral"}>
+        <Card title="Identité & lignée" actions={<InlineAction>Définition</InlineAction>} density="compact" tone={idMismatch ? "warning" : "neutral"}>
           <div className="strategy-detail-identity">
             {idMismatch ? (
               <article className="strategy-detail-warning">
@@ -110,12 +111,12 @@ export function StrategyDetailPage() {
               </div>
             </article>
             <div className="strategy-detail-id-grid">
-              <MetricBox label="Definition" value={compactId(data.identity.strategyDefinitionId)} />
+              <MetricBox label="Définition" value={compactId(data.identity.strategyDefinitionId)} />
               <MetricBox label="Version" value={compactId(data.identity.strategyVersionId)} />
               <MetricBox label="Instance" value={compactId(data.identity.strategyInstanceId)} />
               <MetricBox label="Runtime Bundle" value={compactId(data.identity.runtimeBundleId)} />
-              <MetricBox label="Experiment" value={compactId(data.definition.sourceExperimentId)} />
-              <MetricBox label="Source run" value={compactId(data.definition.sourceRunId)} />
+              <MetricBox label="Expérience" value={compactId(data.definition.sourceExperimentId)} />
+              <MetricBox label="Run source" value={compactId(data.definition.sourceRunId)} />
             </div>
             <div className="strategy-detail-tags">
               {data.definition.tags.map((tag) => <span key={tag}>{tag}</span>)}
@@ -123,12 +124,12 @@ export function StrategyDetailPage() {
           </div>
         </Card>
 
-        <Card title="Strategy Spec & règles" actions={<InlineAction>Rules</InlineAction>} density="compact">
+        <Card title="Spec stratégie & règles" actions={<InlineAction>Règles</InlineAction>} density="compact">
           <div className="strategy-detail-spec">
             <div className="strategy-detail-model-grid">
-              <MetricBox label="Entry" value={data.strategySpec.entryModel} />
+              <MetricBox label="Entrée" value={data.strategySpec.entryModel} />
               <MetricBox label="Stop" value={data.strategySpec.stopModel} />
-              <MetricBox label="Target" value={data.strategySpec.targetModel} />
+              <MetricBox label="Cible" value={data.strategySpec.targetModel} />
               <MetricBox label="Invalidation" value={data.strategySpec.invalidationModel} />
             </div>
             <div className="strategy-detail-rule-list">
@@ -169,12 +170,12 @@ export function StrategyDetailPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Performance, signaux et actions">
-        <Card title="Performance, régimes & allocation" actions={<InlineAction>Risk</InlineAction>} density="compact">
+        <Card title="Performance, régimes & allocation" actions={<InlineAction>Risque</InlineAction>} density="compact">
           <div className="strategy-detail-performance">
             {data.performance.map((bucket) => (
               <article key={bucket.scope}>
                 <strong>{bucket.scope}</strong>
-                <small>{bucket.trades} trades · PF {bucket.profitFactor.toFixed(2)} · Win {bucket.winRatePct}%</small>
+                <small>{bucket.trades} trades · PF {bucket.profitFactor.toFixed(2)} · Gain {bucket.winRatePct}%</small>
                 <b className={bucket.netR >= 0 ? "text-success" : "text-danger"}>{formatSignedR(bucket.netR)}</b>
                 <ProgressBar value={Math.min(100, Math.max(0, bucket.parityPct ?? bucket.profitFactor * 45))} tone={bucket.scope === "LIVE" ? "warning" : "accent"} />
               </article>
@@ -222,7 +223,7 @@ export function StrategyDetailPage() {
           </div>
         </Card>
 
-        <Card title="Contraintes, incidents & actions" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Contraintes, incidents & actions" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="strategy-detail-command-result">
             <FaFingerprint />
             <div>
@@ -314,7 +315,7 @@ function permissionTone(permission: StrategyAction["permission"]) {
 }
 
 function permissionLabel(permission: StrategyAction["permission"]) {
-  return permission === "STEP_UP_REQUIRED" ? "STEP-UP" : permission;
+  return presentPermission(permission).label;
 }
 
 function compactId(value: string) {

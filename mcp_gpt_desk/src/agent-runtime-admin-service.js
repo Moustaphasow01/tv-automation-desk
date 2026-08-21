@@ -111,6 +111,21 @@ export class AgentRuntimeAdminService {
     return { ok: true, count: result.rows.length, items: result.rows.map(projectMetric) };
   }
 
+  async listEvents(args = {}) {
+    authorize("LIST_EVENTS", args);
+    const result = await this.pool.query(
+      `SELECT e.*, t.task_key, t.task_type, m.mission_key
+         FROM agent_events e
+         LEFT JOIN agent_tasks t ON t.agent_task_id = e.agent_task_id
+         LEFT JOIN agent_missions m ON m.agent_mission_id = e.agent_mission_id
+        WHERE ($1::uuid IS NULL OR e.agent_mission_id = $1)
+        ORDER BY e.created_at_utc DESC
+        LIMIT $2`,
+      [nullableText(args.mission_id || args.missionId), boundedLimit(args.limit, 50, 500)],
+    );
+    return { ok: true, count: result.rows.length, items: result.rows.map(projectEvent) };
+  }
+
   async getPoolOverview(args = {}) {
     authorize("LIST_POOLS", args);
     const metricsWindowMinutes = boundedInteger(args.metrics_window_minutes ?? args.metricsWindowMinutes, 60, 5, 1440);
@@ -180,6 +195,7 @@ export class DisabledAgentRuntimeAdminService {
   async getTask() { this.unavailable(); }
   async listDeadLetters() { this.unavailable(); }
   async listMetrics() { this.unavailable(); }
+  async listEvents() { this.unavailable(); }
   async getPoolOverview() { this.unavailable(); }
   async requeueDeadLetter() { this.unavailable(); }
   async cancelTask() { this.unavailable(); }
@@ -249,6 +265,23 @@ function projectDeadLetter(row) {
     metadata: row.metadata || {},
     created_at_utc: toIso(row.created_at_utc),
     resolved_at_utc: toIso(row.resolved_at_utc),
+  });
+}
+
+function projectEvent(row) {
+  return stripNullish({
+    event_id: row.agent_event_id,
+    event_type: row.event_type,
+    agent_id: row.agent_id,
+    mission_id: row.agent_mission_id,
+    mission_key: row.mission_key,
+    task_id: row.agent_task_id,
+    task_key: row.task_key,
+    task_type: row.task_type,
+    correlation_id: row.correlation_id,
+    actor: row.actor,
+    payload: row.payload || {},
+    created_at_utc: toIso(row.created_at_utc),
   });
 }
 

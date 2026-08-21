@@ -14,6 +14,7 @@ export function buildResearchLabOverviewProjection(input = {}) {
     source: sourceDescriptor(),
     summary: summaryFrom({ experiments, hypotheses, candidates, evaluationReports }),
     experiments: experiments.map((experiment) => projectExperiment(experiment, { hypotheses, candidates, evaluationReports })),
+    hypotheses: hypotheses.map(projectHypothesis),
     candidates: candidates.map((candidate) => projectCandidate(candidate, evaluationReports)),
     evaluation_reports: evaluationReports.map(projectEvaluationReport),
     knowledge_graph: {

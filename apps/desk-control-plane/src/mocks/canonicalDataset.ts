@@ -187,7 +187,7 @@ export const authSessionView: ViewEnvelope<AuthSessionView> = {
     commandActions: [
       {
         actionId: "act_auth_refresh_session",
-        label: "Refresh session",
+        label: "Actualiser la session",
         commandType: "auth.session.refresh",
         permission: "ALLOWED",
         requiresConfirmation: false,
@@ -1683,7 +1683,7 @@ export const ordersView: ViewEnvelope<OrdersView> = {
     commandActions: [
       {
         actionId: "act_order_cancel_mnq_0940",
-        label: "Cancel ordre",
+        label: "Annuler ordre",
         commandType: "orders.cancel",
         targetOrderId: "ord_sig_vnext_demo_mnq_0940_001",
         permission: "ALLOWED",
@@ -1705,7 +1705,7 @@ export const ordersView: ViewEnvelope<OrdersView> = {
       },
       {
         actionId: "act_order_close_reduce_mnq",
-        label: "Close / reduce",
+        label: "Clôturer / réduire",
         commandType: "orders.close_reduce",
         targetOrderId: "ord_sig_vnext_demo_mnq_0940_001",
         permission: "DENIED",
@@ -2118,9 +2118,9 @@ export const executionProvidersView: ViewEnvelope<ExecutionProvidersView> = {
       { stepId: "freeze_new_orders", label: "Freeze new orders", state: "READY", detail: "Bloque nouvelles intentions pendant la bascule.", order: 1 },
       { stepId: "position_check", label: "Position check", state: "READY", detail: "Compare positions backend et provider cible.", order: 2 },
       { stepId: "sync_target", label: "Sync target", state: "PENDING", detail: "Synchronise comptes/provider target en simulation.", order: 3 },
-      { stepId: "activate_target", label: "Activate target", state: "PENDING", detail: "Active provider cible après step-up uniquement.", order: 4 },
+      { stepId: "activate_target", label: "Activer cible", state: "PENDING", detail: "Active provider cible après step-up uniquement.", order: 4 },
       { stepId: "reconcile", label: "Reconcile", state: "PENDING", detail: "Réconciliation post-switch obligatoire.", order: 5 },
-      { stepId: "resume", label: "Resume", state: "PENDING", detail: "Reprend les ordres après preuve OK.", order: 6 }
+      { stepId: "resume", label: "Reprendre", state: "PENDING", detail: "Reprend les ordres après preuve OK.", order: 6 }
     ],
     events: [
       { eventId: "evt_broker_netting_completed", providerId: "provider_ninjatrader_sim101", at: "2026-08-10T09:40:56.690Z", title: "Broker netting terminé", eventType: "broker.netting.completed", status: "RECEIVED", correlationId: "corr_live_reconcile_cln5_20260810", route: "/events" },
@@ -2530,51 +2530,71 @@ export const researchLabView: ViewEnvelope<ResearchLabView> = {
     agents: [
       {
         agentId: "agent_hypothesis_01",
+        taskId: "task_hypothesis_es_opening_drive_compare",
         name: "Hypothesis Agent",
         role: "Génère et classe les idées candidates",
         status: "ACTIVE",
         missionId: "mission_research_es_opening_drive_20260810",
+        missionKey: "mission_research_es_opening_drive_20260810",
         task: "Comparer opening drive ES/NQ",
         model: "codex-high",
         reasoningLevel: "high",
         queueDepth: 3,
-        tokenBudgetPct: 41
+        tokenBudgetPct: 41,
+        leaseActive: true,
+        leaseExpiresAt: "2026-08-10T09:45:00.000Z",
+        lastHeartbeatAt: "2026-08-10T09:34:00.000Z"
       },
       {
         agentId: "agent_oos_validator_01",
+        taskId: "task_oos_mnq_fold_18_24",
         name: "OOS Validator",
         role: "Valide les folds hors-échantillon",
         status: "ACTIVE",
         missionId: "mission_research_mnq_breakout_retest_20260810",
+        missionKey: "mission_research_mnq_breakout_retest_20260810",
         task: "OOS rolling fold 18/24",
         model: "codex-ultra",
         reasoningLevel: "ultra",
         queueDepth: 1,
-        tokenBudgetPct: 64
+        tokenBudgetPct: 64,
+        leaseActive: true,
+        leaseExpiresAt: "2026-08-10T09:50:00.000Z",
+        lastHeartbeatAt: "2026-08-10T09:33:00.000Z"
       },
       {
         agentId: "agent_robustness_01",
+        taskId: "task_robustness_gc_slippage_wait",
         name: "Robustness Auditor",
         role: "Stress tests, slippage, regimes",
         status: "WAITING",
         missionId: "mission_research_gc_macro_impulse_20260810",
+        missionKey: "mission_research_gc_macro_impulse_20260810",
         task: "Attente job compute GC",
         model: "codex-high",
         reasoningLevel: "high",
         queueDepth: 2,
-        tokenBudgetPct: 58
+        tokenBudgetPct: 58,
+        leaseActive: false,
+        leaseExpiresAt: "unavailable",
+        lastHeartbeatAt: "2026-08-10T09:20:00.000Z"
       },
       {
         agentId: "agent_data_scout_01",
+        taskId: "task_data_scout_cl_inventory_backfill",
         name: "Data Scout",
         role: "Complète datasets/features point-in-time",
         status: "ACTIVE",
         missionId: "mission_research_cl_inventory_20260810",
+        missionKey: "mission_research_cl_inventory_20260810",
         task: "Backfill inventaires + macro events",
         model: "codex-medium",
         reasoningLevel: "medium",
         queueDepth: 4,
-        tokenBudgetPct: 23
+        tokenBudgetPct: 23,
+        leaseActive: true,
+        leaseExpiresAt: "2026-08-10T09:48:00.000Z",
+        lastHeartbeatAt: "2026-08-10T09:36:00.000Z"
       }
     ],
     coverage: [
@@ -2593,6 +2613,7 @@ export const researchLabView: ViewEnvelope<ResearchLabView> = {
         oosR: 11.6,
         sharpe: 1.42,
         robustnessScore: 81,
+        compositeScore: 82,
         decidedAt: "2026-08-10T09:35:00.000Z"
       },
       {
@@ -2604,6 +2625,7 @@ export const researchLabView: ViewEnvelope<ResearchLabView> = {
         oosR: -2.4,
         sharpe: 0.18,
         robustnessScore: 34,
+        compositeScore: 17,
         decidedAt: "2026-08-10T08:58:00.000Z"
       },
       {
@@ -2615,6 +2637,7 @@ export const researchLabView: ViewEnvelope<ResearchLabView> = {
         oosR: 7.8,
         sharpe: 0.96,
         robustnessScore: 68,
+        compositeScore: 63,
         decidedAt: "2026-08-10T09:20:00.000Z"
       }
     ],
@@ -2693,6 +2716,10 @@ export const researchLabView: ViewEnvelope<ResearchLabView> = {
         detail: "Le fallback 48h couvre le desk, mais le flux ForexFactory reste à brancher.",
         openedAt: "2026-08-10T09:11:00.000Z"
       }
+    ],
+    activityStream: [
+      { eventId: "evt_agent_task_completed_01", eventType: "TASK_COMPLETED", missionKey: "mission_research_mnq_breakout_retest_20260810", taskKey: "task_oos_fold_18", detail: "agent_oos_validator_01", at: "2026-08-10T09:33:00.000Z" },
+      { eventId: "evt_agent_task_claimed_01", eventType: "TASK_CLAIMED", missionKey: "mission_research_es_opening_drive_20260810", taskKey: "task_baseline_es", detail: "agent_hypothesis_01", at: "2026-08-10T09:30:00.000Z" }
     ],
     commandActions: [
       {
@@ -2779,7 +2806,7 @@ export const researchExperimentDetailView: ViewEnvelope<ResearchExperimentDetail
       entryModel: "Breakout close → pullback/retest zone → continuation trigger",
       riskModel: "0.25% net capital, stop structural, rounded-up contracts",
       invariants: [
-        "No lookahead, cutoff immutable",
+        "Aucune anticipation, cutoff immuable",
         "Risk gate before any broker intent",
         "Cross-asset divergence can veto",
         "Entry range is upper/lower bounded"
@@ -3072,6 +3099,7 @@ export const researchAgentFleetView: ViewEnvelope<ResearchAgentFleetView> = {
     agents: [
       {
         agentId: "agent_hypothesis_01",
+        taskId: "task_hypothesis_es_opening_drive_compare",
         name: "Hypothesis Agent",
         type: "HYPOTHESIS",
         role: "Génère, compare et classe les idées candidates avant simulation.",
@@ -3093,6 +3121,7 @@ export const researchAgentFleetView: ViewEnvelope<ResearchAgentFleetView> = {
       },
       {
         agentId: "agent_oos_validator_01",
+        taskId: "task_oos_mnq_fold_18_24",
         name: "OOS Validator",
         type: "OOS_VALIDATOR",
         role: "Valide les folds hors-échantillon et verrouille la reproductibilité.",
@@ -3114,6 +3143,7 @@ export const researchAgentFleetView: ViewEnvelope<ResearchAgentFleetView> = {
       },
       {
         agentId: "agent_robustness_01",
+        taskId: "task_robustness_gc_slippage_wait",
         name: "Robustness Auditor",
         type: "ROBUSTNESS_AUDITOR",
         role: "Stress tests slippage, news, gaps et changements de régime.",
@@ -3135,6 +3165,7 @@ export const researchAgentFleetView: ViewEnvelope<ResearchAgentFleetView> = {
       },
       {
         agentId: "agent_data_scout_01",
+        taskId: "task_data_scout_cl_inventory_backfill",
         name: "Data Scout",
         type: "DATA_SCOUT",
         role: "Complète les datasets point-in-time et signale les trous de couverture.",
@@ -3634,7 +3665,7 @@ export const researchComputeSchedulerView: ViewEnvelope<ResearchComputeScheduler
         missionId: "mission_research_cl_inventory_20260810",
         experimentId: "exp_cl_inventory_mean_revert",
         runId: "run_research_cl_iteration_009",
-        label: "Refresh CL inventory dataset",
+        label: "Actualiser le dataset inventaire CL",
         state: "RETRYING",
         priority: "NORMAL",
         poolId: "pool_research_cpu",
@@ -3672,7 +3703,7 @@ export const researchComputeSchedulerView: ViewEnvelope<ResearchComputeScheduler
     reservations: [
       { reservationId: "res_live_min_capacity", label: "LIVE min capacity", poolId: "pool_live_reserved", scope: "LIVE", reservedPct: 35, active: true, reason: "Le live ne doit jamais attendre les batches research." },
       { reservationId: "res_research_oos_window", label: "OOS research window", poolId: "pool_research_gpu", scope: "RESEARCH", reservedPct: 45, active: true, reason: "Fold OOS prioritaire tant que LIVE reserve reste libre." },
-      { reservationId: "res_maintenance_backup", label: "Backup maintenance", poolId: "pool_research_cpu", scope: "MAINTENANCE", reservedPct: 10, active: false, reason: "Inactive pendant session opérateur." }
+      { reservationId: "res_maintenance_backup", label: "Maintenance de secours", poolId: "pool_research_cpu", scope: "MAINTENANCE", reservedPct: 10, active: false, reason: "Inactive pendant session opérateur." }
     ],
     dlq: [
       {
@@ -3700,7 +3731,7 @@ export const researchComputeSchedulerView: ViewEnvelope<ResearchComputeScheduler
       },
       {
         actionId: "act_compute_retry_cl",
-        label: "Retry CL dataset",
+        label: "Réessayer le dataset CL",
         jobId: "job_cl_inventory_dataset_refresh",
         commandType: "research.compute.retry",
         permission: "ALLOWED",
@@ -3899,12 +3930,58 @@ export const strategyCenterView: ViewEnvelope<StrategyCenterView> = {
         "Invalidation si réintégration sous niveau cassé",
         "Risque initial normalisé par capital net"
       ],
+      meta: {
+        instruments: ["MNQ"],
+        timeframe: "M5",
+        sessionScope: ["ny_open"],
+        owner: "desk-research",
+        publishedAt: "2026-07-18T09:00:00.000Z",
+        compiledArtifactHash: "sha256:mock_breakout_retest_v4_2_0",
+        executionMode: "PAPER",
+        accountScope: "paper-default"
+      },
+      spec: {
+        entryModel: "breakout_retest",
+        stopModel: "structure_invalidation",
+        targetModel: "measured_move",
+        invalidationModel: "close_below_retest_zone",
+        riskModel: "fixed_fractional",
+        rules: [],
+        levels: []
+      },
       gates: [
-        { label: "Version validée", state: "PASS" },
-        { label: "Runtime bundle séparé", state: "PASS" },
-        { label: "Parité live/replay", state: "WATCH" },
-        { label: "Capacité LIVE", state: "WATCH" }
+        { label: "G0 · Données versionnées", state: "PASS", detail: "dataset_mnq_m5_2026" },
+        { label: "G1 · Preuves de validation", state: "PASS", detail: "" },
+        { label: "G2 · Robustesse", state: "PASS", detail: "" },
+        { label: "G3 · Hors échantillon", state: "WATCH", detail: "OOS +11,6 R" },
+        { label: "G4 · Cohérence portefeuille", state: "WATCH", detail: "Corrélation en revue" },
+        { label: "G5 · Matrice de promotion", state: "PENDING", detail: "" },
+        { label: "G6 · Approbation opérateur", state: "PENDING", detail: "" },
+        { label: "G7 · Autorisation live", state: "FAIL", detail: "LIVE_AUTHORIZATION_EXPLICITLY_DISABLED_IN_SEMI_MANUAL_PREPROD" }
       ],
+      lineage: [
+        { nodeType: "HYPOTHESIS", id: "hyp_breakout_retest_mnq", at: "2026-06-01T09:00:00.000Z" },
+        { nodeType: "EXPERIMENT", id: "exp_breakout_retest_mnq", at: "2026-06-02T09:00:00.000Z" },
+        { nodeType: "CANDIDATE", id: "cand_breakout_retest_mnq", at: "2026-06-20T09:00:00.000Z" },
+        { nodeType: "STRATEGY_VERSION", id: "strver_breakout_retest_mnq_v4_2_0", at: "2026-07-18T09:00:00.000Z" },
+        { nodeType: "INSTANCE", id: strategyInstanceId, at: "2026-08-01T09:00:00.000Z" }
+      ],
+      runtimeInstances: [
+        { strategyInstanceId, instruments: ["MNQ"], mode: "PAPER", runtimeStatus: "RUNNING", health: "OK", lastHeartbeatAt: "2026-08-10T09:30:00.000Z", signalsToday: 3 }
+      ],
+      performance: {
+        availability: "AVAILABLE",
+        expectancyR: 0.42,
+        profitFactor: 1.8,
+        winRatePct: 54,
+        maxDrawdownR: 6.1,
+        oosR: 11.6,
+        series: [
+          { sequence: 1, at: "2026-08-01", cumulativeR: 2, drawdownR: 0 },
+          { sequence: 2, at: "2026-08-04", cumulativeR: 5.4, drawdownR: 0 },
+          { sequence: 3, at: "2026-08-07", cumulativeR: 3.9, drawdownR: -1.5 }
+        ]
+      },
       riskAllocationPct: 18,
       currentCommandEligibility: "CAN_REQUEST_SHADOW"
     }
@@ -4713,7 +4790,7 @@ export const operationsQueueView: ViewEnvelope<OperationsQueueView> = {
     commandActions: [
       {
         actionId: "act_retry_news_coverage",
-        label: "Retry news coverage",
+        label: "Réessayer la couverture actualités",
         missionId: "mission_news_fallback_quality",
         commandType: "operations.job.retry",
         permission: "ALLOWED",

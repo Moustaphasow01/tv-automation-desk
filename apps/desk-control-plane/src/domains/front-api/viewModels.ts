@@ -316,6 +316,36 @@ export type CommandCenterActivity = {
   state: "RUNNING" | "DONE" | "WATCH";
 };
 
+export type LiveTheoreticalExecutionRow = {
+  portfolioOrderIntentId: string;
+  targetPositionId: string;
+  strategySignalId: string;
+  strategyId: string;
+  strategyInstanceId: string;
+  instrument: string;
+  side: string;
+  orderType: string;
+  quantity: number | null;
+  entry: number | null;
+  stop: number | null;
+  targets: readonly { label: string; price: number | null; ratioR: number | null }[];
+  expectedR: number | null;
+  status: string;
+  latestEventType: string;
+  latestEventAt: string;
+  entryFilledAt: string;
+  entryFillPrice: number | null;
+  exitAt: string;
+  exitPrice: number | null;
+  resultR: number | null;
+  tradeId: string;
+  tradeStatus: string;
+  sourceCandleAt: string;
+  sourceTimeframe: string;
+  physicalExecutionCreated: boolean;
+  brokerEvidence: string;
+};
+
 export type LiveTradingView = {
   summary: {
     signalsToday: number;
@@ -497,6 +527,26 @@ export type LiveTradingView = {
     asOf: string | null;
     reason: string | null;
     source: string;
+  };
+  theoreticalExecution?: {
+    schemaVersion: string;
+    availability: string;
+    status: string;
+    source: string;
+    asOf: string | null;
+    summary: {
+      trackedIntents: number;
+      working: number;
+      entryFilled: number;
+      targetHit: number;
+      stopHit: number;
+      expired: number;
+      reviewRequired: number;
+      openTrades: number;
+      closedTrades: number;
+      totalClosedR: number;
+    };
+    rows: readonly LiveTheoreticalExecutionRow[];
   };
   performanceR?: {
     availability: string;
@@ -1720,15 +1770,20 @@ export type ResearchLabView = {
   }[];
   agents: readonly {
     agentId: string;
-    name: ResearchAgentName;
+    taskId: string;
+    name: string;
     role: string;
     status: "ACTIVE" | "IDLE" | "WAITING" | "BLOCKED";
     missionId: string;
+    missionKey: string;
     task: string;
     model: string;
     reasoningLevel: "low" | "medium" | "high" | "ultra";
     queueDepth: number;
     tokenBudgetPct: number;
+    leaseActive: boolean;
+    leaseExpiresAt: string;
+    lastHeartbeatAt: string;
   }[];
   coverage: readonly {
     coverageId: string;
@@ -1746,6 +1801,7 @@ export type ResearchLabView = {
     oosR: number;
     sharpe: number;
     robustnessScore: number;
+    compositeScore: number;
     decidedAt: string;
   }[];
   knowledgeGraph: {
@@ -1783,6 +1839,14 @@ export type ResearchLabView = {
     title: string;
     detail: string;
     openedAt: string;
+  }[];
+  activityStream: readonly {
+    eventId: string;
+    eventType: string;
+    missionKey: string;
+    taskKey: string;
+    detail: string;
+    at: string;
   }[];
   commandActions: readonly {
     actionId: string;
@@ -1863,10 +1927,53 @@ export type StrategyCenterView = {
     runtimeBundleId: string;
     thesis: string;
     rulesSummary: readonly string[];
+    meta: {
+      instruments: readonly string[];
+      timeframe: string;
+      sessionScope: readonly string[];
+      owner: string;
+      publishedAt: string;
+      compiledArtifactHash: string;
+      executionMode: "SHADOW" | "PAPER" | "LIVE";
+      accountScope: string;
+    };
+    spec: {
+      entryModel: string;
+      stopModel: string;
+      targetModel: string;
+      invalidationModel: string;
+      riskModel: string;
+      rules: readonly { ruleId: string; label: string; type: string; expression: string; state: string; weightPct: number }[];
+      levels: readonly { levelId: string; label: string; lower: number; upper: number; role: string }[];
+    };
     gates: readonly {
       label: string;
-      state: "PASS" | "WATCH" | "FAIL";
+      state: "PASS" | "WATCH" | "FAIL" | "PENDING";
+      detail: string;
     }[];
+    lineage: readonly {
+      nodeType: "HYPOTHESIS" | "EXPERIMENT" | "RUN" | "CANDIDATE" | "STRATEGY_VERSION" | "INSTANCE";
+      id: string;
+      at: string;
+    }[];
+    runtimeInstances: readonly {
+      strategyInstanceId: string;
+      instruments: readonly string[];
+      mode: "SHADOW" | "PAPER" | "LIVE";
+      runtimeStatus: "STOPPED" | "STARTING" | "RUNNING" | "PAUSED" | "FAILED";
+      health: "OK" | "WATCH" | "DEGRADED" | "OFF";
+      lastHeartbeatAt: string;
+      signalsToday: number;
+    }[];
+    performance: {
+      availability: "AVAILABLE" | "UNAVAILABLE";
+      expectancyR: number;
+      profitFactor: number;
+      winRatePct: number;
+      maxDrawdownR: number;
+      oosR: number;
+      series: readonly { sequence: number; at: string; cumulativeR: number; drawdownR: number }[];
+    };
     riskAllocationPct: number;
     currentCommandEligibility: "CAN_REQUEST_SHADOW" | "CAN_REQUEST_PAPER" | "READ_ONLY";
   };
@@ -2517,6 +2624,7 @@ export type ResearchAgentFleetView = {
   };
   agents: readonly {
     agentId: string;
+    taskId: string;
     name: string;
     type: "HYPOTHESIS" | "OOS_VALIDATOR" | "ROBUSTNESS_AUDITOR" | "DATA_SCOUT";
     role: string;

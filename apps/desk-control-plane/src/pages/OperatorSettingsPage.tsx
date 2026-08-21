@@ -18,6 +18,13 @@ import {
 import { DeskButton, ReasonInput } from "@/design-system/actions";
 import { DataTable, MobileDataList } from "@/design-system/data";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import {
+  presentAvailability,
+  presentDeviceState,
+  presentNotificationSeverity,
+  presentPermission,
+  presentQueueStatus
+} from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -31,7 +38,7 @@ type SettingsDevice = OperatorSettingsView["devices"][number];
 export function OperatorSettingsPage() {
   const query = useFrontView("operator-settings");
   const repository = useFrontViewRepository();
-  const [reason, setReason] = useState("Contrôle opérateur : modification de préférence non critique via BFF Command Runtime.");
+  const [reason, setReason] = useState("Contrôle opérateur : modification de préférence non critique via le flux de commande BFF.");
   const [stepUpToken, setStepUpToken] = useState("");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -43,7 +50,7 @@ export function OperatorSettingsPage() {
 
   if (query.isError) {
     return (
-      <Card title="Settings indisponibles" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+      <Card title="Réglages indisponibles" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
         <p>{(query.error as Error).message}</p>
       </Card>
     );
@@ -78,38 +85,38 @@ export function OperatorSettingsPage() {
     <div className="operator-page operator-settings-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Operator Settings"
+        title="Réglages opérateur"
         description={`${data.summary.theme} · ${data.summary.density} · ${data.summary.language} · projection ${meta.latencyMs} ms · préférences non critiques uniquement.`}
         actions={
           <>
-            <Link to="/auth">Auth</Link>
+            <Link to="/auth">Authentification</Link>
             <Link to="/jarvis">Jarvis</Link>
             {saveAction ? (
               <DeskButton variant="primary" disabled={isActionDisabled(saveAction, reason, stepUpToken)} onClick={() => confirmAction(saveAction)}>
-                Save prefs
+                Enregistrer préférences
               </DeskButton>
             ) : null}
           </>
         }
       />
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Operator Settings">
+      <section className="operator-kpi-strip" aria-label="Indicateurs Réglages opérateur">
         <KpiCard label="THÈME" value={data.summary.theme} delta={data.summary.density} tone="success" />
         <KpiCard label="LANGUE" value={data.summary.language} delta={data.summary.timezone} tone="info" />
-        <KpiCard label="NOTIFS" value={data.summary.notificationsEnabled ? "ON" : "OFF"} delta={`${data.notificationRules.length} rules`} tone={data.summary.notificationsEnabled ? "success" : "warning"} />
-        <KpiCard label="VOICE" value={data.summary.voiceState} delta={data.jarvis.pushToTalkEnabled ? "push-to-talk ON" : "push-to-talk OFF"} tone={data.summary.voiceState === "DEGRADED" ? "warning" : "success"} />
-        <KpiCard label="DEVICES" value={`${data.summary.activeDevices}`} delta={`${data.summary.activeSessions} sessions`} tone="accent" />
-        <KpiCard label="PRIVACY" value={data.summary.privacyMode} delta="local preference only" detail={<ProgressBar value={100} tone="success" />} tone="success" />
+        <KpiCard label="NOTIFS" value={data.summary.notificationsEnabled ? "Activé" : "Désactivé"} delta={`${data.notificationRules.length} règles`} tone={data.summary.notificationsEnabled ? "success" : "warning"} />
+        <KpiCard label="VOICE" value={presentAvailability(data.summary.voiceState).label} delta={data.jarvis.pushToTalkEnabled ? "push-to-talk activé" : "push-to-talk désactivé"} tone={data.summary.voiceState === "DEGRADED" ? "warning" : "success"} />
+        <KpiCard label="APPAREILS" value={`${data.summary.activeDevices}`} delta={`${data.summary.activeSessions} sessions`} tone="accent" />
+        <KpiCard label="PRIVACY" value={data.summary.privacyMode} delta="préférence locale uniquement" detail={<ProgressBar value={100} tone="success" />} tone="success" />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Préférences cockpit, widgets et notifications">
-        <Card title="Préférences cockpit" actions={<InlineAction>Optimistic allowed</InlineAction>} density="compact">
+        <Card title="Préférences cockpit" actions={<InlineAction>Optimiste autorisé</InlineAction>} density="compact">
           <DataTable rows={data.cockpitPreferences} rowKey={(row) => row.preferenceId} columns={preferenceColumns} />
           <MobileDataList
             rows={data.cockpitPreferences}
             rowKey={(row) => row.preferenceId}
             renderTitle={(row) => `${row.label} · ${row.value}`}
-            renderMeta={(row) => `${row.category} · optimistic ${row.optimisticAllowed ? "yes" : "no"}`}
+            renderMeta={(row) => `${row.category} · optimiste ${row.optimisticAllowed ? "oui" : "non"}`}
             renderBody={(row) => `Valeurs : ${row.allowedValues.join(", ")}`}
           />
           <div className="settings-guard-note">
@@ -118,26 +125,26 @@ export function OperatorSettingsPage() {
           </div>
         </Card>
 
-        <Card title="Dashboard widgets" actions={<InlineAction>{data.widgets.length} widgets</InlineAction>} density="compact">
+        <Card title="Widgets du tableau de bord" actions={<InlineAction>{data.widgets.length} widgets</InlineAction>} density="compact">
           <div className="settings-widget-list">
             {data.widgets.map((widget) => (
               <article key={widget.widgetId}>
                 <FaDesktop />
-                <div><strong>{widget.label}</strong><small>{widget.area} · order {widget.order} · refresh {widget.refreshSeconds}s</small></div>
-                <StatusBadge tone={widget.visible ? "success" : "warning"}>{widget.visible ? "VISIBLE" : "HIDDEN"}</StatusBadge>
+                <div><strong>{widget.label}</strong><small>{widget.area} · ordre {widget.order} · rafraîchissement {widget.refreshSeconds}s</small></div>
+                <StatusBadge tone={widget.visible ? "success" : "warning"}>{widget.visible ? "VISIBLE" : "MASQUÉ"}</StatusBadge>
               </article>
             ))}
           </div>
         </Card>
 
-        <Card title="Notifications & alerts" actions={<InlineAction>Channels</InlineAction>} density="compact">
+        <Card title="Notifications & alertes" actions={<InlineAction>Canaux</InlineAction>} density="compact">
           <div className="settings-notification-list">
             {data.notificationRules.map((rule) => (
               <article key={rule.ruleId}>
                 {notificationIcon(rule.channel)}
-                <div><strong>{rule.label}</strong><small>{rule.channel} · {rule.quietHours ?? "no quiet hours"}</small></div>
-                <StatusBadge tone={rule.severity === "CRITICAL" ? "danger" : rule.severity === "WARNING" ? "warning" : "accent"}>{rule.severity}</StatusBadge>
-                <StatusBadge tone={rule.enabled ? "success" : "warning"}>{rule.enabled ? "ON" : "OFF"}</StatusBadge>
+                <div><strong>{rule.label}</strong><small>{rule.channel} · {rule.quietHours ?? "aucune plage silencieuse"}</small></div>
+                <StatusBadge tone={rule.severity === "CRITICAL" ? "danger" : rule.severity === "WARNING" ? "warning" : "accent"}>{presentNotificationSeverity(rule.severity).label}</StatusBadge>
+                <StatusBadge tone={rule.enabled ? "success" : "warning"}>{rule.enabled ? "Activé" : "Désactivé"}</StatusBadge>
               </article>
             ))}
           </div>
@@ -145,34 +152,34 @@ export function OperatorSettingsPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Jarvis, appareils et commandes">
-        <Card title="Jarvis voice & shortcuts" actions={<InlineAction>{data.jarvis.voiceState}</InlineAction>} density="compact">
+        <Card title="Voix & raccourcis Jarvis" actions={<InlineAction>{presentAvailability(data.jarvis.voiceState).label}</InlineAction>} density="compact">
           <div className="settings-jarvis-card">
             <FaMicrophone />
             <div>
-              <strong>Push-to-talk {data.jarvis.pushToTalkEnabled ? "enabled" : "disabled"}</strong>
-              <small>Wake word {data.jarvis.wakeWordEnabled ? "enabled" : "disabled"} · retention {data.jarvis.transcriptRetention} · check {formatTime(data.jarvis.lastVoiceCheckAt)}</small>
+              <strong>Push-to-talk {data.jarvis.pushToTalkEnabled ? "activé" : "désactivé"}</strong>
+              <small>Wake word {data.jarvis.wakeWordEnabled ? "activé" : "désactivé"} · rétention {data.jarvis.transcriptRetention} · vérification {formatTime(data.jarvis.lastVoiceCheckAt)}</small>
             </div>
-            <StatusBadge tone={data.jarvis.voiceState === "DEGRADED" ? "warning" : "success"}>{data.jarvis.voiceState}</StatusBadge>
+            <StatusBadge tone={data.jarvis.voiceState === "DEGRADED" ? "warning" : "success"}>{presentAvailability(data.jarvis.voiceState).label}</StatusBadge>
           </div>
           <div className="settings-shortcut-list">
             {data.shortcuts.map((shortcut) => (
               <Link key={shortcut.shortcutId} to={shortcut.route}>
                 <FaKeyboard />
                 <div><strong>{shortcut.label}</strong><small>{shortcut.keys} · {shortcut.route}</small></div>
-                <StatusBadge tone={shortcut.enabled ? "success" : "warning"}>{shortcut.enabled ? "ON" : "OFF"}</StatusBadge>
+                <StatusBadge tone={shortcut.enabled ? "success" : "warning"}>{shortcut.enabled ? "Activé" : "Désactivé"}</StatusBadge>
               </Link>
             ))}
           </div>
         </Card>
 
-        <Card title="Appareils, sessions & confidentialité" actions={<InlineAction>{data.summary.activeDevices} devices</InlineAction>} density="compact">
+        <Card title="Appareils, sessions & confidentialité" actions={<InlineAction>{data.summary.activeDevices} appareils</InlineAction>} density="compact">
           <div className="settings-device-list">
             {data.devices.map((device) => (
               <article key={device.deviceId}>
                 {deviceIcon(device)}
-                <div><strong>{device.label}</strong><small>{device.deviceId} · {device.sessionId ?? "no active session"} · {formatTime(device.lastSeenAt)}</small></div>
-                <StatusBadge tone={device.trusted ? "success" : "warning"}>{device.trusted ? "TRUSTED" : "WATCH"}</StatusBadge>
-                <StatusBadge tone={device.state === "ACTIVE" ? "success" : device.state === "REVOKABLE" ? "warning" : "accent"}>{device.state}</StatusBadge>
+                <div><strong>{device.label}</strong><small>{device.deviceId} · {device.sessionId ?? "aucune session active"} · {formatTime(device.lastSeenAt)}</small></div>
+                <StatusBadge tone={device.trusted ? "success" : "warning"}>{device.trusted ? "DE CONFIANCE" : "À SURVEILLER"}</StatusBadge>
+                <StatusBadge tone={device.state === "ACTIVE" ? "success" : device.state === "REVOKABLE" ? "warning" : "accent"}>{presentDeviceState(device.state).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -183,16 +190,16 @@ export function OperatorSettingsPage() {
           </div>
         </Card>
 
-        <Card title="Actions settings" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions réglages" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="settings-command-result">
             <FaFingerprint />
             <div>
               <small>Dernière commande settings</small>
-              <strong>{command ? `ACCEPTED · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+              <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
-          <ReasonInput label="Reason obligatoire" value={reason} onChange={setReason} />
+          <ReasonInput label="Motif obligatoire" value={reason} onChange={setReason} />
           <label className="settings-step-up">
             <span>Step-up phrase pour révocation</span>
             <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder={revokeAction?.actionId ?? "actionId step-up"} />
@@ -202,7 +209,7 @@ export function OperatorSettingsPage() {
               <article key={guardrail.guardrailId}>
                 <FaShieldAlt />
                 <div><strong>{guardrail.label}</strong><small>{guardrail.detail}</small></div>
-                <StatusBadge tone={guardrail.status === "PASS" ? "success" : guardrail.status === "WATCH" ? "warning" : "danger"}>{guardrail.status}</StatusBadge>
+                <StatusBadge tone={guardrail.status === "PASS" ? "success" : guardrail.status === "WATCH" ? "warning" : "danger"}>{presentQueueStatus(guardrail.status).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -210,8 +217,8 @@ export function OperatorSettingsPage() {
             {data.commandActions.map((action) => (
               <article key={action.actionId} className={action.commandType.includes("revoke") ? "settings-action-list__revoke" : undefined}>
                 <span>{actionIcon(action)}</span>
-                <div><strong>{action.label}</strong><small>{action.commandType} · optimistic {action.optimisticAllowed ? "yes" : "no"}</small></div>
-                <StatusBadge tone={permissionTone(action.permission)}>{action.permission}</StatusBadge>
+                <div><strong>{action.label}</strong><small>{action.commandType} · optimiste {action.optimisticAllowed ? "oui" : "non"}</small></div>
+                <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                 <DeskButton
                   variant={action.criticality === "HIGH" ? "danger" : "primary"}
                   disabled={isActionDisabled(action, reason, stepUpToken) || submittingActionId === action.actionId}
@@ -261,7 +268,7 @@ const preferenceColumns = [
   { key: "pref", header: "Préférence", render: (row: SettingsPreference) => <PreferenceCell row={row} /> },
   { key: "category", header: "Catégorie", render: (row: SettingsPreference) => row.category },
   { key: "value", header: "Valeur", render: (row: SettingsPreference) => row.value },
-  { key: "optimistic", header: "Optimistic", render: (row: SettingsPreference) => row.optimisticAllowed ? "YES" : "NO" }
+  { key: "optimistic", header: "Optimiste", render: (row: SettingsPreference) => row.optimisticAllowed ? "OUI" : "NON" }
 ] as const;
 
 function PreferenceCell({ row }: { row: SettingsPreference }) {

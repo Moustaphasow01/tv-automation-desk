@@ -5,6 +5,13 @@ import { emitFrontTelemetry } from "@/core/telemetry/frontendTelemetry";
 
 export type ViewLoadState = "loading" | "ready" | "empty" | "partial" | "stale" | "error" | "forbidden";
 
+const VIEW_STATE_EYEBROWS: Record<Exclude<ViewLoadState, "ready" | "partial" | "stale">, string> = {
+  loading: "CHARGEMENT",
+  empty: "VIDE",
+  error: "ERREUR",
+  forbidden: "INTERDIT",
+};
+
 export function ViewStatePanel({
   state,
   title,
@@ -20,7 +27,7 @@ export function ViewStatePanel({
   return (
     <Card
       title={title}
-      eyebrow={state.toUpperCase()}
+      eyebrow={VIEW_STATE_EYEBROWS[state]}
       state={state === "loading" ? "loading" : state === "empty" ? "empty" : "error"}
       tone={state === "error" || state === "forbidden" ? "danger" : "neutral"}
       density="compact"

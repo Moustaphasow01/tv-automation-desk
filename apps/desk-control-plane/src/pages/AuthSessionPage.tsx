@@ -30,7 +30,7 @@ export function AuthSessionPage() {
   const query = useFrontView("auth-session");
   const repository = useFrontViewRepository();
   const capabilityCatalog = useCapabilityCatalog();
-  const [reason, setReason] = useState("Contrôle opérateur : action session demandée via BFF Command Runtime.");
+  const [reason, setReason] = useState("Contrôle opérateur : action session demandée via le flux de commande BFF.");
   const [stepUpToken, setStepUpToken] = useState("");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -139,15 +139,15 @@ export function AuthSessionPage() {
     <div className="operator-page auth-session-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title="Auth & Session"
-        description={`${data.principal.displayName} · ${data.summary.environment} · ${data.summary.sessionState} · projection ${meta.latencyMs} ms · aucune matière sensible navigateur.`}
+        title="Authentification & Session"
+        description={`${data.principal.displayName} · ${data.summary.environment} · ${presentAccessState(data.summary.sessionState).label} · projection ${meta.latencyMs} ms · aucune matière sensible navigateur.`}
         actions={
           <>
-            <Link to="/command-center">Command Center</Link>
-            <Link to="/settings">Settings</Link>
+            <Link to="/command-center">Centre de contrôle</Link>
+            <Link to="/settings">Réglages</Link>
             {refreshAction ? (
               <DeskButton variant="primary" disabled={isActionDisabled(refreshAction, reason, stepUpToken)} onClick={() => confirmAction(refreshAction)}>
-                Refresh
+                Actualiser
               </DeskButton>
             ) : null}
             {verificationAction ? (
@@ -159,24 +159,24 @@ export function AuthSessionPage() {
         }
       />
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Auth Session">
+      <section className="operator-kpi-strip" aria-label="Indicateurs Authentification & Session">
         <KpiCard label="SESSION" value={presentAccessState(data.summary.sessionState).label} delta={data.summary.authenticated ? "authentifiée" : "inactive"} tone={data.summary.authenticated ? "success" : "danger"} />
-        <KpiCard label="ENV" value={data.summary.environment} delta={data.summary.readOnly ? "read-only" : "write gated"} tone={data.summary.environment === "LIVE" ? "danger" : "success"} />
-        <KpiCard label="EXPIRY" value={`${data.summary.minutesToExpiry} min`} delta={`refresh ${formatTime(data.session.refreshAfterAt)}`} detail={<ProgressBar value={Math.min(100, (data.summary.minutesToExpiry / 90) * 100)} tone="success" />} tone="warning" />
-        <KpiCard label="ALLOW" value={`${data.summary.permissionsGranted}`} delta={`${data.summary.permissionsDenied} denied`} tone="info" />
+        <KpiCard label="ENV" value={data.summary.environment} delta={data.summary.readOnly ? "lecture seule" : "écriture contrôlée"} tone={data.summary.environment === "LIVE" ? "danger" : "success"} />
+        <KpiCard label="EXPIRATION" value={`${data.summary.minutesToExpiry} min`} delta={`refresh ${formatTime(data.session.refreshAfterAt)}`} detail={<ProgressBar value={Math.min(100, (data.summary.minutesToExpiry / 90) * 100)} tone="success" />} tone="warning" />
+        <KpiCard label="ALLOW" value={`${data.summary.permissionsGranted}`} delta={`${data.summary.permissionsDenied} refusées`} tone="info" />
         <KpiCard label="STEP-UP" value={data.summary.stepUpReady ? "Prêt" : "Bloqué"} delta={`${data.stepUp.methods.length} méthodes`} tone={data.summary.stepUpReady ? "success" : "danger"} />
-        <KpiCard label="BROWSER" value={data.session.browserMaterialExposure === "NONE" ? "Aucune" : data.session.browserMaterialExposure} delta={data.session.httpOnlySession ? "httpOnly" : "exposed"} tone={data.session.browserMaterialExposure === "NONE" ? "success" : "danger"} />
+        <KpiCard label="BROWSER" value={data.session.browserMaterialExposure === "NONE" ? "Aucune" : data.session.browserMaterialExposure} delta={data.session.httpOnlySession ? "httpOnly" : "exposée"} tone={data.session.browserMaterialExposure === "NONE" ? "success" : "danger"} />
       </section>
 
       {command || commandError ? (
-        <Card title="Résultat de commande" eyebrow="COMMAND RUNTIME" density="compact" tone={commandError ? "danger" : "neutral"}>
+        <Card title="Résultat de commande" eyebrow="FLUX DE COMMANDE" density="compact" tone={commandError ? "danger" : "neutral"}>
           {commandError ? <p role="alert">{commandError}</p> : null}
           <TrackedCommandReceipt command={command} />
         </Card>
       ) : null}
 
       <section className="operator-grid operator-grid--top" aria-label="Identité, environnement et permissions">
-        <Card title="Identity & session bootstrap" actions={<InlineAction>{data.principal.identityProvider}</InlineAction>} density="compact">
+        <Card title="Identité & amorçage session" actions={<InlineAction>{data.principal.identityProvider}</InlineAction>} density="compact">
           <div className="auth-identity-card">
             <FaUserShield />
             <div>
@@ -186,10 +186,10 @@ export function AuthSessionPage() {
             <StatusBadge tone={data.summary.authenticated ? "success" : "danger"}>{presentAccessState(data.summary.sessionState).label}</StatusBadge>
           </div>
           <div className="auth-metric-grid">
-            <MetricBox label="Roles" value={data.principal.roles.join(", ")} />
+            <MetricBox label="Rôles" value={data.principal.roles.join(", ")} />
             <MetricBox label="Desks" value={data.principal.desks.join(", ")} />
-            <MetricBox label="Accounts" value={data.principal.accountScopes.length} />
-            <MetricBox label="Timezone" value={data.principal.timezone} />
+            <MetricBox label="Comptes" value={data.principal.accountScopes.length} />
+            <MetricBox label="Fuseau horaire" value={data.principal.timezone} />
           </div>
           <div className="auth-session-proof">
             <FaLock />
@@ -197,7 +197,7 @@ export function AuthSessionPage() {
           </div>
           <div className="auth-operator-session-control">
             <label>
-              <span>Login</span>
+              <span>Identifiant</span>
               <input
                 value={operatorLogin}
                 onChange={(event) => setOperatorLogin(event.target.value)}
@@ -219,11 +219,11 @@ export function AuthSessionPage() {
             </label>
             {data.summary.authenticated ? (
               <DeskButton variant="warning" disabled={authSessionSubmitting} onClick={logoutOperator}>
-                <FaSignOutAlt /> Logout
+                <FaSignOutAlt /> Déconnexion
               </DeskButton>
             ) : (
               <DeskButton variant="primary" disabled={authSessionSubmitting || !operatorLogin.trim() || !operatorPassword} onClick={loginOperator}>
-                <FaKey /> Login opérateur
+                <FaKey /> Connexion opérateur
               </DeskButton>
             )}
             <DeskButton variant="ghost" disabled={authSessionSubmitting} onClick={() => query.refetch()}>
@@ -239,7 +239,7 @@ export function AuthSessionPage() {
             {data.environments.map((environment) => (
               <article key={environment.environment} className={environment.current ? "auth-environment-list__current" : undefined}>
                 <FaDoorOpen />
-                <div><strong>{environment.label}</strong><small>{environment.riskProfile} · {environment.accountIds.join(", ") || "no account"}</small></div>
+                <div><strong>{environment.label}</strong><small>{environment.riskProfile} · {environment.accountIds.join(", ") || "aucun compte"}</small></div>
                 <span>{environment.writeEnabled ? "Écriture" : "Lecture"}</span>
                 <StatusBadge tone={environmentTone(environment)}>{presentAccessState(environment.status).label}</StatusBadge>
               </article>
@@ -247,7 +247,7 @@ export function AuthSessionPage() {
           </div>
         </Card>
 
-        <Card title="Permissions trading & route guards" actions={<InlineAction>{data.permissions.length} capabilities</InlineAction>} density="compact">
+        <Card title="Permissions trading & gardes de route" actions={<InlineAction>{data.permissions.length} capacités</InlineAction>} density="compact">
           <DataTable rows={data.permissions} rowKey={(row) => row.capability} columns={permissionColumns} />
           <MobileDataList
             rows={data.permissions}
@@ -259,8 +259,8 @@ export function AuthSessionPage() {
         </Card>
       </section>
 
-      <section className="operator-grid operator-grid--bottom" aria-label="Step-up, events et commandes">
-        <Card title="MFA / Step-up readiness" actions={<InlineAction>{data.stepUp.ready ? "Ready" : "Blocked"}</InlineAction>} density="compact">
+      <section className="operator-grid operator-grid--bottom" aria-label="Step-up, événements et commandes">
+        <Card title="Disponibilité MFA / Step-up" actions={<InlineAction>{data.stepUp.ready ? "Prêt" : "Bloqué"}</InlineAction>} density="compact">
           <div className="auth-stepup-list">
             {data.stepUp.methods.map((method) => (
               <article key={method.methodId}>
@@ -275,7 +275,7 @@ export function AuthSessionPage() {
           </div>
         </Card>
 
-        <Card title="Route guards & audit events" actions={<InlineAction>Guards</InlineAction>} density="compact">
+        <Card title="Gardes de route & événements d'audit" actions={<InlineAction>Gardes</InlineAction>} density="compact">
           <ol className="auth-route-list">
             {data.routeGuards.map((guard) => (
               <li key={`${guard.route}:${guard.capability}`}>
@@ -296,7 +296,7 @@ export function AuthSessionPage() {
           </div>
         </Card>
 
-        <Card title="Actions session" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Actions session" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="auth-command-result">
             <FaFingerprint />
             <div>
@@ -305,7 +305,7 @@ export function AuthSessionPage() {
               {commandError ? <span className="text-danger">{commandError}</span> : null}
             </div>
           </div>
-          <ReasonInput label="Reason obligatoire" value={reason} onChange={setReason} />
+          <ReasonInput label="Motif obligatoire" value={reason} onChange={setReason} />
           <label className="auth-step-up-input">
             <span>Step-up phrase pour logout</span>
             <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder={logoutAction?.actionId ?? "actionId step-up"} />
@@ -362,9 +362,9 @@ export function buildAuthSessionCommand(action: AuthAction, reason: string, step
 }
 
 const permissionColumns = [
-  { key: "capability", header: "Capability", render: (row: AuthPermission) => <PermissionCell row={row} /> },
-  { key: "domain", header: "Domain", render: (row: AuthPermission) => row.domain },
-  { key: "decision", header: "Decision", render: (row: AuthPermission) => <StatusBadge tone={decisionTone(row.decision)}>{presentDecision(row.decision).label}</StatusBadge> },
+  { key: "capability", header: "Capacité", render: (row: AuthPermission) => <PermissionCell row={row} /> },
+  { key: "domain", header: "Domaine", render: (row: AuthPermission) => row.domain },
+  { key: "decision", header: "Décision", render: (row: AuthPermission) => <StatusBadge tone={decisionTone(row.decision)}>{presentDecision(row.decision).label}</StatusBadge> },
   { key: "stepup", header: "Step-up", render: (row: AuthPermission) => row.requiresStepUp ? "Oui" : "Non" }
 ] as const;
 

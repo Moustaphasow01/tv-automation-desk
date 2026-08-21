@@ -30,6 +30,7 @@ import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { vnextRoutes, type VNextNavGroup } from "@/app/routes";
 import { NAV_GROUP_LABELS } from "@/shell/navigation";
+import { presentConnectionStatus } from "@/design-system/labels";
 
 type SidebarSection = "Pilotage" | "Stratégie" | "Exécution" | "Supervision" | "Système";
 
@@ -45,20 +46,20 @@ type DeskNavItem = {
 const SIDEBAR_SECTIONS: readonly SidebarSection[] = ["Pilotage", "Stratégie", "Exécution", "Supervision", "Système"];
 
 const deskNavItems: readonly DeskNavItem[] = [
-  { label: "Command Center", to: "/command-center", icon: FaTh, group: "pilotage", section: "Pilotage" },
-  { label: "Live Trading", to: "/live", icon: FaBolt, group: "live", section: "Pilotage" },
-  { label: "Strategy Center", to: "/strategies", icon: FaListAlt, group: "strategy", section: "Stratégie" },
-  { label: "Research Lab", to: "/research", icon: FaFlask, group: "research", section: "Stratégie" },
-  { label: "Replay", to: "/replay", icon: FaPlayCircle, group: "replay", section: "Stratégie" },
+  { label: "Centre de contrôle", to: "/command-center", icon: FaTh, group: "pilotage", section: "Pilotage" },
+  { label: "Trading en direct", to: "/live", icon: FaBolt, group: "live", section: "Pilotage" },
+  { label: "Centre des stratégies", to: "/strategies", icon: FaListAlt, group: "strategy", section: "Stratégie" },
+  { label: "Laboratoire de recherche", to: "/research", icon: FaFlask, group: "research", section: "Stratégie" },
+  { label: "Rejeu", to: "/replay", icon: FaPlayCircle, group: "replay", section: "Stratégie" },
   { label: "Performance", to: "/performance", icon: FaChartBar, group: "performance", section: "Stratégie" },
-  { label: "Portfolio", to: "/portfolio", icon: FaWallet, group: "execution", section: "Exécution" },
-  { label: "Risk Center", to: "/risk", icon: FaShieldAlt, group: "execution", section: "Exécution" },
-  { label: "Orders", to: "/orders", icon: FaFileInvoiceDollar, group: "execution", section: "Exécution" },
-  { label: "Execution", to: "/execution/providers", icon: FaProjectDiagram, group: "execution", section: "Exécution" },
+  { label: "Portefeuille", to: "/portfolio", icon: FaWallet, group: "execution", section: "Exécution" },
+  { label: "Centre de risque", to: "/risk", icon: FaShieldAlt, group: "execution", section: "Exécution" },
+  { label: "Ordres", to: "/orders", icon: FaFileInvoiceDollar, group: "execution", section: "Exécution" },
+  { label: "Exécution", to: "/execution/providers", icon: FaProjectDiagram, group: "execution", section: "Exécution" },
   { label: "Incidents", to: "/execution/incidents", icon: FaExclamationTriangle, group: "operations", section: "Supervision" },
   { label: "Audit", to: "/events", icon: FaClipboardList, group: "operations", section: "Supervision" },
   { label: "Jarvis", to: "/jarvis", icon: FaRobot, group: "governance", section: "Système" },
-  { label: "Settings", to: "/settings", icon: FaCog, group: "governance", section: "Système" },
+  { label: "Réglages", to: "/settings", icon: FaCog, group: "governance", section: "Système" },
 ];
 
 export function DeskShell() {
@@ -97,7 +98,9 @@ export function DeskShell() {
     : "—";
   const isGoldenCommandCenter = currentRoute?.path === "command-center";
   const isGoldenLiveTrading = currentRoute?.path === "live";
-  const isGoldenSurface = isGoldenCommandCenter || isGoldenLiveTrading;
+  const isGoldenStrategyCenter = currentRoute?.path === "strategies";
+  const isGoldenResearchLab = currentRoute?.path === "research";
+  const isGoldenSurface = isGoldenCommandCenter || isGoldenLiveTrading || isGoldenStrategyCenter || isGoldenResearchLab;
   const visibleDeskNavItems = isGoldenLiveTrading
     ? deskNavItems.filter((item) => !["/performance", "/events"].includes(item.to))
     : deskNavItems;
@@ -106,14 +109,14 @@ export function DeskShell() {
     .filter((group) => group.items.length > 0);
 
   return (
-    <div className={`desk-app-shell${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isGoldenLiveTrading && liveSidebarCollapsed ? " desk-app-shell--live-collapsed" : ""}`}>
+    <div className={`desk-app-shell${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isGoldenLiveTrading && liveSidebarCollapsed ? " desk-app-shell--live-collapsed" : ""}${isGoldenStrategyCenter ? " desk-app-shell--strategy-center" : ""}${isGoldenResearchLab ? " desk-app-shell--research-lab" : ""}`}>
       <a className="skip-link" href="#main-content">Aller au contenu principal</a>
       <aside className="desk-sidebar" aria-label="Barre latérale du desk">
         <div className="brand-block">
           <span className="brand-mark" aria-hidden="true"><FaTachometerAlt /></span>
           <div className="brand-copy">
             <h1>DESK</h1>
-            <p className="eyebrow">Portfolio Control</p>
+            <p className="eyebrow">Pilotage du portefeuille</p>
           </div>
         </div>
         <nav className="sidebar-nav" tabIndex={0} aria-label="Navigation principale">
@@ -130,7 +133,7 @@ export function DeskShell() {
             </div>
           ))}
         </nav>
-        {isGoldenLiveTrading ? <button className="live-sidebar-collapse" type="button" aria-label={liveSidebarCollapsed ? "Déployer la navigation" : "Réduire la navigation"} aria-pressed={liveSidebarCollapsed} onClick={() => setLiveSidebarCollapsed((value) => !value)}>{liveSidebarCollapsed ? <FaAngleDoubleRight /> : <FaAngleDoubleLeft />}<span>{liveSidebarCollapsed ? "Expand" : "Collapse"}</span></button> : null}
+        {isGoldenLiveTrading ? <button className="live-sidebar-collapse" type="button" aria-label={liveSidebarCollapsed ? "Déployer la navigation" : "Réduire la navigation"} aria-pressed={liveSidebarCollapsed} onClick={() => setLiveSidebarCollapsed((value) => !value)}>{liveSidebarCollapsed ? <FaAngleDoubleRight /> : <FaAngleDoubleLeft />}<span>{liveSidebarCollapsed ? "Déployer" : "Réduire"}</span></button> : null}
         <div className="sidebar-status-stack">
           <section>
             <p>ENVIRONNEMENT</p>
@@ -138,7 +141,7 @@ export function DeskShell() {
           </section>
           <section>
             <p>SYSTÈME</p>
-            <strong className={runtimeTone}><FaCircle aria-hidden="true" /> {realtime?.connectionStatus ?? "—"}</strong>
+            <strong className={runtimeTone}><FaCircle aria-hidden="true" /> {realtime?.connectionStatus ? presentConnectionStatus(realtime.connectionStatus).label : "—"}</strong>
             <span>{realtime?.events.acceptedCount ?? 0} events · {realtime?.events.duplicateCount ?? 0} doublons</span>
           </section>
           <small>Desk Control Plane<br />version publiée par le build</small>
@@ -191,16 +194,16 @@ export function DeskShell() {
 
         {!isGoldenSurface ? <footer className="desk-status-footer">
           <div>
-            <span className={runtimeTone}><FaCircle aria-hidden="true" /> {realtime?.connectionStatus ?? "RUNTIME"}</span>
+            <span className={runtimeTone}><FaCircle aria-hidden="true" /> {realtime?.connectionStatus ? presentConnectionStatus(realtime.connectionStatus).label : "Runtime"}</span>
             <span>asOf {realtime?.heartbeatLabel ?? "—"}</span>
             <span>·</span>
-            <span>{realtime?.events.acceptedCount ?? 0} events reçus</span>
+            <span>{realtime?.events.acceptedCount ?? 0} événements reçus</span>
             <span>·</span>
             <span>dernier {realtime?.events.lastEventId ?? "—"}</span>
           </div>
           <div>
             <span>Commandes suivies : {Object.keys(realtime?.commands.commands ?? {}).length}</span>
-            <span>Out-of-order : {realtime?.events.outOfOrderCount ?? 0}</span>
+            <span>Hors-ordre : {realtime?.events.outOfOrderCount ?? 0}</span>
             <span>{realtime?.latestError ? `Runtime : ${realtime.latestError}` : "Runtime : nominal"}</span>
           </div>
         </footer> : null}

@@ -103,7 +103,7 @@ export function LiveSignalDetailPage() {
 
       <section className="operator-kpi-strip" aria-label="Indicateurs signal live">
         <KpiCard label="SCORE SIGNAL" value={`${data.summary.signalScore}`} delta={`${data.signal.confidence}% confiance`} tone="success" />
-        <KpiCard label="EXPIRATION" value={remainingSec > 0 ? formatDuration(remainingSec) : "EXPIRED"} delta={formatTime(data.signal.expiresAt)} tone={remainingSec > 0 ? "warning" : "danger"} />
+        <KpiCard label="EXPIRATION" value={remainingSec > 0 ? formatDuration(remainingSec) : "EXPIRÉ"} delta={formatTime(data.signal.expiresAt)} tone={remainingSec > 0 ? "warning" : "danger"} />
         <KpiCard label="PROBA ACCEPT." value={`${data.summary.acceptanceProbabilityPct}%`} delta="DTO backend" tone="success" />
         <KpiCard label="TAILLE CIBLE" value={`${data.summary.targetQuantity}`} delta={`arrondi ${data.riskCheck.roundedQuantity} contrats`} tone="info" />
         <KpiCard label="RISQUE UTILISÉ" value={`${data.summary.riskUsedPct}%`} delta={presentGeneric(data.riskCheck.reasonCode).label} detail={<ProgressBar value={data.summary.riskUsedPct} tone="success" />} tone="success" />
@@ -111,7 +111,7 @@ export function LiveSignalDetailPage() {
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Contexte, prédicats et risk check">
-        <Card title="Signal déterministe" actions={<InlineAction>{idMismatch ? "ID mismatch" : "Signal scope"}</InlineAction>} tone={idMismatch ? "warning" : "neutral"} density="compact">
+        <Card title="Signal déterministe" actions={<InlineAction>{idMismatch ? "Incohérence ID" : "Périmètre signal"}</InlineAction>} tone={idMismatch ? "warning" : "neutral"} density="compact">
           <div className="live-signal-identity">
             <article className="live-signal-main-ticket">
               <FaBolt />
@@ -122,22 +122,22 @@ export function LiveSignalDetailPage() {
               <StatusBadge tone={signalStateTone(data.signal.state)}>{presentSignalState(data.signal.state).label}</StatusBadge>
             </article>
             <div className="live-signal-price-grid">
-              <MetricBox label="Entry low" value={formatPrice(data.signal.entryZoneLow)} />
-              <MetricBox label="Entry high" value={formatPrice(data.signal.entryZoneHigh)} />
+              <MetricBox label="Entrée basse" value={formatPrice(data.signal.entryZoneLow)} />
+              <MetricBox label="Entrée haute" value={formatPrice(data.signal.entryZoneHigh)} />
               <MetricBox label="Stop" value={formatPrice(data.signal.stopPrice)} />
-              <MetricBox label="Target" value={formatPrice(data.signal.targetPrice)} />
+              <MetricBox label="Cible" value={formatPrice(data.signal.targetPrice)} />
               <MetricBox label="Expectancy" value={formatSignedR(data.signal.expectancyR)} />
               <MetricBox label="RR" value={data.signal.rewardRisk.toFixed(1)} />
             </div>
             <div className="live-signal-link-grid">
               <Link to={`/strategies/${data.identity.strategyId}`}><FaProjectDiagram /> Stratégie</Link>
-              <Link to={data.arbitration.portfolioRoute}><FaBalanceScale /> Portfolio</Link>
-              <Link to="/events"><FaStream /> Events</Link>
+              <Link to={data.arbitration.portfolioRoute}><FaBalanceScale /> Portefeuille</Link>
+              <Link to="/events"><FaStream /> Événements</Link>
             </div>
           </div>
         </Card>
 
-        <Card title="Prédicats & Feature Snapshot" actions={<InlineAction>Point-in-time</InlineAction>} density="compact">
+        <Card title="Prédicats & instantané des features" actions={<InlineAction>Point-in-time</InlineAction>} density="compact">
           <div className="live-signal-predicate-list">
             {data.predicates.map((predicate) => (
               <article key={predicate.predicateId}>
@@ -160,7 +160,7 @@ export function LiveSignalDetailPage() {
           </div>
         </Card>
 
-        <Card title="Portfolio Arbitration & Global Risk" actions={<InlineAction>Risk check</InlineAction>} density="compact">
+        <Card title="Arbitrage portefeuille & risque global" actions={<InlineAction>Vérification risque</InlineAction>} density="compact">
           <div className="live-signal-risk-hero">
             <article>
               <FaExchangeAlt />
@@ -193,7 +193,7 @@ export function LiveSignalDetailPage() {
       </section>
 
       <section className="operator-grid operator-grid--bottom" aria-label="Contexte, ordres et commandes">
-        <Card title="Contexte marché & positions" actions={<InlineAction>Context</InlineAction>} density="compact">
+        <Card title="Contexte marché & positions" actions={<InlineAction>Contexte</InlineAction>} density="compact">
           <div className="live-signal-context-list">
             {data.context.map((item) => (
               <article key={item.contextId}>
@@ -215,7 +215,7 @@ export function LiveSignalDetailPage() {
           </div>
         </Card>
 
-        <Card title="Ordres liés & audit trail" actions={<InlineAction>Orders</InlineAction>} density="compact">
+        <Card title="Ordres liés & piste d'audit" actions={<InlineAction>Ordres</InlineAction>} density="compact">
           <div className="live-signal-order-list">
             {data.linkedOrders.map((order) => (
               <article key={order.orderId}>
@@ -236,7 +236,7 @@ export function LiveSignalDetailPage() {
           </ol>
         </Card>
 
-        <Card title="Décision opérateur" actions={<InlineAction>Command Runtime</InlineAction>} density="compact">
+        <Card title="Décision opérateur" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="live-signal-command-result">
             <FaFingerprint />
             <div>
@@ -269,7 +269,7 @@ export function LiveSignalDetailPage() {
           <div className="live-signal-ai-shadow">
             <FaRobot />
             <div>
-              <strong>AI Context Gate · {presentExecutionMode(data.aiAdvisory.mode).label} · authority {data.aiAdvisory.authority}</strong>
+              <strong>AI Context Gate · {presentExecutionMode(data.aiAdvisory.mode).label} · autorité {presentGeneric(data.aiAdvisory.authority).label}</strong>
               <small>{data.aiAdvisory.summary}</small>
             </div>
             <StatusBadge tone="accent">{presentTradeDecision(data.aiAdvisory.recommendation).label}</StatusBadge>

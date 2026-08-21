@@ -85,7 +85,7 @@ export function LiveTradingPage() {
           <JarvisPanel model={model} />
         </div>
       </div>
-      <div className="lt-accessible-status" aria-live="polite">Projection {model.truth.label}. {model.mode.executionMode}. Human Gate {model.mode.humanGateRequired ? "required" : "not required"}.</div>
+      <div className="lt-accessible-status" aria-live="polite">Projection {model.truth.label}. {model.mode.executionMode}. Human Gate {model.mode.humanGateRequired ? "requis" : "non requis"}.</div>
     </div>
   );
 }

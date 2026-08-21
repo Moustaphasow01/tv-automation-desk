@@ -16,7 +16,7 @@ import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 
 export function ExecutionAuthorityPanel({ dossier }: { dossier: OrderIntentDossier }) {
   return (
-    <Card title="Autorité d'exécution" eyebrow="POLICY BACKEND" density="compact" state={dossier.degradedReadOnly ? "degraded" : "readonly"}>
+    <Card title="Autorité d'exécution" eyebrow="POLITIQUE BACKEND" density="compact" state={dossier.degradedReadOnly ? "degraded" : "readonly"}>
       <div className="order-dossier__authority-pair">
         <DataMetric label="Mode d'exécution" value={dossier.executionMode} />
         <MetricBox label="Environnement" value="Non publié dans ce dossier" />
@@ -35,7 +35,7 @@ export function AuthorityStageCard({ stage }: { stage: AuthorityStage }) {
       </div>
       <DataValueLine label="Identifiant" value={stage.authorityId} />
       {stage.reasonCodes.length ? (
-        <ul className="order-dossier__reason-list" aria-label={`Reason codes ${stage.label}`}>
+        <ul className="order-dossier__reason-list" aria-label={`Codes motif ${stage.label}`}>
           {stage.reasonCodes.map((reason) => <li key={reason}>{reason}</li>)}
         </ul>
       ) : <p className="order-dossier__helper">Aucun reason code publié.</p>}
@@ -45,7 +45,7 @@ export function AuthorityStageCard({ stage }: { stage: AuthorityStage }) {
 
 export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier }) {
   return (
-    <Card title="Target Position & plan d'exécution" eyebrow="READ-ONLY APRÈS RISK" density="compact" state="readonly">
+    <Card title="Position cible & plan d'exécution" eyebrow="LECTURE SEULE APRÈS RISQUE" density="compact" state="readonly">
       <div className="order-dossier__immutable-banner" role="note">
         Ces termes sont affichés uniquement. Toute modification exige le rejet puis un nouveau cycle Risk backend.
       </div>
@@ -58,8 +58,8 @@ export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier })
         <ReadonlyTerm label="TIF" value={dossier.executionPlan.timeInForce} />
         <ReadonlyTerm label="Entrée" value={dossier.executionPlan.entry} format="price" />
         <ReadonlyTerm label="Stop" value={dossier.executionPlan.stop} format="price" />
-        {dossier.executionPlan.targets.map((target, index) => <ReadonlyTerm key={index} label={`Target ${index + 1}`} value={target} format="price" />)}
-        <ReadonlyTerm label="Expected R" value={dossier.executionPlan.expectedR} format="r" />
+        {dossier.executionPlan.targets.map((target, index) => <ReadonlyTerm key={index} label={`Cible ${index + 1}`} value={target} format="price" />)}
+        <ReadonlyTerm label="R attendu" value={dossier.executionPlan.expectedR} format="r" />
       </dl>
     </Card>
   );
@@ -105,8 +105,8 @@ export function HumanExecutionGatePanel({
       {gate.actions.some((action) => action.requiresReason) ? <ReasonInput label="Motif opérateur" value={reason} onChange={setReason} /> : null}
 
       <div className="order-dossier__gate-actions">
-        <ActionButton action={reject} fallbackLabel="Reject OrderIntent" variant="danger" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
-        <ActionButton action={confirm} fallbackLabel="Confirm OrderIntent" variant="primary" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
+        <ActionButton action={reject} fallbackLabel="Rejeter OrderIntent" variant="danger" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
+        <ActionButton action={confirm} fallbackLabel="Confirmer OrderIntent" variant="primary" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
       </div>
 
       {pendingAction ? (
@@ -188,9 +188,9 @@ export function ReconciliationPanel({ reconciliation }: { reconciliation: Reconc
   const status = presentBackendStatus(statusValue.raw);
   const hasMismatch = reconciliation.mismatches.length > 0;
   return (
-    <Card title="Réconciliation" eyebrow="EXPECTED VS BROKER" density="compact" tone={hasMismatch ? "danger" : status.tone} state={statusValue.available ? "nominal" : "partial"}>
+    <Card title="Réconciliation" eyebrow="ATTENDU VS BROKER" density="compact" tone={hasMismatch ? "danger" : status.tone} state={statusValue.available ? "nominal" : "partial"}>
       <div className="order-dossier__reconciliation-heading" role={hasMismatch ? "alert" : undefined}>
-        <StatusBadge tone={hasMismatch ? "danger" : status.tone}>{hasMismatch ? "RECONCILIATION MISMATCH" : statusValue.available ? status.label : "NON PUBLIÉE"}</StatusBadge>
+        <StatusBadge tone={hasMismatch ? "danger" : status.tone}>{hasMismatch ? "ÉCART DE RÉCONCILIATION" : statusValue.available ? status.label : "NON PUBLIÉE"}</StatusBadge>
         <DataValueLine label="Dernier contrôle" value={reconciliation.checkedAt} />
       </div>
       {reconciliation.expected.length || reconciliation.broker.length ? (

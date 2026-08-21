@@ -78,6 +78,22 @@ const researchLabStoreMethods = {
     return researchLabResponse("DeskResearchEvaluationReportListV1", { generated_at_utc: this.clock.now().utc, items });
   },
 
+  async getStrategyPromotionLineage({ strategyVersionId } = {}) {
+    const registry = researchRegistry(this);
+    const candidate = strategyVersionId ? (await registry.listCandidates({ strategyVersionId, limit: 1 }))[0] || null : null;
+    const [evaluationReports, hypothesis, experiment] = candidate
+      ? await Promise.all([
+          registry.listEvaluationReports({ researchCandidateId: candidate.research_candidate_id, limit: 20 }),
+          candidate.research_hypothesis_id ? registry.getHypothesis(candidate.research_hypothesis_id).catch(() => null) : Promise.resolve(null),
+          candidate.research_experiment_id ? registry.getExperiment(candidate.research_experiment_id).catch(() => null) : Promise.resolve(null),
+        ])
+      : [[], null, null];
+    return researchLabResponse("DeskStrategyPromotionLineageV1", {
+      generated_at_utc: this.clock.now().utc,
+      candidate: candidate ? buildResearchCandidateDetailProjection({ candidate, evaluationReports, experiment, hypothesis }) : null,
+    });
+  },
+
   async executeResearchLabAction({ input = {}, actor = {} } = {}) {
     const action = String(input.action || input.action_id || input.command || "").trim();
     if (action !== "bootstrap_demo_paper_research") {
