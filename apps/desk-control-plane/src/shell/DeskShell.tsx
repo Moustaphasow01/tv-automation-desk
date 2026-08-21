@@ -18,7 +18,6 @@ import {
   FaListAlt,
   FaPlayCircle,
   FaProjectDiagram,
-  FaTachometerAlt,
   FaRobot,
   FaSearch,
   FaShieldAlt,
@@ -113,7 +112,7 @@ export function DeskShell() {
       <a className="skip-link" href="#main-content">Aller au contenu principal</a>
       <aside className="desk-sidebar" aria-label="Barre latérale du desk">
         <div className="brand-block">
-          <span className="brand-mark" aria-hidden="true"><FaTachometerAlt /></span>
+          <span className="brand-mark" aria-hidden="true">D</span>
           <div className="brand-copy">
             <h1>DESK</h1>
             <p className="eyebrow">Pilotage du portefeuille</p>

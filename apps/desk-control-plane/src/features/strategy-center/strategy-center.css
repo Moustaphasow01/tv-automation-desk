@@ -24,13 +24,9 @@
 
 .desk-app-shell--strategy-center {
   --sc-border-strong: #28536f;
-  grid-template-columns: 210px minmax(0, 1fr);
   color: var(--sc-text);
   background: var(--sc-bg-root);
 }
-.desk-app-shell--strategy-center .desk-sidebar { background: var(--sc-bg-sidebar); border-color: var(--sc-border-soft); }
-.desk-app-shell--strategy-center .sidebar-nav-group h2 { margin: 8px 9px 2px; color: var(--sc-muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.desk-app-shell--strategy-center .nav-link.active { color: var(--sc-text); box-shadow: inset 2px 0 0 var(--sc-blue); }
 .desk-app-shell--strategy-center .desk-main { height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr); }
 .desk-app-shell--strategy-center .desk-content { height: 100%; min-height: 0; padding: 0; overflow: hidden; background: var(--sc-bg-main); }
 
@@ -109,7 +105,6 @@
 .sc-lineage-empty { color: var(--sc-muted); font-size: 12px; padding: 8px 0; }
 
 @media (max-width: 1279px) {
-  .desk-app-shell--strategy-center .sidebar-nav-group h2 { display: none; }
   .sc-grid { grid-template-columns: 1fr; }
   .sc-meta-grid { grid-template-columns: repeat(2, 1fr); }
   .sc-perf-metrics { grid-template-columns: repeat(3, 1fr); }
