@@ -461,6 +461,7 @@ export type LiveTradingView = {
     sourceClass?: string;
     instrument?: string | null;
     timeframe?: string | null;
+    supportedInstruments?: readonly string[];
     supportedTimeframes: readonly string[];
     asOf: string | null;
     points: readonly {

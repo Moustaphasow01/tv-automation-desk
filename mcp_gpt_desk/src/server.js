@@ -305,7 +305,7 @@ const httpServer = createHttpServer(async (req, res) => {
   if (FRONT_API_ENABLED && url.pathname === "/api/v1/auth/operator/session" && req.method === "GET") {
     const auth = verifyOperatorSession(req.headers.cookie, baseUrl);
     sendJson(res, 200, auth.ok
-      ? { ok: true, authenticated: true, user: { email: auth.email, displayName: "Opérateur Desk" } }
+      ? { ok: true, authenticated: true, user: { email: auth.email, displayName: auth.displayName || "Opérateur Desk" } }
       : { ok: true, authenticated: false });
     return;
   }
@@ -314,7 +314,7 @@ const httpServer = createHttpServer(async (req, res) => {
     if (!consumeRateLimit(res, oauthRateLimiter, clientIpFromRequest(req))) return;
     try {
       const body = await readJsonBody(req, 8_192);
-      const session = createOperatorSession(body?.pin, baseUrl);
+      const session = createOperatorSession(operatorLoginCredentials(body), baseUrl);
       sendJson(res, 200, {
         ok: true,
         authenticated: true,
@@ -1108,6 +1108,14 @@ function restCorsHeaders(req) {
     headers.vary = "origin";
   }
   return headers;
+}
+
+function operatorLoginCredentials(body) {
+  if (body?.pin !== undefined) return { pin: body.pin };
+  return {
+    login: body?.login ?? body?.username,
+    password: body?.password,
+  };
 }
 
 async function readJsonBody(req, maxBytes) {

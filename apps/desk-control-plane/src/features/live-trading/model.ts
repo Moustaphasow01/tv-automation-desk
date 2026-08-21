@@ -17,6 +17,7 @@ export type LiveTradingModel = {
     asOf: string;
     instrument: string | null;
     timeframe: string | null;
+    supportedInstruments: readonly string[];
     supportedTimeframes: readonly string[];
     points: NonNullable<LiveTradingView["marketSeries"]>["points"];
   };

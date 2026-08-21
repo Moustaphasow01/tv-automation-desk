@@ -15,13 +15,18 @@ export type RealtimeSubscription = {
   close(): void;
 };
 
+export type OperatorLoginCredentials = {
+  login: string;
+  password: string;
+};
+
 export type DeskTransport = {
   getView<T>(viewName: FrontViewName, params?: Readonly<Record<string, string | undefined>>): Promise<ViewEnvelope<T>>;
   getCommand(commandId: string): Promise<CommandSnapshot>;
   getCapabilities(): Promise<CapabilityCatalog>;
   subscribeEvents(handlers: RealtimeEventHandlers, lastState?: RealtimeEventState): RealtimeSubscription;
   submitCommand(input: SubmitDeskCommandInput): Promise<CommandAccepted>;
-  loginOperator(pin: string): Promise<void>;
+  loginOperator(credentials: OperatorLoginCredentials | string): Promise<void>;
   logoutOperator(): Promise<void>;
 };
 
@@ -163,13 +168,18 @@ function createBffTransport(config: DeskAppConfig): DeskTransport {
         window.clearTimeout(timeout);
       }
     },
-    async loginOperator(pin: string): Promise<void> {
-      await submitOperatorAuthRequest(`${config.operatorAuthBaseUrl}/login`, { pin });
+    async loginOperator(credentials: OperatorLoginCredentials | string): Promise<void> {
+      await submitOperatorAuthRequest(`${config.operatorAuthBaseUrl}/login`, operatorLoginPayload(credentials));
     },
     async logoutOperator(): Promise<void> {
       await submitOperatorAuthRequest(`${config.operatorAuthBaseUrl}/logout`);
     }
   };
+}
+
+function operatorLoginPayload(credentials: OperatorLoginCredentials | string): Record<string, string> {
+  if (typeof credentials === "string") return { pin: credentials };
+  return { login: credentials.login, password: credentials.password };
 }
 
 async function submitOperatorAuthRequest(url: string, body?: Record<string, string>) {

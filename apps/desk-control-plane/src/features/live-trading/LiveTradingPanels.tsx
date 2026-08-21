@@ -16,7 +16,7 @@ export function LivePanel({ title, className = "", action, children, expandable 
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [expanded]);
   return <>
-    {expanded ? <div className="lt-panel-backdrop" onClick={() => setExpanded(false)} aria-hidden="true" /> : null}
+    {expanded ? <button type="button" className="lt-panel-backdrop" onClick={() => setExpanded(false)} aria-label={`Fermer ${title}`} /> : null}
     <section className={`lt-panel ${className}${expanded ? " lt-panel--expanded" : ""}`} role={expanded ? "dialog" : undefined} aria-modal={expanded || undefined} aria-label={expanded ? title : undefined}>
       <header>
         <h2>{title}</h2>
@@ -46,22 +46,75 @@ function Sparkline({ values, positive }: { values: readonly number[]; positive: 
 }
 
 export function StrategyInstancesPanel({ model }: { model: LiveTradingModel }) {
-  return <LivePanel title="Active Strategy Instances" className="lt-panel--strategies"><table><thead><tr><th>Strategy</th><th>Status</th><th>Next eval</th><th>Confidence</th></tr></thead><tbody>{model.strategyInstances.slice(0, 4).map((item) => <tr key={item.strategyInstanceId}><td><Link to={`/strategies/${encodeURIComponent(item.strategyDefinitionId)}?instanceId=${encodeURIComponent(item.strategyInstanceId)}`} title={item.strategyInstanceId}>{item.name ?? shortId(item.strategyInstanceId)}</Link></td><td><StatusBadge tone={presentRuntimeStatus(item.runtimeState).tone}>{presentRuntimeStatus(item.runtimeState).label}</StatusBadge></td><td>{item.runtimeState === "MARKET_CLOSED" ? "À la réouverture" : displayTime(item.nextEvaluationAt)}</td><td>{typeof item.confidence !== "number" || Number.isNaN(item.confidence) ? <span className="lt-confidence-empty" title="Aucun signal actif pour cette instance">—</span> : <span className="lt-confidence-chip" title="Confiance du dernier signal actif de cette instance">{Math.round(item.confidence)}%</span>}</td></tr>)}</tbody></table><TruthEmpty when={!model.strategyInstances.length} status="AUCUNE INSTANCE ACTIVE" label="Aucune Strategy Instance active n'est publiée par le registre." /></LivePanel>;
+  const visibleInstances = model.strategyInstances.slice(0, 4);
+  const totalInstances = model.strategyInstances.length;
+  const strategyAction = totalInstances ? (
+    <Link className="lt-panel-action-link" to="/strategies/deployments" aria-label={`Voir toutes les instances de stratégie, ${totalInstances} publiées`}>
+      Voir toutes <span>{totalInstances}</span>
+    </Link>
+  ) : null;
+  return (
+    <LivePanel title="Active Strategy Instances" className="lt-panel--strategies" action={strategyAction}>
+      <table>
+        <caption className="sr-only">{`${visibleInstances.length} instances affichées sur ${totalInstances} instances publiées par le backend`}</caption>
+        <thead><tr><th scope="col">Strategy</th><th scope="col">Status</th><th scope="col">Next eval</th><th scope="col">Confidence</th></tr></thead>
+        <tbody>{visibleInstances.map((item) => <tr key={item.strategyInstanceId}><td><Link to={`/strategies/${encodeURIComponent(item.strategyDefinitionId)}?instanceId=${encodeURIComponent(item.strategyInstanceId)}`} title={item.strategyInstanceId}>{item.name ?? shortId(item.strategyInstanceId)}</Link></td><td><StatusBadge tone={presentRuntimeStatus(item.runtimeState).tone}>{presentRuntimeStatus(item.runtimeState).label}</StatusBadge></td><td>{item.runtimeState === "MARKET_CLOSED" ? "À la réouverture" : displayTime(item.nextEvaluationAt)}</td><td>{typeof item.confidence !== "number" || Number.isNaN(item.confidence) ? <span className="lt-confidence-empty" title="Aucun signal actif pour cette instance">—</span> : <span className="lt-confidence-chip" title="Confiance du dernier signal actif de cette instance">{Math.round(item.confidence)}%</span>}</td></tr>)}</tbody>
+      </table>
+      <TruthEmpty when={!model.strategyInstances.length} status="AUCUNE INSTANCE ACTIVE" label="Aucune Strategy Instance active n'est publiée par le registre." />
+    </LivePanel>
+  );
 }
 
 export function MacroSessionPanel({ model }: { model: LiveTradingModel }) {
   return <LivePanel title="Macro / Session" className="lt-panel--macro"><dl className="lt-definition-list lt-definition-list--terms"><Pair label="Session" value={model.source.session.activeSession ?? model.source.session.phase} /><Pair label="Market state" value={model.source.session.marketState ?? model.source.session.marketDataStatus} /><Pair label="Trading date" value={model.source.session.tradingDate} /><Pair label="Timezone" value={model.source.session.exchangeTimezone ?? "—"} /><Pair label="Last known" value={displayTime(model.source.session.lastKnownAt)} /><Pair label="Signal cutoff" value={displayTime(model.freshness.signalCutoffAt)} /></dl><p className="lt-panel-note">Macro/news : {presentAvailability(model.source.macroSession ? String(model.source.macroSession.availability ?? "KNOWN") : "UNAVAILABLE").label}</p></LivePanel>;
 }
 
-export function InstrumentChartPanel({ model }: { model: LiveTradingModel }) {
+export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTradingModel; onScopeChange?: (scope: { instrument?: string; timeframe?: string }) => void }) {
   const signal = model.latestSignal;
   const instrument = model.marketSeries.instrument ?? signal?.symbol ?? "Instrument";
+  const timeframe = model.marketSeries.timeframe;
+  const instrumentOptions = optionSet([model.marketSeries.instrument, ...model.marketSeries.supportedInstruments, "MNQ", "MES"]);
+  const timeframeOptions = optionSet([model.marketSeries.timeframe, ...model.marketSeries.supportedTimeframes, "1", "5", "15"]);
   const intent = model.orderIntent;
   const levels: { label: string; price: number; tone: "success" | "danger" | "info" }[] = [];
   if (intent?.limitPrice != null) levels.push({ label: "ENTRÉE", price: intent.limitPrice, tone: "info" });
   if (intent?.stopPrice != null) levels.push({ label: "STOP", price: intent.stopPrice, tone: "danger" });
   if (intent?.targetPrice != null) levels.push({ label: "TARGET", price: intent.targetPrice, tone: "success" });
-  return <LivePanel title={`${instrument} · ${model.marketSeries.timeframe ? `M${model.marketSeries.timeframe}` : "futures"}`} className="lt-panel--chart" action={<Link to="/events">Audit</Link>}><div className="lt-chart-toolbar"><span>{model.marketSeries.supportedTimeframes.map((frame) => <b key={frame} aria-current={frame === model.marketSeries.timeframe ? "true" : undefined}>{frame === "60" ? "H1" : frame === "240" ? "H4" : `M${frame}`}</b>)}</span><span>OHLCV · VWAP · signals · intents</span></div><div className="lt-chart-frame" data-availability={model.marketSeries.availability}>{model.marketSeries.points.length ? <CandlestickChart points={model.marketSeries.points} levels={levels} /> : <><div className="lt-chart-grid" aria-hidden="true" /><div className="lt-chart-empty" role="status"><strong>{presentAvailability(model.marketSeries.availability).label}</strong><span>{model.marketSeries.reason}</span><small>{model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</small></div></>}</div><footer className="lt-chart-footer"><span>{model.marketSeries.points.length} bougies clôturées · source {model.marketSeries.source}</span><StatusBadge tone={presentAvailability(model.marketSeries.availability).tone}>{presentAvailability(model.marketSeries.availability).label}</StatusBadge></footer></LivePanel>;
+  return (
+    <LivePanel title={`${instrument} · ${timeframe ? formatTimeframe(timeframe) : "futures"}`} className="lt-panel--chart" action={<Link to="/events">Audit</Link>}>
+      <div className="lt-chart-toolbar">
+        <div className="lt-chart-selector" aria-label="Instrument affiché">
+          {instrumentOptions.map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={option === model.marketSeries.instrument}
+              onClick={() => onScopeChange?.({ instrument: option })}
+            >
+              {formatInstrumentLabel(option)}
+            </button>
+          ))}
+        </div>
+        <div className="lt-chart-selector lt-chart-selector--timeframes" aria-label="Timeframe affichée">
+          {timeframeOptions.map((frame) => (
+            <button
+              key={frame}
+              type="button"
+              aria-pressed={frame === timeframe}
+              onClick={() => onScopeChange?.({ timeframe: frame })}
+            >
+              {formatTimeframe(frame)}
+            </button>
+          ))}
+        </div>
+        <span>OHLCV · VWAP · signals · intents</span>
+      </div>
+      <div className="lt-chart-frame" data-availability={model.marketSeries.availability}>
+        {model.marketSeries.points.length ? <CandlestickChart points={model.marketSeries.points} levels={levels} /> : <><div className="lt-chart-grid" aria-hidden="true" /><div className="lt-chart-empty" role="status"><strong>{presentAvailability(model.marketSeries.availability).label}</strong><span>{model.marketSeries.reason}</span><small>{model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</small></div></>}
+      </div>
+      <footer className="lt-chart-footer"><span>{model.marketSeries.points.length} bougies clôturées · source {model.marketSeries.source}</span><StatusBadge tone={presentAvailability(model.marketSeries.availability).tone}>{presentAvailability(model.marketSeries.availability).label}</StatusBadge></footer>
+    </LivePanel>
+  );
 }
 
 export function LatestSignalPanel({ model }: { model: LiveTradingModel }) {
@@ -131,6 +184,18 @@ function Pair({ label, value }: { label: string; value: string }) { return <div>
 function TruthEmpty({ when = true, label, status = "ÉTAT VIDE CONFIRMÉ" }: { when?: boolean; label: string; status?: string }) { return when ? <div className="lt-empty" role="status"><FaTimes aria-hidden="true" /><strong>{status}</strong><span>{label}</span></div> : null; }
 function shortId(value: string) { return value.length > 25 ? `${value.slice(0, 22)}…` : value; }
 function priceValue(value: unknown): unknown { if (!value || typeof value !== "object") return value; const record = value as Record<string, unknown>; return record.price ?? record.value; }
+function optionSet(values: readonly (string | null | undefined)[]): string[] { return [...new Set(values.map((value) => String(value || "").trim().toUpperCase()).filter(Boolean))]; }
+function formatInstrumentLabel(value: string) {
+  if (value === "MNQ") return "MNQ · MQ";
+  if (value === "MES") return "MES · MS";
+  return value;
+}
+function formatTimeframe(value: string) {
+  if (value === "60") return "H1";
+  if (value === "240") return "H4";
+  if (value === "D" || value === "1D") return "D1";
+  return `M${value}`;
+}
 
 function CandlestickChart({ points, levels = [] }: { points: LiveTradingModel["marketSeries"]["points"]; levels?: { label: string; price: number; tone: "success" | "danger" | "info" }[] }) {
   const drawable = points.filter((point) => [point.open, point.high, point.low, point.close].every((value) => typeof value === "number"));

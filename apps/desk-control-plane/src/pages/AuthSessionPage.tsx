@@ -35,7 +35,8 @@ export function AuthSessionPage() {
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
-  const [operatorPin, setOperatorPin] = useState("");
+  const [operatorLogin, setOperatorLogin] = useState("MSO");
+  const [operatorPassword, setOperatorPassword] = useState("");
   const [authSessionMessage, setAuthSessionMessage] = useState<string | null>(null);
   const [authSessionError, setAuthSessionError] = useState<string | null>(null);
   const [authSessionSubmitting, setAuthSessionSubmitting] = useState(false);
@@ -79,23 +80,23 @@ export function AuthSessionPage() {
   };
 
   const loginOperator = async () => {
-    const pin = operatorPin.trim();
-    if (!pin) {
-      setAuthSessionError("PIN_OPERATEUR_REQUIS");
+    const login = operatorLogin.trim();
+    if (!login || !operatorPassword) {
+      setAuthSessionError("LOGIN_ET_MOT_DE_PASSE_REQUIS");
       return;
     }
     setAuthSessionSubmitting(true);
     setAuthSessionError(null);
     setAuthSessionMessage(null);
     try {
-      await repository.loginOperator(pin);
-      setOperatorPin("");
+      await repository.loginOperator({ login, password: operatorPassword });
+      setOperatorPassword("");
       setAuthSessionMessage("Session opérateur active. Les commandes PAPER peuvent maintenant être envoyées avec audit.");
       await Promise.all([query.refetch(), capabilityCatalog.refetch()]);
     } catch (error) {
       setAuthSessionError(error instanceof Error ? error.message : "OPERATOR_LOGIN_FAILED");
     } finally {
-      setOperatorPin("");
+      setOperatorPassword("");
       setAuthSessionSubmitting(false);
     }
   };
@@ -196,13 +197,23 @@ export function AuthSessionPage() {
           </div>
           <div className="auth-operator-session-control">
             <label>
-              <span>PIN opérateur</span>
+              <span>Login</span>
+              <input
+                value={operatorLogin}
+                onChange={(event) => setOperatorLogin(event.target.value)}
+                placeholder={data.summary.authenticated ? "Session active" : "Déverrouiller les actions PAPER"}
+                autoComplete="username"
+                disabled={data.summary.authenticated || authSessionSubmitting}
+              />
+            </label>
+            <label>
+              <span>Mot de passe</span>
               <input
                 type="password"
-                value={operatorPin}
-                onChange={(event) => setOperatorPin(event.target.value)}
-                placeholder={data.summary.authenticated ? "Session active" : "Déverrouiller les actions PAPER"}
-                autoComplete="one-time-code"
+                value={operatorPassword}
+                onChange={(event) => setOperatorPassword(event.target.value)}
+                placeholder={data.summary.authenticated ? "Session active" : "Mot de passe opérateur"}
+                autoComplete="current-password"
                 disabled={data.summary.authenticated || authSessionSubmitting}
               />
             </label>
@@ -211,7 +222,7 @@ export function AuthSessionPage() {
                 <FaSignOutAlt /> Logout
               </DeskButton>
             ) : (
-              <DeskButton variant="primary" disabled={authSessionSubmitting || !operatorPin.trim()} onClick={loginOperator}>
+              <DeskButton variant="primary" disabled={authSessionSubmitting || !operatorLogin.trim() || !operatorPassword} onClick={loginOperator}>
                 <FaKey /> Login opérateur
               </DeskButton>
             )}

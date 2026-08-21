@@ -32,6 +32,7 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
       asOf: data.marketSeries?.asOf ?? data.timeSeriesContracts.asOf ?? meta.asOf,
       instrument: data.marketSeries?.instrument ?? null,
       timeframe: data.marketSeries?.timeframe ?? null,
+      supportedInstruments: data.marketSeries?.supportedInstruments ?? [],
       supportedTimeframes: data.marketSeries?.supportedTimeframes ?? [],
       points: data.marketSeries?.points ?? [],
     },

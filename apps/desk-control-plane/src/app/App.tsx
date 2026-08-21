@@ -2,7 +2,7 @@ import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "re
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppProviders } from "@/app/AppProviders";
 import { vnextRoutes } from "@/app/routes";
-import { PermissionGate } from "@/domains/permissions/PermissionGate";
+import { OperatorLoginGate, PermissionGate } from "@/domains/permissions/PermissionGate";
 import { DeskDensityViewport } from "@/shell/DeskDensityViewport";
 import { DeskShell } from "@/shell/DeskShell";
 import { CapabilityUnavailablePage } from "@/pages/CapabilityUnavailablePage";
@@ -85,6 +85,7 @@ export function App() {
       <DeskDensityViewport>
         <HashRouter>
           <Suspense fallback={<RouteLoading />}>
+            <OperatorLoginGate>
             <DeskRouteErrorBoundary>
             <Routes>
               <Route element={<DeskShell />}>
@@ -97,6 +98,7 @@ export function App() {
               </Route>
             </Routes>
             </DeskRouteErrorBoundary>
+            </OperatorLoginGate>
           </Suspense>
         </HashRouter>
       </DeskDensityViewport>

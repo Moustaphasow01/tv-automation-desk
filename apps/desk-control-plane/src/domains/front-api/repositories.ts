@@ -1,7 +1,7 @@
 import { useContext, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DeskConfigContext } from "@/app/AppProviders";
-import { createDeskTransport, type DeskTransport } from "@/shared/transport";
+import { createDeskTransport, type DeskTransport, type OperatorLoginCredentials } from "@/shared/transport";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import { assertViewEnvelope, type FrontViewName, type ViewEnvelope } from "@/shared/contracts";
 import {
@@ -123,8 +123,8 @@ export class FrontViewRepository {
     return this.transport.getCapabilities();
   }
 
-  async loginOperator(pin: string) {
-    return this.transport.loginOperator(pin);
+  async loginOperator(credentials: OperatorLoginCredentials | string) {
+    return this.transport.loginOperator(credentials);
   }
 
   async logoutOperator() {

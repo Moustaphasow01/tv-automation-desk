@@ -2,14 +2,18 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const COOKIE_NAME = "desk_operator_session";
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
+const DEFAULT_BOOTSTRAP_OPERATOR_LOGIN = "MSO";
+const DEFAULT_BOOTSTRAP_OPERATOR_PASSWORD = "2018";
 
-export function createOperatorSession(pin, baseUrl, env = process.env, nowMs = Date.now()) {
-  validateOperatorPin(pin, env);
+export function createOperatorSession(credentials, baseUrl, env = process.env, nowMs = Date.now()) {
+  const principal = validateOperatorCredentials(credentials, env);
   const now = Math.floor(nowMs / 1000);
   const payload = {
     typ: "desk_operator_session",
     iss: canonicalBaseUrl(baseUrl),
-    sub: "desk-operator",
+    sub: principal.uid,
+    email: principal.email,
+    displayName: principal.displayName,
     iat: now,
     exp: now + SESSION_TTL_SECONDS,
     jti: randomBytes(18).toString("base64url"),
@@ -17,7 +21,7 @@ export function createOperatorSession(pin, baseUrl, env = process.env, nowMs = D
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const signature = sign(encoded, env);
   return {
-    user: { email: "operator@desk.local", displayName: "Opérateur Desk" },
+    user: { email: principal.email, displayName: principal.displayName },
     cookie: serializeCookie(`${encoded}.${signature}`, baseUrl, SESSION_TTL_SECONDS),
     expiresAt: new Date((now + SESSION_TTL_SECONDS) * 1000).toISOString(),
   };
@@ -39,8 +43,9 @@ export function verifyOperatorSession(cookieHeader, baseUrl, env = process.env, 
     return {
       ok: true,
       kind: "operator_session",
-      email: "operator@desk.local",
-      uid: payload.sub,
+      email: payload.email || "operator@desk.local",
+      displayName: payload.displayName || "Opérateur Desk",
+      uid: payload.sub || "desk-operator",
       scopes: ["desk.read", "desk.write"],
     };
   } catch {
@@ -52,10 +57,32 @@ export function clearOperatorSessionCookie(baseUrl) {
   return serializeCookie("", baseUrl, 0);
 }
 
+function validateOperatorCredentials(credentials, env) {
+  if (typeof credentials === "string" || credentials?.pin !== undefined) {
+    validateOperatorPin(typeof credentials === "string" ? credentials : credentials.pin, env);
+    return operatorPrincipal("desk-operator", "operator@desk.local", "Opérateur Desk");
+  }
+
+  const login = String(credentials?.login || credentials?.username || "").trim();
+  const password = String(credentials?.password || "");
+  const expectedLogin = String(env.DESK_OPERATOR_LOGIN || DEFAULT_BOOTSTRAP_OPERATOR_LOGIN).trim();
+  const expectedPassword = String(env.DESK_OPERATOR_PASSWORD || DEFAULT_BOOTSTRAP_OPERATOR_PASSWORD);
+  if (!expectedLogin || !expectedPassword) throw operatorError("operator_credentials_not_configured", 503);
+  if (!safeEqual(login.toUpperCase(), expectedLogin.toUpperCase()) || !safeEqual(password, expectedPassword)) {
+    throw operatorError("operator_credentials_invalid", 401);
+  }
+
+  return operatorPrincipal(`desk-operator:${expectedLogin.toLowerCase()}`, "operator@desk.local", `Opérateur ${expectedLogin.toUpperCase()}`);
+}
+
 function validateOperatorPin(pin, env) {
   const expected = String(env.DESK_OPERATOR_ADMIN_PIN || env.DESK_OAUTH_ADMIN_PIN || "");
   if (!expected) throw operatorError("operator_pin_not_configured", 503);
   if (!safeEqual(String(pin || ""), expected)) throw operatorError("operator_pin_invalid", 401);
+}
+
+function operatorPrincipal(uid, email, displayName) {
+  return { uid, email, displayName };
 }
 
 function sign(encoded, env) {

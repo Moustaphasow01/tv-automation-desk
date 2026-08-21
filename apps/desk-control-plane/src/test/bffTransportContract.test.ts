@@ -141,4 +141,23 @@ describe("front vnext BFF transport contract", () => {
 
     expect(accepted.commandId).toBe("cmd_bff_paper_001");
   });
+
+  it("submits operator login credentials to the backend auth endpoint", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("/api/v1/auth/operator/login");
+      expect(init?.method).toBe("POST");
+      expect(init?.credentials).toBe("include");
+      expect(JSON.parse(String(init?.body))).toEqual({ login: "MSO", password: "2018" });
+      return new Response(JSON.stringify({ ok: true, authenticated: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createDeskTransport(bffConfig).loginOperator({ login: "MSO", password: "2018" });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });

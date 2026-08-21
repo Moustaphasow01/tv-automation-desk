@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
@@ -22,12 +23,24 @@ import { toLiveTradingModel } from "@/features/live-trading/mapper";
 import "@/features/live-trading/live-trading.css";
 
 export function LiveTradingPage() {
-  const query = useFrontView("live-trading");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const marketScope = useMemo(() => ({
+    instrument: searchParams.get("instrument") || undefined,
+    timeframe: searchParams.get("timeframe") || undefined,
+  }), [searchParams]);
+  const query = useFrontView("live-trading", marketScope);
   const repository = useFrontViewRepository();
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
   const model = useMemo(() => query.data ? toLiveTradingModel(query.data) : null, [query.data]);
+
+  const updateMarketScope = (nextScope: { instrument?: string; timeframe?: string }) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextScope.instrument) next.set("instrument", nextScope.instrument);
+    if (nextScope.timeframe) next.set("timeframe", nextScope.timeframe);
+    setSearchParams(next, { replace: false });
+  };
 
   const submitGateAction = async (action: HumanGateAction, reason: string) => {
     setSubmittingActionId(action.actionId);
@@ -55,7 +68,7 @@ export function LiveTradingPage() {
           <StrategyInstancesPanel model={model} />
           <MacroSessionPanel model={model} />
         </div>
-        <InstrumentChartPanel model={model} />
+        <InstrumentChartPanel model={model} onScopeChange={updateMarketScope} />
         <div className="lt-signal-rail">
           <LatestSignalPanel model={model} />
           <OrderIntentPanel model={model} />

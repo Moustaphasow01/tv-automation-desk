@@ -2,7 +2,7 @@ import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-qu
 import { createContext, type ReactNode, useMemo } from "react";
 import { readDeskAppConfig, type DeskAppConfig } from "@/app/appConfig";
 import { RealtimeProvider } from "@/domains/realtime/RealtimeProvider";
-import { PermissionProvider } from "@/domains/permissions/PermissionGate";
+import { PermissionProvider, useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { emitFrontTelemetry } from "@/core/telemetry/frontendTelemetry";
 
 export const DeskConfigContext = createContext<DeskAppConfig | null>(null);
@@ -35,9 +35,15 @@ export function AppProviders({ children }: AppProvidersProps) {
     <DeskConfigContext.Provider value={config}>
       <QueryClientProvider client={queryClient}>
         <PermissionProvider config={config}>
-          <RealtimeProvider config={config} queryClient={queryClient}>{children}</RealtimeProvider>
+          <AuthenticatedRealtimeProvider config={config} queryClient={queryClient}>{children}</AuthenticatedRealtimeProvider>
         </PermissionProvider>
       </QueryClientProvider>
     </DeskConfigContext.Provider>
   );
+}
+
+function AuthenticatedRealtimeProvider({ children, config, queryClient }: { children: ReactNode; config: DeskAppConfig; queryClient: QueryClient }) {
+  const { session } = useOperatorSession();
+  if (session?.summary.authenticated !== true) return <>{children}</>;
+  return <RealtimeProvider config={config} queryClient={queryClient}>{children}</RealtimeProvider>;
 }

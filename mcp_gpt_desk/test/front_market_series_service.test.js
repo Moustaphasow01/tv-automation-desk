@@ -9,6 +9,7 @@ describe("Front canonical market series", () => {
 
     assert.equal(result.availability, "KNOWN");
     assert.equal(result.seriesId, "market:MNQ:5");
+    assert.deepEqual(result.supportedInstruments, ["MES", "MNQ"]);
     assert.deepEqual(result.supportedGranularities, ["1", "5", "15"]);
     assert.equal(result.defaultGranularity, "5");
     assert.equal(result.bars.length, 2);
@@ -35,17 +36,19 @@ describe("Front canonical market series", () => {
     const persistence = {
       initialized: Promise.resolve(),
       pool: {
-        async query(_sql, values) {
-          queriedSymbols.push(values[0]);
+        async query(sql, values = []) {
+          if (values.length) queriedSymbols.push(values[0]);
+          if (sql.includes("DISTINCT symbol_code")) return { rows: [{ symbol_code: "MNQ1!" }, { symbol_code: "MES1!" }] };
           return { rows: [] };
         },
       },
     };
 
-    const result = await loadFrontMarketSeries(persistence, { instrument: "MNQ", timeframe: "5" });
+    const result = await loadFrontMarketSeries(persistence, { instrument: "MQ", timeframe: "5" });
 
     assert.deepEqual(queriedSymbols, ["MNQ1!", "MNQ1!"]);
     assert.equal(result.instrument, "MNQ", "the operator-facing instrument remains the normalized desk symbol");
+    assert.deepEqual(result.supportedInstruments, ["MES", "MNQ"]);
   });
 
   test("rejects unsupported timeframes and malformed cursors", async () => {
@@ -61,6 +64,7 @@ function fixturePersistence() {
     pool: {
       async query(sql) {
         if (sql.includes("DISTINCT timeframe")) return { rows: [{ timeframe: "1" }, { timeframe: "5" }, { timeframe: "15" }] };
+        if (sql.includes("DISTINCT symbol_code")) return { rows: [{ symbol_code: "MNQ1!" }, { symbol_code: "MES1!" }] };
         return { rows: [
           candle("2026-08-12T14:10:00.000Z", 20001, 20001),
           candle("2026-08-12T14:00:00.000Z", 20000, 20000.5),

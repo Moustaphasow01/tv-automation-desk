@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { liveTone, toLiveTradingModel } from "@/features/live-trading/mapper";
 import { liveHumanGateStatus } from "@/features/live-trading/LiveHumanGate";
+import { InstrumentChartPanel, StrategyInstancesPanel } from "@/features/live-trading/LiveTradingPanels";
 import type { LiveTradingView } from "@/domains/front-api/viewModels";
 import { liveTradingView } from "@/mocks/canonicalDataset";
 import type { ViewEnvelope } from "@/shared/contracts";
@@ -46,6 +50,47 @@ describe("Live Trading golden master", () => {
 
     expect(model.orderIntent).toBeNull();
     expect(liveHumanGateStatus(model)).toBe("CONNECTED_EMPTY");
+  });
+
+  it("keeps the active strategy panel compact while linking to the full deployment list", () => {
+    const envelope = withStrategyInstances(6);
+    const model = toLiveTradingModel(envelope);
+    const markup = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(StrategyInstancesPanel, { model }))
+    );
+
+    expect(markup).toContain("Voir toutes");
+    expect(markup).toContain("/strategies/deployments");
+    expect(markup).toContain("6 publiées");
+    expect(markup).toContain("4 instances affichées sur 6 instances publiées par le backend");
+    expect(markup).toContain("strategy-preview-04");
+    expect(markup).not.toContain("strategy-preview-05");
+    expect(markup).not.toContain("strategy-preview-06");
+  });
+
+  it("renders backend-published chart scope controls for MNQ/MES and timeframes", () => {
+    const envelope = structuredClone(liveTradingView) as ViewEnvelope<LiveTradingView>;
+    envelope.data.marketSeries = {
+      schemaVersion: "front_market_series_v1",
+      availability: "KNOWN",
+      source: "market_candles",
+      instrument: "MES",
+      timeframe: "5",
+      supportedInstruments: ["MNQ", "MES"],
+      supportedTimeframes: ["1", "5", "15"],
+      asOf: "2026-08-10T09:35:00.000Z",
+      points: [],
+    };
+    const model = toLiveTradingModel(envelope);
+    const markup = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(InstrumentChartPanel, { model }))
+    );
+
+    expect(markup).toContain("MNQ · MQ");
+    expect(markup).toContain("MES · MS");
+    expect(markup).toContain("M1");
+    expect(markup).toContain("M5");
+    expect(markup).toContain("aria-pressed=\"true\"");
   });
 });
 
@@ -93,5 +138,27 @@ function withOrderIntent(stale: boolean): ViewEnvelope<LiveTradingView> {
   envelope.meta = { ...envelope.meta, stale, availability: stale ? "STALE" : "AVAILABLE" };
   envelope.data.portfolioOrderIntents = [intent];
   envelope.data.canonicalRuntime.pendingOrderIntents = [intent];
+  return envelope;
+}
+
+function withStrategyInstances(count: number): ViewEnvelope<LiveTradingView> {
+  const envelope = structuredClone(liveTradingView) as ViewEnvelope<LiveTradingView>;
+  envelope.data.canonicalRuntime.activeStrategyInstances = Array.from({ length: count }, (_, index) => {
+    const position = index + 1;
+    const id = `strategy-preview-${String(position).padStart(2, "0")}`;
+    return {
+      strategyInstanceId: id,
+      strategyDefinitionId: `strategy-definition-${String(position).padStart(2, "0")}`,
+      strategyVersionId: `strategy-version-${String(position).padStart(2, "0")}`,
+      name: id,
+      executionMode: "SHADOW",
+      runtimeState: "RUNNING",
+      lastEvaluationAt: "2026-08-10T09:30:00.000Z",
+      nextEvaluationAt: "2026-08-10T09:45:00.000Z",
+      scheduler: { cadence: "M15" },
+      confidence: null,
+      confidenceSourceSignalId: null,
+    };
+  });
   return envelope;
 }

@@ -22,7 +22,7 @@ export function authSession({ actor = {}, nowIso } = {}) {
 function authPermissions(writeAllowed) {
   return [
     authPermission("front.read", "Lecture cockpit", "COMMAND", "ALLOW", "Lecture BFF autorisée.", false),
-    authPermission("front.command", "Commandes VNext", "COMMAND", writeAllowed ? "ALLOW" : "READ_ONLY", writeAllowed ? "Session opérateur active." : "Login opérateur/PIN requis.", !writeAllowed),
+    authPermission("front.command", "Commandes VNext", "COMMAND", writeAllowed ? "ALLOW" : "READ_ONLY", writeAllowed ? "Session opérateur active." : "Login opérateur requis.", !writeAllowed),
     authPermission("execution.paper", "Exécution PAPER", "EXECUTION", writeAllowed ? "ALLOW" : "READ_ONLY", writeAllowed ? "Commandes PAPER auditables." : "Session opérateur requise avant mutation.", !writeAllowed),
     authPermission("execution.live", "Exécution LIVE", "EXECUTION", "DENY", "LIVE verrouillé jusqu’au cutover explicite.", true),
   ];
@@ -48,7 +48,7 @@ function deniedOrReadOnlyPermission(permission) {
 function authPrincipal({ actor = {}, maskedEmail, writeAllowed, now }) {
   return {
     userId: actor.uid || (writeAllowed ? "desk-operator" : "anonymous-read-only"),
-    displayName: writeAllowed ? "Opérateur Desk" : "Lecture seule non authentifiée",
+    displayName: writeAllowed ? text(actor.displayName, "Opérateur Desk") : "Lecture seule non authentifiée",
     maskedEmail,
     roles: writeAllowed ? ["operator"] : [],
     timezone: "Europe/Paris",
@@ -71,8 +71,8 @@ function authRouteGuards(writeAllowed) {
   return [
     authRoute("/command-center", "front.read", "ALLOW", "Cockpit lisible sans matière sensible."),
     authRoute("/live", "front.read", "ALLOW", "Session live consultable."),
-    authRoute("/orders:command", "front.command", writeAllowed ? "ALLOW" : "READ_ONLY", writeAllowed ? "Session opérateur active." : "PIN opérateur requis."),
-    authRoute("/execution/providers:switch", "execution.paper", writeAllowed ? "ALLOW" : "READ_ONLY", writeAllowed ? "Mutation PAPER seulement." : "PIN opérateur requis."),
+    authRoute("/orders:command", "front.command", writeAllowed ? "ALLOW" : "READ_ONLY", writeAllowed ? "Session opérateur active." : "Login opérateur requis."),
+    authRoute("/execution/providers:switch", "execution.paper", writeAllowed ? "ALLOW" : "READ_ONLY", writeAllowed ? "Mutation PAPER seulement." : "Login opérateur requis."),
     authRoute("/admin", "execution.live", "DENY", "Administration LIVE verrouillée."),
   ];
 }
@@ -88,7 +88,7 @@ function authStepUp(writeAllowed, now) {
 function authStepUpMethod(writeAllowed, now) {
   return {
     methodId: "operator-pin",
-    label: "PIN opérateur local",
+    label: "Login opérateur local",
     state: writeAllowed ? "AVAILABLE" : "UNAVAILABLE",
     ...(writeAllowed ? { lastVerifiedAt: now } : {}),
   };

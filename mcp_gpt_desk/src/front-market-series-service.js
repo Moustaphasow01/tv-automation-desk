@@ -30,7 +30,7 @@ function marketScope(input) {
 async function queryMarketSeries(pool, scope) {
   const { instrument, timeframe, asOf, before, limit } = scope;
   const storageInstrument = canonicalStorageInstrument(instrument);
-  const [seriesResult, timeframeResult] = await Promise.all([
+  const [seriesResult, timeframeResult, instrumentResult] = await Promise.all([
     pool.query(`WITH selected AS MATERIALIZED (
         SELECT feed_id, timestamp_utc, trading_date
         FROM market_candles
@@ -70,8 +70,10 @@ async function queryMarketSeries(pool, scope) {
       ORDER BY scoped.timestamp_utc DESC`, [storageInstrument, timeframe, asOf, before, limit + 1]),
     pool.query(`SELECT DISTINCT timeframe FROM market_candles
       WHERE symbol_code = $1 AND is_closed = true ORDER BY timeframe`, [storageInstrument]),
+    pool.query(`SELECT DISTINCT symbol_code FROM market_candles
+      WHERE is_closed = true ORDER BY symbol_code`),
   ]);
-  return { series: seriesResult.rows, timeframes: timeframeResult.rows };
+  return { series: seriesResult.rows, timeframes: timeframeResult.rows, instruments: instrumentResult.rows };
 }
 
 function canonicalStorageInstrument(instrument) {
@@ -85,6 +87,7 @@ function marketSeriesResponse(scope, result) {
   const oldest = selected[0]?.timestamp || null;
   const latest = selected.at(-1)?.timestamp || null;
   const supportedGranularities = result.timeframes.map((row) => String(row.timeframe)).filter(Boolean);
+  const supportedInstruments = supportedDeskInstruments(result.instruments, instrument);
   return {
     schemaVersion: "front_market_series_v1",
     seriesId: `market:${instrument}:${timeframe}`,
@@ -93,6 +96,7 @@ function marketSeriesResponse(scope, result) {
     sourceClass: "CANONICAL_MARKET_DATA",
     instrument,
     timeframe,
+    supportedInstruments,
     timezone: "UTC",
     marketSession: "CME_GLOBEX",
     from: oldest,
@@ -171,6 +175,7 @@ function unavailable(reason) {
     sourceClass: "CANONICAL_MARKET_DATA",
     instrument: null,
     timeframe: null,
+    supportedInstruments: [],
     supportedTimeframes: [],
     supportedGranularities: [],
     defaultGranularity: null,
@@ -196,8 +201,20 @@ function unavailable(reason) {
 
 function normalizeInstrument(value) {
   const normalized = String(value || "").trim().toUpperCase();
+  const alias = ({ MQ: "MNQ", MS: "MES", MQM5: "MNQ", MSM5: "MES" })[normalized];
+  if (alias) return alias;
   if (!INSTRUMENT.test(normalized)) throw inputError("MARKET_SERIES_INSTRUMENT_INVALID", "Invalid market instrument.");
   return normalized;
+}
+
+function supportedDeskInstruments(rows, requestedInstrument) {
+  const symbols = rows.map((row) => deskInstrumentFromStorage(row.symbol_code)).filter(Boolean);
+  return [...new Set([requestedInstrument, ...symbols])].sort((left, right) => left.localeCompare(right));
+}
+
+function deskInstrumentFromStorage(value) {
+  const symbol = String(value || "").trim().toUpperCase();
+  return ({ "MNQ1!": "MNQ", "MES1!": "MES", "NQ1!": "NQ", "ES1!": "ES" })[symbol] || symbol;
 }
 
 function normalizeTimeframe(value) {

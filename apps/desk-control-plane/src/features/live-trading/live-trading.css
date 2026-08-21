@@ -200,12 +200,41 @@
 .lt-panel > header > svg { width: 9px; color: var(--lt-muted); }
 .lt-panel > header > div { display: flex; min-width: 0; margin-left: auto; color: var(--lt-muted); font-size: 12px; }
 .lt-panel > header a { color: #78a8d8; text-decoration: none; }
+.lt-panel-action-link {
+  display: inline-flex;
+  min-height: 21px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border: 1px solid var(--lt-border-soft);
+  border-radius: 4px;
+  background: rgba(45, 140, 255, .09);
+  color: #9bc6ee;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+.lt-panel-action-link:hover { border-color: var(--lt-focus); background: rgba(45, 140, 255, .16); color: var(--lt-text); }
+.lt-panel-action-link:focus-visible { outline: 2px solid var(--lt-focus); outline-offset: 1px; }
+.lt-panel-action-link span {
+  display: inline-grid;
+  min-width: 17px;
+  height: 16px;
+  place-items: center;
+  padding-inline: 4px;
+  border-radius: 999px;
+  background: rgba(120, 168, 216, .16);
+  color: #d9ecff;
+  font-size: 10px;
+}
 .lt-panel__body { min-width: 0; min-height: 0; overflow: hidden; }
 .lt-panel-expand { display: grid; width: 18px; height: 18px; flex: 0 0 auto; place-items: center; border: 0; background: transparent; color: var(--lt-muted); cursor: pointer; }
 .lt-panel-expand:hover { color: var(--lt-text); }
 .lt-panel-expand:focus-visible { outline: 2px solid var(--lt-focus); outline-offset: 1px; border-radius: 3px; }
 .lt-panel-expand svg { width: 11px; }
-.lt-panel-backdrop { position: fixed; inset: 0; z-index: 900; background: rgba(2,8,19,.72); backdrop-filter: blur(1px); animation: lt-fade-in 120ms ease-out; }
+.lt-panel-backdrop { position: fixed; inset: 0; z-index: 900; padding: 0; border: 0; background: rgba(2,8,19,.72); cursor: zoom-out; backdrop-filter: blur(1px); animation: lt-fade-in 120ms ease-out; }
+.lt-panel-backdrop:focus-visible { outline: 2px solid var(--lt-focus); outline-offset: -4px; }
 .lt-panel--expanded { position: fixed; z-index: 901; top: 50%; left: 50%; width: min(920px, calc(100vw - 56px)); height: min(720px, calc(100vh - 56px)); transform: translate(-50%, -50%); box-shadow: 0 30px 90px rgba(0,0,0,.65), 0 0 0 1px var(--lt-border-strong); animation: lt-panel-pop 140ms ease-out; }
 .lt-panel--expanded .lt-panel-expand svg { width: 12px; }
 @keyframes lt-fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -233,10 +262,26 @@
 .lt-panel--market .lt-panel__body { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .lt-panel--market footer { align-self: end; }
 .lt-panel--strategies .lt-panel__body, .lt-panel--macro .lt-panel__body { overflow-y: auto; }
-.lt-panel--chart .lt-panel__body { display: grid; grid-template-rows: 28px minmax(0,1fr) 26px; }
+.lt-panel--chart .lt-panel__body { display: grid; grid-template-rows: 32px minmax(0,1fr) 26px; }
 .lt-chart-toolbar, .lt-chart-footer { display: flex; gap: 9px; align-items: center; padding: 0 9px; border-bottom: 1px solid var(--lt-border-soft); color: var(--lt-muted); font-size: 12px; }
-.lt-chart-toolbar span:first-child { display: flex; gap: 4px; }
-.lt-chart-toolbar b { padding: 3px 5px; border: 1px solid var(--lt-border-soft); border-radius: 3px; color: var(--lt-secondary); font-weight: 600; }
+.lt-chart-toolbar { min-width: 0; overflow: hidden; }
+.lt-chart-toolbar > span { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-chart-selector { display: inline-flex; flex: 0 0 auto; gap: 4px; }
+.lt-chart-selector button {
+  min-height: 21px;
+  padding: 0 6px;
+  border: 1px solid var(--lt-border-soft);
+  border-radius: 4px;
+  background: rgba(7, 20, 32, .72);
+  color: var(--lt-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.lt-chart-selector button[aria-pressed="true"] { border-color: var(--lt-focus); background: rgba(20, 119, 242, .22); color: var(--lt-text); }
+.lt-chart-selector button:hover { border-color: #2d8cff; color: var(--lt-text); }
+.lt-chart-selector button:focus-visible { outline: 2px solid var(--lt-focus); outline-offset: 1px; }
 .lt-chart-frame { position: relative; min-height: 0; overflow: hidden; background: #04111e; }
 .lt-market-chart { width: 100%; height: 100%; min-height: 0; display: block; }
 .lt-market-chart__candles line { stroke-width: 1; vector-effect: non-scaling-stroke; }
