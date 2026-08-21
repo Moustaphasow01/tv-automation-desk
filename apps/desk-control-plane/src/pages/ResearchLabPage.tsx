@@ -1,18 +1,22 @@
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
-  FaDatabase,
-  FaExclamationTriangle,
+  FaCheckCircle,
+  FaClipboardList,
+  FaCoins,
+  FaFlask,
   FaMicrochip,
-  FaNetworkWired
+  FaPlay,
+  FaSearch,
+  FaTimesCircle,
+  FaUsers
 } from "react-icons/fa";
-import { DataTable } from "@/design-system/data";
 import { DeskButton, TrackedCommandReceipt } from "@/design-system/actions";
-import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import { Card, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { presentResearchDecision } from "@/design-system/labels";
-import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { useCapabilityCatalog, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
+import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { OperatorMenu } from "@/shell/OperatorMenu";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
 import type { ResearchLabView } from "@/domains/front-api/viewModels";
@@ -22,8 +26,11 @@ type ExperimentRow = ResearchLabView["experiments"][number];
 type ResultRow = ResearchLabView["results"][number];
 type AgentRow = ResearchLabView["agents"][number];
 
+const MISSIONS_PER_PAGE = 8;
+
 export function ResearchLabPage() {
   const { session } = useOperatorSession();
+  const realtime = useContext(RealtimeContext);
   const query = useFrontView("research-lab");
   const capabilityCatalog = useCapabilityCatalog();
   const repository = useFrontViewRepository();
@@ -31,8 +38,28 @@ export function ResearchLabPage() {
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null);
+  const [missionSearch, setMissionSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState<"ALL" | ExperimentRow["stage"]>("ALL");
+  const [missionPage, setMissionPage] = useState(1);
 
   const data = query.data?.data ?? null;
+
+  const filteredMissions = useMemo(() => {
+    if (!data) return [];
+    const needle = missionSearch.trim().toLocaleLowerCase("fr");
+    return data.experiments.filter((row) => {
+      if (stageFilter !== "ALL" && row.stage !== stageFilter) return false;
+      if (!needle) return true;
+      return `${row.title} ${row.missionId}`.toLocaleLowerCase("fr").includes(needle);
+    });
+  }, [data, missionSearch, stageFilter]);
+
+  const totalMissionPages = Math.max(1, Math.ceil(filteredMissions.length / MISSIONS_PER_PAGE));
+  const pagedMissions = useMemo(() => {
+    const page = Math.min(missionPage, totalMissionPages);
+    return filteredMissions.slice((page - 1) * MISSIONS_PER_PAGE, page * MISSIONS_PER_PAGE);
+  }, [filteredMissions, missionPage, totalMissionPages]);
+
   const selectedExperiment = useMemo(
     () => (data ? data.experiments.find((item) => item.experimentId === selectedMissionId) ?? data.experiments[0] ?? null : null),
     [data, selectedMissionId]
@@ -60,9 +87,9 @@ export function ResearchLabPage() {
     );
   }
 
-  const { meta } = query.data;
   const bootstrapAction = data.commandActions.find((action) => action.commandType === "research.bootstrap_demo_paper");
   const bootstrapCapability = capabilityCatalog.data?.actions.find((action) => action.commandType === "research.bootstrap_demo_paper");
+  const activeAgents = data.agents.filter((agent) => agent.status === "ACTIVE").length;
 
   const bootstrapDemoPaperResearch = async () => {
     if (!bootstrapAction || bootstrapAction.permission !== "ALLOWED" || bootstrapCapability?.allowed !== true) {
@@ -92,14 +119,26 @@ export function ResearchLabPage() {
     <div className="rl-page" data-testid="research-lab-golden-master">
       <header className="rl-header">
         <div className="rl-header__title">
-          <h1>Research Lab</h1>
-          <p>Pipeline autonome : hypothèses, expériences, validation quantitative, compute</p>
+          <h1>Laboratoire de recherche</h1>
+          <p>Découverte et validation automatisée de stratégies</p>
         </div>
-        <div className="rl-header__divider" aria-hidden="true" />
-        <DeskButton variant="primary" disabled={submitting || bootstrapAction?.permission !== "ALLOWED" || bootstrapCapability?.allowed !== true} onClick={bootstrapDemoPaperResearch}>
-          {submitting ? "Amorçage..." : bootstrapAction?.label ?? "Commande indisponible"}
-        </DeskButton>
-        <Link to="/research/data">Explorer les données</Link>
+        <div className="rl-header__engine">
+          <small>Moteur de recherche</small>
+          <span className={`rl-header__engine-pill rl-header__engine-pill--${data.summary.runningExperiments > 0 ? "on" : "off"}`}>
+            <span aria-hidden="true" />
+            {data.summary.runningExperiments > 0 ? "En cours" : "Inactif"}
+          </span>
+        </div>
+        <div className="rl-header__clock">
+          <strong>{formatClock(realtime?.now)}</strong>
+          <small>{formatClockDate(realtime?.now)}</small>
+        </div>
+        <div className="rl-header__actions">
+          <DeskButton variant="primary" disabled={submitting || bootstrapAction?.permission !== "ALLOWED" || bootstrapCapability?.allowed !== true} onClick={bootstrapDemoPaperResearch}>
+            {submitting ? "Amorçage..." : bootstrapAction?.label ?? "Commande indisponible"}
+          </DeskButton>
+          <Link to="/research/data">Explorer les données</Link>
+        </div>
         <OperatorMenu variant="command-center" displayName={session?.principal.displayName ?? "Session non authentifiée"} roleLabel={session?.principal.roles[0] ?? "Lecture seule"} />
       </header>
 
@@ -115,207 +154,221 @@ export function ResearchLabPage() {
         )}
 
         <section className="rl-kpi-strip" aria-label="Indicateurs Laboratoire de recherche">
-          <article><small>Expériences en cours</small><strong>{data.summary.runningExperiments}</strong></article>
-          <article><small>Terminées</small><strong>{data.summary.completedExperiments}</strong></article>
-          <article><small>Stratégies promues</small><strong>{data.summary.promotedStrategies}</strong></article>
-          <article><small>Rejetées</small><strong>{data.summary.rejectedStrategies}</strong></article>
-          <article><small>Agents recherche</small><strong>{data.summary.activeResearchAgents}</strong></article>
-          <article><small>Budget compute</small><strong>{formatPercent(data.summary.computeBudgetUsedPct)}</strong></article>
-          <article><small>Latence projection</small><strong>{meta.latencyMs ?? 0} ms</strong></article>
+          <KpiCard icon={<FaClipboardList />} tone="var(--rl-cyan)" label="Missions recherche" value={String(data.experiments.length)} />
+          <KpiCard icon={<FaUsers />} tone="var(--rl-blue)" label="Workers actifs" value={`${activeAgents} / ${data.agents.length}`} detail="Utilisation" />
+          <KpiCard icon={<FaPlay />} tone="var(--rl-purple)" label="Runs compute" value={String(data.computeQueue.length)} />
+          <KpiCard icon={<FaFlask />} tone="var(--rl-cyan)" label="Candidats" value={String(data.results.length)} />
+          <KpiCard icon={<FaCheckCircle />} tone="var(--rl-green)" label="Gates passées" value={String(data.summary.promotedStrategies)} />
+          <KpiCard icon={<FaTimesCircle />} tone="var(--rl-red)" label="Rejetées" value={String(data.summary.rejectedStrategies)} />
+          <KpiCard icon={<FaMicrochip />} tone="var(--rl-amber)" label="Compute utilisé" value={formatPercent(data.summary.computeBudgetUsedPct)} detail="CPU / RAM" />
+          <KpiCard icon={<FaCoins />} tone="var(--rl-blue)" label="Budget IA (jour)" value={formatPercent(data.summary.tokenBudgetUsedPct)} detail="Tokens utilisés" />
         </section>
 
-        <section className="rl-panel" aria-label="Pipeline de recherche">
-          <header><h2>Pipeline de recherche</h2><small>Hypothèse → Paper Ready</small></header>
-          <div className="rl-panel__body">
-            <div className="rl-pipeline-track">
-              {data.pipeline.map((stage) => (
-                <div key={stage.stageId} className="rl-pipeline-stage">
-                  <StatusBadge tone={stateTone(stage.state)}>{stage.state}</StatusBadge>
-                  <strong>{stage.label.replace("_", " ")}</strong>
-                  <small>{stage.activeExperiments} actifs · {stage.promoted} promus · {stage.rejected} rejetés</small>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <div className="rl-grid">
-          <div className="rl-column">
-            <section className="rl-panel" aria-label="File de missions recherche">
-              <header><h2>File de missions recherche</h2><small>{data.experiments.length}</small></header>
-              <div className="rl-panel__body" style={{ padding: 0 }}>
-                <div className="rl-table-scroll">
-                  <table className="rl-table">
-                    <thead>
-                      <tr><th>Mission</th><th>Agent</th><th>Étape</th><th>Progression</th><th>Score</th><th>ETA</th><th>État</th></tr>
-                    </thead>
-                    <tbody>
-                      {data.experiments.map((row) => (
-                        <tr key={row.experimentId} aria-selected={row.experimentId === selectedExperiment?.experimentId} onClick={() => setSelectedMissionId(row.experimentId)}>
-                          <td><strong>{row.title}</strong><br /><small style={{ color: "var(--rl-muted)" }}>{row.missionId}</small></td>
-                          <td>{row.ownerAgent}</td>
-                          <td><StatusBadge tone={stageTone(row.stage)}>{row.stage}</StatusBadge></td>
-                          <td><ProgressBar value={row.progressPct} tone="accent" /></td>
-                          <td>{row.score}</td>
-                          <td>{row.eta}</td>
-                          <td><StatusBadge tone={experimentTone(row.status)}>{row.status}</StatusBadge></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+        <div className="rl-row1">
+          <section className="rl-panel" aria-label="File de missions recherche">
+            <header>
+              <h2>File de missions</h2>
+              <small>{filteredMissions.length} missions</small>
+              <div className="rl-panel__search">
+                <FaSearch aria-hidden="true" color="var(--rl-muted)" />
+                <input
+                  type="search"
+                  placeholder="Rechercher une mission..."
+                  value={missionSearch}
+                  onChange={(event) => { setMissionSearch(event.target.value); setMissionPage(1); }}
+                />
               </div>
-            </section>
-
-            <section className="rl-panel" aria-label="Mission sélectionnée">
-              <header><h2>Mission sélectionnée</h2>{selectedExperiment ? <Link to={`/research/experiments/${selectedExperiment.experimentId}`}>Ouvrir le détail</Link> : null}</header>
-              <div className="rl-panel__body">
-                {selectedExperiment ? (
-                  <div className="rl-mission-detail">
-                    <strong>{selectedExperiment.title}</strong>
-                    <span>{selectedExperiment.hypothesis}</span>
-                    <div className="rl-mission-detail__meta">
-                      <div><small>Agent</small><strong>{selectedExperiment.ownerAgent}</strong></div>
-                      <div><small>Étape</small><strong>{selectedExperiment.stage}</strong></div>
-                      <div><small>Tâche en cours</small><strong>{selectedExperiment.currentTask}</strong></div>
-                      <div><small>Score</small><strong>{selectedExperiment.score}</strong></div>
-                      <div><small>Budget tokens</small><strong>{formatPercent(selectedExperiment.tokenBudgetPct)}</strong></div>
-                      <div><small>Budget compute</small><strong>{formatPercent(selectedExperiment.computeBudgetPct)}</strong></div>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="rl-empty">Aucune mission sélectionnée.</p>
-                )}
-              </div>
-            </section>
-          </div>
-
-          <div className="rl-column">
-            <section className="rl-panel" aria-label="Agents actifs">
-              <header><h2>Agents actifs</h2><small>{data.agents.length}</small></header>
-              <div className="rl-panel__body">
-                {data.agents.map((agent) => <WorkerRow key={agent.taskId || agent.agentId} agent={agent} />)}
-              </div>
-            </section>
-
-            <section className="rl-panel" aria-label="Classement des candidats">
-              <header><h2>Classement des candidats</h2><small>Top 10</small></header>
-              <div className="rl-panel__body" style={{ padding: 0 }}>
-                <div className="rl-table-scroll">
-                  <table className="rl-table">
-                    <thead>
-                      <tr><th>Candidat</th><th>OOS R</th><th>Robust.</th><th>Score</th><th>Décision</th></tr>
-                    </thead>
-                    <tbody>
-                      {topCandidates.map((row) => (
-                        <tr key={row.resultId} onClick={() => setSelectedMissionId(row.experimentId)}>
-                          <td><Link className="research-table-link" to={`/strategies/${row.strategyId}`}><strong>{row.title}</strong></Link></td>
-                          <td className={row.oosR >= 0 ? "text-success" : "text-danger"}>{formatSignedR(row.oosR)}</td>
-                          <td>{row.robustnessScore}</td>
-                          <td><strong>{row.compositeScore}</strong></td>
-                          <td><StatusBadge tone={presentResearchDecision(row.decision).tone}>{presentResearchDecision(row.decision).label}</StatusBadge></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </section>
-
-            <section className="rl-panel" aria-label="Flux d'activité recherche">
-              <header><h2>Flux d'activité recherche</h2></header>
-              <div className="rl-panel__body">
-                {data.activityStream.length ? (
-                  <div className="rl-activity-stream">
-                    {data.activityStream.map((event) => (
-                      <div key={event.eventId} className="rl-activity-row">
-                        <time>{formatTime(event.at)}</time>
-                        <div>
-                          <strong>{event.eventType}</strong>
-                          <small>{event.missionKey} · {event.detail}</small>
-                        </div>
-                      </div>
+              <select className="rl-panel__select" value={stageFilter} onChange={(event) => { setStageFilter(event.target.value as typeof stageFilter); setMissionPage(1); }}>
+                <option value="ALL">Toutes étapes</option>
+                {data.pipeline.map((stage) => <option key={stage.stageId} value={stage.stageId}>{stage.label}</option>)}
+              </select>
+            </header>
+            <div className="rl-panel__body" style={{ padding: 0 }}>
+              <div className="rl-table-scroll">
+                <table className="rl-table">
+                  <thead>
+                    <tr><th>Mission</th><th>Agent</th><th>Étape</th><th>Progression</th><th>Score</th><th>ETA</th><th>État</th></tr>
+                  </thead>
+                  <tbody>
+                    {pagedMissions.map((row, index) => (
+                      <tr key={`${row.experimentId}_${index}`} aria-selected={row.experimentId === selectedExperiment?.experimentId} onClick={() => setSelectedMissionId(row.experimentId)}>
+                        <td><strong>{row.title}</strong><span className="rl-mission-id">{row.missionId}</span></td>
+                        <td>{row.ownerAgent}</td>
+                        <td><StatusBadge tone={stageTone(row.stage)}>{row.stage}</StatusBadge></td>
+                        <td>
+                          <div className="rl-progress-cell">
+                            <ProgressBar value={row.progressPct} tone="accent" />
+                            <small>{row.progressPct}%</small>
+                          </div>
+                        </td>
+                        <td>{row.score}</td>
+                        <td>{row.eta}</td>
+                        <td><StatusBadge tone={experimentTone(row.status)}>{row.status}</StatusBadge></td>
+                      </tr>
                     ))}
+                    {!pagedMissions.length ? (
+                      <tr><td colSpan={7}><p className="rl-empty">Aucune mission ne correspond à ce filtre.</p></td></tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+              {totalMissionPages > 1 ? (
+                <div className="rl-pagination">
+                  <span>Page {Math.min(missionPage, totalMissionPages)} / {totalMissionPages}</span>
+                  <div className="rl-pagination__pages">
+                    <button type="button" disabled={missionPage <= 1} onClick={() => setMissionPage((page) => Math.max(1, page - 1))}>‹</button>
+                    {Array.from({ length: totalMissionPages }, (_, index) => index + 1).map((page) => (
+                      <button key={page} type="button" aria-current={page === missionPage} onClick={() => setMissionPage(page)}>{page}</button>
+                    ))}
+                    <button type="button" disabled={missionPage >= totalMissionPages} onClick={() => setMissionPage((page) => Math.min(totalMissionPages, page + 1))}>›</button>
                   </div>
-                ) : (
-                  <p className="rl-empty">Aucun événement agent publié.</p>
-                )}
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <div className="rl-column">
+            <section className="rl-panel" aria-label="Pipeline de recherche">
+              <header><h2>Pipeline de recherche</h2><small>Idée → Paper Ready</small></header>
+              <div className="rl-panel__body">
+                <div className="rl-pipeline-flow">
+                  {data.pipeline.map((stage, index) => (
+                    <div key={stage.stageId} style={{ display: "flex", alignItems: "flex-start" }}>
+                      <div className="rl-pipe-node">
+                        <div className="rl-pipe-node__ring" style={{ "--ring-color": stageRingColor(stage.state) } as CSSProperties}>
+                          {stage.state === "DONE" ? <FaCheckCircle /> : stage.activeExperiments}
+                        </div>
+                        <strong>{stage.activeExperiments}</strong>
+                        <small title={stage.label}>{stage.label.replace(/_/g, " ")}</small>
+                      </div>
+                      {index < data.pipeline.length - 1 ? <span className="rl-pipe-arrow">→</span> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="rl-panel" aria-label="Workers actifs">
+              <header><h2>Workers actifs</h2><small>{activeAgents} / {data.agents.length}</small><Link to="/research/agents">Tous les workers</Link></header>
+              <div className="rl-panel__body rl-worker-list">
+                {data.agents.map((agent, index) => <WorkerRow key={`${agent.taskId || agent.agentId}_${index}`} agent={agent} />)}
               </div>
             </section>
           </div>
         </div>
 
-        <section className="operator-grid operator-grid--bottom" aria-label="Coverage, résultats, compute et incidents">
-          <Card title="Datasets, features & coverage" actions={<InlineAction>Data Foundation</InlineAction>} density="compact">
-            <div className="research-coverage-list">
-              {data.coverage.map((coverage) => (
-                <article key={coverage.coverageId}>
-                  <span><FaDatabase /></span>
-                  <div><strong>{coverage.label}</strong><small>{coverage.detail}</small></div>
-                  <b>{formatPercent(coverage.coveragePct)}</b>
-                  <StatusBadge tone={qualityTone(coverage.quality)}>{coverage.quality}</StatusBadge>
-                  <ProgressBar value={coverage.coveragePct} tone={coverage.quality === "GAP" ? "danger" : coverage.quality === "WATCH" ? "warning" : "success"} />
-                </article>
-              ))}
+        <div className="rl-row2">
+          <section className="rl-panel" aria-label="Classement des candidats">
+            <header><h2>Classement candidats</h2><small>Top 10</small></header>
+            <div className="rl-panel__body" style={{ padding: 0 }}>
+              <div className="rl-table-scroll">
+                <table className="rl-table">
+                  <thead>
+                    <tr><th>#</th><th>Candidat</th><th>OOS R</th><th>Robust.</th><th>Score</th><th>Décision</th></tr>
+                  </thead>
+                  <tbody>
+                    {topCandidates.map((row, index) => (
+                      <tr key={`${row.resultId}_${index}`} onClick={() => setSelectedMissionId(row.experimentId)}>
+                        <td><span className="rl-rank-index">{index + 1}</span></td>
+                        <td><Link className="research-table-link" to={`/strategies/${row.strategyId}`}><strong>{row.title}</strong></Link></td>
+                        <td className={row.oosR >= 0 ? "text-success" : "text-danger"}>{formatSignedR(row.oosR)}</td>
+                        <td>{row.robustnessScore}</td>
+                        <td><strong>{row.compositeScore}</strong></td>
+                        <td><StatusBadge tone={presentResearchDecision(row.decision).tone}>{presentResearchDecision(row.decision).label}</StatusBadge></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="research-dataset-strip">
-              {data.datasets.map((dataset) => (
-                <Link key={dataset.datasetId} to="/research/data">
-                  <strong>{dataset.label}</strong>
-                  <small>{dataset.coverage} · {dataset.pointInTime ? "point-in-time" : "non PIT"}</small>
-                </Link>
-              ))}
+            <div className="rl-panel__body" style={{ paddingTop: 0 }}>
+              <Link to="/research/candidates">Voir tous les candidats →</Link>
             </div>
-          </Card>
+          </section>
 
-          <Card title="Résultats récents & knowledge graph" actions={<InlineAction>Comparer</InlineAction>} density="compact">
-            <DataTable rows={data.results} rowKey={(row) => row.resultId} columns={resultColumns} />
-            <div className="research-graph-summary">
-              <MetricBox label="Lien le plus fort" value={data.knowledgeGraph.strongestLink} />
-              <MetricBox label="Novelty score" value={`${data.knowledgeGraph.noveltyScore}/100`} />
+          <section className="rl-panel" aria-label="Mission sélectionnée">
+            <header><h2>Mission sélectionnée</h2>{selectedExperiment ? <Link to={`/research/experiments/${selectedExperiment.experimentId}`}>Voir le détail</Link> : null}</header>
+            <div className="rl-panel__body">
+              {selectedExperiment ? (
+                <div className="rl-mission-detail">
+                  <div>
+                    <strong>{selectedExperiment.title}</strong>
+                    <p className="rl-mission-detail__hyp">{selectedExperiment.hypothesis}</p>
+                  </div>
+                  <div className="rl-mission-box">
+                    <small>Résumé mission</small>
+                    <div className="rl-mission-box__grid">
+                      <div><small>Agent</small><strong>{selectedExperiment.ownerAgent}</strong></div>
+                      <div><small>Étape</small><strong>{selectedExperiment.stage}</strong></div>
+                      <div><small>Tâche en cours</small><strong>{selectedExperiment.currentTask}</strong></div>
+                      <div><small>Score</small><strong>{selectedExperiment.score}</strong></div>
+                    </div>
+                  </div>
+                  <div className="rl-mission-box">
+                    <small>Progression</small>
+                    <ProgressBar value={selectedExperiment.progressPct} tone="accent" />
+                    <div className="rl-mission-box__grid">
+                      <div><small>Avancement</small><strong>{selectedExperiment.progressPct}%</strong></div>
+                      <div><small>Budget tokens</small><strong>{formatPercent(selectedExperiment.tokenBudgetPct)}</strong></div>
+                      <div><small>Budget compute</small><strong>{formatPercent(selectedExperiment.computeBudgetPct)}</strong></div>
+                      <div><small>ETA</small><strong>{selectedExperiment.eta}</strong></div>
+                    </div>
+                  </div>
+                  <div className="rl-mission-box rl-mission-box--next">
+                    <span className="rl-mission-box--next__play"><FaPlay /></span>
+                    <div>
+                      <small>Prochaine action automatisée</small>
+                      <strong>{selectedExperiment.expectedEvent}</strong>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="rl-empty">Aucune mission sélectionnée.</p>
+              )}
             </div>
-            <div className="research-cluster-list">
-              {data.knowledgeGraph.clusters.map((cluster) => (
-                <article key={cluster.clusterId}>
-                  <FaNetworkWired />
-                  <div><strong>{cluster.label}</strong><small>{cluster.experiments} expériences · similarité {formatPercent(cluster.similarityPct)}</small></div>
-                  <StatusBadge tone={cluster.signal === "EDGE" ? "success" : cluster.signal === "DUPLICATE_RISK" ? "warning" : "accent"}>
-                    {cluster.signal}
-                  </StatusBadge>
-                </article>
-              ))}
-            </div>
-          </Card>
+          </section>
 
-          <Card title="Compute queue, scheduler & incidents" actions={<InlineAction>Compute Lab</InlineAction>} density="compact">
-            <div className="research-compute-list">
-              {data.computeQueue.map((job) => (
-                <Link key={job.jobId} to="/research/compute">
-                  <span><FaMicrochip /></span>
-                  <div><strong>{job.label}</strong><small>{job.worker} · {job.eta} · ${job.costUsd.toFixed(2)}</small></div>
-                  <StatusBadge tone={job.status === "DONE" ? "success" : job.status === "FAILED" ? "danger" : job.status === "RUNNING" ? "accent" : "warning"}>
-                    {job.status}
-                  </StatusBadge>
-                  <ProgressBar value={job.progressPct} tone={job.status === "FAILED" ? "danger" : "accent"} />
-                </Link>
-              ))}
+          <section className="rl-panel" aria-label="Flux d'activité recherche">
+            <header><h2>Activité recherche</h2><span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, color: "var(--rl-green)", fontSize: 11 }}><FaCircleDot />Live</span></header>
+            <div className="rl-panel__body">
+              {data.activityStream.length ? (
+                <div className="rl-activity-stream">
+                  {data.activityStream.map((event) => (
+                    <div key={event.eventId} className="rl-activity-row">
+                      <time>{formatTime(event.at)}</time>
+                      <div>
+                        <strong style={{ color: activityTone(event.eventType) }}>{event.eventType}</strong>
+                        <small>{event.missionKey} · {event.detail}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rl-empty">Aucun événement agent publié.</p>
+              )}
             </div>
-            <div className="research-incidents">
-              {data.incidents.map((incident) => (
-                <article key={incident.incidentId}>
-                  <FaExclamationTriangle />
-                  <div><strong>{incident.title}</strong><small>{incident.detail}</small></div>
-                  <StatusBadge tone={incident.severity === "HIGH" ? "danger" : incident.severity === "MEDIUM" ? "warning" : "accent"}>
-                    {incident.severity}
-                  </StatusBadge>
-                </article>
-              ))}
-            </div>
-          </Card>
-        </section>
+          </section>
+        </div>
       </div>
     </div>
   );
+}
+
+function KpiCard({ icon, tone, label, value, detail }: { icon: ReactNode; tone: string; label: string; value: string; detail?: string }) {
+  return (
+    <article className="rl-kpi-card">
+      <span className="rl-kpi-card__icon" style={{ color: tone, background: "rgba(255,255,255,.06)" }}>{icon}</span>
+      <div className="rl-kpi-card__body">
+        <small>{label}</small>
+        <strong>{value}</strong>
+        {detail ? <span>{detail}</span> : null}
+      </div>
+    </article>
+  );
+}
+
+function FaCircleDot() {
+  return <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />;
 }
 
 function WorkerRow({ agent }: { agent: AgentRow }) {
@@ -325,26 +378,9 @@ function WorkerRow({ agent }: { agent: AgentRow }) {
       <span className="rl-worker-dot" aria-hidden="true" />
       <div>
         <strong>{agent.name}</strong>
-        <small>{agent.task}</small>
+        <small>{agent.role} · {agent.model} · {agent.task}</small>
       </div>
       <StatusBadge tone={agent.status === "ACTIVE" ? "success" : agent.status === "BLOCKED" ? "danger" : "warning"}>{agent.status}</StatusBadge>
-    </Link>
-  );
-}
-
-const resultColumns = [
-  { key: "strategy", header: "Stratégie", render: (row: ResultRow) => <ResultCell row={row} /> },
-  { key: "decision", header: "Décision", render: (row: ResultRow) => <StatusBadge tone={presentResearchDecision(row.decision).tone}>{presentResearchDecision(row.decision).label}</StatusBadge> },
-  { key: "oos", header: "OOS R", align: "right" as const, render: (row: ResultRow) => <span className={row.oosR >= 0 ? "text-success" : "text-danger"}>{formatSignedR(row.oosR)}</span> },
-  { key: "sharpe", header: "Sharpe", align: "right" as const, render: (row: ResultRow) => row.sharpe.toFixed(2) },
-  { key: "robust", header: "Robust.", align: "right" as const, render: (row: ResultRow) => `${row.robustnessScore}` }
-] as const;
-
-function ResultCell({ row }: { row: ResultRow }) {
-  return (
-    <Link className="research-table-link" to={`/strategies/${row.strategyId}`}>
-      <strong>{row.title}</strong>
-      <small>{row.experimentId}</small>
     </Link>
   );
 }
@@ -354,18 +390,11 @@ function ResearchLabLoading() {
     <div className="rl-page">
       <div className="rl-workspace">
         <section className="rl-kpi-strip">
-          {Array.from({ length: 7 }).map((_, index) => <Card key={index} state="loading" density="compact"><div className="skeleton-line" /></Card>)}
+          {Array.from({ length: 8 }).map((_, index) => <Card key={index} state="loading" density="compact"><div className="skeleton-line" /></Card>)}
         </section>
       </div>
     </div>
   );
-}
-
-function stateTone(state: ResearchLabView["pipeline"][number]["state"]) {
-  if (state === "DONE") return "success" as const;
-  if (state === "RUNNING") return "accent" as const;
-  if (state === "BLOCKED") return "danger" as const;
-  return "warning" as const;
 }
 
 function stageTone(stage: ExperimentRow["stage"]) {
@@ -374,17 +403,26 @@ function stageTone(stage: ExperimentRow["stage"]) {
   return "accent" as const;
 }
 
+function stageRingColor(state: ResearchLabView["pipeline"][number]["state"]) {
+  if (state === "DONE") return "var(--rl-green)";
+  if (state === "RUNNING") return "var(--rl-blue)";
+  if (state === "BLOCKED") return "var(--rl-red)";
+  return "var(--rl-amber)";
+}
+
+function activityTone(eventType: string) {
+  const upper = eventType.toUpperCase();
+  if (upper.includes("FAIL") || upper.includes("REJECT")) return "var(--rl-red)";
+  if (upper.includes("PASS") || upper.includes("SUCCESS") || upper.includes("COMPLET") || upper.includes("CREATED")) return "var(--rl-green)";
+  if (upper.includes("START") || upper.includes("CLAIM") || upper.includes("GENERATED")) return "var(--rl-blue)";
+  return "var(--rl-secondary)";
+}
+
 function experimentTone(status: ExperimentRow["status"]) {
   if (status === "PROMOTED" || status === "PASSED") return "success" as const;
   if (status === "FAILED" || status === "REJECTED") return "danger" as const;
   if (status === "WAITING") return "warning" as const;
   return "accent" as const;
-}
-
-function qualityTone(quality: ResearchLabView["coverage"][number]["quality"]) {
-  if (quality === "OK") return "success" as const;
-  if (quality === "GAP") return "danger" as const;
-  return "warning" as const;
 }
 
 function formatPercent(value: number) {
@@ -399,4 +437,14 @@ function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function formatClock(value: Date | undefined) {
+  if (!value) return "—:—:—";
+  return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(value);
+}
+
+function formatClockDate(value: Date | undefined) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "2-digit", month: "short" }).format(value);
 }
