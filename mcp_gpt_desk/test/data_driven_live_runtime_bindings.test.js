@@ -139,9 +139,10 @@ test("data-driven live runtime bindings anchor live levels on the previous close
   assert.equal(result.ok, true);
   assert.equal(result.anchor.anchor_cutoff_utc, "2026-08-14T07:15:00.000Z");
   const setup = result.runtime_bindings.setups[0];
-  assert.equal(setup.valid_from_paris, "2026-08-14T09:15:00.000+02:00");
-  assert.equal(setup.expires_at_paris, "2026-08-14T09:20:00.000+02:00");
+  assert.equal(setup.valid_from_paris, "2026-08-14T09:20:00.000+02:00");
+  assert.equal(setup.expires_at_paris, "2026-08-14T09:50:00.000+02:00");
   assert.equal(setup.metadata.anti_lookahead, "ANCHOR_PREVIOUS_CLOSED_CUTOFF");
+  assert.equal(setup.metadata.validity_policy, "PUBLICATION_CUTOFF_PLUS_30M");
   assert.equal(result.runtime_bindings.metadata.rows_at_anchor, 1);
   assert.equal(result.runtime_bindings.metadata.rows_at_evaluation, 2);
   assert.ok(setup.break_level < 200, "latest 09:20 spike must not repaint the 09:15 live anchor");
@@ -173,7 +174,8 @@ test("data-driven live runtime bindings reject stale previous evaluation anchors
   assert.equal(result.ok, true);
   assert.equal(result.anchor.source, "previous_closed_row");
   assert.equal(result.anchor.anchor_cutoff_utc, "2026-08-14T07:15:00.000Z");
-  assert.equal(result.runtime_bindings.setups[0].valid_from_paris, "2026-08-14T09:15:00.000+02:00");
+  assert.equal(result.runtime_bindings.setups[0].valid_from_paris, "2026-08-14T09:20:00.000+02:00");
+  assert.equal(result.runtime_bindings.setups[0].expires_at_paris, "2026-08-14T09:50:00.000+02:00");
 });
 
 function dslSource() {

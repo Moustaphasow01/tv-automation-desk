@@ -10,6 +10,7 @@ import {
 } from "./data-driven-strategy-family-catalog.js";
 
 export const DATA_DRIVEN_LIVE_RUNTIME_BINDINGS_VERSION = "data_driven_live_runtime_bindings_v1";
+const STRATEGY_SETUP_TTL_MS = 30 * 60_000;
 
 export function buildDataDrivenLiveRuntimeBindings({
   version = {},
@@ -110,6 +111,10 @@ function dataDrivenDescriptor(version = {}, dsl = {}) {
 function dataDrivenSetup({ day, dayIndex, tradingDays, familySpec, parameters, familyVariantIndex, instrument, instanceId, anchorCutoffUtc, evaluationCutoffUtc }) {
   const anchor = anchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex });
   if (!anchor) return null;
+  const publicationCutoffUtc = isoOrNull(evaluationCutoffUtc) || isoOrNull(anchorCutoffUtc) || isoOrNull(day.last_time);
+  const expiresAtUtc = publicationCutoffUtc
+    ? new Date(Date.parse(publicationCutoffUtc) + STRATEGY_SETUP_TTL_MS).toISOString()
+    : null;
   const level = roundPrice(anchor.level + parameters.break_offset_points);
   const retest = roundPrice(anchor.retest ?? level);
   const direction = familySpec.direction;
@@ -133,8 +138,8 @@ function dataDrivenSetup({ day, dayIndex, tradingDays, familySpec, parameters, f
     direction,
     rank: 1,
     trading_date: day.trading_date,
-    valid_from_paris: toParisIso(Date.parse(anchorCutoffUtc || day.last_time)),
-    expires_at_paris: toParisIso(Date.parse(evaluationCutoffUtc || day.last_time)),
+    valid_from_paris: toParisIso(Date.parse(publicationCutoffUtc || day.last_time)),
+    expires_at_paris: toParisIso(Date.parse(expiresAtUtc || publicationCutoffUtc || day.last_time)),
     break_level: level,
     retest_level: retest,
     entry_zone: entry,
@@ -153,6 +158,7 @@ function dataDrivenSetup({ day, dayIndex, tradingDays, familySpec, parameters, f
       anchor_source: anchor.source,
       anchor_cutoff_utc: anchorCutoffUtc || null,
       evaluation_cutoff_utc: evaluationCutoffUtc || null,
+      validity_policy: "PUBLICATION_CUTOFF_PLUS_30M",
       anti_lookahead: "ANCHOR_PREVIOUS_CLOSED_CUTOFF",
     },
   };
