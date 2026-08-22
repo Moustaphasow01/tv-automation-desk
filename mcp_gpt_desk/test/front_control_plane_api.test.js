@@ -1489,6 +1489,50 @@ test("front control plane exposes the persisted command lifecycle by command id"
   );
 });
 
+test("front control plane risk view maps authoritative risk-engine limits into the RiskView contract", async () => {
+  const store = frontControlPlaneStore({
+    execution: {
+      portfolioOrderIntents: [{
+        portfolio_order_intent_id: "portfolio_order_intent_risk_1",
+        target_account_id: "Sim101",
+        target_instrument: "MNQ",
+        quantity: 1,
+        status: "READY",
+        risk_decisions: [{
+          risk_decision_id: "risk-decision-1",
+          decision: "APPROVED",
+          status: "PASS",
+          limits: [
+            { type: "PORTFOLIO_ABS_SIZE", unit: "CONTRACTS", scope: "portfolio", value: 20, breached: false, limit_id: "PORTFOLIO_ABS_SIZE:portfolio", severity: "INFO", remaining: 20, current_utilization: 0, resulting_utilization: 0.05 },
+            { type: "INSTRUMENT_ABS_SIZE", unit: "CONTRACTS", scope: "MNQ", value: 10, breached: true, limit_id: "INSTRUMENT_ABS_SIZE:MNQ", severity: "INFO", remaining: 0, current_utilization: 1, resulting_utilization: 1 },
+          ],
+        }],
+      }],
+    },
+  });
+
+  const envelope = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/risk", method: "GET", query: {} });
+  const { limits } = envelope.data;
+  assert.equal(limits.length, 2);
+
+  const portfolioLimit = limits.find((item) => item.limitId === "PORTFOLIO_ABS_SIZE:portfolio");
+  assert.equal(portfolioLimit.scope, "GLOBAL");
+  assert.equal(portfolioLimit.unit, "CONTRACTS");
+  assert.equal(portfolioLimit.limitValue, 20);
+  assert.equal(portfolioLimit.usedValue, 0);
+  assert.equal(portfolioLimit.usedPct, 0);
+  assert.equal(portfolioLimit.headroomValue, 20);
+  assert.equal(portfolioLimit.status, "PASS");
+  assert.equal(typeof portfolioLimit.label, "string");
+  assert.equal(portfolioLimit.label.length > 0, true);
+
+  const instrumentLimit = limits.find((item) => item.limitId === "INSTRUMENT_ABS_SIZE:MNQ");
+  assert.equal(instrumentLimit.scope, "INSTRUMENT");
+  assert.equal(instrumentLimit.status, "BREACH");
+  assert.equal(instrumentLimit.usedValue, 10);
+  assert.equal(instrumentLimit.headroomValue, 0);
+});
+
 function frontControlPlaneStore(overrides = {}) {
   const execution = {
     safety: { executionEnabled: true, bridgeMode: "sim101_addon_approved_only", killSwitchEnv: false, submissionPossible: true, riskPercent: 0.25, maxContracts: 2, liveAccountAllowed: false, executionAuthorityMode: "auto", entryOperatorApprovalRequired: false, databaseLocked: false },

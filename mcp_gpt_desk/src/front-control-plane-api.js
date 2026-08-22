@@ -1414,7 +1414,7 @@ function riskCenter({ risk, execution, nowIso, warnings }) {
   return {
     summary: riskCenterSummary(risk, authoritative),
     authoritativeState: authoritative,
-    limits: riskCenterPreferredRows(authoritative, risk, "limits"),
+    limits: riskCenterLimits(authoritative, risk),
     exposures: riskCenterExposures(risk),
     correlations: rows(nested(risk, ["correlations"])),
     propConstraints: rows(nested(risk, ["prop_constraints"])),
@@ -1461,6 +1461,63 @@ function riskCenterSummary(risk, authoritative) {
 function riskCenterPreferredRows(authoritative, risk, key) {
   const authoritativeRows = rows(nested(authoritative, [key]));
   return authoritativeRows.length ? authoritativeRows : rows(nested(risk, [key]));
+}
+
+// The risk_center authoritative snapshot exposes limits in the risk engine's own
+// internal shape (limit_id/current_utilization/... in snake_case), not the
+// RiskView.limits front contract (limitId/usedPct/label/...). Map explicitly
+// instead of passing the raw engine rows straight through to the front.
+const RISK_LIMIT_TYPE_LABELS = {
+  PORTFOLIO_ABS_SIZE: "Taille absolue du portefeuille",
+  ACCOUNT_ABS_SIZE: "Taille absolue du compte",
+  INSTRUMENT_ABS_SIZE: "Taille absolue instrument",
+  CORRELATION_GROUP_ABS_SIZE: "Taille absolue groupe de corrélation",
+};
+function riskCenterLimits(authoritative, risk) {
+  const authoritativeRows = rows(nested(authoritative, ["limits"]));
+  if (authoritativeRows.length) return authoritativeRows.map((item) => mapAuthoritativeRiskLimit(item, authoritative));
+  return rows(nested(risk, ["limits"]));
+}
+function riskLimitScope(type) {
+  const normalized = upper(type);
+  if (normalized.startsWith("ACCOUNT")) return "ACCOUNT";
+  if (normalized.startsWith("INSTRUMENT")) return "INSTRUMENT";
+  if (normalized.startsWith("CORRELATION_GROUP")) return "ASSET_CLASS";
+  return "GLOBAL";
+}
+function riskLimitStatus(item) {
+  if (item?.breached) return "BREACH";
+  const severity = upper(item?.severity);
+  if (severity === "EMERGENCY" || severity === "CRITICAL") return "BLOCKED";
+  const utilization = number(item?.current_utilization, 0);
+  if (utilization >= 0.8 || severity === "HIGH" || severity === "WARN" || severity === "WARNING") return "WATCH";
+  return "PASS";
+}
+function riskLimitLabel(type, scopeValue) {
+  const base = RISK_LIMIT_TYPE_LABELS[upper(type)] || text(type, "Limite").replaceAll("_", " ").toLowerCase();
+  return scopeValue ? `${base} · ${scopeValue}` : base;
+}
+function mapAuthoritativeRiskLimit(item, authoritative) {
+  const value = number(item.value, 0);
+  const utilization = number(item.current_utilization, 0);
+  const scopeValue = text(item.scope, "");
+  return {
+    limitId: text(item.limit_id, `${text(item.type, "LIMIT")}:${scopeValue}`),
+    scope: riskLimitScope(item.type),
+    label: riskLimitLabel(item.type, scopeValue),
+    targetId: scopeValue,
+    limitValue: value,
+    usedValue: value * utilization,
+    unit: upper(item.unit) === "CONTRACTS" ? "CONTRACTS" : text(item.unit, "PCT"),
+    usedPct: utilization * 100,
+    headroomValue: number(item.remaining, value - value * utilization),
+    status: riskLimitStatus(item),
+    reasonCodes: [],
+    lastChangedAt: text(authoritative?.asOf, "unavailable"),
+    changedBy: "risk_engine",
+    officialSource: text(authoritative?.source, "risk_center"),
+    contributors: [],
+  };
 }
 function riskCenterExposures(risk) {
   return rows(nested(risk, ["exposures"]))

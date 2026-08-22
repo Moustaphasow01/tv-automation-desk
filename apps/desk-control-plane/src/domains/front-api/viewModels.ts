@@ -1159,7 +1159,7 @@ export type RiskView = {
     targetId: string;
     limitValue: number;
     usedValue: number;
-    unit: "PCT" | "USD" | "R" | "LOTS" | "X";
+    unit: "PCT" | "USD" | "R" | "LOTS" | "X" | "CONTRACTS";
     usedPct: number;
     headroomValue: number;
     status: "PASS" | "WATCH" | "BREACH" | "BLOCKED";
