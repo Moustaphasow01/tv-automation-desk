@@ -475,6 +475,7 @@ async function runWindowReplayPipeline({ store, config, signals }) {
   const service = createStrategySignalDecisionPipelineService({ store });
   const cutoffs = [...new Set(signals.map((signal) => signal.window_replay?.cutoff_utc || signal.source_data_cutoff_utc).filter(Boolean))].sort();
   const runs = [];
+  const replayOrderIntentIds = new Set();
   for (const cutoff of cutoffs) {
     const result = await service.runOnce({
       now_utc: cutoff,
@@ -486,13 +487,16 @@ async function runWindowReplayPipeline({ store, config, signals }) {
       consumer_id: `strategy-runtime-window-replay:${config.runId}`,
       idempotency_key: `strategy-runtime-window-replay:${config.runId}:${cutoff}`,
     });
+    for (const id of result.order_intent_ids || []) replayOrderIntentIds.add(id);
     const theoretical = config.runTheoretical && typeof store.execution?.processTheoreticalExecution === "function"
-      ? await store.execution.processTheoreticalExecution({
-        entryLimit: config.pipelineLimit,
-        exitLimit: config.pipelineLimit,
-        nowUtc: cutoff,
-        portfolioOrderIntentIds: result.order_intent_ids || [],
-      })
+      ? replayOrderIntentIds.size
+        ? await store.execution.processTheoreticalExecution({
+          entryLimit: config.pipelineLimit,
+          exitLimit: config.pipelineLimit,
+          nowUtc: cutoff,
+          portfolioOrderIntentIds: [...replayOrderIntentIds],
+        })
+        : { ok: true, status: "NO_SCOPED_PORTFOLIO_ORDER_INTENTS", entries: [], exits: [], expiredHumanGates: { expired: 0, items: [] }, materialized: 0 }
       : null;
     runs.push({ ...result, theoretical });
   }
