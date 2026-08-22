@@ -61,7 +61,7 @@ function stableUniqueRowKeys<T>(rows: readonly T[], rowKey: (row: T) => string) 
   const seen = new Map<string, number>();
   return rows.map((row, index) => {
     const key = rowKey(row);
-    const safeKey = key.trim() || `row-${index}`;
+    const safeKey = String(key ?? "").trim() || `row-${index}`;
     const count = seen.get(safeKey) ?? 0;
     seen.set(safeKey, count + 1);
     return count === 0 ? safeKey : `${safeKey}__duplicate_${count}`;
