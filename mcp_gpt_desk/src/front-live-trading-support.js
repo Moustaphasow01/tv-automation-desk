@@ -1,6 +1,7 @@
 export function marketSessionState(readiness = {}) {
   if (readiness.market_closed === true) return "MARKET_CLOSED";
-  const state = upper(readiness.market_state || readiness.state);
+  const state = upper(readiness.market_state || readiness.market_session?.state || readiness.state);
+  if (state === "TRADING_DAY") return "TRADING_DAY";
   if (["OPEN", "PREOPEN", "HALTED", "CLOSED"].includes(state)) return state;
   return readiness.ok === true ? "OPEN" : "UNKNOWN";
 }
