@@ -94,6 +94,30 @@ test("service can process theoretical tracking at an injected replay cutoff", as
   assert.equal(repository.entryFill.now, replayNow);
 });
 
+test("service can scope theoretical replay tracking to explicit Portfolio OrderIntent IDs", async () => {
+  const repository = new TheoreticalFakeRepository({
+    candidate: {
+      ...entryCandidate(),
+      order_intent_id: "portfolio_order_intent_scoped",
+      portfolio_order_intent_id: "portfolio_order_intent_scoped",
+      trade_order_intent_id: null,
+      theoretical_source_kind: "PORTFOLIO_ORDER_INTENT_LINEAGE",
+    },
+    entryCandle: candle({ low: 99.75 }),
+  });
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: manualEnvironment });
+
+  const result = await service.processTheoreticalExecution({
+    nowUtc: "2026-08-12T10:05:00.000Z",
+    portfolioOrderIntentIds: ["portfolio_order_intent_scoped"],
+  });
+
+  assert.equal(result.status, "MATERIALIZED");
+  assert.deepEqual(repository.entryScope.portfolioOrderIntentIds, ["portfolio_order_intent_scoped"]);
+  assert.deepEqual(repository.exitScope.portfolioOrderIntentIds, ["portfolio_order_intent_scoped"]);
+  assert.deepEqual(repository.expireSweep.portfolioOrderIntentIds, ["portfolio_order_intent_scoped"]);
+});
+
 test("canonical Portfolio OrderIntent lineage maps to a theoretical LIMIT candidate with gate TTL", () => {
   const candidate = portfolioLineageToTheoreticalEntryCandidate({
     portfolio_order_intent_id: "portfolio_order_intent_1",
@@ -193,9 +217,12 @@ class TheoreticalFakeRepository {
     this.exitFill = null;
     this.review = null;
     this.manualEvents = [];
+    this.entryScope = null;
+    this.exitScope = null;
   }
 
-  async listTheoreticalEntryCandidates() {
+  async listTheoreticalEntryCandidates(input = {}) {
+    this.entryScope = input;
     return [this.candidate];
   }
 
@@ -219,7 +246,8 @@ class TheoreticalFakeRepository {
     return { event: { theoretical_execution_event_id: "theoretical_event_expired" } };
   }
 
-  async listTheoreticalOpenTrades() {
+  async listTheoreticalOpenTrades(input = {}) {
+    this.exitScope = input;
     return [];
   }
 

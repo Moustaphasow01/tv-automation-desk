@@ -6,17 +6,23 @@ import {
 
 const MANUAL_EXECUTION_EVENT_TYPES = new Set(["placed", "filled", "skipped", "closed", "modified", "note"]);
 
-export async function processTheoreticalExecution(service, { entryLimit = 100, exitLimit = 100, nowUtc = null } = {}) {
+export async function processTheoreticalExecution(service, {
+  entryLimit = 100,
+  exitLimit = 100,
+  nowUtc = null,
+  portfolioOrderIntentIds = null,
+} = {}) {
   const scopedService = serviceAt(service, nowUtc);
   if (!scopedService.repository.available) return skipped("BROKER_REPOSITORY_UNAVAILABLE");
   if (scopedService.environment.manualTelegramExecutionEnabled !== true) {
     return skipped("THEORETICAL_EXECUTION_ONLY_IN_MANUAL_TELEGRAM_MODE");
   }
+  const scope = theoreticalScope({ portfolioOrderIntentIds });
   const expiredHumanGates = typeof scopedService.repository.expireStalePortfolioHumanGates === "function"
-    ? await scopedService.repository.expireStalePortfolioHumanGates({ now: scopedService.now() })
+    ? await scopedService.repository.expireStalePortfolioHumanGates({ now: scopedService.now(), ...scope })
     : { expired: 0, items: [] };
-  const entries = await processTheoreticalEntries(scopedService, { entryLimit });
-  const exits = await processTheoreticalExits(scopedService, { exitLimit });
+  const entries = await processTheoreticalEntries(scopedService, { entryLimit, ...scope });
+  const exits = await processTheoreticalExits(scopedService, { exitLimit, ...scope });
   const materialized = countMaterialized(entries, ["fill_entry", "expire_entry"])
     + countMaterialized(exits, ["fill_exit", "review_exit"]);
   return {
@@ -100,9 +106,9 @@ function actualManualExecutionFields(input = {}) {
   };
 }
 
-async function processTheoreticalEntries(service, { entryLimit }) {
+async function processTheoreticalEntries(service, { entryLimit, portfolioOrderIntentIds }) {
   const candidates = typeof service.repository.listTheoreticalEntryCandidates === "function"
-    ? await service.repository.listTheoreticalEntryCandidates({ limit: entryLimit })
+    ? await service.repository.listTheoreticalEntryCandidates({ limit: entryLimit, portfolioOrderIntentIds })
     : [];
   const entries = [];
   for (const candidate of candidates) {
@@ -133,9 +139,9 @@ async function persistTheoreticalEntryAction(service, evaluated) {
   return evaluated;
 }
 
-async function processTheoreticalExits(service, { exitLimit }) {
+async function processTheoreticalExits(service, { exitLimit, portfolioOrderIntentIds }) {
   const openTrades = typeof service.repository.listTheoreticalOpenTrades === "function"
-    ? await service.repository.listTheoreticalOpenTrades({ limit: exitLimit })
+    ? await service.repository.listTheoreticalOpenTrades({ limit: exitLimit, portfolioOrderIntentIds })
     : [];
   const exits = [];
   for (const trade of openTrades) {
@@ -213,6 +219,12 @@ function manualExecutionRaw(input, manualReconciliation = null) {
 
 function countMaterialized(items, actions) {
   return items.filter((item) => actions.includes(item.action)).length;
+}
+function theoreticalScope({ portfolioOrderIntentIds } = {}) {
+  const ids = Array.isArray(portfolioOrderIntentIds)
+    ? [...new Set(portfolioOrderIntentIds.map((value) => String(value || "").trim()).filter(Boolean))]
+    : null;
+  return ids ? { portfolioOrderIntentIds: ids } : {};
 }
 
 function skipped(reason) { return { ok: true, status: "SKIPPED", reason, entries: [], exits: [] }; }

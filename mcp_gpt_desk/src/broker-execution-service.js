@@ -187,8 +187,13 @@ export class BrokerExecutionService {
     return this.portfolioOrderIntentExecutionService.materializeReadyCommands({ ...scope, execution_halt: this.environment.killSwitch === true });
   }
 
-  async processTheoreticalExecution({ entryLimit = 100, exitLimit = 100, nowUtc = null } = {}) {
-    return processTheoreticalExecutionService(this, { entryLimit, exitLimit, nowUtc });
+  async processTheoreticalExecution({ entryLimit = 100, exitLimit = 100, nowUtc = null, portfolioOrderIntentIds = null, portfolio_order_intent_ids = null } = {}) {
+    return processTheoreticalExecutionService(this, {
+      entryLimit,
+      exitLimit,
+      nowUtc,
+      portfolioOrderIntentIds: portfolioOrderIntentIds || portfolio_order_intent_ids || null,
+    });
   }
 
   async recordManualExecutionEvent(input = {}, actor = {}) {
@@ -287,7 +292,12 @@ export class BrokerExecutionService {
     const portfolioExecutionAction = await maybeExecutePortfolioExecutionAction({ input, actorName: who, service: this.portfolioOrderIntentExecutionService, requirePhrase });
     if (portfolioExecutionAction.handled) return portfolioExecutionAction.result;
     if (input.action === "materialize_management") return this.materializeRecentManagement({ monitorId: input.monitorId || null, scope: input.scope || {}, limit: input.limit });
-    if (input.action === "process_theoretical_execution") return this.processTheoreticalExecution({ entryLimit: input.entryLimit, exitLimit: input.exitLimit, nowUtc: input.nowUtc || input.now_utc || null });
+    if (input.action === "process_theoretical_execution") return this.processTheoreticalExecution({
+      entryLimit: input.entryLimit,
+      exitLimit: input.exitLimit,
+      nowUtc: input.nowUtc || input.now_utc || null,
+      portfolioOrderIntentIds: input.portfolioOrderIntentIds || input.portfolio_order_intent_ids || null,
+    });
     if (input.action === "record_manual_execution_event") return this.recordManualExecutionEvent(input, actor);
     if (input.action === "evaluate") return this.evaluateDecision({ decisionId: input.decisionId, accountId: input.accountId, policyProfileId: input.policyProfileId, actor: who });
     if (input.action === "configure_sizing") {

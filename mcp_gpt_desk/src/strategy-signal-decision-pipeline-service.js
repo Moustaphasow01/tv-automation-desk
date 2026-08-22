@@ -55,7 +55,9 @@ export class StrategySignalDecisionPipelineService {
       risk_decision_count: pipeline.risk?.allocation_evaluations?.length || 0,
       target_position_count: pipeline.targets?.target_positions?.length || 0,
       order_intent_count: pipeline.intents?.order_intents?.length || 0,
+      order_intent_ids: (pipeline.intents?.order_intents || []).map((intent) => intent.order_intent_id).filter(Boolean),
       human_gate_count: humanGates.length,
+      human_gate_ids: humanGates.map((gate) => gate?.human_execution_gate_id).filter(Boolean),
       consumed_signal_outbox_ids: consumed,
       shadow_dispatch: shadowDispatch,
       provider_counts: { before, after, unchanged: true },
@@ -148,9 +150,13 @@ function signalInScope(item, input) {
   const allowedSourceClasses = stringSet(input.source_classes || input.sourceClasses || ["LIVE", "SHADOW"]);
   const allowedModes = stringSet(input.execution_modes || input.executionModes || ["SHADOW"]);
   const strategyVersionIds = new Set(array(input.strategy_version_ids || input.strategyVersionIds).map(String));
+  const certificationRunIds = new Set(array(input.certification_run_ids || input.certificationRunIds).map(String));
+  const certificationRunId = input.certification_run_id || input.certificationRunId;
+  if (certificationRunId) certificationRunIds.add(String(certificationRunId));
   if (!allowedSourceClasses.has(String(item.source_class || "LIVE").toUpperCase())) return false;
   if (!allowedModes.has(String(item.execution_mode_origin || "SHADOW").toUpperCase())) return false;
   if (strategyVersionIds.size && !strategyVersionIds.has(String(item.strategy_version_id))) return false;
+  if (certificationRunIds.size && !certificationRunIds.has(String(item.certification_run_id || ""))) return false;
   return true;
 }
 

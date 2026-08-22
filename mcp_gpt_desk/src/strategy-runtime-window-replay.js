@@ -491,6 +491,7 @@ async function runWindowReplayPipeline({ store, config, signals }) {
         entryLimit: config.pipelineLimit,
         exitLimit: config.pipelineLimit,
         nowUtc: cutoff,
+        portfolioOrderIntentIds: result.order_intent_ids || [],
       })
       : null;
     runs.push({ ...result, theoretical });

@@ -1,10 +1,11 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { materializeTradeOutcome } from "./broker-trade-outcome-repository.js";
 
-export async function listTheoreticalEntryCandidates(repository, { limit = 100 } = {}) {
+export async function listTheoreticalEntryCandidates(repository, { limit = 100, portfolioOrderIntentIds = null } = {}) {
   await repository.ready();
   const bounded = boundLimit(limit);
-  const legacyCandidates = await rows(repository.pool, `SELECT i.*, d.instrument_code, d.side AS decision_side,
+  const scopedPortfolioIds = normalizePortfolioOrderIntentIds(portfolioOrderIntentIds);
+  const legacyCandidates = scopedPortfolioIds.length ? [] : await rows(repository.pool, `SELECT i.*, d.instrument_code, d.side AS decision_side,
         d.trading_date, d.session, d.strategy_id, d.entry_plan, d.risk_plan,
         NULL::text AS portfolio_order_intent_id,
         'LEGACY_TRADE_ORDER_INTENT' AS theoretical_source_kind,
@@ -107,6 +108,7 @@ export async function listTheoreticalEntryCandidates(repository, { limit = 100 }
         LIMIT 1
       ) c ON true
       WHERE l.status = 'READY'
+        AND ($2::text[] IS NULL OR l.portfolio_order_intent_id = ANY($2::text[]))
         AND COALESCE((l.payload #>> '{protection,ready}')::boolean, true) = true
         AND l.quantity > 0
         AND NOT EXISTS (
@@ -120,15 +122,16 @@ export async function listTheoreticalEntryCandidates(repository, { limit = 100 }
             AND tr.status NOT IN ('cancelled','rejected','expired','error')
         )
       ORDER BY l.created_at_utc ASC
-      LIMIT $1`, [bounded]);
+      LIMIT $1`, [bounded, scopedPortfolioIds.length ? scopedPortfolioIds : null]);
   return [...legacyCandidates, ...portfolioCandidates.map(portfolioLineageToTheoreticalEntryCandidate)]
     .sort((left, right) => Date.parse(left.requested_at || 0) - Date.parse(right.requested_at || 0))
     .slice(0, bounded);
 }
 
-export async function expireStalePortfolioHumanGates(repository, { limit = 200, now = new Date().toISOString() } = {}) {
+export async function expireStalePortfolioHumanGates(repository, { limit = 200, now = new Date().toISOString(), portfolioOrderIntentIds = null } = {}) {
   await repository.ready();
   const bounded = boundLimit(limit);
+  const scopedPortfolioIds = normalizePortfolioOrderIntentIds(portfolioOrderIntentIds);
   const client = await repository.pool.connect();
   const expired = [];
   try {
@@ -142,10 +145,11 @@ export async function expireStalePortfolioHumanGates(repository, { limit = 200, 
          AND g.expires_at_utc IS NOT NULL
          AND g.expires_at_utc <= $1::timestamptz
          AND l.status = 'READY'
+         AND ($3::text[] IS NULL OR g.portfolio_order_intent_id = ANY($3::text[]))
        ORDER BY g.expires_at_utc ASC
        LIMIT $2
        FOR UPDATE OF g, l SKIP LOCKED`,
-      [now, bounded],
+      [now, bounded, scopedPortfolioIds.length ? scopedPortfolioIds : null],
     );
     for (const gate of result.rows) {
       const payload = {
@@ -306,9 +310,10 @@ export async function recordTheoreticalEntryExpired(repository, { result, now })
   }
 }
 
-export async function listTheoreticalOpenTrades(repository, { limit = 100 } = {}) {
+export async function listTheoreticalOpenTrades(repository, { limit = 100, portfolioOrderIntentIds = null } = {}) {
   await repository.ready();
   const bounded = boundLimit(limit);
+  const scopedPortfolioIds = normalizePortfolioOrderIntentIds(portfolioOrderIntentIds);
   return rows(repository.pool, `SELECT t.*,
         COALESCE(c.instrument_code, t.raw->>'instrument') AS instrument_code,
         c.broker_symbol,
@@ -324,8 +329,9 @@ export async function listTheoreticalOpenTrades(repository, { limit = 100 } = {}
         AND t.quantity_open > 0
         AND t.current_stop_price IS NOT NULL
         AND t.current_target_price IS NOT NULL
+        AND ($2::text[] IS NULL OR t.portfolio_order_intent_id = ANY($2::text[]))
       ORDER BY t.updated_at ASC
-      LIMIT $1`, [bounded]);
+      LIMIT $1`, [bounded, scopedPortfolioIds.length ? scopedPortfolioIds : null]);
 }
 
 export async function latestClosedCandleForTrade(repository, trade) {
@@ -840,6 +846,11 @@ async function commitValue(client, valueToReturn) {
 }
 
 function boundLimit(limit) { return Math.max(1, Math.min(Number(limit) || 100, 500)); }
+function normalizePortfolioOrderIntentIds(value) {
+  return Array.isArray(value)
+    ? [...new Set(value.map((item) => text(item)).filter(Boolean))]
+    : [];
+}
 function entrySide(intent) { return String(intent?.side || "").toLowerCase(); }
 function candleHigh(candle) { return Number(candle?.high); }
 function candleLow(candle) { return Number(candle?.low); }
