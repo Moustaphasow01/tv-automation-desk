@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { canonicalJson } from "@tv-automation/desk-domain";
-import { CanonicalStrategyEvaluationScheduler, schedulerContinuityAnchorUtc, scopedSchedulerRunKey } from "../src/canonical-strategy-evaluation-scheduler.js";
+import { CanonicalStrategyEvaluationScheduler, latestNewPosition, schedulerContinuityAnchorUtc, scopedSchedulerRunKey, selectLatestNewPosition, strategySignalFromRuntimePosition } from "../src/canonical-strategy-evaluation-scheduler.js";
 
 describe("Canonical Strategy Evaluation Scheduler", () => {
   test("wakes a due SHADOW instance and persists a deterministic NO_SIGNAL result", async () => {
@@ -34,7 +34,7 @@ describe("Canonical Strategy Evaluation Scheduler", () => {
 
     assert.equal(result.status, "EVALUATED", JSON.stringify(result));
     assert.equal(result.outcomes[0].status, "NO_SIGNAL");
-    assert.deepEqual(result.outcomes[0].reasonCodes, ["NO_STRATEGY_SIGNAL_AT_CUTOFF"]);
+    assert.deepEqual(result.outcomes[0].reasonCodes, ["NO_STRATEGY_SIGNAL_AT_CUTOFF", "NO_SIMULATED_POSITION"]);
     assert.equal(evaluations[0].status, "NO_SIGNAL");
     assert.equal(evaluations[0].source_data_cutoff_utc, asOf);
     assert.equal(evaluations[0].next_evaluation_at_utc, "2026-08-12T14:10:00.000Z");
@@ -81,6 +81,18 @@ describe("Canonical Strategy Evaluation Scheduler", () => {
     assert.equal(healthy, "2026-08-12T14:00:00.000Z");
   });
 
+  test("anchors nominal scheduler continuity on scheduled tick rather than market data cutoff", () => {
+    const anchor = schedulerContinuityAnchorUtc({
+      status: "NO_SIGNAL",
+      scheduler_run_key: "strategy_scheduler:61c2fbed-b58c-4570-9b0e-c6ef0f5d7380:2026-08-21T00_05_00_000Z",
+      source_data_cutoff_utc: "2026-08-21T00:00:00.000Z",
+      completed_at_utc: "2026-08-21T00:07:47.056Z",
+      payload: { availability: "KNOWN", marketCutoff: "2026-08-21T00:00:00.000Z" },
+    });
+
+    assert.equal(anchor, "2026-08-21T00:05:00.000Z");
+  });
+
   test("scopes certification scheduler idempotency to its certification run", () => {
     const nominal = scopedSchedulerRunKey("scheduler:instance:cutoff", { sourceClass: "LIVE" });
     const first = scopedSchedulerRunKey("scheduler:instance:cutoff", { sourceClass: "CERTIFICATION_REPLAY", certificationRunId: "cert-a" });
@@ -90,6 +102,96 @@ describe("Canonical Strategy Evaluation Scheduler", () => {
     assert.equal(nominal, "scheduler:instance:cutoff");
     assert.equal(first, repeated);
     assert.notEqual(first, second);
+  });
+
+  test("publishes a candidate discovered on the prior closed cutoff when prior cycle had no signal", () => {
+    const candidate = latestNewPosition([
+      position("too_old", "2026-08-21T14:15:00.000Z"),
+      position("confirmed_one_bar_late", "2026-08-21T14:20:00.000Z"),
+    ], {
+      status: "NO_SIGNAL",
+      source_data_cutoff_utc: "2026-08-21T14:20:00.000Z",
+    }, "2026-08-21T14:25:00.000Z");
+
+    assert.equal(candidate.position_id, "confirmed_one_bar_late");
+  });
+
+  test("does not republish a prior-cutoff candidate when prior cycle already created a signal", () => {
+    const selection = selectLatestNewPosition([
+      position("already_published", "2026-08-21T14:20:00.000Z"),
+    ], {
+      status: "SIGNAL_CREATED",
+      source_data_cutoff_utc: "2026-08-21T14:20:00.000Z",
+    }, "2026-08-21T14:25:00.000Z");
+
+    assert.equal(selection.candidate, null);
+    assert.equal(selection.diagnostics.reason, "PREVIOUS_CUTOFF_ALREADY_PUBLISHED");
+  });
+
+  test("keeps older retroactive candidates out of the live publication window", () => {
+    const candidate = latestNewPosition([
+      position("retroactive_hindsight", "2026-08-21T13:55:00.000Z"),
+    ], {
+      status: "NO_SIGNAL",
+      source_data_cutoff_utc: "2026-08-21T14:20:00.000Z",
+    }, "2026-08-21T14:25:00.000Z");
+
+    assert.equal(candidate, null);
+  });
+
+  test("does not publish a simulated position after the signal TTL expired", () => {
+    const selection = selectLatestNewPosition([
+      position("expired_candidate", "2026-08-21T13:50:00.000Z"),
+    ], null, "2026-08-21T14:25:00.000Z");
+
+    assert.equal(selection.candidate, null);
+    assert.equal(selection.diagnostics.reason, "NO_UNEXPIRED_SIMULATED_POSITION_IN_PUBLICATION_WINDOW");
+    assert.equal(selection.diagnostics.expired_position_count, 1);
+  });
+
+  test("publishes signal validity from market cutoff instead of simulated fill time", () => {
+    const signal = strategySignalFromRuntimePosition({
+      signalId: "signal-001",
+      correlationId: "correlation-001",
+      definition: strategyDefinition(),
+      version: strategyVersion(strategyDsl()),
+      instance: strategyInstance("3b2f1a90-6e3d-4b8e-9d1a-2f6c8e0a9b11"),
+      candidate: {
+        position_id: "candidate-001",
+        setup_id: "setup-001",
+        instrument: "MNQ",
+        direction: "long",
+        entry_price: 20100,
+        entry_time: "2026-08-21T14:00:00.000Z",
+        entry_row: { timestamp_utc: "2026-08-21T14:00:00.000Z" },
+        entry_order: { order_type: "MARKET", limit_price: 20100 },
+        stop_loss: 20080,
+        take_profit_1: 20140,
+        quantity: 1,
+      },
+      market: { cutoffUtc: "2026-08-21T14:25:00.000Z" },
+      timeframe: "5",
+      evaluationId: "strategy_eval_001",
+      sourceClass: "LIVE",
+      certificationRunId: null,
+    });
+
+    assert.equal(signal.generated_at_utc, "2026-08-21T14:25:00.000Z");
+    assert.equal(signal.expires_at_utc, "2026-08-21T14:55:00.000Z");
+    assert.equal(signal.source_data_cutoff_utc, "2026-08-21T14:25:00.000Z");
+    assert.equal(signal.signal_quality.temporal_alignment, "PUBLICATION_CUTOFF");
+    assert.equal(signal.signal_quality.simulated_entry_time_utc, "2026-08-21T14:00:00.000Z");
+  });
+
+  test("explains empty simulation results in NO_SIGNAL diagnostics", () => {
+    const selection = selectLatestNewPosition([], {
+      status: "NO_SIGNAL",
+      source_data_cutoff_utc: "2026-08-21T14:20:00.000Z",
+    }, "2026-08-21T14:25:00.000Z");
+
+    assert.equal(selection.candidate, null);
+    assert.equal(selection.diagnostics.reason, "NO_SIMULATED_POSITION");
+    assert.equal(selection.diagnostics.total_positions, 0);
   });
 });
 
@@ -133,5 +235,14 @@ function marketPool(asOf) {
       }
       return { rows };
     },
+  };
+}
+
+function position(positionId, timestampUtc) {
+  return {
+    position_id: positionId,
+    direction: "short",
+    entry_row: { timestamp_utc: timestampUtc },
+    entry_order: { limit_price: 29230.5 },
   };
 }

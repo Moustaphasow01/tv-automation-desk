@@ -1,7 +1,6 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { toParisIso } from "@tv-automation/desk-time";
 import {
-  DATA_DRIVEN_FAMILY_SET_DIVERSIFIED_V2,
   DATA_DRIVEN_FAMILY_SET_V1,
   dataDrivenAnchorForFamily,
   dataDrivenParameterCombination,
@@ -18,12 +17,16 @@ export function buildDataDrivenLiveRuntimeBindings({
   instance = {},
   market = {},
   instrument = "MNQ",
+  previousEvaluation = null,
 } = {}) {
   const descriptor = dataDrivenDescriptor(version, dsl);
   if (!descriptor.ok) return descriptor;
-  const contextRows = Array.isArray(market.contextRows) && market.contextRows.length
+  const anchor = runtimeAnchorCutoff({ market, previousEvaluation });
+  const rowsAtAnchor = rowsUntil(market.rows, anchor.anchor_cutoff_utc);
+  const contextRowsInput = Array.isArray(market.contextRows) && market.contextRows.length
     ? market.contextRows
     : market.rows;
+  const contextRows = rowsUntil(contextRowsInput || [], anchor.anchor_cutoff_utc);
   const tradingDays = buildTradingDays(contextRows || []);
   const currentDate = market.rows?.[0]?.trading_date || market.tradingDate;
   const dayIndex = tradingDays.findIndex((day) => day.trading_date === currentDate);
@@ -43,6 +46,8 @@ export function buildDataDrivenLiveRuntimeBindings({
     familyVariantIndex: descriptor.variant_index - 1,
     instrument,
     instanceId: instance.strategy_instance_id,
+    anchorCutoffUtc: anchor.anchor_cutoff_utc,
+    evaluationCutoffUtc: market.cutoffUtc,
   });
   if (!setup) return rejected(["DATA_DRIVEN_RUNTIME_ANCHOR_UNAVAILABLE"]);
   return {
@@ -50,6 +55,7 @@ export function buildDataDrivenLiveRuntimeBindings({
     status: "READY",
     descriptor,
     parameters,
+    anchor,
     runtime_bindings: {
       valid_from_paris: setup.valid_from_paris,
       expires_at_paris: setup.expires_at_paris,
@@ -63,7 +69,12 @@ export function buildDataDrivenLiveRuntimeBindings({
       setups: [setup],
       metadata: {
         binding_version: DATA_DRIVEN_LIVE_RUNTIME_BINDINGS_VERSION,
-        binding_hash: `sha256:${canonicalSha256({ descriptor, parameters, setup })}`,
+        binding_hash: `sha256:${canonicalSha256({ descriptor, parameters, setup, anchor })}`,
+        anchor_cutoff_utc: anchor.anchor_cutoff_utc,
+        evaluation_cutoff_utc: market.cutoffUtc,
+        rows_at_anchor: rowsAtAnchor.length,
+        rows_at_evaluation: Array.isArray(market.rows) ? market.rows.length : 0,
+        anti_lookahead: "ANCHOR_PREVIOUS_CLOSED_CUTOFF",
       },
     },
   };
@@ -78,7 +89,7 @@ function dataDrivenDescriptor(version = {}, dsl = {}) {
   const explicitFamilyIndex = integer(metadata.family_index ?? metadata.familyIndex, null);
   const fallbackFamilyIndex = getDataDrivenStrategyFamilyIndex(
     familyId,
-    familySet === DATA_DRIVEN_FAMILY_SET_DIVERSIFIED_V2 ? DATA_DRIVEN_FAMILY_SET_DIVERSIFIED_V2 : DATA_DRIVEN_FAMILY_SET_V1,
+    familySet,
   ) + 1;
   const familyIndex = explicitFamilyIndex || fallbackFamilyIndex;
   if (!familySpec) return rejected(["DATA_DRIVEN_RUNTIME_FAMILY_UNKNOWN"]);
@@ -96,7 +107,7 @@ function dataDrivenDescriptor(version = {}, dsl = {}) {
   };
 }
 
-function dataDrivenSetup({ day, dayIndex, tradingDays, familySpec, parameters, familyVariantIndex, instrument, instanceId }) {
+function dataDrivenSetup({ day, dayIndex, tradingDays, familySpec, parameters, familyVariantIndex, instrument, instanceId, anchorCutoffUtc, evaluationCutoffUtc }) {
   const anchor = anchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex });
   if (!anchor) return null;
   const level = roundPrice(anchor.level + parameters.break_offset_points);
@@ -122,8 +133,8 @@ function dataDrivenSetup({ day, dayIndex, tradingDays, familySpec, parameters, f
     direction,
     rank: 1,
     trading_date: day.trading_date,
-    valid_from_paris: day.first_time,
-    expires_at_paris: day.last_time,
+    valid_from_paris: toParisIso(Date.parse(anchorCutoffUtc || day.last_time)),
+    expires_at_paris: toParisIso(Date.parse(evaluationCutoffUtc || day.last_time)),
     break_level: level,
     retest_level: retest,
     entry_zone: entry,
@@ -140,8 +151,75 @@ function dataDrivenSetup({ day, dayIndex, tradingDays, familySpec, parameters, f
       family_id: familySpec.family_id,
       anchor_kind: familySpec.anchor_kind,
       anchor_source: anchor.source,
+      anchor_cutoff_utc: anchorCutoffUtc || null,
+      evaluation_cutoff_utc: evaluationCutoffUtc || null,
+      anti_lookahead: "ANCHOR_PREVIOUS_CLOSED_CUTOFF",
     },
   };
+}
+
+function runtimeAnchorCutoff({ market = {}, previousEvaluation = null } = {}) {
+  const evaluationCutoff = isoOrNull(market.cutoffUtc);
+  const previous = usablePreviousCutoff(previousEvaluation, market);
+  if (previous) {
+    return {
+      anchor_cutoff_utc: previous,
+      source: "previous_evaluation_cutoff",
+      evaluation_cutoff_utc: evaluationCutoff,
+    };
+  }
+  const previousRow = [...(Array.isArray(market.rows) ? market.rows : [])]
+    .filter((row) => Date.parse(row.timestamp_utc || row.time || "") < Date.parse(evaluationCutoff || ""))
+    .sort((left, right) => Date.parse(right.timestamp_utc || right.time || "") - Date.parse(left.timestamp_utc || left.time || ""))[0] || null;
+  const previousRowCutoff = isoOrNull(previousRow?.timestamp_utc || previousRow?.time);
+  return {
+    anchor_cutoff_utc: previousRowCutoff || evaluationCutoff,
+    source: previousRowCutoff ? "previous_closed_row" : "evaluation_cutoff",
+    evaluation_cutoff_utc: evaluationCutoff,
+  };
+}
+
+function usablePreviousCutoff(previousEvaluation, market = {}) {
+  if (!previousEvaluation || typeof previousEvaluation !== "object") return null;
+  const status = String(previousEvaluation.status || "").toUpperCase();
+  const availability = String(previousEvaluation.payload?.availability || "").toUpperCase();
+  if (status === "FAILED" || availability === "STALE" || availability === "UNAVAILABLE") return null;
+  const previousCutoff = isoOrNull(previousEvaluation.source_data_cutoff_utc);
+  const evaluationCutoff = isoOrNull(market.cutoffUtc);
+  if (!previousCutoff || !evaluationCutoff) return null;
+  const previousMs = Date.parse(previousCutoff);
+  const evaluationMs = Date.parse(evaluationCutoff);
+  if (!Number.isFinite(previousMs) || !Number.isFinite(evaluationMs) || previousMs >= evaluationMs) return null;
+  if (evaluationMs - previousMs > previousCutoffMaxGapMs(market)) return null;
+  const currentDate = market.rows?.[0]?.trading_date || market.tradingDate || null;
+  const previousRow = [...(Array.isArray(market.rows) ? market.rows : [])]
+    .find((row) => isoOrNull(row.timestamp_utc || row.time) === previousCutoff);
+  if (currentDate && previousRow?.trading_date && previousRow.trading_date !== currentDate) return null;
+  return previousCutoff;
+}
+
+function previousCutoffMaxGapMs(market = {}) {
+  const rows = [...(Array.isArray(market.rows) ? market.rows : [])]
+    .map((row) => Date.parse(row.timestamp_utc || row.time || ""))
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right);
+  const gaps = [];
+  for (let index = 1; index < rows.length; index += 1) {
+    const gap = rows[index] - rows[index - 1];
+    if (gap > 0) gaps.push(gap);
+  }
+  const cadenceMs = median(gaps) || 5 * 60_000;
+  return Math.max(2 * 60_000, cadenceMs * 3);
+}
+
+function rowsUntil(rows, cutoffUtc) {
+  const cutoffMs = Date.parse(cutoffUtc || "");
+  if (!Array.isArray(rows) || !Number.isFinite(cutoffMs)) return [];
+  const filtered = rows.filter((row) => {
+    const rowMs = Date.parse(row.timestamp_utc || row.time || "");
+    return Number.isFinite(rowMs) && rowMs <= cutoffMs;
+  });
+  return filtered.length ? filtered : rows.slice(0, 1);
 }
 
 function anchorForFamily({ familySpec, parameters, day, tradingDays, dayIndex }) {
@@ -160,12 +238,17 @@ function buildTradingDays(rows) {
   const ranges = days.map((day) => day.range).sort((left, right) => left - right);
   const highs = days.map((day) => day.high).sort((left, right) => left - right);
   const lows = days.map((day) => day.low).sort((left, right) => left - right);
+  const rangeP35 = percentile(ranges, 0.35) || 0;
+  const rangeP65 = percentile(ranges, 0.65) || rangeP35;
   for (let index = 0; index < days.length; index += 1) {
     days[index].previous = days[index - 1] || null;
     days[index].dataset_stats = {
-      range_p35: percentile(ranges, 0.35) || 0,
+      range_p35: rangeP35,
+      range_p65: rangeP65,
       range_p35_high: percentile(highs, 0.65) || days[index].high,
       range_p35_low: percentile(lows, 0.35) || days[index].low,
+      range_p65_high: percentile(highs, 0.75) || days[index].high,
+      range_p65_low: percentile(lows, 0.25) || days[index].low,
     };
   }
   return days;
@@ -189,8 +272,13 @@ function summarizeDay(trading_date, rows) {
     range: high - low,
     vwap: roundPrice(vwap),
     opening: (bars) => rangeSummary(sorted.slice(0, Math.max(1, bars))),
+    overnight: rangeSummary(sessionRows(sorted, "00:00", "09:10")),
+    firstHour: rangeSummary(sessionRows(sorted, "09:15", "10:15")),
     asia: rangeSummary(sessionRows(sorted, "09:15", "14:45")),
+    lunch: rangeSummary(sessionRows(sorted, "12:00", "14:00")),
+    preNy: rangeSummary(sessionRows(sorted, "14:00", "15:25")),
     nyOpening: rangeSummary(sessionRows(sorted, "15:30", "17:00")),
+    afternoon: rangeSummary(sessionRows(sorted, "17:00", "19:00")),
   };
 }
 
@@ -243,9 +331,14 @@ function sessionRows(rows, fromHm, toHm) {
 }
 
 function firstTemplate(dsl) { return Array.isArray(dsl?.setup_templates) ? dsl.setup_templates[0] || {} : {}; }
+function median(values) { return percentile([...values].sort((left, right) => left - right), 0.5); }
 function percentile(values, ratio) { if (!values.length) return null; const index = Math.min(values.length - 1, Math.max(0, Math.floor(values.length * ratio))); return values[index]; }
 function roundPrice(value) { return Math.round(Number(value) * 4) / 4; }
 function integer(value, fallback = 0) { const parsed = Number(value); return Number.isInteger(parsed) ? parsed : fallback; }
 function number(value, fallback = 0) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
 function text(value) { return String(value ?? "").trim(); }
 function rejected(reasons) { return { ok: false, status: "REJECTED", reasons }; }
+function isoOrNull(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}

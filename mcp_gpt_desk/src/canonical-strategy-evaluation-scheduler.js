@@ -9,6 +9,7 @@ import { toParisIso } from "@tv-automation/desk-time";
 import { buildDataDrivenLiveRuntimeBindings } from "./research/data-driven-live-runtime-bindings.js";
 
 const DEFAULT_CADENCE_SECONDS = 300;
+const STRATEGY_SIGNAL_TTL_MS = 30 * 60_000;
 const SYMBOL_BY_INSTRUMENT = Object.freeze({ MNQ: "MNQ1!", MES: "MES1!" });
 
 export class CanonicalStrategyEvaluationScheduler {
@@ -95,19 +96,20 @@ export class CanonicalStrategyEvaluationScheduler {
       if (simulation.status !== "COMPLETED") {
         return this.#record({ due, version, correlationId, nowUtc, startedAt, instrument, timeframe, sourceClass, certificationRunId, status: "FAILED", reasonCodes: ["STRATEGY_RUNTIME_EVALUATION_REJECTED", ...array(simulation.reasons)], payload: { availability: "DEGRADED", simulationStatus: simulation.status } });
       }
-      const candidate = latestNewPosition(simulation.positions, previous?.source_data_cutoff_utc, market.cutoffUtc);
+      const selection = selectLatestNewPosition(simulation.positions, previous, market.cutoffUtc);
+      const candidate = selection.candidate;
       if (!candidate) {
-        return this.#record({ due, version, correlationId, nowUtc, startedAt, instrument, timeframe, sourceClass, certificationRunId, status: "NO_SIGNAL", reasonCodes: ["NO_STRATEGY_SIGNAL_AT_CUTOFF"], payload: { availability: "KNOWN", evaluatedRows: market.rows.length, simulationRunId: simulation.run_id, marketCutoff: market.cutoffUtc } });
+        return this.#record({ due, version, correlationId, nowUtc, startedAt, instrument, timeframe, sourceClass, certificationRunId, status: "NO_SIGNAL", reasonCodes: ["NO_STRATEGY_SIGNAL_AT_CUTOFF", selection.diagnostics.reason], payload: { availability: "KNOWN", evaluatedRows: market.rows.length, simulationRunId: simulation.run_id, marketCutoff: market.cutoffUtc, selection: selection.diagnostics } });
       }
       const signalId = randomUUID();
       const evaluation = await this.#record({ due, version, correlationId, nowUtc, startedAt, instrument, timeframe, sourceClass, certificationRunId, status: "SIGNAL_CREATED", signalId, reasonCodes: ["CANONICAL_STRATEGY_CONDITIONS_SATISFIED"], payload: { availability: "KNOWN", evaluatedRows: market.rows.length, simulationRunId: simulation.run_id, positionId: candidate.position_id, marketCutoff: market.cutoffUtc } });
       const published = await this.store.publishStrategyV2Signal({
-        input: signalFromPosition({ signalId, correlationId, definition, version, instance, candidate, market, timeframe, evaluationId: evaluation.evaluation.strategy_evaluation_id, sourceClass, certificationRunId }),
+        input: strategySignalFromRuntimePosition({ signalId, correlationId, definition, version, instance, candidate, market, timeframe, evaluationId: evaluation.evaluation.strategy_evaluation_id, sourceClass, certificationRunId }),
         actor: { kind: "strategy-evaluation-scheduler" },
       });
       return { ...evaluation, publishedSignalId: published.signal?.signal_id || signalId };
     } catch (error) {
-      return this.#record({ due, version: { strategy_version_id: due.strategy_version_id }, correlationId, nowUtc, startedAt, instrument: "MNQ", timeframe: "5", sourceClass, certificationRunId, status: "FAILED", reasonCodes: [error.code || "STRATEGY_RUNTIME_EVALUATION_FAILED"], payload: { availability: "DEGRADED", errorCode: error.code || "STRATEGY_RUNTIME_EVALUATION_FAILED" } });
+      return this.#record({ due, version: { strategy_version_id: due.strategy_version_id }, correlationId, nowUtc, startedAt, instrument: "MNQ", timeframe: "5", sourceClass, certificationRunId, status: "FAILED", reasonCodes: [error.code || "STRATEGY_RUNTIME_EVALUATION_FAILED"], payload: { availability: "DEGRADED", errorCode: error.code || "STRATEGY_RUNTIME_EVALUATION_FAILED", errorMessage: error.message || null } });
     }
   }
 
@@ -157,6 +159,8 @@ export function schedulerContinuityAnchorUtc(evaluation = {}) {
   if (status === "FAILED" || availability === "STALE" || availability === "UNAVAILABLE") {
     return evaluation.completed_at_utc || evaluation.source_data_cutoff_utc || null;
   }
+  const scheduledTick = schedulerTickFromRunKey(evaluation.scheduler_run_key);
+  if (scheduledTick) return scheduledTick;
   return evaluation.source_data_cutoff_utc || evaluation.completed_at_utc || null;
 }
 
@@ -295,12 +299,15 @@ function runtimeBinding(template, { instrument, high, low }) {
   };
 }
 
-function signalFromPosition({ signalId, correlationId, definition, version, instance, candidate, market, timeframe, evaluationId, sourceClass, certificationRunId }) {
+export function strategySignalFromRuntimePosition({ signalId, correlationId, definition, version, instance, candidate, market, timeframe, evaluationId, sourceClass, certificationRunId }) {
   const direction = String(candidate.direction || candidate.side || "").toUpperCase();
   const entry = nullable(candidate.entry_order?.limit_price ?? candidate.entry_raw_price ?? candidate.entry_price);
   const stop = nullable(candidate.stop_loss ?? candidate.stop_price ?? candidate.protection?.stop_price);
   const target = nullable(candidate.take_profit_1 ?? candidate.target_price ?? candidate.protection?.target_price);
-  const generatedAt = iso(candidate.entry_row?.timestamp_utc || candidate.entry_time || market.cutoffUtc);
+  const generatedAt = signalPublicationUtc({ candidate, market });
+  const simulatedEntryAt = isoOrNull(candidate.entry_row?.timestamp_utc || candidate.entry_time);
+  const riskPoints = entry === null || stop === null ? null : Math.abs(entry - stop);
+  const rewardPoints = entry === null || target === null ? null : Math.abs(target - entry);
   return {
     signal_id: signalId,
     strategy_definition_id: definition.strategy_definition_id,
@@ -314,7 +321,7 @@ function signalFromPosition({ signalId, correlationId, definition, version, inst
     source_data_cutoff_utc: market.cutoffUtc,
     execution_mode_origin: String(instance.execution_mode || "SHADOW").toUpperCase(),
     generated_at_utc: generatedAt,
-    expires_at_utc: new Date(Date.parse(generatedAt) + 30 * 60_000).toISOString(),
+    expires_at_utc: new Date(Date.parse(generatedAt) + STRATEGY_SIGNAL_TTL_MS).toISOString(),
     correlation_id: correlationId,
     source_class: sourceClass,
     certification_run_id: certificationRunId,
@@ -323,15 +330,103 @@ function signalFromPosition({ signalId, correlationId, definition, version, inst
     predicates: [{ code: "CANONICAL_STRATEGY_CONDITIONS_SATISFIED", state: "SATISFIED" }],
     evidence: [{ kind: "STRATEGY_EVALUATION", ref: `strategy-evaluation://${evaluationId}` }],
     reason_codes: ["CANONICAL_STRATEGY_CONDITIONS_SATISFIED"],
-    proposed_trade_plan: { order_type: candidate.entry_order?.order_type || "LIMIT", entry_price: entry, stop_price: stop, targets: target === null ? [] : [target] },
+    signal_quality: {
+      temporal_alignment: "PUBLICATION_CUTOFF",
+      publication_cutoff_utc: generatedAt,
+      simulated_entry_time_utc: simulatedEntryAt,
+    },
+    proposed_trade_plan: {
+      order_type: candidate.entry_order?.order_type || "LIMIT",
+      instrument: candidate.instrument || instance.instrument_scope?.[0] || "MNQ",
+      direction,
+      entry_price: entry,
+      stop_price: stop,
+      targets: target === null ? [] : [target],
+      source_data_cutoff_utc: market.cutoffUtc,
+    },
+    trade_plan_economics: {
+      risk_points: riskPoints,
+      reward_points: rewardPoints,
+      rr: riskPoints && rewardPoints ? Math.round((rewardPoints / riskPoints) * 10_000) / 10_000 : null,
+    },
   };
 }
 
-function latestNewPosition(positions, previousCutoff, cutoff) {
-  return array(positions).filter((position) => {
+function signalPublicationUtc({ candidate = {}, market = {} } = {}) {
+  return iso(
+    market.cutoffUtc
+    || market.cutoff_utc
+    || market.dataset?.cutoff_utc
+    || candidate.signal_publication_utc
+    || candidate.entry_row?.timestamp_utc
+    || candidate.entry_time,
+  );
+}
+
+export function selectLatestNewPosition(positions, previous, cutoff) {
+  const previousCutoff = typeof previous === "string" ? previous : previous?.source_data_cutoff_utc || null;
+  const previousStatus = previous && typeof previous === "object" ? String(previous.status || "").toUpperCase() : "";
+  const cutoffMs = Date.parse(cutoff);
+  if (previousStatus === "SIGNAL_CREATED") {
+    return {
+      candidate: null,
+      diagnostics: {
+        reason: "PREVIOUS_CUTOFF_ALREADY_PUBLISHED",
+        previous_cutoff_utc: previousCutoff,
+        cutoff_utc: cutoff,
+        total_positions: array(positions).length,
+      },
+    };
+  }
+  let expiredCount = 0;
+  let outsideWindowCount = 0;
+  const candidates = array(positions).filter((position) => {
     const at = Date.parse(position.entry_row?.timestamp_utc || position.entry_time || "");
-    return Number.isFinite(at) && at <= Date.parse(cutoff) && (!previousCutoff || at > Date.parse(previousCutoff));
-  }).sort((left, right) => Date.parse(right.entry_row?.timestamp_utc || right.entry_time) - Date.parse(left.entry_row?.timestamp_utc || left.entry_time))[0] || null;
+    const previousMs = Date.parse(previousCutoff || "");
+    const afterPrevious = !Number.isFinite(previousMs)
+      || (previousStatus === "NO_SIGNAL" ? at >= previousMs : at > previousMs);
+    if (!Number.isFinite(at) || !Number.isFinite(cutoffMs)) return false;
+    if (at > cutoffMs || !afterPrevious) {
+      outsideWindowCount += 1;
+      return false;
+    }
+    if (at + STRATEGY_SIGNAL_TTL_MS <= cutoffMs) {
+      expiredCount += 1;
+      return false;
+    }
+    return true;
+  }).sort((left, right) => Date.parse(right.entry_row?.timestamp_utc || right.entry_time) - Date.parse(left.entry_row?.timestamp_utc || left.entry_time));
+  return {
+    candidate: candidates[0] || null,
+    diagnostics: candidates[0]
+      ? {
+        reason: "NEW_SIMULATED_POSITION_SELECTED",
+        previous_cutoff_utc: previousCutoff,
+        cutoff_utc: cutoff,
+        total_positions: array(positions).length,
+        candidate_count: candidates.length,
+        candidate_position_id: candidates[0].position_id || null,
+        expired_position_count: expiredCount,
+        outside_publication_window_count: outsideWindowCount,
+      }
+      : {
+        reason: array(positions).length && expiredCount
+          ? "NO_UNEXPIRED_SIMULATED_POSITION_IN_PUBLICATION_WINDOW"
+          : array(positions).length
+            ? "NO_NEW_SIMULATED_POSITION_IN_PUBLICATION_WINDOW"
+            : "NO_SIMULATED_POSITION",
+        previous_cutoff_utc: previousCutoff,
+        cutoff_utc: cutoff,
+        total_positions: array(positions).length,
+        candidate_count: 0,
+        expired_position_count: expiredCount,
+        outside_publication_window_count: outsideWindowCount,
+      },
+  };
+}
+
+export function latestNewPosition(positions, previousOrCutoff, cutoff) {
+  return selectLatestNewPosition(positions, previousOrCutoff, cutoff).candidate;
 }
 
 function latestEvaluationByInstance(items) {
@@ -339,7 +434,17 @@ function latestEvaluationByInstance(items) {
   for (const item of array(items)) if (!map.has(item.strategy_instance_id)) map.set(item.strategy_instance_id, item);
   return map;
 }
-function runtimeSimulationParameters() { return { simulation_policy: { position_at_cutoff: "MARK_TO_MARKET_CLOSE" }, order_simulation_policy: { ambiguous_intrabar_policy: "CONSERVATIVE_STOP", spread_points: 0.25, slippage_points: 0.25, commission_r_per_contract: 0.01 }, validation_scope: "canonical_live_shadow_runtime" }; }
+export function strategyRuntimeSimulationParameters() { return { simulation_policy: { position_at_cutoff: "MARK_TO_MARKET_CLOSE" }, order_simulation_policy: { ambiguous_intrabar_policy: "CONSERVATIVE_STOP", spread_points: 0.25, slippage_points: 0.25, commission_r_per_contract: 0.01 }, validation_scope: "canonical_live_shadow_runtime" }; }
+function runtimeSimulationParameters() { return strategyRuntimeSimulationParameters(); }
+function schedulerTickFromRunKey(value) {
+  const textValue = String(value || "");
+  const match = textValue.match(/(\d{4}-\d{2}-\d{2}T\d{2}[_:]\d{2}[_:]\d{2}[_:]\d{3}Z)$/);
+  if (!match) return null;
+  const normalized = match[1]
+    .replace(/T(\d{2})_(\d{2})_(\d{2})_(\d{3})Z$/, "T$1:$2:$3.$4Z");
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
 function templateTimeframe(dsl) { const value = String(array(dsl?.setup_templates)[0]?.timeframe || "M5").toUpperCase(); return value.replace(/^M/, ""); }
 function freshnessThresholdMs(timeframe) { return Math.max(2, Number(timeframe) || 5) * 60_000 * 3; }
 function bounded(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(1, Math.min(86_400, Math.trunc(parsed))) : fallback; }
@@ -348,4 +453,5 @@ function nullable(value) { if (value === null || value === undefined || value ==
 function quarter(value) { return Math.round(Number(value) * 4) / 4; }
 function normalizeSourceClass(value) { const normalized = String(value || "LIVE").toUpperCase(); if (["LIVE", "SHADOW", "CERTIFICATION_REPLAY"].includes(normalized)) return normalized; throw coded("STRATEGY_EVALUATION_SOURCE_CLASS_INVALID", "Strategy evaluation source class is invalid."); }
 function iso(value) { const parsed = Date.parse(value || ""); if (!Number.isFinite(parsed)) throw coded("STRATEGY_EVALUATION_TIMESTAMP_INVALID", "Strategy evaluation timestamp is invalid."); return new Date(parsed).toISOString(); }
+function isoOrNull(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
 function coded(code, message) { return Object.assign(new Error(message || code), { code, retryable: false }); }
