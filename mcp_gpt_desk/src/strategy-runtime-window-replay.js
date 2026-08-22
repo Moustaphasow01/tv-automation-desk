@@ -194,6 +194,7 @@ export function normalizeWindowReplayInput(input = {}) {
     contextDays: bounded(input.context_days || input.contextDays, DEFAULT_CONTEXT_DAYS, 1, 45),
     persistSignals: bool(input.persist_signals ?? input.persistSignals, false),
     runPipeline: bool(input.run_pipeline ?? input.runPipeline, false),
+    runTheoretical: bool(input.run_theoretical ?? input.runTheoretical, false),
     recordEvaluations: bool(input.record_evaluations ?? input.recordEvaluations, true),
     accountId: String(firstDefined(input.account_id, input.accountId, process.env.DESK_SHADOW_RUNTIME_ACCOUNT_ID, "shadow_live")),
     pipelineLimit: bounded(input.pipeline_limit || input.pipelineLimit, 500, 1, 500),
@@ -485,7 +486,14 @@ async function runWindowReplayPipeline({ store, config, signals }) {
       consumer_id: `strategy-runtime-window-replay:${config.runId}`,
       idempotency_key: `strategy-runtime-window-replay:${config.runId}:${cutoff}`,
     });
-    runs.push(result);
+    const theoretical = config.runTheoretical && typeof store.execution?.processTheoreticalExecution === "function"
+      ? await store.execution.processTheoreticalExecution({
+        entryLimit: config.pipelineLimit,
+        exitLimit: config.pipelineLimit,
+        nowUtc: cutoff,
+      })
+      : null;
+    runs.push({ ...result, theoretical });
   }
   return runs;
 }
@@ -559,6 +567,7 @@ function summarizeWindowReplay({ config, instances, outcomes, signals, published
     published_signal_count: published.length,
     pipeline_run_count: pipelineRuns.length,
     pipeline_human_gate_count: pipelineRuns.reduce((sum, item) => sum + Number(item.human_gate_count || 0), 0),
+    theoretical_materialized_count: pipelineRuns.reduce((sum, item) => sum + Number(item.theoretical?.materialized || 0), 0),
     total_r: round(totalR),
     by_instrument: byInstrument,
     by_day: byDay,

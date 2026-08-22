@@ -4,6 +4,7 @@ import { evaluateBrokerProtectionSnapshot } from "./broker-protection-snapshot.j
 import {
   latestClosedCandleForIntent as latestTheoreticalClosedCandleForIntent,
   latestClosedCandleForTrade as latestTheoreticalClosedCandleForTrade,
+  expireStalePortfolioHumanGates as expireStalePortfolioHumanGatesRepository,
   listTheoreticalEntryCandidates as listTheoreticalEntryCandidatesRepository,
   listTheoreticalOpenTrades as listTheoreticalOpenTradesRepository,
   recordManualExecutionEvent as recordManualExecutionEventRepository,
@@ -339,7 +340,8 @@ export class PostgresBrokerExecutionRepository {
   }
 
   async listTheoreticalEntryCandidates({ limit = 100 } = {}) { return listTheoreticalEntryCandidatesRepository(this, { limit }); }
-  async latestClosedCandleForIntent(intent) { return latestTheoreticalClosedCandleForIntent(this, intent); }
+  async expireStalePortfolioHumanGates({ limit = 200, now } = {}) { return expireStalePortfolioHumanGatesRepository(this, { limit, now }); }
+  async latestClosedCandleForIntent(intent, options = {}) { return latestTheoreticalClosedCandleForIntent(this, intent, options); }
   async recordTheoreticalEntryFill({ result, now }) { return recordTheoreticalEntryFillRepository(this, { result, now }); }
   async recordTheoreticalEntryExpired({ result, now }) { return recordTheoreticalEntryExpiredRepository(this, { result, now }); }
   async listTheoreticalOpenTrades({ limit = 100 } = {}) { return listTheoreticalOpenTradesRepository(this, { limit }); }

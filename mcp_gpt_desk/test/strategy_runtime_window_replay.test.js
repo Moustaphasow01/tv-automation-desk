@@ -53,6 +53,17 @@ test("window replay cutoff suffix is stable", () => {
   assert.equal(windowReplayCutoffSuffix("2026-08-21T09:05:00.000Z"), "20260821t090500000z");
 });
 
+test("window replay can enable historical theoretical tracking explicitly", () => {
+  const config = normalizeWindowReplayInput({
+    run_id: "cert-window-theoretical",
+    start_utc: "2026-08-21T09:00:00.000Z",
+    end_utc: "2026-08-21T09:15:00.000Z",
+    run_theoretical: "true",
+  });
+
+  assert.equal(config.runTheoretical, true);
+});
+
 test("window replay emits the signal at setup cutoff when a later fill occurs within TTL", () => {
   const config = normalizeWindowReplayInput({
     run_id: "cert-window-fill-after-cutoff",

@@ -6,21 +6,26 @@ import {
 
 const MANUAL_EXECUTION_EVENT_TYPES = new Set(["placed", "filled", "skipped", "closed", "modified", "note"]);
 
-export async function processTheoreticalExecution(service, { entryLimit = 100, exitLimit = 100 } = {}) {
-  if (!service.repository.available) return skipped("BROKER_REPOSITORY_UNAVAILABLE");
-  if (service.environment.manualTelegramExecutionEnabled !== true) {
+export async function processTheoreticalExecution(service, { entryLimit = 100, exitLimit = 100, nowUtc = null } = {}) {
+  const scopedService = serviceAt(service, nowUtc);
+  if (!scopedService.repository.available) return skipped("BROKER_REPOSITORY_UNAVAILABLE");
+  if (scopedService.environment.manualTelegramExecutionEnabled !== true) {
     return skipped("THEORETICAL_EXECUTION_ONLY_IN_MANUAL_TELEGRAM_MODE");
   }
-  const entries = await processTheoreticalEntries(service, { entryLimit });
-  const exits = await processTheoreticalExits(service, { exitLimit });
+  const expiredHumanGates = typeof scopedService.repository.expireStalePortfolioHumanGates === "function"
+    ? await scopedService.repository.expireStalePortfolioHumanGates({ now: scopedService.now() })
+    : { expired: 0, items: [] };
+  const entries = await processTheoreticalEntries(scopedService, { entryLimit });
+  const exits = await processTheoreticalExits(scopedService, { exitLimit });
   const materialized = countMaterialized(entries, ["fill_entry", "expire_entry"])
     + countMaterialized(exits, ["fill_exit", "review_exit"]);
   return {
     ok: true,
-    status: materialized > 0 ? "MATERIALIZED" : "NO_THEORETICAL_FILL",
+    status: materialized > 0 || Number(expiredHumanGates.expired || 0) > 0 ? "MATERIALIZED" : "NO_THEORETICAL_FILL",
+    expiredHumanGates,
     entries,
     exits,
-    materialized,
+    materialized: materialized + Number(expiredHumanGates.expired || 0),
   };
 }
 
@@ -36,6 +41,7 @@ export async function recordManualExecutionEvent(service, input = {}, actor = {}
   const event = await service.repository.recordManualExecutionEvent({
     event: {
       order_intent_id: input.orderIntentId || input.order_intent_id || null,
+      portfolio_order_intent_id: input.portfolioOrderIntentId || input.portfolio_order_intent_id || null,
       trade_id: input.tradeId || input.trade_id || null,
       management_intent_id: input.managementIntentId || input.management_intent_id || null,
       event_type: eventType,
@@ -107,7 +113,7 @@ async function processTheoreticalEntries(service, { entryLimit }) {
 }
 
 async function evaluateTheoreticalEntry(service, candidate) {
-  const candle = await service.repository.latestClosedCandleForIntent(candidate);
+  const candle = await service.repository.latestClosedCandleForIntent(candidate, { now: service.now() });
   return evaluateTheoreticalEntryIntent({
     intent: candidate,
     decision: candidateDecision(candidate),
@@ -163,6 +169,17 @@ function candidateDecision(candidate) {
   };
 }
 
+function serviceAt(service, nowUtc) {
+  const now = validIso(nowUtc);
+  if (!now) return service;
+  return {
+    ...service,
+    repository: service.repository,
+    environment: service.environment,
+    now: () => now,
+  };
+}
+
 function candidateContract(candidate) {
   return {
     broker_contract_id: candidate.broker_contract_id,
@@ -176,7 +193,7 @@ function candidateContract(candidate) {
 function manualExecutionIdempotencyKey({ input, eventType, occurredAt, who }) {
   return `manual_exec_${canonicalSha256({
     eventType,
-    orderIntentId: input.orderIntentId || input.order_intent_id || null,
+    orderIntentId: input.orderIntentId || input.order_intent_id || input.portfolioOrderIntentId || input.portfolio_order_intent_id || null,
     tradeId: input.tradeId || input.trade_id || null,
     managementIntentId: input.managementIntentId || input.management_intent_id || null,
     occurredAt,

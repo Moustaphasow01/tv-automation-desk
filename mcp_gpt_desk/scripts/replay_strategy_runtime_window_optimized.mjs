@@ -16,6 +16,7 @@ Options:
   --runtime-states RUNNING      Runtime state scope.
   --persist-signals true|false  Publish found signals to the canonical signal bus.
   --run-pipeline true|false     Run Context/Risk/Target/OrderIntent/Human Gate on published certification signals.
+  --run-theoretical true|false  Track theoretical fills/exits at each replay cutoff after the pipeline.
   --record-evaluations true|false
   --limit <n>                   Strategy instance limit.
   --json-out <path>             Write the full result JSON.
@@ -47,6 +48,7 @@ function compactResult(result) {
     published_signal_count: result.published_signal_count,
     pipeline_run_count: result.pipeline_run_count,
     pipeline_human_gate_count: result.pipeline_human_gate_count,
+    theoretical_materialized_count: result.theoretical_materialized_count,
     total_r: result.total_r,
     by_instrument: result.by_instrument,
     by_day: result.by_day,
@@ -80,6 +82,7 @@ function markdownReport(result) {
     `- Published signals: ${result.published_signal_count}`,
     `- Pipeline runs: ${result.pipeline_run_count}`,
     `- Human gates: ${result.pipeline_human_gate_count}`,
+    `- Theoretical materialized: ${result.theoretical_materialized_count}`,
     `- Total theoretical R: ${result.total_r}`,
     "",
     "## By instrument",
