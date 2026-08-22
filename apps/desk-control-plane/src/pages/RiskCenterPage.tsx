@@ -347,6 +347,7 @@ function formatRiskValue(value: number, unit: RiskLimit["unit"] | RiskView["prop
   if (unit === "USD") return formatCurrency(value);
   if (unit === "R") return formatSignedR(value);
   if (unit === "LOTS") return `${value.toFixed(0)} lots`;
+  if (unit === "CONTRACTS") return `${value.toFixed(0)} contrats`;
   if (unit === "X") return `${value.toFixed(2)}×`;
   return `${value.toFixed(value < 1 ? 2 : 1).replace(".", ",")}%`;
 }
