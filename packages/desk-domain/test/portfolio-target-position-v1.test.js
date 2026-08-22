@@ -47,6 +47,45 @@ describe("portfolio target position V1", () => {
     assert.equal(plan.target_positions[0].strategy_breakdown.length, 2);
   });
 
+  it("keeps strategy breakdown signed by each signal and selects a trade plan matching the net direction", () => {
+    const plan = buildPortfolioTargetPositionPlanV1({
+      as_of_utc: "2026-08-09T08:20:00.000Z",
+      account_id: "paper-sim101",
+      candidate_allocations: [allocation({
+        id: "alloc-net-long",
+        net_direction: "LONG",
+        net_size: 1,
+        proposed_size: 1,
+        contributing_signals: [
+          {
+            signal_id: "sig-short-first",
+            strategy_instance_id: "inst-short",
+            direction: "SHORT",
+            proposed_size: 2,
+            proposed_trade_plan: tradePlan({ direction: "SHORT", entry: 100, stop: 110, target: 80 }),
+          },
+          {
+            signal_id: "sig-long-second",
+            strategy_instance_id: "inst-long",
+            direction: "LONG",
+            proposed_size: 3,
+            proposed_trade_plan: tradePlan({ direction: "LONG", entry: 100, stop: 90, target: 120 }),
+          },
+        ],
+      })],
+      risk_budget_evaluation: evaluation([{ candidate_allocation_id: "alloc-net-long", approved_size: 1, status: "PASS", risk_decision_id: "risk-net-long" }]),
+    });
+
+    const target = plan.target_positions[0];
+    assert.equal(target.net_direction, "LONG");
+    assert.equal(target.approved_trade_plan.side, "LONG");
+    assert.equal(target.approved_trade_plan.source_signal_id, "sig-long-second");
+    assert.equal(target.approved_trade_plan.stop.price, 90);
+    assert.equal(target.approved_trade_plan.targets[0].price, 120);
+    assert.equal(target.strategy_breakdown.find((item) => item.strategy_instance_id === "inst-short").signed_size, -2);
+    assert.equal(target.strategy_breakdown.find((item) => item.strategy_instance_id === "inst-long").signed_size, 3);
+  });
+
   it("uses reduced risk size instead of requested allocation size", () => {
     const plan = buildPortfolioTargetPositionPlanV1({
       as_of_utc: "2026-08-09T08:20:00.000Z",
@@ -135,5 +174,17 @@ function position(overrides = {}) {
     instrument: "MNQ",
     signed_size: 0,
     ...overrides,
+  };
+}
+
+function tradePlan({ direction = "LONG", entry = 100, stop = 90, target = 120 } = {}) {
+  return {
+    availability: "KNOWN",
+    direction,
+    order_type: "MARKET",
+    entry: { availability: "KNOWN", price: entry },
+    stop: { availability: "KNOWN", price: stop },
+    targets: [{ label: "T1", availability: "KNOWN", price: target }],
+    time_in_force: "DAY",
   };
 }

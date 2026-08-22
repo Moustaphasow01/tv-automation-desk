@@ -98,15 +98,18 @@ function targetForGroup(key, legs, currentPositions, asOf) {
 }
 
 function strategyBreakdown(allocation, approved) {
-  const requested = positiveOrZero(allocation.proposed_size);
+  const signedNetSize = numberOrNull(allocation.net_size);
+  const requested = Math.abs(signedNetSize ?? signedSize(upper(firstDefined(allocation.net_direction, allocation.direction)), positiveOrZero(allocation.proposed_size)));
+  const approvalRatio = requested > 0 ? approved / requested : 0;
   return array(allocation.contributing_signals).map((signal) => {
     const rawSize = positiveOrZero(signal.proposed_size);
-    const ratio = requested > 0 ? rawSize / requested : 0;
+    const signalSignedSize = signedSize(upper(firstDefined(signal.direction, signal.net_direction)), rawSize);
+    const signedApprovedSize = round(signalSignedSize * approvalRatio);
     return {
       strategy_instance_id: text(signal.strategy_instance_id),
       signal_id: text(signal.signal_id),
-      approved_size: round(approved * ratio),
-      signed_size: signedSize(allocation.net_direction, approved * ratio),
+      approved_size: Math.abs(signedApprovedSize),
+      signed_size: signedApprovedSize,
     };
   });
 }
@@ -139,14 +142,17 @@ function normalizeRiskBudgetEvaluation(input) {
 
 function approvedTradePlanForAllocation(allocation, approved) {
   const signals = array(allocation.contributing_signals);
-  const plans = signals.map((item) => record(firstDefined(item.proposed_trade_plan, item.proposedTradePlan))).filter(Boolean);
+  const netDirection = upper(firstDefined(allocation.net_direction, allocation.direction));
+  const directionalSignals = signals.filter((item) => upper(firstDefined(item.direction, item.net_direction, item.proposed_trade_plan?.direction, item.proposedTradePlan?.direction)) === netDirection);
+  const planSignals = directionalSignals.length ? directionalSignals : signals;
+  const plans = planSignals.map((item) => record(firstDefined(item.proposed_trade_plan, item.proposedTradePlan))).filter(Boolean);
   const plan = plans[0];
   if (!plan) return { availability: "UNAVAILABLE", reason_code: "PROPOSED_TRADE_PLAN_UNAVAILABLE" };
   const authorizedQuantity = round(approved);
   return {
     availability: plans.length === 1 && plan.availability === "KNOWN" ? "KNOWN" : "PARTIAL",
-    source_signal_id: text(signals[0]?.signal_id),
-    side: upper(firstDefined(plan.direction, allocation.net_direction, allocation.direction)),
+    source_signal_id: text(planSignals[0]?.signal_id),
+    side: upper(firstDefined(plan.direction, netDirection)),
     authorized_quantity: authorizedQuantity,
     order_type: text(firstDefined(plan.order_type, "LIMIT")),
     entry: plan.entry || null,
