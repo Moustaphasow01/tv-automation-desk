@@ -339,12 +339,18 @@ export class PostgresBrokerExecutionRepository {
     return { intent, decision, riskCheck, approvals, outbox, orders };
   }
 
-  async listTheoreticalEntryCandidates({ limit = 100 } = {}) { return listTheoreticalEntryCandidatesRepository(this, { limit }); }
-  async expireStalePortfolioHumanGates({ limit = 200, now } = {}) { return expireStalePortfolioHumanGatesRepository(this, { limit, now }); }
+  async listTheoreticalEntryCandidates({ limit = 100, portfolioOrderIntentIds = null } = {}) {
+    return listTheoreticalEntryCandidatesRepository(this, { limit, portfolioOrderIntentIds });
+  }
+  async expireStalePortfolioHumanGates({ limit = 200, now, portfolioOrderIntentIds = null } = {}) {
+    return expireStalePortfolioHumanGatesRepository(this, { limit, now, portfolioOrderIntentIds });
+  }
   async latestClosedCandleForIntent(intent, options = {}) { return latestTheoreticalClosedCandleForIntent(this, intent, options); }
   async recordTheoreticalEntryFill({ result, now }) { return recordTheoreticalEntryFillRepository(this, { result, now }); }
   async recordTheoreticalEntryExpired({ result, now }) { return recordTheoreticalEntryExpiredRepository(this, { result, now }); }
-  async listTheoreticalOpenTrades({ limit = 100 } = {}) { return listTheoreticalOpenTradesRepository(this, { limit }); }
+  async listTheoreticalOpenTrades({ limit = 100, portfolioOrderIntentIds = null } = {}) {
+    return listTheoreticalOpenTradesRepository(this, { limit, portfolioOrderIntentIds });
+  }
   async latestClosedCandleForTrade(trade) { return latestTheoreticalClosedCandleForTrade(this, trade); }
   async recordTheoreticalExitFill({ result, now }) { return recordTheoreticalExitFillRepository(this, { result, now }); }
   async recordTheoreticalReviewRequired({ result, now }) { return recordTheoreticalReviewRequiredRepository(this, { result, now }); }
