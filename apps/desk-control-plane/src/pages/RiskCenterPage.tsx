@@ -272,7 +272,7 @@ const limitColumns = [
   { key: "scope", header: "Périmètre", render: (row: RiskLimit) => row.scope },
   { key: "used", header: "Utilisé", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.usedValue, row.unit) },
   { key: "limitValue", header: "Limite", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.limitValue, row.unit) },
-  { key: "pct", header: "%", align: "right" as const, render: (row: RiskLimit) => `${row.usedPct.toFixed(1)}%` },
+  { key: "pct", header: "%", align: "right" as const, render: (row: RiskLimit) => formatPercent(row.usedPct) },
   { key: "headroom", header: "Marge disponible", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.headroomValue, row.unit) },
   { key: "status", header: "Statut", render: (row: RiskLimit) => <StatusBadge tone={statusTone(row.status)}>{presentQueueStatus(row.status).label}</StatusBadge> }
 ] as const;
@@ -280,8 +280,8 @@ const limitColumns = [
 function LimitCell({ row }: { row: RiskLimit }) {
   return (
     <div className="risk-limit-cell">
-      <strong>{row.label}</strong>
-      <small>{row.officialSource} · {row.reasonCodes.map((code) => presentGeneric(code).label).join(", ")}</small>
+      <strong>{row.label ?? "Limite non publiée"}</strong>
+      <small>{row.officialSource ?? "Source non publiée"} · {(row.reasonCodes ?? []).map((code) => presentGeneric(code).label).join(", ")}</small>
     </div>
   );
 }
@@ -324,14 +324,17 @@ function permissionTone(permission: RiskAction["permission"]) {
 }
 
 function formatPercent(value: number) {
+  if (!Number.isFinite(value)) return "—";
   return `${value.toFixed(1).replace(".", ",")}%`;
 }
 
 function formatSignedR(value: number) {
+  if (!Number.isFinite(value)) return "—";
   return `${value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(2).replace(".", ",")} R`;
 }
 
 function formatCurrency(value: number) {
+  if (!Number.isFinite(value)) return "—";
   const absolute = Math.abs(value);
   const formatter = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
   if (absolute >= 1_000_000) return `${value < 0 ? "−" : ""}${formatter.format(absolute / 1_000_000)} M$`;
@@ -340,6 +343,7 @@ function formatCurrency(value: number) {
 }
 
 function formatRiskValue(value: number, unit: RiskLimit["unit"] | RiskView["propConstraints"][number]["unit"]) {
+  if (!Number.isFinite(value)) return "—";
   if (unit === "USD") return formatCurrency(value);
   if (unit === "R") return formatSignedR(value);
   if (unit === "LOTS") return `${value.toFixed(0)} lots`;
