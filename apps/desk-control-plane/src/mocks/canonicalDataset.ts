@@ -2616,6 +2616,14 @@ export const executionIncidentsView: ViewEnvelope<ExecutionIncidentsView> = {
         impactSummary: "Refusé : aucune urgence broker, incident non critique.",
         payload: { incidentId: "inc_live_broker_netting_cl_delta", dryRun: true }
       }
+    ],
+    workers: [
+      { workerId: "research-worker-01", role: "research", status: "ACTIVE", currentTask: "run_simulation", lastHeartbeatAt: "2026-08-10T09:40:52.000Z", leaseExpiresAt: "2026-08-10T09:42:10.000Z" },
+      { workerId: "strategy-worker-01", role: "strategy", status: "WAITING", currentTask: "", lastHeartbeatAt: "2026-08-10T09:39:40.000Z", leaseExpiresAt: "" }
+    ],
+    workersSummary: { total: 2, active: 1, idle: 1, failed: 0 },
+    runbooks: [
+      { runbookId: "runbook_exec_provider_latency", title: "Execution Latency High", triggeredBy: "system", status: "IN_PROGRESS", severity: "MEDIUM", updatedAt: "2026-08-10T09:36:00.000Z" }
     ]
   }
 };

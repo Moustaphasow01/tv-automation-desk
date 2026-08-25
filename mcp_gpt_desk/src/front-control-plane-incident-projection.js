@@ -12,10 +12,19 @@ import {
   upper,
 } from "./front-control-plane-projection-helpers.js";
 
-export function executionIncidents({ incidents, warnings }) {
+export function executionIncidents({ incidents, warnings, runtime, runbooks }) {
   const list = rows(incidents).filter(hasIncidentId).map(incidentRow);
   if (!list.length) warnings.push("incidents:EMPTY");
+  const workers = rows(runtime).filter((item) => item?.worker_id || item?.assigned_worker_id || item?.task_id).map(workerRow);
   return {
+    workers,
+    workersSummary: {
+      total: workers.length,
+      active: countBy(workers, (item) => item.status === "ACTIVE"),
+      idle: countBy(workers, (item) => item.status === "WAITING"),
+      failed: countBy(workers, (item) => item.status === "FAILED"),
+    },
+    runbooks: rows(runbooks).slice(0, 20).map(runbookSummaryRow),
     summary: {
       openIncidents: countBy(list, (item) => !["RESOLVED", "CLOSED", "EXPECTED_STOPPED"].includes(upper(item.status))),
       criticalIncidents: countBy(list, (item) => item.severity === "HIGH" && item.category === "ACTIVE_FAILURE"),
@@ -147,5 +156,27 @@ function severity(value) {
   const normalized = upper(value);
   if (normalized === "CRITICAL") return "HIGH";
   return ["LOW", "MEDIUM", "HIGH"].includes(normalized) ? normalized : "LOW";
+}
+
+function workerRow(item) {
+  return {
+    workerId: text(item.assigned_worker_id || item.worker_id || item.task_id, ""),
+    role: text(item.task_type, "agent-runtime"),
+    status: upper(item.status) === "READY" ? "WAITING" : upper(item.status) === "FAILED" ? "FAILED" : "ACTIVE",
+    currentTask: text(item.task_key, ""),
+    lastHeartbeatAt: text(item.updated_at_utc, "unavailable"),
+    leaseExpiresAt: text(item.lease_expires_at_utc, ""),
+  };
+}
+
+function runbookSummaryRow(item) {
+  return {
+    runbookId: text(item.id, ""),
+    title: text(item.title, "Runbook"),
+    triggeredBy: text(item.context?.worker || item.owner, "system"),
+    status: text(item.status, "unavailable"),
+    severity: severity(item.severity),
+    updatedAt: text(item.updatedAt, "unavailable"),
+  };
 }
 

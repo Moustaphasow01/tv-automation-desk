@@ -160,7 +160,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   orders: ["execution"],
   risk: ["execution", "portfolio-risk", "strategy", "health"],
   "execution-providers": ["execution", "incidents", "health"],
-  "execution-incidents": ["execution", "incidents"],
+  "execution-incidents": ["execution", "incidents", "agent-runtime", "runbooks"],
   portfolio: ["execution", "portfolio-risk"],
   "jarvis-workspace": ["ai-context", "incidents", "agent-runtime", "assistant-runtime", "research", "data-foundation", "execution", "strategy", "portfolio-risk", "health"],
   sessions: ["sessions"],

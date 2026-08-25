@@ -1610,6 +1610,23 @@ export type ExecutionIncidentsView = {
     impactSummary: string;
     payload: Record<string, string | number | boolean>;
   }[];
+  workers: readonly {
+    workerId: string;
+    role: string;
+    status: "ACTIVE" | "WAITING" | "FAILED";
+    currentTask: string;
+    lastHeartbeatAt: string;
+    leaseExpiresAt: string;
+  }[];
+  workersSummary: { total: number; active: number; idle: number; failed: number };
+  runbooks: readonly {
+    runbookId: string;
+    title: string;
+    triggeredBy: string;
+    status: string;
+    severity: "LOW" | "MEDIUM" | "HIGH";
+    updatedAt: string;
+  }[];
 };
 
 export type AuthSessionView = {

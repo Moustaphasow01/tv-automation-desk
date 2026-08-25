@@ -244,6 +244,50 @@ export function ExecutionIncidentsPage() {
             </div>
           </section>
         </div>
+
+        <div className="io-row3">
+          <section className="io-panel" aria-label="Statut des workers">
+            <header><h2>Workers</h2><small>{data.workersSummary.active} actifs / {data.workersSummary.total}</small></header>
+            <div className="io-panel__body" style={{ padding: 0 }}>
+              <table className="io-table">
+                <thead><tr><th>Worker</th><th>Rôle</th><th>Tâche</th><th>Statut</th><th>Dernier heartbeat</th></tr></thead>
+                <tbody>
+                  {data.workers.map((worker) => (
+                    <tr key={worker.workerId}>
+                      <td><strong>{worker.workerId}</strong></td>
+                      <td>{worker.role}</td>
+                      <td>{worker.currentTask || "—"}</td>
+                      <td><StatusBadge tone={worker.status === "ACTIVE" ? "success" : worker.status === "FAILED" ? "danger" : "warning"}>{worker.status}</StatusBadge></td>
+                      <td>{formatTime(worker.lastHeartbeatAt)}</td>
+                    </tr>
+                  ))}
+                  {!data.workers.length ? <tr><td colSpan={5}><p className="io-empty">Aucun worker publié.</p></td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="io-panel" aria-label="Runbooks récents">
+            <header><h2>Runbooks récents</h2><small>{data.runbooks.length}</small></header>
+            <div className="io-panel__body" style={{ padding: 0 }}>
+              <table className="io-table">
+                <thead><tr><th>Runbook</th><th>Déclenché par</th><th>Statut</th><th>Sévérité</th><th>Mis à jour</th></tr></thead>
+                <tbody>
+                  {data.runbooks.map((runbook) => (
+                    <tr key={runbook.runbookId}>
+                      <td><strong>{runbook.title}</strong></td>
+                      <td>{runbook.triggeredBy}</td>
+                      <td><StatusBadge tone="warning">{runbook.status}</StatusBadge></td>
+                      <td><StatusBadge tone={severityTone(runbook.severity)}>{presentSeverity(runbook.severity).label}</StatusBadge></td>
+                      <td>{formatTime(runbook.updatedAt)}</td>
+                    </tr>
+                  ))}
+                  {!data.runbooks.length ? <tr><td colSpan={5}><p className="io-empty">Aucun runbook publié.</p></td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
