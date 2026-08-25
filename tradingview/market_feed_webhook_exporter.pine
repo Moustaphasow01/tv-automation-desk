@@ -27,35 +27,36 @@ f_contains(string haystack, string needle) =>
     str.contains(str.upper(haystack), needle)
 
 f_auto_symbol() =>
-    string tickerText = str.upper(syminfo.ticker)
-    string tickerIdText = str.upper(syminfo.tickerid)
-    string haystack = tickerText + "|" + tickerIdText
-
-     f_contains(haystack, "MNQ") ? "MNQ1!" :
-     f_contains(haystack, "MES") ? "MES1!" :
-     f_contains(haystack, "NQ") ? "NQ1!" :
-     f_contains(haystack, "SX5E") or f_contains(haystack, "FESX") ? "SX5E" :
-     f_contains(haystack, "ES") ? "ES1!" :
-     f_contains(haystack, "US10Y") ? "US10Y" :
-     f_contains(haystack, "US02Y") ? "US02Y" :
-     f_contains(haystack, "DXY") ? "DXY" :
-     f_contains(haystack, "CL1") or f_contains(haystack, "NYMEX:CL") ? "CL1!" :
-     f_contains(haystack, "GC1") or f_contains(haystack, "COMEX:GC") ? "GC1!" :
-     f_contains(haystack, "VIX") ? "VIX" :
-     f_contains(haystack, "NI225") or f_contains(haystack, "NIKKEI") or f_contains(haystack, "NK225") or f_contains(haystack, "NKY") ? "NI225" :
-     f_contains(haystack, "HSI") or f_contains(haystack, "HANG") ? "HSI" :
-     f_contains(haystack, "DAX") or f_contains(haystack, "DEU40") or f_contains(haystack, "FDAX") ? "DAX" :
-     f_contains(haystack, "NVDA") ? "NVDA" :
-     f_contains(haystack, "AAPL") ? "AAPL" :
-     f_contains(haystack, "MSFT") ? "MSFT" :
-     f_contains(haystack, "TSLA") ? "TSLA" :
-     f_contains(haystack, "SMH") ? "SMH" :
-     f_contains(haystack, "SOXX") ? "SOXX" :
-     syminfo.ticker
+    haystack = str.upper(syminfo.ticker) + "|" + str.upper(syminfo.tickerid)
+    f_contains(haystack, "MNQ") ? "MNQ1!" :
+      f_contains(haystack, "MES") ? "MES1!" :
+      f_contains(haystack, "ZC1") or f_contains(haystack, "CBOT:ZC") ? "ZC1!" :
+      f_contains(haystack, "ZW1") or f_contains(haystack, "CBOT:ZW") ? "ZW1!" :
+      f_contains(haystack, "NQ") ? "NQ1!" :
+      f_contains(haystack, "SX5E") or f_contains(haystack, "FESX") ? "SX5E" :
+      f_contains(haystack, "ES") ? "ES1!" :
+      f_contains(haystack, "US10Y") ? "US10Y" :
+      f_contains(haystack, "US02Y") ? "US02Y" :
+      f_contains(haystack, "DXY") ? "DXY" :
+      f_contains(haystack, "CL1") or f_contains(haystack, "NYMEX:CL") ? "CL1!" :
+      f_contains(haystack, "GC1") or f_contains(haystack, "COMEX:GC") ? "GC1!" :
+      f_contains(haystack, "VIX") ? "VIX" :
+      f_contains(haystack, "NI225") or f_contains(haystack, "NIKKEI") or f_contains(haystack, "NK225") or f_contains(haystack, "NKY") ? "NI225" :
+      f_contains(haystack, "HSI") or f_contains(haystack, "HANG") ? "HSI" :
+      f_contains(haystack, "DAX") or f_contains(haystack, "DEU40") or f_contains(haystack, "FDAX") ? "DAX" :
+      f_contains(haystack, "NVDA") ? "NVDA" :
+      f_contains(haystack, "AAPL") ? "AAPL" :
+      f_contains(haystack, "MSFT") ? "MSFT" :
+      f_contains(haystack, "TSLA") ? "TSLA" :
+      f_contains(haystack, "SMH") ? "SMH" :
+      f_contains(haystack, "SOXX") ? "SOXX" :
+      syminfo.ticker
 
 f_auto_asset(string symbol) =>
-    symbol == "MNQ1!" ? "MNQ" :
+     symbol == "MNQ1!" ? "MNQ" :
      symbol == "MES1!" ? "MES" :
+     symbol == "ZC1!" ? "ZC" :
+     symbol == "ZW1!" ? "ZW" :
      symbol == "NQ1!" ? "NQ" :
      symbol == "ES1!" ? "ES" :
      symbol == "CL1!" ? "CL" :

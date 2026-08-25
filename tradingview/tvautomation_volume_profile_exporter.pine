@@ -6,7 +6,7 @@ indicator("TVAutomation Volume Profile Exporter", "TVA VP", overlay = true, max_
 sendEveryClosedBar = input.bool(true, "Envoyer un webhook a chaque cloture de bougie", group="TVAutomation")
 webhookSecret      = input.string("", "Secret webhook local", group="TVAutomation")
 requireWebhookSecret = input.bool(false, "Bloquer l'alerte si le secret est vide", group="TVAutomation")
-deskSymbolInput    = input.string("AUTO", "Symbole envoye au desk", options=["AUTO", "MES1!", "MCL1!"], group="TVAutomation")
+deskSymbolInput    = input.string("AUTO", "Symbole envoye au desk", options=["AUTO", "MES1!", "MCL1!", "ZC1!", "ZW1!"], group="TVAutomation")
 showExportVisuals  = input.bool(true, "Afficher POC/VAH/VAL/VWAP/EMA export", group="TVAutomation")
 
 atrLen = input.int(14, "ATR Length", minval=1, group="TVAutomation - Helpers")
@@ -31,7 +31,9 @@ f_auto_symbol() =>
     tickerIdText = str.upper(syminfo.tickerid)
     isMcl = str.contains(tickerText, "MCL") or str.contains(tickerIdText, "MCL")
     isMes = str.contains(tickerText, "MES") or str.contains(tickerIdText, "MES")
-    isMcl ? "MCL1!" : isMes ? "MES1!" : syminfo.ticker
+    isZc = str.contains(tickerText, "ZC1") or str.contains(tickerIdText, "CBOT:ZC")
+    isZw = str.contains(tickerText, "ZW1") or str.contains(tickerIdText, "CBOT:ZW")
+    isMcl ? "MCL1!" : isMes ? "MES1!" : isZc ? "ZC1!" : isZw ? "ZW1!" : syminfo.ticker
 
 f_rel(price, level) =>
     na(price) or na(level) ? "unknown" : math.abs(price - level) <= syminfo.mintick * 0.5 ? "at" : price > level ? "above" : "below"

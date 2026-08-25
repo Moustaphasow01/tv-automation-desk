@@ -80,6 +80,12 @@ c1 = f_candle("NQ", "NQ1!", "CME_MINI:NQ1!", s1)
 s2 = request.security("CME_MINI:ES1!", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
 c2 = f_candle("ES", "ES1!", "CME_MINI:ES1!", s2)
 
+s3 = request.security("CBOT:ZC1!", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c3 = f_candle("ZC", "ZC1!", "CBOT:ZC1!", s3)
+
+s4 = request.security("CBOT:ZW1!", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c4 = f_candle("ZW", "ZW1!", "CBOT:ZW1!", s4)
+
 payload = "{"
 payload := payload + '"source":"tradingview_webhook",'
 payload := payload + '"type":"market_feed_batch",'
@@ -89,6 +95,8 @@ payload := payload + '"bar_status":"closed",'
 payload := payload + '"candles":['
 payload := payload + "" + c1
 payload := payload + "," + c2
+payload := payload + "," + c3
+payload := payload + "," + c4
 payload := payload + ']'
 payload := payload + "}"
 

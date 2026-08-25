@@ -146,6 +146,12 @@ c23 = f_candle("SMH", "SMH", "NASDAQ:SMH", s23)
 s24 = request.security("NASDAQ:SOXX", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
 c24 = f_candle("SOXX", "SOXX", "NASDAQ:SOXX", s24)
 
+s25 = request.security("CBOT:ZC1!", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c25 = f_candle("ZC", "ZC1!", "CBOT:ZC1!", s25)
+
+s26 = request.security("CBOT:ZW1!", TF, f_feed_point(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+c26 = f_candle("ZW", "ZW1!", "CBOT:ZW1!", s26)
+
 payload = "{"
 payload := payload + '"source":"tradingview_webhook",'
 payload := payload + '"type":"market_feed_batch",'
@@ -177,6 +183,8 @@ payload := payload + "," + c21
 payload := payload + "," + c22
 payload := payload + "," + c23
 payload := payload + "," + c24
+payload := payload + "," + c25
+payload := payload + "," + c26
 payload := payload + ']'
 payload := payload + "}"
 
