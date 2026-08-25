@@ -148,7 +148,85 @@ function OverviewTab({ data, strategyGroup }: { data: PerformanceView; strategyG
           </div>
         </section>
       </div>
+
+      <div className="pa-row1">
+        <section className="pa-panel" aria-label="Analyse du drawdown">
+          <header><h2>Analyse du drawdown</h2></header>
+          <div className="pa-panel__body">
+            <DrawdownChart points={data.equityCurve} />
+            <div className="pa-drawdown-stats">
+              <span><small>Max drawdown</small><strong>{formatSignedR(s.maxDrawdownR)}</strong></span>
+              <span><small>Drawdown actuel</small><strong>{formatSignedR(s.currentDrawdownR)}</strong></span>
+              <span><small>Jours gagnants</small><strong>{s.winningDays}</strong></span>
+              <span><small>Jours perdants</small><strong>{s.losingDays}</strong></span>
+            </div>
+          </div>
+        </section>
+
+        <section className="pa-panel" aria-label="Distribution des trades">
+          <header><h2>Distribution des trades</h2></header>
+          <div className="pa-panel__body">
+            <TradeDistributionDonut wins={s.wins} losses={s.losses} flats={s.flats} />
+          </div>
+        </section>
+      </div>
     </>
+  );
+}
+
+function DrawdownChart({ points }: { points: PerformanceView["equityCurve"] }) {
+  if (!points.length) return <p className="pa-empty">Aucune courbe de drawdown publiée.</p>;
+  const width = 640;
+  const height = 160;
+  const padding = 8;
+  const values = points.map((point) => point.drawdownR);
+  const min = Math.min(...values, 0);
+  const span = Math.max(-min, 0.0001);
+  const stepX = points.length > 1 ? (width - padding * 2) / (points.length - 1) : 0;
+  const y = (value: number) => padding + ((0 - value) / span) * (height - padding * 2);
+  const path = points.map((point, index) => `${index === 0 ? "M" : "L"}${padding + index * stepX},${y(point.drawdownR)}`).join(" ");
+  const area = `${path} L${padding + (points.length - 1) * stepX},${y(0)} L${padding},${y(0)} Z`;
+  return (
+    <svg className="pa-chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      <path d={area} fill="rgba(255,77,90,.18)" stroke="none" />
+      <path d={path} fill="none" stroke="var(--pa-red)" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function TradeDistributionDonut({ wins, losses, flats }: { wins: number; losses: number; flats: number }) {
+  const total = wins + losses + flats || 1;
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  const segments = [
+    { key: "Gagnants", value: wins, color: "var(--pa-green)" },
+    { key: "Perdants", value: losses, color: "var(--pa-red)" },
+    { key: "Neutres", value: flats, color: "var(--pa-muted)" },
+  ];
+  let cumulative = 0;
+  return (
+    <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+      <svg viewBox="0 0 100 100" width="110" height="110" role="img" aria-label="Distribution des trades">
+        <g transform="rotate(-90 50 50)">
+          {segments.map((segment) => {
+            const fraction = segment.value / total;
+            const dash = fraction * circumference;
+            const offset = cumulative * circumference;
+            cumulative += fraction;
+            return <circle key={segment.key} cx="50" cy="50" r={radius} fill="none" stroke={segment.color} strokeWidth="14" strokeDasharray={`${dash} ${circumference - dash}`} strokeDashoffset={-offset} />;
+          })}
+        </g>
+        <text x="50" y="50" textAnchor="middle" dominantBaseline="middle" fontSize="12" fill="var(--pa-text)" fontWeight="700">{wins + losses + flats}</text>
+      </svg>
+      <ul style={{ display: "grid", gap: 5, fontSize: 11.5, listStyle: "none", margin: 0, padding: 0 }}>
+        {segments.map((segment) => (
+          <li key={segment.key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: segment.color, display: "inline-block" }} />
+            {segment.key} <strong>{segment.value}</strong>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

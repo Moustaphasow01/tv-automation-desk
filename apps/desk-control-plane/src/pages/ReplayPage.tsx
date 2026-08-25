@@ -273,28 +273,51 @@ function CandleChart({ candles, playheadIndex, events, onSelectEvent }: {
         );
       })}
       <line x1={x(playheadIndex)} x2={x(playheadIndex)} y1={0} y2={height} stroke="var(--rp-secondary)" strokeDasharray="3 3" />
-      {eventPositions.map(({ event, index }) => (
-        <circle
-          key={event.eventId}
-          cx={x(Math.min(index, visible.length - 1))}
-          cy={8}
-          r={4}
-          fill={LAYER_COLORS[event.layer]}
-          onClick={() => onSelectEvent(event.eventId)}
-          style={{ cursor: "pointer" }}
-        >
-          <title>{event.title}</title>
-        </circle>
-      ))}
+      {eventPositions.map(({ event, index }, position) => {
+        const cx = x(Math.min(index, visible.length - 1));
+        const showLabel = eventPositions.length <= 12;
+        const labelY = 10 + (position % 3) * 12;
+        return (
+          <g key={event.eventId} onClick={() => onSelectEvent(event.eventId)} style={{ cursor: "pointer" }}>
+            {showLabel ? <line x1={cx} x2={cx} y1={labelY + 4} y2={y(candles[Math.min(index, visible.length - 1)].high)} stroke={LAYER_COLORS[event.layer]} strokeWidth="1" strokeDasharray="2 2" opacity={0.6} /> : null}
+            <circle cx={cx} cy={showLabel ? labelY : 8} r={4} fill={LAYER_COLORS[event.layer]}>
+              <title>{event.title}</title>
+            </circle>
+            {showLabel ? (
+              <text x={cx + 6} y={labelY + 3} fontSize="8.5" fill={LAYER_COLORS[event.layer]} fontWeight="700">{event.title}</text>
+            ) : null}
+          </g>
+        );
+      })}
     </svg>
   );
 }
 
 function DecisionColumn({ title, event }: { title: string; event: TimelineEvent | null }) {
+  if (!event) {
+    return (
+      <div className="rp-decision-col">
+        <h3>{title}</h3>
+        <p style={{ color: "var(--rp-muted)" }}>Non publié</p>
+      </div>
+    );
+  }
+  const fields: [string, string][] = [
+    ["Type", event.type],
+    ["Décision", event.decision ?? "Non publié"],
+    ["Détail", event.detail || event.title],
+  ];
+  if (event.conclusion) fields.push(["Conclusion", event.conclusion]);
+  if (event.price != null) fields.push(["Prix", event.price.toFixed(2)]);
+  if (event.severity) fields.push(["Sévérité", event.severity]);
   return (
     <div className="rp-decision-col">
       <h3>{title}</h3>
-      {event ? <p>{event.detail || event.title}</p> : <p style={{ color: "var(--rp-muted)" }}>Non publié</p>}
+      <div className="rp-decision-fields">
+        {fields.map(([label, value]) => (
+          <div key={label}><small>{label}</small><span>{value}</span></div>
+        ))}
+      </div>
     </div>
   );
 }
