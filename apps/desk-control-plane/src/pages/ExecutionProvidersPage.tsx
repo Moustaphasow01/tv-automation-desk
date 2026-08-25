@@ -13,6 +13,17 @@ import "@/features/execution-providers/execution-providers.css";
 type ProviderAction = ExecutionProvidersView["commandActions"][number];
 type ProviderAccount = ExecutionProvidersView["accounts"][number];
 
+type CommandTab = "all" | "working" | "pending" | "filled" | "partial" | "rejected" | "cancelled";
+const COMMAND_TAB_STATUSES: Record<CommandTab, readonly string[] | null> = {
+  all: null,
+  working: ["pending", "leased", "sent"],
+  pending: ["pending"],
+  filled: ["filled"],
+  partial: ["partially_filled"],
+  rejected: ["rejected"],
+  cancelled: ["cancelled"],
+};
+
 export function ExecutionProvidersPage() {
   const realtime = useContext(RealtimeContext);
   const query = useFrontView("execution-providers");
@@ -21,6 +32,7 @@ export function ExecutionProvidersPage() {
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
+  const [commandTab, setCommandTab] = useState<CommandTab>("all");
 
   if (query.isLoading) return <ExecutionProvidersLoading />;
   if (query.isError) return <div className="ep-page"><div className="ep-workspace"><p className="ep-empty">Fournisseurs indisponibles : {(query.error as Error).message}</p></div></div>;
@@ -28,6 +40,8 @@ export function ExecutionProvidersPage() {
 
   const { data } = query.data;
   const switchAction = data.commandActions.find((action) => action.commandType === "execution.provider.switch_primary");
+  const allowedStatuses = COMMAND_TAB_STATUSES[commandTab];
+  const visibleCommands = allowedStatuses ? data.providerCommands.items.filter((item) => allowedStatuses.includes(item.status)) : data.providerCommands.items;
 
   const confirmAction = async (action: ProviderAction) => {
     setSubmittingActionId(action.actionId);
@@ -134,6 +148,130 @@ export function ExecutionProvidersPage() {
                 </div>
               ))}
               {!data.healthChecks.length ? <p className="ep-empty">Aucun contrôle santé publié.</p> : null}
+            </div>
+          </section>
+        </div>
+
+        <div className="ep-row3">
+          <section className="ep-panel" aria-label="Modes d'exécution">
+            <header><h2>Modes d'exécution</h2></header>
+            <div className="ep-panel__body">
+              <div className="ep-mode-row"><strong>Mode courant</strong><StatusBadge tone="accent">{data.executionModes.current}</StatusBadge></div>
+              <div className="ep-mode-row"><span>Exécution activée</span><StatusBadge tone={data.executionModes.executionEnabled ? "success" : "danger"}>{data.executionModes.executionEnabled ? "OUI" : "NON"}</StatusBadge></div>
+              <div className="ep-mode-row"><span>Approbation opérateur requise</span><StatusBadge tone={data.executionModes.entryOperatorApprovalRequired ? "warning" : "success"}>{data.executionModes.entryOperatorApprovalRequired ? "OUI" : "NON"}</StatusBadge></div>
+              <div className="ep-mode-row"><span>Exécution manuelle Telegram</span><StatusBadge tone={data.executionModes.manualTelegramExecutionEnabled ? "warning" : "success"}>{data.executionModes.manualTelegramExecutionEnabled ? "ACTIVE" : "INACTIVE"}</StatusBadge></div>
+              <div className="ep-mode-row"><span>Compte live autorisé</span><StatusBadge tone={data.executionModes.liveAccountAllowed ? "danger" : "success"}>{data.executionModes.liveAccountAllowed ? "OUI" : "NON"}</StatusBadge></div>
+            </div>
+          </section>
+
+          <section className="ep-panel" aria-label="Disjoncteurs">
+            <header><h2>Disjoncteurs</h2></header>
+            <div className="ep-panel__body">
+              <div className="ep-breaker-panel">
+                {data.circuitBreakers.map((breaker) => (
+                  <div key={breaker.breakerId} className="ep-breaker-row">
+                    <strong>{breaker.label}</strong>
+                    <StatusBadge tone={breaker.armed ? "danger" : "success"}>{breaker.armed ? "BLOQUANT" : "OK"}</StatusBadge>
+                    <small>{breaker.detail}</small>
+                  </div>
+                ))}
+                {!data.circuitBreakers.length ? <p className="ep-empty">Aucun disjoncteur publié.</p> : null}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section className="ep-panel" aria-label="Commandes provider">
+          <header>
+            <h2>Commandes provider</h2>
+            <div className="ep-tabs">
+              {(Object.keys(COMMAND_TAB_STATUSES) as CommandTab[]).map((tab) => (
+                <button key={tab} type="button" className={`ep-tab${commandTab === tab ? " ep-tab--active" : ""}`} onClick={() => setCommandTab(tab)}>
+                  {tab.toUpperCase()} ({data.providerCommands.counts[tab]})
+                </button>
+              ))}
+            </div>
+          </header>
+          <div className="ep-panel__body" style={{ padding: 0 }}>
+            <div className="ep-table-scroll">
+              <table className="ep-table">
+                <thead><tr><th>Heure</th><th>OrderIntent</th><th>Instrument</th><th>Côté</th><th>Qté</th><th>Type</th><th>Statut</th></tr></thead>
+                <tbody>
+                  {visibleCommands.map((item) => (
+                    <tr key={item.commandId}>
+                      <td>{formatTime(item.at)}</td>
+                      <td>{shortId(item.orderIntentId)}</td>
+                      <td>{item.instrument}</td>
+                      <td><StatusBadge tone={item.side === "BUY" ? "success" : "danger"}>{item.side}</StatusBadge></td>
+                      <td>{item.quantity}</td>
+                      <td>{item.commandType}</td>
+                      <td><StatusBadge tone={commandStatusTone(item.status)}>{item.status}</StatusBadge></td>
+                    </tr>
+                  ))}
+                  {!visibleCommands.length ? <tr><td colSpan={7}><p className="ep-empty">Aucune commande provider publiée pour cet onglet.</p></td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <div className="ep-row4">
+          <section className="ep-panel" aria-label="Remplissages récents">
+            <header><h2>Remplissages</h2><small>{data.fills.length}</small></header>
+            <div className="ep-panel__body" style={{ padding: 0 }}>
+              <table className="ep-table">
+                <thead><tr><th>Heure</th><th>Côté</th><th>Qté</th><th>Prix</th></tr></thead>
+                <tbody>
+                  {data.fills.map((event) => (
+                    <tr key={event.eventId}>
+                      <td>{formatTime(event.at)}</td>
+                      <td>{event.side ? <StatusBadge tone={event.side === "BUY" ? "success" : "danger"}>{event.side}</StatusBadge> : "—"}</td>
+                      <td>{event.fillQuantity ?? event.quantity ?? "—"}</td>
+                      <td>{event.fillPrice != null ? event.fillPrice.toFixed(2) : "—"}</td>
+                    </tr>
+                  ))}
+                  {!data.fills.length ? <tr><td colSpan={4}><p className="ep-empty">Aucun remplissage publié.</p></td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="ep-panel" aria-label="Remplissages partiels">
+            <header><h2>Remplissages partiels</h2><small>{data.partialFills.length}</small></header>
+            <div className="ep-panel__body" style={{ padding: 0 }}>
+              <table className="ep-table">
+                <thead><tr><th>Heure</th><th>Côté</th><th>Rempli</th><th>Demandé</th></tr></thead>
+                <tbody>
+                  {data.partialFills.map((event) => (
+                    <tr key={event.eventId}>
+                      <td>{formatTime(event.at)}</td>
+                      <td>{event.side ? <StatusBadge tone={event.side === "BUY" ? "success" : "danger"}>{event.side}</StatusBadge> : "—"}</td>
+                      <td>{event.fillQuantity ?? "—"}</td>
+                      <td>{event.quantity ?? "—"}</td>
+                    </tr>
+                  ))}
+                  {!data.partialFills.length ? <tr><td colSpan={4}><p className="ep-empty">Aucun remplissage partiel publié.</p></td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="ep-panel" aria-label="Rejets et annulations">
+            <header><h2>Rejets &amp; annulations</h2><small>{data.rejectsAndCancels.length}</small></header>
+            <div className="ep-panel__body" style={{ padding: 0 }}>
+              <table className="ep-table">
+                <thead><tr><th>Heure</th><th>Type</th><th>Statut</th></tr></thead>
+                <tbody>
+                  {data.rejectsAndCancels.map((event) => (
+                    <tr key={event.eventId}>
+                      <td>{formatTime(event.at)}</td>
+                      <td>{event.eventType}</td>
+                      <td><StatusBadge tone="danger">{event.status}</StatusBadge></td>
+                    </tr>
+                  ))}
+                  {!data.rejectsAndCancels.length ? <tr><td colSpan={3}><p className="ep-empty">Aucun rejet ou annulation publié.</p></td></tr> : null}
+                </tbody>
+              </table>
             </div>
           </section>
         </div>
@@ -250,6 +388,17 @@ function providerStateTone(state: ExecutionProvidersView["providers"][number]["s
   if (state === "DEGRADED" || state === "VALIDATION_PENDING") return "warning" as const;
   if (state === "DISABLED" || state === "DISCONNECTED") return "danger" as const;
   return "accent" as const;
+}
+
+function commandStatusTone(status: string) {
+  if (status === "filled") return "success" as const;
+  if (status === "rejected" || status === "cancelled") return "danger" as const;
+  if (status === "partially_filled") return "warning" as const;
+  return "accent" as const;
+}
+
+function shortId(value: string) {
+  return value.length > 14 ? `${value.slice(0, 14)}…` : value;
 }
 
 function providerShort(providerId: string) {

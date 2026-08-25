@@ -2357,7 +2357,51 @@ export const executionProvidersView: ViewEnvelope<ExecutionProvidersView> = {
         impactSummary: "Refusé : demo order non explicitement autorisé pour PickMyTrade shadow.",
         payload: { providerId: "provider_pickmytrade_shadow", dryRun: true }
       }
-    ]
+    ],
+    executionModes: {
+      current: "SEMI_AUTO",
+      executionEnabled: true,
+      manualTelegramExecutionEnabled: false,
+      entryOperatorApprovalRequired: true,
+      liveAccountAllowed: false
+    },
+    circuitBreakers: [
+      { breakerId: "global_kill_switch", label: "Global Kill Switch", armed: false, detail: "Aucun verrou global actif" },
+      { breakerId: "market_data", label: "Flux de données marché", armed: false, detail: "Aucun problème détecté" },
+      { breakerId: "infrastructure", label: "Infrastructure d'exécution", armed: false, detail: "Infrastructure saine" }
+    ],
+    providerCommands: {
+      counts: { all: 2, working: 1, pending: 0, filled: 1, partial: 0, rejected: 0, cancelled: 0 },
+      items: [
+        {
+          commandId: "cmd_sig_vnext_demo_mnq_0940_001",
+          orderIntentId: "oint_sig_vnext_demo_mnq_0940_001",
+          providerId: "provider_ninjatrader_sim101",
+          instrument: "MNQ",
+          side: "BUY",
+          quantity: 2,
+          commandType: "entry",
+          status: "sent",
+          at: "2026-08-10T09:40:57.500Z"
+        },
+        {
+          commandId: "cmd_sig_gc_macro_0935_shadow",
+          orderIntentId: "oint_sig_gc_macro_0935_shadow",
+          providerId: "provider_pickmytrade_shadow",
+          instrument: "MGC",
+          side: "BUY",
+          quantity: 1,
+          commandType: "entry",
+          status: "filled",
+          at: "2026-08-10T09:36:20.000Z"
+        }
+      ]
+    },
+    fills: [
+      { eventId: "evt_fill_gc_macro_0935", commandId: "cmd_sig_gc_macro_0935_shadow", orderIntentId: "oint_sig_gc_macro_0935_shadow", eventType: "fill", status: "filled", side: "BUY", quantity: 1, fillQuantity: 1, fillPrice: 2460.1, at: "2026-08-10T09:36:20.500Z", classification: "FILL" }
+    ],
+    partialFills: [],
+    rejectsAndCancels: []
   }
 };
 

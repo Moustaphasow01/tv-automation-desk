@@ -1472,6 +1472,45 @@ export type ExecutionProvidersView = {
     impactSummary: string;
     payload: Record<string, string | number | boolean>;
   }[];
+  executionModes: {
+    current: string;
+    executionEnabled: boolean;
+    manualTelegramExecutionEnabled: boolean;
+    entryOperatorApprovalRequired: boolean;
+    liveAccountAllowed: boolean;
+  };
+  circuitBreakers: readonly { breakerId: string; label: string; armed: boolean; detail: string }[];
+  providerCommands: {
+    counts: { all: number; working: number; pending: number; filled: number; partial: number; rejected: number; cancelled: number };
+    items: readonly {
+      commandId: string;
+      orderIntentId: string;
+      providerId: string;
+      instrument: string;
+      side: string;
+      quantity: number;
+      commandType: string;
+      status: string;
+      at: string;
+    }[];
+  };
+  fills: readonly ProviderEventRow[];
+  partialFills: readonly ProviderEventRow[];
+  rejectsAndCancels: readonly ProviderEventRow[];
+};
+
+type ProviderEventRow = {
+  eventId: string;
+  commandId: string;
+  orderIntentId: string;
+  eventType: string;
+  status: string;
+  side: string | null;
+  quantity: number | null;
+  fillQuantity: number | null;
+  fillPrice: number | null;
+  at: string;
+  classification: "FILL" | "PARTIAL_FILL" | "REJECT_CANCEL" | "OTHER";
 };
 
 export type ExecutionIncidentSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
