@@ -151,13 +151,15 @@ function providerEventMatches(item, intentIds, commandIds) {
   return intentMatches && commandMatches;
 }
 
-export function liveSummary({ signals, intents, commands, events, safety = {}, performance = {} }) {
+export function liveSummary({ signals, intents, commands, events, safety = {}, risk = {}, performance = {} }) {
   return {
     signalsToday: signals.length, tradesExecuted: events.filter(isCanonicalFillEvent).length,
     acceptanceRatePct: signals.length ? Math.round((intents.length / signals.length) * 100) : null,
     orderIntentsPending: intents.filter((item) => ["READY", "AWAITING_MANUAL_CONFIRMATION", "PENDING"].includes(upper(item.state))).length,
     providerCommandsCreated: commands.length, providerEventsObserved: events.length,
-    riskUsedPct: nullableMetric(safety.riskPercent), correlatedExposurePct: nullableMetric(safety.correlatedExposurePct), liveDrawdownR: nullableMetric(performance.max_drawdown_R),
+    riskUsedPct: nullableMetric(first(safety.riskPercent, risk?.summary?.risk_percent)),
+    correlatedExposurePct: nullableMetric(first(safety.correlatedExposurePct, risk?.summary?.correlated_exposure_pct)),
+    liveDrawdownR: nullableMetric(performance.max_drawdown_R),
   };
 }
 
@@ -179,8 +181,7 @@ export function appendLiveWarnings({ execution, safety, canonicalRuntime, liveSe
   if (!execution.session_id && !currentLiveSession?.id) warnings.push("live-session-id:UNAVAILABLE");
   if (!marketClosed && !execution.next_monitor_at && !currentLiveSession?.nextMonitorAt && !currentLiveSession?.nextCheckpointAt) warnings.push("live-next-monitor:UNAVAILABLE");
   if (signalCount && !execution.arbitrations) warnings.push("live-arbitrations:UNAVAILABLE");
-  if (intentCount && !execution.risk_checks) warnings.push("live-risk-checks:UNAVAILABLE");
-  if (intentCount && safety.correlatedExposurePct == null) warnings.push("live-correlated-exposure:UNAVAILABLE");
+  if (intentCount && !hasRiskCheckEvidence(execution)) warnings.push("live-risk-checks:UNAVAILABLE");
   if (!rows(execution.pipeline).length && canonicalRuntime.pipeline.every((item) => item.status === "UNAVAILABLE")) warnings.push("live-pipeline:UNAVAILABLE");
   if (!marketClosed && (signalCount || intentCount) && !rows(execution.timeline).length && !rows(currentLiveSession?.timeline).length && !rows(currentLiveSession?.operationalTimeline).length) warnings.push("live-timeline:UNAVAILABLE");
 }
@@ -198,7 +199,18 @@ export function liveArbitrations(execution) {
 }
 
 export function liveRiskChecks(execution) {
-  return rows(execution.risk_checks).filter((item) => item?.risk_check_id && item?.signal_id).map((item) => ({ riskCheckId: String(item.risk_check_id), signalId: String(item.signal_id), status: ["PASS", "WATCH", "BLOCK"].includes(upper(item.status)) ? upper(item.status) : "WATCH", limitLabel: text(item.limit_label, "Limite non publiée"), usedPct: numeric(item.used_pct), reasonCode: text(item.reason_code, "REASON_UNAVAILABLE") }));
+  return uniqueBy([
+    ...rows(execution.risk_checks).filter((item) => item?.risk_check_id && item?.signal_id).map((item) => ({
+      riskCheckId: String(item.risk_check_id),
+      signalId: String(item.signal_id),
+      status: riskStatus(item.status),
+      limitLabel: text(item.limit_label, "Limite non publiée"),
+      usedPct: nullableMetric(item.used_pct),
+      reasonCode: text(item.reason_code, "REASON_UNAVAILABLE"),
+      source: "execution.risk_checks",
+    })),
+    ...derivedRiskChecksFromOrderIntents(execution),
+  ], (item) => `${item.riskCheckId}:${item.signalId}`);
 }
 
 export function nullableMetric(value) { if (value === null || value === undefined || value === "") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
@@ -207,3 +219,78 @@ function text(value, fallback = "") { const normalized = String(value ?? "").tri
 function upper(value) { return String(value || "").toUpperCase(); }
 function numeric(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 function first(...values) { return values.find((value) => value !== null && value !== undefined); }
+
+function hasRiskCheckEvidence(execution = {}) {
+  if (rows(execution.risk_checks).some((item) => item?.risk_check_id && item?.signal_id)) return true;
+  return derivedRiskChecksFromOrderIntents(execution).length > 0;
+}
+
+function derivedRiskChecksFromOrderIntents(execution = {}) {
+  return rows(execution.portfolioOrderIntents).flatMap((intent, intentIndex) => {
+    const signalId = intentSignalId(intent);
+    if (!signalId) return [];
+    return rows(intent?.risk_decisions).map((decision, decisionIndex) => riskCheckFromDecision({
+      decision,
+      signalId,
+      intent,
+      fallbackIndex: `${intentIndex + 1}-${decisionIndex + 1}`,
+    })).filter(Boolean);
+  });
+}
+
+function riskCheckFromDecision({ decision = {}, signalId, intent = {}, fallbackIndex }) {
+  const decisionId = text(decision.risk_decision_id, "");
+  const riskCheckId = decisionId || text(intent.portfolio_order_intent_id, "") || `derived-risk-${fallbackIndex}`;
+  const reasonCodes = rows(decision.reason_codes);
+  return {
+    riskCheckId,
+    signalId,
+    status: riskStatus(first(decision.status, decision.decision)),
+    limitLabel: limitLabel(decision),
+    usedPct: limitUtilizationPct(decision.nearest_limit),
+    reasonCode: text(reasonCodes[0], "RISK_DECISION_PUBLISHED"),
+    source: "portfolio_risk_decisions",
+  };
+}
+
+function intentSignalId(intent = {}) {
+  const payload = intent.order_intent_payload || intent.payload || {};
+  const lineage = payload.lineage || payload.source?.lineage || {};
+  return text(first(
+    intent.signal_id,
+    intent.strategy_signal_id,
+    payload.signal_id,
+    payload.strategy_signal_id,
+    rows(lineage.strategy_signal_ids)[0],
+  ), "");
+}
+
+function riskStatus(value) {
+  const status = upper(value);
+  if (["PASS", "APPROVED", "ACCEPTED", "TAKE"].includes(status)) return "PASS";
+  if (["BLOCK", "BLOCKED", "REJECT", "REJECTED", "FAILED", "DENIED"].includes(status)) return "BLOCK";
+  return "WATCH";
+}
+
+function limitLabel(decision = {}) {
+  const nearest = decision.nearest_limit || {};
+  return text(first(nearest.label, nearest.type, nearest.limit_id, decision.risk_rule_set_version), "Global Risk");
+}
+
+function limitUtilizationPct(nearestLimit) {
+  const raw = nullableMetric(nearestLimit?.utilization ?? nearestLimit?.used_pct ?? nearestLimit?.usage_pct);
+  if (raw === null) return null;
+  return raw <= 1 ? Math.round(raw * 10_000) / 100 : Math.round(raw * 100) / 100;
+}
+
+function uniqueBy(items, keyOf) {
+  const seen = new Set();
+  const result = [];
+  for (const item of items) {
+    const key = keyOf(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}

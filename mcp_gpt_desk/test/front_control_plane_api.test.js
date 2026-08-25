@@ -396,6 +396,11 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
   assert.equal(envelope.data.telegramDrilldown.schemaVersion, "telegram_drilldown_front_v1");
   assert.equal(envelope.data.telegramDrilldown.availability, "KNOWN");
   assert.equal(envelope.data.telegramDrilldown.secretsExposed, false);
+  assert.equal(envelope.meta.warnings.includes("live-risk-checks:UNAVAILABLE"), false);
+  assert.equal(envelope.meta.warnings.includes("live-correlated-exposure:UNAVAILABLE"), false);
+  assert.equal(envelope.data.riskChecks[0].source, "portfolio_risk_decisions");
+  assert.equal(envelope.data.riskChecks[0].riskCheckId, "risk-live-1");
+  assert.equal(envelope.data.riskChecks[0].status, "PASS");
 
   const commandCenter = await handleFrontControlPlane(store, {
     pathname: "/front-api/v1/views/command-center",

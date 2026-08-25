@@ -1095,7 +1095,7 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
     warnings,
   });
   return {
-    summary: liveSummary({ signals, intents: portfolioOrderIntents, commands: provider.commands, events: provider.events, safety, performance }),
+    summary: liveSummary({ signals, intents: portfolioOrderIntents, commands: provider.commands, events: provider.events, safety, risk, performance }),
     session: liveSession({ execution: executionValue, liveSession: currentLiveSession, scope, launchGate, health, marketSeries, marketDataStatus: liveMarketDataStatus }),
     launchGate: publicLaunchGate(launchGate),
     pipeline: pipeline(executionValue, launchGate),

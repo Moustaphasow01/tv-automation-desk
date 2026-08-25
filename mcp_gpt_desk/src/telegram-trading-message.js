@@ -75,22 +75,37 @@ function formatManualEntryTicket({ state, sourceId, payload, occurredAt }) {
   const target = pickPrice(payload, [["profit_target"], ["bracket", "target_price"], ["take_profit"]]);
   const riskDecision = field(payload, ["risk_decision", "risk_status"]);
   const contextDecision = field(payload, ["context_gate_decision", "ai_context_recommendation"]);
+  const riskAmount = field(payload, ["risk_amount", "riskAmount"]);
+  const expectedR = field(payload, ["expected_r", "expectedR", "reward_risk", "rewardRisk"]);
+  const validity = dateTime(payload.expires_at || payload.valid_until);
+  const orderIntentId = text(payload.order_intent_id || sourceId, "N/D");
   const lines = [
     `🚨 MANUAL ACTION REQUIRED — ${side.icon} ${side.label} ${instrument}`,
-    `État desk: ${upper(state)} · Human Gate: ${upper(gateStatus)} · Type: ${orderType}`,
-    `Strategy: ${text(strategyId, "N/D")} · Instance: ${text(strategyInstanceId, "N/D")}`,
-    `Quantité: ${quantity(payload.quantity)} contrat(s)`,
-    `Entrée: ${entry}`,
-    `Stop: ${price(stop)}`,
-    `TP: ${price(target)}`,
-    `Risk: ${text(riskDecision, "N/D")} · Context: ${text(contextDecision, "N/D")}`,
-    `Validité: ${dateTime(payload.expires_at || payload.valid_until)}`,
+    "━━━━━━━━━━━━━━━━━━━━",
+    `🎯 Action: ${side.label} · ${orderType}`,
+    `🧾 OrderIntent: ${orderIntentId}`,
+    `🧠 Strategy: ${text(strategyId, "N/D")}`,
+    `🧩 Instance: ${text(strategyInstanceId, "N/D")}`,
+    "",
+    "📍 Prix à poser",
+    `• Quantité: ${quantity(payload.quantity)} contrat(s)`,
+    `• Entrée: ${entry}`,
+    `• Stop: ${price(stop)}`,
+    `• TP: ${price(target)}`,
+    "",
+    "🛡️ Contrôles desk",
+    `• Desk: ${upper(state)}`,
+    `• Human Gate: ${upper(gateStatus)}`,
+    `• Risk: ${text(riskDecision, "N/D")}`,
+    `• Context: ${text(contextDecision, "N/D")}`,
+    `• Risque: ${riskAmount === null || riskAmount === undefined ? "N/D" : text(riskAmount)}${expectedR === null || expectedR === undefined ? "" : ` · RR/R attendu: ${text(expectedR)}`}`,
+    "",
+    `⏱️ Validité: ${validity}`,
     "⚠️ Aucun ordre Ninja/broker n’a été envoyé. Action manuelle opérateur requise.",
-    `OrderIntent: ${text(payload.order_intent_id || sourceId, "N/D")}`,
   ];
   if (payload.invalidation) lines.push(`Invalidation: ${oneLine(invalidationReason(payload.invalidation))}`);
-  if (payload.rationale) lines.push(`Lecture: ${oneLine(payload.rationale)}`);
-  lines.push(`Réf: ${text(sourceId)} · ${dateTime(occurredAt)}`);
+  if (payload.rationale) lines.push(`📝 Lecture: ${oneLine(payload.rationale)}`);
+  lines.push(`🔎 Réf: ${text(sourceId)} · ${dateTime(occurredAt)}`);
   return lines.join("\n");
 }
 
@@ -99,12 +114,14 @@ function formatManualManagementTicket({ state, sourceId, payload, occurredAt }) 
   const instrument = text(payload.instrument || payload.broker_symbol || payload.symbol, "Instrument N/D");
   const lines = [
     `🛡️ GESTION MANUELLE — ${action}`,
-    `Instrument: ${instrument} · État desk: ${upper(state)}`,
-    `Quantité: ${quantity(payload.quantity)}`,
-    `Nouveau stop: ${price(payload.stop_price ?? payload.requested_stop_price)}`,
-    `Raison: ${oneLine(payload.reason || "mise à jour du plan de gestion")}`,
+    "━━━━━━━━━━━━━━━━━━━━",
+    `📍 Instrument: ${instrument}`,
+    `• État desk: ${upper(state)}`,
+    `• Quantité: ${quantity(payload.quantity)}`,
+    `• Nouveau stop: ${price(payload.stop_price ?? payload.requested_stop_price)}`,
+    `📝 Raison: ${oneLine(payload.reason || "mise à jour du plan de gestion")}`,
     "⚠️ Aucun ordre Ninja/broker n’a été envoyé. Modifier manuellement la position si elle est ouverte.",
-    `Trade: ${text(payload.trade_id, "N/D")} · Réf: ${text(sourceId)} · ${dateTime(occurredAt)}`,
+    `🔎 Trade: ${text(payload.trade_id, "N/D")} · Réf: ${text(sourceId)} · ${dateTime(occurredAt)}`,
   ];
   return lines.join("\n");
 }
