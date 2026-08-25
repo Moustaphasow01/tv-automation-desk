@@ -99,7 +99,16 @@ export function DeskShell() {
   const isGoldenLiveTrading = currentRoute?.path === "live";
   const isGoldenStrategyCenter = currentRoute?.path === "strategies";
   const isGoldenResearchLab = currentRoute?.path === "research";
-  const isGoldenSurface = isGoldenCommandCenter || isGoldenLiveTrading || isGoldenStrategyCenter || isGoldenResearchLab;
+  const isGoldenRiskCenter = currentRoute?.path === "risk";
+  const isGoldenOrdersHumanGate = currentRoute?.path === "orders";
+  const isGoldenPortfolio = currentRoute?.path === "portfolio";
+  const isGoldenExecutionProviders = currentRoute?.path === "execution/providers";
+  const isGoldenIncidentsOperations = currentRoute?.path === "execution/incidents";
+  const isGoldenPerformance = currentRoute?.path === "performance";
+  const isGoldenReplay = currentRoute?.path === "replay";
+  const isGoldenSurface = isGoldenCommandCenter || isGoldenLiveTrading || isGoldenStrategyCenter || isGoldenResearchLab
+    || isGoldenRiskCenter || isGoldenOrdersHumanGate || isGoldenPortfolio || isGoldenExecutionProviders
+    || isGoldenIncidentsOperations || isGoldenPerformance || isGoldenReplay;
   const visibleDeskNavItems = isGoldenLiveTrading
     ? deskNavItems.filter((item) => !["/performance", "/events"].includes(item.to))
     : deskNavItems;
@@ -108,7 +117,7 @@ export function DeskShell() {
     .filter((group) => group.items.length > 0);
 
   return (
-    <div className={`desk-app-shell${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isGoldenLiveTrading && liveSidebarCollapsed ? " desk-app-shell--live-collapsed" : ""}${isGoldenStrategyCenter ? " desk-app-shell--strategy-center" : ""}${isGoldenResearchLab ? " desk-app-shell--research-lab" : ""}`}>
+    <div className={`desk-app-shell${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isGoldenLiveTrading && liveSidebarCollapsed ? " desk-app-shell--live-collapsed" : ""}${isGoldenStrategyCenter ? " desk-app-shell--strategy-center" : ""}${isGoldenResearchLab ? " desk-app-shell--research-lab" : ""}${isGoldenRiskCenter ? " desk-app-shell--risk-center" : ""}${isGoldenOrdersHumanGate ? " desk-app-shell--orders-human-gate" : ""}${isGoldenPortfolio ? " desk-app-shell--portfolio" : ""}${isGoldenExecutionProviders ? " desk-app-shell--execution-providers" : ""}${isGoldenIncidentsOperations ? " desk-app-shell--incidents-operations" : ""}${isGoldenPerformance ? " desk-app-shell--performance" : ""}${isGoldenReplay ? " desk-app-shell--replay" : ""}`}>
       <a className="skip-link" href="#main-content">Aller au contenu principal</a>
       <aside className="desk-sidebar" aria-label="Barre latérale du desk">
         <div className="brand-block">

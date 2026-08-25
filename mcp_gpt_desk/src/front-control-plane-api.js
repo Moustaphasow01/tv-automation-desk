@@ -994,10 +994,18 @@ function portfolio({ execution, risk, nowIso, warnings }) {
   const trades = rows(nested(execution, ["trades"])).filter(hasTradeId).filter(isOpenPortfolioTrade);
   const summary = portfolioSummary(execution, risk, nowIso);
   if (summary.accountSnapshotStale) warnings.push("portfolio-account-snapshot:STALE");
+  const positionsLong = countBy(trades, (item) => side(item.side) === "LONG");
+  const positionsShort = countBy(trades, (item) => side(item.side) === "SHORT");
+  const strategyIdsWithPositions = new Set(trades.map((item) => text(item.strategy_instance_id, "")).filter(Boolean));
+  const humanGates = rows(nested(execution, ["humanExecutionGates"]));
+  const humanGatePending = countBy(humanGates, (item) => !["CONFIRMED", "REJECTED", "EXPIRED", "CANCELLED"].includes(upper(item.status)));
+  const portfolioIntents = rows(nested(execution, ["portfolioOrderIntents"]));
+  const pendingOrders = countBy(portfolioIntents, (item) => ["READY", "WORKING", "PENDING", "AWAITING_MANUAL_CONFIRMATION"].includes(upper(item.status)));
   return {
-    summary: summary.values,
+    summary: { ...summary.values, positionsLong, positionsShort, strategiesWithPositions: strategyIdsWithPositions.size, humanGatePending, pendingOrders },
     summaryTruth: summary.truth,
     authoritativeState: firstValue(nested(risk, ["portfolio_state"]), null),
+    accountsSummary: portfolioAccountsSummary(execution),
     equityCurve: [],
     positions: trades.map(portfolioPositionRow),
     exposureTree: exposureRows.map(portfolioExposureTreeRow),
@@ -1017,19 +1025,30 @@ function portfolioSummary(execution = {}, risk = {}, nowIso) {
   const unrealizedPnl = finiteNumber(firstValue(nested(snapshot, ["unrealized_pnl"]), nested(snapshot, ["payload", "unrealized_pnl"])));
   const riskPct = finiteNumber(firstValue(nested(risk, ["summary", "risk_percent"]), nested(execution, ["safety", "riskPercent"])));
   const correlatedExposurePct = finiteNumber(nested(risk, ["summary", "correlated_exposure_pct"]));
+  // risk_center.{grossExposure,netExposure,dailyLoss,trailingDrawdown} are the real
+  // (schema-correct) locations for these figures, but the projection that builds
+  // risk_center (front-portfolio-risk-projection.js) hardcodes all four to
+  // availability:"UNAVAILABLE" today - the underlying computation was never written.
+  // Read the real path (so this starts working the day that gap is closed) rather
+  // than a field that never existed; today it still resolves to null/unavailable.
+  const grossExposureUsd = finiteNumber(nested(risk, ["risk_center", "grossExposure", "value"]));
+  const netExposureUsd = finiteNumber(nested(risk, ["risk_center", "netExposure", "value"]));
+  const dailyLossR = finiteNumber(nested(risk, ["risk_center", "dailyLoss", "value"]));
+  const maxDrawdownR = finiteNumber(nested(risk, ["risk_center", "trailingDrawdown", "value"]));
+  const openRiskUsd = finiteNumber(nested(risk, ["risk_center", "openRisk", "value"]));
   const sourceAt = isoTimestamp(nested(snapshot, ["captured_at"]), nowIso);
   const accountSnapshotStale = Boolean(snapshot) && isOlderThanSeconds(sourceAt, nowIso, number(nested(execution, ["safety", "accountSnapshotMaxAgeSeconds"]), 60));
   const values = {
     equity: equity ?? 0,
-    grossExposureUsd: 0,
-    netExposureUsd: 0,
+    grossExposureUsd: grossExposureUsd ?? 0,
+    netExposureUsd: netExposureUsd ?? 0,
     unrealizedPnl: unrealizedPnl ?? 0,
     riskUsedPct: riskPct ?? 0,
     correlatedExposurePct: correlatedExposurePct ?? 0,
     netLiquidation: equity ?? 0,
-    dailyR: 0,
-    exposureUsd: 0,
-    maxDrawdownR: 0,
+    dailyR: dailyLossR ?? 0,
+    exposureUsd: openRiskUsd ?? grossExposureUsd ?? 0,
+    maxDrawdownR: maxDrawdownR ?? 0,
     openPositions: number(nested(execution, ["summary", "openTrades"]), 0),
     riskUsagePct: riskPct ?? 0,
   };
@@ -1037,8 +1056,8 @@ function portfolioSummary(execution = {}, risk = {}, nowIso) {
     values,
     truth: {
       equity: equity == null ? unavailableValue("Aucun snapshot de capital exploitable", "execution.accountSnapshots") : metricValue(equity, sourceAt, "execution.accountSnapshots", accountSnapshotStale),
-      grossExposureUsd: notImplementedValue("Le backend ne publie pas encore l’exposition brute consolidée", "portfolio.gross-exposure"),
-      netExposureUsd: notImplementedValue("Le backend ne publie pas encore l’exposition nette consolidée", "portfolio.net-exposure"),
+      grossExposureUsd: grossExposureUsd == null ? unavailableValue("Exposition brute absente de l’état du risk engine", "portfolio-risk") : knownValue(grossExposureUsd, nowIso, "portfolio-risk"),
+      netExposureUsd: netExposureUsd == null ? unavailableValue("Exposition nette absente de l’état du risk engine", "portfolio-risk") : knownValue(netExposureUsd, nowIso, "portfolio-risk"),
       unrealizedPnl: unrealizedPnl == null ? unavailableValue("PnL latent absent du dernier snapshot", "execution.accountSnapshots") : metricValue(unrealizedPnl, sourceAt, "execution.accountSnapshots", accountSnapshotStale),
       riskUsedPct: riskPct == null ? unavailableValue("Pourcentage de risque absent", "portfolio-risk") : knownValue(riskPct, nowIso, "portfolio-risk"),
       correlatedExposurePct: correlatedExposurePct == null ? notImplementedValue("Exposition corrélée non publiée", "portfolio.correlation") : knownValue(correlatedExposurePct, nowIso, "portfolio-risk"),
@@ -1058,6 +1077,32 @@ function portfolioExposureTreeRow(item) {
     valueUsd: number(item.value_usd, 0),
     weightPct: number(item.weight_pct, 0),
   };
+}
+function portfolioAccountsSummary(execution = {}) {
+  const accounts = rows(nested(execution, ["accounts"]));
+  const snapshotsByAccount = new Map();
+  for (const snapshot of rows(nested(execution, ["accountSnapshots"]))) {
+    const accountId = text(snapshot.broker_account_id, "");
+    if (!accountId) continue;
+    const existing = snapshotsByAccount.get(accountId);
+    if (!existing || Date.parse(snapshot.captured_at || 0) > Date.parse(existing.captured_at || 0)) snapshotsByAccount.set(accountId, snapshot);
+  }
+  const trades = rows(nested(execution, ["trades"])).filter(hasTradeId).filter(isOpenPortfolioTrade);
+  return accounts.filter((account) => account?.broker_account_id).map((account) => {
+    const accountId = text(account.broker_account_id, "");
+    const snapshot = snapshotsByAccount.get(accountId) || null;
+    const equity = finiteNumber(firstValue(nested(snapshot, ["payload", "net_liquidation_value"]), nested(snapshot, ["cash_value"])));
+    const openPnl = finiteNumber(firstValue(nested(snapshot, ["unrealized_pnl"]), nested(snapshot, ["payload", "unrealized_pnl"])));
+    return {
+      accountId,
+      label: text(account.account_label, accountId),
+      mode: text(account.mode, "unavailable").toUpperCase(),
+      equity,
+      openPnl,
+      openPositions: countBy(trades, (item) => text(item.broker_account_id, "") === accountId),
+      asOf: snapshot ? isoTimestamp(snapshot.captured_at, null) : null,
+    };
+  });
 }
 function portfolioReconciliationSummary({ execution, risk, nowIso }) {
   return {
@@ -1182,10 +1227,79 @@ function eventsAudit({ execution, strategy, incidents, runtime, warnings, nowIso
   };
 }
 
-function orders({ execution, warnings }) {
+function orders({ execution, warnings, actor, nowIso }) {
   warnings.push("orders-state-machine:NOT_IMPLEMENTED", "orders-history:NOT_IMPLEMENTED");
   const activeOrders = rows(execution?.orders).filter(hasOrderId).map(activeOrderRow);
-  return { summary: { orderIntents: rows(execution?.intents).filter(hasIntentId).length, activeOrders: activeOrders.length, recentFills: rows(execution?.fills).filter(hasFillId).length, partialOrders: countBy(activeOrders, (item) => item.state === "PARTIAL"), rejectedOrders: countBy(activeOrders, (item) => item.state === "REJECTED"), protectedOrdersPct: orderProtectionRate(activeOrders) }, filters: { activeTab: "ACTIVE", stateCounts: {}, providerCounts: {} }, orderIntents: rows(execution?.intents).filter(hasIntentId).map(intentRow), activeOrders, fills: rows(execution?.fills).filter(hasFillId).map(orderFillRow), protections: [], providers: providerRows(execution), stateMachine: [], history: [], commandActions: [] };
+  return { summary: { orderIntents: rows(execution?.intents).filter(hasIntentId).length, activeOrders: activeOrders.length, recentFills: rows(execution?.fills).filter(hasFillId).length, partialOrders: countBy(activeOrders, (item) => item.state === "PARTIAL"), rejectedOrders: countBy(activeOrders, (item) => item.state === "REJECTED"), protectedOrdersPct: orderProtectionRate(activeOrders) }, filters: { activeTab: "ACTIVE", stateCounts: {}, providerCounts: {} }, orderIntents: rows(execution?.intents).filter(hasIntentId).map(intentRow), activeOrders, fills: rows(execution?.fills).filter(hasFillId).map(orderFillRow), protections: [], providers: providerRows(execution), stateMachine: [], history: [], commandActions: [], humanGateReview: humanGateReviewOverview({ execution, actor, nowIso }) };
+}
+
+// Real portfolioOrderIntents + humanExecutionGates + risk_decisions, reusing the
+// same gate/action projections orderDetail() already uses for a single intent -
+// this is the list-level "Orders & Human Gate" review workflow.
+function humanGateReviewOverview({ execution, actor, nowIso }) {
+  const intents = rows(nested(execution, ["portfolioOrderIntents"]));
+  const gated = intents.filter((intent) => {
+    const id = text(intent.portfolio_order_intent_id, "");
+    return id && rows(nested(execution, ["humanExecutionGates"])).some((gate) => text(gate.portfolio_order_intent_id, "") === id);
+  });
+  const items = gated.map((intent) => {
+    const gate = orderHumanGateProjection({ execution, portfolioIntent: intent, actor });
+    const canonical = portfolioOrderIntentSummaryRowSafe(intent);
+    const riskDecision = safeArrayFirst(intent.risk_decisions);
+    return {
+      orderIntentId: text(intent.portfolio_order_intent_id, ""),
+      instrument: text(canonical.instrument, "—"),
+      side: upper(canonical.side || "—"),
+      quantity: number(canonical.quantity, 0),
+      authorizedQuantity: number(riskDecision?.authorized?.quantity ?? riskDecision?.approved_size, canonical.quantity ?? 0),
+      riskPct: finiteOrNull(riskDecision?.authorized?.risk_pct),
+      status: gate.status,
+      expiresAt: gate.expiresAt || null,
+      ageSeconds: ageSecondsSafe(intent.created_at_utc, nowIso),
+      route: `/execution/orders/${encodeURIComponent(text(intent.portfolio_order_intent_id, ""))}`,
+    };
+  });
+  const pending = items.filter((item) => item.status === "AWAITING_MANUAL_CONFIRMATION");
+  const decided = gated.map((intent) => ({ intent, gate: orderHumanGateProjection({ execution, portfolioIntent: intent, actor }) }));
+  const approvedToday = countBy(decided, ({ gate }) => Boolean(gate.confirmedAt) && isSameUtcDay(gate.confirmedAt, nowIso));
+  const rejectedToday = countBy(decided, ({ gate }) => Boolean(gate.rejectedAt) && isSameUtcDay(gate.rejectedAt, nowIso));
+  const decisionDurationsMs = decided
+    .map(({ intent, gate }) => {
+      const resolvedAt = Date.parse(gate.confirmedAt || gate.rejectedAt || "");
+      const createdAt = Date.parse(intent.created_at_utc || "");
+      return Number.isFinite(resolvedAt) && Number.isFinite(createdAt) ? resolvedAt - createdAt : NaN;
+    })
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  return {
+    summary: {
+      pendingCount: pending.length,
+      approvedToday,
+      rejectedToday,
+      avgDecisionSeconds: decisionDurationsMs.length ? Math.round(decisionDurationsMs.reduce((sum, value) => sum + value, 0) / decisionDurationsMs.length / 1000) : 0,
+    },
+    items,
+  };
+}
+function safeArrayFirst(value) { return rows(value)[0] || null; }
+function ageSecondsSafe(value, nowIso) {
+  const created = Date.parse(value || "");
+  const now = Date.parse(nowIso || "");
+  return Number.isFinite(created) && Number.isFinite(now) ? Math.max(0, Math.round((now - created) / 1000)) : 0;
+}
+function isSameUtcDay(value, nowIso) {
+  const date = new Date(value);
+  const reference = new Date(nowIso);
+  return !Number.isNaN(date.getTime()) && !Number.isNaN(reference.getTime())
+    && date.getUTCFullYear() === reference.getUTCFullYear() && date.getUTCMonth() === reference.getUTCMonth() && date.getUTCDate() === reference.getUTCDate();
+}
+function portfolioOrderIntentSummaryRowSafe(intent = {}) {
+  const payload = intent.order_intent_payload || intent.payload || {};
+  const terms = intent.execution_terms || payload.execution_terms || {};
+  return {
+    instrument: firstValue(intent.target_instrument, payload.instrument, terms.instrument),
+    side: firstValue(payload.action, terms.side),
+    quantity: finiteOrNull(firstValue(intent.risk_approved_net_size, intent.quantity, payload.quantity, terms.quantity)),
+  };
 }
 
 function orderDetail({ execution, query, warnings, actor, nowIso }) {
@@ -1444,20 +1558,30 @@ function executionProviders({ execution, incidents, warnings }) {
 
 function riskCenterSummary(risk, authoritative) {
   const summary = nested(risk, ["summary"]) || {};
+  // grossExposure/netExposure/dailyLoss/trailingDrawdown live on the risk_center
+  // ("authoritative") snapshot as { availability, value, reasonCode } nodes, not as
+  // flat risk.summary.* fields (those never existed - reading them always resolved
+  // to 0). front-portfolio-risk-projection.js's riskCenterState() still hardcodes
+  // all four to availability:"UNAVAILABLE" today, so these correctly read through
+  // as unavailable/0 until that computation is implemented; openRisk *is* real
+  // (aggregated from risk_decisions), so use it in place of a fabricated leverage figure.
+  const openRisk = finiteOrNull(nested(authoritative, ["openRisk", "value"]));
   return {
     globalStatus: firstValue(nested(authoritative, ["globalStatus"]), summary.status, "DATA_UNAVAILABLE"),
     riskUsedPct: number(summary.risk_percent, 0),
-    grossExposureUsd: number(summary.gross_exposure_usd, 0),
-    netExposureUsd: number(summary.net_exposure_usd, 0),
+    grossExposureUsd: number(nested(authoritative, ["grossExposure", "value"]), 0),
+    netExposureUsd: number(nested(authoritative, ["netExposure", "value"]), 0),
     leverage: number(summary.leverage, 0),
-    dailyLossR: number(summary.daily_loss_r, 0),
+    dailyLossR: number(nested(authoritative, ["dailyLoss", "value"]), 0),
     dailyLossLimitR: number(summary.daily_loss_limit_r, 0),
-    trailingDrawdownR: number(summary.trailing_drawdown_r, 0),
-    maxDrawdownR: number(summary.max_drawdown_r, 0),
+    trailingDrawdownR: number(nested(authoritative, ["trailingDrawdown", "value"]), 0),
+    maxDrawdownR: number(nested(authoritative, ["trailingDrawdown", "value"]), 0),
     activeBreaches: firstValue(rows(nested(authoritative, ["breaches"])).length || undefined, rows(nested(risk, ["breaches"])).length),
     stressTestsToday: rows(nested(risk, ["stress_tests"])).length,
+    openRiskUsd: openRisk ?? 0,
   };
 }
+function finiteOrNull(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function riskCenterPreferredRows(authoritative, risk, key) {
   const authoritativeRows = rows(nested(authoritative, [key]));
   return authoritativeRows.length ? authoritativeRows : rows(nested(risk, [key]));

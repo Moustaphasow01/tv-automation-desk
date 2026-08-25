@@ -786,7 +786,7 @@ test("front control plane portfolio preserves unavailable, stale and open-positi
 
   assert.equal(envelope.data.summaryTruth.equity.state, "STALE");
   assert.equal(envelope.data.summaryTruth.equity.value, 50_000);
-  assert.equal(envelope.data.summaryTruth.grossExposureUsd.state, "NOT_IMPLEMENTED");
+  assert.equal(envelope.data.summaryTruth.grossExposureUsd.state, "UNAVAILABLE");
   assert.equal(envelope.data.summaryTruth.unrealizedPnl.state, "STALE");
   assert.deepEqual(envelope.data.positions.map((item) => item.positionId), ["trade-open"]);
   assert.deepEqual(envelope.data.brokerPositions.map((item) => item.positionId), ["trade-open"]);
@@ -794,6 +794,101 @@ test("front control plane portfolio preserves unavailable, stale and open-positi
   assert.equal(envelope.data.reconciliation.status, "PENDING");
   assert.equal(envelope.meta.warnings.includes("portfolio-account-snapshot:STALE"), true);
   assert.equal(envelope.meta.warnings.includes("portfolio-attribution:NOT_IMPLEMENTED"), true);
+});
+
+test("front control plane portfolio reads risk_center's real openRisk aggregate and derived counts instead of hardcoded zeros", async () => {
+  const store = frontControlPlaneStore({
+    execution: {
+      accounts: [
+        { broker_account_id: "Sim101", provider_id: "ninjatrader", account_label: "SIM-MAIN", mode: "paper" },
+        { broker_account_id: "Sim102", provider_id: "ninjatrader", account_label: "SIM-SECONDARY", mode: "paper" },
+      ],
+      accountSnapshots: [
+        { broker_account_id: "Sim101", captured_at: "2026-08-11T08:00:00.000Z", unrealized_pnl: 250, payload: { net_liquidation_value: 725_450 } },
+        { broker_account_id: "Sim102", captured_at: "2026-08-11T08:00:00.000Z", unrealized_pnl: -40, payload: { net_liquidation_value: 312_250 } },
+      ],
+      trades: [
+        { trade_id: "trade-long", status: "OPEN", instrument_code: "MNQ", side: "long", quantity_open: 2, entry_price: 22_100, strategy_instance_id: "strinst-1", broker_account_id: "Sim101" },
+        { trade_id: "trade-short", status: "OPEN", instrument_code: "MES", side: "short", quantity_open: 1, entry_price: 6_100, strategy_instance_id: "strinst-2", broker_account_id: "Sim102" },
+      ],
+      portfolioOrderIntents: [{
+        portfolio_order_intent_id: "poi-1",
+        status: "READY",
+        risk_decisions: [{ authorized: { risk_amount: 735 } }],
+      }],
+      humanExecutionGates: [{ human_execution_gate_id: "hg-1", portfolio_order_intent_id: "poi-1", status: "AWAITING_MANUAL_CONFIRMATION" }],
+    },
+    strategy: { definitions: [], versions: [], instances: [], signals: [] },
+  });
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/portfolio",
+    method: "GET",
+    query: {},
+  });
+
+  // grossExposure/netExposure/dailyLoss/trailingDrawdown are still hardcoded
+  // UNAVAILABLE in front-portfolio-risk-projection.js's riskCenterState() - that
+  // computation doesn't exist yet, so these correctly stay unavailable/zero here too.
+  assert.equal(envelope.data.summaryTruth.grossExposureUsd.state, "UNAVAILABLE");
+  assert.equal(envelope.data.summary.maxDrawdownR, 0);
+  // openRisk *is* really computed (aggregateMoney over risk_decisions[].authorized.risk_amount).
+  assert.equal(envelope.data.summary.exposureUsd, 735);
+  assert.equal(envelope.data.summary.positionsLong, 1);
+  assert.equal(envelope.data.summary.positionsShort, 1);
+  assert.equal(envelope.data.summary.strategiesWithPositions, 2);
+  assert.equal(envelope.data.summary.humanGatePending, 1);
+  assert.equal(envelope.data.summary.pendingOrders, 1);
+  assert.equal(envelope.data.accountsSummary.length, 2);
+  const main = envelope.data.accountsSummary.find((item) => item.accountId === "Sim101");
+  assert.equal(main.label, "SIM-MAIN");
+  assert.equal(main.equity, 725_450);
+  assert.equal(main.openPnl, 250);
+  assert.equal(main.openPositions, 1);
+});
+
+test("front control plane orders humanGateReview lists real portfolio order intents with their human gate status", async () => {
+  const store = frontControlPlaneStore({
+    execution: {
+      portfolioOrderIntents: [
+        {
+          portfolio_order_intent_id: "poi-pending",
+          target_instrument: "MNQ",
+          created_at_utc: "2026-08-11T07:58:00.000Z",
+          payload: { action: "BUY", quantity: 3 },
+          risk_decisions: [{ authorized: { quantity: 2, risk_pct: 0.62 } }],
+        },
+        {
+          portfolio_order_intent_id: "poi-confirmed",
+          target_instrument: "MES",
+          created_at_utc: "2026-08-11T07:50:00.000Z",
+          payload: { action: "SELL", quantity: 1 },
+        },
+      ],
+      humanExecutionGates: [
+        { human_execution_gate_id: "hg-pending", portfolio_order_intent_id: "poi-pending", status: "AWAITING_MANUAL_CONFIRMATION" },
+        { human_execution_gate_id: "hg-confirmed", portfolio_order_intent_id: "poi-confirmed", status: "CONFIRMED", confirmed_at_utc: "2026-08-11T07:51:42.000Z" },
+      ],
+    },
+  });
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/orders",
+    method: "GET",
+    query: {},
+  });
+
+  const review = envelope.data.humanGateReview;
+  assert.equal(review.items.length, 2);
+  assert.equal(review.summary.pendingCount, 1);
+  assert.equal(review.summary.approvedToday, 1);
+  assert.equal(review.summary.avgDecisionSeconds, 102);
+  const pendingItem = review.items.find((item) => item.orderIntentId === "poi-pending");
+  assert.equal(pendingItem.instrument, "MNQ");
+  assert.equal(pendingItem.side, "BUY");
+  assert.equal(pendingItem.authorizedQuantity, 2);
+  assert.equal(pendingItem.status, "AWAITING_MANUAL_CONFIRMATION");
+  assert.equal(pendingItem.route, "/execution/orders/poi-pending");
 });
 
 test("front control plane auth-session reflects read-only versus operator write session", async () => {

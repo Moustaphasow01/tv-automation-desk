@@ -1,0 +1,72 @@
+:root {
+  --ep-bg-root: #020813;
+  --ep-bg-header: #050f1b;
+  --ep-bg-main: #061522;
+  --ep-surface-1: #071827;
+  --ep-surface-2: #091c2c;
+  --ep-surface-3: #0c2234;
+  --ep-border-soft: #122a3d;
+  --ep-border: #1a3549;
+  --ep-border-strong: #28536f;
+  --ep-text: #f2f6fa;
+  --ep-secondary: #a8b8c8;
+  --ep-muted: #71879b;
+  --ep-blue: #2d8cff;
+  --ep-cyan: #2fc4d6;
+  --ep-green: #37d27c;
+  --ep-amber: #f6b90b;
+  --ep-red: #ff4d5a;
+}
+
+.desk-app-shell--execution-providers { color: var(--ep-text); background: var(--ep-bg-root); }
+.desk-app-shell--execution-providers .desk-main { height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+.desk-app-shell--execution-providers .desk-content { height: 100%; min-height: 0; padding: 0; overflow: hidden; background: var(--ep-bg-main); }
+
+.ep-page { display: grid; grid-template-rows: 60px minmax(0, 1fr); width: 100%; height: 100%; min-height: 0; overflow: hidden; background: var(--ep-bg-main); color: var(--ep-text); }
+
+.ep-header { display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 16px; border-bottom: 1px solid var(--ep-border); background: var(--ep-bg-header); }
+.ep-header__title h1 { margin: 0; font-size: 17px; font-weight: 800; }
+.ep-header__title p { margin: 1px 0 0; color: var(--ep-muted); font-size: 12px; }
+.ep-header__clock { display: grid; justify-items: end; gap: 1px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.ep-header__clock strong { font-size: 12px; font-weight: 700; }
+.ep-header__clock small { color: var(--ep-muted); font-size: 10px; }
+
+.ep-workspace { min-height: 0; overflow-y: auto; padding: 14px; scrollbar-color: var(--ep-border-strong) transparent; display: grid; gap: 14px; align-content: start; }
+
+.ep-kpi-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.ep-kpi-card { display: grid; gap: 3px; padding: 9px 10px; border: 1px solid var(--ep-border-soft); border-radius: 7px; background: var(--ep-surface-1); }
+.ep-kpi-card small { color: var(--ep-muted); font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.ep-kpi-card strong { font-size: 16px; }
+.ep-kpi-card span { color: var(--ep-muted); font-size: 10px; }
+
+.ep-row1 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr); gap: 14px; align-items: start; }
+.ep-row2 { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+
+.ep-panel { display: grid; min-width: 0; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface-1); box-shadow: 0 5px 14px rgba(0,0,0,.15); }
+.ep-panel > header { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 12px; border-bottom: 1px solid var(--ep-border); background: var(--ep-surface-2); }
+.ep-panel > header h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--ep-secondary); }
+.ep-panel > header small { color: var(--ep-muted); font-size: 11px; }
+.ep-panel__body { padding: 10px 12px; min-height: 0; }
+
+.ep-provider-card { display: grid; gap: 8px; }
+.ep-provider-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+.ep-provider-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.ep-provider-grid div { display: grid; gap: 1px; }
+.ep-provider-grid small { color: var(--ep-muted); font-size: 10px; text-transform: uppercase; }
+.ep-provider-grid strong { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ep-health-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--ep-border-soft); font-size: 12px; }
+.ep-health-row:last-child { border-bottom: 0; }
+
+.ep-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.ep-table th { text-align: left; color: var(--ep-muted); font-weight: 600; font-size: 10px; text-transform: uppercase; padding: 5px 8px; border-bottom: 1px solid var(--ep-border); }
+.ep-table td { padding: 6px 8px; border-bottom: 1px solid var(--ep-border-soft); }
+.ep-table tbody tr:hover { background: var(--ep-surface-2); }
+.ep-table-scroll { max-height: 320px; overflow-y: auto; }
+
+.ep-empty { color: var(--ep-muted); font-size: 12px; padding: 8px 0; }
+
+@media (max-width: 1279px) {
+  .ep-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ep-row1, .ep-row2 { grid-template-columns: 1fr; }
+}

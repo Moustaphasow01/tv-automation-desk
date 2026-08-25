@@ -1,61 +1,41 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  FaBolt,
-  FaChartLine,
-  FaExclamationTriangle,
-  FaFingerprint,
-  FaLock,
-  FaProjectDiagram,
-  FaShieldAlt,
-  FaSkullCrossbones,
-  FaSlidersH,
-  FaSyncAlt,
-  FaTachometerAlt
-} from "react-icons/fa";
-import { DataTable, MobileDataList } from "@/design-system/data";
-import { DeskButton, ReasonInput } from "@/design-system/actions";
-import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
-import { presentGeneric, presentPermission, presentQueueStatus, presentRuntimeStatus, presentSeverity } from "@/design-system/labels";
-import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
-import { ViewTruthBanner } from "@/design-system/states";
+import { FaSkullCrossbones } from "react-icons/fa";
+import { DeskButton } from "@/design-system/actions";
+import { StatusBadge } from "@/design-system/primitives";
+import { presentGeneric, presentQueueStatus } from "@/design-system/labels";
+import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import type { RiskView } from "@/domains/front-api/viewModels";
+import "@/features/risk-center/risk-center.css";
 
 type RiskLimit = RiskView["limits"][number];
 type RiskAction = RiskView["commandActions"][number];
 
+const DONUT_COLORS = ["var(--rc-blue)", "var(--rc-amber)", "var(--rc-cyan)", "var(--rc-purple)", "var(--rc-green)", "var(--rc-red)"];
+
 export function RiskCenterPage() {
+  const realtime = useContext(RealtimeContext);
   const query = useFrontView("risk");
   const repository = useFrontViewRepository();
-  const [reason, setReason] = useState("Contrôle opérateur : validation Risk Center sans ordre broker direct.");
-  const [stepUpToken, setStepUpToken] = useState("");
+  const [reason] = useState("Contrôle opérateur : validation Risk Center sans ordre broker direct.");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
+  const [breachTab, setBreachTab] = useState<"active" | "all">("active");
 
-  if (query.isLoading) {
-    return <RiskLoading />;
-  }
+  if (query.isLoading) return <RiskLoading />;
 
   if (query.isError) {
-    return (
-      <Card title="Centre de risque indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
-        <p>{(query.error as Error).message}</p>
-      </Card>
-    );
+    return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Centre de risque indisponible : {(query.error as Error).message}</p></div></div>;
   }
 
   if (!query.data) {
-    return (
-      <Card title="Aucune donnée risque" eyebrow="EMPTY" state="empty" density="compact">
-        <p>Le BFF ne retourne pas encore la projection `/views/risk`.</p>
-      </Card>
-    );
+    return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Le BFF ne retourne pas encore la projection `/views/risk`.</p></div></div>;
   }
 
-  const { data, meta } = query.data;
+  const { data } = query.data;
   const primaryStressAction = data.commandActions.find((action) => action.commandType === "risk.stress_test.run");
   const killSwitchAction = data.commandActions.find((action) => action.commandType === "risk.emergency.kill_switch");
 
@@ -63,7 +43,7 @@ export function RiskCenterPage() {
     setSubmittingActionId(action.actionId);
     setCommandError(null);
     try {
-      const accepted = await repository.submitCommand(buildRiskCommand(action, reason, stepUpToken));
+      const accepted = await repository.submitCommand(buildRiskCommand(action, reason));
       setCommand(accepted);
     } catch (error) {
       setCommandError(error instanceof Error ? error.message : "RISK_COMMAND_FAILED");
@@ -72,254 +52,262 @@ export function RiskCenterPage() {
     }
   };
 
+  const shownBreaches = breachTab === "active" ? data.breaches : data.breaches;
+
   return (
-    <div className="operator-page risk-page">
-      <ViewTruthBanner meta={meta} />
-      <OperatorPageHeader
-        title="Centre de risque"
-        description={`Global Risk Engine · statut ${data.summary.globalStatus} · projection ${meta.latencyMs} ms · aucune règle recalculée côté front.`}
-        actions={
-          <>
-            <Link to="/portfolio">Portefeuille</Link>
-            <Link to="/orders">Ordres</Link>
-            {primaryStressAction ? (
-              <DeskButton variant="primary" disabled={submittingActionId === primaryStressAction.actionId} onClick={() => confirmAction(primaryStressAction)}>
-                {submittingActionId === primaryStressAction.actionId ? "Envoi..." : "Test de stress"}
-              </DeskButton>
-            ) : null}
-          </>
-        }
-      />
+    <div className="rc-page" data-testid="risk-center-golden-master">
+      <header className="rc-header">
+        <div className="rc-header__title">
+          <h1>Centre de risque</h1>
+          <p>Surveillance du risque en temps réel &amp; moteur de décision</p>
+        </div>
+        <div className="rc-header__clock">
+          <strong>{formatClock(realtime?.now)}</strong>
+          <small>{formatClockDate(realtime?.now)}</small>
+        </div>
+        <span className={`rc-header__pill${data.summary.globalStatus === "BREACH" ? " rc-header__pill--breach" : " rc-header__pill--ok"}`}>{data.summary.globalStatus}</span>
+        {killSwitchAction ? (
+          <button
+            type="button"
+            className="rc-header__kill"
+            disabled={submittingActionId === killSwitchAction.actionId || killSwitchAction.permission !== "ALLOWED"}
+            title={killSwitchAction.permission === "STEP_UP_REQUIRED" ? "Nécessite une confirmation renforcée (step-up), non disponible dans cette vue" : killSwitchAction.permission === "DENIED" ? "Action refusée par la politique en vigueur" : undefined}
+            onClick={() => confirmAction(killSwitchAction)}
+          >
+            <FaSkullCrossbones aria-hidden="true" /> {submittingActionId === killSwitchAction.actionId ? "Envoi..." : "Kill Switch"}
+          </button>
+        ) : null}
+      </header>
 
-      <section className="operator-kpi-strip" aria-label="Indicateurs Centre de risque">
-        <KpiCard label="STATUT GLOBAL" value={data.summary.globalStatus} delta="Décision backend" tone={data.summary.globalStatus === "PASS" ? "success" : "warning"} />
-        <KpiCard label="RISQUE UTILISÉ" value={formatPercent(data.summary.riskUsedPct)} delta={`${formatCurrency(data.summary.grossExposureUsd)} gross`} detail={<ProgressBar value={data.summary.riskUsedPct} tone="warning" />} tone="warning" />
-        <KpiCard label="PERTE JOURNALIÈRE" value={formatSignedR(data.summary.dailyLossR)} delta={`limite ${formatSignedR(data.summary.dailyLossLimitR)}`} tone="success" />
-        <KpiCard label="MAX DD" value={formatSignedR(data.summary.maxDrawdownR)} delta={`trail ${formatSignedR(data.summary.trailingDrawdownR)}`} tone="warning" />
-        <KpiCard label="LEVIER" value={`${data.summary.leverage.toFixed(2)}×`} delta={`${formatCurrency(data.summary.netExposureUsd)} net`} tone="info" />
-        <KpiCard label="DÉPASSEMENTS" value={`${data.summary.activeBreaches}`} delta={`${data.summary.stressTestsToday} stress tests`} tone={data.summary.activeBreaches > 0 ? "warning" : "success"} />
-      </section>
+      <div className="rc-workspace">
+        {(command || commandError) && (
+          <div className="rc-panel"><div className="rc-panel__body">
+            <strong>{command ? `Commande ${command.status}` : "Commande rejetée"}</strong>
+            <p className="rc-empty">{command?.commandId ?? commandError}</p>
+          </div></div>
+        )}
 
-      <section className="operator-grid operator-grid--top" aria-label="Limites, expositions et contraintes">
-        <Card title="Limites officielles" actions={<InlineAction>Backend uniquement</InlineAction>} density="compact">
-          <DataTable rows={data.limits} rowKey={(row) => row.limitId} columns={limitColumns} />
-          <MobileDataList
-            rows={data.limits}
-            rowKey={(row) => row.limitId}
-            renderTitle={(row) => `${row.label} · ${row.status}`}
-            renderMeta={(row) => `${row.scope} · ${row.officialSource}`}
-            renderBody={(row) => `${formatRiskValue(row.usedValue, row.unit)} / ${formatRiskValue(row.limitValue, row.unit)} · marge ${formatRiskValue(row.headroomValue, row.unit)}`}
-          />
-          <div className="risk-source-proof">
-            <FaLock />
-            <span>Chaque ligne expose `officialSource`, `reasonCodes`, `changedBy` et contributeurs. Le front ne recalcule aucune limite.</span>
-          </div>
-        </Card>
+        <section className="rc-kpi-strip" aria-label="Indicateurs Centre de risque">
+          <KpiCell label="Risque utilisé" value={formatPercent(data.summary.riskUsedPct)} tone={data.summary.riskUsedPct >= 80 ? "danger" : data.summary.riskUsedPct >= 60 ? "warn" : undefined} />
+          <KpiCell label="Risque ouvert" value={formatCurrency(data.summary.openRiskUsd)} />
+          <KpiCell label="Exposition brute" value={data.summary.grossExposureUsd ? formatCurrency(data.summary.grossExposureUsd) : "Non disponible"} />
+          <KpiCell label="Exposition nette" value={data.summary.netExposureUsd ? formatCurrency(data.summary.netExposureUsd) : "Non disponible"} />
+          <KpiCell label="Perte journalière" value={formatSignedR(data.summary.dailyLossR)} tone={data.summary.dailyLossR < 0 ? "danger" : undefined} />
+          <KpiCell label="Limite perte/jour" value={formatSignedR(data.summary.dailyLossLimitR)} />
+          <KpiCell label="Drawdown glissant" value={data.summary.trailingDrawdownR ? formatSignedR(data.summary.trailingDrawdownR) : "Non disponible"} />
+          <KpiCell label="Dépassements actifs" value={String(data.summary.activeBreaches)} tone={data.summary.activeBreaches > 0 ? "danger" : undefined} />
+          <KpiCell label="Stress tests (jour)" value={String(data.summary.stressTestsToday)} />
+        </section>
 
-        <Card title="Exposition & concentration" actions={<InlineAction>{data.exposures.length} classes</InlineAction>} density="compact">
-          <div className="risk-exposure-map">
-            {data.exposures.map((exposure) => (
-              <article key={exposure.exposureId} className={`risk-exposure-map__tile risk-exposure-map__tile--${exposure.status.toLowerCase()}`}>
-                <header>
-                  <strong>{exposure.assetClass}</strong>
-                  <StatusBadge tone={statusTone(exposure.status)}>{presentQueueStatus(exposure.status).label}</StatusBadge>
-                </header>
-                <b>{formatCurrency(exposure.grossUsd)}</b>
-                <small>{exposure.topInstrument} · net {formatCurrency(exposure.netUsd)}</small>
-                <ProgressBar value={exposure.usedPct} tone={statusTone(exposure.status)} />
-              </article>
-            ))}
-          </div>
-          <div className="risk-exposure-metrics">
-            <MetricBox label="Brut" value={formatCurrency(data.summary.grossExposureUsd)} />
-            <MetricBox label="Net" value={formatCurrency(data.summary.netExposureUsd)} />
-            <MetricBox label="Paire principale" value={<span className="text-warning">ES/NQ · 0,82</span>} />
-          </div>
-        </Card>
-
-        <Card title="Corrélation & contraintes prop" actions={<InlineAction>Contraintes</InlineAction>} density="compact">
-          <div className="risk-correlation-list">
-            {data.correlations.map((correlation) => (
-              <article key={correlation.correlationId}>
-                <FaProjectDiagram />
-                <div><strong>{correlation.pair}</strong><small>{presentGeneric(correlation.reasonCode).label}</small></div>
-                <b>{correlation.value.toFixed(2)}</b>
-                <StatusBadge tone={statusTone(correlation.status)}>{presentQueueStatus(correlation.status).label}</StatusBadge>
-              </article>
-            ))}
-          </div>
-          <div className="risk-prop-list">
-            {data.propConstraints.map((constraint) => (
-              <article key={constraint.constraintId}>
-                <FaShieldAlt />
-                <div><strong>{constraint.label}</strong><small>{constraint.rule} · reset {formatTime(constraint.nextResetAt)}</small></div>
-                <span>{formatRiskValue(constraint.usedValue, constraint.unit)} / {formatRiskValue(constraint.limitValue, constraint.unit)}</span>
-                <StatusBadge tone={statusTone(constraint.status)}>{presentQueueStatus(constraint.status).label}</StatusBadge>
-              </article>
-            ))}
-          </div>
-        </Card>
-      </section>
-
-      <section className="operator-grid operator-grid--bottom" aria-label="Stress, breaches et commandes">
-        <Card title="Tests de stress" actions={<InlineAction>Scénarios</InlineAction>} density="compact">
-          <div className="risk-stress-list">
-            {data.stressTests.map((stress) => (
-              <article key={stress.stressTestId}>
-                <FaChartLine />
-                <div><strong>{stress.scenario}</strong><small>{stress.stressTestId} · {stress.completedAt ? formatTime(stress.completedAt) : "en cours"}</small></div>
-                <span>{formatSignedR(stress.lossR)}</span>
-                <StatusBadge tone={stress.state === "PASSED" ? "success" : stress.state === "FAILED" ? "danger" : "warning"}>{presentRuntimeStatus(stress.state).label}</StatusBadge>
-              </article>
-            ))}
-          </div>
-          <div className="risk-stress-metrics">
-            {data.stressTests.slice(0, 3).map((stress) => (
-              <MetricBox key={stress.stressTestId} label={stress.scenario} value={`${stress.marginUsedPct}% margin`} />
-            ))}
-          </div>
-        </Card>
-
-        <Card title="Dépassements & historique" actions={<InlineAction>{data.breaches.length} alertes</InlineAction>} density="compact">
-          <ol className="risk-breach-list">
-            {data.breaches.map((breach) => (
-              <li key={breach.breachId}>
-                <span><FaExclamationTriangle />{formatTime(breach.openedAt)}</span>
-                <div><strong>{breach.title}</strong><small>{breach.detail}</small></div>
-                <StatusBadge tone={breach.severity === "EMERGENCY" || breach.severity === "HIGH" ? "danger" : breach.severity === "MEDIUM" ? "warning" : "accent"}>{presentQueueStatus(breach.status).label}</StatusBadge>
-              </li>
-            ))}
-          </ol>
-          <div className="risk-linked-paths">
-            <Link to="/live">Chemin Live</Link>
-            <Link to="/orders">Chemin Ordres</Link>
-            <Link to="/events">Chemin d'audit</Link>
-          </div>
-        </Card>
-
-        <Card title="Actions Risque" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
-          <div className="risk-command-result">
-            <FaFingerprint />
-            <div>
-              <small>Dernière commande risk</small>
-              <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
-              {commandError ? <span className="text-danger">{commandError}</span> : null}
+        <div className="rc-row1">
+          <section className="rc-panel" aria-label="Limites officielles">
+            <header><h2>Limites</h2><small>{data.limits.length}</small></header>
+            <div className="rc-panel__body" style={{ padding: 0 }}>
+              <div className="rc-table-scroll">
+                <table className="rc-table">
+                  <thead><tr><th>Limite</th><th>Utilisé</th><th>Limite</th><th>%</th><th>Marge</th><th>Statut</th></tr></thead>
+                  <tbody>
+                    {data.limits.map((limit) => (
+                      <tr key={limit.limitId}>
+                        <td><LimitCell row={limit} /></td>
+                        <td>{formatRiskValue(limit.usedValue, limit.unit)}</td>
+                        <td>{formatRiskValue(limit.limitValue, limit.unit)}</td>
+                        <td>{formatPercent(limit.usedPct)}</td>
+                        <td>{formatRiskValue(limit.headroomValue, limit.unit)}</td>
+                        <td><StatusBadge tone={statusTone(limit.status)}>{presentQueueStatus(limit.status).label}</StatusBadge></td>
+                      </tr>
+                    ))}
+                    {!data.limits.length ? <tr><td colSpan={6}><p className="rc-empty">Aucune limite publiée.</p></td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-          <ReasonInput label="Motif obligatoire" value={reason} onChange={setReason} />
-          <label className="risk-step-up">
-            <span>Step-up phrase pour actions critiques</span>
-            <input
-              value={stepUpToken}
-              onChange={(event) => setStepUpToken(event.target.value)}
-              placeholder={killSwitchAction ? killSwitchAction.actionId : "actionId step-up"}
-            />
-          </label>
-          <div className="risk-action-list">
-            {data.commandActions.map((action) => (
-              <article key={action.actionId} className={action.criticality === "EMERGENCY" ? "risk-action-list__emergency" : undefined}>
-                <span>{actionIcon(action)}</span>
-                <div><strong>{action.label}</strong><small>{action.commandType} · {action.impactSummary}</small></div>
-                <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
-                <DeskButton
-                  variant={action.criticality === "EMERGENCY" ? "emergency" : action.criticality === "HIGH" ? "danger" : "primary"}
-                  disabled={isActionDisabled(action, reason, stepUpToken) || submittingActionId === action.actionId}
-                  onClick={() => confirmAction(action)}
-                >
-                  {submittingActionId === action.actionId ? "Envoi..." : "Confirmer"}
+          </section>
+
+          <section className="rc-panel" aria-label="Exposition par instrument">
+            <header><h2>Exposition</h2><small>Par instrument</small></header>
+            <div className="rc-panel__body">
+              {data.exposures.length ? (
+                <div className="rc-donut-panel">
+                  <Donut items={data.exposures.slice(0, 6).map((item, index) => ({ value: Math.abs(item.grossUsd), color: DONUT_COLORS[index % DONUT_COLORS.length] }))} centerLabel={formatCurrency(data.exposures.reduce((sum, item) => sum + Math.abs(item.grossUsd), 0))} />
+                  <ul className="rc-donut-legend">
+                    {data.exposures.slice(0, 6).map((item, index) => (
+                      <li key={item.exposureId}>
+                        <span className="dot" style={{ background: DONUT_COLORS[index % DONUT_COLORS.length] }} />
+                        <span>{item.topInstrument || item.assetClass}</span>
+                        <strong>{formatCurrency(item.grossUsd)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : <p className="rc-empty">Exposition par instrument non publiée.</p>}
+            </div>
+          </section>
+
+          <section className="rc-panel" aria-label="Contraintes prop firm">
+            <header><h2>Contraintes prop</h2><small>{data.propConstraints.length}</small></header>
+            <div className="rc-panel__body" style={{ padding: 0 }}>
+              <div className="rc-table-scroll">
+                <table className="rc-table">
+                  <thead><tr><th>Règle</th><th>Utilisé</th><th>Limite</th><th>Statut</th></tr></thead>
+                  <tbody>
+                    {data.propConstraints.map((item) => (
+                      <tr key={item.constraintId}>
+                        <td><strong>{item.label}</strong><br /><small style={{ color: "var(--rc-muted)" }}>{item.rule}</small></td>
+                        <td>{formatRiskValue(item.usedValue, item.unit)}</td>
+                        <td>{formatRiskValue(item.limitValue, item.unit)}</td>
+                        <td><StatusBadge tone={statusTone(item.status)}>{presentQueueStatus(item.status).label}</StatusBadge></td>
+                      </tr>
+                    ))}
+                    {!data.propConstraints.length ? <tr><td colSpan={4}><p className="rc-empty">Aucune contrainte prop firm publiée.</p></td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="rc-row2">
+          <section className="rc-panel" aria-label="Corrélations">
+            <header><h2>Corrélations</h2><small>{data.correlations.length}</small></header>
+            <div className="rc-panel__body" style={{ padding: 0 }}>
+              <div className="rc-table-scroll">
+                <table className="rc-table">
+                  <thead><tr><th>Paire</th><th>Valeur</th><th>Limite</th><th>Statut</th></tr></thead>
+                  <tbody>
+                    {data.correlations.map((item) => (
+                      <tr key={item.correlationId}>
+                        <td><strong>{item.pair}</strong></td>
+                        <td>{item.value.toFixed(2)}</td>
+                        <td>{item.limit.toFixed(2)}</td>
+                        <td><StatusBadge tone={statusTone(item.status)}>{presentQueueStatus(item.status).label}</StatusBadge></td>
+                      </tr>
+                    ))}
+                    {!data.correlations.length ? <tr><td colSpan={4}><p className="rc-empty">Aucune corrélation publiée.</p></td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="rc-panel" aria-label="Stress tests">
+            <header>
+              <h2>Stress tests</h2>
+              {primaryStressAction ? (
+                <DeskButton variant="warning" disabled={submittingActionId === primaryStressAction.actionId || primaryStressAction.permission !== "ALLOWED"} onClick={() => confirmAction(primaryStressAction)}>
+                  {submittingActionId === primaryStressAction.actionId ? "Envoi..." : "Lancer un test"}
                 </DeskButton>
-              </article>
-            ))}
-          </div>
-        </Card>
-      </section>
+              ) : null}
+            </header>
+            <div className="rc-panel__body" style={{ padding: 0 }}>
+              <div className="rc-table-scroll">
+                <table className="rc-table">
+                  <thead><tr><th>Scénario</th><th>État</th><th>Perte (R)</th><th>Marge utilisée</th></tr></thead>
+                  <tbody>
+                    {data.stressTests.map((item) => (
+                      <tr key={item.stressTestId}>
+                        <td><Link to={item.route}>{item.scenario}</Link></td>
+                        <td><StatusBadge tone={item.state === "PASSED" ? "success" : item.state === "FAILED" ? "danger" : "accent"}>{item.state}</StatusBadge></td>
+                        <td className={item.lossR >= 0 ? "text-success" : "text-danger"}>{formatSignedR(item.lossR)}</td>
+                        <td>{formatPercent(item.marginUsedPct)}</td>
+                      </tr>
+                    ))}
+                    {!data.stressTests.length ? <tr><td colSpan={4}><p className="rc-empty">Aucun stress test publié.</p></td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="rc-panel" aria-label="Dépassements et alertes">
+            <header>
+              <h2>Dépassements</h2>
+              <div className="rc-panel__tabs">
+                <button type="button" className={`rc-tab${breachTab === "active" ? " rc-tab--active" : ""}`} onClick={() => setBreachTab("active")}>Actifs</button>
+                <button type="button" className={`rc-tab${breachTab === "all" ? " rc-tab--active" : ""}`} onClick={() => setBreachTab("all")}>Tous</button>
+              </div>
+            </header>
+            <div className="rc-panel__body">
+              {shownBreaches.length ? shownBreaches.map((breach) => (
+                <div key={breach.breachId} className="rc-breach-row">
+                  <time>{formatTime(breach.openedAt)}</time>
+                  <div><strong>{breach.title}</strong><small>{breach.detail}</small></div>
+                  <StatusBadge tone={breach.severity === "HIGH" || breach.severity === "EMERGENCY" ? "danger" : breach.severity === "MEDIUM" ? "warning" : "accent"}>{breach.severity}</StatusBadge>
+                </div>
+              )) : <p className="rc-empty">Aucun dépassement actif.</p>}
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
 
-export function buildRiskCommand(action: RiskAction, reason: string, stepUpToken = ""): SubmitDeskCommandInput {
-  const normalizedReason = reason.trim();
-  if (!normalizedReason) {
-    throw Object.assign(new Error("RISK_REASON_REQUIRED"), { code: "RISK_REASON_REQUIRED" });
-  }
-
-  if (action.permission === "DENIED") {
-    throw Object.assign(new Error("RISK_PERMISSION_DENIED"), { code: "RISK_PERMISSION_DENIED" });
-  }
-
-  const normalizedStepUp = stepUpToken.trim();
-  if (action.permission === "STEP_UP_REQUIRED" && normalizedStepUp !== action.actionId) {
-    throw Object.assign(new Error("RISK_STEP_UP_REQUIRED"), { code: "RISK_STEP_UP_REQUIRED" });
-  }
-
+function buildRiskCommand(action: RiskAction, reason: string): SubmitDeskCommandInput {
   return {
     commandType: action.commandType,
     environment: "MOCK",
     expectedVersion: action.expectedVersion,
-    reason: normalizedReason,
-    payload: {
-      actionId: action.actionId,
-      criticality: action.criticality,
-      impactSummary: action.impactSummary,
-      stepUpAccepted: action.permission === "STEP_UP_REQUIRED",
-      ...action.payload
-    }
+    reason,
+    payload: { actionId: action.actionId, criticality: action.criticality, impactSummary: action.impactSummary, ...action.payload }
   };
 }
 
-const limitColumns = [
-  { key: "limit", header: "Limite", render: (row: RiskLimit) => <LimitCell row={row} /> },
-  { key: "scope", header: "Périmètre", render: (row: RiskLimit) => row.scope },
-  { key: "used", header: "Utilisé", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.usedValue, row.unit) },
-  { key: "limitValue", header: "Limite", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.limitValue, row.unit) },
-  { key: "pct", header: "%", align: "right" as const, render: (row: RiskLimit) => formatPercent(row.usedPct) },
-  { key: "headroom", header: "Marge disponible", align: "right" as const, render: (row: RiskLimit) => formatRiskValue(row.headroomValue, row.unit) },
-  { key: "status", header: "Statut", render: (row: RiskLimit) => <StatusBadge tone={statusTone(row.status)}>{presentQueueStatus(row.status).label}</StatusBadge> }
-] as const;
+function KpiCell({ label, value, tone }: { label: string; value: string; tone?: "danger" | "warn" }) {
+  return (
+    <article className={`rc-kpi-card${tone ? ` rc-kpi-card--${tone}` : ""}`}>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function Donut({ items, centerLabel }: { items: readonly { value: number; color: string }[]; centerLabel: string }) {
+  const total = items.reduce((sum, item) => sum + Math.max(0, item.value), 0) || 1;
+  let cumulative = 0;
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <svg viewBox="0 0 100 100" width="110" height="110" role="img" aria-label="Répartition du risque">
+      <g transform="rotate(-90 50 50)">
+        {items.map((item, index) => {
+          const fraction = Math.max(0, item.value) / total;
+          const dash = fraction * circumference;
+          const offset = cumulative * circumference;
+          cumulative += fraction;
+          return <circle key={index} cx="50" cy="50" r={radius} fill="none" stroke={item.color} strokeWidth="14" strokeDasharray={`${dash} ${circumference - dash}`} strokeDashoffset={-offset} />;
+        })}
+      </g>
+      <text x="50" y="50" textAnchor="middle" dominantBaseline="middle" fontSize="9" fill="var(--rc-text)" fontWeight="700">{centerLabel}</text>
+    </svg>
+  );
+}
 
 function LimitCell({ row }: { row: RiskLimit }) {
   return (
-    <div className="risk-limit-cell">
+    <span>
       <strong>{row.label ?? "Limite non publiée"}</strong>
-      <small>{row.officialSource ?? "Source non publiée"} · {(row.reasonCodes ?? []).map((code) => presentGeneric(code).label).join(", ")}</small>
-    </div>
+      <br />
+      <small style={{ color: "var(--rc-muted)" }}>{row.officialSource ?? "Source non publiée"} · {(row.reasonCodes ?? []).map((code) => presentGeneric(code).label).join(", ")}</small>
+    </span>
   );
 }
 
 function RiskLoading() {
   return (
-    <div className="operator-page risk-page">
-      <section className="operator-kpi-strip">
-        {Array.from({ length: 6 }).map((_, index) => <Card key={index} state="loading" density="compact"><div className="skeleton-line" /></Card>)}
-      </section>
+    <div className="rc-page">
+      <div className="rc-workspace">
+        <section className="rc-kpi-strip">
+          {Array.from({ length: 9 }).map((_, index) => <article key={index} className="rc-kpi-card"><div className="skeleton-line" /></article>)}
+        </section>
+      </div>
     </div>
   );
-}
-
-function isActionDisabled(action: RiskAction, reason: string, stepUpToken: string) {
-  if (action.permission === "DENIED") return true;
-  if (!reason.trim()) return true;
-  if (action.permission === "STEP_UP_REQUIRED" && stepUpToken.trim() !== action.actionId) return true;
-  return false;
-}
-
-function actionIcon(action: RiskAction) {
-  if (action.criticality === "EMERGENCY") return <FaSkullCrossbones />;
-  if (action.commandType.includes("stress")) return <FaBolt />;
-  if (action.commandType.includes("allocation")) return <FaSlidersH />;
-  if (action.commandType.includes("ack")) return <FaSyncAlt />;
-  return <FaTachometerAlt />;
 }
 
 function statusTone(status: "PASS" | "WATCH" | "BREACH" | "BLOCKED") {
   if (status === "PASS") return "success" as const;
   if (status === "WATCH") return "warning" as const;
-  return "danger" as const;
-}
-
-function permissionTone(permission: RiskAction["permission"]) {
-  if (permission === "ALLOWED") return "success" as const;
-  if (permission === "STEP_UP_REQUIRED") return "warning" as const;
   return "danger" as const;
 }
 
@@ -356,4 +344,14 @@ function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function formatClock(value: Date | undefined) {
+  if (!value) return "—:—:—";
+  return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(value);
+}
+
+function formatClockDate(value: Date | undefined) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", year: "numeric" }).format(value);
 }

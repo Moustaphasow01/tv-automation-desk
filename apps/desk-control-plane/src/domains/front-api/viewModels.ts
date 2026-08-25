@@ -95,6 +95,11 @@ export type PortfolioView = {
     maxDrawdownR: number;
     openPositions: number;
     riskUsagePct: number;
+    positionsLong: number;
+    positionsShort: number;
+    strategiesWithPositions: number;
+    humanGatePending: number;
+    pendingOrders: number;
   };
   summaryTruth: {
     equity: DataValue<number>;
@@ -105,6 +110,15 @@ export type PortfolioView = {
     correlatedExposurePct: DataValue<number>;
   };
   equityCurve: readonly number[];
+  accountsSummary: readonly {
+    accountId: string;
+    label: string;
+    mode: string;
+    equity: number | null;
+    openPnl: number | null;
+    openPositions: number;
+    asOf: string | null;
+  }[];
   positions: readonly PortfolioPosition[];
   exposureTree: readonly ExposureTreeItem[];
   brokerPositions: readonly BrokerPosition[];
@@ -1016,6 +1030,26 @@ export type LiveSignalDetailView = {
 };
 
 export type OrdersView = {
+  humanGateReview: {
+    summary: {
+      pendingCount: number;
+      approvedToday: number;
+      rejectedToday: number;
+      avgDecisionSeconds: number;
+    };
+    items: readonly {
+      orderIntentId: string;
+      instrument: string;
+      side: string;
+      quantity: number;
+      authorizedQuantity: number;
+      riskPct: number | null;
+      status: string;
+      expiresAt: string | null;
+      ageSeconds: number;
+      route: string;
+    }[];
+  };
   summary: {
     orderIntents: number;
     activeOrders: number;
@@ -1151,6 +1185,7 @@ export type RiskView = {
     leverage: number;
     activeBreaches: number;
     stressTestsToday: number;
+    openRiskUsd: number;
   };
   limits: readonly {
     limitId: string;
