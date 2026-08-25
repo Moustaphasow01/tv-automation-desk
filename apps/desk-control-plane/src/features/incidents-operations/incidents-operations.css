@@ -58,7 +58,7 @@
 .io-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
 .io-table th { text-align: left; color: var(--io-muted); font-weight: 600; font-size: 10px; text-transform: uppercase; padding: 5px 8px; border-bottom: 1px solid var(--io-border); }
 .io-table td { padding: 6px 8px; border-bottom: 1px solid var(--io-border-soft); }
-.io-table tbody tr:hover { background: var(--io-surface-2); cursor: pointer; }
+.io-table tbody tr:hover { background: var(--io-surface-2); }
 .io-table tbody tr[aria-selected="true"] { background: rgba(45,140,255,.14); }
 .io-table-scroll { max-height: 300px; overflow-y: auto; }
 

@@ -9,7 +9,7 @@ import type { ExplorerView } from "@/domains/front-api/viewModels";
 type ExplorerViewName =
   | "research-experiments" | "research-candidates" | "research-dataset-detail" | "strategy-deployments"
   | "replay-overview" | "replay-runs" | "replay-run-detail" | "replay-compare"
-  | "performance-overview" | "performance-calendar" | "performance-day-detail" | "performance-strategies" | "performance-trades"
+  | "performance-calendar" | "performance-day-detail" | "performance-strategies" | "performance-trades"
   | "workflow-detail" | "event-detail" | "operations-runbooks" | "governance-prompts" | "governance-policies";
 
 type ExplorerProps = { viewName: ExplorerViewName; title: string; description: string; backTo: string; backLabel: string; params?: Readonly<Record<string, string | undefined>> };
@@ -77,7 +77,6 @@ export function ReplayOverviewPage() { return <ExplorerPage viewName="replay-ove
 export function ReplayRunsPage() { return <ExplorerPage viewName="replay-runs" title="Runs Rejeu" description="Runs filtrables, versions moteur et classification résultat." backTo="/replay" backLabel="Rejeu" />; }
 export function ReplayRunDetailPage() { const { runId } = useParams(); return <ExplorerPage viewName="replay-run-detail" title="Détail Rejeu" description="Run, moteur, timeline et processus GPT." backTo="/replay/runs" backLabel="Runs Rejeu" params={{ runId }} />; }
 export function ReplayComparePage() { const [search] = useSearchParams(); return <ExplorerPage viewName="replay-compare" title="Comparaison Rejeu" description="Comparaison backend de baselines et variantes." backTo="/replay/runs" backLabel="Runs Rejeu" params={{ ids: search.get("ids") ?? undefined }} />; }
-export function PerformanceOverviewPage() { return <ExplorerPage viewName="performance-overview" title="Performance" description="Résultats officiels en R, risque et attribution." backTo="/command-center" backLabel="Centre de contrôle" />; }
 export function PerformanceCalendarPage() { return <ExplorerPage viewName="performance-calendar" title="Calendrier de performance" description="Résultats par journée et accès à l'historique des trades." backTo="/performance" backLabel="Performance" />; }
 export function PerformanceDayDetailPage() { const { dayId } = useParams(); return <ExplorerPage viewName="performance-day-detail" title="Détail performance jour" description="Trades et attribution de la journée." backTo="/performance/calendar" backLabel="Calendrier" params={{ dayId }} />; }
 export function PerformanceStrategiesPage() { return <ExplorerPage viewName="performance-strategies" title="Performance stratégies" description="Comparaison officielle par stratégie." backTo="/performance" backLabel="Performance" />; }

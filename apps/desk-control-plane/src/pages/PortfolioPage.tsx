@@ -48,7 +48,7 @@ export function PortfolioPage() {
           <strong>{formatClock(realtime?.now)}</strong>
           <small>{formatClockDate(realtime?.now)}</small>
         </div>
-        <span className="pf-header__pill pf-header__pill--ok"><small>Moteur risque</small>{riskEngineLabel(portfolio.authoritativeState)}</span>
+        <span className="pf-header__pill pf-header__pill--ok"><small>Réconciliation</small>{riskEngineLabel(portfolio.reconciliation.status)}</span>
         <span className="pf-header__pill"><small>Environnement</small>{session?.summary.environment ?? "—"}</span>
         {primaryAccount ? <span className="pf-header__pill"><small>Compte</small>{primaryAccount.label}</span> : null}
       </header>
@@ -348,11 +348,11 @@ function PortfolioLoadingState() {
   );
 }
 
-function riskEngineLabel(state: PortfolioView["authoritativeState"]) {
-  const status = (state as { globalStatus?: string } | null)?.globalStatus;
-  if (status === "CONTROLLED") return "OK";
-  if (status === "BLOCKED") return "BLOQUÉ";
-  return "—";
+function riskEngineLabel(status: PortfolioView["reconciliation"]["status"]) {
+  if (status === "SYNCHRO") return "OK";
+  if (status === "PENDING") return "EN COURS";
+  if (status === "MISMATCH") return "ÉCART";
+  return "CRITIQUE";
 }
 
 function formatCurrencyCompact(value: number) {

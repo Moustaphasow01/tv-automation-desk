@@ -20,6 +20,7 @@ export function RiskCenterPage() {
   const query = useFrontView("risk");
   const repository = useFrontViewRepository();
   const [reason] = useState("Contrôle opérateur : validation Risk Center sans ordre broker direct.");
+  const [stepUpToken, setStepUpToken] = useState("");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
@@ -43,7 +44,7 @@ export function RiskCenterPage() {
     setSubmittingActionId(action.actionId);
     setCommandError(null);
     try {
-      const accepted = await repository.submitCommand(buildRiskCommand(action, reason));
+      const accepted = await repository.submitCommand(buildRiskCommand(action, reason, stepUpToken));
       setCommand(accepted);
     } catch (error) {
       setCommandError(error instanceof Error ? error.message : "RISK_COMMAND_FAILED");
@@ -66,12 +67,16 @@ export function RiskCenterPage() {
           <small>{formatClockDate(realtime?.now)}</small>
         </div>
         <span className={`rc-header__pill${data.summary.globalStatus === "BREACH" ? " rc-header__pill--breach" : " rc-header__pill--ok"}`}>{data.summary.globalStatus}</span>
+        <label className="rc-step-up">
+          <span>Step-up (kill switch / stress test)</span>
+          <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder={killSwitchAction?.actionId ?? "actionId step-up"} />
+        </label>
         {killSwitchAction ? (
           <button
             type="button"
             className="rc-header__kill"
-            disabled={submittingActionId === killSwitchAction.actionId || killSwitchAction.permission !== "ALLOWED"}
-            title={killSwitchAction.permission === "STEP_UP_REQUIRED" ? "Nécessite une confirmation renforcée (step-up), non disponible dans cette vue" : killSwitchAction.permission === "DENIED" ? "Action refusée par la politique en vigueur" : undefined}
+            disabled={isActionDisabled(killSwitchAction, reason, stepUpToken) || submittingActionId === killSwitchAction.actionId}
+            title={killSwitchAction.permission === "STEP_UP_REQUIRED" ? "Nécessite une confirmation renforcée (step-up)" : killSwitchAction.permission === "DENIED" ? "Action refusée par la politique en vigueur" : undefined}
             onClick={() => confirmAction(killSwitchAction)}
           >
             <FaSkullCrossbones aria-hidden="true" /> {submittingActionId === killSwitchAction.actionId ? "Envoi..." : "Kill Switch"}
@@ -194,7 +199,7 @@ export function RiskCenterPage() {
             <header>
               <h2>Stress tests</h2>
               {primaryStressAction ? (
-                <DeskButton variant="warning" disabled={submittingActionId === primaryStressAction.actionId || primaryStressAction.permission !== "ALLOWED"} onClick={() => confirmAction(primaryStressAction)}>
+                <DeskButton variant="warning" disabled={isActionDisabled(primaryStressAction, reason, stepUpToken) || submittingActionId === primaryStressAction.actionId} onClick={() => confirmAction(primaryStressAction)}>
                   {submittingActionId === primaryStressAction.actionId ? "Envoi..." : "Lancer un test"}
                 </DeskButton>
               ) : null}
@@ -243,14 +248,41 @@ export function RiskCenterPage() {
   );
 }
 
-function buildRiskCommand(action: RiskAction, reason: string): SubmitDeskCommandInput {
+export function buildRiskCommand(action: RiskAction, reason: string, stepUpToken = ""): SubmitDeskCommandInput {
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw Object.assign(new Error("RISK_REASON_REQUIRED"), { code: "RISK_REASON_REQUIRED" });
+  }
+
+  if (action.permission === "DENIED") {
+    throw Object.assign(new Error("RISK_PERMISSION_DENIED"), { code: "RISK_PERMISSION_DENIED" });
+  }
+
+  const normalizedStepUp = stepUpToken.trim();
+  if (action.permission === "STEP_UP_REQUIRED" && normalizedStepUp !== action.actionId) {
+    throw Object.assign(new Error("RISK_STEP_UP_REQUIRED"), { code: "RISK_STEP_UP_REQUIRED" });
+  }
+
   return {
     commandType: action.commandType,
     environment: "MOCK",
     expectedVersion: action.expectedVersion,
-    reason,
-    payload: { actionId: action.actionId, criticality: action.criticality, impactSummary: action.impactSummary, ...action.payload }
+    reason: normalizedReason,
+    payload: {
+      actionId: action.actionId,
+      criticality: action.criticality,
+      impactSummary: action.impactSummary,
+      stepUpAccepted: action.permission === "STEP_UP_REQUIRED",
+      ...action.payload
+    }
   };
+}
+
+function isActionDisabled(action: RiskAction, reason: string, stepUpToken: string) {
+  if (action.permission === "DENIED") return true;
+  if (!reason.trim()) return true;
+  if (action.permission === "STEP_UP_REQUIRED" && stepUpToken.trim() !== action.actionId) return true;
+  return false;
 }
 
 function KpiCell({ label, value, tone }: { label: string; value: string; tone?: "danger" | "warn" }) {

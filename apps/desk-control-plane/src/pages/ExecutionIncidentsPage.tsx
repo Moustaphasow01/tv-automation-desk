@@ -41,7 +41,6 @@ export function ExecutionIncidentsPage() {
   const realtime = useContext(RealtimeContext);
   const query = useFrontView("execution-incidents");
   const repository = useFrontViewRepository();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reason, setReason] = useState("Contrôle opérateur : traitement incident via le flux de commande, sans action broker directe.");
   const [stepUpToken, setStepUpToken] = useState("");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
@@ -49,10 +48,7 @@ export function ExecutionIncidentsPage() {
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
 
   const data = query.data?.data ?? null;
-  const selected = useMemo(
-    () => (data ? data.incidents.find((item) => item.incidentId === selectedId) ?? data.selectedIncident : null),
-    [data, selectedId]
-  );
+  const selected = data?.selectedIncident ?? null;
   const severityBreakdown = useMemo(() => {
     if (!data) return [];
     const counts = { HIGH: 0, MEDIUM: 0, LOW: 0 } as Record<string, number>;
@@ -125,7 +121,7 @@ export function ExecutionIncidentsPage() {
                   <thead><tr><th>Incident</th><th>Sév.</th><th>Statut</th><th>Impact</th></tr></thead>
                   <tbody>
                     {data.incidents.map((incident) => (
-                      <tr key={incident.incidentId} aria-selected={selected.incidentId === incident.incidentId} onClick={() => setSelectedId(incident.incidentId)}>
+                      <tr key={incident.incidentId} aria-selected={selected.incidentId === incident.incidentId}>
                         <td><strong>{incident.title}</strong><br /><small style={{ color: "var(--io-muted)" }}>{formatTime(incident.openedAt)}</small></td>
                         <td><StatusBadge tone={severityTone(incident.severity)}>{presentSeverity(incident.severity).label}</StatusBadge></td>
                         <td><StatusBadge tone={statusTone(incident.status)}>{presentIncidentStatus(incident.status).label}</StatusBadge></td>

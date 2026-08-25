@@ -2956,6 +2956,76 @@ export type ExplorerView = {
   }[];
 };
 
+export type PerformanceDimension = "STRATEGY" | "SESSION" | "INSTRUMENT" | "DIRECTION" | "OTHER";
+
+export type PerformanceView = {
+  summary: {
+    totalR: number;
+    trades: number;
+    wins: number;
+    losses: number;
+    flats: number;
+    winRate: number | null;
+    expectancyR: number | null;
+    profitFactor: number | null;
+    maxDrawdownR: number;
+    currentDrawdownR: number;
+    bestTradeR: number | null;
+    worstTradeR: number | null;
+    bestDayR: number | null;
+    worstDayR: number | null;
+    activeDays: number;
+    winningDays: number;
+    losingDays: number;
+  };
+  equityCurve: readonly {
+    sequence: number;
+    date: string;
+    cumulativeR: number;
+    drawdownR: number;
+    resultR: number;
+  }[];
+  pnlByDay: readonly {
+    date: string;
+    totalR: number;
+    trades: number;
+    wins: number;
+    losses: number;
+    winRate: number | null;
+  }[];
+  breakdowns: readonly {
+    dimension: PerformanceDimension;
+    items: readonly { label: string; totalR: number; trades: number; winRate: number | null }[];
+  }[];
+  attribution: readonly {
+    dimension: PerformanceDimension;
+    items: readonly {
+      label: string;
+      totalR: number;
+      trades: number;
+      winRate: number | null;
+      expectancyR: number | null;
+      avgR: number | null;
+      contributionPct: number;
+      tone: "positive" | "negative" | "neutral";
+    }[];
+  }[];
+  latestTrades: readonly {
+    tradeId: string;
+    at: string;
+    strategyId: string | null;
+    instrument: string | null;
+    session: string | null;
+    direction: string | null;
+    resultR: number | null;
+  }[];
+  facets: {
+    strategies: readonly string[];
+    sessions: readonly string[];
+    instruments: readonly string[];
+  };
+};
+
 export type ControlPlaneViews = {
   "auth-session": AuthSessionView;
   "operator-settings": OperatorSettingsView;
@@ -2997,7 +3067,7 @@ export type ControlPlaneViews = {
   "replay-runs": ExplorerView;
   "replay-run-detail": ExplorerView;
   "replay-compare": ExplorerView;
-  "performance-overview": ExplorerView;
+  "performance-overview": PerformanceView;
   "performance-calendar": ExplorerView;
   "performance-day-detail": ExplorerView;
   "performance-strategies": ExplorerView;
@@ -3414,6 +3484,19 @@ export function isExecutionProvidersView(value: unknown): value is ExecutionProv
       Array.isArray(candidate.events) &&
       Array.isArray(candidate.incidents) &&
       Array.isArray(candidate.commandActions)
+  );
+}
+
+export function isPerformanceView(value: unknown): value is PerformanceView {
+  const candidate = value as Partial<PerformanceView>;
+  return Boolean(
+    candidate?.summary &&
+      Array.isArray(candidate.equityCurve) &&
+      Array.isArray(candidate.pnlByDay) &&
+      Array.isArray(candidate.breakdowns) &&
+      Array.isArray(candidate.attribution) &&
+      Array.isArray(candidate.latestTrades) &&
+      candidate?.facets
   );
 }
 

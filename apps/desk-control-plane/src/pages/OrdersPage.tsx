@@ -1,14 +1,16 @@
 import { useContext, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { FaFingerprint } from "react-icons/fa";
 import { ReasonInput } from "@/design-system/actions";
 import { StatusBadge } from "@/design-system/primitives";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
-import type { SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
+import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import type { OrdersView } from "@/domains/front-api/viewModels";
 import "@/features/orders-human-gate/orders-human-gate.css";
 
 type ReviewItem = OrdersView["humanGateReview"]["items"][number];
+type OrderAction = OrdersView["commandActions"][number];
 
 export function OrdersPage() {
   const realtime = useContext(RealtimeContext);
@@ -18,6 +20,9 @@ export function OrdersPage() {
   const [reason, setReason] = useState("Contrôle opérateur : décision Human Gate depuis Orders & Human Gate.");
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [command, setCommand] = useState<CommandAccepted | null>(null);
+  const [commandError, setCommandError] = useState<string | null>(null);
+  const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
 
   const data = query.data?.data ?? null;
   const review = data?.humanGateReview ?? null;
@@ -49,6 +54,19 @@ export function OrdersPage() {
       setFeedback(error instanceof Error ? error.message : "HUMAN_GATE_COMMAND_FAILED");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const confirmOrderAction = async (action: OrderAction) => {
+    setSubmittingActionId(action.actionId);
+    setCommandError(null);
+    try {
+      const accepted = await repository.submitCommand(buildOrdersCommand(action, reason));
+      setCommand(accepted);
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : "ORDERS_COMMAND_FAILED");
+    } finally {
+      setSubmittingActionId(null);
     }
   };
 
@@ -168,9 +186,61 @@ export function OrdersPage() {
             </div>
           </section>
         </div>
+
+        <section className="oh-panel" aria-label="Actions ordres">
+          <header><h2>Actions ordres</h2><small>Flux de commande</small></header>
+          <div className="oh-panel__body">
+            <div className="oh-command-result">
+              <FaFingerprint />
+              <div>
+                <small>Dernière commande orders</small>
+                <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+                {commandError ? <div style={{ color: "var(--oh-red)" }}>{commandError}</div> : null}
+              </div>
+            </div>
+            <div className="oh-command-list">
+              {data.commandActions.map((action) => (
+                <article key={action.actionId}>
+                  <FaFingerprint />
+                  <div><strong>{action.label}</strong><small>{action.commandType}</small></div>
+                  <StatusBadge tone={action.permission === "ALLOWED" ? "success" : action.permission === "STEP_UP_REQUIRED" ? "warning" : "danger"}>{action.permission}</StatusBadge>
+                  <button
+                    type="button"
+                    disabled={action.permission !== "ALLOWED" || !reason.trim() || submittingActionId === action.actionId}
+                    onClick={() => confirmOrderAction(action)}
+                  >
+                    {submittingActionId === action.actionId ? "Envoi..." : "Confirmer"}
+                  </button>
+                </article>
+              ))}
+              {!data.commandActions.length ? <p className="oh-empty">Aucune action commande publiée.</p> : null}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
+}
+
+export function buildOrdersCommand(action: OrderAction, reason: string): SubmitDeskCommandInput {
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw Object.assign(new Error("ORDERS_REASON_REQUIRED"), { code: "ORDERS_REASON_REQUIRED" });
+  }
+
+  return {
+    commandType: action.commandType,
+    environment: "MOCK",
+    expectedVersion: action.expectedVersion,
+    reason: normalizedReason,
+    payload: {
+      actionId: action.actionId,
+      targetOrderId: action.targetOrderId ?? "",
+      targetProviderId: action.targetProviderId ?? "",
+      criticality: action.criticality,
+      ...action.payload
+    }
+  };
 }
 
 function KpiCell({ label, value }: { label: string; value: string }) {

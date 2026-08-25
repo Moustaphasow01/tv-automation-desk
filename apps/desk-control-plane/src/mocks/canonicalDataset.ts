@@ -504,7 +504,12 @@ export const portfolioView: ViewEnvelope<PortfolioView> = {
       exposureUsd: 348_600_000,
       maxDrawdownR: -1.18,
       openPositions: 6,
-      riskUsagePct: 37.6
+      riskUsagePct: 37.6,
+      positionsLong: 5,
+      positionsShort: 1,
+      strategiesWithPositions: 4,
+      humanGatePending: 1,
+      pendingOrders: 2
     },
     summaryTruth: {
       equity: { state: "KNOWN", value: 124_700_000, asOf: generatedAt, source: "test-fixture" },
@@ -515,6 +520,26 @@ export const portfolioView: ViewEnvelope<PortfolioView> = {
       correlatedExposurePct: { state: "KNOWN", value: 28.2, asOf: generatedAt, source: "test-fixture" }
     },
     equityCurve: [122.1, 122.6, 122.4, 123.0, 123.8, 123.4, 124.2, 124.0, 124.7],
+    accountsSummary: [
+      {
+        accountId: "acct_ninjatrader_sim101",
+        label: "NinjaTrader SIM101",
+        mode: "PAPER",
+        equity: 124_700_000,
+        openPnl: 499_625,
+        openPositions: 4,
+        asOf: generatedAt
+      },
+      {
+        accountId: "acct_ninjatrader_sim102",
+        label: "NinjaTrader SIM102",
+        mode: "PAPER",
+        equity: 0,
+        openPnl: null,
+        openPositions: 0,
+        asOf: null
+      }
+    ],
     positions: [
       {
         positionId: "pos_demo_es",
@@ -1458,6 +1483,40 @@ export const ordersView: ViewEnvelope<OrdersView> = {
   meta: commonMeta,
   permissions: commonPermissions,
   data: {
+    humanGateReview: {
+      summary: {
+        pendingCount: 1,
+        approvedToday: 1,
+        rejectedToday: 1,
+        avgDecisionSeconds: 96
+      },
+      items: [
+        {
+          orderIntentId: "oint_sig_vnext_demo_mnq_0940_001",
+          instrument: "MNQ",
+          side: "BUY",
+          quantity: 2,
+          authorizedQuantity: 2,
+          riskPct: 0.42,
+          status: "AWAITING_MANUAL_CONFIRMATION",
+          expiresAt: "2026-08-10T09:45:57.040Z",
+          ageSeconds: 180,
+          route: "/execution/orders/ord_sig_vnext_demo_mnq_0940_001"
+        },
+        {
+          orderIntentId: "oint_sig_gc_macro_0935_shadow",
+          instrument: "MGC",
+          side: "BUY",
+          quantity: 1,
+          authorizedQuantity: 1,
+          riskPct: 0.2,
+          status: "CONFIRMED",
+          expiresAt: null,
+          ageSeconds: 620,
+          route: "/execution/orders/ord_sig_gc_macro_0935_shadow"
+        }
+      ]
+    },
     summary: {
       orderIntents: 4,
       activeOrders: 2,
@@ -1744,7 +1803,8 @@ export const riskView: ViewEnvelope<RiskView> = {
       netExposureUsd: 118_200_000,
       leverage: 2.8,
       activeBreaches: 1,
-      stressTestsToday: 3
+      stressTestsToday: 3,
+      openRiskUsd: 42_500
     },
     limits: [
       {

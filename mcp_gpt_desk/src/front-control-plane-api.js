@@ -116,7 +116,7 @@ const VIEW_BUILDERS = {
   "replay-runs": replayRunsExplorer,
   "replay-run-detail": replayRunDetailExplorer,
   "replay-compare": replayCompareExplorer,
-  "performance-overview": performanceOverviewExplorer,
+  "performance-overview": performanceOverview,
   "performance-calendar": performanceCalendarExplorer,
   "performance-day-detail": performanceDayDetailExplorer,
   "performance-strategies": performanceStrategiesExplorer,
@@ -792,10 +792,101 @@ function replayCompareExplorer({ replays, replayComparison }) {
   return explorerView("Comparer Replay", "Sélectionnez au moins deux IDs dans l'URL via ?ids=runA,runB pour une comparaison backend.", items, [metric("Candidats", items.length), metric("Comparaison", "Non configurée")]);
 }
 
-function performanceOverviewExplorer({ performance }) {
+function performanceOverview({ performance }) {
   const totals = performance?.totals || {};
-  const items = rows(performance?.dayDrilldowns).map(performanceDayItem);
-  return explorerView("Performance", "PnL en R, risque et attribution calculés par le backend.", items, [metric("Total R", `${signedNumber(totals.totalR)} R`), metric("Trades", number(totals.trades, 0)), metric("Win rate", `${number(totals.winRate, 0).toFixed(1)}%`), metric("Max DD", `${signedNumber(totals.maxDrawdownR)} R`), metric("Expectancy", `${signedNumber(totals.expectancyR)} R`)]);
+  const risk = performance?.risk || {};
+  const equity = rows(performance?.equity);
+  const dailySeries = rows(performance?.dailySeries);
+  const breakdowns = rows(performance?.breakdowns);
+  const attribution = rows(performance?.attribution);
+  const dayDrilldowns = rows(performance?.dayDrilldowns);
+  const facets = performance?.facets || {};
+  return {
+    summary: {
+      totalR: number(totals.totalR, 0),
+      trades: number(totals.trades, 0),
+      wins: number(totals.wins, 0),
+      losses: number(totals.losses, 0),
+      flats: number(totals.flats, 0),
+      winRate: totals.winRate == null ? null : number(totals.winRate, 0),
+      expectancyR: totals.expectancyR == null ? null : number(totals.expectancyR, 0),
+      profitFactor: totals.profitFactor == null ? null : number(totals.profitFactor, 0),
+      maxDrawdownR: number(risk.maxDrawdownR, 0),
+      currentDrawdownR: number(risk.currentDrawdownR, 0),
+      bestTradeR: risk.bestTradeR == null ? null : number(risk.bestTradeR, 0),
+      worstTradeR: risk.worstTradeR == null ? null : number(risk.worstTradeR, 0),
+      bestDayR: risk.bestDayR == null ? null : number(risk.bestDayR, 0),
+      worstDayR: risk.worstDayR == null ? null : number(risk.worstDayR, 0),
+      activeDays: number(totals.activeDays, 0),
+      winningDays: number(totals.winningDays, 0),
+      losingDays: number(totals.losingDays, 0),
+    },
+    equityCurve: equity.map((point) => ({
+      sequence: number(point.sequence, 0),
+      date: text(point.date, "unavailable"),
+      cumulativeR: number(point.cumulativeR, 0),
+      drawdownR: number(point.drawdownR, 0),
+      resultR: number(point.resultR, 0),
+    })),
+    pnlByDay: dailySeries.map((day) => ({
+      date: text(day.date, "unavailable"),
+      totalR: number(day.totalR, 0),
+      trades: number(day.trades, 0),
+      wins: number(day.wins, 0),
+      losses: number(day.losses, 0),
+      winRate: day.winRate == null ? null : number(day.winRate, 0),
+    })),
+    breakdowns: breakdowns
+      .filter((group) => ["strategy", "session", "instrument", "direction"].includes(group.dimension))
+      .map((group) => ({
+        dimension: performanceDimensionKey(group.dimension),
+        items: rows(group.items).slice(0, 20).map((item) => ({
+          label: text(item.label, "unavailable"),
+          totalR: number(item.totalR, 0),
+          trades: number(item.trades, 0),
+          winRate: item.winRate == null ? null : number(item.winRate, 0),
+        })),
+      })),
+    attribution: attribution.map((group) => ({
+      dimension: performanceDimensionKey(group.dimension),
+      items: rows(group.items).slice(0, 20).map((item) => ({
+        label: text(item.label, "unavailable"),
+        totalR: number(item.totalR, 0),
+        trades: number(item.trades, 0),
+        winRate: item.winRate == null ? null : number(item.winRate, 0),
+        expectancyR: item.expectancyR == null ? null : number(item.expectancyR, 0),
+        avgR: item.avgR == null ? null : number(item.avgR, 0),
+        contributionPct: number(item.contributionPct, 0),
+        tone: item.tone === "positive" || item.tone === "negative" ? item.tone : "neutral",
+      })),
+    })),
+    latestTrades: [...dayDrilldowns]
+      .reverse()
+      .flatMap((day) => rows(day.tradeItems))
+      .slice(0, 30)
+      .map((trade) => ({
+        tradeId: text(trade.id, "unavailable"),
+        at: text(trade.at, "unavailable"),
+        strategyId: trade.strategyId ? text(trade.strategyId, "") : null,
+        instrument: trade.instrument ? text(trade.instrument, "") : null,
+        session: trade.session ? text(trade.session, "") : null,
+        direction: trade.direction ? text(trade.direction, "") : null,
+        resultR: trade.resultR == null ? null : number(trade.resultR, 0),
+      })),
+    facets: {
+      strategies: stringList(facets.strategies),
+      sessions: stringList(facets.sessions),
+      instruments: stringList(facets.instruments),
+    },
+  };
+}
+function performanceDimensionKey(dimension) {
+  const normalized = upper(dimension);
+  if (normalized === "STRATEGY") return "STRATEGY";
+  if (normalized === "SESSION") return "SESSION";
+  if (normalized === "INSTRUMENT") return "INSTRUMENT";
+  if (normalized === "DIRECTION") return "DIRECTION";
+  return "OTHER";
 }
 
 function performanceCalendarExplorer({ performance }) {
