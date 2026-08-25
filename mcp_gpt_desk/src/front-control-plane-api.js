@@ -158,7 +158,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "position-detail": ["execution"],
   "incident-detail": ["incidents"],
   orders: ["execution"],
-  risk: ["execution", "portfolio-risk"],
+  risk: ["execution", "portfolio-risk", "strategy", "health"],
   "execution-providers": ["execution", "incidents"],
   "execution-incidents": ["execution", "incidents"],
   portfolio: ["execution", "portfolio-risk"],
@@ -1368,16 +1368,16 @@ function eventsAudit({ execution, strategy, incidents, runtime, warnings, nowIso
   };
 }
 
-function orders({ execution, warnings, actor, nowIso }) {
+function orders({ execution, warnings, actor, nowIso, query }) {
   warnings.push("orders-state-machine:NOT_IMPLEMENTED", "orders-history:NOT_IMPLEMENTED");
   const activeOrders = rows(execution?.orders).filter(hasOrderId).map(activeOrderRow);
-  return { summary: { orderIntents: rows(execution?.intents).filter(hasIntentId).length, activeOrders: activeOrders.length, recentFills: rows(execution?.fills).filter(hasFillId).length, partialOrders: countBy(activeOrders, (item) => item.state === "PARTIAL"), rejectedOrders: countBy(activeOrders, (item) => item.state === "REJECTED"), protectedOrdersPct: orderProtectionRate(activeOrders) }, filters: { activeTab: "ACTIVE", stateCounts: {}, providerCounts: {} }, orderIntents: rows(execution?.intents).filter(hasIntentId).map(intentRow), activeOrders, fills: rows(execution?.fills).filter(hasFillId).map(orderFillRow), protections: [], providers: providerRows(execution), stateMachine: [], history: [], commandActions: [], humanGateReview: humanGateReviewOverview({ execution, actor, nowIso }) };
+  return { summary: { orderIntents: rows(execution?.intents).filter(hasIntentId).length, activeOrders: activeOrders.length, recentFills: rows(execution?.fills).filter(hasFillId).length, partialOrders: countBy(activeOrders, (item) => item.state === "PARTIAL"), rejectedOrders: countBy(activeOrders, (item) => item.state === "REJECTED"), protectedOrdersPct: orderProtectionRate(activeOrders) }, filters: { activeTab: "ACTIVE", stateCounts: {}, providerCounts: {} }, orderIntents: rows(execution?.intents).filter(hasIntentId).map(intentRow), activeOrders, fills: rows(execution?.fills).filter(hasFillId).map(orderFillRow), protections: [], providers: providerRows(execution), stateMachine: [], history: [], commandActions: [], humanGateReview: humanGateReviewOverview({ execution, actor, nowIso, query }) };
 }
 
 // Real portfolioOrderIntents + humanExecutionGates + risk_decisions, reusing the
 // same gate/action projections orderDetail() already uses for a single intent -
 // this is the list-level "Orders & Human Gate" review workflow.
-function humanGateReviewOverview({ execution, actor, nowIso }) {
+function humanGateReviewOverview({ execution, actor, nowIso, query }) {
   const intents = rows(nested(execution, ["portfolioOrderIntents"]));
   const gated = intents.filter((intent) => {
     const id = text(intent.portfolio_order_intent_id, "");
@@ -1404,13 +1404,40 @@ function humanGateReviewOverview({ execution, actor, nowIso }) {
   const decided = gated.map((intent) => ({ intent, gate: orderHumanGateProjection({ execution, portfolioIntent: intent, actor }) }));
   const approvedToday = countBy(decided, ({ gate }) => Boolean(gate.confirmedAt) && isSameUtcDay(gate.confirmedAt, nowIso));
   const rejectedToday = countBy(decided, ({ gate }) => Boolean(gate.rejectedAt) && isSameUtcDay(gate.rejectedAt, nowIso));
-  const decisionDurationsMs = decided
+  const decisionDurations = decided
     .map(({ intent, gate }) => {
       const resolvedAt = Date.parse(gate.confirmedAt || gate.rejectedAt || "");
       const createdAt = Date.parse(intent.created_at_utc || "");
-      return Number.isFinite(resolvedAt) && Number.isFinite(createdAt) ? resolvedAt - createdAt : NaN;
+      return Number.isFinite(resolvedAt) && Number.isFinite(createdAt) ? { intent, gate, at: gate.confirmedAt || gate.rejectedAt, durationMs: resolvedAt - createdAt } : null;
     })
-    .filter((value) => Number.isFinite(value) && value >= 0);
+    .filter((item) => item && item.durationMs >= 0);
+  const decisionDurationsMs = decisionDurations.map((item) => item.durationMs);
+  const requestedRunId = text(query?.orderIntentId, "");
+  const selectedIntent = gated.find((intent) => text(intent.portfolio_order_intent_id, "") === requestedRunId)
+    || gated.find((intent) => text(intent.portfolio_order_intent_id, "") === pending[0]?.orderIntentId)
+    || gated[0]
+    || null;
+  const selectedDossier = selectedIntent ? canonicalOrderIntentDossier({ execution, portfolioIntent: selectedIntent, order: {}, actor, nowIso, health: null }) : null;
+  const reasonCodeCounts = new Map();
+  for (const intent of gated) {
+    const codes = rows(safeArrayFirst(intent.risk_decisions)?.reason_codes);
+    for (const code of codes) reasonCodeCounts.set(String(code), (reasonCodeCounts.get(String(code)) || 0) + 1);
+  }
+  const reasonCodes = [...reasonCodeCounts.entries()]
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+  const pendingByStrategyGroups = new Map();
+  for (const intent of gated) {
+    const gate = orderHumanGateProjection({ execution, portfolioIntent: intent, actor });
+    if (gate.status !== "AWAITING_MANUAL_CONFIRMATION") continue;
+    const payload = intent.order_intent_payload || intent.payload || {};
+    const key = text(payload.strategy_instance_id, "unavailable");
+    const current = pendingByStrategyGroups.get(key) || { strategyInstanceId: key, pending: 0, oldestAgeSeconds: 0 };
+    current.pending += 1;
+    current.oldestAgeSeconds = Math.max(current.oldestAgeSeconds, ageSecondsSafe(intent.created_at_utc, nowIso));
+    pendingByStrategyGroups.set(key, current);
+  }
   return {
     summary: {
       pendingCount: pending.length,
@@ -1419,6 +1446,23 @@ function humanGateReviewOverview({ execution, actor, nowIso }) {
       avgDecisionSeconds: decisionDurationsMs.length ? Math.round(decisionDurationsMs.reduce((sum, value) => sum + value, 0) / decisionDurationsMs.length / 1000) : 0,
     },
     items,
+    selectedOrderIntentId: text(selectedIntent?.portfolio_order_intent_id, ""),
+    selectedDossier,
+    reasonCodes,
+    pendingByStrategy: [...pendingByStrategyGroups.values()].sort((a, b) => b.pending - a.pending),
+    recentDecisions: [...decisionDurations]
+      .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+      .slice(0, 10)
+      .map(({ intent, gate, at, durationMs }) => {
+        const canonical = portfolioOrderIntentSummaryRowSafe(intent);
+        return {
+          orderIntentId: text(intent.portfolio_order_intent_id, ""),
+          instrument: text(canonical.instrument, "—"),
+          decision: gate.confirmedAt === at ? "APPROVED" : "REJECTED",
+          at: text(at, "unavailable"),
+          decisionSeconds: Math.round(durationMs / 1000),
+        };
+      }),
   };
 }
 function safeArrayFirst(value) { return rows(value)[0] || null; }
@@ -1663,9 +1707,11 @@ function incidentDetail({ incidents, query, warnings }) {
   return { summary: { severity: incident.severity, status: incident.status, retryCount: number(source.retry_count, 0), operatorGate: text(source.operator_gate, "NONE") }, incident: { ...incident, retryCount: number(source.retry_count, 0), operatorGate: text(source.operator_gate, "NONE"), impactR: number(source.impact_R ?? source.impact_r, 0), impactSummary: text(source.impact_summary, incident.detail), machineRecommendation: text(source.machine_recommendation, "Indisponible"), openedAt: text(source.opened_at_utc || source.created_at_utc, "unavailable"), updatedAt: text(source.updated_at_utc || source.created_at_utc, "unavailable") }, payloadPreview: incident.payloadPreview, meta: incident.meta, chronology: incident.chronology, reconciliationResults: incident.reconciliationResults, postMortem: incident.postMortem, retries: rows(source.retries), relations: [{ label: "Ordre", id: text(source.order_id, "unavailable"), route: `/execution/orders/${encodeURIComponent(text(source.order_id, "unavailable"))}` }, { label: "Position", id: text(source.position_id, "unavailable"), route: `/execution/portfolio/positions/${encodeURIComponent(text(source.position_id, "unavailable"))}` }] };
 }
 
-function riskCenter({ risk, execution, nowIso, warnings }) {
+function riskCenter({ risk, execution, strategy, health, nowIso, warnings }) {
   if (!nested(risk, ["limits"])) warnings.push("risk-limits:UNAVAILABLE");
   const authoritative = nested(risk, ["risk_center"]) || null;
+  const intents = rows(nested(execution, ["portfolioOrderIntents"]));
+  const decisions = intents.map((intent) => riskDecisionRow(intent, nowIso)).filter(Boolean);
   return {
     summary: riskCenterSummary(risk, authoritative),
     authoritativeState: authoritative,
@@ -1676,8 +1722,104 @@ function riskCenter({ risk, execution, nowIso, warnings }) {
     stressTests: rows(nested(risk, ["stress_tests"])),
     breaches: riskCenterPreferredRows(authoritative, risk, "breaches"),
     timeSeriesContracts: frontTimeSeriesContracts({ view: "risk", execution, risk, nowIso }),
+    riskByAccount: riskByAccountRows(risk, decisions),
+    riskByStrategy: riskByStrategyRows(decisions, strategy),
+    riskByInstrument: riskByInstrumentRows(decisions),
+    riskDecisions: {
+      summary: riskDecisionsSummary(decisions, nowIso),
+      items: [...decisions].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 20),
+    },
+    circuitBreakers: circuitBreakerRows(execution, health),
     commandActions: [],
   };
+}
+function riskDecisionRow(intent, nowIso) {
+  const payload = intent.order_intent_payload || intent.payload || {};
+  const decision = safeArrayFirst(intent.risk_decisions);
+  const requestedQty = finiteOrNull(firstValue(intent.quantity, payload.quantity));
+  const authorizedQty = finiteOrNull(firstValue(decision?.authorized?.quantity, decision?.approved_size));
+  if (requestedQty === null && authorizedQty === null) return null;
+  return {
+    at: text(intent.created_at_utc, "unavailable"),
+    orderIntentId: text(intent.portfolio_order_intent_id, ""),
+    signalId: text(payload.signal_id, "unavailable"),
+    strategyInstanceId: text(payload.strategy_instance_id, "unavailable"),
+    accountId: text(firstValue(intent.target_account_id, payload.account_id, payload.broker_account_id), ""),
+    instrument: text(firstValue(intent.target_instrument, payload.instrument), "unavailable"),
+    requestedQty: requestedQty ?? 0,
+    authorizedQty: authorizedQty ?? 0,
+    riskAmount: number(decision?.authorized?.risk_amount, 0),
+    verdict: riskDecisionVerdict(requestedQty, authorizedQty),
+    reason: text(firstValue(rows(decision?.reason_codes)[0], decision?.nearest_limit?.type), "unavailable"),
+  };
+}
+function riskDecisionVerdict(requested, authorized) {
+  if (authorized === null || authorized === 0) return "REJECTED";
+  if (requested !== null && authorized < requested) return "REDUCED";
+  return "APPROVED";
+}
+function riskDecisionsSummary(decisions, nowIso) {
+  return {
+    total: decisions.length,
+    approved: countBy(decisions, (item) => item.verdict === "APPROVED"),
+    reduced: countBy(decisions, (item) => item.verdict === "REDUCED"),
+    rejected: countBy(decisions, (item) => item.verdict === "REJECTED"),
+    today: countBy(decisions, (item) => isSameUtcDay(item.at, nowIso)),
+  };
+}
+function riskByAccountRows(risk, decisions) {
+  const accounts = rows(nested(risk, ["accounts"]));
+  return accounts.map((account) => {
+    const accountId = text(account.account_id, "");
+    const accountDecisions = decisions.filter((item) => item.accountId === accountId);
+    return {
+      accountId,
+      label: text(account.label, accountId),
+      equityUsd: finiteOrNull(account.capital),
+      openRiskUsd: number(aggregateSum(accountDecisions.map((item) => item.riskAmount)), 0),
+      status: text(account.status, "UNKNOWN"),
+    };
+  });
+}
+function riskByStrategyRows(decisions, strategy) {
+  const instances = rows(nested(strategy, ["instances"]));
+  const nameById = new Map(instances.map((item) => [text(item.strategy_instance_id, ""), text(item.strategy_definition_id || item.name, item.strategy_instance_id)]));
+  const groups = new Map();
+  for (const item of decisions) {
+    const key = item.strategyInstanceId;
+    if (!key || key === "unavailable") continue;
+    const current = groups.get(key) || { strategyInstanceId: key, label: nameById.get(key) || key, riskAmount: 0, decisions: 0 };
+    current.riskAmount += item.riskAmount;
+    current.decisions += 1;
+    groups.set(key, current);
+  }
+  return [...groups.values()].sort((a, b) => b.riskAmount - a.riskAmount).slice(0, 10);
+}
+function riskByInstrumentRows(decisions) {
+  const groups = new Map();
+  for (const item of decisions) {
+    const key = item.instrument;
+    if (!key || key === "unavailable") continue;
+    const current = groups.get(key) || { instrument: key, riskAmount: 0, decisions: 0 };
+    current.riskAmount += item.riskAmount;
+    current.decisions += 1;
+    groups.set(key, current);
+  }
+  return [...groups.values()].sort((a, b) => b.riskAmount - a.riskAmount);
+}
+function aggregateSum(values) { return values.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0); }
+function circuitBreakerRows(execution, health) {
+  const locks = rows(nested(execution, ["locks"]));
+  const globalLock = locks.find((item) => item.scope_type === "global");
+  const accountLocks = locks.filter((item) => item.scope_type === "account");
+  const marketDataOk = nested(health, ["data_readiness", "market_closed"]) !== true && health != null;
+  const infraOk = health?.ok !== false;
+  return [
+    { breakerId: "global_kill_switch", label: "Global Kill Switch", armed: Boolean(globalLock), detail: globalLock ? text(globalLock.reason, "Verrou actif") : "Aucun verrou global actif" },
+    ...accountLocks.map((lock) => ({ breakerId: text(lock.execution_lock_id, lock.scope_value), label: `Protection compte · ${text(lock.scope_value, "")}`, armed: true, detail: text(lock.reason, "Verrou de protection actif") })),
+    { breakerId: "market_data", label: "Flux de données marché", armed: !marketDataOk, detail: health ? (marketDataOk ? "Aucun problème détecté" : "Marché fermé ou données indisponibles") : "État santé non publié" },
+    { breakerId: "infrastructure", label: "Infrastructure d'exécution", armed: !infraOk, detail: health ? (infraOk ? "Infrastructure saine" : "Dégradation détectée") : "État santé non publié" },
+  ];
 }
 
 function executionProviders({ execution, incidents, warnings }) {

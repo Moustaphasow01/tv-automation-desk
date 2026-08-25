@@ -124,16 +124,22 @@ export function OrdersPage() {
             <div className="oh-panel__body">
               {selected ? (
                 <div className="oh-detail">
+                  {review.selectedDossier ? <PipelineStepper lineage={review.selectedDossier.lineage} /> : null}
                   <div className="oh-detail-grid">
                     <div><small>OrderIntent</small><strong>{shortId(selected.orderIntentId)}</strong></div>
                     <div><small>Statut</small><strong>{selected.status}</strong></div>
                     <div><small>Instrument</small><strong>{selected.instrument}</strong></div>
                     <div><small>Côté</small><strong>{selected.side}</strong></div>
-                    <div><small>Qté demandée</small><strong>{selected.quantity}</strong></div>
-                    <div><small>Qté autorisée</small><strong>{selected.authorizedQuantity}</strong></div>
-                    <div><small>Risque autorisé</small><strong>{selected.riskPct != null ? `${(selected.riskPct * 100).toFixed(2)}%` : "Non publié"}</strong></div>
                     <div><small>Expire</small><strong>{formatTime(selected.expiresAt)}</strong></div>
+                    <div><small>Décision risque</small><strong>{review.selectedDossier?.lineage.riskDecision.decision ?? "Non publié"}</strong></div>
                   </div>
+                  {review.selectedDossier ? (
+                    <div className="oh-qty-compare">
+                      <div><small>Demandé</small><strong>{review.selectedDossier.riskSnapshot.requestedQty}</strong></div>
+                      <div><small>Autorisé</small><strong>{review.selectedDossier.riskSnapshot.authorizedQty}</strong></div>
+                      <div><small>Delta</small><strong>{review.selectedDossier.riskSnapshot.authorizedQty - review.selectedDossier.riskSnapshot.requestedQty}</strong></div>
+                    </div>
+                  ) : null}
                   {selected.status === "AWAITING_MANUAL_CONFIRMATION" ? (
                     <>
                       <ReasonInput label="Justification opérateur" value={reason} onChange={setReason} />
@@ -146,6 +152,64 @@ export function OrdersPage() {
                   {feedback ? <p className="oh-empty">{feedback}</p> : null}
                 </div>
               ) : <p className="oh-empty">Aucun OrderIntent sélectionné.</p>}
+            </div>
+          </section>
+        </div>
+
+        <div className="oh-row3">
+          <section className="oh-panel" aria-label="Résumé des décisions">
+            <header><h2>Décisions</h2></header>
+            <div className="oh-panel__body">
+              <DecisionDonut items={review.items} />
+            </div>
+          </section>
+
+          <section className="oh-panel" aria-label="Codes de raison">
+            <header><h2>Codes de raison</h2></header>
+            <div className="oh-panel__body">
+              <div className="oh-reason-list">
+                {review.reasonCodes.map((item) => (
+                  <div key={item.code} className="oh-reason-row"><span>{item.code}</span><strong>{item.count}</strong></div>
+                ))}
+                {!review.reasonCodes.length ? <p className="oh-empty">Aucun code de raison publié.</p> : null}
+              </div>
+            </div>
+          </section>
+
+          <section className="oh-panel" aria-label="En attente par stratégie">
+            <header><h2>En attente par stratégie</h2></header>
+            <div className="oh-panel__body">
+              <div className="oh-pending-list">
+                {review.pendingByStrategy.map((row) => (
+                  <div key={row.strategyInstanceId} className="oh-pending-row">
+                    <span>{shortId(row.strategyInstanceId)}</span>
+                    <strong>{row.pending}</strong>
+                    <small>{formatAge(row.oldestAgeSeconds)}</small>
+                  </div>
+                ))}
+                {!review.pendingByStrategy.length ? <p className="oh-empty">Aucune stratégie en attente.</p> : null}
+              </div>
+            </div>
+          </section>
+
+          <section className="oh-panel" aria-label="Dernières décisions">
+            <header><h2>Dernières décisions</h2></header>
+            <div className="oh-panel__body" style={{ padding: 0 }}>
+              <div className="oh-table-scroll">
+                <table className="oh-table">
+                  <thead><tr><th>Instrument</th><th>Décision</th><th>Durée</th></tr></thead>
+                  <tbody>
+                    {review.recentDecisions.map((item) => (
+                      <tr key={item.orderIntentId}>
+                        <td>{item.instrument}</td>
+                        <td><StatusBadge tone={item.decision === "APPROVED" ? "success" : "danger"}>{item.decision}</StatusBadge></td>
+                        <td>{formatDuration(item.decisionSeconds)}</td>
+                      </tr>
+                    ))}
+                    {!review.recentDecisions.length ? <tr><td colSpan={3}><p className="oh-empty">Aucune décision récente publiée.</p></td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
         </div>
@@ -241,6 +305,79 @@ export function buildOrdersCommand(action: OrderAction, reason: string): SubmitD
       ...action.payload
     }
   };
+}
+
+type Lineage = NonNullable<OrdersView["humanGateReview"]["selectedDossier"]>["lineage"];
+
+const STEPPER_STAGES: readonly { key: keyof Lineage; label: string }[] = [
+  { key: "strategySignal", label: "Signal" },
+  { key: "contextDecision", label: "AI Context" },
+  { key: "portfolioDecision", label: "Portfolio" },
+  { key: "riskDecision", label: "Risk Engine" },
+  { key: "targetPosition", label: "Target" },
+  { key: "orderIntent", label: "OrderIntent" },
+  { key: "humanGate", label: "Human Gate" },
+];
+
+function PipelineStepper({ lineage }: { lineage: Lineage }) {
+  const providerReached = lineage.providerCommands.length > 0;
+  return (
+    <div className="oh-stepper">
+      {STEPPER_STAGES.map((stage, index) => {
+        const node = lineage[stage.key] as { id: string };
+        const done = node.id !== "unavailable";
+        return (
+          <div key={stage.key} style={{ display: "contents" }}>
+            <div className={`oh-stepper-node${done ? " is-done" : ""}${!done && index > 0 ? " is-current" : ""}`}>
+              <span className="dot" />
+              <small>{stage.label}</small>
+            </div>
+            {index < STEPPER_STAGES.length - 1 ? <div className="oh-stepper-line" /> : null}
+          </div>
+        );
+      })}
+      <div className="oh-stepper-line" />
+      <div className={`oh-stepper-node${providerReached ? " is-done" : ""}`}><span className="dot" /><small>Provider Cmd</small></div>
+    </div>
+  );
+}
+
+function DecisionDonut({ items }: { items: OrdersView["humanGateReview"]["items"] }) {
+  const counts = {
+    CONFIRMED: items.filter((item) => item.status === "CONFIRMED").length,
+    REJECTED: items.filter((item) => item.status === "REJECTED").length,
+    AWAITING_MANUAL_CONFIRMATION: items.filter((item) => item.status === "AWAITING_MANUAL_CONFIRMATION").length,
+    EXPIRED: items.filter((item) => item.status === "EXPIRED").length,
+  };
+  const total = items.length || 1;
+  const colors: Record<string, string> = { CONFIRMED: "var(--oh-green)", REJECTED: "var(--oh-red)", AWAITING_MANUAL_CONFIRMATION: "var(--oh-amber)", EXPIRED: "var(--oh-muted)" };
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  let cumulative = 0;
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+      <svg viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Répartition des décisions">
+        <g transform="rotate(-90 50 50)">
+          {Object.entries(counts).map(([key, value]) => {
+            const fraction = value / total;
+            const dash = fraction * circumference;
+            const offset = cumulative * circumference;
+            cumulative += fraction;
+            return <circle key={key} cx="50" cy="50" r={radius} fill="none" stroke={colors[key]} strokeWidth="14" strokeDasharray={`${dash} ${circumference - dash}`} strokeDashoffset={-offset} />;
+          })}
+        </g>
+        <text x="50" y="50" textAnchor="middle" dominantBaseline="middle" fontSize="11" fill="var(--oh-text)" fontWeight="700">{items.length}</text>
+      </svg>
+      <ul style={{ display: "grid", gap: 4, fontSize: 11, listStyle: "none", margin: 0, padding: 0 }}>
+        {Object.entries(counts).map(([key, value]) => (
+          <li key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: colors[key], display: "inline-block" }} />
+            {key} <strong>{value}</strong>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function KpiCell({ label, value }: { label: string; value: string }) {

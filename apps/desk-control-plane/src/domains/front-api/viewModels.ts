@@ -1049,6 +1049,50 @@ export type OrdersView = {
       ageSeconds: number;
       route: string;
     }[];
+    selectedOrderIntentId: string;
+    selectedDossier: {
+      lineage: {
+        strategyDefinition: { id: string };
+        strategyVersion: { id: string };
+        strategyInstance: { id: string };
+        strategySignal: { id: string };
+        contextDecision: { id: string };
+        portfolioDecision: { id: string };
+        riskDecision: { id: string; decision: string };
+        targetPosition: { id: string };
+        orderIntent: { id: string };
+        humanGate: { id: string; status: string };
+        providerCommands: readonly string[];
+        providerEvents: readonly string[];
+      };
+      executionTerms: {
+        account_id: string;
+        instrument: string;
+        side: string;
+        quantity: number;
+        order_type: string;
+        time_in_force: string;
+      };
+      riskSnapshot: {
+        requestedQty: number;
+        authorizedQty: number;
+        requestedRiskPct: number | null;
+        authorizedRiskPct: number | null;
+        riskAmount: number | null;
+        riskPerContract: number | null;
+        nearestLimit: unknown;
+        reasonCodes: readonly string[];
+      };
+    } | null;
+    reasonCodes: readonly { code: string; count: number }[];
+    pendingByStrategy: readonly { strategyInstanceId: string; pending: number; oldestAgeSeconds: number }[];
+    recentDecisions: readonly {
+      orderIntentId: string;
+      instrument: string;
+      decision: "APPROVED" | "REJECTED";
+      at: string;
+      decisionSeconds: number;
+    }[];
   };
   summary: {
     orderIntents: number;
@@ -1274,6 +1318,46 @@ export type RiskView = {
     expectedVersion: string;
     impactSummary: string;
     payload: Record<string, string | number | boolean>;
+  }[];
+  riskByAccount: readonly {
+    accountId: string;
+    label: string;
+    equityUsd: number | null;
+    openRiskUsd: number;
+    status: string;
+  }[];
+  riskByStrategy: readonly {
+    strategyInstanceId: string;
+    label: string;
+    riskAmount: number;
+    decisions: number;
+  }[];
+  riskByInstrument: readonly {
+    instrument: string;
+    riskAmount: number;
+    decisions: number;
+  }[];
+  riskDecisions: {
+    summary: { total: number; approved: number; reduced: number; rejected: number; today: number };
+    items: readonly {
+      at: string;
+      orderIntentId: string;
+      signalId: string;
+      strategyInstanceId: string;
+      accountId: string;
+      instrument: string;
+      requestedQty: number;
+      authorizedQty: number;
+      riskAmount: number;
+      verdict: "APPROVED" | "REDUCED" | "REJECTED";
+      reason: string;
+    }[];
+  };
+  circuitBreakers: readonly {
+    breakerId: string;
+    label: string;
+    armed: boolean;
+    detail: string;
   }[];
 };
 

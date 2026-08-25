@@ -243,6 +243,131 @@ export function RiskCenterPage() {
             </div>
           </section>
         </div>
+
+        <div className="rc-row3">
+          <section className="rc-panel" aria-label="Risque par compte">
+            <header><h2>Risque par compte</h2><small>{data.riskByAccount.length}</small></header>
+            <div className="rc-panel__body" style={{ padding: 0 }}>
+              <table className="rc-table">
+                <thead><tr><th>Compte</th><th>Equity</th><th>Risque ouvert</th><th>Statut</th></tr></thead>
+                <tbody>
+                  {data.riskByAccount.map((row) => (
+                    <tr key={row.accountId}>
+                      <td><strong>{row.label}</strong></td>
+                      <td>{row.equityUsd != null ? formatCurrency(row.equityUsd) : "Non disponible"}</td>
+                      <td>{formatCurrency(row.openRiskUsd)}</td>
+                      <td><StatusBadge tone={row.status === "CONTROLLED" ? "success" : "warning"}>{row.status}</StatusBadge></td>
+                    </tr>
+                  ))}
+                  {!data.riskByAccount.length ? <tr><td colSpan={4}><p className="rc-empty">Aucun compte publié.</p></td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="rc-panel" aria-label="Risque par stratégie">
+            <header><h2>Risque par stratégie</h2><small>Top {data.riskByStrategy.length}</small></header>
+            <div className="rc-panel__body" style={{ padding: 0 }}>
+              <table className="rc-table">
+                <thead><tr><th>Stratégie</th><th>Risque</th><th>Décisions</th></tr></thead>
+                <tbody>
+                  {data.riskByStrategy.map((row) => (
+                    <tr key={row.strategyInstanceId}>
+                      <td><strong>{row.label}</strong></td>
+                      <td>{formatCurrency(row.riskAmount)}</td>
+                      <td>{row.decisions}</td>
+                    </tr>
+                  ))}
+                  {!data.riskByStrategy.length ? <tr><td colSpan={3}><p className="rc-empty">Aucune décision de risque publiée par stratégie.</p></td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="rc-panel" aria-label="Risque par instrument">
+            <header><h2>Risque par instrument</h2></header>
+            <div className="rc-panel__body" style={{ padding: 0 }}>
+              <table className="rc-table">
+                <thead><tr><th>Instrument</th><th>Risque</th><th>Décisions</th></tr></thead>
+                <tbody>
+                  {data.riskByInstrument.map((row) => (
+                    <tr key={row.instrument}>
+                      <td><strong>{row.instrument}</strong></td>
+                      <td>{formatCurrency(row.riskAmount)}</td>
+                      <td>{row.decisions}</td>
+                    </tr>
+                  ))}
+                  {!data.riskByInstrument.length ? <tr><td colSpan={3}><p className="rc-empty">Aucune décision de risque publiée par instrument.</p></td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <div className="rc-row4">
+          <section className="rc-panel" aria-label="Décisions de risque du jour">
+            <header><h2>Décisions (jour)</h2><small>{data.riskDecisions.summary.today}</small></header>
+            <div className="rc-panel__body">
+              {data.riskDecisions.summary.total ? (
+                <div className="rc-donut-panel">
+                  <Donut
+                    items={[
+                      { value: data.riskDecisions.summary.approved, color: "var(--rc-green)" },
+                      { value: data.riskDecisions.summary.reduced, color: "var(--rc-amber)" },
+                      { value: data.riskDecisions.summary.rejected, color: "var(--rc-red)" },
+                    ]}
+                    centerLabel={String(data.riskDecisions.summary.total)}
+                  />
+                  <ul className="rc-donut-legend">
+                    <li><span className="dot" style={{ background: "var(--rc-green)" }} /><span>Approuvées</span><strong>{data.riskDecisions.summary.approved}</strong></li>
+                    <li><span className="dot" style={{ background: "var(--rc-amber)" }} /><span>Réduites</span><strong>{data.riskDecisions.summary.reduced}</strong></li>
+                    <li><span className="dot" style={{ background: "var(--rc-red)" }} /><span>Rejetées</span><strong>{data.riskDecisions.summary.rejected}</strong></li>
+                  </ul>
+                </div>
+              ) : <p className="rc-empty">Aucune décision de risque publiée.</p>}
+            </div>
+          </section>
+
+          <section className="rc-panel" aria-label="Dernières décisions de risque">
+            <header><h2>Dernières décisions</h2><small>{data.riskDecisions.items.length}</small></header>
+            <div className="rc-panel__body" style={{ padding: 0 }}>
+              <div className="rc-table-scroll">
+                <table className="rc-table">
+                  <thead><tr><th>Heure</th><th>Signal</th><th>Instrument</th><th>Demandé</th><th>Autorisé</th><th>Décision</th></tr></thead>
+                  <tbody>
+                    {data.riskDecisions.items.map((item) => (
+                      <tr key={item.orderIntentId}>
+                        <td>{formatTime(item.at)}</td>
+                        <td>{shortId(item.signalId)}</td>
+                        <td>{item.instrument}</td>
+                        <td>{item.requestedQty}</td>
+                        <td>{item.authorizedQty}</td>
+                        <td><StatusBadge tone={item.verdict === "APPROVED" ? "success" : item.verdict === "REDUCED" ? "warning" : "danger"}>{item.verdict}</StatusBadge></td>
+                      </tr>
+                    ))}
+                    {!data.riskDecisions.items.length ? <tr><td colSpan={6}><p className="rc-empty">Aucune décision de risque publiée.</p></td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="rc-panel" aria-label="Kill switch et disjoncteurs">
+            <header><h2>Kill Switch &amp; Disjoncteurs</h2></header>
+            <div className="rc-panel__body">
+              <div className="rc-kill-panel">
+                {data.circuitBreakers.map((breaker) => (
+                  <div key={breaker.breakerId} className="rc-kill-row">
+                    <strong>{breaker.label}</strong>
+                    <StatusBadge tone={breaker.armed ? "danger" : "success"}>{breaker.armed ? "BLOQUANT" : "OK"}</StatusBadge>
+                    <small>{breaker.detail}</small>
+                  </div>
+                ))}
+                {!data.circuitBreakers.length ? <p className="rc-empty">Aucun disjoncteur publié.</p> : null}
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
@@ -370,6 +495,10 @@ function formatRiskValue(value: number, unit: RiskLimit["unit"] | RiskView["prop
   if (unit === "CONTRACTS") return `${value.toFixed(0)} contrats`;
   if (unit === "X") return `${value.toFixed(2)}×`;
   return `${value.toFixed(value < 1 ? 2 : 1).replace(".", ",")}%`;
+}
+
+function shortId(value: string) {
+  return value.length > 14 ? `${value.slice(0, 14)}…` : value;
 }
 
 function formatTime(value: string) {

@@ -1515,6 +1515,51 @@ export const ordersView: ViewEnvelope<OrdersView> = {
           ageSeconds: 620,
           route: "/execution/orders/ord_sig_gc_macro_0935_shadow"
         }
+      ],
+      selectedOrderIntentId: "oint_sig_vnext_demo_mnq_0940_001",
+      selectedDossier: {
+        lineage: {
+          strategyDefinition: { id: "strdef_mean_revert" },
+          strategyVersion: { id: "strver_mean_revert_v2" },
+          strategyInstance: { id: strategyInstanceId },
+          strategySignal: { id: signalId },
+          contextDecision: { id: "ctxdec_vnext_demo_0940" },
+          portfolioDecision: { id: "pfarb_vnext_demo_0940" },
+          riskDecision: { id: "riskdec_vnext_demo_0940", decision: "APPROVED_WITH_REDUCTION" },
+          targetPosition: { id: "tp_vnext_demo_0940" },
+          orderIntent: { id: "oint_sig_vnext_demo_mnq_0940_001" },
+          humanGate: { id: "hgate_vnext_demo_0940", status: "AWAITING_MANUAL_CONFIRMATION" },
+          providerCommands: [],
+          providerEvents: []
+        },
+        executionTerms: {
+          account_id: "acct_ninjatrader_sim101",
+          instrument: "MNQ",
+          side: "BUY",
+          quantity: 3,
+          order_type: "LIMIT",
+          time_in_force: "DAY"
+        },
+        riskSnapshot: {
+          requestedQty: 3,
+          authorizedQty: 2,
+          requestedRiskPct: 0.82,
+          authorizedRiskPct: 0.62,
+          riskAmount: 735,
+          riskPerContract: 24.5,
+          nearestLimit: null,
+          reasonCodes: ["MAX_RISK_PER_TRADE", "DAILY_RISK_BUDGET"]
+        }
+      },
+      reasonCodes: [
+        { code: "MAX_RISK_PER_TRADE", count: 6 },
+        { code: "DAILY_RISK_BUDGET", count: 3 }
+      ],
+      pendingByStrategy: [
+        { strategyInstanceId, pending: 1, oldestAgeSeconds: 180 }
+      ],
+      recentDecisions: [
+        { orderIntentId: "oint_sig_gc_macro_0935_shadow", instrument: "MGC", decision: "APPROVED", at: "2026-08-10T09:36:15.000Z", decisionSeconds: 96 }
       ]
     },
     summary: {
@@ -2013,6 +2058,41 @@ export const riskView: ViewEnvelope<RiskView> = {
         impactSummary: "Emergency : bloque nouveaux ordres et demande flat/reconcile via backend. Aucun ordre broker direct depuis le front.",
         payload: { scope: "GLOBAL", dryRun: true, requiresStepUp: true }
       }
+    ],
+    riskByAccount: [
+      { accountId: "acct_ninjatrader_sim101", label: "NinjaTrader SIM101", equityUsd: 124_700_000, openRiskUsd: 35_400, status: "CONTROLLED" },
+      { accountId: "acct_ninjatrader_sim102", label: "NinjaTrader SIM102", equityUsd: null, openRiskUsd: 7_100, status: "CAPITAL_MISSING" }
+    ],
+    riskByStrategy: [
+      { strategyInstanceId: "strinst_gc_macro_impulse_shadow_demo", label: "GC Macro Impulse", riskAmount: 24_500, decisions: 6 },
+      { strategyInstanceId: "strinst_mean_revert_nq_vnext_demo", label: "Mean Revert NQ", riskAmount: 18_000, decisions: 4 }
+    ],
+    riskByInstrument: [
+      { instrument: "MGC", riskAmount: 24_500, decisions: 6 },
+      { instrument: "MNQ", riskAmount: 18_000, decisions: 4 }
+    ],
+    riskDecisions: {
+      summary: { total: 10, approved: 6, reduced: 3, rejected: 1, today: 10 },
+      items: [
+        {
+          at: "2026-08-10T09:40:57.040Z",
+          orderIntentId: "oint_sig_vnext_demo_mnq_0940_001",
+          signalId: "sig_vnext_demo_mnq_0940",
+          strategyInstanceId: "strinst_mean_revert_nq_vnext_demo",
+          accountId: "acct_ninjatrader_sim101",
+          instrument: "MNQ",
+          requestedQty: 3,
+          authorizedQty: 2,
+          riskAmount: 735,
+          verdict: "REDUCED",
+          reason: "MAX_RISK_PER_TRADE"
+        }
+      ]
+    },
+    circuitBreakers: [
+      { breakerId: "global_kill_switch", label: "Global Kill Switch", armed: false, detail: "Aucun verrou global actif" },
+      { breakerId: "market_data", label: "Flux de données marché", armed: false, detail: "Aucun problème détecté" },
+      { breakerId: "infrastructure", label: "Infrastructure d'exécution", armed: false, detail: "Infrastructure saine" }
     ]
   }
 };

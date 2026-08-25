@@ -80,7 +80,33 @@
 .oh-command-list button { border: none; border-radius: 4px; padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer; background: var(--oh-blue); color: #051019; }
 .oh-command-list button:disabled { opacity: .4; cursor: not-allowed; }
 
+.oh-row3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+
+.oh-stepper { display: flex; align-items: center; gap: 2px; overflow-x: auto; padding: 4px 0 10px; margin-bottom: 8px; border-bottom: 1px solid var(--oh-border-soft); }
+.oh-stepper-node { display: grid; justify-items: center; gap: 3px; min-width: 78px; }
+.oh-stepper-node .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--oh-border-strong); background: var(--oh-surface-2); }
+.oh-stepper-node.is-done .dot { background: var(--oh-green); border-color: var(--oh-green); }
+.oh-stepper-node.is-current .dot { background: var(--oh-amber); border-color: var(--oh-amber); }
+.oh-stepper-node small { font-size: 9px; color: var(--oh-muted); text-transform: uppercase; text-align: center; }
+.oh-stepper-line { flex: 1; height: 2px; background: var(--oh-border-strong); min-width: 12px; }
+
+.oh-qty-compare { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; }
+.oh-qty-compare div { padding: 8px; border: 1px solid var(--oh-border-soft); border-radius: 6px; background: var(--oh-surface-2); }
+.oh-qty-compare small { display: block; color: var(--oh-muted); font-size: 10px; text-transform: uppercase; }
+.oh-qty-compare strong { font-size: 15px; }
+
+.oh-reason-list { display: grid; gap: 5px; }
+.oh-reason-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--oh-border-soft); font-size: 11.5px; }
+
+.oh-pending-list { display: grid; gap: 5px; }
+.oh-pending-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--oh-border-soft); font-size: 11.5px; }
+.oh-pending-row small { color: var(--oh-muted); }
+
+@media (max-width: 1600px) {
+  .oh-row3 { grid-template-columns: 1fr 1fr; }
+}
+
 @media (max-width: 1279px) {
   .oh-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .oh-row1, .oh-row2 { grid-template-columns: 1fr; }
+  .oh-row1, .oh-row2, .oh-row3 { grid-template-columns: 1fr; }
 }
