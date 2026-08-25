@@ -112,7 +112,7 @@ const VIEW_BUILDERS = {
   "research-candidates": researchCandidatesExplorer,
   "research-dataset-detail": researchDatasetDetailExplorer,
   "strategy-deployments": strategyDeploymentsExplorer,
-  "replay-overview": replayOverviewExplorer,
+  "replay-overview": replayOverview,
   "replay-runs": replayRunsExplorer,
   "replay-run-detail": replayRunDetailExplorer,
   "replay-compare": replayCompareExplorer,
@@ -173,7 +173,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "research-candidates": ["research"],
   "research-dataset-detail": ["data-foundation"],
   "strategy-deployments": ["strategy"],
-  "replay-overview": ["replays"],
+  "replay-overview": ["replays", "replay-run-full"],
   "replay-runs": ["replays"],
   "replay-run-detail": ["replay-detail"],
   "replay-compare": ["replays", "replay-comparison"],
@@ -310,6 +310,9 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     "assistant-runtime": () => source("assistant-runtime", () => loadFrontAssistantRuntime(store, { ...query, limit: 20 })),
     replays: () => source("replays", () => call(store, "listOperationsReplays", { ...query, limit: 200 })),
     "replay-detail": () => loadFrontReplayDetail(store, query),
+    "replay-run-full": () => query.runId
+      ? source("replay-run-full", () => call(store, "getOperationsReplay", { run_id: query.runId }))
+      : Promise.resolve(null),
     "replay-comparison": () => source("replay-comparison", () => {
       const ids = queryList(query.ids || query.id);
       return ids.length >= 2 && typeof store?.compareOperationsReplays === "function"
@@ -348,6 +351,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     assistantRuntime: loaded["assistant-runtime"] ?? null,
     replays: loaded.replays ?? null,
     replayDetail: loaded["replay-detail"] ?? null,
+    replayRunFull: loaded["replay-run-full"] ?? null,
     replayComparison: loaded["replay-comparison"] ?? null,
     workflowDetail: loaded["workflow-detail"] ?? null,
     eventDetail: loaded["event-detail"] ?? null,
@@ -743,19 +747,65 @@ function strategyDeploymentsExplorer({ strategy }) {
   return explorerView("Déploiements stratégie", "Instances runtime, modes d'exécution et heartbeat réels.", items, [metric("Instances", items.length), metric("PAPER", items.filter((item) => item.tags.includes("PAPER")).length), metric("Actives", items.filter((item) => ["RUNNING", "ACTIVE"].includes(upper(item.status))).length)]);
 }
 
-function replayOverviewExplorer({ replays }) {
+function replayOverview({ replays, replayRunFull }) {
   const summary = replays?.summary || {};
-  const items = rows(replays?.days).map((item) => explorerItem({
-    id: text(item.primaryRunId || item.date, "replay-day"),
-    title: `Replay du ${text(item.date, "—")}`,
-    subtitle: `${number(item.sessionCount, 0)} session(s) · ${number(item.totalProgress, 0)}%`,
-    status: item.status,
-    primary: `${signedNumber(item.totalR)} R`,
-    secondary: `${number(item.gptProcesses, 0)} processus GPT`,
-    route: item.primaryRunId ? `/replay/runs/${encodeURIComponent(String(item.primaryRunId))}` : "/replay/runs",
-    tags: [item.currentReplayTime, item.startTime, item.endTime],
+  const days = rows(replays?.days).map((day) => ({
+    date: text(day.date, "unavailable"),
+    status: text(day.status, "UNKNOWN"),
+    sessionCount: number(day.sessionCount, 0),
+    totalR: number(day.totalR, 0),
+    totalProgress: number(day.totalProgress, 0),
+    gptProcesses: number(day.gptProcesses, 0),
+    primaryRunId: day.primaryRunId ? text(day.primaryRunId, "") : null,
+    startTime: day.startTime ? text(day.startTime, "") : null,
+    endTime: day.endTime ? text(day.endTime, "") : null,
   }));
-  return explorerView("Replay", "Progression, résultats et éligibilité des journées replay.", items, [metric("Exécutions", number(summary.executions, 0)), metric("Actifs", number(summary.active, 0)), metric("Total R", `${signedNumber(summary.totalR)} R`), metric("Éligibles", number(summary.resultEligible, 0))]);
+  const run = replayRunFull?.run || null;
+  const timeline = rows(replayRunFull?.timeline).map((item) => ({
+    eventId: text(item.id, ""),
+    at: text(item.at, "unavailable"),
+    type: text(item.type, "EVENT"),
+    layer: ["decision", "step", "gpt", "event"].includes(item.layer) ? item.layer : "event",
+    title: text(item.title, "Événement"),
+    detail: text(item.detail, ""),
+    decision: item.decision ? text(item.decision, "") : null,
+    conclusion: item.conclusion ? text(item.conclusion, "") : null,
+    price: item.price == null ? null : number(item.price, 0),
+    severity: item.severity ? text(item.severity, "") : null,
+    stepId: item.stepId ? text(item.stepId, "") : null,
+  }));
+  const candles = rows(replayRunFull?.priceSeries)
+    .map((point) => ({ time: text(point.time, ""), open: number(point.open, 0), high: number(point.high, 0), low: number(point.low, 0), close: number(point.close, 0) }))
+    .filter((point) => point.time);
+  return {
+    summary: {
+      executions: number(summary.executions, 0),
+      days: number(summary.days, 0),
+      active: number(summary.active, 0),
+      totalR: number(summary.totalR, 0),
+      resultEligible: number(summary.resultEligible, 0),
+      gptProcesses: number(summary.gptProcesses, 0),
+    },
+    days,
+    selectedRun: run ? {
+      runId: text(run.sourceId ?? run.id, "unavailable"),
+      tradingDate: text(run.tradingDate, "unavailable"),
+      session: text(run.session, "unavailable"),
+      strategyId: text(run.strategyId, "unavailable"),
+      status: text(run.status, "UNKNOWN"),
+      progress: number(run.progress, 0),
+      totalR: number(nested(run, ["metrics", "totalR"]), 0),
+      engineVersion: text(run.engineVersion, "unavailable"),
+    } : null,
+    candles,
+    timeline,
+    timelineCounts: {
+      decision: countBy(timeline, (item) => item.layer === "decision"),
+      step: countBy(timeline, (item) => item.layer === "step"),
+      gpt: countBy(timeline, (item) => item.layer === "gpt"),
+      event: countBy(timeline, (item) => item.layer === "event"),
+    },
+  };
 }
 
 function replayRunsExplorer({ replays }) {

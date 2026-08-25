@@ -8,7 +8,7 @@ import type { ExplorerView } from "@/domains/front-api/viewModels";
 
 type ExplorerViewName =
   | "research-experiments" | "research-candidates" | "research-dataset-detail" | "strategy-deployments"
-  | "replay-overview" | "replay-runs" | "replay-run-detail" | "replay-compare"
+  | "replay-runs" | "replay-run-detail" | "replay-compare"
   | "performance-calendar" | "performance-day-detail" | "performance-strategies" | "performance-trades"
   | "workflow-detail" | "event-detail" | "operations-runbooks" | "governance-prompts" | "governance-policies";
 
@@ -73,7 +73,6 @@ export function ResearchExperimentsPage() { return <ExplorerPage viewName="resea
 export function ResearchCandidatesPage() { return <ExplorerPage viewName="research-candidates" title="Candidats stratégie" description="Verdicts et éligibilité de promotion publiés par la Research Factory." backTo="/research" backLabel="Laboratoire de recherche" />; }
 export function ResearchDatasetDetailPage() { const { datasetId } = useParams(); return <ExplorerPage viewName="research-dataset-detail" title="Détail dataset" description="Lineage, couverture, cutoff et qualité point-in-time." backTo="/research/data" backLabel="Fondation données" params={{ datasetId }} />; }
 export function StrategyDeploymentsPage() { return <ExplorerPage viewName="strategy-deployments" title="Déploiements stratégie" description="Instances runtime, environnements, modes et heartbeat." backTo="/strategies" backLabel="Catalogue" />; }
-export function ReplayOverviewPage() { return <ExplorerPage viewName="replay-overview" title="Rejeu" description="Vue globale des journées, progression et résultats éligibles." backTo="/command-center" backLabel="Centre de contrôle" />; }
 export function ReplayRunsPage() { return <ExplorerPage viewName="replay-runs" title="Runs Rejeu" description="Runs filtrables, versions moteur et classification résultat." backTo="/replay" backLabel="Rejeu" />; }
 export function ReplayRunDetailPage() { const { runId } = useParams(); return <ExplorerPage viewName="replay-run-detail" title="Détail Rejeu" description="Run, moteur, timeline et processus GPT." backTo="/replay/runs" backLabel="Runs Rejeu" params={{ runId }} />; }
 export function ReplayComparePage() { const [search] = useSearchParams(); return <ExplorerPage viewName="replay-compare" title="Comparaison Rejeu" description="Comparaison backend de baselines et variantes." backTo="/replay/runs" backLabel="Runs Rejeu" params={{ ids: search.get("ids") ?? undefined }} />; }

@@ -3026,6 +3026,66 @@ export type PerformanceView = {
   };
 };
 
+export type ReplayTimelineLayer = "decision" | "step" | "gpt" | "event";
+
+export type ReplayOverviewView = {
+  summary: {
+    executions: number;
+    days: number;
+    active: number;
+    totalR: number;
+    resultEligible: number;
+    gptProcesses: number;
+  };
+  days: readonly {
+    date: string;
+    status: string;
+    sessionCount: number;
+    totalR: number;
+    totalProgress: number;
+    gptProcesses: number;
+    primaryRunId: string | null;
+    startTime: string | null;
+    endTime: string | null;
+  }[];
+  selectedRun: {
+    runId: string;
+    tradingDate: string;
+    session: string;
+    strategyId: string;
+    status: string;
+    progress: number;
+    totalR: number;
+    engineVersion: string;
+  } | null;
+  candles: readonly {
+    time: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+  }[];
+  timeline: readonly {
+    eventId: string;
+    at: string;
+    type: string;
+    layer: ReplayTimelineLayer;
+    title: string;
+    detail: string;
+    decision: string | null;
+    conclusion: string | null;
+    price: number | null;
+    severity: string | null;
+    stepId: string | null;
+  }[];
+  timelineCounts: {
+    decision: number;
+    step: number;
+    gpt: number;
+    event: number;
+  };
+};
+
 export type ControlPlaneViews = {
   "auth-session": AuthSessionView;
   "operator-settings": OperatorSettingsView;
@@ -3063,7 +3123,7 @@ export type ControlPlaneViews = {
   "research-candidates": ExplorerView;
   "research-dataset-detail": ExplorerView;
   "strategy-deployments": ExplorerView;
-  "replay-overview": ExplorerView;
+  "replay-overview": ReplayOverviewView;
   "replay-runs": ExplorerView;
   "replay-run-detail": ExplorerView;
   "replay-compare": ExplorerView;
@@ -3497,6 +3557,17 @@ export function isPerformanceView(value: unknown): value is PerformanceView {
       Array.isArray(candidate.attribution) &&
       Array.isArray(candidate.latestTrades) &&
       candidate?.facets
+  );
+}
+
+export function isReplayOverviewView(value: unknown): value is ReplayOverviewView {
+  const candidate = value as Partial<ReplayOverviewView>;
+  return Boolean(
+    candidate?.summary &&
+      Array.isArray(candidate.days) &&
+      Array.isArray(candidate.candles) &&
+      Array.isArray(candidate.timeline) &&
+      candidate?.timelineCounts
   );
 }
 
