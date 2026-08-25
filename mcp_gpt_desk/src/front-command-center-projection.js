@@ -499,8 +499,11 @@ function feedStatus(feed, readiness) {
   if (readiness?.market_closed === true) return feed?.latest_timestamp_utc ? "LAST_KNOWN" : "UNAVAILABLE";
   if (feed?.stale === true) return "STALE";
   if (feed?.stale === false) return "FRESH";
-  const state = text(feed?.status || feed?.state, "UNAVAILABLE").toUpperCase();
-  return state;
+  const state = text(feed?.status || feed?.state, "").toUpperCase();
+  if (state) return state;
+  const readinessState = marketState(readiness);
+  if (["STALE", "DELAYED", "DOWN", "DEGRADED", "FRESH"].includes(readinessState)) return readinessState;
+  return feed?.latest_timestamp_utc ? "FRESH" : "UNAVAILABLE";
 }
 
 function marketDetail(readiness) {

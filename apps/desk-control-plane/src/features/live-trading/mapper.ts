@@ -20,7 +20,9 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
   const reconciliationNotApplicable = ["NOT_APPLICABLE_CURRENT_MODE", "DISABLED_BY_POLICY"]
     .includes(String(data.reconciliation?.availability ?? "").toUpperCase());
   const selectedTheoreticalExecution = selectTheoreticalExecution(data.theoreticalExecution?.rows ?? [], orderIntent, selectedInstrument);
-  const theoreticalExpected = data.reconciliation?.expected ?? selectedTheoreticalExecution;
+  const theoreticalExpected = data.reconciliation?.expected
+    ?? selectedTheoreticalExecution
+    ?? theoreticalExpectedFromTargetPosition(targetPosition, orderIntent, meta.asOf);
 
   return {
     meta,
@@ -148,6 +150,31 @@ function selectTheoreticalExecution(
     if (byInstrument) return byInstrument;
   }
   return rows[0] ?? null;
+}
+
+function theoreticalExpectedFromTargetPosition(
+  targetPosition: LiveTradingModel["targetPosition"],
+  orderIntent: LiveTradingModel["orderIntent"],
+  asOf: string,
+): Record<string, unknown> | null {
+  if (!targetPosition) return null;
+  const targetNetSize = recordValue(targetPosition, ["targetNetSize", "target_net_size", "netSize", "net_size"]);
+  if (targetNetSize == null) return null;
+  return {
+    lifecycle: "THEORETICAL_TARGET_PENDING_HUMAN_GATE",
+    status: "PENDING_HUMAN_GATE",
+    latestEventType: "TARGET_POSITION_CREATED",
+    latestEventAt: orderIntent?.createdAt ?? asOf,
+    portfolioOrderIntentId: orderIntent?.portfolioOrderIntentId ?? orderIntent?.orderIntentId ?? null,
+    targetPositionId: recordValue(targetPosition, ["targetPositionId", "target_position_id"]),
+    instrument: recordValue(targetPosition, ["instrument", "targetInstrument", "target_instrument", "symbol"]) ?? intentInstrument(orderIntent),
+    side: orderIntent?.side ?? recordValue(targetPosition, ["side", "targetSide", "target_side"]),
+    targetNetSize,
+    deltaSize: recordValue(targetPosition, ["deltaSize", "delta_size"]),
+    quantity: orderIntent?.quantity ?? recordValue(targetPosition, ["authorizedQuantity", "authorized_quantity", "quantity"]),
+    physicalExecutionCreated: false,
+    brokerEvidence: "NONE",
+  };
 }
 
 function deriveAuditTimeline(data: LiveTradingEnvelope["data"]): LiveTradingEnvelope["data"]["timeline"] {
