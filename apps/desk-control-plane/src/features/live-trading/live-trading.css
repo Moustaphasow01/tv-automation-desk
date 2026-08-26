@@ -283,6 +283,24 @@
 .lt-chart-selector button:hover { border-color: #2d8cff; color: var(--lt-text); }
 .lt-chart-selector button:focus-visible { outline: 2px solid var(--lt-focus); outline-offset: 1px; }
 .lt-chart-frame { position: relative; min-height: 0; overflow: hidden; background: #04111e; }
+.lt-chart-canvas { position: absolute; inset: 0; display: grid; min-height: 0; grid-template-rows: 27px minmax(0, 1fr) 24px; outline: 2px solid transparent; outline-offset: -2px; cursor: grab; }
+.lt-chart-canvas:active { cursor: grabbing; }
+.lt-chart-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--lt-focus); }
+.lt-chart-controls { position: relative; z-index: 2; display: flex; gap: 4px; align-items: center; padding: 3px 7px; border-bottom: 1px solid rgba(32, 58, 83, .72); background: linear-gradient(180deg, rgba(6,18,30,.94), rgba(6,18,30,.62)); }
+.lt-chart-controls button {
+  min-height: 19px;
+  padding: 0 7px;
+  border: 1px solid rgba(75, 109, 140, .72);
+  border-radius: 4px;
+  background: rgba(10, 32, 52, .82);
+  color: var(--lt-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.lt-chart-controls button:hover { border-color: #2d8cff; color: var(--lt-text); }
+.lt-chart-controls button:focus-visible { outline: 2px solid var(--lt-focus); outline-offset: 1px; }
 .lt-market-chart { width: 100%; height: 100%; min-height: 0; display: block; }
 .lt-market-chart__axis line { stroke: rgba(32, 58, 83, .72); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .lt-market-chart__axis text { fill: var(--lt-muted); font-size: 11px; font-weight: 600; letter-spacing: .01em; }
@@ -292,6 +310,9 @@
 .lt-market-chart__candles .is-up line, .lt-market-chart__candles .is-up rect { stroke: #20d39b; fill: #20d39b; }
 .lt-market-chart__candles .is-down line, .lt-market-chart__candles .is-down rect { stroke: #f05c68; fill: #f05c68; }
 .lt-market-chart__vwap { stroke: #f3b54a; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.lt-market-chart__zone { stroke-width: 1; vector-effect: non-scaling-stroke; }
+.lt-market-chart__zone--profit { fill: rgba(32, 211, 155, .16); stroke: rgba(32, 211, 155, .48); }
+.lt-market-chart__zone--risk { fill: rgba(240, 92, 104, .18); stroke: rgba(240, 92, 104, .52); }
 .lt-sparkline { width: 64px; height: 22px; display: block; }
 .lt-sparkline polyline { stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .lt-sparkline.is-positive polyline { stroke: var(--lt-green); }
@@ -310,6 +331,18 @@
 .lt-market-chart__level--info line { stroke: #2d8cff; }
 .lt-market-chart__level--info rect { fill: #0a2034; stroke: #2d8cff; stroke-width: 1; }
 .lt-market-chart__level--info text { fill: #7fb4ff; }
+.lt-market-chart__level--entry line { stroke: #2d8cff; stroke-width: 1.5; }
+.lt-market-chart__level--entry rect { fill: #0a2034; stroke: #2d8cff; stroke-width: 1; }
+.lt-market-chart__level--entry text { fill: #9bc6ff; }
+.lt-market-chart__level--stop line { stroke: #f05c68; }
+.lt-market-chart__level--stop rect { fill: #3a151d; stroke: #f05c68; stroke-width: 1; }
+.lt-market-chart__level--stop text { fill: #ff9aa3; }
+.lt-market-chart__level--target line { stroke: #20d39b; }
+.lt-market-chart__level--target rect { fill: #0c3626; stroke: #20d39b; stroke-width: 1; }
+.lt-market-chart__level--target text { fill: #61efbf; }
+.lt-chart-readout { display: flex; min-width: 0; gap: 8px; align-items: center; justify-content: space-between; padding: 0 8px; border-top: 1px solid rgba(32, 58, 83, .72); background: rgba(4, 17, 30, .88); color: var(--lt-muted); font-size: 11px; }
+.lt-chart-readout span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-chart-readout__warning { color: var(--lt-amber); font-weight: 700; }
 .lt-chart-scope-note { color: var(--lt-amber); font-weight: 650; }
 .lt-chart-grid { position: absolute; inset: 8px 38px 25px 30px; border-right: 1px solid #10293c; border-bottom: 1px solid #10293c; }
 .lt-chart-grid::before, .lt-chart-grid::after { position: absolute; inset: 33.333% 0 auto; height: 1px; background: #10293c; content: ""; box-shadow: 0 88px #10293c, 0 176px #10293c; }

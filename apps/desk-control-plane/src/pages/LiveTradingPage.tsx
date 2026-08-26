@@ -39,7 +39,7 @@ export function LiveTradingPage() {
     const next = new URLSearchParams(searchParams);
     if (nextScope.instrument) next.set("instrument", nextScope.instrument);
     if (nextScope.timeframe) next.set("timeframe", nextScope.timeframe);
-    setSearchParams(next, { replace: false });
+    setSearchParams(next, { replace: true });
   };
 
   const submitGateAction = async (action: HumanGateAction, reason: string) => {

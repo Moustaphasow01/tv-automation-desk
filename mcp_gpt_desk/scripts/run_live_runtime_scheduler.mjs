@@ -123,6 +123,7 @@ async function runDueWork(now) {
       source_classes: ["LIVE", "SHADOW"],
       execution_modes: ["SHADOW"],
       account_id: process.env.DESK_SHADOW_RUNTIME_ACCOUNT_ID || "shadow_live",
+      prefer_embedded_context_gate_decision: process.env.DESK_STRATEGY_SIGNAL_PREFER_EMBEDDED_CONTEXT_GATE !== "false",
     })
     : { status: "UNAVAILABLE" };
   const nowMs = now.getTime();

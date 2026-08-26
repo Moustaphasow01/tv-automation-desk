@@ -38,6 +38,30 @@ describe("strategy signal bus V1", () => {
     assert.equal(envelope.payload.strategy_instance_id, normalized.strategy_instance_id);
     assert.equal(envelope.payload.proposed_size, normalized.proposed_size);
   });
+
+  it("reconstructs grain trade-plan economics from setup entry zone when the plan omits entry price", () => {
+    const result = normalizeStrategySignalV1(signalFixture({
+      instrument: "CBOT:ZC1!",
+      direction: "LONG",
+      proposed_trade_plan: {
+        stop_price: 506.25,
+        targets: [{ label: "T1", price: 510 }],
+      },
+      setup: {
+        entry_zone: { low: 507.25, high: 507.75 },
+      },
+    }));
+
+    assert.equal(result.ok, true);
+    assert.equal(result.signal.instrument, "ZC");
+    assert.equal(result.signal.availability, "KNOWN");
+    assert.equal(result.signal.proposed_trade_plan.entry.availability, "KNOWN");
+    assert.equal(result.signal.proposed_trade_plan.entry.type, "ZONE");
+    assert.equal(result.signal.trade_plan_economics.entry_price, 507.5);
+    assert.equal(result.signal.trade_plan_economics.tick_size, 0.25);
+    assert.equal(result.signal.trade_plan_economics.tick_value, 12.5);
+    assert.equal(result.signal.trade_plan_economics.risk_per_contract, 62.5);
+  });
 });
 
 function signalFixture(overrides = {}) {

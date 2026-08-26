@@ -19,6 +19,8 @@ export const FUTURES_INSTRUMENT_SPECS_V1 = Object.freeze({
   MES: Object.freeze({ instrument: "MES", tick_size: 0.25, tick_value: 1.25, point_value: 5, currency: "USD", source: "CME Micro E-mini S&P 500" }),
   NQ: Object.freeze({ instrument: "NQ", tick_size: 0.25, tick_value: 5, point_value: 20, currency: "USD", source: "CME E-mini Nasdaq-100" }),
   ES: Object.freeze({ instrument: "ES", tick_size: 0.25, tick_value: 12.5, point_value: 50, currency: "USD", source: "CME E-mini S&P 500" }),
+  ZC: Object.freeze({ instrument: "ZC", tick_size: 0.25, tick_value: 12.5, point_value: 50, currency: "USD", source: "CBOT Corn Futures" }),
+  ZW: Object.freeze({ instrument: "ZW", tick_size: 0.25, tick_value: 12.5, point_value: 50, currency: "USD", source: "CBOT Wheat Futures" }),
 });
 
 export function instrumentContractSpecV1(instrument) {
@@ -33,6 +35,8 @@ export function canonicalFuturesInstrumentV1(value) {
   if (textValue.includes("MES")) return "MES";
   if (textValue.includes("NQ")) return "NQ";
   if (textValue.includes("ES")) return "ES";
+  if (textValue.includes("ZC")) return "ZC";
+  if (textValue.includes("ZW")) return "ZW";
   return textValue.replace(/[^A-Z0-9]/g, "");
 }
 

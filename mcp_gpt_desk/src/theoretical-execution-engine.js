@@ -15,6 +15,7 @@ export const THEORETICAL_ORDER_POLICY = Object.freeze({
 
 export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, contract = {}, candle = null, now = new Date().toISOString(), policy = THEORETICAL_ORDER_POLICY } = {}) {
   if (!intent?.order_intent_id) return noAction("ENTRY_INTENT_MISSING");
+  const portfolioOrderIntentId = intent.portfolio_order_intent_id || intent.order_intent_id || null;
   const candleTime = timestamp(candle?.timestamp_utc || candle?.time || now);
   const expiresAt = timestamp(intent.expires_at);
   if (expiresAt && candleTime && expiresAt <= candleTime) {
@@ -24,10 +25,11 @@ export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, con
       reason: "ORDER_INTENT_EXPIRED",
       event_at_utc: expiresAt.toISOString(),
       order_intent_id: intent.order_intent_id,
+      portfolio_order_intent_id: portfolioOrderIntentId,
       engine_version: THEORETICAL_EXECUTION_ENGINE_VERSION,
     };
   }
-  if (!candle) return noAction("CANDLE_MISSING", { order_intent_id: intent.order_intent_id });
+  if (!candle) return noAction("CANDLE_MISSING", { order_intent_id: intent.order_intent_id, portfolio_order_intent_id: portfolioOrderIntentId });
   const setup = entryIntentAsSimulatorSetup({ intent, decision, contract });
   const outcome = simulateEntryOrderV1({
     setup,
@@ -40,6 +42,7 @@ export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, con
       status: outcome.status,
       reason: outcome.reason,
       order_intent_id: intent.order_intent_id,
+      portfolio_order_intent_id: portfolioOrderIntentId,
       trade_decision_id: intent.trade_decision_id || decision.trade_decision_id || null,
       instrument_code: contract.instrument_code || decision.instrument_code || null,
       side: intent.side === "sell" ? "short" : "long",
@@ -57,6 +60,7 @@ export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, con
   }
   return noAction(outcome.reason || "ENTRY_NOT_FILLED", {
     order_intent_id: intent.order_intent_id,
+    portfolio_order_intent_id: portfolioOrderIntentId,
     status: "WORKING",
     candle: projectCandle(candle),
     simulator_outcome: outcome,

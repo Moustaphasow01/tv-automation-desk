@@ -51,6 +51,34 @@ describe("trade plan economics V1", () => {
     assert.equal(economics.targets[0].reward_risk, 3);
   });
 
+  it("supports CBOT grains with canonical tick economics", () => {
+    const corn = computeTradePlanEconomicsV1({
+      instrument: "CBOT:ZC1!",
+      direction: "LONG",
+      entry_price: 507.5,
+      stop_price: 506.25,
+      targets: [{ label: "T1", price: 510 }],
+    });
+    const wheat = computeTradePlanEconomicsV1({
+      instrument: "CBOT:ZW1!",
+      direction: "SHORT",
+      entry_price: 538,
+      stop_price: 539.5,
+      targets: [{ label: "T1", price: 535 }],
+    });
+
+    assert.equal(corn.instrument, "ZC");
+    assert.equal(corn.tick_size, 0.25);
+    assert.equal(corn.tick_value, 12.5);
+    assert.equal(corn.stop_distance_ticks, 5);
+    assert.equal(corn.risk_per_contract, 62.5);
+    assert.equal(wheat.instrument, "ZW");
+    assert.equal(wheat.tick_size, 0.25);
+    assert.equal(wheat.tick_value, 12.5);
+    assert.equal(wheat.stop_distance_ticks, 6);
+    assert.equal(wheat.risk_per_contract, 75);
+  });
+
   it("does not default unavailable risk economics to zero", () => {
     const economics = computeTradePlanEconomicsV1({
       instrument: "UNKNOWN",
@@ -72,5 +100,7 @@ describe("trade plan economics V1", () => {
     assert.equal(canonicalFuturesInstrumentV1("CME_MINI:MNQ1!__5"), "MNQ");
     assert.equal(canonicalFuturesInstrumentV1("CME_MINI:MES1!"), "MES");
     assert.equal(instrumentContractSpecV1("NQ1!").tick_value, 5);
+    assert.equal(canonicalFuturesInstrumentV1("CBOT:ZC1!"), "ZC");
+    assert.equal(canonicalFuturesInstrumentV1("CBOT:ZW1!__15"), "ZW");
   });
 });

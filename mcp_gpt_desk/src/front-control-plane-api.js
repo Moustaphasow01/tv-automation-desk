@@ -17,6 +17,7 @@ import {
   frontAuditEvents,
   isNominalLiveSignal,
   isNominalPortfolioIntent,
+  isCurrentLivePortfolioIntent,
   liveCanonicalRuntime,
   portfolioOrderIntentSummaryRow,
   telegramDrilldownFromHealth,
@@ -1068,7 +1069,9 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
   const advisorySummary = (ai && ai.summary) || {};
   const scope = normalizeFrontApiScope(query);
   const signals = rows(strategy?.signals).filter(isNominalLiveSignal).filter(hasSignalId).map(signalRow);
-  const nominalIntentRows = rows(executionValue.portfolioOrderIntents).filter(isNominalPortfolioIntent);
+  const nominalIntentRows = rows(executionValue.portfolioOrderIntents)
+    .filter(isNominalPortfolioIntent)
+    .filter((item) => isCurrentLivePortfolioIntent(item, nowIso));
   const nominalIntentIds = new Set(nominalIntentRows.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
   const portfolioOrderIntents = nominalIntentRows.map((item) => portfolioOrderIntentSummaryRow({ execution: executionValue, item, actor }));
   const provider = canonicalProviderScope(executionValue, nominalIntentIds);

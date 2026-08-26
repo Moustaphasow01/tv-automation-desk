@@ -14,6 +14,7 @@ try {
     account_id: input.accountId || input.account_id || process.env.DESK_SHADOW_RUNTIME_ACCOUNT_ID || "shadow_live",
     source_classes: (input.sourceClasses || input.source_classes || "LIVE,SHADOW").split(",").map((item) => item.trim()).filter(Boolean),
     execution_modes: (input.executionModes || input.execution_modes || "SHADOW").split(",").map((item) => item.trim()).filter(Boolean),
+    prefer_embedded_context_gate_decision: process.env.DESK_STRATEGY_SIGNAL_PREFER_EMBEDDED_CONTEXT_GATE !== "false",
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 } finally {

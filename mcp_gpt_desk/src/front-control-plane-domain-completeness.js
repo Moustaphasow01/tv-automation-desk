@@ -58,7 +58,9 @@ export function liveCanonicalRuntime({ execution = {}, strategy = {}, ai = {}, r
   const signals = nominalSignals.filter(hasSignalId).map(signalRow);
   const nominalSignalIds = new Set(nominalSignals.map((item) => String(item.signal_id || item.signal_outbox_id || "")).filter(Boolean));
   const gateDecisions = rows(ai?.decisions).filter((item) => nominalSignalIds.has(String(item.signal_id || "")));
-  const portfolioOrderIntents = rows(execution?.portfolioOrderIntents).filter(isNominalPortfolioIntent);
+  const portfolioOrderIntents = rows(execution?.portfolioOrderIntents)
+    .filter(isNominalPortfolioIntent)
+    .filter((item) => isCurrentLivePortfolioIntent(item, nowIso));
   const nominalIntentIds = new Set(portfolioOrderIntents.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
   const humanGates = rows(execution?.humanExecutionGates).filter((item) => nominalIntentIds.has(String(item.portfolio_order_intent_id || "")));
   const providerCommands = rows(execution?.providerCommands).filter((item) => !item.portfolio_order_intent_id || nominalIntentIds.has(String(item.portfolio_order_intent_id)));
@@ -131,6 +133,26 @@ export function isNominalPortfolioIntent(item = {}) {
   );
   return Boolean(strategySignalId && strategyInstanceId)
     && !values.some((value) => value === "shadow_certification" || value.startsWith("certification:") || value.startsWith("corr_cert_shadow_"));
+}
+
+export function isCurrentLivePortfolioIntent(item = {}, nowIso = currentUtc()) {
+  const payload = payloadOf(item);
+  const status = String(firstValue(item.status, payload.status, "") || "").toUpperCase();
+  const terminalStatuses = new Set([
+    "EXPIRED",
+    "CANCELLED",
+    "CANCELED",
+    "REJECTED",
+    "FAILED",
+    "SUPERSEDED",
+    "FILLED",
+    "CLOSED",
+    "DONE",
+  ]);
+  if (terminalStatuses.has(status)) return false;
+  const expiresAt = firstValue(item.expires_at_utc, item.expiresAt, payload.expires_at_utc, payload.expiresAt);
+  if (expiresAt && Number.isFinite(Date.parse(expiresAt)) && Date.parse(expiresAt) <= Date.parse(nowIso || currentUtc())) return false;
+  return true;
 }
 
 export function portfolioOrderIntentSummaryRow({ execution = {}, item = {}, actor = {} }) {

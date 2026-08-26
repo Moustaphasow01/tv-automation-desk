@@ -157,6 +157,66 @@ describe("Live Trading golden master", () => {
     expect(markup).not.toContain("ENTRÉE 0.00");
     expect(markup).not.toContain("7710.00");
   });
+
+  it("draws the same-instrument tradable signal plan when no OrderIntent exists yet", () => {
+    const envelope = structuredClone(liveTradingView) as ViewEnvelope<LiveTradingView>;
+    envelope.data.canonicalRuntime.pendingOrderIntents = [];
+    envelope.data.portfolioOrderIntents = [];
+    envelope.data.marketSeries = {
+      schemaVersion: "front_market_series_v1",
+      availability: "KNOWN",
+      source: "market_candles",
+      instrument: "ZC",
+      timeframe: "5",
+      supportedInstruments: ["MNQ", "MES", "ZC", "ZW"],
+      supportedTimeframes: ["1", "5", "15", "60", "240"],
+      asOf: "2026-08-26T16:40:00.000Z",
+      points: [
+        { timestamp: "2026-08-26T16:30:00.000Z", open: 507, high: 508, low: 506.5, close: 507.5, volume: 120, vwap: 507.2 },
+        { timestamp: "2026-08-26T16:35:00.000Z", open: 507.5, high: 508.25, low: 506.75, close: 507.75, volume: 150, vwap: 507.45 },
+        { timestamp: "2026-08-26T16:40:00.000Z", open: 507.75, high: 509.25, low: 507.25, close: 508.75, volume: 180, vwap: 508.1 },
+      ],
+    };
+    envelope.data.signals = [{
+      signalId: "grain-signal-zc",
+      strategyId: "grain-strategy",
+      strategyVersionId: "grain-strategy-v1",
+      strategyInstanceId: "grain-instance-zc",
+      symbol: "ZC",
+      direction: "LONG",
+      state: "NEW",
+      confidence: 74,
+      createdAt: "2026-08-26T16:35:00.000Z",
+      expiresAt: "2026-08-26T16:55:00.000Z",
+      sourceDataCutoffAt: "2026-08-26T16:35:00.000Z",
+      featureSnapshotId: "features-zc",
+      ruleHits: ["US_OPEN_TREND"],
+      expectancyR: 1.8,
+      rewardRisk: 2,
+      regime: "TREND",
+      proposedTradePlan: {
+        entry: { availability: "KNOWN", type: "ZONE", price: 507.5, low: 507.25, high: 507.75 },
+        stop: { availability: "KNOWN", price: 506.25 },
+        targets: [{ label: "T1", price: 510, expected_r: 2 }],
+      },
+      tradePlanEconomics: { entry_price: 507.5, stop_price: 506.25, targets: [{ label: "T1", price: 510, reward_risk: 2 }] },
+      availability: "KNOWN",
+    }];
+    envelope.data.canonicalRuntime.latestSignals = envelope.data.signals;
+    const model = toLiveTradingModel(envelope);
+    const markup = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(InstrumentChartPanel, { model }))
+    );
+
+    expect(markup).toContain("Dernier signal tradable");
+    expect(markup).toContain("ENTRÉE 507.50");
+    expect(markup).toContain("STOP 506.25");
+    expect(markup).toContain("T1 510.00");
+    expect(markup).toContain("Navigation du graphique");
+    expect(markup).toContain("ZC");
+    expect(markup).toContain("H1");
+    expect(markup).toContain("H4");
+  });
 });
 
 function withOrderIntent(stale: boolean): ViewEnvelope<LiveTradingView> {

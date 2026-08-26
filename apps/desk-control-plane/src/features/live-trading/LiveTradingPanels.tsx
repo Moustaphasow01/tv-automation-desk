@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FaCheck, FaCompress, FaExclamationTriangle, FaExpand, FaInfoCircle, FaLock, FaRobot, FaTimes } from "react-icons/fa";
 import { StatusBadge } from "@/design-system/primitives";
@@ -73,16 +73,24 @@ export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTrad
   const signal = model.latestSignal;
   const instrument = model.marketSeries.instrument ?? signal?.symbol ?? "Instrument";
   const timeframe = model.marketSeries.timeframe;
-  const instrumentOptions = optionSet([model.marketSeries.instrument, ...model.marketSeries.supportedInstruments, "MNQ", "MES"]);
-  const timeframeOptions = optionSet([model.marketSeries.timeframe, ...model.marketSeries.supportedTimeframes, "1", "5", "15"]);
+  const instrumentOptions = optionSet([model.marketSeries.instrument, ...model.marketSeries.supportedInstruments, "MNQ", "MES", "ZC", "ZW"]);
+  const timeframeOptions = optionSet([model.marketSeries.timeframe, ...model.marketSeries.supportedTimeframes, "1", "5", "15", "60", "240"]);
   const intent = model.orderIntent;
   const intentInstrument = instrumentCode(intent);
   const theoretical = model.selectedTheoreticalExecution;
   const theoreticalInstrument = instrumentCode({ symbol: theoretical?.instrument });
+  const signalInstrument = instrumentCode({ symbol: signal?.symbol });
   const chartInstrument = instrumentCode({ symbol: model.marketSeries.instrument ?? instrument });
   const canOverlayIntent = Boolean(intent && intentInstrument && chartInstrument && intentInstrument === chartInstrument);
   const canOverlayTheoretical = Boolean(!canOverlayIntent && theoretical && theoreticalInstrument && chartInstrument && theoreticalInstrument === chartInstrument);
-  const levels = canOverlayIntent ? tradePlanLevels(intent) : canOverlayTheoretical ? theoreticalExecutionLevels(theoretical) : [];
+  const canOverlaySignal = Boolean(!canOverlayIntent && !canOverlayTheoretical && signal && signalInstrument && chartInstrument && signalInstrument === chartInstrument);
+  const overlay = canOverlayIntent
+    ? tradePlanOverlayFromIntent(intent)
+    : canOverlayTheoretical
+      ? tradePlanOverlayFromTheoretical(theoretical)
+      : canOverlaySignal
+        ? tradePlanOverlayFromSignal(signal)
+        : null;
   return (
     <LivePanel title={`${instrument} · ${timeframe ? formatTimeframe(timeframe) : "futures"}`} className="lt-panel--chart" action={<Link to="/events">Audit</Link>}>
       <div className="lt-chart-toolbar">
@@ -113,12 +121,13 @@ export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTrad
         <span>OHLCV · VWAP · signals · intents</span>
       </div>
       <div className="lt-chart-frame" data-availability={model.marketSeries.availability}>
-        {model.marketSeries.points.length ? <CandlestickChart points={model.marketSeries.points} levels={levels} /> : <><div className="lt-chart-grid" aria-hidden="true" /><div className="lt-chart-empty" role="status"><strong>{presentAvailability(model.marketSeries.availability).label}</strong><span>{model.marketSeries.reason}</span><small>{model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</small></div></>}
+        {model.marketSeries.points.length ? <CandlestickChart points={model.marketSeries.points} overlay={overlay} /> : <><div className="lt-chart-grid" aria-hidden="true" /><div className="lt-chart-empty" role="status"><strong>{presentAvailability(model.marketSeries.availability).label}</strong><span>{model.marketSeries.reason}</span><small>{model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</small></div></>}
       </div>
       <footer className="lt-chart-footer">
         <span>{model.marketSeries.points.length} bougies clôturées · source {model.marketSeries.source}</span>
         {intent && !canOverlayIntent ? <span className="lt-chart-scope-note">Niveaux {intentInstrument || "intent"} masqués sur chart {chartInstrument || "—"}</span> : null}
         {!intent && theoretical && !canOverlayTheoretical ? <span className="lt-chart-scope-note">Tracking {theoreticalInstrument || "intent"} masqué sur chart {chartInstrument || "—"}</span> : null}
+        {!intent && !theoretical && signal && !canOverlaySignal ? <span className="lt-chart-scope-note">Signal {signalInstrument || "signal"} masqué sur chart {chartInstrument || "—"}</span> : null}
         <StatusBadge tone={presentAvailability(model.marketSeries.availability).tone}>{presentAvailability(model.marketSeries.availability).label}</StatusBadge>
       </footer>
     </LivePanel>
@@ -200,29 +209,152 @@ function instrumentCode(intent: unknown): string | null {
   const record = intent as Record<string, unknown>;
   return String(record.symbol ?? record.instrument ?? recordValue(record.executionTerms as Record<string, unknown> | null, ["instrument", "instrument_code", "symbol"]) ?? "").trim().toUpperCase() || null;
 }
-function tradePlanLevels(intent: LiveTradingModel["orderIntent"]): { label: string; price: number; tone: "success" | "danger" | "info" }[] {
-  if (!intent) return [];
+
+type TradeOverlayTarget = { label: string; price: number; ratioR?: number | null };
+type TradeOverlay = {
+  source: "ORDER_INTENT" | "THEORETICAL_EXECUTION" | "SIGNAL";
+  label: string;
+  instrument: string | null;
+  side: "LONG" | "SHORT";
+  entry: number;
+  stop: number | null;
+  targets: readonly TradeOverlayTarget[];
+  createdAt?: string | null;
+  expiresAt?: string | null;
+  status?: string | null;
+};
+
+function tradePlanOverlayFromIntent(intent: LiveTradingModel["orderIntent"]): TradeOverlay | null {
+  if (!intent) return null;
   const terms = intent.executionTerms;
-  const levels: { label: string; price: number; tone: "success" | "danger" | "info" }[] = [];
-  const entry = finitePrice(priceValue(recordValue(terms, ["entry"])) ?? intent.limitPrice);
-  const stop = finitePrice(priceValue(recordValue(terms, ["stop"])) ?? intent.stopPrice);
-  const target = finitePrice(firstTargetPrice(terms) ?? intent.targetPrice);
-  if (entry !== null) levels.push({ label: "ENTRÉE", price: entry, tone: "info" });
-  if (stop !== null) levels.push({ label: "STOP", price: stop, tone: "danger" });
-  if (target !== null) levels.push({ label: "CIBLE", price: target, tone: "success" });
-  return levels;
+  const entry = finitePrice(
+    priceValue(recordValue(terms, ["entry"]))
+    ?? recordValue(terms, ["entry_price", "entryPrice"])
+    ?? intent.limitPrice,
+  );
+  if (entry === null) return null;
+  const stop = finitePrice(
+    priceValue(recordValue(terms, ["stop"]))
+    ?? recordValue(terms, ["stop_price", "stopPrice"])
+    ?? intent.stopPrice,
+  );
+  const targets = tradeTargetsFrom(recordValue(terms, ["targets"]));
+  const intentTarget = finitePrice(firstTargetPrice(terms) ?? intent.targetPrice);
+  const allTargets = targets.length || intentTarget === null ? targets : [{ label: "T1", price: intentTarget }];
+  return {
+    source: "ORDER_INTENT",
+    label: "OrderIntent post-risk",
+    instrument: instrumentCode(intent),
+    side: normalizeTradeSide(intent.side),
+    entry,
+    stop,
+    targets: allTargets,
+    createdAt: intent.createdAt ?? null,
+    expiresAt: intent.allowedActions.expiresAt,
+    status: intent.humanGate.status,
+  };
 }
 
-function theoreticalExecutionLevels(row: LiveTradingModel["selectedTheoreticalExecution"]): { label: string; price: number; tone: "success" | "danger" | "info" }[] {
-  if (!row) return [];
-  const levels: { label: string; price: number; tone: "success" | "danger" | "info" }[] = [];
+function tradePlanOverlayFromTheoretical(row: LiveTradingModel["selectedTheoreticalExecution"]): TradeOverlay | null {
+  if (!row) return null;
   const entry = finitePrice(row.entry);
   const stop = finitePrice(row.stop);
-  const target = finitePrice(row.targets[0]?.price);
-  if (entry !== null) levels.push({ label: "ENTRÉE", price: entry, tone: "info" });
-  if (stop !== null) levels.push({ label: "STOP", price: stop, tone: "danger" });
-  if (target !== null) levels.push({ label: "CIBLE", price: target, tone: "success" });
-  return levels;
+  if (entry === null) return null;
+  return {
+    source: "THEORETICAL_EXECUTION",
+    label: "Suivi théorique backend",
+    instrument: row.instrument,
+    side: normalizeTradeSide(row.side),
+    entry,
+    stop,
+    targets: tradeTargetsFrom(row.targets),
+    createdAt: row.sourceCandleAt || row.latestEventAt,
+    expiresAt: null,
+    status: row.status,
+  };
+}
+
+function tradePlanOverlayFromSignal(signal: LiveTradingModel["latestSignal"]): TradeOverlay | null {
+  if (!signal) return null;
+  const plan = signal.proposedTradePlan ?? {};
+  const setup = signal.setup ?? {};
+  const economics = signal.tradePlanEconomics ?? {};
+  const entry = finitePrice(
+    priceValue(recordValue(plan, ["entry"]))
+    ?? recordValue(economics, ["entry_price", "entryPrice"])
+    ?? recordValue(setup, ["entry_price", "entryPrice", "entry"])
+    ?? entryFromZone(recordValue(setup, ["entry_zone", "entryZone"]) ?? recordValue(plan, ["entry_zone", "entryZone"])),
+  );
+  if (entry === null) return null;
+  const stop = finitePrice(
+    priceValue(recordValue(plan, ["stop"]))
+    ?? recordValue(economics, ["stop_price", "stopPrice"])
+    ?? recordValue(setup, ["stop_price", "stopPrice", "stop", "stop_loss", "stopLoss"]),
+  );
+  const targets = tradeTargetsFrom(recordValue(plan, ["targets"]))
+    .concat(tradeTargetsFrom(recordValue(setup, ["targets", "take_profit_targets", "takeProfitTargets", "target_prices", "targetPrices"])))
+    .concat(tradeTargetsFrom(recordValue(economics, ["targets"])));
+  return {
+    source: "SIGNAL",
+    label: "Dernier signal tradable",
+    instrument: signal.symbol,
+    side: normalizeTradeSide(signal.direction),
+    entry,
+    stop,
+    targets: uniqueTargets(targets),
+    createdAt: signal.sourceDataCutoffAt ?? signal.createdAt,
+    expiresAt: signal.expiresAt,
+    status: signal.availability ?? signal.state,
+  };
+}
+
+function normalizeTradeSide(value: unknown): "LONG" | "SHORT" {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "SELL" || normalized === "SHORT") return "SHORT";
+  return "LONG";
+}
+
+function tradeTargetsFrom(value: unknown): TradeOverlayTarget[] {
+  const items = Array.isArray(value) ? value : value == null ? [] : [value];
+  return items.map((item, index) => {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : { price: item };
+    const price = finitePrice(priceValue(record) ?? record.target_price ?? record.targetPrice ?? record.value);
+    if (price === null) return null;
+    return {
+      label: String(record.label ?? record.name ?? `T${index + 1}`),
+      price,
+      ratioR: Number.isFinite(Number(record.ratioR ?? record.reward_risk ?? record.rewardRisk ?? record.expected_r ?? record.expectedR))
+        ? Number(record.ratioR ?? record.reward_risk ?? record.rewardRisk ?? record.expected_r ?? record.expectedR)
+        : null,
+    };
+  }).filter((item): item is TradeOverlayTarget => Boolean(item));
+}
+
+function entryFromZone(value: unknown): number | null {
+  if (Array.isArray(value) && value.length >= 2) {
+    const left = finitePrice(value[0]);
+    const right = finitePrice(value[1]);
+    return left !== null && right !== null ? (left + right) / 2 : null;
+  }
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const direct = finitePrice(record.mid ?? record.center ?? record.price);
+  if (direct !== null) return direct;
+  const low = finitePrice(record.low ?? record.min ?? record.from ?? record.lower);
+  const high = finitePrice(record.high ?? record.max ?? record.to ?? record.upper);
+  return low !== null && high !== null ? (low + high) / 2 : null;
+}
+
+function uniqueTargets(targets: readonly TradeOverlayTarget[]): TradeOverlayTarget[] {
+  const seen = new Set<string>();
+  const result: TradeOverlayTarget[] = [];
+  for (const target of targets) {
+    const key = `${target.label}:${target.price}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(target);
+  }
+  return result;
 }
 function optionSet(values: readonly (string | null | undefined)[]): string[] { return [...new Set(values.map((value) => String(value || "").trim().toUpperCase()).filter(Boolean))]; }
 function formatInstrumentLabel(value: string) {
@@ -242,67 +374,183 @@ function formatAxisTime(value: string) {
   return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-function CandlestickChart({ points, levels = [] }: { points: LiveTradingModel["marketSeries"]["points"]; levels?: { label: string; price: number; tone: "success" | "danger" | "info" }[] }) {
+function CandlestickChart({ points, overlay }: { points: LiveTradingModel["marketSeries"]["points"]; overlay?: TradeOverlay | null }) {
   const drawable = points.filter((point) => [point.open, point.high, point.low, point.close].every((value) => typeof value === "number"));
+  const defaultWindow = Math.min(96, drawable.length);
+  const [windowRange, setWindowRange] = useState(() => ({ start: Math.max(0, drawable.length - defaultWindow), end: drawable.length }));
+  const dragStartX = useRef<number | null>(null);
+  const firstDrawableTimestamp = drawable[0]?.timestamp ?? "";
+  const lastDrawableTimestamp = drawable.at(-1)?.timestamp ?? "";
+
+  useEffect(() => {
+    const nextWindow = Math.min(96, drawable.length);
+    setWindowRange({ start: Math.max(0, drawable.length - nextWindow), end: drawable.length });
+  }, [drawable.length, firstDrawableTimestamp, lastDrawableTimestamp]);
+
   if (!drawable.length) return <div className="lt-chart-empty" role="status"><strong>{presentAvailability("CONNECTED_EMPTY").label}</strong><span>Aucune bougie complète à tracer.</span></div>;
-  const lows = drawable.map((point) => point.low as number);
-  const highs = drawable.map((point) => point.high as number);
-  const candleMin = Math.min(...lows);
-  const candleMax = Math.max(...highs);
+  const visible = drawable.slice(windowRange.start, windowRange.end);
+  const visibleCount = visible.length;
+  const moveWindow = (delta: number) => {
+    setWindowRange((current) => {
+      const size = current.end - current.start;
+      const start = Math.max(0, Math.min(drawable.length - size, current.start + delta));
+      return { start, end: start + size };
+    });
+  };
+  const zoomWindow = (factor: number) => {
+    setWindowRange((current) => {
+      const size = current.end - current.start;
+      const nextSize = Math.max(18, Math.min(drawable.length, Math.round(size * factor)));
+      const center = current.start + size / 2;
+      const start = Math.max(0, Math.min(drawable.length - nextSize, Math.round(center - nextSize / 2)));
+      return { start, end: start + nextSize };
+    });
+  };
+  const resetWindow = () => setWindowRange({ start: Math.max(0, drawable.length - defaultWindow), end: drawable.length });
+  const goLatest = () => setWindowRange((current) => {
+    const size = current.end - current.start;
+    return { start: Math.max(0, drawable.length - size), end: drawable.length };
+  });
+
+  if (!visible.length) return <div className="lt-chart-empty" role="status"><strong>{presentAvailability("CONNECTED_EMPTY").label}</strong><span>Fenêtre graphique vide.</span></div>;
+  const visibleLows = visible.map((point) => point.low as number);
+  const visibleHighs = visible.map((point) => point.high as number);
+  const candleMin = Math.min(...visibleLows);
+  const candleMax = Math.max(...visibleHighs);
   const candleSpan = Math.max(candleMax - candleMin, 0.0001);
-  const visibleLevels = levels.filter((level) => level.price >= candleMin - candleSpan * 1.5 && level.price <= candleMax + candleSpan * 1.5);
-  const levelPrices = visibleLevels.map((level) => level.price);
+  const overlayPrices = overlay ? [overlay.entry, overlay.stop, ...overlay.targets.map((target) => target.price)].filter((value): value is number => typeof value === "number" && Number.isFinite(value)) : [];
+  const overlayInScale = Boolean(overlay && overlayPrices.length && overlayPrices.every((price) => price >= candleMin - candleSpan * 2 && price <= candleMax + candleSpan * 2));
+  const visibleOverlay = overlayInScale ? overlay : null;
+  const levelPrices = visibleOverlay ? [visibleOverlay.entry, visibleOverlay.stop, ...visibleOverlay.targets.map((target) => target.price)].filter((value): value is number => typeof value === "number" && Number.isFinite(value)) : [];
   const min = Math.min(candleMin, ...levelPrices);
   const max = Math.max(candleMax, ...levelPrices);
   const span = Math.max(max - min, 0.0001);
   const width = 900;
   const height = 300;
   const leftGutter = 58;
-  const rightGutter = visibleLevels.length ? 112 : 56;
+  const rightGutter = visibleOverlay ? 132 : 56;
   const topGutter = 12;
   const bottomGutter = 30;
   const plotWidth = width - leftGutter - rightGutter;
   const plotHeight = height - topGutter - bottomGutter;
-  const step = drawable.length > 1 ? plotWidth / (drawable.length - 1) : plotWidth;
+  const step = visible.length > 1 ? plotWidth / (visible.length - 1) : plotWidth;
   const x = (index: number) => leftGutter + index * step;
   const y = (value: number) => topGutter + ((max - value) / span) * plotHeight;
-  const vwap = drawable.map((point, index) => point.vwap === null ? null : `${x(index)},${y(point.vwap)}`).filter(Boolean).join(" ");
+  const vwap = visible.map((point, index) => point.vwap === null ? null : `${x(index)},${y(point.vwap)}`).filter(Boolean).join(" ");
   const yTicks = Array.from({ length: 5 }, (_, index) => max - (span / 4) * index);
-  const xTickIndexes = uniqueNumbers([0, Math.floor(drawable.length * 0.25), Math.floor(drawable.length * 0.5), Math.floor(drawable.length * 0.75), drawable.length - 1]);
+  const xTickIndexes = uniqueNumbers([0, Math.floor(visible.length * 0.25), Math.floor(visible.length * 0.5), Math.floor(visible.length * 0.75), visible.length - 1]);
+  const anchorIndex = visibleOverlay ? overlayAnchorIndex(visible, visibleOverlay.createdAt) : 0;
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "ArrowLeft") moveWindow(-Math.max(1, Math.round(visibleCount * 0.2)));
+    if (event.key === "ArrowRight") moveWindow(Math.max(1, Math.round(visibleCount * 0.2)));
+    if (event.key === "+" || event.key === "=") zoomWindow(0.75);
+    if (event.key === "-") zoomWindow(1.25);
+    if (event.key === "Home") setWindowRange({ start: 0, end: Math.min(defaultWindow, drawable.length) });
+    if (event.key === "End") goLatest();
+  };
   return (
-    <svg className="lt-market-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${drawable.length} bougies OHLCV clôturées. Prix de ${min.toFixed(2)} à ${max.toFixed(2)}.`} preserveAspectRatio="none">
-      <g className="lt-market-chart__axis lt-market-chart__axis--price">
-        {yTicks.map((tick) => {
-          const tickY = y(tick);
-          return <g key={tick.toFixed(4)}><line x1={leftGutter} x2={width - rightGutter} y1={tickY} y2={tickY} /><text x={leftGutter - 8} y={tickY + 4} textAnchor="end">{tick.toFixed(2)}</text><text x={width - rightGutter + 8} y={tickY + 4}>{tick.toFixed(2)}</text></g>;
-        })}
-      </g>
-      <g className="lt-market-chart__axis lt-market-chart__axis--time">
-        <line x1={leftGutter} x2={width - rightGutter} y1={height - bottomGutter} y2={height - bottomGutter} />
-        {xTickIndexes.map((index) => <text key={drawable[index]?.timestamp ?? index} x={x(index)} y={height - 8} textAnchor={index === 0 ? "start" : index === drawable.length - 1 ? "end" : "middle"}>{formatAxisTime(drawable[index]?.timestamp ?? "")}</text>)}
-      </g>
-      <g className="lt-market-chart__axis-labels">
-        <text x={leftGutter - 46} y={topGutter + 9}>Prix</text>
-        <text x={leftGutter + plotWidth / 2} y={height - 1} textAnchor="middle">Temps</text>
-      </g>
-      <g className="lt-market-chart__candles">{drawable.map((point, index) => {
-        const candleX = x(index);
-        const open = point.open as number;
-        const high = point.high as number;
-        const low = point.low as number;
-        const close = point.close as number;
-        const up = close >= open;
-        const candleWidth = Math.max(2, Math.min(8, step * 0.58));
-        return <g key={point.timestamp} className={up ? "is-up" : "is-down"}><line x1={candleX} x2={candleX} y1={y(high)} y2={y(low)} /><rect x={candleX - candleWidth / 2} y={Math.min(y(open), y(close))} width={candleWidth} height={Math.max(1, Math.abs(y(open) - y(close)))} /></g>;
-      })}</g>
-      {vwap ? <polyline className="lt-market-chart__vwap" points={vwap} fill="none" /> : null}
-      <g className="lt-market-chart__levels">{visibleLevels.map((level) => {
-        const levelY = y(level.price);
-        const lineEnd = width - rightGutter;
-        return <g key={level.label} className={`lt-market-chart__level lt-market-chart__level--${level.tone}`}><line x1={leftGutter} x2={lineEnd} y1={levelY} y2={levelY} strokeDasharray="6 5" /><rect x={lineEnd + 6} y={levelY - 11} width={rightGutter - 12} height={22} rx={4} /><text x={lineEnd + rightGutter / 2} y={levelY + 4} textAnchor="middle">{level.label} {level.price.toFixed(2)}</text></g>;
-      })}</g>
-    </svg>
+    <div
+      className="lt-chart-canvas"
+      tabIndex={0}
+      role="application"
+      aria-label={`${visible.length} bougies affichées sur ${drawable.length}. Utiliser les flèches pour déplacer le graphique et plus ou moins pour zoomer.`}
+      onKeyDown={onKeyDown}
+      onWheel={(event) => {
+        event.preventDefault();
+        zoomWindow(event.deltaY < 0 ? 0.85 : 1.15);
+      }}
+      onPointerDown={(event) => { dragStartX.current = event.clientX; event.currentTarget.setPointerCapture?.(event.pointerId); }}
+      onPointerMove={(event) => {
+        if (dragStartX.current === null) return;
+        const delta = event.clientX - dragStartX.current;
+        if (Math.abs(delta) < 18) return;
+        moveWindow(delta > 0 ? -Math.max(1, Math.round(visibleCount * 0.12)) : Math.max(1, Math.round(visibleCount * 0.12)));
+        dragStartX.current = event.clientX;
+      }}
+      onPointerUp={() => { dragStartX.current = null; }}
+      onPointerCancel={() => { dragStartX.current = null; }}
+    >
+      <div className="lt-chart-controls" aria-label="Navigation du graphique">
+        <button type="button" onClick={() => moveWindow(-Math.max(1, Math.round(visibleCount * 0.5)))} aria-label="Reculer dans le graphique">←</button>
+        <button type="button" onClick={() => moveWindow(Math.max(1, Math.round(visibleCount * 0.5)))} aria-label="Avancer dans le graphique">→</button>
+        <button type="button" onClick={() => zoomWindow(0.75)} aria-label="Zoomer">+</button>
+        <button type="button" onClick={() => zoomWindow(1.25)} aria-label="Dézoomer">−</button>
+        <button type="button" onClick={goLatest}>Dernier</button>
+        <button type="button" onClick={resetWindow}>Reset</button>
+      </div>
+      <svg className="lt-market-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${visible.length} bougies OHLCV clôturées. Prix de ${min.toFixed(2)} à ${max.toFixed(2)}.`} preserveAspectRatio="none">
+        <g className="lt-market-chart__axis lt-market-chart__axis--price">
+          {yTicks.map((tick) => {
+            const tickY = y(tick);
+            return <g key={tick.toFixed(4)}><line x1={leftGutter} x2={width - rightGutter} y1={tickY} y2={tickY} /><text x={leftGutter - 8} y={tickY + 4} textAnchor="end">{tick.toFixed(2)}</text><text x={width - rightGutter + 8} y={tickY + 4}>{tick.toFixed(2)}</text></g>;
+          })}
+        </g>
+        <g className="lt-market-chart__axis lt-market-chart__axis--time">
+          <line x1={leftGutter} x2={width - rightGutter} y1={height - bottomGutter} y2={height - bottomGutter} />
+          {xTickIndexes.map((index) => <text key={visible[index]?.timestamp ?? index} x={x(index)} y={height - 8} textAnchor={index === 0 ? "start" : index === visible.length - 1 ? "end" : "middle"}>{formatAxisTime(visible[index]?.timestamp ?? "")}</text>)}
+        </g>
+        <g className="lt-market-chart__axis-labels">
+          <text x={leftGutter - 46} y={topGutter + 9}>Prix</text>
+          <text x={leftGutter + plotWidth / 2} y={height - 1} textAnchor="middle">Temps</text>
+        </g>
+        {visibleOverlay ? <TradeZone overlay={visibleOverlay} y={y} x1={x(anchorIndex)} x2={width - rightGutter} /> : null}
+        <g className="lt-market-chart__candles">{visible.map((point, index) => {
+          const candleX = x(index);
+          const open = point.open as number;
+          const high = point.high as number;
+          const low = point.low as number;
+          const close = point.close as number;
+          const up = close >= open;
+          const candleWidth = Math.max(2, Math.min(8, step * 0.58));
+          return <g key={point.timestamp} className={up ? "is-up" : "is-down"}><line x1={candleX} x2={candleX} y1={y(high)} y2={y(low)} /><rect x={candleX - candleWidth / 2} y={Math.min(y(open), y(close))} width={candleWidth} height={Math.max(1, Math.abs(y(open) - y(close)))} /></g>;
+        })}</g>
+        {vwap ? <polyline className="lt-market-chart__vwap" points={vwap} fill="none" /> : null}
+        {visibleOverlay ? <TradeLevelLabels overlay={visibleOverlay} y={y} x1={leftGutter} x2={width - rightGutter} labelWidth={rightGutter} /> : null}
+      </svg>
+      <div className="lt-chart-readout">
+        <span>{formatAxisTime(visible[0]?.timestamp ?? "")} → {formatAxisTime(visible.at(-1)?.timestamp ?? "")}</span>
+        <span>{visible.length}/{drawable.length} bougies</span>
+        {overlay && !visibleOverlay ? <span className="lt-chart-readout__warning">Plan {overlay.label} hors fenêtre prix actuelle</span> : null}
+        {visibleOverlay ? <span>{visibleOverlay.label} · {visibleOverlay.side} · entrée {visibleOverlay.entry.toFixed(2)}</span> : null}
+      </div>
+    </div>
   );
+}
+
+function TradeZone({ overlay, y, x1, x2 }: { overlay: TradeOverlay; y(value: number): number; x1: number; x2: number }) {
+  const firstTarget = overlay.targets[0]?.price ?? null;
+  const entryY = y(overlay.entry);
+  const stopY = overlay.stop === null ? null : y(overlay.stop);
+  const targetY = firstTarget === null ? null : y(firstTarget);
+  return (
+    <g className="lt-market-chart__trade-zones" aria-hidden="true">
+      {targetY !== null ? <rect className="lt-market-chart__zone lt-market-chart__zone--profit" x={x1} y={Math.min(entryY, targetY)} width={Math.max(0, x2 - x1)} height={Math.max(1, Math.abs(entryY - targetY))} rx={3} /> : null}
+      {stopY !== null ? <rect className="lt-market-chart__zone lt-market-chart__zone--risk" x={x1} y={Math.min(entryY, stopY)} width={Math.max(0, x2 - x1)} height={Math.max(1, Math.abs(entryY - stopY))} rx={3} /> : null}
+    </g>
+  );
+}
+
+function TradeLevelLabels({ overlay, y, x1, x2, labelWidth }: { overlay: TradeOverlay; y(value: number): number; x1: number; x2: number; labelWidth: number }) {
+  const rows = [
+    { label: "ENTRÉE", price: overlay.entry, tone: "entry" },
+    overlay.stop === null ? null : { label: "STOP", price: overlay.stop, tone: "stop" },
+    ...overlay.targets.slice(0, 3).map((target) => ({ label: target.label, price: target.price, tone: "target" })),
+  ].filter((row): row is { label: string; price: number; tone: string } => Boolean(row));
+  return (
+    <g className="lt-market-chart__levels">
+      {rows.map((row) => {
+        const levelY = y(row.price);
+        return <g key={`${row.label}:${row.price}`} className={`lt-market-chart__level lt-market-chart__level--${row.tone}`}><line x1={x1} x2={x2} y1={levelY} y2={levelY} strokeDasharray={row.tone === "entry" ? "none" : "6 5"} /><rect x={x2 + 6} y={levelY - 11} width={labelWidth - 12} height={22} rx={4} /><text x={x2 + labelWidth / 2} y={levelY + 4} textAnchor="middle">{row.label} {row.price.toFixed(2)}</text></g>;
+      })}
+    </g>
+  );
+}
+
+function overlayAnchorIndex(points: readonly LiveTradingModel["marketSeries"]["points"][number][], at?: string | null): number {
+  const target = Date.parse(at || "");
+  if (!Number.isFinite(target)) return 0;
+  const index = points.findIndex((point) => Date.parse(point.timestamp) >= target);
+  return index >= 0 ? index : Math.max(0, points.length - 1);
 }
 
 function uniqueNumbers(values: readonly number[]): number[] {

@@ -590,11 +590,25 @@ export type LiveTradingView = {
     confidence: number;
     createdAt: string;
     expiresAt: string;
+    timeframe?: string | null;
+    session?: string | null;
+    sourceDataCutoffAt?: string | null;
     featureSnapshotId: string;
     ruleHits: readonly string[];
     expectancyR: number;
     rewardRisk: number;
     regime: string;
+    setup?: Record<string, unknown> | null;
+    predicates?: readonly unknown[];
+    evidence?: readonly unknown[];
+    reasonCodes?: readonly string[];
+    signalQuality?: Record<string, unknown> | null;
+    proposedTradePlan?: Record<string, unknown> | null;
+    tradePlanEconomics?: Record<string, unknown> | null;
+    availability?: string;
+    sourceClass?: string;
+    certificationRunId?: string | null;
+    correlationId?: string | null;
   }[];
   arbitrations: readonly {
     arbitrationId: string;

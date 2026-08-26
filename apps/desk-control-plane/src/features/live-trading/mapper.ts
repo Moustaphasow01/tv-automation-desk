@@ -5,8 +5,9 @@ import type { LiveTone, LiveTradingEnvelope, LiveTradingModel } from "./model";
 export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingModel {
   const { data, meta } = envelope;
   const runtime = data.canonicalRuntime;
-  const latestSignal = runtime.latestSignals[0] ?? data.signals[0] ?? null;
-  const selectedInstrument = normalizeInstrument(data.marketSeries?.instrument ?? latestSignal?.symbol ?? null);
+  const signalPool = uniqueBy([...(runtime.latestSignals ?? []), ...(data.signals ?? [])], (item) => item.signalId);
+  const selectedInstrument = normalizeInstrument(data.marketSeries?.instrument ?? signalPool[0]?.symbol ?? null);
+  const latestSignal = selectLatestSignal(signalPool, selectedInstrument);
   const orderIntent = selectOrderIntent([...runtime.pendingOrderIntents, ...data.portfolioOrderIntents], selectedInstrument);
   const targetPosition = selectTargetPosition(runtime.pendingTargetPositions ?? [], orderIntent, selectedInstrument);
   const marketContract = seriesContracts(data).find((item) => item.seriesId === "market.ohlcv");
@@ -112,6 +113,19 @@ function selectOrderIntent(
     if (sameInstrument) return sameInstrument;
   }
   return pool[0] ?? null;
+}
+
+function selectLatestSignal(
+  signals: readonly NonNullable<LiveTradingEnvelope["data"]["canonicalRuntime"]["latestSignals"]>[number][],
+  selectedInstrument: string | null,
+) {
+  if (!signals.length) return null;
+  const sorted = [...signals].sort((left, right) => new Date(right.createdAt ?? "").getTime() - new Date(left.createdAt ?? "").getTime());
+  if (selectedInstrument) {
+    const sameInstrument = sorted.find((item) => normalizeInstrument(item.symbol) === selectedInstrument);
+    if (sameInstrument) return sameInstrument;
+  }
+  return sorted[0] ?? null;
 }
 
 function selectTargetPosition(
