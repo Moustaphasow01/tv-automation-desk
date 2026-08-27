@@ -63,11 +63,13 @@ export const FRONT_CONTROL_PLANE_CAPABILITIES_PATH = `${FRONT_CONTROL_PLANE_PREF
 
 const VIEW_PATH = /^\/front-api\/v1\/views\/([a-z0-9-]+)$/;
 const COMMAND_PATH = /^\/front-api\/v1\/commands\/([a-zA-Z0-9_-]+)$/;
-// Keep one short, shared source window across the widgets of an operator view.
-// Five seconds is below the live monitor cadence while preventing the same
-// expensive PostgreSQL projections from being rebuilt for every card/refetch.
-const FRONT_SOURCE_CACHE_TTL_MS = 5_000;
-const FRONT_SOURCE_TIMEOUT_MS = 3_500;
+// Keep one shared source window across the widgets of an operator view.
+// The live/read models are now richer than the original control-plane cards:
+// a 3.5 s cutoff made the screen oscillate between populated and partial states
+// while PostgreSQL was still answering valid projections. The defaults stay
+// comfortably below operator refresh cadence while avoiding false empty states.
+const FRONT_SOURCE_CACHE_TTL_MS = 15_000;
+const FRONT_SOURCE_TIMEOUT_MS = 8_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sourceCacheByStore = new WeakMap();
 const VIEW_NAMES = new Set([

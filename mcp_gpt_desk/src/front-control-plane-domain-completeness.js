@@ -155,6 +155,10 @@ export function isCurrentLivePortfolioIntent(item = {}, nowIso = currentUtc()) {
   return true;
 }
 
+export function isCurrentPortfolioIntent(item = {}, nowIso = currentUtc()) {
+  return isCurrentLivePortfolioIntent(item, nowIso);
+}
+
 export function portfolioOrderIntentSummaryRow({ execution = {}, item = {}, actor = {} }) {
   const intent = intentRow(item);
   const payload = payloadOf(item);

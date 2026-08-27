@@ -1,4 +1,5 @@
 import { number, rows, stringList, text, upper } from "./front-control-plane-projection-helpers.js";
+import { normalizeProposedTradePlanV1 } from "../../packages/desk-domain/src/trade-plan-economics-v1.js";
 
 export function activeOrderRow(item) {
   const payload = payloadOf(item);
@@ -65,6 +66,7 @@ export function intentRow(item) {
 }
 
 export function signalRow(item) {
+  const tradePlan = frontSignalTradePlan(item);
   return {
     signalId: text(firstValue(item.signal_outbox_id, item.signal_id), ""),
     strategyId: text(firstValue(item.strategy_definition_id, item.strategy_id), "unavailable"),
@@ -86,9 +88,9 @@ export function signalRow(item) {
     evidence: rows(item.evidence),
     reasonCodes: stringList(item.reason_codes),
     signalQuality: item.signal_quality || null,
-    proposedTradePlan: item.proposed_trade_plan || null,
-    tradePlanEconomics: item.trade_plan_economics || null,
-    availability: item.availability || null,
+    proposedTradePlan: tradePlan.proposedTradePlan,
+    tradePlanEconomics: tradePlan.tradePlanEconomics,
+    availability: tradePlan.availability,
     sourceClass: text(item.source_class, "LIVE").toUpperCase(),
     certificationRunId: item.certification_run_id || null,
     correlationId: text(item.correlation_id, "unavailable"),
@@ -97,6 +99,76 @@ export function signalRow(item) {
     rewardRisk: number(item.reward_risk, 0),
     regime: text(item.regime, "unavailable"),
   };
+}
+
+function frontSignalTradePlan(item = {}) {
+  const existingPlan = item.proposed_trade_plan || null;
+  const existingEconomics = item.trade_plan_economics || null;
+  if (existingPlan?.availability === "KNOWN" && existingEconomics?.availability === "KNOWN") {
+    return {
+      proposedTradePlan: existingPlan,
+      tradePlanEconomics: existingEconomics,
+      availability: item.availability || existingPlan.availability,
+    };
+  }
+  const setup = item.setup || {};
+  if (!hasTradePlanHints(existingPlan, setup)) {
+    return {
+      proposedTradePlan: existingPlan,
+      tradePlanEconomics: existingEconomics,
+      availability: item.availability || existingPlan?.availability || null,
+    };
+  }
+  try {
+    const normalized = normalizeProposedTradePlanV1({
+      ...object(existingPlan),
+      instrument: firstValue(item.instrument, item.instrument_code, item.symbol, existingPlan?.instrument),
+      direction: firstValue(item.direction, item.side, existingPlan?.direction),
+      order_type: firstValue(existingPlan?.order_type, setup.order_type, setup.orderType),
+      time_in_force: firstValue(existingPlan?.time_in_force, setup.time_in_force, setup.timeInForce, "DAY"),
+      entry_price: firstValue(existingPlan?.entry_price, setup.entry_price, setup.entryPrice, setup.entry),
+      entry_zone: firstValue(existingPlan?.entry_zone, setup.entry_zone, setup.entryZone),
+      stop_price: firstValue(existingPlan?.stop?.price, existingPlan?.stop_price, setup.stop_price, setup.stopPrice, setup.stop, setup.stop_loss, setup.stopLoss),
+      targets: firstValue(existingPlan?.targets, setup.targets, setup.take_profit_targets, setup.takeProfitTargets, setup.target_prices, setup.targetPrices),
+      source_data_cutoff_utc: firstValue(item.source_data_cutoff_utc, item.cutoff_at_utc, existingPlan?.source?.source_data_cutoff_utc),
+    });
+    return {
+      proposedTradePlan: normalized.proposed_trade_plan || existingPlan,
+      tradePlanEconomics: normalized.economics || existingEconomics,
+      availability: normalized.proposed_trade_plan?.availability || item.availability || existingPlan?.availability || null,
+    };
+  } catch {
+    return {
+      proposedTradePlan: existingPlan,
+      tradePlanEconomics: existingEconomics,
+      availability: item.availability || existingPlan?.availability || null,
+    };
+  }
+}
+
+function hasTradePlanHints(existingPlan, setup = {}) {
+  return Boolean(
+    existingPlan ||
+    setup.entry_zone ||
+    setup.entryZone ||
+    setup.entry_price ||
+    setup.entryPrice ||
+    setup.entry ||
+    setup.stop_price ||
+    setup.stopPrice ||
+    setup.stop ||
+    setup.stop_loss ||
+    setup.stopLoss ||
+    setup.targets ||
+    setup.take_profit_targets ||
+    setup.takeProfitTargets ||
+    setup.target_prices ||
+    setup.targetPrices
+  );
+}
+
+function object(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function payloadOf(item = {}) {

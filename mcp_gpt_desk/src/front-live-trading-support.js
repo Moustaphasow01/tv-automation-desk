@@ -180,7 +180,9 @@ export function appendLiveWarnings({ execution, safety, canonicalRuntime, liveSe
   const intentCount = rows(canonicalRuntime?.pendingOrderIntents).length;
   if (!execution.session_id && !currentLiveSession?.id) warnings.push("live-session-id:UNAVAILABLE");
   if (!marketClosed && !execution.next_monitor_at && !currentLiveSession?.nextMonitorAt && !currentLiveSession?.nextCheckpointAt) warnings.push("live-next-monitor:UNAVAILABLE");
-  if (signalCount && !execution.arbitrations) warnings.push("live-arbitrations:UNAVAILABLE");
+  // A raw StrategySignal can be visible while portfolio arbitration has not
+  // produced any current accepted candidate. That is a connected-empty business
+  // state, not a front/runtime outage; avoid degrading the whole Live screen.
   if (intentCount && !hasRiskCheckEvidence(execution)) warnings.push("live-risk-checks:UNAVAILABLE");
   if (!rows(execution.pipeline).length && canonicalRuntime.pipeline.every((item) => item.status === "UNAVAILABLE")) warnings.push("live-pipeline:UNAVAILABLE");
   if (!marketClosed && (signalCount || intentCount) && !rows(execution.timeline).length && !rows(currentLiveSession?.timeline).length && !rows(currentLiveSession?.operationalTimeline).length) warnings.push("live-timeline:UNAVAILABLE");
