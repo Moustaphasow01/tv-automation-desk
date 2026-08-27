@@ -29,8 +29,61 @@ export function LivePanel({ title, className = "", action, children, expandable 
   </>;
 }
 
+export function LiveDecisionRibbon({ model }: { model: LiveTradingModel }) {
+  const operator = model.operator;
+  return (
+    <section className="lt-decision-ribbon" aria-label="État opérateur Live Trading">
+      <article className={`lt-decision-ribbon__operator lt-ribbon-tone--${operator.tone}`}>
+        <small>État opérateur</small>
+        <strong>{operator.label}</strong>
+        <span>{operator.detail}</span>
+      </article>
+      <div className="lt-decision-ribbon__funnel" aria-label="Pipeline signal vers exécution">
+        {model.signalFunnel.stages.map((stage) => (
+          <div key={stage.key} className={`lt-funnel-stage lt-ribbon-tone--${stage.tone}`}>
+            <small>{stage.label}</small>
+            <strong>{stage.value.toLocaleString("fr-FR")}</strong>
+            <span>{stage.detail}</span>
+          </div>
+        ))}
+      </div>
+      <article className="lt-decision-ribbon__guardrails">
+        <small>Garde-fous</small>
+        <strong>{model.mode.autoExecutionEnabled ? "AUTO ON" : "AUTO OFF"} · {model.mode.physicalExecutionEnabled ? "BROKER ON" : "BROKER OFF"}</strong>
+        <span>ACK ≠ FILL · le frontend ne modifie ni quantité, ni prix, ni risque.</span>
+      </article>
+    </section>
+  );
+}
+
 export function MarketContextPanel({ model }: { model: LiveTradingModel }) {
   return <LivePanel title="Contexte marché" className="lt-panel--market"><table><thead><tr><th>Symbole</th><th>Dernier</th><th>Var%</th><th>Tendance</th></tr></thead><tbody>{model.watchlist.map((item) => <tr key={item.symbol}><td>{item.symbol}</td><td>{item.last === null ? "—" : item.last.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}</td><td className={item.changePct === null ? "" : `lt-tone--${item.changePct >= 0 ? "success" : "danger"}`}>{item.changePct === null ? "—" : `${item.changePct >= 0 ? "+" : ""}${item.changePct.toFixed(2)}%`}</td><td><Sparkline values={item.trend} positive={(item.changePct ?? 0) >= 0} /></td></tr>)}</tbody></table><TruthEmpty when={!model.watchlist.length} status="WATCHLIST NON PUBLIÉE" label="Aucun instantané de marché live n'est disponible." /><footer><StatusBadge tone={presentAvailability(model.freshness.marketData).tone}>{presentAvailability(model.freshness.marketData).label}</StatusBadge><span>Fraîcheur de la source de marché</span></footer></LivePanel>;
+}
+
+export function MarketIntelligencePanel({ model }: { model: LiveTradingModel }) {
+  const context = model.marketIntelligence;
+  return (
+    <LivePanel title="Intelligence marché" className="lt-panel--intelligence">
+      <div className="lt-intelligence-summary">
+        <span><small>Biais</small><strong>{context.bias}</strong></span>
+        <span><small>Régime</small><strong>{context.regime}</strong></span>
+        <span><small>Volatilité</small><strong>{context.volatility}</strong></span>
+        <span><small>Macro</small><strong>{context.macroRisk}</strong></span>
+      </div>
+      <dl className="lt-definition-list">
+        <Pair label="Confiance contexte" value={context.confidence === null ? "—" : `${Math.round(context.confidence)}%`} />
+        <Pair label="Multiplicateur risque" value={context.riskMultiplier === null ? "—" : `${context.riskMultiplier.toFixed(2)}x`} />
+        <Pair label="Valide jusqu'à" value={displayTime(context.validUntil)} />
+      </dl>
+      <div className="lt-zone-list" aria-label="Zones de contexte">
+        {context.zones.map((zone) => <article key={`${zone.label}:${zone.range}`} className={`lt-zone-list__item lt-ribbon-tone--${zone.tone}`}><strong>{zone.label}</strong><span>{zone.direction} · {zone.range}</span><small>{zone.detail || "Publié par le contexte ou le signal"}</small></article>)}
+      </div>
+      <TruthEmpty when={!context.zones.length && !context.reasonCodes.length} status="CONTEXTE STRUCTURÉ NON PUBLIÉ" label="Le front affiche les champs disponibles, mais le snapshot Market Context complet n'est pas encore présent dans cette projection." />
+      <div className="lt-tags lt-tags--compact">
+        {[...context.preferredFamilies.map((item) => `+ ${item}`), ...context.discouragedFamilies.map((item) => `− ${item}`), ...context.reasonCodes].slice(0, 12).map((item) => <span key={item}>{item}</span>)}
+      </div>
+    </LivePanel>
+  );
 }
 
 function Sparkline({ values, positive }: { values: readonly number[]; positive: boolean }) {
@@ -70,10 +123,11 @@ export function MacroSessionPanel({ model }: { model: LiveTradingModel }) {
 }
 
 export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTradingModel; onScopeChange?: (scope: { instrument?: string; timeframe?: string }) => void }) {
+  const [overlayMode, setOverlayMode] = useState<"AUTO" | "ORDER_INTENT" | "THEORETICAL" | "SIGNAL" | "NONE">("AUTO");
   const signal = model.latestSignal;
   const instrument = model.marketSeries.instrument ?? signal?.symbol ?? "Instrument";
   const timeframe = model.marketSeries.timeframe;
-  const instrumentOptions = optionSet([model.marketSeries.instrument, ...model.marketSeries.supportedInstruments, "MNQ", "MES", "ZC", "ZW"]);
+  const instrumentOptions = optionSet([model.marketSeries.instrument, signal?.symbol, ...model.marketSeries.supportedInstruments.filter(isTradableDeskInstrument), "MNQ", "MES", "ZC", "ZW"]);
   const timeframeOptions = optionSet([model.marketSeries.timeframe, ...model.marketSeries.supportedTimeframes, "1", "5", "15", "60", "240"]);
   const intent = model.orderIntent;
   const intentInstrument = instrumentCode(intent);
@@ -82,15 +136,28 @@ export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTrad
   const signalInstrument = instrumentCode({ symbol: signal?.symbol });
   const chartInstrument = instrumentCode({ symbol: model.marketSeries.instrument ?? instrument });
   const canOverlayIntent = Boolean(intent && intentInstrument && chartInstrument && intentInstrument === chartInstrument);
-  const canOverlayTheoretical = Boolean(!canOverlayIntent && theoretical && theoreticalInstrument && chartInstrument && theoreticalInstrument === chartInstrument);
-  const canOverlaySignal = Boolean(!canOverlayIntent && !canOverlayTheoretical && signal && signalInstrument && chartInstrument && signalInstrument === chartInstrument);
-  const overlay = canOverlayIntent
-    ? tradePlanOverlayFromIntent(intent)
-    : canOverlayTheoretical
-      ? tradePlanOverlayFromTheoretical(theoretical)
-      : canOverlaySignal
-        ? tradePlanOverlayFromSignal(signal)
-        : null;
+  const canOverlayTheoretical = Boolean(theoretical && theoreticalInstrument && chartInstrument && theoreticalInstrument === chartInstrument);
+  const canOverlaySignal = Boolean(signal && signalInstrument && chartInstrument && signalInstrument === chartInstrument);
+  const intentOverlay = canOverlayIntent ? tradePlanOverlayFromIntent(intent) : null;
+  const theoreticalOverlay = canOverlayTheoretical ? tradePlanOverlayFromTheoretical(theoretical) : null;
+  const signalOverlay = canOverlaySignal ? tradePlanOverlayFromSignal(signal) : null;
+  const autoOverlay = intentOverlay ?? theoreticalOverlay ?? signalOverlay;
+  const overlay = overlayMode === "NONE"
+    ? null
+    : overlayMode === "ORDER_INTENT"
+      ? intentOverlay
+      : overlayMode === "THEORETICAL"
+        ? theoreticalOverlay
+        : overlayMode === "SIGNAL"
+          ? signalOverlay
+          : autoOverlay;
+  const overlayOptions = [
+    { value: "AUTO", label: "Auto", enabled: Boolean(autoOverlay) },
+    { value: "SIGNAL", label: "Signal", enabled: Boolean(signalOverlay) },
+    { value: "THEORETICAL", label: "Théorie", enabled: Boolean(theoreticalOverlay) },
+    { value: "ORDER_INTENT", label: "Intent", enabled: Boolean(intentOverlay) },
+    { value: "NONE", label: "Masquer", enabled: true },
+  ] as const;
   return (
     <LivePanel title={`${instrument} · ${timeframe ? formatTimeframe(timeframe) : "futures"}`} className="lt-panel--chart" action={<Link to="/events">Audit</Link>}>
       <div className="lt-chart-toolbar">
@@ -118,6 +185,20 @@ export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTrad
             </button>
           ))}
         </div>
+        <div className="lt-chart-selector lt-chart-selector--overlays" aria-label="Plan affiché sur le graphique">
+          {overlayOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={overlayMode === option.value}
+              disabled={!option.enabled}
+              onClick={() => setOverlayMode(option.value)}
+              title={option.enabled ? `Afficher ${option.label}` : `${option.label} indisponible pour ${chartInstrument ?? "cet instrument"}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
         <span>OHLCV · VWAP · signals · intents</span>
       </div>
       <div className="lt-chart-frame" data-availability={model.marketSeries.availability}>
@@ -136,7 +217,71 @@ export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTrad
 
 export function LatestSignalPanel({ model }: { model: LiveTradingModel }) {
   const signal = model.latestSignal;
-  return <LivePanel title="Dernier signal stratégie" className="lt-panel--signal">{signal ? <><div className="lt-signal-hero"><span><small>Instrument</small><strong>{signal.symbol}</strong></span><span><small>Direction</small><strong className={`lt-tone--${signal.direction === "LONG" ? "success" : "danger"}`}>{signal.direction}</strong></span><span><small>Confiance</small><strong>{signal.confidence}%</strong></span></div><dl className="lt-definition-list"><Pair label="Stratégie" value={shortId(signal.strategyId)} /><Pair label="État" value={presentSignalState(signal.state).label} /><Pair label="Régime" value={presentGeneric(signal.regime).label} /><Pair label="R attendu" value={`${displayValue(signal.expectancyR)} R`} /><Pair label="Gain / Risque" value={displayValue(signal.rewardRisk)} /><Pair label="Expire" value={displayTime(signal.expiresAt)} /></dl><div className="lt-tags">{signal.ruleHits.map((rule) => <span key={rule}>{rule}</span>)}</div><Link className="lt-detail-link" to={`/live/signals/${encodeURIComponent(signal.signalId)}`}>Ouvrir le dossier signal</Link></> : <TruthEmpty status="AUCUN SIGNAL ACTUEL" label="Aucun StrategySignal n'a été publié pour la session ; le moteur n'invente pas d'opportunité." />}</LivePanel>;
+  const plan = model.selectedSignalPlan;
+  return (
+    <LivePanel title="Dernier signal stratégie" className="lt-panel--signal">
+      {signal ? (
+        <>
+          <div className="lt-signal-hero">
+            <span><small>Instrument</small><strong>{signal.symbol}</strong></span>
+            <span><small>Direction</small><strong className={`lt-tone--${signal.direction === "LONG" ? "success" : "danger"}`}>{signal.direction}</strong></span>
+            <span><small>Confiance</small><strong>{signal.confidence}%</strong></span>
+          </div>
+          <dl className="lt-definition-list">
+            <Pair label="Stratégie" value={shortId(signal.strategyId)} />
+            <Pair label="État" value={presentSignalState(signal.state).label} />
+            <Pair label="Régime" value={presentGeneric(signal.regime).label} />
+            <Pair label="R attendu" value={`${displayValue(signal.expectancyR)} R`} />
+            <Pair label="Gain / Risque" value={displayValue(signal.rewardRisk)} />
+            <Pair label="Expire" value={displayTime(signal.expiresAt)} />
+          </dl>
+          {plan ? (
+            <section className="lt-signal-plan" aria-label="Plan proposé par le signal">
+              <header><strong>Plan proposé</strong><span>{plan.source}</span></header>
+              <dl>
+                <Pair label="Type" value={plan.orderType} />
+                <Pair label="Entrée" value={plan.entry} />
+                <Pair label="Stop" value={plan.stop} />
+                <Pair label="Cibles" value={plan.targets.length ? plan.targets.join(" · ") : "NON PUBLIÉ"} />
+              </dl>
+            </section>
+          ) : null}
+          <div className="lt-tags">{signal.ruleHits.map((rule) => <span key={rule}>{rule}</span>)}</div>
+          <Link className="lt-detail-link" to={`/live/signals/${encodeURIComponent(signal.signalId)}`}>Ouvrir le dossier signal</Link>
+        </>
+      ) : <TruthEmpty status="AUCUN SIGNAL ACTUEL" label="Aucun StrategySignal n'a été publié pour la session ; le moteur n'invente pas d'opportunité." />}
+    </LivePanel>
+  );
+}
+
+export function SignalFunnelPanel({ model }: { model: LiveTradingModel }) {
+  const signals = [...model.source.signals]
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .slice(0, 6);
+  return (
+    <LivePanel title="Entonnoir signaux" className="lt-panel--signal-funnel">
+      <div className="lt-signal-funnel-metrics">
+        <span><small>TAKE contexte</small><strong>{model.signalFunnel.contextTake}</strong></span>
+        <span><small>Risk PASS</small><strong>{model.signalFunnel.riskPass}</strong></span>
+        <span><small>Human Gate</small><strong>{model.signalFunnel.pendingHumanGates}</strong></span>
+        <span><small>R théorique clos</small><strong>{model.signalFunnel.totalClosedR === null ? "—" : `${model.signalFunnel.totalClosedR.toFixed(2)}R`}</strong></span>
+      </div>
+      <table className="lt-signal-funnel-table">
+        <thead><tr><th>Heure</th><th>Signal</th><th>État</th><th>RR</th></tr></thead>
+        <tbody>
+          {signals.map((signal) => (
+            <tr key={signal.signalId}>
+              <td>{displayTime(signal.createdAt)}</td>
+              <td><Link to={`/live/signals/${encodeURIComponent(signal.signalId)}`}>{signal.symbol} {signal.direction}</Link></td>
+              <td><StatusBadge tone={presentSignalState(signal.state).tone}>{presentSignalState(signal.state).label}</StatusBadge></td>
+              <td>{displayValue(signal.rewardRisk)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <TruthEmpty when={!signals.length} status="AUCUN SIGNAL" label="Aucun signal récent n'est publié par le backend." />
+    </LivePanel>
+  );
 }
 
 export function RiskAuthorityPanel({ model }: { model: LiveTradingModel }) {
@@ -176,6 +321,31 @@ export function PerformancePanel({ model }: { model: LiveTradingModel }) {
   const perf = model.performance;
   const hasSeries = perf.series.length > 0;
   return <LivePanel title="Recherche / Performance (Aujourd'hui)" className="lt-panel--performance"><div className="lt-performance-metrics"><span><small>Échantillon</small><strong>{displayValue(perf.sampleSize)}</strong></span><span><small>Taux de réussite</small><strong>{perf.hitRatePct === null ? "—" : `${perf.hitRatePct.toFixed(1)}%`}</strong></span><span><small>Total R</small><strong>{perf.totalR === null ? "—" : `${perf.totalR.toFixed(2)}R`}</strong></span><span><small>Drawdown R</small><strong>{perf.drawdownR === null ? "—" : `${perf.drawdownR.toFixed(2)}R`}</strong></span></div>{hasSeries ? <EquityCurve series={perf.series} /> : <div className="lt-performance-empty"><strong>{presentAvailability(perf.availability).label} · {presentGeneric(perf.sourceType).label}</strong><span>{perf.reason}</span></div>}</LivePanel>;
+}
+
+export function DataQualityPanel({ model }: { model: LiveTradingModel }) {
+  const quality = model.dataQuality;
+  return (
+    <LivePanel title="Qualité flux & contrats" className="lt-panel--quality">
+      <div className="lt-quality-headline">
+        <span><small>Marché</small><strong>{presentAvailability(quality.availability).label}</strong></span>
+        <span><small>Âge</small><strong>{quality.marketAgeLabel}</strong></span>
+        <span><small>Bougies</small><strong>{quality.candleCount}</strong></span>
+        <span><small>Telegram</small><strong className={`lt-tone--${quality.telegram.tone}`}>{quality.telegram.status}</strong></span>
+      </div>
+      <table className="lt-quality-table">
+        <thead><tr><th>Source</th><th>Lignes</th><th>Dernière</th></tr></thead>
+        <tbody>{quality.sources.slice(0, 5).map((source) => <tr key={source.source}><td>{source.source}</td><td>{source.rows.toLocaleString("fr-FR")}</td><td>{displayTime(source.latestAt)}</td></tr>)}</tbody>
+      </table>
+      <div className="lt-quality-contracts">
+        {quality.timeSeries.slice(0, 4).map((contract) => <span key={contract.seriesId} className={`lt-ribbon-tone--${contract.tone}`} title={contract.reason}><strong>{contract.label}</strong><small>{contract.source} · {presentAvailability(contract.availability).label}</small></span>)}
+      </div>
+      <footer>
+        <span>asOf {displayTime(quality.generatedAt)} · marché {displayTime(quality.marketAsOf)}</span>
+        <StatusBadge tone={quality.telegram.tone}>Telegram {quality.telegram.healthy ? "OK" : quality.telegram.enabled ? "WATCH" : "OFF"}</StatusBadge>
+      </footer>
+    </LivePanel>
+  );
 }
 
 function EquityCurve({ series }: { series: LiveTradingModel["performance"]["series"] }) {
@@ -316,16 +486,17 @@ function normalizeTradeSide(value: unknown): "LONG" | "SHORT" {
 
 function tradeTargetsFrom(value: unknown): TradeOverlayTarget[] {
   const items = Array.isArray(value) ? value : value == null ? [] : [value];
-  return items.map((item, index) => {
-    const record = item && typeof item === "object" ? item as Record<string, unknown> : { price: item };
+  return items.map((item, index): TradeOverlayTarget | null => {
+    const record: Record<string, unknown> = item && typeof item === "object" ? item as Record<string, unknown> : { price: item };
     const price = finitePrice(priceValue(record) ?? record.target_price ?? record.targetPrice ?? record.value);
     if (price === null) return null;
+    const ratio = Number.isFinite(Number(record.ratioR ?? record.reward_risk ?? record.rewardRisk ?? record.expected_r ?? record.expectedR))
+      ? Number(record.ratioR ?? record.reward_risk ?? record.rewardRisk ?? record.expected_r ?? record.expectedR)
+      : null;
     return {
       label: String(record.label ?? record.name ?? `T${index + 1}`),
       price,
-      ratioR: Number.isFinite(Number(record.ratioR ?? record.reward_risk ?? record.rewardRisk ?? record.expected_r ?? record.expectedR))
-        ? Number(record.ratioR ?? record.reward_risk ?? record.rewardRisk ?? record.expected_r ?? record.expectedR)
-        : null,
+      ratioR: ratio,
     };
   }).filter((item): item is TradeOverlayTarget => Boolean(item));
 }
@@ -357,6 +528,10 @@ function uniqueTargets(targets: readonly TradeOverlayTarget[]): TradeOverlayTarg
   return result;
 }
 function optionSet(values: readonly (string | null | undefined)[]): string[] { return [...new Set(values.map((value) => String(value || "").trim().toUpperCase()).filter(Boolean))]; }
+function isTradableDeskInstrument(value: string | null | undefined) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return ["MNQ", "MES", "ZC", "ZW"].includes(normalized);
+}
 function formatInstrumentLabel(value: string) {
   if (value === "MNQ") return "MNQ · MQ";
   if (value === "MES") return "MES · MS";
@@ -378,6 +553,7 @@ function CandlestickChart({ points, overlay }: { points: LiveTradingModel["marke
   const drawable = points.filter((point) => [point.open, point.high, point.low, point.close].every((value) => typeof value === "number"));
   const defaultWindow = Math.min(96, drawable.length);
   const [windowRange, setWindowRange] = useState(() => ({ start: Math.max(0, drawable.length - defaultWindow), end: drawable.length }));
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const dragStartX = useRef<number | null>(null);
   const firstDrawableTimestamp = drawable[0]?.timestamp ?? "";
   const lastDrawableTimestamp = drawable.at(-1)?.timestamp ?? "";
@@ -440,6 +616,15 @@ function CandlestickChart({ points, overlay }: { points: LiveTradingModel["marke
   const yTicks = Array.from({ length: 5 }, (_, index) => max - (span / 4) * index);
   const xTickIndexes = uniqueNumbers([0, Math.floor(visible.length * 0.25), Math.floor(visible.length * 0.5), Math.floor(visible.length * 0.75), visible.length - 1]);
   const anchorIndex = visibleOverlay ? overlayAnchorIndex(visible, visibleOverlay.createdAt) : 0;
+  const hoverPoint = hoverIndex === null ? null : visible[hoverIndex] ?? null;
+  const hoverX = hoverIndex === null ? null : x(hoverIndex);
+  const hoverY = typeof hoverPoint?.close === "number" ? y(hoverPoint.close) : null;
+  const updateHover = (clientX: number, element: HTMLDivElement) => {
+    const rect = element.getBoundingClientRect();
+    const svgX = ((clientX - rect.left) / Math.max(rect.width, 1)) * width;
+    const index = Math.max(0, Math.min(visible.length - 1, Math.round((svgX - leftGutter) / Math.max(step, 1))));
+    setHoverIndex(index);
+  };
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowLeft") moveWindow(-Math.max(1, Math.round(visibleCount * 0.2)));
     if (event.key === "ArrowRight") moveWindow(Math.max(1, Math.round(visibleCount * 0.2)));
@@ -461,6 +646,7 @@ function CandlestickChart({ points, overlay }: { points: LiveTradingModel["marke
       }}
       onPointerDown={(event) => { dragStartX.current = event.clientX; event.currentTarget.setPointerCapture?.(event.pointerId); }}
       onPointerMove={(event) => {
+        updateHover(event.clientX, event.currentTarget);
         if (dragStartX.current === null) return;
         const delta = event.clientX - dragStartX.current;
         if (Math.abs(delta) < 18) return;
@@ -469,6 +655,7 @@ function CandlestickChart({ points, overlay }: { points: LiveTradingModel["marke
       }}
       onPointerUp={() => { dragStartX.current = null; }}
       onPointerCancel={() => { dragStartX.current = null; }}
+      onPointerLeave={() => { dragStartX.current = null; setHoverIndex(null); }}
     >
       <div className="lt-chart-controls" aria-label="Navigation du graphique">
         <button type="button" onClick={() => moveWindow(-Math.max(1, Math.round(visibleCount * 0.5)))} aria-label="Reculer dans le graphique">←</button>
@@ -505,8 +692,22 @@ function CandlestickChart({ points, overlay }: { points: LiveTradingModel["marke
           return <g key={point.timestamp} className={up ? "is-up" : "is-down"}><line x1={candleX} x2={candleX} y1={y(high)} y2={y(low)} /><rect x={candleX - candleWidth / 2} y={Math.min(y(open), y(close))} width={candleWidth} height={Math.max(1, Math.abs(y(open) - y(close)))} /></g>;
         })}</g>
         {vwap ? <polyline className="lt-market-chart__vwap" points={vwap} fill="none" /> : null}
+        {hoverPoint && hoverX !== null && hoverY !== null ? (
+          <g className="lt-market-chart__crosshair" aria-hidden="true">
+            <line x1={hoverX} x2={hoverX} y1={topGutter} y2={height - bottomGutter} />
+            <line x1={leftGutter} x2={width - rightGutter} y1={hoverY} y2={hoverY} />
+          </g>
+        ) : null}
         {visibleOverlay ? <TradeLevelLabels overlay={visibleOverlay} y={y} x1={leftGutter} x2={width - rightGutter} labelWidth={rightGutter} /> : null}
       </svg>
+      {hoverPoint && hoverX !== null && hoverY !== null ? (
+        <div className="lt-chart-tooltip" style={{ left: `${(hoverX / width) * 100}%`, top: `${Math.max(18, (hoverY / height) * 100)}%` }}>
+          <strong>{formatAxisTime(hoverPoint.timestamp)}</strong>
+          <span>O {displayValue(hoverPoint.open)} · H {displayValue(hoverPoint.high)}</span>
+          <span>L {displayValue(hoverPoint.low)} · C {displayValue(hoverPoint.close)}</span>
+          <small>Vol {displayValue(hoverPoint.volume)} · VWAP {displayValue(hoverPoint.vwap)}</small>
+        </div>
+      ) : null}
       <div className="lt-chart-readout">
         <span>{formatAxisTime(visible[0]?.timestamp ?? "")} → {formatAxisTime(visible.at(-1)?.timestamp ?? "")}</span>
         <span>{visible.length}/{drawable.length} bougies</span>

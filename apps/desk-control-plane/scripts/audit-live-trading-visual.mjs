@@ -15,7 +15,8 @@ const golden = {
   sidebar: { x: 0, y: 0, width: 96, height: 941 },
   header: { x: 96, y: 0, width: 1576, height: 52 },
   policy: { x: 96, y: 52, width: 1576, height: 32 },
-  grid: { x: 96, y: 84, width: 1576, height: 857 },
+  ribbon: { x: 96, y: 84, width: 1576, height: 60 },
+  grid: { x: 96, y: 144, width: 1576, height: 797 },
 };
 
 await mkdir(outputRoot, { recursive: true });
@@ -29,6 +30,11 @@ try {
     page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
     page.on("pageerror", (error) => consoleErrors.push(error.message));
     await page.goto(`${baseUrl}/#/live`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    if (await page.locator(".operator-login-gate").isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await page.locator(".operator-login-gate input[autocomplete='username']").fill(process.env.DESK_OPERATOR_LOGIN || "MSO");
+      await page.locator(".operator-login-gate input[autocomplete='current-password']").fill(process.env.DESK_OPERATOR_PASSWORD || "2018");
+      await page.locator(".operator-login-gate button[type='submit']").click();
+    }
     await page.locator(".lt-page").waitFor({ state: "visible", timeout: 45_000 });
     await page.locator(".lt-panel").first().waitFor({ state: "visible", timeout: 45_000 });
     await page.screenshot({ path: resolve(outputRoot, `${scenario.name}.png`), fullPage: false });
@@ -38,7 +44,7 @@ try {
       return {
         viewport: { width: innerWidth, height: innerHeight },
         document: { clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth },
-        sidebar: read(".desk-sidebar"), header: read(".lt-header"), policy: read(".lt-policy"), grid: read(".lt-grid"),
+        sidebar: read(".desk-sidebar"), header: read(".lt-header"), policy: read(".lt-policy"), ribbon: read(".lt-decision-ribbon"), grid: read(".lt-grid"),
         panelCount: document.querySelectorAll(".lt-panel").length,
         horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
         clippedInteractiveCount: interactives.filter((node) => { const bounds = node.getBoundingClientRect(); return bounds.right > innerWidth + 1 || bounds.left < -1; }).length,
@@ -57,7 +63,7 @@ try {
   }
 } finally { await browser.close(); }
 
-const failures = results.filter(({ measurement, geometryFailures, consoleErrors }) => measurement.horizontalOverflow || measurement.clippedInteractiveCount > 0 || measurement.panelCount !== 13 || measurement.editablePostRiskCount > 0 || geometryFailures.length || consoleErrors.length);
+const failures = results.filter(({ measurement, geometryFailures, consoleErrors }) => measurement.horizontalOverflow || measurement.clippedInteractiveCount > 0 || measurement.panelCount !== 16 || measurement.editablePostRiskCount > 0 || geometryFailures.length || consoleErrors.length);
 const reportPath = resolve(outputRoot, "live-trading-visual-qa.json");
 await writeFile(reportPath, `${JSON.stringify({ generatedAt: new Date().toISOString(), baseUrl, results }, null, 2)}\n`);
 console.log(`Live Trading visual QA: ${results.length - failures.length}/${results.length} scenarios passed · ${reportPath}`);

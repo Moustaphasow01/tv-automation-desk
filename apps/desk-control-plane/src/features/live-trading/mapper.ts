@@ -24,6 +24,7 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
   const theoreticalExpected = data.reconciliation?.expected
     ?? selectedTheoreticalExecution
     ?? theoreticalExpectedFromTargetPosition(targetPosition, orderIntent, meta.asOf);
+  const signalFunnel = buildSignalFunnel(data, signalPool);
 
   return {
     meta,
@@ -33,6 +34,11 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
       tone: degraded ? "warning" : "success",
       detail: meta.warnings?.join(" · ") || "Projection BFF autoritaire disponible",
     },
+    operator: buildOperatorState(meta.availability ?? "UNAVAILABLE", meta.stale, latestSignal, orderIntent, selectedTheoreticalExecution),
+    signalFunnel,
+    marketIntelligence: buildMarketIntelligence(data, latestSignal, runtime.aiContextGate[0] ?? null),
+    selectedSignalPlan: buildSignalPlanSummary(latestSignal),
+    dataQuality: buildDataQuality(data, meta.asOf),
     mode: runtime.mode,
     freshness: runtime.freshness,
     marketSeries: {
@@ -87,6 +93,210 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
       sampleSize: data.performanceR?.sampleSize ?? null,
       hitRatePct: data.performanceR?.hitRatePct ?? null,
       series: data.performanceR?.series ?? [],
+    },
+  };
+}
+
+function buildOperatorState(
+  availability: string,
+  stale: boolean,
+  latestSignal: LiveTradingModel["latestSignal"],
+  orderIntent: LiveTradingModel["orderIntent"],
+  theoretical: LiveTradingModel["selectedTheoreticalExecution"],
+): LiveTradingModel["operator"] {
+  if (stale || availability === "UNAVAILABLE") {
+    return {
+      status: "DEGRADED",
+      label: "Lecture dégradée",
+      detail: stale ? "Projection ancienne : aucune action sensible ne doit être interprétée comme fraîche." : "La projection Live Trading n'est pas disponible.",
+      tone: "warning",
+    };
+  }
+  if (orderIntent) {
+    return {
+      status: "AWAITING_HUMAN_GATE",
+      label: "Dossier à confirmer",
+      detail: `${orderIntent.side} ${intentInstrument(orderIntent) ?? "instrument"} · qty ${orderIntent.quantity} · ${orderIntent.humanGate.status}`,
+      tone: orderIntent.humanGate.allowedActions.length ? "warning" : "info",
+    };
+  }
+  if (theoretical) {
+    return {
+      status: "THEORETICAL_TRACKING",
+      label: "Suivi théorique actif",
+      detail: `${theoretical.instrument} · ${theoretical.status} · R ${displayValue(theoretical.resultR)}`,
+      tone: theoretical.status === "STOP_HIT" ? "danger" : theoretical.status === "TARGET_HIT" ? "success" : "info",
+    };
+  }
+  if (latestSignal) {
+    return {
+      status: "SIGNAL_DETECTED",
+      label: "Signal détecté",
+      detail: `${latestSignal.symbol} ${latestSignal.direction} · ${latestSignal.state} · expire ${displayTime(latestSignal.expiresAt)}`,
+      tone: latestSignal.state === "REJECTED" || latestSignal.state === "EXPIRED" ? "warning" : "info",
+    };
+  }
+  return {
+    status: "NO_OPPORTUNITY",
+    label: "Aucune opportunité active",
+    detail: "Les moteurs peuvent tourner sans publier de signal exploitable sur la fenêtre courante.",
+    tone: "neutral",
+  };
+}
+
+function buildSignalFunnel(
+  data: LiveTradingEnvelope["data"],
+  signalPool: readonly LiveTradingEnvelope["data"]["signals"][number][],
+): LiveTradingModel["signalFunnel"] {
+  const contextDecisions = data.canonicalRuntime.aiContextGate ?? [];
+  const contextTake = contextDecisions.filter((item) => semanticIncludes(item.status, item.recommendation, ["TAKE", "ACCEPT", "PASS"])).length;
+  const contextWait = contextDecisions.filter((item) => semanticIncludes(item.status, item.recommendation, ["WAIT", "WATCH"])).length;
+  const contextReject = contextDecisions.filter((item) => semanticIncludes(item.status, item.recommendation, ["REJECT", "BLOCK"])).length;
+  const arbitrations = data.arbitrations ?? [];
+  const riskChecks = data.riskChecks ?? [];
+  const portfolioAccepted = arbitrations.filter((item) => item.decision === "ACCEPTED" || item.decision === "SCALED").length;
+  const portfolioRejected = arbitrations.filter((item) => item.decision === "REJECTED").length;
+  const riskPass = riskChecks.filter((item) => item.status === "PASS").length;
+  const riskWatch = riskChecks.filter((item) => item.status === "WATCH").length;
+  const riskBlock = riskChecks.filter((item) => item.status === "BLOCK").length;
+  const intents = uniqueBy([...(data.canonicalRuntime.pendingOrderIntents ?? []), ...(data.portfolioOrderIntents ?? [])], (item) => item.portfolioOrderIntentId || item.orderIntentId);
+  const pendingHumanGates = intents.filter((item) => item.humanGate.allowedActions.length || semanticIncludes(item.humanGate.status, "", ["AWAITING", "PENDING"])).length;
+  const theoreticalSummary = data.theoreticalExecution?.summary;
+  const theoreticalTracked = theoreticalSummary?.trackedIntents ?? data.theoreticalExecution?.rows.length ?? 0;
+  const rawSignals = signalPool.length;
+  return {
+    rawSignals,
+    contextTake,
+    contextWait,
+    contextReject,
+    portfolioAccepted,
+    portfolioRejected,
+    riskPass,
+    riskWatch,
+    riskBlock,
+    orderIntents: intents.length,
+    pendingHumanGates,
+    theoreticalTracked,
+    theoreticalOpen: theoreticalSummary?.openTrades ?? 0,
+    targetHit: theoreticalSummary?.targetHit ?? 0,
+    stopHit: theoreticalSummary?.stopHit ?? 0,
+    expired: theoreticalSummary?.expired ?? 0,
+    totalClosedR: theoreticalSummary?.totalClosedR ?? null,
+    stages: [
+      { key: "signals", label: "Signaux", value: rawSignals, tone: rawSignals ? "info" : "neutral", detail: "Signaux StrategySignal publiés par les moteurs." },
+      { key: "context", label: "Contexte OK", value: contextTake, tone: contextTake ? "success" : contextWait || contextReject ? "warning" : "neutral", detail: `${contextWait} attente · ${contextReject} rejet contexte` },
+      { key: "portfolio", label: "Portfolio", value: portfolioAccepted, tone: portfolioAccepted ? "success" : portfolioRejected ? "warning" : "neutral", detail: `${portfolioRejected} rejet portfolio` },
+      { key: "risk", label: "Risk PASS", value: riskPass, tone: riskPass ? "success" : riskBlock ? "danger" : riskWatch ? "warning" : "neutral", detail: `${riskWatch} watch · ${riskBlock} block` },
+      { key: "intent", label: "OrderIntent", value: intents.length, tone: intents.length ? "warning" : "neutral", detail: `${pendingHumanGates} Human Gate en attente` },
+      { key: "tracking", label: "Suivis", value: theoreticalTracked, tone: theoreticalTracked ? "info" : "neutral", detail: `${theoreticalSummary?.closedTrades ?? 0} clos · R ${displayValue(theoreticalSummary?.totalClosedR)}` },
+    ],
+  };
+}
+
+function buildMarketIntelligence(
+  data: LiveTradingEnvelope["data"],
+  latestSignal: LiveTradingModel["latestSignal"],
+  contextDecision: LiveTradingModel["latestContextDecision"],
+): LiveTradingModel["marketIntelligence"] {
+  const setup = asRecord(latestSignal?.setup);
+  const signalQuality = asRecord(latestSignal?.signalQuality);
+  const macro = asRecord(data.macroSession);
+  const context = asRecord(recordValue(setup, ["context", "marketContext", "market_context", "contextSnapshot"])) ?? signalQuality ?? {};
+  const preferredFamilies = uniqueText([
+    ...stringArray(recordValue(context, ["preferredStrategyFamilies", "preferred_strategy_families", "preferredFamilies"])),
+    ...stringArray(recordValue(setup, ["preferredStrategyFamilies", "preferred_strategy_families"])),
+  ]);
+  const discouragedFamilies = uniqueText([
+    ...stringArray(recordValue(context, ["discouragedStrategyFamilies", "discouraged_strategy_families", "discouragedFamilies"])),
+    ...stringArray(recordValue(setup, ["discouragedStrategyFamilies", "discouraged_strategy_families"])),
+  ]);
+  const reasonCodes = uniqueText([
+    ...(latestSignal?.reasonCodes ?? []),
+    ...(contextDecision?.reasonCodes ?? []),
+    ...stringArray(recordValue(context, ["reasonCodes", "reason_codes"])),
+  ]).slice(0, 10);
+  const zones = [
+    ...zoneRows(recordValue(context, ["opportunityZones", "opportunity_zones", "zones"]), "Zone opportunité", "info"),
+    ...zoneRows(recordValue(context, ["noTradeZones", "no_trade_zones"]), "Zone no-trade", "warning"),
+    ...zoneRows(recordValue(setup, ["entry_zone", "entryZone"]), "Zone d'entrée signal", "success"),
+  ].slice(0, 6);
+  return {
+    bias: displayValue(recordValue(context, ["globalBias", "global_bias", "bias", "marketBias", "market_bias"]) ?? recordValue(macro, ["bias", "marketBias", "globalBias"]), "NON PUBLIÉ"),
+    regime: displayValue(recordValue(context, ["marketRegime", "market_regime", "regime"]) ?? latestSignal?.regime ?? recordValue(macro, ["regime", "marketRegime"]), "NON PUBLIÉ"),
+    volatility: displayValue(recordValue(context, ["volatilityRegime", "volatility_regime", "volatility"]) ?? recordValue(macro, ["volatilityRegime", "volatility_regime", "volatility"]), "NON PUBLIÉ"),
+    macroRisk: displayValue(recordValue(context, ["macroRisk", "macro_risk", "newsRisk"]) ?? recordValue(macro, ["macroRisk", "macro_risk", "newsRisk"]), "NON PUBLIÉ"),
+    confidence: numberOrNull(recordValue(context, ["confidence"]) ?? contextDecision?.confidence ?? latestSignal?.confidence),
+    riskMultiplier: numberOrNull(recordValue(context, ["riskMultiplier", "risk_multiplier"]) ?? contextDecision?.riskMultiplier),
+    validUntil: normalizeText(recordValue(context, ["validUntil", "valid_until"]) ?? latestSignal?.expiresAt) || null,
+    reasonCodes,
+    preferredFamilies,
+    discouragedFamilies,
+    zones,
+  };
+}
+
+function buildSignalPlanSummary(signal: LiveTradingModel["latestSignal"]): LiveTradingModel["selectedSignalPlan"] {
+  if (!signal) return null;
+  const plan = asRecord(signal.proposedTradePlan) ?? {};
+  const setup = asRecord(signal.setup) ?? {};
+  const economics = asRecord(signal.tradePlanEconomics) ?? {};
+  const entry = priceValue(recordValue(plan, ["entry"]))
+    ?? recordValue(economics, ["entry_price", "entryPrice"])
+    ?? recordValue(setup, ["entry_price", "entryPrice", "entry"])
+    ?? recordValue(setup, ["entry_zone", "entryZone"]);
+  const stop = priceValue(recordValue(plan, ["stop"]))
+    ?? recordValue(economics, ["stop_price", "stopPrice"])
+    ?? recordValue(setup, ["stop_price", "stopPrice", "stop", "stop_loss", "stopLoss"]);
+  return {
+    source: signal.sourceClass || signal.availability || "StrategySignal",
+    orderType: displayValue(recordValue(plan, ["orderType", "order_type"]) ?? recordValue(setup, ["orderType", "order_type"]), "NON PUBLIÉ"),
+    entry: displayValue(formatPriceOrRange(entry), "NON PUBLIÉ"),
+    stop: displayValue(formatPriceOrRange(stop), "NON PUBLIÉ"),
+    targets: targetStrings(recordValue(plan, ["targets"]) ?? recordValue(setup, ["targets", "take_profit_targets", "takeProfitTargets", "target_prices", "targetPrices"])),
+    expectedR: `${displayValue(signal.expectancyR)} R`,
+    rewardRisk: displayValue(signal.rewardRisk),
+    expiresAt: signal.expiresAt,
+    sourceCutoffAt: signal.sourceDataCutoffAt ?? signal.createdAt,
+  };
+}
+
+function buildDataQuality(data: LiveTradingEnvelope["data"], generatedAt: string): LiveTradingModel["dataQuality"] {
+  const contracts = seriesContracts(data);
+  const telegram = data.telegramDrilldown ?? {
+    availability: "UNAVAILABLE",
+    enabled: false,
+    healthy: false,
+    lastDeliveryAt: null,
+    deliveryStatus: "UNAVAILABLE",
+    reason: "Telegram non publié dans cette projection.",
+  };
+  return {
+    availability: data.marketSeries?.availability ?? "UNAVAILABLE",
+    generatedAt,
+    marketAsOf: data.marketSeries?.asOf ?? data.timeSeriesContracts.asOf ?? null,
+    marketAgeLabel: ageLabel(generatedAt, data.marketSeries?.asOf ?? data.timeSeriesContracts.asOf),
+    candleCount: data.marketSeries?.points.length ?? 0,
+    sources: (data.canonicalRuntime.authoritativeSources ?? []).map((item) => ({
+      source: item.source,
+      rows: item.rows,
+      latestAt: item.latestAt,
+      tone: item.latestAt ? "success" : item.rows ? "info" : "neutral",
+    })),
+    timeSeries: contracts.map((item) => ({
+      seriesId: item.seriesId,
+      label: item.label,
+      source: item.source,
+      availability: item.availability,
+      reason: item.reason || "",
+      tone: liveTone(item.availability),
+    })),
+    telegram: {
+      availability: telegram.availability,
+      enabled: telegram.enabled,
+      healthy: telegram.healthy,
+      lastDeliveryAt: telegram.lastDeliveryAt ?? null,
+      status: telegram.deliveryStatus || telegram.reason || (telegram.enabled ? "ENABLED" : "DISABLED"),
+      tone: telegram.healthy ? "success" : telegram.enabled ? "warning" : "info",
     },
   };
 }
@@ -274,6 +484,102 @@ function uniqueBy<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
     result.push(item);
   }
   return result;
+}
+
+function semanticIncludes(left: unknown, right: unknown, needles: readonly string[]): boolean {
+  const value = `${String(left ?? "")} ${String(right ?? "")}`.toUpperCase();
+  return needles.some((needle) => value.includes(needle));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function stringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => normalizeText(item)).filter(Boolean);
+  const text = normalizeText(value);
+  return text ? [text] : [];
+}
+
+function uniqueText(values: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const key = value.trim();
+    if (!key || seen.has(key.toUpperCase())) continue;
+    seen.add(key.toUpperCase());
+    result.push(key);
+  }
+  return result;
+}
+
+function numberOrNull(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function zoneRows(value: unknown, fallbackLabel: string, tone: LiveTone): LiveTradingModel["marketIntelligence"]["zones"] {
+  const rows = Array.isArray(value) ? value : value == null ? [] : [value];
+  return rows.map((item, index) => {
+    const record = asRecord(item);
+    const range = record ? formatZoneRange(record) : formatPriceOrRange(item);
+    if (!range) return null;
+    return {
+      label: displayValue(recordValue(record, ["label", "name", "zoneType", "zone_type"]) ?? `${fallbackLabel} ${index + 1}`),
+      direction: displayValue(recordValue(record, ["direction", "side", "bias"]), "—"),
+      range,
+      detail: displayValue(recordValue(record, ["detail", "reason", "description"]) ?? recordValue(record, ["priority"]), ""),
+      tone,
+    };
+  }).filter((item): item is LiveTradingModel["marketIntelligence"]["zones"][number] => Boolean(item));
+}
+
+function formatZoneRange(record: Record<string, unknown>): string {
+  const low = recordValue(record, ["minPrice", "min_price", "low", "from", "lower", "start"]);
+  const high = recordValue(record, ["maxPrice", "max_price", "high", "to", "upper", "end"]);
+  const direct = recordValue(record, ["price", "level", "value"]);
+  if (low !== undefined && high !== undefined) return `${displayValue(low)} → ${displayValue(high)}`;
+  if (direct !== undefined) return displayValue(direct);
+  return "";
+}
+
+function priceValue(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  return record.price ?? record.value ?? record.mid ?? record.center ?? record.level;
+}
+
+function formatPriceOrRange(value: unknown): string {
+  if (Array.isArray(value)) return value.map((item) => displayValue(priceValue(item))).join(" → ");
+  const record = asRecord(value);
+  if (!record) return displayValue(value, "");
+  const direct = priceValue(record);
+  if (direct !== record && direct !== undefined) return displayValue(direct, "");
+  return formatZoneRange(record);
+}
+
+function targetStrings(value: unknown): string[] {
+  const rows = Array.isArray(value) ? value : value == null ? [] : [value];
+  return rows.map((item, index) => {
+    const record = asRecord(item);
+    const price = record ? priceValue(record) ?? recordValue(record, ["targetPrice", "target_price"]) : item;
+    const label = displayValue(recordValue(record, ["label", "name"]) ?? `T${index + 1}`);
+    const formatted = displayValue(price, "");
+    return formatted ? `${label} ${formatted}` : "";
+  }).filter(Boolean).slice(0, 4);
+}
+
+function ageLabel(referenceIso: string, valueIso: string | null | undefined): string {
+  if (!valueIso) return "non publié";
+  const reference = Date.parse(referenceIso);
+  const value = Date.parse(valueIso);
+  if (!Number.isFinite(reference) || !Number.isFinite(value)) return "horodatage illisible";
+  const deltaSeconds = Math.max(0, Math.round((reference - value) / 1000));
+  if (deltaSeconds < 60) return `${deltaSeconds}s`;
+  const minutes = Math.round(deltaSeconds / 60);
+  if (minutes < 60) return `${minutes}min`;
+  const hours = Math.round(minutes / 60);
+  return `${hours}h`;
 }
 
 export function liveTone(value: string): LiveTone {

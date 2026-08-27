@@ -208,7 +208,7 @@ describe("Live Trading golden master", () => {
       createElement(MemoryRouter, null, createElement(InstrumentChartPanel, { model }))
     );
 
-    expect(markup).toContain("Dernier signal tradable");
+    expect(markup).toContain("Dernier signal détecté");
     expect(markup).toContain("ENTRÉE 507.50");
     expect(markup).toContain("STOP 506.25");
     expect(markup).toContain("T1 510.00");

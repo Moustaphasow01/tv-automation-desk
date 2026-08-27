@@ -7,16 +7,20 @@ import { LiveHumanGate } from "@/features/live-trading/LiveHumanGate";
 import { LiveTradingHeader } from "@/features/live-trading/LiveTradingHeader";
 import {
   AuditTimelinePanel,
+  DataQualityPanel,
   InstrumentChartPanel,
   JarvisPanel,
   LatestSignalPanel,
+  LiveDecisionRibbon,
   MacroSessionPanel,
+  MarketIntelligencePanel,
   MarketContextPanel,
   OrderIntentPanel,
   PerformancePanel,
   ProviderRuntimePanel,
   ReconciliationPanel,
   RiskAuthorityPanel,
+  SignalFunnelPanel,
   StrategyInstancesPanel,
 } from "@/features/live-trading/LiveTradingPanels";
 import { toLiveTradingModel } from "@/features/live-trading/mapper";
@@ -62,15 +66,18 @@ export function LiveTradingPage() {
   return (
     <div className="lt-page" data-testid="live-trading-golden-master">
       <LiveTradingHeader model={model} onRefresh={() => void query.refetch()} refreshing={query.isFetching} />
+      <LiveDecisionRibbon model={model} />
       <div className="lt-grid" aria-label="Cockpit Live Trading semi-manuel">
         <div className="lt-left-rail">
           <MarketContextPanel model={model} />
+          <MarketIntelligencePanel model={model} />
           <StrategyInstancesPanel model={model} />
           <MacroSessionPanel model={model} />
         </div>
         <InstrumentChartPanel model={model} onScopeChange={updateMarketScope} />
         <div className="lt-signal-rail">
           <LatestSignalPanel model={model} />
+          <SignalFunnelPanel model={model} />
           <OrderIntentPanel model={model} />
         </div>
         <div className="lt-execution-rail">
@@ -82,6 +89,7 @@ export function LiveTradingPage() {
           <ReconciliationPanel model={model} />
           <AuditTimelinePanel model={model} />
           <PerformancePanel model={model} />
+          <DataQualityPanel model={model} />
           <JarvisPanel model={model} />
         </div>
       </div>
