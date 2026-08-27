@@ -79,7 +79,7 @@ export function signalRow(item) {
     symbol: text(firstValue(item.instrument, item.instrument_code, item.symbol), "unavailable"),
     direction: upper(firstValue(item.direction, item.side)) === "SHORT" ? "SHORT" : "LONG",
     state: signalState(firstValue(item.state, item.status)),
-    confidence: number(item.confidence, 0),
+    confidence: confidencePct(item.confidence),
     createdAt: text(item.created_at_utc, "unavailable"),
     expiresAt: text(item.expires_at_utc, "unavailable"),
     featureSnapshotId: text(item.feature_snapshot_id, "unavailable"),
@@ -97,8 +97,13 @@ export function signalRow(item) {
     ruleHits: stringList(item.rule_hits),
     expectancyR: number(firstValue(item.expectancy_R, item.expectancy_r), 0),
     rewardRisk: number(item.reward_risk, 0),
-    regime: text(item.regime, "unavailable"),
+    regime: text(firstValue(item.regime, item.setup?.context?.market_regime, item.signal_quality?.context_bias), "unavailable"),
   };
+}
+
+function confidencePct(value) {
+  const parsed = number(value, 0);
+  return parsed > 0 && parsed <= 1 ? Math.round(parsed * 100) : parsed;
 }
 
 function frontSignalTradePlan(item = {}) {

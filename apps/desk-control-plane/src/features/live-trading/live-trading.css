@@ -311,8 +311,9 @@
 .lt-market-chart__candles .is-down line, .lt-market-chart__candles .is-down rect { stroke: #f05c68; fill: #f05c68; }
 .lt-market-chart__vwap { stroke: #f3b54a; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .lt-market-chart__zone { stroke-width: 1; vector-effect: non-scaling-stroke; }
-.lt-market-chart__zone--profit { fill: rgba(32, 211, 155, .16); stroke: rgba(32, 211, 155, .48); }
-.lt-market-chart__zone--risk { fill: rgba(240, 92, 104, .18); stroke: rgba(240, 92, 104, .52); }
+.lt-market-chart__zone { pointer-events: none; stroke-width: 1.2; shape-rendering: crispEdges; }
+.lt-market-chart__zone--profit { fill: rgba(32, 211, 155, .28); stroke: rgba(32, 211, 155, .78); }
+.lt-market-chart__zone--risk { fill: rgba(240, 92, 104, .30); stroke: rgba(240, 92, 104, .82); }
 .lt-sparkline { width: 64px; height: 22px; display: block; }
 .lt-sparkline polyline { stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .lt-sparkline.is-positive polyline { stroke: var(--lt-green); }
