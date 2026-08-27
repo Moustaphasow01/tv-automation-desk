@@ -10,12 +10,12 @@ const projectRoot = path.resolve(testDirectory, "../..");
 const exporters = [
   {
     file: "market_feed_batch_m1_exporter.pine",
-    securityCalls: 2,
-    symbols: ["CME_MINI:MNQ1!", "CME_MINI:MES1!"],
+    securityCalls: 4,
+    symbols: ["CME_MINI:MNQ1!", "CME_MINI:MES1!", "CBOT:ZC1!", "CBOT:ZW1!"],
   },
   {
     file: "market_feed_batch_m5_exporter.pine",
-    securityCalls: 22,
+    securityCalls: 24,
     symbols: [
       "CME_MINI:MNQ1!",
       "CME_MINI:MES1!",
@@ -39,21 +39,23 @@ const exporters = [
       "NASDAQ:TSLA",
       "NASDAQ:SMH",
       "NASDAQ:SOXX",
+      "CBOT:ZC1!",
+      "CBOT:ZW1!",
     ],
   },
   {
     file: "market_feed_batch_m15_exporter.pine",
-    securityCalls: 2,
-    symbols: ["CME_MINI:NQ1!", "CME_MINI:ES1!"],
+    securityCalls: 4,
+    symbols: ["CME_MINI:NQ1!", "CME_MINI:ES1!", "CBOT:ZC1!", "CBOT:ZW1!"],
   },
   {
     file: "market_feed_batch_h1_exporter.pine",
-    securityCalls: 2,
-    symbols: ["CME_MINI:NQ1!", "CME_MINI:ES1!"],
+    securityCalls: 4,
+    symbols: ["CME_MINI:NQ1!", "CME_MINI:ES1!", "CBOT:ZC1!", "CBOT:ZW1!"],
   },
   {
     file: "market_feed_batch_h4_exporter.pine",
-    securityCalls: 24,
+    securityCalls: 26,
     symbols: [
       "CME_MINI:MNQ1!",
       "CME_MINI:MES1!",
@@ -79,6 +81,8 @@ const exporters = [
       "NASDAQ:TSLA",
       "NASDAQ:SMH",
       "NASDAQ:SOXX",
+      "CBOT:ZC1!",
+      "CBOT:ZW1!",
     ],
   },
 ];
