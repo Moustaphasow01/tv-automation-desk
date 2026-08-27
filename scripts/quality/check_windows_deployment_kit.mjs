@@ -197,7 +197,10 @@ for (const relative of ["deploy/windows/Test-DeskCanary.ps1", "deploy/windows/In
     violations.push(`composable_script_must_not_exit_host:${relative}`);
   }
 }
-const update = content.get("deploy/windows/Update-Desk.ps1");
+// PowerShell sources are intentionally stored with Windows CRLF endings. Normalize
+// them before assertions that inspect line boundaries so the guard behaves the
+// same under Windows, WSL and Linux CI.
+const update = content.get("deploy/windows/Update-Desk.ps1").replace(/\r\n/g, "\n");
 if (!update.includes("maintenance.env") || !update.includes('["DESK_DB_MIGRATION_URL"]')) {
   violations.push("update_protected_migration_credential_missing");
 }
