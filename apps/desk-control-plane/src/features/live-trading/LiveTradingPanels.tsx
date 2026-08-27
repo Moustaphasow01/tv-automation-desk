@@ -296,7 +296,7 @@ function tradePlanOverlayFromSignal(signal: LiveTradingModel["latestSignal"]): T
     .concat(tradeTargetsFrom(recordValue(economics, ["targets"])));
   return {
     source: "SIGNAL",
-    label: "Dernier signal tradable",
+    label: "Dernier signal détecté",
     instrument: signal.symbol,
     side: normalizeTradeSide(signal.direction),
     entry,
