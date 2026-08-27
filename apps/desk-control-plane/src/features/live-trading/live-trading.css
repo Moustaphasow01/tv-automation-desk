@@ -543,9 +543,11 @@
 .lt-quality-headline span { display: grid; align-content: center; gap: 1px; padding: 0 7px; border-right: 1px solid var(--lt-border-soft); }
 .lt-quality-headline small { overflow: hidden; color: var(--lt-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .lt-quality-headline strong { overflow: hidden; color: var(--lt-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.lt-quality-table { min-height: 0; }
+.lt-quality-table-scroll { min-height: 0; overflow: auto; scrollbar-color: var(--lt-border-strong) transparent; }
+.lt-quality-table-scroll:focus-visible { outline: 2px solid var(--lt-focus); outline-offset: -2px; }
+.lt-quality-table { width: 100%; min-height: 0; }
 .lt-quality-table td, .lt-quality-table th { font-size: 11px; }
-.lt-quality-contracts { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px; padding: 5px 7px; border-top: 1px solid var(--lt-border-soft); }
+.lt-quality-contracts { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 4px; padding: 5px 7px; border-top: 1px solid var(--lt-border-soft); }
 .lt-quality-contracts span { display: grid; min-width: 0; gap: 1px; padding: 4px 6px; border-radius: 4px; }
 .lt-quality-contracts strong, .lt-quality-contracts small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lt-quality-contracts strong { color: var(--lt-text); font-size: 11px; }

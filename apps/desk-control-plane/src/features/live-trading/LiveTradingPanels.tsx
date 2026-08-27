@@ -122,13 +122,13 @@ export function MacroSessionPanel({ model }: { model: LiveTradingModel }) {
   return <LivePanel title="Macro / Session" className="lt-panel--macro"><dl className="lt-definition-list lt-definition-list--terms"><Pair label="Session" value={model.source.session.activeSession ?? model.source.session.phase} /><Pair label="État marché" value={model.source.session.marketState ?? model.source.session.marketDataStatus} /><Pair label="Date de trading" value={model.source.session.tradingDate} /><Pair label="Fuseau horaire" value={model.source.session.exchangeTimezone ?? "—"} /><Pair label="Dernière connue" value={displayTime(model.source.session.lastKnownAt)} /><Pair label="Coupure signal" value={displayTime(model.freshness.signalCutoffAt)} /></dl><p className="lt-panel-note">Macro/news : {presentAvailability(model.source.macroSession ? String(model.source.macroSession.availability ?? "KNOWN") : "UNAVAILABLE").label}</p></LivePanel>;
 }
 
-export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTradingModel; onScopeChange?: (scope: { instrument?: string; timeframe?: string }) => void }) {
+export function InstrumentChartPanel({ model, onScopeChange, showScopeControls = true }: { model: LiveTradingModel; onScopeChange?: (scope: { instrument?: string; timeframe?: string }) => void; showScopeControls?: boolean }) {
   const [overlayMode, setOverlayMode] = useState<"AUTO" | "ORDER_INTENT" | "THEORETICAL" | "SIGNAL" | "NONE">("AUTO");
   const signal = model.latestSignal;
-  const instrument = model.marketSeries.instrument ?? signal?.symbol ?? "Instrument";
+  const instrument = model.marketSeries.instrument ?? "Instrument non publié";
   const timeframe = model.marketSeries.timeframe;
-  const instrumentOptions = optionSet([model.marketSeries.instrument, signal?.symbol, ...model.marketSeries.supportedInstruments.filter(isTradableDeskInstrument), "MNQ", "MES", "ZC", "ZW"]);
-  const timeframeOptions = optionSet([model.marketSeries.timeframe, ...model.marketSeries.supportedTimeframes, "1", "5", "15", "60", "240"]);
+  const instrumentOptions = optionSet(model.marketSeries.supportedInstruments);
+  const timeframeOptions = optionSet(model.marketSeries.supportedTimeframes);
   const intent = model.orderIntent;
   const intentInstrument = instrumentCode(intent);
   const theoretical = model.selectedTheoreticalExecution;
@@ -161,8 +161,8 @@ export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTrad
   return (
     <LivePanel title={`${instrument} · ${timeframe ? formatTimeframe(timeframe) : "futures"}`} className="lt-panel--chart" action={<Link to="/events">Audit</Link>}>
       <div className="lt-chart-toolbar">
-        <div className="lt-chart-selector" aria-label="Instrument affiché">
-          {instrumentOptions.map((option) => (
+        {showScopeControls ? <div className="lt-chart-selector" aria-label="Instrument affiché">
+          {instrumentOptions.length ? instrumentOptions.map((option) => (
             <button
               key={option}
               type="button"
@@ -171,10 +171,10 @@ export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTrad
             >
               {formatInstrumentLabel(option)}
             </button>
-          ))}
-        </div>
-        <div className="lt-chart-selector lt-chart-selector--timeframes" aria-label="Timeframe affichée">
-          {timeframeOptions.map((frame) => (
+          )) : <span className="lt-chart-scope-unavailable">Périmètres disponibles non publiés · actif {instrument}</span>}
+        </div> : null}
+        {showScopeControls ? <div className="lt-chart-selector lt-chart-selector--timeframes" aria-label="Timeframe affichée">
+          {timeframeOptions.length ? timeframeOptions.map((frame) => (
             <button
               key={frame}
               type="button"
@@ -183,8 +183,8 @@ export function InstrumentChartPanel({ model, onScopeChange }: { model: LiveTrad
             >
               {formatTimeframe(frame)}
             </button>
-          ))}
-        </div>
+          )) : <span className="lt-chart-scope-unavailable">Unités disponibles non publiées{timeframe ? ` · actif ${formatTimeframe(timeframe)}` : ""}</span>}
+        </div> : null}
         <div className="lt-chart-selector lt-chart-selector--overlays" aria-label="Plan affiché sur le graphique">
           {overlayOptions.map((option) => (
             <button
@@ -331,12 +331,14 @@ export function DataQualityPanel({ model }: { model: LiveTradingModel }) {
         <span><small>Marché</small><strong>{presentAvailability(quality.availability).label}</strong></span>
         <span><small>Âge</small><strong>{quality.marketAgeLabel}</strong></span>
         <span><small>Bougies</small><strong>{quality.candleCount}</strong></span>
-        <span><small>Telegram</small><strong className={`lt-tone--${quality.telegram.tone}`}>{quality.telegram.status}</strong></span>
+        <span><small>Telegram</small><strong className={`lt-tone--${quality.telegram.tone}`} title={quality.telegram.status}>{quality.telegram.status}</strong></span>
       </div>
-      <table className="lt-quality-table">
-        <thead><tr><th>Source</th><th>Lignes</th><th>Dernière</th></tr></thead>
-        <tbody>{quality.sources.slice(0, 5).map((source) => <tr key={source.source}><td>{source.source}</td><td>{source.rows.toLocaleString("fr-FR")}</td><td>{displayTime(source.latestAt)}</td></tr>)}</tbody>
-      </table>
+      <div className="lt-quality-table-scroll" tabIndex={0} aria-label="Sources de données, défilement disponible">
+        <table className="lt-quality-table">
+          <thead><tr><th>Source</th><th>Lignes</th><th>Dernière</th></tr></thead>
+          <tbody>{quality.sources.slice(0, 5).map((source) => <tr key={source.source}><td>{source.source}</td><td>{source.rows.toLocaleString("fr-FR")}</td><td>{displayTime(source.latestAt)}</td></tr>)}</tbody>
+        </table>
+      </div>
       <div className="lt-quality-contracts">
         {quality.timeSeries.slice(0, 4).map((contract) => <span key={contract.seriesId} className={`lt-ribbon-tone--${contract.tone}`} title={contract.reason}><strong>{contract.label}</strong><small>{contract.source} · {presentAvailability(contract.availability).label}</small></span>)}
       </div>
@@ -397,12 +399,13 @@ type TradeOverlay = {
 function tradePlanOverlayFromIntent(intent: LiveTradingModel["orderIntent"]): TradeOverlay | null {
   if (!intent) return null;
   const terms = intent.executionTerms;
+  const side = normalizeTradeSide(intent.side);
   const entry = finitePrice(
     priceValue(recordValue(terms, ["entry"]))
     ?? recordValue(terms, ["entry_price", "entryPrice"])
     ?? intent.limitPrice,
   );
-  if (entry === null) return null;
+  if (entry === null || side === null) return null;
   const stop = finitePrice(
     priceValue(recordValue(terms, ["stop"]))
     ?? recordValue(terms, ["stop_price", "stopPrice"])
@@ -415,7 +418,7 @@ function tradePlanOverlayFromIntent(intent: LiveTradingModel["orderIntent"]): Tr
     source: "ORDER_INTENT",
     label: "OrderIntent post-risk",
     instrument: instrumentCode(intent),
-    side: normalizeTradeSide(intent.side),
+    side,
     entry,
     stop,
     targets: allTargets,
@@ -427,14 +430,15 @@ function tradePlanOverlayFromIntent(intent: LiveTradingModel["orderIntent"]): Tr
 
 function tradePlanOverlayFromTheoretical(row: LiveTradingModel["selectedTheoreticalExecution"]): TradeOverlay | null {
   if (!row) return null;
+  const side = normalizeTradeSide(row.side);
   const entry = finitePrice(row.entry);
   const stop = finitePrice(row.stop);
-  if (entry === null) return null;
+  if (entry === null || side === null) return null;
   return {
     source: "THEORETICAL_EXECUTION",
     label: "Suivi théorique backend",
     instrument: row.instrument,
-    side: normalizeTradeSide(row.side),
+    side,
     entry,
     stop,
     targets: tradeTargetsFrom(row.targets),
@@ -449,13 +453,13 @@ function tradePlanOverlayFromSignal(signal: LiveTradingModel["latestSignal"]): T
   const plan = signal.proposedTradePlan ?? {};
   const setup = signal.setup ?? {};
   const economics = signal.tradePlanEconomics ?? {};
+  const side = normalizeTradeSide(signal.direction);
   const entry = finitePrice(
     priceValue(recordValue(plan, ["entry"]))
     ?? recordValue(economics, ["entry_price", "entryPrice"])
-    ?? recordValue(setup, ["entry_price", "entryPrice", "entry"])
-    ?? entryFromZone(recordValue(setup, ["entry_zone", "entryZone"]) ?? recordValue(plan, ["entry_zone", "entryZone"])),
+    ?? recordValue(setup, ["entry_price", "entryPrice", "entry"]),
   );
-  if (entry === null) return null;
+  if (entry === null || side === null) return null;
   const stop = finitePrice(
     priceValue(recordValue(plan, ["stop"]))
     ?? recordValue(economics, ["stop_price", "stopPrice"])
@@ -468,7 +472,7 @@ function tradePlanOverlayFromSignal(signal: LiveTradingModel["latestSignal"]): T
     source: "SIGNAL",
     label: "Dernier signal détecté",
     instrument: signal.symbol,
-    side: normalizeTradeSide(signal.direction),
+    side,
     entry,
     stop,
     targets: uniqueTargets(targets),
@@ -478,10 +482,11 @@ function tradePlanOverlayFromSignal(signal: LiveTradingModel["latestSignal"]): T
   };
 }
 
-function normalizeTradeSide(value: unknown): "LONG" | "SHORT" {
+function normalizeTradeSide(value: unknown): "LONG" | "SHORT" | null {
   const normalized = String(value ?? "").trim().toUpperCase();
   if (normalized === "SELL" || normalized === "SHORT") return "SHORT";
-  return "LONG";
+  if (normalized === "BUY" || normalized === "LONG") return "LONG";
+  return null;
 }
 
 function tradeTargetsFrom(value: unknown): TradeOverlayTarget[] {
@@ -501,21 +506,6 @@ function tradeTargetsFrom(value: unknown): TradeOverlayTarget[] {
   }).filter((item): item is TradeOverlayTarget => Boolean(item));
 }
 
-function entryFromZone(value: unknown): number | null {
-  if (Array.isArray(value) && value.length >= 2) {
-    const left = finitePrice(value[0]);
-    const right = finitePrice(value[1]);
-    return left !== null && right !== null ? (left + right) / 2 : null;
-  }
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  const direct = finitePrice(record.mid ?? record.center ?? record.price);
-  if (direct !== null) return direct;
-  const low = finitePrice(record.low ?? record.min ?? record.from ?? record.lower);
-  const high = finitePrice(record.high ?? record.max ?? record.to ?? record.upper);
-  return low !== null && high !== null ? (low + high) / 2 : null;
-}
-
 function uniqueTargets(targets: readonly TradeOverlayTarget[]): TradeOverlayTarget[] {
   const seen = new Set<string>();
   const result: TradeOverlayTarget[] = [];
@@ -528,10 +518,6 @@ function uniqueTargets(targets: readonly TradeOverlayTarget[]): TradeOverlayTarg
   return result;
 }
 function optionSet(values: readonly (string | null | undefined)[]): string[] { return [...new Set(values.map((value) => String(value || "").trim().toUpperCase()).filter(Boolean))]; }
-function isTradableDeskInstrument(value: string | null | undefined) {
-  const normalized = String(value || "").trim().toUpperCase();
-  return ["MNQ", "MES", "ZC", "ZW"].includes(normalized);
-}
 function formatInstrumentLabel(value: string) {
   if (value === "MNQ") return "MNQ · MQ";
   if (value === "MES") return "MES · MS";
@@ -603,8 +589,8 @@ function CandlestickChart({ points, overlay }: { points: LiveTradingModel["marke
   const span = Math.max(max - min, 0.0001);
   const width = 900;
   const height = 300;
-  const leftGutter = 58;
-  const rightGutter = visibleOverlay ? 132 : 56;
+  const leftGutter = 70;
+  const rightGutter = visibleOverlay ? 142 : 22;
   const topGutter = 12;
   const bottomGutter = 30;
   const plotWidth = width - leftGutter - rightGutter;
@@ -669,7 +655,7 @@ function CandlestickChart({ points, overlay }: { points: LiveTradingModel["marke
         <g className="lt-market-chart__axis lt-market-chart__axis--price">
           {yTicks.map((tick) => {
             const tickY = y(tick);
-            return <g key={tick.toFixed(4)}><line x1={leftGutter} x2={width - rightGutter} y1={tickY} y2={tickY} /><text x={leftGutter - 8} y={tickY + 4} textAnchor="end">{tick.toFixed(2)}</text><text x={width - rightGutter + 8} y={tickY + 4}>{tick.toFixed(2)}</text></g>;
+            return <g key={tick.toFixed(4)}><line x1={leftGutter} x2={width - rightGutter} y1={tickY} y2={tickY} /><text x={leftGutter - 10} y={tickY + 4} textAnchor="end">{tick.toFixed(2)}</text></g>;
           })}
         </g>
         <g className="lt-market-chart__axis lt-market-chart__axis--time">

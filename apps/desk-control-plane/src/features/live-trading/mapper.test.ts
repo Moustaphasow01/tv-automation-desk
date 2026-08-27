@@ -53,7 +53,7 @@ describe("toLiveTradingModel reconciliation", () => {
       portfolioOrderIntents: [orderIntent()],
       canonicalRuntime: {
         pendingOrderIntents: [orderIntent()],
-        pendingTargetPositions: [{ targetPositionId: "target_1", deltaSize: 1 }],
+        pendingTargetPositions: [{ targetPositionId: "target_1", targetNetSize: 1, deltaSize: 1 }],
       },
     });
 
@@ -112,7 +112,115 @@ describe("toLiveTradingModel reconciliation", () => {
 
     expect(model.selectedTheoreticalExecution?.status).toBe("ENTRY_FILLED");
     expect(model.reconciliation.expected).toEqual(row);
-    expect(model.timeline.some((event) => event.step === "THEORETICAL_EXECUTION")).toBe(true);
+    expect(model.timeline).toEqual([]);
+  });
+
+  it("uses only the backend audit timeline and never derives events from runtime objects", () => {
+    const envelope = liveEnvelope({
+      portfolioOrderIntents: [orderIntent()],
+      canonicalRuntime: { pendingOrderIntents: [orderIntent()] },
+      timeline: [],
+    });
+
+    expect(toLiveTradingModel(envelope).timeline).toEqual([]);
+  });
+
+  it("does not present signal confidence or expiry as market-context evidence", () => {
+    const signal = {
+      signalId: "sig_context_truth",
+      strategyId: "strategy_1",
+      strategyInstanceId: "instance_1",
+      symbol: "MNQ",
+      direction: "LONG",
+      state: "NEW",
+      confidence: 91,
+      reasonCodes: ["SIGNAL_ONLY_REASON"],
+      createdAt: "2026-08-16T12:00:00.000Z",
+      expiresAt: "2026-08-16T12:15:00.000Z",
+    };
+    const envelope = liveEnvelope({
+      signals: [signal],
+      canonicalRuntime: { latestSignals: [signal], aiContextGate: [] },
+    });
+
+    const context = toLiveTradingModel(envelope).marketIntelligence;
+
+    expect(context.confidence).toBeNull();
+    expect(context.validUntil).toBeNull();
+    expect(context.reasonCodes).not.toContain("SIGNAL_ONLY_REASON");
+  });
+
+  it("preserves unpublished nullable context metrics instead of converting them to zero", () => {
+    const signal = strategySignal("sig_nullable", "MNQ", "2026-08-16T12:00:00.000Z");
+    const envelope = liveEnvelope({
+      signals: [signal],
+      canonicalRuntime: {
+        latestSignals: [signal],
+        aiContextGate: [{
+          decisionId: "ctx_nullable",
+          signalId: "sig_nullable",
+          status: "RECORDED",
+          mode: "SHADOW",
+          recommendation: "WAIT",
+          confidence: null,
+          riskMultiplier: null,
+          reasonCodes: [],
+          anomalies: [],
+          decidedAt: "2026-08-16T12:01:00.000Z",
+        }],
+      },
+    });
+
+    const model = toLiveTradingModel(envelope);
+
+    expect(model.latestContextDecision?.decisionId).toBe("ctx_nullable");
+    expect(model.marketIntelligence.confidence).toBeNull();
+    expect(model.marketIntelligence.riskMultiplier).toBeNull();
+  });
+
+  it("selects the StrategySignal linked by the OrderIntent instead of a newer unrelated signal", () => {
+    const linked = strategySignal("sig_linked", "MNQ", "2026-08-16T12:00:00.000Z");
+    const unrelated = strategySignal("sig_unrelated", "ZW", "2026-08-16T12:05:00.000Z");
+    const intent = { ...orderIntent(), signalId: linked.signalId };
+    const envelope = liveEnvelope({
+      signals: [unrelated, linked],
+      portfolioOrderIntents: [intent],
+      marketSeries: { instrument: "ZW", supportedTimeframes: [], points: [] },
+      canonicalRuntime: { latestSignals: [unrelated, linked], pendingOrderIntents: [intent] },
+    });
+
+    const model = toLiveTradingModel(envelope);
+
+    expect(model.orderIntent?.signalId).toBe("sig_linked");
+    expect(model.latestSignal?.signalId).toBe("sig_linked");
+  });
+
+  it("fails closed when an OrderIntent has no matching StrategySignal", () => {
+    const unrelated = strategySignal("sig_unrelated", "ZW", "2026-08-16T12:05:00.000Z");
+    const intent = { ...orderIntent(), signalId: "sig_missing" };
+    const envelope = liveEnvelope({
+      signals: [unrelated],
+      portfolioOrderIntents: [intent],
+      canonicalRuntime: { latestSignals: [unrelated], pendingOrderIntents: [intent] },
+    });
+
+    expect(toLiveTradingModel(envelope).latestSignal).toBeNull();
+  });
+
+  it("distinguishes an expired Human Gate dossier from one awaiting confirmation", () => {
+    const expiredIntent = {
+      ...orderIntent(),
+      humanGate: { status: "EXPIRED", allowedActions: [], gateId: "gate_1" },
+    };
+    const envelope = liveEnvelope({
+      portfolioOrderIntents: [expiredIntent],
+      canonicalRuntime: { pendingOrderIntents: [expiredIntent] },
+    });
+
+    const operator = toLiveTradingModel(envelope).operator;
+
+    expect(operator.status).toBe("ORDER_INTENT_RECORDED");
+    expect(operator.label).toBe("Dossier expiré");
   });
 });
 
@@ -168,6 +276,7 @@ function orderIntent() {
   return {
     portfolioOrderIntentId: "poi_1",
     orderIntentId: "poi_1",
+    signalId: "sig_1",
     targetPositionId: "target_1",
     symbol: "MNQ",
     side: "BUY",
@@ -178,5 +287,20 @@ function orderIntent() {
     humanGate: { status: "AWAITING_MANUAL_CONFIRMATION", allowedActions: [], gateId: "gate_1" },
     allowedActions: { allowedActions: [], denialReasons: [], expiresAt: null },
     route: "/order-intents/poi_1",
+  };
+}
+
+function strategySignal(signalId: string, symbol: string, createdAt: string) {
+  return {
+    signalId,
+    strategyId: "strategy_1",
+    strategyInstanceId: "instance_1",
+    symbol,
+    direction: "LONG",
+    state: "NEW",
+    confidence: 70,
+    reasonCodes: [],
+    createdAt,
+    expiresAt: "2026-08-16T12:15:00.000Z",
   };
 }

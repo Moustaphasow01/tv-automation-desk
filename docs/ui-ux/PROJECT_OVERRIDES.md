@@ -46,14 +46,12 @@ L'installation ne modifie aucun écran ni comportement métier. Le premier audit
 
 Cette dérogation ne désactive ni ne renumérote `UXR-0161`. Le scanner continue de publier les signaux correspondants afin qu'ils restent visibles. Elle n'autorise aucune taille inférieure à 10 px sur les autres écrans ni sur une nouvelle tranche sans décision séparée.
 
-### OV-LT-001 — densité typographique du golden master Live Trading
+### OV-LT-001 — clôturée le 2026-08-27 — ancien golden master Live Trading
 
 - **Règle concernée :** `UXR-0161`.
-- **Périmètre strict :** `apps/desk-control-plane/src/features/live-trading/live-trading.css`, profil desktop workstation uniquement.
-- **Décision produit source :** maquette et spécification Live Trading approuvées comme référence normative le 2026-08-16 ; la grille 1 672 × 941, les treize panneaux simultanément visibles et leur hiérarchie imposent la densité observée.
-- **Écart borné :** microcopy, métadonnées, entêtes de tableaux compacts, badges et légende lifecycle peuvent utiliser 5–9 px sur le golden master desktop. Le titre, la recherche et les termes opérateur critiques gardent un niveau supérieur ; les actions Human Gate conservent une cible d'au moins 32 px.
-- **Compensations obligatoires :** reflow mobile dédié, zoom navigateur non neutralisé, résumé textuel du chart, états exprimés par texte et pas uniquement par couleur, focus visible, détails par navigation, absence de clipping et audit Axe sans blocker serious/critical.
-- **Preuves :** `reports/ui-ux/live-trading/live-trading-visual-qa.json`, `reports/ui-ux/front-v2-axe.json`, `docs/front-redesign/LIVE_TRADING_VNEXT_VISUAL_QA.md`.
-- **Expiration/révision :** à réexaminer après test opérateur de lisibilité, changement de maquette ou avant certification WCAG complète.
+- **Ancien périmètre :** `apps/desk-control-plane/src/features/live-trading/live-trading.css`, profil desktop workstation uniquement.
+- **Motif de clôture :** le cockpit Flight Director remplace la grille de treize panneaux simultanés. Il neutralise le zoom workstation sur cette seule route, utilise une composition à trois zones et un dock de profondeur unique, et garantit une taille calculée minimale de `11 px` sur les cinq viewports certifiés.
+- **Date d'effet :** 2026-08-27.
+- **Preuves de clôture :** `reports/ui-ux/live-trading/live-trading-visual-qa.json` et `docs/front-redesign/LIVE_TRADING_VNEXT_VISUAL_QA.md`.
 
-Cette dérogation ne désactive ni ne renumérote `UXR-0161`. Les détections restent dans le rapport statique ; toute autre règle P0 demeure bloquante.
+Cette entrée reste conservée pour l'historique et ne renumérote pas `UXR-0161`. Elle n'autorise plus aucune taille de `5–9 px` sur Live Trading ; toute réintroduction exige une nouvelle décision séparée.

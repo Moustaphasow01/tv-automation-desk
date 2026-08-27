@@ -485,6 +485,7 @@ export type LiveTradingView = {
     latestSignals: readonly LiveTradingView["signals"][number][];
     aiContextGate: readonly {
       decisionId: string;
+      signalId?: string | null;
       status: string;
       mode: string;
       recommendation: string;

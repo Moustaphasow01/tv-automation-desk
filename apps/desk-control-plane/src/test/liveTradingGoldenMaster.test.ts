@@ -46,7 +46,7 @@ describe("Live Trading golden master", () => {
     expect(model.gateActions.map((action) => action.action)).toEqual(["CONFIRM", "REJECT"]);
   });
 
-  it("projects a theoretical TargetPosition and derived audit timeline before broker execution", () => {
+  it("keeps TargetPosition visible without inventing theoretical execution or audit events", () => {
     const envelope = withOrderIntent(false);
     envelope.data.canonicalRuntime.pendingTargetPositions = [{
       targetPositionId: "target-1",
@@ -58,10 +58,8 @@ describe("Live Trading golden master", () => {
     const model = toLiveTradingModel(envelope);
 
     expect(model.targetPosition?.targetPositionId).toBe("target-1");
-    expect(model.reconciliation.expected?.lifecycle).toBe("THEORETICAL_TARGET_PENDING_HUMAN_GATE");
-    expect(model.reconciliation.expected?.targetNetSize).toBe(2);
-    expect(model.timeline.map((event) => event.step)).toContain("ORDER_INTENT");
-    expect(model.timeline.map((event) => event.step)).toContain("HUMAN_GATE");
+    expect(model.reconciliation.expected).toBeNull();
+    expect(model.timeline).toEqual([]);
   });
 
   it("renders market closure and policy disablement as truthful neutral states", () => {
@@ -217,7 +215,87 @@ describe("Live Trading golden master", () => {
     expect(markup).toContain("H1");
     expect(markup).toContain("H4");
   });
+
+  it("does not turn an entry zone into an invented point price", () => {
+    const envelope = signalChartEnvelope({
+      direction: "LONG",
+      proposedTradePlan: {
+        entry_zone: { low: 507.25, high: 507.75 },
+        stop: { price: 506.25 },
+        targets: [{ label: "T1", price: 510 }],
+      },
+      tradePlanEconomics: {},
+    });
+    const markup = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(InstrumentChartPanel, { model: toLiveTradingModel(envelope) }))
+    );
+
+    expect(markup).not.toContain("Dernier signal détecté");
+    expect(markup).not.toContain("ENTRÉE 507.50");
+  });
+
+  it("does not render a trade overlay when the backend side is unknown", () => {
+    const envelope = signalChartEnvelope({
+      direction: "UNKNOWN",
+      proposedTradePlan: {
+        entry: { price: 507.5 },
+        stop: { price: 506.25 },
+        targets: [{ label: "T1", price: 510 }],
+      },
+      tradePlanEconomics: { entry_price: 507.5 },
+    });
+    const markup = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(InstrumentChartPanel, { model: toLiveTradingModel(envelope) }))
+    );
+
+    expect(markup).not.toContain("Dernier signal détecté");
+    expect(markup).not.toContain("ENTRÉE 507.50");
+  });
 });
+
+function signalChartEnvelope(signalOverrides: Record<string, unknown>): ViewEnvelope<LiveTradingView> {
+  const envelope = structuredClone(liveTradingView) as ViewEnvelope<LiveTradingView>;
+  envelope.data.canonicalRuntime.pendingOrderIntents = [];
+  envelope.data.portfolioOrderIntents = [];
+  envelope.data.marketSeries = {
+    schemaVersion: "front_market_series_v1",
+    availability: "KNOWN",
+    source: "market_candles",
+    instrument: "ZC",
+    timeframe: "5",
+    supportedInstruments: ["ZC"],
+    supportedTimeframes: ["5"],
+    asOf: "2026-08-26T16:40:00.000Z",
+    points: [
+      { timestamp: "2026-08-26T16:35:00.000Z", open: 507.5, high: 508.25, low: 506.75, close: 507.75, volume: 150, vwap: 507.45 },
+      { timestamp: "2026-08-26T16:40:00.000Z", open: 507.75, high: 509.25, low: 507.25, close: 508.75, volume: 180, vwap: 508.1 },
+    ],
+  };
+  envelope.data.signals = [{
+    signalId: "grain-signal-zc-truth-test",
+    strategyId: "grain-strategy",
+    strategyVersionId: "grain-strategy-v1",
+    strategyInstanceId: "grain-instance-zc",
+    symbol: "ZC",
+    direction: "LONG",
+    state: "NEW",
+    confidence: 74,
+    createdAt: "2026-08-26T16:35:00.000Z",
+    expiresAt: "2026-08-26T16:55:00.000Z",
+    sourceDataCutoffAt: "2026-08-26T16:35:00.000Z",
+    featureSnapshotId: "features-zc",
+    ruleHits: ["US_OPEN_TREND"],
+    expectancyR: 1.8,
+    rewardRisk: 2,
+    regime: "TREND",
+    proposedTradePlan: {},
+    tradePlanEconomics: {},
+    availability: "KNOWN",
+    ...signalOverrides,
+  }] as LiveTradingView["signals"];
+  envelope.data.canonicalRuntime.latestSignals = envelope.data.signals;
+  return envelope;
+}
 
 function withOrderIntent(stale: boolean): ViewEnvelope<LiveTradingView> {
   const envelope = structuredClone(liveTradingView) as ViewEnvelope<LiveTradingView>;

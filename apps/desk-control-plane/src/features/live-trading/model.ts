@@ -5,7 +5,7 @@ import type { ViewEnvelope, ViewMeta } from "@/shared/contracts";
 export type LiveTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 export type LiveOperatorState = {
-  status: "DEGRADED" | "AWAITING_HUMAN_GATE" | "THEORETICAL_TRACKING" | "SIGNAL_DETECTED" | "NO_OPPORTUNITY";
+  status: "DEGRADED" | "AWAITING_HUMAN_GATE" | "ORDER_INTENT_RECORDED" | "THEORETICAL_TRACKING" | "SIGNAL_DETECTED" | "NO_OPPORTUNITY";
   label: string;
   detail: string;
   tone: LiveTone;

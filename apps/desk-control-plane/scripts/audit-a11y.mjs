@@ -22,16 +22,18 @@ const routeConcurrency = Math.max(1, Number(process.env.DESK_A11Y_ROUTE_CONCURRE
 
 try {
   for (const viewport of [{ name: "workstation", width: 1792, height: 1024 }, { name: "mobile", width: 320, height: 720 }]) {
-    const context = await browser.newContext({ viewport });
+    const context = await browser.newContext({ viewport, serviceWorkers: "block" });
     for (let offset = 0; offset < routes.length; offset += routeConcurrency) {
       const batch = routes.slice(offset, offset + routeConcurrency);
       await Promise.all(batch.map(async (route) => {
         const page = await context.newPage();
         try {
           await page.goto(`${baseUrl}/#/${route}`, { waitUntil: "domcontentloaded" });
+          await establishOperatorSession(page);
           await page.locator("#main-content > *").first().waitFor({ state: "visible", timeout: 45_000 });
           const readySelector = route === "command-center" ? ".cc-page" : route === "live" ? ".lt-page" : null;
           if (readySelector) await page.locator(readySelector).waitFor({ state: "visible", timeout: 45_000 });
+          if (route === "live") await page.locator(".lt-panel").first().waitFor({ state: "visible", timeout: 45_000 });
           const result = await new AxeBuilder({ page }).analyze();
           findings.push({ viewport: viewport.name, route, violations: result.violations });
         } catch (error) {
@@ -64,4 +66,26 @@ function browserLaunchOptions() {
       ? { executablePath: process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH }
       : {}),
   };
+}
+
+async function establishOperatorSession(page) {
+  const gate = page.locator(".operator-login-gate");
+  if (!await gate.isVisible({ timeout: 5_000 }).catch(() => false)) return;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const form = gate.locator(".operator-login-gate__form");
+    if (await form.isVisible().catch(() => false)) {
+      await form.locator("input[autocomplete='username']").fill(process.env.DESK_OPERATOR_LOGIN || "MSO");
+      await form.locator("input[autocomplete='current-password']").fill(process.env.DESK_OPERATOR_PASSWORD || "2018");
+      await form.locator("button[type='submit']").click();
+      await gate.waitFor({ state: "hidden", timeout: 45_000 }).catch(() => undefined);
+      if (!await gate.isVisible().catch(() => false)) return;
+    }
+
+    const retry = gate.locator("button.operator-login-gate__secondary");
+    if (await retry.isVisible().catch(() => false)) await retry.click();
+    await page.waitForTimeout(1_000);
+  }
+
+  throw new Error(`OPERATOR_SESSION_NOT_ESTABLISHED: ${(await gate.innerText().catch(() => "")).slice(0, 500)}`);
 }

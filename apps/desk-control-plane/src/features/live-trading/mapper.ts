@@ -6,9 +6,13 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
   const { data, meta } = envelope;
   const runtime = data.canonicalRuntime;
   const signalPool = uniqueBy([...(runtime.latestSignals ?? []), ...(data.signals ?? [])], (item) => item.signalId);
-  const selectedInstrument = normalizeInstrument(data.marketSeries?.instrument ?? signalPool[0]?.symbol ?? null);
-  const latestSignal = selectLatestSignal(signalPool, selectedInstrument);
+  const selectedInstrument = normalizeInstrument(data.marketSeries?.instrument ?? null);
   const orderIntent = selectOrderIntent([...runtime.pendingOrderIntents, ...data.portfolioOrderIntents], selectedInstrument);
+  const requiredSignalId = normalizeText(orderIntent?.signalId) || null;
+  const latestSignal = orderIntent && !requiredSignalId
+    ? null
+    : selectLatestSignal(signalPool, selectedInstrument, requiredSignalId);
+  const latestContextDecision = selectContextDecision(runtime.aiContextGate, latestSignal?.signalId ?? null);
   const targetPosition = selectTargetPosition(runtime.pendingTargetPositions ?? [], orderIntent, selectedInstrument);
   const marketContract = seriesContracts(data).find((item) => item.seriesId === "market.ohlcv");
   const performanceContract = seriesContracts(data).find((item) => item.seriesId === "performance.r_equity");
@@ -22,8 +26,7 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
     .includes(String(data.reconciliation?.availability ?? "").toUpperCase());
   const selectedTheoreticalExecution = selectTheoreticalExecution(data.theoreticalExecution?.rows ?? [], orderIntent, selectedInstrument);
   const theoreticalExpected = data.reconciliation?.expected
-    ?? selectedTheoreticalExecution
-    ?? theoreticalExpectedFromTargetPosition(targetPosition, orderIntent, meta.asOf);
+    ?? selectedTheoreticalExecution;
   const signalFunnel = buildSignalFunnel(data, signalPool);
 
   return {
@@ -36,7 +39,7 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
     },
     operator: buildOperatorState(meta.availability ?? "UNAVAILABLE", meta.stale, latestSignal, orderIntent, selectedTheoreticalExecution),
     signalFunnel,
-    marketIntelligence: buildMarketIntelligence(data, latestSignal, runtime.aiContextGate[0] ?? null),
+    marketIntelligence: buildMarketIntelligence(data, latestSignal, latestContextDecision),
     selectedSignalPlan: buildSignalPlanSummary(latestSignal),
     dataQuality: buildDataQuality(data, meta.asOf),
     mode: runtime.mode,
@@ -55,7 +58,7 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
     watchlist: data.watchlist ?? [],
     strategyInstances: runtime.activeStrategyInstances,
     latestSignal,
-    latestContextDecision: runtime.aiContextGate[0] ?? null,
+    latestContextDecision,
     orderIntent,
     targetPosition,
     theoreticalExecution: data.theoreticalExecution ?? null,
@@ -83,7 +86,7 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
       broker: reconciliationNotApplicable ? null : data.reconciliation?.broker ?? null,
       mismatchCount: data.reconciliation?.mismatchCount ?? null,
     },
-    timeline: deriveAuditTimeline(data),
+    timeline: data.timeline ?? [],
     performance: {
       availability: data.performanceR?.availability ?? performanceContract?.availability ?? "UNAVAILABLE",
       totalR: data.performanceR?.totalR ?? null,
@@ -113,6 +116,20 @@ function buildOperatorState(
     };
   }
   if (orderIntent) {
+    const gateStatus = String(orderIntent.humanGate.status ?? "").trim().toUpperCase();
+    const awaitingHumanDecision = orderIntent.humanGate.allowedActions.length > 0
+      || ["AWAITING", "PENDING", "REQUIRED", "READY"].some((token) => gateStatus.includes(token));
+    if (!awaitingHumanDecision) {
+      const expired = gateStatus.includes("EXPIRED");
+      const rejected = gateStatus.includes("REJECT");
+      const confirmed = ["CONFIRM", "APPROV"].some((token) => gateStatus.includes(token));
+      return {
+        status: "ORDER_INTENT_RECORDED",
+        label: expired ? "Dossier expiré" : rejected ? "Dossier rejeté" : confirmed ? "Dossier confirmé" : "Dossier enregistré",
+        detail: `${orderIntent.side} ${intentInstrument(orderIntent) ?? "instrument"} · qty ${orderIntent.quantity} · ${gateStatus || "état non publié"}`,
+        tone: expired || rejected ? "warning" : "info",
+      };
+    }
     return {
       status: "AWAITING_HUMAN_GATE",
       label: "Dossier à confirmer",
@@ -199,9 +216,9 @@ function buildMarketIntelligence(
   contextDecision: LiveTradingModel["latestContextDecision"],
 ): LiveTradingModel["marketIntelligence"] {
   const setup = asRecord(latestSignal?.setup);
-  const signalQuality = asRecord(latestSignal?.signalQuality);
   const macro = asRecord(data.macroSession);
-  const context = asRecord(recordValue(setup, ["context", "marketContext", "market_context", "contextSnapshot"])) ?? signalQuality ?? {};
+  const decision = asRecord(contextDecision);
+  const context = asRecord(recordValue(setup, ["context", "marketContext", "market_context", "contextSnapshot"])) ?? {};
   const preferredFamilies = uniqueText([
     ...stringArray(recordValue(context, ["preferredStrategyFamilies", "preferred_strategy_families", "preferredFamilies"])),
     ...stringArray(recordValue(setup, ["preferredStrategyFamilies", "preferred_strategy_families"])),
@@ -211,7 +228,6 @@ function buildMarketIntelligence(
     ...stringArray(recordValue(setup, ["discouragedStrategyFamilies", "discouraged_strategy_families"])),
   ]);
   const reasonCodes = uniqueText([
-    ...(latestSignal?.reasonCodes ?? []),
     ...(contextDecision?.reasonCodes ?? []),
     ...stringArray(recordValue(context, ["reasonCodes", "reason_codes"])),
   ]).slice(0, 10);
@@ -222,12 +238,12 @@ function buildMarketIntelligence(
   ].slice(0, 6);
   return {
     bias: displayValue(recordValue(context, ["globalBias", "global_bias", "bias", "marketBias", "market_bias"]) ?? recordValue(macro, ["bias", "marketBias", "globalBias"]), "NON PUBLIÉ"),
-    regime: displayValue(recordValue(context, ["marketRegime", "market_regime", "regime"]) ?? latestSignal?.regime ?? recordValue(macro, ["regime", "marketRegime"]), "NON PUBLIÉ"),
+    regime: displayValue(recordValue(context, ["marketRegime", "market_regime", "regime"]) ?? recordValue(macro, ["regime", "marketRegime"]), "NON PUBLIÉ"),
     volatility: displayValue(recordValue(context, ["volatilityRegime", "volatility_regime", "volatility"]) ?? recordValue(macro, ["volatilityRegime", "volatility_regime", "volatility"]), "NON PUBLIÉ"),
     macroRisk: displayValue(recordValue(context, ["macroRisk", "macro_risk", "newsRisk"]) ?? recordValue(macro, ["macroRisk", "macro_risk", "newsRisk"]), "NON PUBLIÉ"),
-    confidence: numberOrNull(recordValue(context, ["confidence"]) ?? contextDecision?.confidence ?? latestSignal?.confidence),
+    confidence: numberOrNull(recordValue(context, ["confidence"]) ?? contextDecision?.confidence),
     riskMultiplier: numberOrNull(recordValue(context, ["riskMultiplier", "risk_multiplier"]) ?? contextDecision?.riskMultiplier),
-    validUntil: normalizeText(recordValue(context, ["validUntil", "valid_until"]) ?? latestSignal?.expiresAt) || null,
+    validUntil: normalizeText(recordValue(context, ["validUntil", "valid_until"]) ?? recordValue(decision, ["validUntil", "valid_until"])) || null,
     reasonCodes,
     preferredFamilies,
     discouragedFamilies,
@@ -328,14 +344,26 @@ function selectOrderIntent(
 function selectLatestSignal(
   signals: readonly NonNullable<LiveTradingEnvelope["data"]["canonicalRuntime"]["latestSignals"]>[number][],
   selectedInstrument: string | null,
+  requiredSignalId: string | null,
 ) {
   if (!signals.length) return null;
   const sorted = [...signals].sort((left, right) => new Date(right.createdAt ?? "").getTime() - new Date(left.createdAt ?? "").getTime());
+  if (requiredSignalId) {
+    return sorted.find((item) => normalizeText(item.signalId) === requiredSignalId) ?? null;
+  }
   if (selectedInstrument) {
     const sameInstrument = sorted.find((item) => normalizeInstrument(item.symbol) === selectedInstrument);
     if (sameInstrument) return sameInstrument;
   }
   return sorted[0] ?? null;
+}
+
+function selectContextDecision(
+  decisions: LiveTradingEnvelope["data"]["canonicalRuntime"]["aiContextGate"],
+  signalId: string | null,
+) {
+  if (!signalId) return null;
+  return decisions.find((item) => normalizeText(item.signalId) === signalId) ?? null;
 }
 
 function selectTargetPosition(
@@ -374,90 +402,6 @@ function selectTheoreticalExecution(
     if (byInstrument) return byInstrument;
   }
   return rows[0] ?? null;
-}
-
-function theoreticalExpectedFromTargetPosition(
-  targetPosition: LiveTradingModel["targetPosition"],
-  orderIntent: LiveTradingModel["orderIntent"],
-  asOf: string,
-): Record<string, unknown> | null {
-  if (!targetPosition) return null;
-  const targetNetSize = recordValue(targetPosition, ["targetNetSize", "target_net_size", "netSize", "net_size"]);
-  if (targetNetSize == null) return null;
-  return {
-    lifecycle: "THEORETICAL_TARGET_PENDING_HUMAN_GATE",
-    status: "PENDING_HUMAN_GATE",
-    latestEventType: "TARGET_POSITION_CREATED",
-    latestEventAt: orderIntent?.createdAt ?? asOf,
-    portfolioOrderIntentId: orderIntent?.portfolioOrderIntentId ?? orderIntent?.orderIntentId ?? null,
-    targetPositionId: recordValue(targetPosition, ["targetPositionId", "target_position_id"]),
-    instrument: recordValue(targetPosition, ["instrument", "targetInstrument", "target_instrument", "symbol"]) ?? intentInstrument(orderIntent),
-    side: orderIntent?.side ?? recordValue(targetPosition, ["side", "targetSide", "target_side"]),
-    targetNetSize,
-    deltaSize: recordValue(targetPosition, ["deltaSize", "delta_size"]),
-    quantity: orderIntent?.quantity ?? recordValue(targetPosition, ["authorizedQuantity", "authorized_quantity", "quantity"]),
-    physicalExecutionCreated: false,
-    brokerEvidence: "NONE",
-  };
-}
-
-function deriveAuditTimeline(data: LiveTradingEnvelope["data"]): LiveTradingEnvelope["data"]["timeline"] {
-  if ((data.timeline ?? []).length) return data.timeline;
-  const events: Array<LiveTradingEnvelope["data"]["timeline"][number]> = [];
-  for (const signal of (data.canonicalRuntime.latestSignals ?? []).slice(0, 4)) {
-    events.push({
-      eventId: `signal:${signal.signalId}`,
-      at: signal.createdAt,
-      step: "STRATEGY_SIGNAL",
-      title: `${signal.direction} ${signal.symbol}`,
-      detail: `${signal.strategyInstanceId} · confiance ${signal.confidence}%`,
-      tone: "INFO",
-    });
-  }
-  for (const decision of (data.canonicalRuntime.aiContextGate ?? []).slice(0, 4)) {
-    events.push({
-      eventId: `context:${decision.decisionId}`,
-      at: decision.decidedAt,
-      step: "AI_CONTEXT_GATE",
-      title: decision.recommendation || decision.status,
-      detail: decision.reasonCodes.join(", ") || "Décision contextuelle publiée",
-      tone: decision.status === "PASS" ? "INFO" : "WATCH",
-    });
-  }
-  for (const intent of (data.canonicalRuntime.pendingOrderIntents ?? []).slice(0, 6)) {
-    events.push({
-      eventId: `intent:${intent.portfolioOrderIntentId}`,
-      at: intent.createdAt ?? data.canonicalRuntime.freshness.orderIntentAt ?? data.canonicalRuntime.freshness.asOf,
-      step: "ORDER_INTENT",
-      title: `${intent.side} ${intentInstrument(intent)}`,
-      detail: `${intent.humanGate.status} · qty ${intent.quantity}`,
-      tone: intent.humanGate.allowedActions.length ? "WATCH" : "INFO",
-    });
-    if (intent.humanGate.gateId) {
-      events.push({
-        eventId: `human_gate:${intent.humanGate.gateId}`,
-        at: intent.createdAt ?? data.canonicalRuntime.freshness.orderIntentAt ?? data.canonicalRuntime.freshness.asOf,
-        step: "HUMAN_GATE",
-        title: "Confirmation opérateur requise",
-        detail: intent.allowedActions.allowedActions.join(", ") || "Aucune action autorisée",
-        tone: "WATCH",
-      });
-    }
-  }
-  for (const row of (data.theoreticalExecution?.rows ?? []).slice(0, 8)) {
-    if (!row.latestEventAt) continue;
-    events.push({
-      eventId: `theoretical:${row.portfolioOrderIntentId}:${row.latestEventType}`,
-      at: row.latestEventAt,
-      step: "THEORETICAL_EXECUTION",
-      title: `${row.status} · ${row.instrument}`,
-      detail: `${row.side} ${row.quantity ?? "—"} · R ${row.resultR ?? "—"}`,
-      tone: ["TARGET_HIT", "ENTRY_FILLED"].includes(row.status) ? "INFO" : row.status === "STOP_HIT" ? "HIGH" : "WATCH",
-    });
-  }
-  return uniqueBy(events.filter((event) => event.at && event.at !== "unavailable"), (event) => event.eventId)
-    .sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime())
-    .slice(0, 24);
 }
 
 function intentInstrument(intent: LiveTradingModel["orderIntent"]): unknown {
@@ -514,6 +458,7 @@ function uniqueText(values: readonly string[]): string[] {
 }
 
 function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }

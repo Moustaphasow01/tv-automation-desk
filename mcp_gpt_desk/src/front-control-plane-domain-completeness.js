@@ -457,6 +457,7 @@ function nominalPortfolioState(portfolioState, intentIds) {
 function aiContextGateRows(gateDecisions) {
   return gateDecisions.slice(0, 12).map((item) => ({
     decisionId: text(item.decision_id || item.ai_context_gate_decision_id, "unavailable"),
+    signalId: text(item.signal_id || item.strategy_signal_id, "") || null,
     status: text(item.status, "UNKNOWN"),
     mode: text(item.mode, "SHADOW"),
     recommendation: text(item.recommendation, "UNKNOWN"),

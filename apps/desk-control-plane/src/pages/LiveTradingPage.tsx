@@ -1,30 +1,17 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
-import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
+import { useCommandStatus, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
-import { LiveHumanGate } from "@/features/live-trading/LiveHumanGate";
+import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
+import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
+import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
+import { commandForCurrentGate, type GateCommandBinding } from "@/features/live-trading/LiveHumanGate";
+import { LiveMarketLens } from "@/features/live-trading/LiveMarketLens";
 import { LiveTradingHeader } from "@/features/live-trading/LiveTradingHeader";
-import {
-  AuditTimelinePanel,
-  DataQualityPanel,
-  InstrumentChartPanel,
-  JarvisPanel,
-  LatestSignalPanel,
-  LiveDecisionRibbon,
-  MacroSessionPanel,
-  MarketIntelligencePanel,
-  MarketContextPanel,
-  OrderIntentPanel,
-  PerformancePanel,
-  ProviderRuntimePanel,
-  ReconciliationPanel,
-  RiskAuthorityPanel,
-  SignalFunnelPanel,
-  StrategyInstancesPanel,
-} from "@/features/live-trading/LiveTradingPanels";
+import { InstrumentChartPanel } from "@/features/live-trading/LiveTradingPanels";
 import { toLiveTradingModel } from "@/features/live-trading/mapper";
 import "@/features/live-trading/live-trading.css";
+import "@/features/live-trading/live-cockpit.css";
 
 export function LiveTradingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -34,10 +21,13 @@ export function LiveTradingPage() {
   }), [searchParams]);
   const query = useFrontView("live-trading", marketScope);
   const repository = useFrontViewRepository();
-  const [command, setCommand] = useState<CommandAccepted | null>(null);
+  const [commandBinding, setCommandBinding] = useState<GateCommandBinding | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
   const model = useMemo(() => query.data ? toLiveTradingModel(query.data) : null, [query.data]);
+  const currentOrderIntentId = model?.orderIntent?.portfolioOrderIntentId ?? null;
+  const command = commandForCurrentGate(commandBinding, currentOrderIntentId, model?.gateActions ?? []);
+  const commandStatus = useCommandStatus(command?.commandId ?? null);
 
   const updateMarketScope = (nextScope: { instrument?: string; timeframe?: string }) => {
     const next = new URLSearchParams(searchParams);
@@ -47,11 +37,21 @@ export function LiveTradingPage() {
   };
 
   const submitGateAction = async (action: HumanGateAction, reason: string) => {
+    const orderIntentId = model?.orderIntent?.portfolioOrderIntentId;
+    if (!orderIntentId) {
+      setCommandError("HUMAN_GATE_ORDER_INTENT_MISSING");
+      return;
+    }
     setSubmittingActionId(action.actionId);
     setCommandError(null);
     try {
       const accepted = await repository.submitCommand(buildHumanGateCommand(action, reason));
-      setCommand(accepted);
+      setCommandBinding({
+        orderIntentId,
+        actionId: action.actionId,
+        expectedRevision: action.expectedRevision,
+        receipt: accepted,
+      });
       await query.refetch();
     } catch (error) {
       setCommandError(error instanceof Error ? error.message : "HUMAN_GATE_COMMAND_FAILED");
@@ -64,34 +64,33 @@ export function LiveTradingPage() {
   if (query.isLoading || !model) return <LiveTradingLoading />;
 
   return (
-    <div className="lt-page" data-testid="live-trading-golden-master">
+    <div
+      className="lt-page lt-cockpit"
+      data-testid="live-trading-golden-master"
+      data-operator-state={model.operator.status}
+      data-design-seed="c87167ea"
+    >
       <LiveTradingHeader model={model} onRefresh={() => void query.refetch()} refreshing={query.isFetching} />
-      <LiveDecisionRibbon model={model} />
-      <div className="lt-grid" aria-label="Cockpit Live Trading semi-manuel">
-        <div className="lt-left-rail">
-          <MarketContextPanel model={model} />
-          <MarketIntelligencePanel model={model} />
-          <StrategyInstancesPanel model={model} />
-          <MacroSessionPanel model={model} />
-        </div>
-        <InstrumentChartPanel model={model} onScopeChange={updateMarketScope} />
-        <div className="lt-signal-rail">
-          <LatestSignalPanel model={model} />
-          <SignalFunnelPanel model={model} />
-          <OrderIntentPanel model={model} />
-        </div>
-        <div className="lt-execution-rail">
-          <RiskAuthorityPanel model={model} />
-          <LiveHumanGate model={model} onSubmit={submitGateAction} submittingActionId={submittingActionId} command={command} error={commandError} />
-          <ProviderRuntimePanel model={model} />
-        </div>
-        <div className="lt-lower-row">
-          <ReconciliationPanel model={model} />
-          <AuditTimelinePanel model={model} />
-          <PerformancePanel model={model} />
-          <DataQualityPanel model={model} />
-          <JarvisPanel model={model} />
-        </div>
+      <LiveCockpitStatusBar model={model} onScopeChange={updateMarketScope} />
+      <div className="lt-cockpit__workspace" aria-label="Cockpit Live Trading semi-manuel">
+        <aside className="lt-cockpit__market" aria-label="Lecture du marché">
+          <LiveMarketLens model={model} />
+        </aside>
+        <section className="lt-cockpit__canvas" aria-label="Graphique de marché et plan de trade">
+          <InstrumentChartPanel model={model} onScopeChange={updateMarketScope} showScopeControls={false} />
+        </section>
+        <aside className="lt-cockpit__decision" aria-label="Dossier de décision courant">
+          <LiveDecisionStack
+            model={model}
+            onSubmit={submitGateAction}
+            submittingActionId={submittingActionId}
+            command={command}
+            commandStatus={commandStatus.data?.status ?? command?.status ?? null}
+            error={commandError}
+            onScopeChange={updateMarketScope}
+          />
+        </aside>
+        <LiveActivityDock model={model} />
       </div>
       <div className="lt-accessible-status" aria-live="polite">Projection {model.truth.label}. {model.mode.executionMode}. Human Gate {model.mode.humanGateRequired ? "requis" : "non requis"}.</div>
     </div>
