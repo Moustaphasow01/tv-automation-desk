@@ -37,6 +37,10 @@ foreach ($requiredExtension in @(".COM", ".EXE", ".BAT", ".CMD")) {
     }
 }
 $env:PATHEXT = $pathExtensions -join ";"
+
+# A release must be reproducible from a clean clone. Install each independent
+# package root before code generation, tests or the production front build.
+Invoke-DeskCommand -FilePath $npm -Arguments @("ci", "--ignore-scripts") -WorkingDirectory $ProjectRoot
 Invoke-DeskCommand -FilePath $npm -Arguments @("--prefix", "packages/desk-contracts", "run", "generate") -WorkingDirectory $ProjectRoot
 Invoke-DeskCommand -FilePath $npm -Arguments @("--prefix", "packages/desk-contracts", "run", "check:generated") -WorkingDirectory $ProjectRoot
 Invoke-DeskCommand -FilePath $npm -Arguments @("run", "guard:strategy-contracts") -WorkingDirectory $ProjectRoot
@@ -44,6 +48,11 @@ Invoke-DeskCommand -FilePath $npm -Arguments @("run", "guard:strategy-contracts"
 # Materialize local file: dependencies as regular directories only when Windows
 # will execute the source-tree tests. A certified prebuilt release may come from
 # WSL, where these paths are valid symbolic links that Windows cannot replace.
+if (-not $SkipTests -or -not $UsePrebuiltFront) {
+    Invoke-DeskCommand -FilePath $npm -Arguments @(
+        "--prefix", "apps/desk-control-plane", "ci", "--ignore-scripts"
+    ) -WorkingDirectory $ProjectRoot
+}
 if (-not $SkipTests) {
     Invoke-DeskCommand -FilePath $npm -Arguments @(
         "--prefix", "mcp_gpt_desk", "ci", "--ignore-scripts", "--install-links"

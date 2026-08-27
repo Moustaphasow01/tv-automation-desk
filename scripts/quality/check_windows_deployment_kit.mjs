@@ -214,6 +214,15 @@ if (!update.includes("-AllowDisabledAiWorkers:$keepAiWorkersDisabled")) {
   violations.push("update_ai_worker_disabled_mode_not_passed_to_healthcheck");
 }
 const buildRelease = content.get("deploy/windows/Build-DeskRelease.ps1");
+for (const dependencyInstall of [
+  'Invoke-DeskCommand -FilePath $npm -Arguments @("ci", "--ignore-scripts")',
+  '"--prefix", "apps/desk-control-plane", "ci", "--ignore-scripts"',
+  '"--prefix", "mcp_gpt_desk", "ci", "--ignore-scripts", "--install-links"',
+]) {
+  if (!buildRelease.includes(dependencyInstall)) {
+    violations.push(`release_clean_clone_dependency_install_missing:${dependencyInstall}`);
+  }
+}
 if (
   !buildRelease.includes('[ValidateSet("standard", "deterministic_strategy_v5_frozen")]')
   || !buildRelease.includes('$ReleaseProfile = "standard"')
