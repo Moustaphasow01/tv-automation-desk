@@ -136,6 +136,7 @@ export function StrategyCenterPage() {
         </div>
         <span className="sc-header__pill">{session?.summary.environment ?? "—"}</span>
         <label className="sc-header__pill">
+          <span className="sr-only">Filtrer le catalogue des stratégies</span>
           <select value={catalogFilter} onChange={(event) => setFilter(event.target.value as CatalogFilter)}>
             <option value="ALL">TOUS</option>
             <option value="SHADOW">SHADOW</option>

@@ -42,7 +42,7 @@
 .sc-header__search input:focus-visible { outline-color: var(--sc-focus); }
 .sc-header__search:focus-within { border-color: var(--sc-focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sc-focus) 38%, transparent); }
 .sc-header__search input::placeholder { color: var(--sc-disabled); }
-.sc-header__search kbd { color: var(--sc-disabled); font-size: 11px; border: 1px solid var(--sc-border); border-radius: 4px; padding: 1px 5px; }
+.sc-header__search kbd { color: var(--sc-muted); font-size: 11px; border: 1px solid var(--sc-border); border-radius: 4px; padding: 1px 5px; }
 
 .sc-header__pill { display: flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid var(--sc-border); border-radius: 999px; background: var(--sc-surface-1); color: var(--sc-secondary); font-size: 11px; font-weight: 700; letter-spacing: .03em; }
 .sc-header__pill select { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; }
@@ -83,6 +83,7 @@
 .sc-catalog-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--sc-border-soft); background: transparent; color: var(--sc-text); text-align: left; cursor: pointer; }
 .sc-catalog-row:hover { background: var(--sc-surface-2); }
 .sc-catalog-row--active { background: var(--sc-surface-3); box-shadow: inset 2px 0 0 var(--sc-blue); }
+.sc-catalog-row--active small { color: var(--sc-secondary); }
 .sc-catalog-row strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-catalog-row small { color: var(--sc-muted); font-size: 11px; grid-column: 1 / -1; }
 .sc-catalog-row__badges { display: flex; gap: 4px; }
@@ -111,7 +112,7 @@
 .sc-meta-item { display: grid; gap: 2px; }
 .sc-meta-item small { color: var(--sc-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
 .sc-meta-item strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-meta-item strong[data-unavailable="true"] { color: var(--sc-disabled); font-weight: 400; font-style: italic; }
+.sc-meta-item strong[data-unavailable="true"] { color: var(--sc-muted); font-weight: 400; font-style: italic; }
 
 .sc-command-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding: 9px 10px; border: 1px solid var(--sc-border-soft); border-radius: 6px; background: var(--sc-surface-2); }
 .sc-command-box small { display: block; color: var(--sc-muted); font-size: 10px; text-transform: uppercase; }

@@ -3,6 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { readySelectorForRoute } from "./audit-readiness.mjs";
 
 const baseUrl = process.env.DESK_VNEXT_BASE_URL || "http://127.0.0.1:8091";
 const defaultRoutes = [
@@ -42,7 +43,7 @@ try {
           await page.goto(`${baseUrl}/#/${route}`, { waitUntil: "domcontentloaded" });
           await establishOperatorSessionWithRetry(page);
           await page.locator("#main-content > *").first().waitFor({ state: "visible", timeout: 45_000 });
-          const readySelector = route === "command-center" ? ".cc-page" : route === "live" ? ".lt-page" : null;
+          const readySelector = readySelectorForRoute(route);
           if (readySelector) await page.locator(readySelector).waitFor({ state: "visible", timeout: 45_000 });
           if (route === "live") await page.locator(".lt-panel").first().waitFor({ state: "visible", timeout: 45_000 });
           const result = await new AxeBuilder({ page }).analyze();
