@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCommandStatus, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
 import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
+import type { LiveSignalNavigationTarget } from "@/features/live-trading/LiveSignalInbox";
 import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
 import { commandForCurrentGate, type GateCommandBinding } from "@/features/live-trading/LiveHumanGate";
@@ -21,6 +22,9 @@ export function LiveTradingPage() {
     timeframe: searchParams.get("timeframe") || undefined,
   }), [searchParams]);
   const selectedSignalId = searchParams.get("signalId");
+  const chartAt = searchParams.get("chartAt");
+  const chartSurfaceRef = useRef<HTMLElement>(null);
+  const decisionSurfaceRef = useRef<HTMLElement>(null);
   const deskQuery = useFrontView("live-trading");
   const chartQuery = useFrontView("live-trading", marketScope, {
     preservePreviousData: true,
@@ -49,10 +53,25 @@ export function LiveTradingPage() {
     setSearchParams(next, { replace: true });
   };
 
-  const selectSignal = (signalId: string) => {
+  const selectSignal = (target: LiveSignalNavigationTarget) => {
     const next = new URLSearchParams(searchParams);
-    next.set("signalId", signalId);
+    next.set("signalId", target.signalId);
+    next.delete("chartAt");
     setSearchParams(next, { replace: true });
+    focusSurface(decisionSurfaceRef.current);
+  };
+
+  const showSignalOnChart = (target: LiveSignalNavigationTarget) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("signalId", target.signalId);
+    next.set("instrument", target.instrument);
+    next.set("chartAt", target.at);
+    const normalizedTimeframe = normalizeSignalTimeframe(target.timeframe);
+    if (normalizedTimeframe && model?.marketSeries.supportedTimeframes.some((value) => normalizeSignalTimeframe(value) === normalizedTimeframe)) {
+      next.set("timeframe", normalizedTimeframe);
+    }
+    setSearchParams(next, { replace: true });
+    focusSurface(chartSurfaceRef.current);
   };
 
   const clearSignal = () => {
@@ -101,7 +120,7 @@ export function LiveTradingPage() {
         <aside className="lt-cockpit__market" aria-label="Lecture du marché">
           <LiveMarketLens model={model} />
         </aside>
-        <section className="lt-cockpit__canvas" aria-label="Graphique de marché et plan de trade">
+        <section ref={chartSurfaceRef} className="lt-cockpit__canvas" aria-label="Graphique de marché et plan de trade" tabIndex={-1}>
           <InstrumentChartPanel
             model={model}
             onScopeChange={updateMarketScope}
@@ -109,9 +128,10 @@ export function LiveTradingPage() {
             requestedScope={marketScope}
             loading={chartQuery.isFetching}
             error={chartQuery.isError ? (chartQuery.error as Error).message : null}
+            focusAt={chartAt}
           />
         </section>
-        <aside className="lt-cockpit__decision" aria-label="Dossier de décision courant">
+        <aside ref={decisionSurfaceRef} className="lt-cockpit__decision" aria-label="Dossier de décision courant" tabIndex={-1}>
           <LiveDecisionStack
             model={model}
             onSubmit={submitGateAction}
@@ -127,12 +147,27 @@ export function LiveTradingPage() {
           selectedSignalId={selectedSignalId}
           onSelectSignal={selectSignal}
           onClearSignal={clearSignal}
-          onShowOnChart={(instrument) => updateMarketScope({ instrument })}
+          onShowOnChart={showSignalOnChart}
         />
       </div>
       <div className="lt-accessible-status" aria-live="polite">Projection {model.truth.label}. {model.mode.executionMode}. Human Gate {model.mode.humanGateRequired ? "requis" : "non requis"}.</div>
     </div>
   );
+}
+
+function focusSurface(element: HTMLElement | null) {
+  window.setTimeout(() => {
+    element?.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+    element?.focus({ preventScroll: true });
+  }, 80);
+}
+
+function normalizeSignalTimeframe(value: string | null | undefined): string | null {
+  const normalized = String(value ?? "").trim().toUpperCase().replace(/^M/, "");
+  if (!normalized) return null;
+  if (["H1", "1H", "60"].includes(normalized)) return "60";
+  if (["H4", "4H", "240"].includes(normalized)) return "240";
+  return normalized;
 }
 
 function LiveTradingLoading() {

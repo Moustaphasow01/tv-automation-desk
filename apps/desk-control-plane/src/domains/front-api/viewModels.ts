@@ -588,6 +588,9 @@ export type LiveTradingView = {
     symbol: string;
     direction: "LONG" | "SHORT";
     state: "NEW" | "ARBITRATED" | "REJECTED" | "ORDERED" | "FILLED" | "EXPIRED";
+    effectiveState?: "NEW" | "ARBITRATED" | "REJECTED" | "ORDERED" | "FILLED" | "EXPIRED";
+    stateAsOf?: string;
+    temporalReason?: string | null;
     confidence: number;
     createdAt: string;
     expiresAt: string;
@@ -920,6 +923,9 @@ export type LiveSignalDetailView = {
     symbol: string;
     direction: "LONG" | "SHORT";
     state: "NEW" | "ARBITRATED" | "REJECTED" | "ORDERED" | "FILLED" | "EXPIRED";
+    effectiveState?: "NEW" | "ARBITRATED" | "REJECTED" | "ORDERED" | "FILLED" | "EXPIRED";
+    stateAsOf?: string;
+    temporalReason?: string | null;
     generatedAt: string;
     expiresAt: string;
     confidence: number;

@@ -1,0 +1,249 @@
+.signal-dossier-page {
+  --signal-surface: #071722;
+  --signal-surface-raised: #0a1d29;
+  --signal-surface-soft: #0d2431;
+  --signal-line: #17384a;
+  --signal-line-strong: #25546a;
+  --signal-text: #e6f0f6;
+  --signal-secondary: #a7bbc8;
+  --signal-muted: #6f8998;
+  --signal-cyan: #4ad5df;
+  --signal-green: #4fd39a;
+  --signal-red: #ff6f7d;
+  --signal-amber: #f2bd58;
+  gap: 12px;
+  height: auto;
+  grid-template-rows: none;
+  grid-auto-rows: max-content;
+  overflow: visible;
+  background: linear-gradient(180deg, rgba(15, 40, 52, .32), transparent 240px), #040d13;
+  color: var(--signal-text);
+}
+
+.operator-page.signal-dossier-page {
+  grid-template-rows: none;
+  grid-auto-rows: max-content;
+}
+
+.signal-dossier-page :where(strong, b) { color: var(--signal-text); font-size: inherit; white-space: normal; }
+.signal-dossier-page :where(small, span) { color: inherit; font-size: inherit; }
+.signal-dossier-page a:focus-visible,
+.signal-dossier-page button:focus-visible,
+.signal-dossier-page textarea:focus-visible { outline: 2px solid var(--signal-cyan); outline-offset: 2px; }
+
+.signal-contract-warning,
+.signal-hero__warning {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 9px 12px;
+  border: 1px solid rgba(242, 189, 88, .5);
+  border-radius: 7px;
+  background: rgba(92, 62, 13, .26);
+  color: #ffe4aa;
+}
+.signal-contract-warning { display: grid; }
+.signal-contract-warning span { color: var(--signal-secondary); font-size: 12px; }
+
+.signal-hero {
+  position: relative;
+  display: grid;
+  min-height: 132px;
+  grid-template-columns: minmax(210px, 1.1fr) minmax(150px, .65fr) minmax(280px, 1.35fr) auto;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--signal-line-strong);
+  border-radius: 9px;
+  background: var(--signal-line);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, .24);
+}
+.signal-hero[data-tone="expired"] { border-color: rgba(242, 189, 88, .55); box-shadow: 0 18px 52px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(242, 189, 88, .12); }
+.signal-hero > div:not(.signal-hero__warning) { display: grid; min-width: 0; align-content: center; padding: 16px 18px; background: var(--signal-surface); }
+.signal-hero__identity { grid-template-columns: auto minmax(0, 1fr); gap: 13px; align-items: center; }
+.signal-hero__direction { display: grid; min-width: 58px; min-height: 58px; place-items: center; border: 1px solid var(--signal-line-strong); border-radius: 7px; background: #0d2c38; color: var(--signal-cyan); font-family: var(--lt-font-data); font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+.signal-hero__identity p { margin: 0 0 3px; color: var(--signal-muted); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.signal-hero__identity h2 { margin: 0; color: var(--signal-text); font-family: var(--lt-font-heading); font-size: clamp(30px, 3vw, 46px); line-height: .95; letter-spacing: -.04em; }
+.signal-hero__identity div > span { display: block; margin-top: 7px; color: var(--signal-secondary); font-size: 12px; }
+.signal-hero__validity { gap: 5px; justify-items: start; }
+.signal-hero__validity > strong { font-family: var(--lt-font-data); font-size: 20px; letter-spacing: -.02em; }
+.signal-hero__validity > small { color: var(--signal-muted); font-size: 11px; }
+.signal-hero__clock { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.signal-hero__clock span { display: grid; min-width: 0; gap: 4px; padding-left: 10px; border-left: 1px solid var(--signal-line); }
+.signal-hero__clock small { color: var(--signal-muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.signal-hero__clock strong { color: var(--signal-secondary); font-family: var(--lt-font-data); font-size: 11px; line-height: 1.35; }
+.signal-hero__actions { gap: 6px; align-content: center; }
+.signal-hero__actions a,
+.signal-dossier-section__action a,
+.signal-related-links a { display: inline-flex; min-height: 34px; gap: 7px; align-items: center; justify-content: center; padding: 0 10px; border: 1px solid var(--signal-line-strong); border-radius: 5px; background: #0b222e; color: var(--signal-text); font-size: 11px; font-weight: 750; text-decoration: none; white-space: nowrap; }
+.signal-hero__actions a:first-child { border-color: rgba(74, 213, 223, .62); color: #c9fbff; }
+.signal-hero__warning { grid-column: 1 / -1; margin: 0; border-width: 1px 0 0; border-radius: 0; }
+.signal-hero__warning span { display: grid; gap: 2px; color: var(--signal-secondary); font-size: 11px; }
+
+.signal-lifecycle {
+  display: grid;
+  height: fit-content;
+  align-self: start;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--signal-line);
+  border-radius: 7px;
+  background: var(--signal-surface);
+  list-style: none;
+}
+.signal-lifecycle li { position: relative; display: grid; min-width: 0; min-height: 58px; align-self: start; grid-template-columns: 25px minmax(0, 1fr); gap: 7px; align-items: center; padding: 8px 11px; border-right: 1px solid var(--signal-line); }
+.signal-lifecycle li:last-child { border-right: 0; }
+.signal-lifecycle li::after { position: absolute; right: -4px; z-index: 1; width: 7px; height: 7px; transform: rotate(45deg); border-top: 1px solid var(--signal-line); border-right: 1px solid var(--signal-line); background: var(--signal-surface); content: ""; }
+.signal-lifecycle li:last-child::after { display: none; }
+.signal-lifecycle li > span { display: grid; width: 24px; height: 24px; place-items: center; border: 1px solid var(--signal-line-strong); border-radius: 50%; color: var(--signal-muted); font-family: var(--lt-font-data); font-size: 10px; }
+.signal-lifecycle li[data-state="done"] > span { border-color: var(--signal-green); color: var(--signal-green); }
+.signal-lifecycle li[data-state="pending"] > span { border-color: var(--signal-amber); color: var(--signal-amber); }
+.signal-lifecycle div { display: grid; min-width: 0; gap: 2px; }
+.signal-lifecycle strong { font-size: 11px; }
+.signal-lifecycle small { overflow: hidden; color: var(--signal-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+
+.signal-dossier-layout { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(300px, .72fr); gap: 10px; align-items: start; }
+.signal-dossier-main,
+.signal-dossier-sidebar { display: grid; min-width: 0; gap: 10px; }
+.signal-dossier-sidebar { position: sticky; top: 8px; }
+.signal-dossier-section { overflow: hidden; border: 1px solid var(--signal-line); border-radius: 7px; background: var(--signal-surface); }
+.signal-dossier-section > header { display: grid; min-height: 52px; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 9px; align-items: center; padding: 8px 11px; border-bottom: 1px solid var(--signal-line); background: linear-gradient(90deg, rgba(24, 64, 79, .25), transparent); }
+.signal-dossier-section__icon { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--signal-line-strong); border-radius: 5px; background: #0b2632; color: var(--signal-cyan); }
+.signal-dossier-section > header p { margin: 0; color: var(--signal-muted); font-size: 10px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+.signal-dossier-section > header h2 { margin: 2px 0 0; color: var(--signal-text); font-family: var(--lt-font-heading); font-size: 14px; line-height: 1.15; letter-spacing: -.01em; }
+.signal-dossier-section > header > small { padding: 3px 6px; border: 1px solid var(--signal-line); border-radius: 999px; color: var(--signal-muted); font-size: 10px; }
+.signal-dossier-section__body { display: grid; gap: 10px; padding: 10px; }
+.signal-dossier-section--compact .signal-dossier-section__body { padding: 9px; }
+.signal-dossier-section__action a { min-height: 30px; }
+
+.signal-trade-plan { display: grid; grid-template-columns: 1.45fr repeat(5, minmax(96px, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--signal-line); border-radius: 5px; background: var(--signal-line); }
+.signal-trade-plan > div { display: grid; min-width: 0; min-height: 66px; align-content: center; gap: 5px; padding: 9px; background: var(--signal-surface-raised); }
+.signal-trade-plan small { color: var(--signal-muted); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.signal-trade-plan strong { color: var(--signal-text); font-family: var(--lt-font-data); font-size: 13px; }
+.signal-trade-plan [data-tone="danger"] strong { color: var(--signal-red); }
+.signal-trade-plan [data-tone="success"] strong { color: var(--signal-green); }
+.signal-section-note { margin: 0; color: var(--signal-muted); font-size: 10px; line-height: 1.45; }
+
+.signal-evidence-list { display: grid; }
+.signal-evidence-list article { display: grid; min-height: 42px; grid-template-columns: 72px minmax(0, 1fr) minmax(100px, auto); gap: 9px; align-items: center; border-bottom: 1px solid var(--signal-line); }
+.signal-evidence-list article:last-child { border-bottom: 0; }
+.signal-evidence-list article div { display: grid; min-width: 0; gap: 2px; }
+.signal-evidence-list strong { font-size: 11px; }
+.signal-evidence-list small,
+.signal-evidence-list article > span { color: var(--signal-muted); font-family: var(--lt-font-data); font-size: 10px; }
+.signal-feature-snapshot,
+.signal-command-state { display: grid; min-height: 48px; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 9px; align-items: center; padding: 8px 9px; border: 1px solid var(--signal-line); border-radius: 5px; background: var(--signal-surface-raised); }
+.signal-feature-snapshot > svg,
+.signal-command-state > svg { color: var(--signal-cyan); }
+.signal-feature-snapshot div,
+.signal-command-state div { display: grid; min-width: 0; gap: 2px; }
+.signal-feature-snapshot strong,
+.signal-command-state strong { overflow: hidden; font-family: var(--lt-font-data); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.signal-feature-snapshot small,
+.signal-command-state small { color: var(--signal-muted); font-size: 10px; }
+
+.signal-authority-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.signal-authority-card { min-width: 0; overflow: hidden; border: 1px solid var(--signal-line); border-radius: 5px; background: var(--signal-surface-raised); }
+.signal-authority-card > header { display: grid; grid-template-columns: 25px minmax(0, 1fr); gap: 8px; align-items: center; padding: 8px; border-bottom: 1px solid var(--signal-line); }
+.signal-authority-card > header > span { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 4px; background: #102f3c; color: var(--signal-cyan); font-family: var(--lt-font-data); font-size: 10px; }
+.signal-authority-card[data-tone="success"] > header > span { background: rgba(79, 211, 154, .13); color: var(--signal-green); }
+.signal-authority-card[data-tone="danger"] > header > span { background: rgba(255, 111, 125, .13); color: var(--signal-red); }
+.signal-authority-card[data-tone="advisory"] > header > span { background: rgba(171, 132, 255, .14); color: #c8acff; }
+.signal-authority-card header div { display: grid; gap: 2px; }
+.signal-authority-card header strong { font-size: 11px; }
+.signal-authority-card header small { color: var(--signal-muted); font-size: 10px; }
+.signal-authority-card dl { display: grid; margin: 0; }
+.signal-authority-card dl div { display: grid; min-height: 31px; grid-template-columns: minmax(90px, .7fr) minmax(0, 1.3fr); gap: 7px; align-items: center; padding: 5px 8px; border-bottom: 1px solid rgba(23, 56, 74, .7); }
+.signal-authority-card dl div:last-child { border-bottom: 0; }
+.signal-authority-card dt { color: var(--signal-muted); font-size: 10px; }
+.signal-authority-card dd { margin: 0; color: var(--signal-secondary); font-size: 10px; text-align: right; }
+.signal-authority-card > p { min-height: 62px; margin: 0; padding: 10px; color: var(--signal-muted); font-size: 10px; line-height: 1.45; }
+
+.signal-audit-timeline { display: grid; margin: 0; padding: 0; list-style: none; }
+.signal-audit-timeline li > div,
+.signal-audit-timeline li > a { display: grid; min-height: 45px; grid-template-columns: 116px 14px minmax(0, 1fr) auto; gap: 9px; align-items: center; color: inherit; text-decoration: none; }
+.signal-audit-timeline time { color: var(--signal-muted); font-family: var(--lt-font-data); font-size: 10px; }
+.signal-audit-timeline__dot { position: relative; display: block; width: 8px; height: 8px; border: 2px solid var(--signal-cyan); border-radius: 50%; background: var(--signal-surface); }
+.signal-audit-timeline__dot::after { position: absolute; top: 8px; left: 2px; width: 1px; height: 37px; background: var(--signal-line); content: ""; }
+.signal-audit-timeline li:last-child .signal-audit-timeline__dot::after { display: none; }
+.signal-audit-timeline li[data-tone="advisory"] .signal-audit-timeline__dot { border-color: #b597f5; }
+.signal-audit-timeline li[data-tone="expired"] .signal-audit-timeline__dot { border-color: var(--signal-amber); }
+.signal-audit-timeline li div > div { display: grid; min-width: 0; gap: 2px; }
+.signal-audit-timeline strong { font-size: 11px; }
+.signal-audit-timeline small { overflow: hidden; color: var(--signal-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.signal-audit-timeline em { color: var(--signal-muted); font-size: 10px; font-style: normal; }
+
+.signal-identity-list { display: grid; margin: 0; }
+.signal-identity-list > div { display: grid; min-height: 31px; grid-template-columns: 82px minmax(0, 1fr); gap: 8px; align-items: center; border-bottom: 1px solid var(--signal-line); }
+.signal-identity-list dt { color: var(--signal-muted); font-size: 10px; }
+.signal-identity-list dd { overflow: hidden; margin: 0; color: var(--signal-secondary); font-family: var(--lt-font-data); font-size: 10px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.signal-related-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.signal-related-links a { min-width: 0; min-height: 32px; padding: 0 5px; }
+.signal-related-records { display: grid; gap: 12px; }
+.signal-related-records section { display: grid; gap: 5px; }
+.signal-related-records h3 { margin: 0; color: var(--signal-secondary); font-size: 10px; }
+.signal-related-records article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: center; padding: 7px; border: 1px solid var(--signal-line); border-radius: 4px; }
+.signal-related-records article div { display: grid; min-width: 0; gap: 2px; }
+.signal-related-records article strong { font-size: 10px; }
+.signal-related-records article small,
+.signal-related-records article > span { color: var(--signal-muted); font-size: 10px; }
+.signal-evidence-empty { display: grid; gap: 3px; padding: 10px; border: 1px dashed var(--signal-line-strong); border-radius: 5px; background: rgba(10, 29, 41, .55); }
+.signal-evidence-empty strong { color: var(--signal-secondary); font-size: 10px; }
+.signal-evidence-empty span { color: var(--signal-muted); font-size: 10px; line-height: 1.4; }
+
+.signal-command-state { grid-template-columns: 22px minmax(0, 1fr); }
+.signal-command-error { margin: 0; color: var(--signal-red); font-size: 10px; }
+.signal-command-reason { display: grid; gap: 5px; }
+.signal-command-reason > span { color: var(--signal-muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.signal-command-reason textarea { min-height: 68px; resize: vertical; border: 1px solid var(--signal-line-strong); border-radius: 5px; background: #06151f; color: var(--signal-text); padding: 8px; font: inherit; font-size: 10px; line-height: 1.45; }
+.signal-command-actions { display: grid; gap: 6px; }
+.signal-command-actions article { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 7px; align-items: center; padding: 7px; border: 1px solid var(--signal-line); border-radius: 5px; background: var(--signal-surface-raised); }
+.signal-command-actions article > div { display: grid; min-width: 0; gap: 2px; }
+.signal-command-actions strong { font-size: 10px; }
+.signal-command-actions small { color: var(--signal-muted); font-size: 10px; }
+.signal-command-actions button { min-height: 30px; }
+
+.signal-dossier-skeleton { min-height: 130px; border: 1px solid var(--signal-line); border-radius: 8px; background: linear-gradient(90deg, #071722 25%, #0d2633 50%, #071722 75%); background-size: 200% 100%; animation: signal-skeleton 1.4s linear infinite; }
+.signal-dossier-skeleton--tall { min-height: 420px; }
+@keyframes signal-skeleton { to { background-position-x: -200%; } }
+
+@media (max-width: 1180px) {
+  .signal-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .signal-hero__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .signal-lifecycle { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .signal-lifecycle li:nth-child(3) { border-right: 0; }
+  .signal-dossier-layout { grid-template-columns: 1fr; }
+  .signal-dossier-sidebar { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .signal-dossier-sidebar > :last-child { grid-column: 1 / -1; }
+  .signal-trade-plan { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .signal-hero { grid-template-columns: 1fr; }
+  .signal-hero__clock { grid-template-columns: 1fr; }
+  .signal-hero__actions { grid-template-columns: 1fr; }
+  .signal-lifecycle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .signal-lifecycle li:nth-child(3) { border-right: 1px solid var(--signal-line); }
+  .signal-lifecycle li:nth-child(even) { border-right: 0; }
+  .signal-authority-grid,
+  .signal-dossier-sidebar { grid-template-columns: 1fr; }
+  .signal-dossier-sidebar > :last-child { grid-column: auto; }
+  .signal-trade-plan { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .signal-dossier-section > header { grid-template-columns: 28px minmax(0, 1fr) auto; }
+  .signal-dossier-section__action { grid-column: 1 / -1; }
+  .signal-audit-timeline li > div,
+  .signal-audit-timeline li > a { grid-template-columns: 88px 14px minmax(0, 1fr); }
+  .signal-audit-timeline em { display: none; }
+}
+
+@media (max-width: 460px) {
+  .signal-trade-plan { grid-template-columns: 1fr; }
+  .signal-related-links { grid-template-columns: 1fr; }
+  .signal-command-actions article { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal-dossier-skeleton { animation: none; }
+}

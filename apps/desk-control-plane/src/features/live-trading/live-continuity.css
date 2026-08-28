@@ -13,6 +13,15 @@
 .lt-chart-volume-control output { min-width: 27px; color: var(--lt-text); font-variant-numeric: tabular-nums; }
 .lt-chart-canvas--pro .lt-chart-controls button[aria-pressed="true"] { border-color: var(--lt-flight-cyan); background: #0c303a; color: #ccfbff; }
 
+.lt-chart-signal-context { display: grid; min-height: 42px; grid-template-columns: 10px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 5px 8px; border-top: 1px solid var(--lt-flight-line); border-bottom: 1px solid var(--lt-flight-line); background: #081a24; }
+.lt-chart-signal-context__marker { width: 7px; height: 7px; border: 2px solid var(--lt-flight-cyan); border-radius: 50%; box-shadow: 0 0 0 3px rgba(56, 200, 216, .09); }
+.lt-chart-signal-context > div { display: grid; min-width: 0; gap: 1px; }
+.lt-chart-signal-context strong { overflow: hidden; color: var(--lt-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.lt-chart-signal-context small,
+.lt-chart-signal-context > span { color: var(--lt-muted); font-size: 10px; }
+.lt-chart-signal-context[data-status="partial"] > span { color: var(--lt-flight-amber); }
+.lt-chart-signal-context a { display: inline-flex; min-height: 28px; align-items: center; padding: 0 7px; border: 1px solid var(--lt-flight-line); border-radius: 4px; color: var(--lt-flight-cyan); font-size: 10px; text-decoration: none; }
+
 .lt-chart-error {
   position: absolute;
   z-index: 5;
@@ -112,6 +121,8 @@
 .lt-signal-inbox th, .lt-signal-inbox td { height: 34px; padding: 5px 8px; border-bottom: 1px solid rgba(42, 83, 102, .4); font-size: 11px; text-align: left; white-space: nowrap; }
 .lt-signal-inbox thead th { position: sticky; z-index: 1; top: 0; background: #091923; color: var(--lt-muted); }
 .lt-signal-inbox tbody tr[data-selected="true"] { background: rgba(56, 200, 216, .09); box-shadow: inset 3px 0 var(--lt-flight-cyan); }
+.lt-signal-inbox tbody tr[data-expired="true"] { opacity: .82; }
+.lt-signal-inbox__temporal-note { display: block; margin-top: 2px; color: var(--lt-flight-amber); font-size: 10px; }
 .lt-signal-inbox__actions { display: flex; gap: 4px; align-items: center; }
 .lt-signal-inbox__actions button, .lt-signal-inbox__actions a { display: inline-flex; min-height: 28px; gap: 4px; align-items: center; padding: 0 6px; border: 1px solid var(--lt-flight-line); border-radius: 4px; background: #0a202c; color: var(--lt-secondary); font-size: 11px; text-decoration: none; cursor: pointer; }
 .lt-signal-inbox__actions button[aria-pressed="true"] { border-color: var(--lt-flight-cyan); color: #c9f8fb; }
@@ -141,6 +152,8 @@
   .lt-activity-dock__tabs { overflow-x: auto; overflow-y: auto; }
   .lt-signal-inbox__metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lt-signal-inbox__filters { grid-template-columns: 1fr; }
+  .lt-chart-signal-context { grid-template-columns: 10px minmax(0, 1fr) auto; }
+  .lt-chart-signal-context > span { display: none; }
   .lt-signal-inbox__actions button, .lt-signal-inbox__actions a { min-height: 44px; }
   .lt-decision-stack__dossier { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lt-cockpit .lt-panel.lt-panel--expanded,

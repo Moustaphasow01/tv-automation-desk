@@ -1,6 +1,6 @@
 import { codedError, text } from "./front-control-plane-common.js";
 import { number, rows } from "./front-control-plane-projection-helpers.js";
-import { orderRow, positionRow, signalRow } from "./front-control-plane-row-mappers.js";
+import { orderRow, positionRow, signalRow, signalTemporalRow } from "./front-control-plane-row-mappers.js";
 
 export function liveSignalDetail({ strategy, execution, risk, ai, query, nowIso }) {
   const source = selectById(rows(nested(strategy, ["signals"])), query.signalId, (item) => firstValue(item.signal_outbox_id, item.signal_id), "LIVE_SIGNAL_NOT_FOUND");
@@ -10,7 +10,7 @@ export function liveSignalDetail({ strategy, execution, risk, ai, query, nowIso 
   return {
     summary: liveSignalSummary({ signal, source, risk, nowIso }),
     identity: identityValue,
-    signal: liveSignalBody({ signal, source }),
+    signal: liveSignalBody({ source, nowIso }),
     predicates: rows(source.predicates),
     featureSnapshot: liveSignalFeatureSnapshot({ signal, source, nowIso }),
     context: [],
@@ -36,11 +36,15 @@ function liveSignalSummary({ signal, source, risk, nowIso }) {
     conflictCount: 0,
   };
 }
-function liveSignalBody({ signal, source }) {
+function liveSignalBody({ source, nowIso }) {
+  const signal = signalTemporalRow(source, nowIso);
   return {
     symbol: signal.symbol,
     direction: signal.direction,
     state: signal.state,
+    effectiveState: signal.effectiveState,
+    stateAsOf: signal.stateAsOf,
+    temporalReason: signal.temporalReason,
     generatedAt: signal.createdAt,
     expiresAt: signal.expiresAt,
     confidence: signal.confidence,

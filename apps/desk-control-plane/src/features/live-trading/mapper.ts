@@ -1,6 +1,7 @@
 import type { LiveTimeSeriesContract } from "@/domains/front-api/viewModels";
 import type { HumanGateAction } from "@/features/order-intent/model";
 import type { LiveTone, LiveTradingEnvelope, LiveTradingModel } from "./model";
+import { resolveSignalTemporalState } from "./signalTemporalState";
 
 export type LiveTradingSelection = {
   signalId?: string | null;
@@ -63,7 +64,7 @@ export function toLiveTradingModel(
       tone: degraded ? "warning" : "success",
       detail: meta.warnings?.join(" · ") || "Projection BFF autoritaire disponible",
     },
-    operator: buildOperatorState(meta.availability ?? "UNAVAILABLE", meta.stale, latestSignal, orderIntent, selectedTheoreticalExecution),
+    operator: buildOperatorState(meta.availability ?? "UNAVAILABLE", meta.stale, latestSignal, orderIntent, selectedTheoreticalExecution, meta.asOf),
     signalFunnel,
     marketIntelligence: buildMarketIntelligence(data, latestSignal, latestContextDecision),
     selectedSignalPlan: buildSignalPlanSummary(latestSignal),
@@ -133,6 +134,7 @@ function buildOperatorState(
   latestSignal: LiveTradingModel["latestSignal"],
   orderIntent: LiveTradingModel["orderIntent"],
   theoretical: LiveTradingModel["selectedTheoreticalExecution"],
+  asOf: string,
 ): LiveTradingModel["operator"] {
   if (stale || availability === "UNAVAILABLE") {
     return {
@@ -173,11 +175,12 @@ function buildOperatorState(
     };
   }
   if (latestSignal) {
+    const temporal = resolveSignalTemporalState(latestSignal, asOf);
     return {
       status: "SIGNAL_DETECTED",
-      label: "Signal détecté",
-      detail: `${latestSignal.symbol} ${latestSignal.direction} · ${latestSignal.state} · expire ${displayTime(latestSignal.expiresAt)}`,
-      tone: latestSignal.state === "REJECTED" || latestSignal.state === "EXPIRED" ? "warning" : "info",
+      label: temporal.effectiveState === "EXPIRED" ? "Dernier signal expiré" : "Signal détecté",
+      detail: `${latestSignal.symbol} ${latestSignal.direction} · ${temporal.label} · ${temporal.effectiveState === "EXPIRED" ? "expiré" : "expire"} ${displayTime(latestSignal.expiresAt)}`,
+      tone: temporal.effectiveState === "REJECTED" || temporal.effectiveState === "EXPIRED" ? "warning" : "info",
     };
   }
   return {

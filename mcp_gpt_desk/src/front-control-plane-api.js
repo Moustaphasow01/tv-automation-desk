@@ -46,7 +46,7 @@ import {
 import { executionIncidents, incidentRow, incidentSummary } from "./front-control-plane-incident-projection.js";
 import { executionAuthorityMode, orderIntentReconciliation } from "./front-order-detail-support.js";
 import { orderHumanGateProjection, permissions, resourceAllowedActions } from "./front-control-plane-permissions.js";
-import { accountRow, activeOrderRow, fillRow, intentRow, orderFillRow, orderRow, positionRow, providerRows, signalRow } from "./front-control-plane-row-mappers.js";
+import { accountRow, activeOrderRow, fillRow, intentRow, orderFillRow, orderRow, positionRow, providerRows, signalRow, signalTemporalRow } from "./front-control-plane-row-mappers.js";
 import { frontTimeSeriesContracts } from "./front-control-plane-time-series-contracts.js";
 
 export {
@@ -1072,7 +1072,7 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
   const scope = normalizeFrontApiScope(query);
   const cohort = currentLiveLineageCohort({ execution: executionValue, strategy, nowIso });
   const funnelSignals = cohort.signals.filter(hasSignalId).map(signalRow);
-  const signalInbox = rows(strategy?.signals).filter(isNominalLiveSignal).filter(hasSignalId).map(signalRow);
+  const signalInbox = rows(strategy?.signals).filter(isNominalLiveSignal).filter(hasSignalId).map((item) => signalTemporalRow(item, nowIso));
   const nominalIntentRows = cohort.portfolioOrderIntents;
   const nominalIntentIds = new Set(nominalIntentRows.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
   const portfolioOrderIntents = nominalIntentRows.map((item) => portfolioOrderIntentSummaryRow({ execution: executionValue, item, actor }));

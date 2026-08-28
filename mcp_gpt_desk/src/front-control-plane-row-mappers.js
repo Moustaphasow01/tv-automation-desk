@@ -101,6 +101,23 @@ export function signalRow(item) {
   };
 }
 
+export function signalTemporalRow(item, nowIso) {
+  const signal = signalRow(item);
+  const expiryMs = Date.parse(signal.expiresAt);
+  const asOfMs = Date.parse(nowIso);
+  const expiredByClock = ["NEW", "ARBITRATED"].includes(signal.state)
+    && Number.isFinite(expiryMs)
+    && Number.isFinite(asOfMs)
+    && expiryMs <= asOfMs;
+
+  return {
+    ...signal,
+    effectiveState: expiredByClock ? "EXPIRED" : signal.state,
+    stateAsOf: nowIso,
+    temporalReason: expiredByClock ? "EXPIRY_TIMESTAMP_ELAPSED" : null,
+  };
+}
+
 function confidencePct(value) {
   const parsed = number(value, 0);
   return parsed > 0 && parsed <= 1 ? Math.round(parsed * 100) : parsed;

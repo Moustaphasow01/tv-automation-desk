@@ -52,6 +52,24 @@ describe("Live Trading continuity", () => {
     expect(markup).not.toContain("Risk ·");
   });
 
+  it("exposes three explicit signal destinations and presents elapsed NEW signals as expired", () => {
+    const envelope = multiInstrumentEnvelope(1);
+    envelope.meta.asOf = "2026-08-28T08:00:00.000Z";
+    envelope.data.signals = envelope.data.signals.map((signal) => ({
+      ...signal,
+      state: "NEW",
+      expiresAt: "2026-08-27T22:05:00.000Z",
+    }));
+    envelope.data.canonicalRuntime.latestSignals = envelope.data.signals;
+    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(LiveSignalInbox, { model: toLiveTradingModel(envelope) })));
+
+    expect(markup).toContain("Décision");
+    expect(markup).toContain("Graphique");
+    expect(markup).toContain("Dossier complet");
+    expect(markup).toContain("Expiré");
+    expect(markup).toContain("état brut NEW");
+  });
+
   it("does not draw a pinned signal context marker on another instrument", () => {
     const envelope = multiInstrumentEnvelope(2);
     envelope.data.canonicalRuntime.aiContextGate = [{

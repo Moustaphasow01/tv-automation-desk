@@ -1481,6 +1481,7 @@ test("front control plane composes Command Center research truth and resolves de
       { signal_id: "signal-a", strategy_id: "strategy-a", instrument_code: "MNQ", side: "long", confidence: 61 },
       { signal_id: "signal-b", strategy_id: "strategy-b", instrument_code: "MES", side: "short", confidence: 73 },
       { signal_id: "signal-expired", strategy_id: "strategy-c", instrument_code: "ZW", side: "long", confidence: 55, status: "EXPIRED", expires_at_utc: "2026-08-10T08:00:00.000Z" },
+      { signal_id: "signal-clock-expired", strategy_id: "strategy-d", instrument_code: "ZC", side: "long", confidence: 57, status: "NEW", expires_at_utc: "2026-08-10T08:00:00.000Z" },
     ],
   });
 
@@ -1490,10 +1491,14 @@ test("front control plane composes Command Center research truth and resolves de
   const first = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "signal-a" } });
   const second = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "signal-b" } });
   const expired = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "signal-expired" } });
+  const clockExpired = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "signal-clock-expired" } });
   assert.equal(first.data.identity.signalId, "signal-a");
   assert.equal(second.data.identity.signalId, "signal-b");
   assert.equal(expired.data.identity.signalId, "signal-expired");
   assert.equal(expired.data.signal.state, "EXPIRED");
+  assert.equal(clockExpired.data.signal.state, "NEW");
+  assert.equal(clockExpired.data.signal.effectiveState, "EXPIRED");
+  assert.equal(clockExpired.data.signal.temporalReason, "EXPIRY_TIMESTAMP_ELAPSED");
   assert.notEqual(first.data.signal.symbol, second.data.signal.symbol);
   await assert.rejects(
     () => handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "missing" } }),

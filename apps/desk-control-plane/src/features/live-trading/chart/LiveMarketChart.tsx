@@ -6,6 +6,7 @@ import { presentAvailability, presentGeneric } from "@/design-system/labels";
 import { displayTime, displayValue } from "../mapper";
 import { LivePanel } from "../LivePanel";
 import type { LiveTradingModel } from "../model";
+import { resolveSignalTemporalState } from "../signalTemporalState";
 import {
   instrumentCode,
   tradePlanOverlayFromIntent,
@@ -26,6 +27,7 @@ export type InstrumentChartPanelProps = {
   requestedScope?: MarketScope;
   loading?: boolean;
   error?: string | null;
+  focusAt?: string | null;
 };
 
 export function InstrumentChartPanel({
@@ -35,6 +37,7 @@ export function InstrumentChartPanel({
   requestedScope = {},
   loading = false,
   error = null,
+  focusAt = null,
 }: InstrumentChartPanelProps) {
   const [overlayMode, setOverlayMode] = useState<OverlayMode>("AUTO");
   const instrument = model.marketSeries.instrument ?? "Instrument non publié";
@@ -74,6 +77,7 @@ export function InstrumentChartPanel({
         onOverlayMode={setOverlayMode}
         onScopeChange={onScopeChange}
       />
+      <SignalChartContext model={model} chartInstrument={chartInstrument} focusAt={focusAt} />
       <div className="lt-chart-frame" data-availability={model.marketSeries.availability} aria-busy={loading}>
         {model.marketSeries.points.length ? (
           <CandlestickChart
@@ -84,6 +88,7 @@ export function InstrumentChartPanel({
             scope={`${instrument} ${formatTimeframe(timeframe ?? "")}`}
             refreshing={loading}
             syncLabel={pendingDifferentScope ? `Chargement ${requestedInstrument || instrument} ${formatTimeframe(requestedTimeframe || timeframe || "")}` : "Synchronisation"}
+            focusAt={focusAt}
           />
         ) : (
           <ChartEmpty model={model} />
@@ -96,6 +101,29 @@ export function InstrumentChartPanel({
         <StatusBadge tone={presentAvailability(model.marketSeries.availability).tone}>{presentAvailability(model.marketSeries.availability).label}</StatusBadge>
       </footer>
     </LivePanel>
+  );
+}
+
+function SignalChartContext({ model, chartInstrument, focusAt }: {
+  model: LiveTradingModel;
+  chartInstrument: string | null;
+  focusAt: string | null;
+}) {
+  const signal = model.latestSignal;
+  if (!signal) return null;
+  const temporal = resolveSignalTemporalState(signal, model.meta.asOf);
+  const sameScope = sameInstrument(chartInstrument, signal.symbol);
+  const hasCoverage = focusAt ? coversTimestamp(model.marketSeries.points, focusAt) : true;
+  return (
+    <div className="lt-chart-signal-context" data-status={sameScope && hasCoverage ? "ready" : "partial"} role="status">
+      <span className="lt-chart-signal-context__marker" aria-hidden="true" />
+      <div>
+        <strong>{signal.symbol} · {presentGeneric(signal.direction).label} · {temporal.label}</strong>
+        <small>Signal {shortSignalId(signal.signalId)} · {displayTime(signal.sourceDataCutoffAt || signal.createdAt)} · fenêtre historique reproductible</small>
+      </div>
+      <span>{!sameScope ? `Graphique ${chartInstrument ?? "non publié"}` : !hasCoverage ? "Bougies hors fenêtre chargée" : "Signal centré"}</span>
+      <Link to={`/live/signals/${encodeURIComponent(signal.signalId)}`}>Dossier complet</Link>
+    </div>
   );
 }
 
@@ -131,13 +159,14 @@ function ChartToolbar({ model, showScopeControls, overlayMode, overlays, onOverl
 type ChartPoint = LiveTradingModel["marketSeries"]["points"][number];
 type ChartMarker = { id: string; at: string; label: string; tone: "signal" | "context" | "intent" | "fill"; selected?: boolean };
 
-function CandlestickChart({ points, overlay, markers, scope, refreshing, syncLabel }: {
+function CandlestickChart({ points, overlay, markers, scope, refreshing, syncLabel, focusAt }: {
   points: LiveTradingModel["marketSeries"]["points"];
   overlay?: TradeOverlay | null;
   markers: readonly ChartMarker[];
   scope: string;
   refreshing: boolean;
   syncLabel: string;
+  focusAt?: string | null;
 }) {
   const drawable = useMemo(() => points.filter(isDrawable), [points]);
   const [viewport, dispatch] = useReducer(reduceViewport, drawable.length, (length) => createViewport(length));
@@ -145,6 +174,7 @@ function CandlestickChart({ points, overlay, markers, scope, refreshing, syncLab
   const [volumeRatio, setVolumeRatio] = useState(0.2);
   const previousDrawable = useRef(drawable);
   const viewportRef = useRef(viewport);
+  const lastFocusedAt = useRef<string | null>(null);
   const drag = useRef<{ x: number; y: number; mode: "X" | "Y"; remainderPixels: number } | null>(null);
 
   viewportRef.current = viewport;
@@ -168,6 +198,15 @@ function CandlestickChart({ points, overlay, markers, scope, refreshing, syncLab
     }
     previousDrawable.current = drawable;
   }, [drawable]);
+
+  useEffect(() => {
+    if (!focusAt || !drawable.length || lastFocusedAt.current === focusAt) return;
+    const index = nearestPointIndex(drawable, focusAt);
+    const size = Math.min(48, drawable.length);
+    const start = Math.max(0, Math.min(index - Math.floor(size * 0.4), drawable.length - size));
+    dispatch({ type: "RESTORE_WINDOW", start, size, length: drawable.length });
+    lastFocusedAt.current = focusAt;
+  }, [drawable, focusAt]);
 
   if (!drawable.length) return <div className="lt-chart-empty" role="status"><strong>Connecté, sans bougie</strong><span>Aucune bougie OHLC complète à tracer.</span></div>;
   const range = visibleWindow(viewport, drawable.length);
@@ -398,7 +437,7 @@ function TradeLevelLabels({ overlay, y, x1, x2, labelWidth }: { overlay: TradeOv
 }
 
 export function chartMarkers(model: LiveTradingModel, instrument: string | null): ChartMarker[] {
-  const markers: ChartMarker[] = model.source.signals.filter((signal) => sameInstrument(instrument, signal.symbol)).map((signal) => ({ id: `signal:${signal.signalId}`, at: signal.sourceDataCutoffAt ?? signal.createdAt, label: `${signal.symbol} ${presentGeneric(signal.direction).label} · ${presentGeneric(signal.state).label}`, tone: "signal", selected: signal.signalId === model.latestSignal?.signalId }));
+  const markers: ChartMarker[] = model.source.signals.filter((signal) => sameInstrument(instrument, signal.symbol)).map((signal) => ({ id: `signal:${signal.signalId}`, at: signal.sourceDataCutoffAt ?? signal.createdAt, label: `${signal.symbol} ${presentGeneric(signal.direction).label} · ${resolveSignalTemporalState(signal, model.meta.asOf).label}`, tone: "signal", selected: signal.signalId === model.latestSignal?.signalId }));
   const context = model.latestContextDecision; if (context?.decidedAt && sameInstrument(instrument, model.latestSignal?.symbol)) markers.push({ id: `context:${context.decisionId}`, at: context.decidedAt, label: `Contexte · ${presentGeneric(context.recommendation).label}`, tone: "context", selected: true });
   if (model.orderIntent?.createdAt && sameInstrument(instrument, instrumentCode(model.orderIntent))) markers.push({ id: `intent:${model.orderIntent.portfolioOrderIntentId}`, at: model.orderIntent.createdAt, label: `OrderIntent · ${presentGeneric(model.orderIntent.state).label}`, tone: "intent", selected: true });
   const theoretical = model.selectedTheoreticalExecution; if (theoretical && sameInstrument(instrument, theoretical.instrument)) { if (theoretical.entryFilledAt) markers.push({ id: `fill:${theoretical.tradeId}`, at: theoretical.entryFilledAt, label: "Entrée théorique exécutée", tone: "fill", selected: true }); if (theoretical.exitAt) markers.push({ id: `exit:${theoretical.tradeId}`, at: theoretical.exitAt, label: `Sortie théorique · ${presentGeneric(theoretical.status).label}`, tone: "fill", selected: true }); }
@@ -414,6 +453,8 @@ function isFiniteNumber(value: unknown): value is number { return typeof value =
 function sameInstrument(left: unknown, right: unknown): boolean { const a = normalizeInstrument(left); const b = normalizeInstrument(right); return Boolean(a && b && a === b); }
 function normalizeInstrument(value: unknown): string | null { return String(value ?? "").trim().toUpperCase() || null; }
 function normalizeTimeframe(value: unknown): string { const normalized = String(value ?? "").trim().toUpperCase().replace(/^M/, ""); if (["H1", "1H", "60"].includes(normalized)) return "60"; if (["H4", "4H", "240"].includes(normalized)) return "240"; if (["D", "D1", "1D", "1440"].includes(normalized)) return "D"; return normalized; }
+function coversTimestamp(points: readonly ChartPoint[], at: string): boolean { const target = Date.parse(at); const start = Date.parse(points[0]?.timestamp ?? ""); const end = Date.parse(points.at(-1)?.timestamp ?? ""); return Number.isFinite(target) && Number.isFinite(start) && Number.isFinite(end) && target >= start && target <= end; }
+function shortSignalId(value: string): string { return value.length > 30 ? `${value.slice(0, 15)}…${value.slice(-10)}` : value; }
 function optionSet(values: readonly (string | null | undefined)[]): string[] { return [...new Set(values.map((value) => String(value ?? "").trim().toUpperCase()).filter(Boolean))]; }
 function formatInstrumentLabel(value: string): string { if (value === "MNQ") return "MNQ · MQ"; if (value === "MES") return "MES · MS"; return value; }
 function formatTimeframe(value: string): string { const normalized = normalizeTimeframe(value); if (normalized === "60") return "H1"; if (normalized === "240") return "H4"; if (normalized === "D") return "D1"; return normalized ? `M${normalized}` : "—"; }

@@ -9,6 +9,7 @@ import {
   ReconciliationPanel,
 } from "./LiveTradingPanels";
 import { LiveSignalInbox } from "./LiveSignalInbox";
+import type { LiveSignalNavigationTarget } from "./LiveSignalInbox";
 import type { LiveTradingModel } from "./model";
 import { useFullscreenSurface } from "./useFullscreenSurface";
 
@@ -26,12 +27,17 @@ const DOCK_TABS: readonly { id: DockTab; label: string; icon: ReactNode }[] = [
 export function LiveActivityDock({ model, selectedSignalId, onSelectSignal, onClearSignal, onShowOnChart }: {
   model: LiveTradingModel;
   selectedSignalId?: string | null;
-  onSelectSignal?(signalId: string): void;
+  onSelectSignal?(target: LiveSignalNavigationTarget): void;
   onClearSignal?(): void;
-  onShowOnChart?(instrument: string): void;
+  onShowOnChart?(target: LiveSignalNavigationTarget): void;
 }) {
   const [activeTab, setActiveTab] = useState<DockTab>(() => initialTab(model));
   const fullscreen = useFullscreenSurface<HTMLElement>();
+  const leaveFullscreenThen = (callback: (() => void) | undefined) => {
+    if (!callback) return;
+    if (fullscreen.expanded) fullscreen.close();
+    window.requestAnimationFrame(() => window.requestAnimationFrame(callback));
+  };
   const onTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -99,7 +105,12 @@ export function LiveActivityDock({ model, selectedSignalId, onSelectSignal, onCl
           aria-labelledby={`lt-dock-tab-${activeTab.toLowerCase()}`}
           tabIndex={0}
         >
-          {renderTab(activeTab, model, { selectedSignalId, onSelectSignal, onClearSignal, onShowOnChart })}
+          {renderTab(activeTab, model, {
+            selectedSignalId,
+            onSelectSignal: (target) => leaveFullscreenThen(() => onSelectSignal?.(target)),
+            onClearSignal,
+            onShowOnChart: (target) => leaveFullscreenThen(() => onShowOnChart?.(target)),
+          })}
         </div>
       </section>
     </>

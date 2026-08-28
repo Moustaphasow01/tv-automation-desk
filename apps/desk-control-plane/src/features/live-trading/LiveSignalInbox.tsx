@@ -5,15 +5,23 @@ import { StatusBadge } from "@/design-system/primitives";
 import { presentGeneric, presentSignalState } from "@/design-system/labels";
 import { displayTime, displayValue } from "./mapper";
 import type { LiveTradingModel } from "./model";
+import { resolveSignalTemporalState } from "./signalTemporalState";
 
 type SignalRow = LiveTradingModel["source"]["signals"][number];
+
+export type LiveSignalNavigationTarget = {
+  signalId: string;
+  instrument: string;
+  at: string;
+  timeframe?: string | null;
+};
 
 export type LiveSignalInboxProps = {
   model: LiveTradingModel;
   selectedSignalId?: string | null;
-  onSelectSignal?(signalId: string): void;
+  onSelectSignal?(target: LiveSignalNavigationTarget): void;
   onClearSignal?(): void;
-  onShowOnChart?(instrument: string): void;
+  onShowOnChart?(target: LiveSignalNavigationTarget): void;
 };
 
 export function LiveSignalInbox({
@@ -29,16 +37,16 @@ export function LiveSignalInbox({
   const [limit, setLimit] = useState(12);
   const signals = useMemo(() => allSignals(model), [model]);
   const instruments = useMemo(() => unique(signals.map((signal) => signal.symbol)), [signals]);
-  const states = useMemo(() => unique(signals.map((signal) => signal.state)), [signals]);
+  const states = useMemo(() => unique(signals.map((signal) => effectiveSignalState(signal, model.meta.asOf))), [model.meta.asOf, signals]);
   const filtered = useMemo(() => signals.filter((signal) => {
     const matchesInstrument = instrument === "ALL" || signal.symbol === instrument;
-    const matchesStatus = status === "ALL" || signal.state === status;
+    const matchesStatus = status === "ALL" || effectiveSignalState(signal, model.meta.asOf) === status;
     const needle = search.trim().toLocaleLowerCase("fr-FR");
     const matchesSearch = !needle || `${signal.signalId} ${signal.strategyId} ${signal.symbol} ${signal.direction}`
       .toLocaleLowerCase("fr-FR")
       .includes(needle);
     return matchesInstrument && matchesStatus && matchesSearch;
-  }), [instrument, search, signals, status]);
+  }), [instrument, model.meta.asOf, search, signals, status]);
   const visible = filtered.slice(0, limit);
 
   return (
@@ -94,19 +102,24 @@ export function LiveSignalInbox({
             {visible.map((signal) => {
               const stage = signalStage(model, signal);
               const selected = selectedSignalId === signal.signalId || (!selectedSignalId && model.latestSignal?.signalId === signal.signalId);
+              const temporal = resolveSignalTemporalState(signal, model.meta.asOf);
+              const target = signalNavigationTarget(signal);
               return (
-                <tr key={signal.signalId} data-selected={selected ? "true" : "false"}>
+                <tr key={signal.signalId} data-selected={selected ? "true" : "false"} data-expired={temporal.effectiveState === "EXPIRED" ? "true" : "false"}>
                   <td><time dateTime={signal.createdAt}>{displayTime(signal.createdAt)}</time></td>
                   <td><strong>{signal.symbol}</strong></td>
                   <td title={signal.strategyId}>{compactId(signal.strategyId)}</td>
-                  <td><StatusBadge tone={presentSignalState(signal.state).tone}>{presentGeneric(signal.direction).label} · {presentSignalState(signal.state).label}</StatusBadge></td>
+                  <td>
+                    <StatusBadge tone={temporal.tone}>{presentGeneric(signal.direction).label} · {temporal.label}</StatusBadge>
+                    {temporal.mismatch ? <small className="lt-signal-inbox__temporal-note">état brut {temporal.backendState}</small> : null}
+                  </td>
                   <td><span className={`lt-signal-stage lt-signal-stage--${stage.tone}`}>{stage.label}</span></td>
                   <td>{displayValue(signal.rewardRisk)}</td>
                   <td>
                     <div className="lt-signal-inbox__actions">
-                      <button type="button" aria-pressed={selected} onClick={() => onSelectSignal?.(signal.signalId)} title="Épingler ce dossier de décision"><FaBullseye aria-hidden="true" /><span>Dossier</span></button>
-                      <button type="button" onClick={() => onShowOnChart?.(signal.symbol)} title={`Afficher ${signal.symbol} sur le graphique`}><FaChartLine aria-hidden="true" /><span>Graphique</span></button>
-                      <Link to={`/live/signals/${encodeURIComponent(signal.signalId)}`}>Détail</Link>
+                      <button type="button" aria-pressed={selected} onClick={() => onSelectSignal?.(target)} title="Examiner ce signal dans la chaîne de décision"><FaBullseye aria-hidden="true" /><span>Décision</span></button>
+                      <button type="button" onClick={() => onShowOnChart?.(target)} title={`Centrer le graphique ${signal.symbol} sur ce signal`}><FaChartLine aria-hidden="true" /><span>Graphique</span></button>
+                      <Link to={`/live/signals/${encodeURIComponent(signal.signalId)}`} title="Ouvrir le dossier signal complet">Dossier complet</Link>
                     </div>
                   </td>
                 </tr>
@@ -155,4 +168,17 @@ function unique(values: readonly string[]): string[] {
 
 function compactId(value: string): string {
   return value.length > 26 ? `${value.slice(0, 23)}…` : value;
+}
+
+function effectiveSignalState(signal: SignalRow, asOf: string): string {
+  return resolveSignalTemporalState(signal, asOf).effectiveState;
+}
+
+function signalNavigationTarget(signal: SignalRow): LiveSignalNavigationTarget {
+  return {
+    signalId: signal.signalId,
+    instrument: signal.symbol,
+    at: signal.sourceDataCutoffAt || signal.createdAt,
+    timeframe: signal.timeframe,
+  };
 }

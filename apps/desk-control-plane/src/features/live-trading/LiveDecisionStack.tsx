@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { CommandAccepted, CommandStatus } from "@/domains/realtime/commandRuntime";
-import { presentAvailability, presentGeneric, presentSignalState } from "@/design-system/labels";
+import { presentAvailability, presentGeneric } from "@/design-system/labels";
 import { StatusBadge } from "@/design-system/primitives";
 import type { HumanGateAction } from "@/features/order-intent/model";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import { LiveHumanGate } from "./LiveHumanGate";
 import { displayTime, displayValue, recordValue } from "./mapper";
 import type { LiveTradingModel } from "./model";
+import { resolveSignalTemporalState } from "./signalTemporalState";
 
 export type LiveDecisionStackProps = {
   model: LiveTradingModel;
@@ -88,7 +89,8 @@ export function LiveDecisionStack(props: LiveDecisionStackProps) {
 
 function SignalStage({ model, defaultExpanded }: { model: LiveTradingModel; defaultExpanded: boolean }) {
   const signal = model.latestSignal;
-  const presentation = signal ? presentSignalState(signal.state) : presentAvailability("CONNECTED_EMPTY");
+  const temporal = signal ? resolveSignalTemporalState(signal, model.meta.asOf) : null;
+  const presentation = temporal ?? presentAvailability("CONNECTED_EMPTY");
   return (
     <StageShell stage="signal" index="01" title="Signal de stratégie" status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />} defaultExpanded={defaultExpanded}>
       {signal ? (
@@ -101,8 +103,9 @@ function SignalStage({ model, defaultExpanded }: { model: LiveTradingModel; defa
             <Fact label="Stratégie" value={shortId(signal.strategyId)} />
             <Fact label="Setup" value={displayValue(recordValue(signal.setup, ["setup", "setupType", "setup_type", "name"]))} />
             <Fact label="R attendu" value={`${displayValue(signal.expectancyR)} R`} />
-            <Fact label="Expiration" value={displayTime(signal.expiresAt)} />
+            <Fact label={temporal?.effectiveState === "EXPIRED" ? "Expiré à" : "Expiration"} value={displayTime(signal.expiresAt)} />
           </dl>
+          {temporal?.mismatch ? <p className="lt-decision-stack__warning" role="status">{temporal.detail}</p> : null}
           <Link to={`/live/signals/${encodeURIComponent(signal.signalId)}`}>Ouvrir le signal</Link>
         </>
       ) : <EmptyEvidence text="Aucun StrategySignal courant n’est publié." />}
