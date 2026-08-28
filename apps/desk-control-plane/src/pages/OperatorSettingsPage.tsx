@@ -50,17 +50,23 @@ export function OperatorSettingsPage() {
 
   if (query.isError) {
     return (
-      <Card title="Réglages indisponibles" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
-        <p>{(query.error as Error).message}</p>
-      </Card>
+      <div className="operator-page operator-settings-page">
+        <h1 className="sr-only">Réglages opérateur</h1>
+        <Card title="Réglages indisponibles" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+          <p>{(query.error as Error).message}</p>
+        </Card>
+      </div>
     );
   }
 
   if (!query.data) {
     return (
-      <Card title="Aucun réglage" eyebrow="EMPTY" state="empty" density="compact">
-        <p>Le BFF ne retourne pas encore la projection `/views/operator-settings`.</p>
-      </Card>
+      <div className="operator-page operator-settings-page">
+        <h1 className="sr-only">Réglages opérateur</h1>
+        <Card title="Aucun réglage" eyebrow="EMPTY" state="empty" density="compact">
+          <p>Le BFF ne retourne pas encore la projection `/views/operator-settings`.</p>
+        </Card>
+      </div>
     );
   }
 
@@ -283,6 +289,7 @@ function PreferenceCell({ row }: { row: SettingsPreference }) {
 function SettingsLoading() {
   return (
     <div className="operator-page operator-settings-page">
+      <h1 className="sr-only">Réglages opérateur</h1>
       <section className="operator-kpi-strip">
         {Array.from({ length: 6 }).map((_, index) => <Card key={index} state="loading" density="compact"><div className="skeleton-line" /></Card>)}
       </section>

@@ -49,17 +49,23 @@ export function AdminAccessPage() {
 
   if (query.isError) {
     return (
-      <Card title="Admin indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
-        <p>{(query.error as Error).message}</p>
-      </Card>
+      <div className="operator-page admin-access-page">
+        <h1 className="sr-only">Accès administrateur</h1>
+        <Card title="Admin indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+          <p>{(query.error as Error).message}</p>
+        </Card>
+      </div>
     );
   }
 
   if (!query.data) {
     return (
-      <Card title="Aucune donnée admin" eyebrow="EMPTY" state="empty" density="compact">
-        <p>Le BFF ne retourne pas encore la projection `/views/admin-access`.</p>
-      </Card>
+      <div className="operator-page admin-access-page">
+        <h1 className="sr-only">Accès administrateur</h1>
+        <Card title="Aucune donnée admin" eyebrow="EMPTY" state="empty" density="compact">
+          <p>Le BFF ne retourne pas encore la projection `/views/admin-access`.</p>
+        </Card>
+      </div>
     );
   }
 
@@ -276,6 +282,7 @@ function UserCell({ row }: { row: AdminUser }) {
 function AdminLoading() {
   return (
     <div className="operator-page admin-access-page">
+      <h1 className="sr-only">Accès administrateur</h1>
       <section className="operator-kpi-strip">
         {Array.from({ length: 6 }).map((_, index) => <Card key={index} state="loading" density="compact"><div className="skeleton-line" /></Card>)}
       </section>

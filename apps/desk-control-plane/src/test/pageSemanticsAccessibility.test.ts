@@ -26,6 +26,8 @@ describe("page semantic accessibility regressions", () => {
     ["pages/PortfolioPage.tsx", "Portefeuille &amp; Positions"],
     ["pages/JarvisWorkspacePage.tsx", "Espace Jarvis"],
     ["pages/LiveSignalsPage.tsx", "Signaux live"],
+    ["pages/AdminAccessPage.tsx", "Accès administrateur"],
+    ["pages/OperatorSettingsPage.tsx", "Réglages opérateur"],
   ])("keeps a level-one heading in asynchronous states of %s", (path, title) => {
     const source = readSource(path);
 
