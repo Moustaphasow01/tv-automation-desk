@@ -108,12 +108,12 @@ export function RiskCenterPage() {
           <section className="rc-panel" aria-label="Limites officielles">
             <header><h2>Limites</h2><small>{data.limits.length}</small></header>
             <div className="rc-panel__body" style={{ padding: 0 }}>
-              <div className="rc-table-scroll">
+              <div className="rc-table-scroll" role="region" aria-label="Limites de risque défilables" tabIndex={0}>
                 <table className="rc-table">
                   <thead><tr><th>Limite</th><th>Utilisé</th><th>Limite</th><th>%</th><th>Marge</th><th>Statut</th></tr></thead>
                   <tbody>
-                    {data.limits.map((limit) => (
-                      <tr key={limit.limitId}>
+                    {data.limits.map((limit, index) => (
+                      <tr key={`${limit.limitId}-${index}`}>
                         <td><LimitCell row={limit} /></td>
                         <td>{formatRiskValue(limit.usedValue, limit.unit)}</td>
                         <td>{formatRiskValue(limit.limitValue, limit.unit)}</td>
@@ -137,7 +137,7 @@ export function RiskCenterPage() {
                   <Donut items={data.exposures.slice(0, 6).map((item, index) => ({ value: Math.abs(item.grossUsd), color: DONUT_COLORS[index % DONUT_COLORS.length] }))} centerLabel={formatCurrency(data.exposures.reduce((sum, item) => sum + Math.abs(item.grossUsd), 0))} />
                   <ul className="rc-donut-legend">
                     {data.exposures.slice(0, 6).map((item, index) => (
-                      <li key={item.exposureId}>
+                      <li key={`${item.exposureId}-${index}`}>
                         <span className="dot" style={{ background: DONUT_COLORS[index % DONUT_COLORS.length] }} />
                         <span>{item.topInstrument || item.assetClass}</span>
                         <strong>{formatCurrency(item.grossUsd)}</strong>
@@ -152,12 +152,12 @@ export function RiskCenterPage() {
           <section className="rc-panel" aria-label="Contraintes prop firm">
             <header><h2>Contraintes prop</h2><small>{data.propConstraints.length}</small></header>
             <div className="rc-panel__body" style={{ padding: 0 }}>
-              <div className="rc-table-scroll">
+              <div className="rc-table-scroll" role="region" aria-label="Contraintes prop firm défilables" tabIndex={0}>
                 <table className="rc-table">
                   <thead><tr><th>Règle</th><th>Utilisé</th><th>Limite</th><th>Statut</th></tr></thead>
                   <tbody>
-                    {data.propConstraints.map((item) => (
-                      <tr key={item.constraintId}>
+                    {data.propConstraints.map((item, index) => (
+                      <tr key={`${item.constraintId}-${index}`}>
                         <td><strong>{item.label}</strong><br /><small style={{ color: "var(--rc-muted)" }}>{item.rule}</small></td>
                         <td>{formatRiskValue(item.usedValue, item.unit)}</td>
                         <td>{formatRiskValue(item.limitValue, item.unit)}</td>
@@ -176,12 +176,12 @@ export function RiskCenterPage() {
           <section className="rc-panel" aria-label="Corrélations">
             <header><h2>Corrélations</h2><small>{data.correlations.length}</small></header>
             <div className="rc-panel__body" style={{ padding: 0 }}>
-              <div className="rc-table-scroll">
+              <div className="rc-table-scroll" role="region" aria-label="Corrélations défilables" tabIndex={0}>
                 <table className="rc-table">
                   <thead><tr><th>Paire</th><th>Valeur</th><th>Limite</th><th>Statut</th></tr></thead>
                   <tbody>
-                    {data.correlations.map((item) => (
-                      <tr key={item.correlationId}>
+                    {data.correlations.map((item, index) => (
+                      <tr key={`${item.correlationId}-${index}`}>
                         <td><strong>{item.pair}</strong></td>
                         <td>{item.value.toFixed(2)}</td>
                         <td>{item.limit.toFixed(2)}</td>
@@ -205,12 +205,12 @@ export function RiskCenterPage() {
               ) : null}
             </header>
             <div className="rc-panel__body" style={{ padding: 0 }}>
-              <div className="rc-table-scroll">
+              <div className="rc-table-scroll" role="region" aria-label="Stress tests défilables" tabIndex={0}>
                 <table className="rc-table">
                   <thead><tr><th>Scénario</th><th>État</th><th>Perte (R)</th><th>Marge utilisée</th></tr></thead>
                   <tbody>
-                    {data.stressTests.map((item) => (
-                      <tr key={item.stressTestId}>
+                    {data.stressTests.map((item, index) => (
+                      <tr key={`${item.stressTestId}-${index}`}>
                         <td><Link to={item.route}>{item.scenario}</Link></td>
                         <td><StatusBadge tone={item.state === "PASSED" ? "success" : item.state === "FAILED" ? "danger" : "accent"}>{item.state}</StatusBadge></td>
                         <td className={item.lossR >= 0 ? "text-success" : "text-danger"}>{formatSignedR(item.lossR)}</td>
@@ -233,8 +233,8 @@ export function RiskCenterPage() {
               </div>
             </header>
             <div className="rc-panel__body">
-              {shownBreaches.length ? shownBreaches.map((breach) => (
-                <div key={breach.breachId} className="rc-breach-row">
+              {shownBreaches.length ? shownBreaches.map((breach, index) => (
+                <div key={`${breach.breachId}-${index}`} className="rc-breach-row">
                   <time>{formatTime(breach.openedAt)}</time>
                   <div><strong>{breach.title}</strong><small>{breach.detail}</small></div>
                   <StatusBadge tone={breach.severity === "HIGH" || breach.severity === "EMERGENCY" ? "danger" : breach.severity === "MEDIUM" ? "warning" : "accent"}>{breach.severity}</StatusBadge>
@@ -251,8 +251,8 @@ export function RiskCenterPage() {
               <table className="rc-table">
                 <thead><tr><th>Compte</th><th>Equity</th><th>Risque ouvert</th><th>Statut</th></tr></thead>
                 <tbody>
-                  {data.riskByAccount.map((row) => (
-                    <tr key={row.accountId}>
+                  {data.riskByAccount.map((row, index) => (
+                    <tr key={`${row.accountId}-${index}`}>
                       <td><strong>{row.label}</strong></td>
                       <td>{row.equityUsd != null ? formatCurrency(row.equityUsd) : "Non disponible"}</td>
                       <td>{formatCurrency(row.openRiskUsd)}</td>
@@ -271,8 +271,8 @@ export function RiskCenterPage() {
               <table className="rc-table">
                 <thead><tr><th>Stratégie</th><th>Risque</th><th>Décisions</th></tr></thead>
                 <tbody>
-                  {data.riskByStrategy.map((row) => (
-                    <tr key={row.strategyInstanceId}>
+                  {data.riskByStrategy.map((row, index) => (
+                    <tr key={`${row.strategyInstanceId}-${index}`}>
                       <td><strong>{row.label}</strong></td>
                       <td>{formatCurrency(row.riskAmount)}</td>
                       <td>{row.decisions}</td>
@@ -290,8 +290,8 @@ export function RiskCenterPage() {
               <table className="rc-table">
                 <thead><tr><th>Instrument</th><th>Risque</th><th>Décisions</th></tr></thead>
                 <tbody>
-                  {data.riskByInstrument.map((row) => (
-                    <tr key={row.instrument}>
+                  {data.riskByInstrument.map((row, index) => (
+                    <tr key={`${row.instrument}-${index}`}>
                       <td><strong>{row.instrument}</strong></td>
                       <td>{formatCurrency(row.riskAmount)}</td>
                       <td>{row.decisions}</td>
@@ -331,12 +331,12 @@ export function RiskCenterPage() {
           <section className="rc-panel" aria-label="Dernières décisions de risque">
             <header><h2>Dernières décisions</h2><small>{data.riskDecisions.items.length}</small></header>
             <div className="rc-panel__body" style={{ padding: 0 }}>
-              <div className="rc-table-scroll">
+              <div className="rc-table-scroll" role="region" aria-label="Décisions de risque défilables" tabIndex={0}>
                 <table className="rc-table">
                   <thead><tr><th>Heure</th><th>Signal</th><th>Instrument</th><th>Demandé</th><th>Autorisé</th><th>Décision</th></tr></thead>
                   <tbody>
-                    {data.riskDecisions.items.map((item) => (
-                      <tr key={item.orderIntentId}>
+                    {data.riskDecisions.items.map((item, index) => (
+                      <tr key={`${item.orderIntentId}-${index}`}>
                         <td>{formatTime(item.at)}</td>
                         <td>{shortId(item.signalId)}</td>
                         <td>{item.instrument}</td>
@@ -356,8 +356,8 @@ export function RiskCenterPage() {
             <header><h2>Kill Switch &amp; Disjoncteurs</h2></header>
             <div className="rc-panel__body">
               <div className="rc-kill-panel">
-                {data.circuitBreakers.map((breaker) => (
-                  <div key={breaker.breakerId} className="rc-kill-row">
+                {data.circuitBreakers.map((breaker, index) => (
+                  <div key={`${breaker.breakerId}-${index}`} className="rc-kill-row">
                     <strong>{breaker.label}</strong>
                     <StatusBadge tone={breaker.armed ? "danger" : "success"}>{breaker.armed ? "BLOQUANT" : "OK"}</StatusBadge>
                     <small>{breaker.detail}</small>
@@ -420,7 +420,8 @@ function KpiCell({ label, value, tone }: { label: string; value: string; tone?: 
 }
 
 function Donut({ items, centerLabel }: { items: readonly { value: number; color: string }[]; centerLabel: string }) {
-  const total = items.reduce((sum, item) => sum + Math.max(0, item.value), 0) || 1;
+  const normalizedValues = items.map((item) => Number.isFinite(item.value) ? Math.max(0, item.value) : 0);
+  const total = normalizedValues.reduce((sum, value) => sum + value, 0) || 1;
   let cumulative = 0;
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
@@ -428,7 +429,7 @@ function Donut({ items, centerLabel }: { items: readonly { value: number; color:
     <svg viewBox="0 0 100 100" width="110" height="110" role="img" aria-label="Répartition du risque">
       <g transform="rotate(-90 50 50)">
         {items.map((item, index) => {
-          const fraction = Math.max(0, item.value) / total;
+          const fraction = normalizedValues[index] / total;
           const dash = fraction * circumference;
           const offset = cumulative * circumference;
           cumulative += fraction;

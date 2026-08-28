@@ -156,6 +156,28 @@ describe("Live Trading cockpit components", () => {
     expect(model.gateActions).toEqual([]);
   });
 
+  it("renders an honestly unavailable Risk utilization without throwing", () => {
+    const base = cockpitModel();
+    const publishedRisk = base.source.riskChecks[0];
+    const model: LiveTradingModel = {
+      ...base,
+      riskCheck: publishedRisk ? { ...publishedRisk, usedPct: null } : null,
+    };
+
+    const markup = render(
+      <LiveDecisionStack
+        model={model}
+        onSubmit={noopSubmit}
+        submittingActionId={null}
+        command={null}
+        error={null}
+      />,
+    );
+
+    expect(markup).toContain("Utilisation");
+    expect(markup).toContain("Non publiée");
+  });
+
   it("locks Human Gate actions throughout an accepted command and permits only terminal-failure retry", () => {
     expect(commandLocksGateActions("ACCEPTED")).toBe(true);
     expect(commandLocksGateActions("RUNNING")).toBe(true);
@@ -194,6 +216,7 @@ describe("Live Trading cockpit components", () => {
     });
 
     expect(commandForCurrentGate(binding, "intent-1", [action("1")])).toEqual(receipt);
+    expect(commandForCurrentGate(binding, "intent-1", [])).toEqual(receipt);
     expect(commandForCurrentGate(binding, "intent-2", [action("1")])).toBeNull();
     expect(commandForCurrentGate(binding, "intent-1", [action("2")])).toBeNull();
   });

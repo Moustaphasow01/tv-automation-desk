@@ -139,8 +139,8 @@ export function LiveSignalDetailPage() {
 
         <Card title="Prédicats & instantané des features" actions={<InlineAction>Point-in-time</InlineAction>} density="compact">
           <div className="live-signal-predicate-list">
-            {data.predicates.map((predicate) => (
-              <article key={predicate.predicateId}>
+            {data.predicates.map((predicate, index) => (
+              <article key={`${predicate.predicateId}-${index}`}>
                 <FaCheckCircle />
                 <div><strong>{predicate.label}</strong><small>{predicate.enumCode} · {predicate.observedValue}</small></div>
                 <span>{predicate.threshold}</span>
@@ -182,8 +182,8 @@ export function LiveSignalDetailPage() {
             <MetricBox label="Contrats" value={`${data.riskCheck.roundedQuantity}`} />
           </div>
           <div className="live-signal-conflict-list">
-            {data.conflicts.map((conflict) => (
-              <article key={conflict.conflictId}>
+            {data.conflicts.map((conflict, index) => (
+              <article key={`${conflict.conflictId}-${index}`}>
                 <div><strong>{conflict.label}</strong><small>{conflict.kind} · {conflict.targetId}</small></div>
                 <StatusBadge tone={conflict.severity === "HIGH" ? "danger" : conflict.severity === "MEDIUM" ? "warning" : "accent"}>{presentConflictResolution(conflict.resolution).label}</StatusBadge>
               </article>
@@ -195,8 +195,8 @@ export function LiveSignalDetailPage() {
       <section className="operator-grid operator-grid--bottom" aria-label="Contexte, ordres et commandes">
         <Card title="Contexte marché & positions" actions={<InlineAction>Contexte</InlineAction>} density="compact">
           <div className="live-signal-context-list">
-            {data.context.map((item) => (
-              <article key={item.contextId}>
+            {data.context.map((item, index) => (
+              <article key={`${item.contextId}-${index}`}>
                 <div><strong>{item.label}</strong><small>{item.interpretation}</small></div>
                 <b className={contextToneClass(item.tone)}>{item.value}</b>
                 <StatusBadge tone={contextTone(item.tone)}>{presentContextTone(item.tone).label}</StatusBadge>
@@ -204,8 +204,8 @@ export function LiveSignalDetailPage() {
             ))}
           </div>
           <div className="live-signal-position-list">
-            {data.existingPositions.map((position) => (
-              <article key={position.positionId}>
+            {data.existingPositions.map((position, index) => (
+              <article key={`${position.positionId}-${index}`}>
                 <div><strong>{position.symbol} {position.side}</strong><small>{position.strategyInstanceId}</small></div>
                 <span>{position.quantity}</span>
                 <b className={position.pnlR >= 0 ? "text-success" : "text-danger"}>{formatSignedR(position.pnlR)}</b>
@@ -217,8 +217,8 @@ export function LiveSignalDetailPage() {
 
         <Card title="Ordres liés & piste d'audit" actions={<InlineAction>Ordres</InlineAction>} density="compact">
           <div className="live-signal-order-list">
-            {data.linkedOrders.map((order) => (
-              <article key={order.orderId}>
+            {data.linkedOrders.map((order, index) => (
+              <article key={`${order.orderId}-${index}`}>
                 <div><strong>{order.side} {order.quantity} · {order.type}</strong><small>{order.orderId} · {order.brokerOrderId}</small></div>
                 <span>{order.limitPrice ? formatPrice(order.limitPrice) : "MKT"}</span>
                 <StatusBadge tone={order.state === "ACKED" || order.state === "FILLED" ? "success" : order.state === "REJECTED" ? "danger" : "warning"}>{presentBackendStatus(order.state).label}</StatusBadge>
@@ -226,8 +226,8 @@ export function LiveSignalDetailPage() {
             ))}
           </div>
           <ol className="live-signal-audit-list">
-            {data.auditTrail.map((event) => (
-              <li key={event.eventId} className={event.lane === "ADVISORY" ? "live-signal-audit-list__advisory" : undefined}>
+            {data.auditTrail.map((event, index) => (
+              <li key={`${event.eventId}-${index}`} className={event.lane === "ADVISORY" ? "live-signal-audit-list__advisory" : undefined}>
                 <span><FaClock />{formatTime(event.at)}</span>
                 <div><strong>{event.title}</strong><small>{event.domain} · {event.eventId}</small></div>
                 <StatusBadge tone={event.lane === "ADVISORY" ? "accent" : "success"}>{presentEventLane(event.lane).label}</StatusBadge>
@@ -251,8 +251,8 @@ export function LiveSignalDetailPage() {
           </label>
           <div className="live-signal-actions">
             <TrackedCommandReceipt command={command} />
-            {data.commandActions.map((action) => (
-              <article key={action.actionId}>
+            {data.commandActions.map((action, index) => (
+              <article key={`${action.actionId}-${index}`}>
                 <span>{actionIcon(action.decision)}</span>
                 <div><strong>{action.label}</strong><small>{action.capability} · expected {compactId(data.identity.expectedVersion)}</small></div>
                 <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>

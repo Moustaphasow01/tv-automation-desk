@@ -98,7 +98,7 @@ export function OrdersPage() {
           <section className="oh-panel" aria-label="OrderIntents en revue">
             <header><h2>OrderIntents en revue</h2><small>{review.items.length}</small></header>
             <div className="oh-panel__body" style={{ padding: 0 }}>
-              <div className="oh-table-scroll">
+              <div className="oh-table-scroll" role="region" aria-label="Liste des OrderIntents en revue" tabIndex={0}>
                 <table className="oh-table">
                   <thead><tr><th>OrderIntent</th><th>Instrument</th><th>Côté</th><th>Qté (aut.)</th><th>Âge</th><th>Statut</th></tr></thead>
                   <tbody>
@@ -135,9 +135,9 @@ export function OrdersPage() {
                   </div>
                   {review.selectedDossier ? (
                     <div className="oh-qty-compare">
-                      <div><small>Demandé</small><strong>{review.selectedDossier.riskSnapshot.requestedQty}</strong></div>
-                      <div><small>Autorisé</small><strong>{review.selectedDossier.riskSnapshot.authorizedQty}</strong></div>
-                      <div><small>Delta</small><strong>{review.selectedDossier.riskSnapshot.authorizedQty - review.selectedDossier.riskSnapshot.requestedQty}</strong></div>
+                      <div><small>Demandé</small><strong>{formatPublishedNumber(review.selectedDossier.riskSnapshot.requestedQty)}</strong></div>
+                      <div><small>Autorisé</small><strong>{formatPublishedNumber(review.selectedDossier.riskSnapshot.authorizedQty)}</strong></div>
+                      <div><small>Delta</small><strong>{formatPublishedDelta(review.selectedDossier.riskSnapshot.authorizedQty, review.selectedDossier.riskSnapshot.requestedQty)}</strong></div>
                     </div>
                   ) : null}
                   {selected.status === "AWAITING_MANUAL_CONFIRMATION" ? (
@@ -195,7 +195,7 @@ export function OrdersPage() {
           <section className="oh-panel" aria-label="Dernières décisions">
             <header><h2>Dernières décisions</h2></header>
             <div className="oh-panel__body" style={{ padding: 0 }}>
-              <div className="oh-table-scroll">
+              <div className="oh-table-scroll" role="region" aria-label="Liste des dernières décisions" tabIndex={0}>
                 <table className="oh-table">
                   <thead><tr><th>Instrument</th><th>Décision</th><th>Durée</th></tr></thead>
                   <tbody>
@@ -230,7 +230,7 @@ export function OrdersPage() {
           <section className="oh-panel" aria-label="Ordres actifs">
             <header><h2>Ordres actifs</h2><small>{data.activeOrders.length}</small></header>
             <div className="oh-panel__body" style={{ padding: 0 }}>
-              <div className="oh-table-scroll">
+              <div className="oh-table-scroll" role="region" aria-label="Liste des ordres actifs" tabIndex={0}>
                 <table className="oh-table">
                   <thead><tr><th>Ordre</th><th>Instrument</th><th>Côté</th><th>Qté</th><th>État</th></tr></thead>
                   <tbody>
@@ -322,7 +322,7 @@ const STEPPER_STAGES: readonly { key: keyof Lineage; label: string }[] = [
 function PipelineStepper({ lineage }: { lineage: Lineage }) {
   const providerReached = lineage.providerCommands.length > 0;
   return (
-    <div className="oh-stepper">
+    <div className="oh-stepper" role="region" aria-label="Progression du pipeline d’exécution" tabIndex={0}>
       {STEPPER_STAGES.map((stage, index) => {
         const node = lineage[stage.key] as { id: string };
         const done = node.id !== "unavailable";
@@ -399,6 +399,17 @@ function OrdersLoading() {
       </div>
     </div>
   );
+}
+
+function formatPublishedNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? String(value) : "Non publié";
+}
+
+function formatPublishedDelta(authorized: unknown, requested: unknown) {
+  if (typeof authorized !== "number" || !Number.isFinite(authorized) || typeof requested !== "number" || !Number.isFinite(requested)) {
+    return "Non publié";
+  }
+  return String(authorized - requested);
 }
 
 function gateTone(status: ReviewItem["status"]) {

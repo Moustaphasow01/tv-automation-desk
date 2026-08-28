@@ -43,6 +43,29 @@ test("theoretical execution fills market entries immediately on the next closed 
   assert.equal(result.price, 101);
 });
 
+test("theoretical execution preserves distinct legacy and canonical OrderIntent identities", () => {
+  const legacy = evaluateTheoreticalEntryIntent({
+    intent: entryIntent({ order_intent_id: "legacy_order_intent_1" }),
+    decision: decision(),
+    contract: contract(),
+    candle: candle({ low: 99.75 }),
+  });
+  const canonical = evaluateTheoreticalEntryIntent({
+    intent: entryIntent({
+      order_intent_id: "portfolio_order_intent_1",
+      portfolio_order_intent_id: "portfolio_order_intent_1",
+    }),
+    decision: decision(),
+    contract: contract(),
+    candle: candle({ low: 99.75 }),
+  });
+
+  assert.equal(legacy.order_intent_id, "legacy_order_intent_1");
+  assert.equal(legacy.portfolio_order_intent_id, null);
+  assert.equal(canonical.order_intent_id, "portfolio_order_intent_1");
+  assert.equal(canonical.portfolio_order_intent_id, "portfolio_order_intent_1");
+});
+
 test("theoretical execution expires an entry instead of auto-filling after TTL", () => {
   const result = evaluateTheoreticalEntryIntent({
     intent: entryIntent({ expires_at: "2026-08-12T10:01:00.000Z" }),

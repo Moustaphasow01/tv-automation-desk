@@ -77,7 +77,9 @@
 .rl-panel__body { padding: 10px 12px; min-height: 0; }
 
 .rl-panel__search { display: flex; align-items: center; gap: 6px; margin-left: 10px; padding: 4px 8px; border: 1px solid var(--rl-border); border-radius: 5px; background: var(--rl-surface-1); }
-.rl-panel__search input { border: 0; background: transparent; color: var(--rl-text); font-size: 12px; width: 130px; outline: none; }
+.rl-panel__search input { width: 130px; border: 0; background: transparent; color: var(--rl-text); font-size: 12px; outline: 2px solid transparent; outline-offset: 2px; }
+.rl-panel__search input:focus-visible { outline-color: var(--rl-blue); }
+.rl-panel__search:focus-within { border-color: var(--rl-blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--rl-blue) 38%, transparent); }
 .rl-panel__search input::placeholder { color: var(--rl-disabled); }
 .rl-panel__select { margin-left: 8px; padding: 4px 8px; border: 1px solid var(--rl-border); border-radius: 5px; background: var(--rl-surface-1); color: var(--rl-secondary); font-size: 12px; }
 
@@ -90,7 +92,7 @@
 .rl-table tbody tr:hover { background: var(--rl-surface-2); }
 .rl-table tbody tr[aria-selected="true"] { background: var(--rl-surface-3); box-shadow: inset 2px 0 0 var(--rl-blue); }
 .rl-table-scroll { max-height: 360px; overflow-y: auto; }
-.rl-mission-id { display: block; color: var(--rl-muted); font-size: 10px; font-family: ui-monospace, monospace; }
+.rl-mission-id { display: block; color: #768da1; font-size: 10px; font-family: ui-monospace, monospace; }
 .rl-progress-cell { display: flex; align-items: center; gap: 6px; min-width: 90px; }
 .rl-progress-cell .progress-wrap { flex: 1 1 auto; }
 
@@ -143,6 +145,8 @@
 /* -------------------------------------------------------- Activity stream */
 
 .rl-activity-stream { display: grid; gap: 0; max-height: 420px; overflow-y: auto; }
+.rl-table-scroll:focus-visible,
+.rl-activity-stream:focus-visible { outline: 2px solid var(--rl-focus); outline-offset: -2px; }
 .rl-activity-row { display: grid; grid-template-columns: 46px 1fr; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--rl-border-soft); font-size: 12px; }
 .rl-activity-row time { color: var(--rl-muted); font-size: 10px; font-family: ui-monospace, monospace; padding-top: 2px; }
 .rl-activity-row strong { display: block; font-size: 11px; letter-spacing: .02em; }

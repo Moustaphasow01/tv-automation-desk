@@ -70,6 +70,7 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
           setResyncing(true);
           const affected = frontViewNamesForRealtimeEvent(event);
           void Promise.all(affected.map((viewName) => queryClient.refetchQueries({ queryKey: ["front-view", viewName] })))
+            .then(() => queryClient.refetchQueries({ queryKey: ["front-view-scope", "market-series"] }))
             .finally(() => {
               setEvents(createRealtimeEventState());
               setResyncing(false);
@@ -83,6 +84,7 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
             setResyncing(true);
             const affected = frontViewNamesForRealtimeEvent(event);
             void Promise.all(affected.map((viewName) => queryClient.refetchQueries({ queryKey: ["front-view", viewName] })))
+              .then(() => queryClient.refetchQueries({ queryKey: ["front-view-scope", "market-series"] }))
               .finally(() => setResyncing(false));
           }
           return next;
@@ -100,6 +102,7 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
           void Promise.all([
             queryClient.refetchQueries({ queryKey: ["front-view", "command-center"] }),
             queryClient.refetchQueries({ queryKey: ["front-view", "live-trading"] }),
+            queryClient.refetchQueries({ queryKey: ["front-view-scope", "market-series"] }),
           ]).finally(() => setResyncing(false));
         }
       },

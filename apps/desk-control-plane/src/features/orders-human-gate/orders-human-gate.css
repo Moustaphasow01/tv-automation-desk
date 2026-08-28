@@ -56,6 +56,7 @@
 .oh-table tbody tr:hover { background: var(--oh-surface-2); }
 .oh-table tbody tr[aria-selected="true"] { background: var(--oh-surface-3); box-shadow: inset 2px 0 0 var(--oh-blue); }
 .oh-table-scroll { max-height: 400px; overflow-y: auto; }
+.oh-table-scroll:focus-visible { outline: 2px solid var(--oh-blue); outline-offset: -2px; }
 
 .oh-detail { display: grid; gap: 10px; }
 .oh-detail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
@@ -83,11 +84,12 @@
 .oh-row3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 
 .oh-stepper { display: flex; align-items: center; gap: 2px; overflow-x: auto; padding: 4px 0 10px; margin-bottom: 8px; border-bottom: 1px solid var(--oh-border-soft); }
+.oh-stepper:focus-visible { outline: 2px solid var(--oh-blue); outline-offset: -2px; }
 .oh-stepper-node { display: grid; justify-items: center; gap: 3px; min-width: 78px; }
 .oh-stepper-node .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--oh-border-strong); background: var(--oh-surface-2); }
 .oh-stepper-node.is-done .dot { background: var(--oh-green); border-color: var(--oh-green); }
 .oh-stepper-node.is-current .dot { background: var(--oh-amber); border-color: var(--oh-amber); }
-.oh-stepper-node small { font-size: 9px; color: var(--oh-muted); text-transform: uppercase; text-align: center; }
+.oh-stepper-node small { font-size: 11px; color: var(--oh-muted); text-transform: uppercase; text-align: center; }
 .oh-stepper-line { flex: 1; height: 2px; background: var(--oh-border-strong); min-width: 12px; }
 
 .oh-qty-compare { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; }

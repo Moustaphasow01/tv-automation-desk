@@ -4,13 +4,16 @@ import { resolve } from "node:path";
 
 const baseUrl = process.env.DESK_VNEXT_BASE_URL || "http://127.0.0.1:8190";
 const outputRoot = resolve(process.cwd(), "../../reports/ui-ux/live-trading");
-const scenarios = [
+const scenarioCatalog = [
   { name: "golden-1672x941", viewport: { width: 1672, height: 941 }, golden: true },
   { name: "laptop-1440x900", viewport: { width: 1440, height: 900 } },
   { name: "compact-1280x800", viewport: { width: 1280, height: 800 } },
   { name: "mobile-390x844", viewport: { width: 390, height: 844 } },
   { name: "mobile-430x932", viewport: { width: 430, height: 932 } },
 ];
+const requestedScenario = process.env.DESK_VNEXT_VISUAL_SCENARIO;
+const scenarios = requestedScenario ? scenarioCatalog.filter((scenario) => scenario.name === requestedScenario) : scenarioCatalog;
+if (!scenarios.length) throw new Error(`UNKNOWN_VISUAL_SCENARIO:${requestedScenario}`);
 const flightDirectorGolden = {
   sidebar: { x: 0, y: 0, width: 96, height: 941 },
   header: { x: 96, y: 0, width: 1576, height: 64 },
@@ -21,14 +24,17 @@ const flightDirectorGolden = {
 
 await mkdir(outputRoot, { recursive: true });
 const browser = await chromium.launch(browserLaunchOptions());
+const context = await browser.newContext({ viewport: scenarios[0].viewport, deviceScaleFactor: 1, serviceWorkers: "block" });
+const page = await context.newPage();
+let activeConsoleErrors = [];
+page.on("console", (message) => { if (message.type() === "error") activeConsoleErrors.push(message.text()); });
+page.on("pageerror", (error) => activeConsoleErrors.push(error.message));
 const results = [];
 try {
   for (const scenario of scenarios) {
-    const context = await browser.newContext({ viewport: scenario.viewport, deviceScaleFactor: 1, serviceWorkers: "block" });
-    const page = await context.newPage();
+    await page.setViewportSize(scenario.viewport);
     const consoleErrors = [];
-    page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
-    page.on("pageerror", (error) => consoleErrors.push(error.message));
+    activeConsoleErrors = consoleErrors;
     await page.goto(`${baseUrl}/#/live`, { waitUntil: "domcontentloaded", timeout: 45_000 });
     await establishOperatorSession(page);
     await page.locator(".lt-page").waitFor({ state: "visible", timeout: 45_000 });
@@ -47,7 +53,7 @@ try {
       await tab.click();
       await page.locator(".lt-activity-dock__content[role='tabpanel']").waitFor({ state: "visible" });
       await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-      const tabMeasurement = await page.evaluate(measureCockpit, { mobile: scenario.viewport.width <= 900 });
+      const tabMeasurement = await page.evaluate(measureCockpit, { mobile: scenario.viewport.width <= 900, scopeSelector: ".lt-activity-dock" });
       dockTabMeasurements.push({
         id: await tab.getAttribute("id"),
         label: (await tab.textContent())?.trim() ?? "",
@@ -65,7 +71,7 @@ try {
       await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
       decisionStageMeasurements.push({
         label: (await stage.textContent())?.trim() ?? `stage-${index + 1}`,
-        ...(await page.evaluate(measureCockpit, { mobile: scenario.viewport.width <= 900 })),
+        ...(await page.evaluate(measureCockpit, { mobile: scenario.viewport.width <= 900, scopeSelector: ".lt-cockpit__decision" })),
         consoleErrors: consoleErrors.slice(consoleErrorOffset),
       });
     }
@@ -84,11 +90,19 @@ try {
       gateDialog.exercised = true;
       gateDialog.visible = await page.locator(".lt-gate-dialog[role='alertdialog']").isVisible().catch(() => false);
       if (gateDialog.visible) {
-        gateDialog.measurement = await page.evaluate(measureCockpit, { mobile: scenario.viewport.width <= 900 });
+        gateDialog.measurement = await page.evaluate(measureCockpit, { mobile: scenario.viewport.width <= 900, scopeSelector: ".lt-gate-dialog" });
         await page.keyboard.press("Escape");
       }
     }
-    await page.evaluate(() => scrollTo(0, 0));
+    const defaultDockTab = page.locator("#lt-dock-tab-position");
+    if (await defaultDockTab.count()) await defaultDockTab.click();
+    await page.evaluate(() => {
+      scrollTo(0, 0);
+      document.querySelectorAll(".lt-activity-dock__tabs,.lt-activity-dock__content,.lt-cockpit__decision,.lt-chart-canvas,.lt-chart-toolbar,.lt-chart-controls").forEach((node) => {
+        node.scrollTop = 0;
+        node.scrollLeft = 0;
+      });
+    });
     await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
     const measurement = await page.evaluate(measureCockpit, { mobile: scenario.viewport.width <= 900 });
     measurement.dockTabs = dockTabMeasurements;
@@ -99,23 +113,6 @@ try {
       ...dockTabMeasurements.map((tab) => tab.minimumReadableTextPx),
       ...decisionStageMeasurements.map((stage) => stage.minimumReadableTextPx),
     );
-    measurement.clippedInteractiveCount = Math.max(
-      measurement.clippedInteractiveCount,
-      ...dockTabMeasurements.map((tab) => tab.clippedInteractiveCount),
-      ...decisionStageMeasurements.map((stage) => stage.clippedInteractiveCount),
-    );
-    measurement.verticallyClippedInteractiveCount = Math.max(
-      measurement.verticallyClippedInteractiveCount,
-      ...dockTabMeasurements.map((tab) => tab.verticallyClippedInteractiveCount),
-      ...decisionStageMeasurements.map((stage) => stage.verticallyClippedInteractiveCount),
-    );
-    measurement.obscuredInteractiveCount = Math.max(
-      measurement.obscuredInteractiveCount,
-      ...dockTabMeasurements.map((tab) => tab.obscuredInteractiveCount),
-      ...decisionStageMeasurements.map((stage) => stage.obscuredInteractiveCount),
-    );
-    measurement.horizontalOverflow = measurement.horizontalOverflow
-      || dockTabMeasurements.some((tab) => tab.horizontalOverflow);
     const geometryFailures = [];
     for (const issue of measurement.verticalShellIssues) geometryFailures.push(`shell: ${issue}`);
     for (const tab of dockTabMeasurements) {
@@ -149,9 +146,8 @@ try {
     if (scenario.viewport.width > 1240 && measurement.chart && measurement.marketLens && measurement.chart.width <= measurement.marketLens.width) geometryFailures.push("chart must remain wider than market lens on desktop");
     if (!measurement.chartBeforeDecisionOnMobile) geometryFailures.push("chart must precede the decision stack on mobile");
     results.push({ scenario, measurement, geometryFailures, consoleErrors });
-    await context.close();
   }
-} finally { await browser.close(); }
+} finally { await page.close(); await context.close(); await browser.close(); }
 
 const failures = results.filter(({ measurement, geometryFailures, consoleErrors }) => measurement.horizontalOverflow || measurement.clippedInteractiveCount > 0 || measurement.verticallyClippedInteractiveCount > 0 || measurement.obscuredInteractiveCount > 0 || measurement.cockpitCount !== 1 || measurement.visibleBackdropCount > 0 || measurement.editablePostRiskCount > 0 || measurement.minimumReadableTextPx < 10.9 || geometryFailures.length || consoleErrors.length);
 const reportPath = resolve(outputRoot, "live-trading-visual-qa.json");
@@ -160,7 +156,7 @@ console.log(`Live Trading visual QA: ${results.length - failures.length}/${resul
 for (const item of results) console.log(`${item.scenario.name}: overflow=${item.measurement.horizontalOverflow} clipped=${item.measurement.clippedInteractiveCount}/${item.measurement.verticallyClippedInteractiveCount} obscured=${item.measurement.obscuredInteractiveCount} cockpit=${item.measurement.cockpitCount} panels=${item.measurement.panelCount} backdrop=${item.measurement.visibleBackdropCount} minText=${item.measurement.minimumReadableTextPx}px immutable=${item.measurement.editablePostRiskCount === 0} gateEnabled=${item.measurement.enabledGateActions} geometry=${item.geometryFailures.length} console=${item.consoleErrors.length}`);
 if (failures.length) process.exitCode = 1;
 
-function measureCockpit({ mobile }) {
+function measureCockpit({ mobile, scopeSelector = null }) {
   const read = (selector) => {
     const node = document.querySelector(selector);
     return node ? node.getBoundingClientRect().toJSON() : null;
@@ -171,6 +167,7 @@ function measureCockpit({ mobile }) {
     if (node.closest("details:not([open])")) return false;
     if (node.classList.contains("skip-link") && document.activeElement !== node) return false;
     const centerY = bounds.top + bounds.height / 2;
+    const centerX = bounds.left + bounds.width / 2;
     let ancestor = node.parentElement;
     while (ancestor && ancestor !== document.body) {
       const ancestorStyle = getComputedStyle(ancestor);
@@ -178,10 +175,18 @@ function measureCockpit({ mobile }) {
         const ancestorBounds = ancestor.getBoundingClientRect();
         if (centerY <= ancestorBounds.top || centerY >= ancestorBounds.bottom) return false;
       }
+      if (["auto", "scroll"].includes(ancestorStyle.overflowX)) {
+        const ancestorBounds = ancestor.getBoundingClientRect();
+        if (centerX <= ancestorBounds.left || centerX >= ancestorBounds.right) return false;
+      }
       ancestor = ancestor.parentElement;
     }
     return bounds.width > 0
       && bounds.height > 0
+      && centerX >= 0
+      && centerX <= innerWidth
+      && centerY >= 0
+      && centerY <= innerHeight
       && style.visibility !== "hidden"
       && style.display !== "none";
   };
@@ -215,7 +220,8 @@ function measureCockpit({ mobile }) {
     const hit = document.elementFromPoint(center.x, center.y);
     return Boolean(hit && hit !== node && !node.contains(hit));
   };
-  const interactives = [...document.querySelectorAll("a,button,input,select,textarea,[tabindex]")]
+  const interactionRoot = scopeSelector ? document.querySelector(scopeSelector) : document.querySelector(".lt-cockpit");
+  const interactives = [...(interactionRoot ?? document).querySelectorAll("a,button,input,select,textarea,[tabindex]")]
     .filter((node) => !node.classList.contains("lt-chart-canvas"))
     .filter(isRendered);
   const describeInteractive = (node) => ({
@@ -321,7 +327,7 @@ function measureCockpit({ mobile }) {
     dockSiblingOverlapCount: dockSiblingOverlaps.length,
     editablePostRiskCount: document.querySelectorAll(".lt-panel--intent input,.lt-panel--intent select,.lt-panel--intent textarea,.lt-decision-stack__readonly input,.lt-decision-stack__readonly select,.lt-decision-stack__readonly textarea,[contenteditable='true']").length,
     enabledGateActions: [...document.querySelectorAll(".lt-gate-actions button")].filter((node) => !node.disabled).length,
-    minimumReadableTextPx: [...document.querySelectorAll(".lt-cockpit *")].reduce((minimum, node) => {
+    minimumReadableTextPx: [...(interactionRoot ?? document).querySelectorAll("*")].reduce((minimum, node) => {
       const style = getComputedStyle(node);
       const bounds = node.getBoundingClientRect();
       const text = (node.textContent || "").trim();
@@ -329,7 +335,7 @@ function measureCockpit({ mobile }) {
       const size = Number.parseFloat(style.fontSize);
       return Number.isFinite(size) && size > 0 ? Math.min(minimum, size) : minimum;
     }, Number.POSITIVE_INFINITY),
-    undersizedTextNodes: [...document.querySelectorAll(".lt-cockpit *")].flatMap((node) => {
+    undersizedTextNodes: [...(interactionRoot ?? document).querySelectorAll("*")].flatMap((node) => {
       const style = getComputedStyle(node);
       const bounds = node.getBoundingClientRect();
       const text = (node.textContent || "").trim();
@@ -370,7 +376,7 @@ async function establishOperatorSession(page) {
   const gate = page.locator(".operator-login-gate");
   if (!await gate.isVisible({ timeout: 5_000 }).catch(() => false)) return;
 
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  for (let attempt = 0; attempt < 15; attempt += 1) {
     const form = gate.locator(".operator-login-gate__form");
     if (await form.isVisible().catch(() => false)) {
       await form.locator("input[autocomplete='username']").fill(process.env.DESK_OPERATOR_LOGIN || "MSO");

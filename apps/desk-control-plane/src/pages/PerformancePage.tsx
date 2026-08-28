@@ -52,13 +52,13 @@ export function PerformancePage() {
 
       <nav className="pa-tabs" aria-label="Onglets Performance Analytics">
         {TABS.map((item) => (
-          <button key={item.key} type="button" aria-selected={tab === item.key} onClick={() => setTab(item.key)}>
+          <button key={item.key} type="button" aria-pressed={tab === item.key} onClick={() => setTab(item.key)}>
             {item.label}
           </button>
         ))}
       </nav>
 
-      <div className="pa-workspace">
+      <div className="pa-workspace" role="region" aria-label="Analyse de performance" tabIndex={0}>
         {tab === "OVERVIEW" ? <OverviewTab data={data} strategyGroup={byDimension.get("STRATEGY")} /> : null}
         {tab === "STRATEGY" ? <DimensionTab group={byDimension.get("STRATEGY")} label="stratégie" /> : null}
         {tab === "INSTRUMENT" ? <DimensionTab group={byDimension.get("INSTRUMENT")} label="instrument" /> : null}
@@ -380,7 +380,7 @@ function KpiCell({ label, value, detail, tone }: { label: string; value: string;
 function PerformanceLoading() {
   return (
     <div className="pa-page">
-      <div className="pa-workspace">
+      <div className="pa-workspace" role="region" aria-label="Chargement de l’analyse de performance" tabIndex={0}>
         <section className="pa-kpi-strip">
           {Array.from({ length: 9 }).map((_, index) => <article key={index} className="pa-kpi-card"><div className="skeleton-line" /></article>)}
         </section>

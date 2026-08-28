@@ -39,6 +39,8 @@ test("service fills a theoretical LIMIT entry only after the closed OHLC touches
   assert.equal(result.status, "MATERIALIZED");
   assert.equal(result.entries[0].action, "fill_entry");
   assert.equal(repository.entryFill.result.price, 100);
+  assert.equal(repository.entryFill.result.order_intent_id, "order_intent_1");
+  assert.equal(repository.entryFill.result.portfolio_order_intent_id, null);
 });
 
 test("operator manual filled event is recorded separately and does not create a theoretical fill", async () => {

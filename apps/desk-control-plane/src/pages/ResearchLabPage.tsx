@@ -178,13 +178,18 @@ export function ResearchLabPage() {
                   onChange={(event) => { setMissionSearch(event.target.value); setMissionPage(1); }}
                 />
               </div>
-              <select className="rl-panel__select" value={stageFilter} onChange={(event) => { setStageFilter(event.target.value as typeof stageFilter); setMissionPage(1); }}>
+              <select
+                className="rl-panel__select"
+                aria-label="Filtrer les missions par étape"
+                value={stageFilter}
+                onChange={(event) => { setStageFilter(event.target.value as typeof stageFilter); setMissionPage(1); }}
+              >
                 <option value="ALL">Toutes étapes</option>
                 {data.pipeline.map((stage) => <option key={stage.stageId} value={stage.stageId}>{stage.label}</option>)}
               </select>
             </header>
             <div className="rl-panel__body" style={{ padding: 0 }}>
-              <div className="rl-table-scroll">
+              <div className="rl-table-scroll" role="region" aria-label="Liste des missions de recherche" tabIndex={0}>
                 <table className="rl-table">
                   <thead>
                     <tr><th>Mission</th><th>Agent</th><th>Étape</th><th>Progression</th><th>Score</th><th>ETA</th><th>État</th></tr>
@@ -332,7 +337,7 @@ export function ResearchLabPage() {
             <header><h2>Activité recherche</h2><span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, color: "var(--rl-green)", fontSize: 11 }}><FaCircleDot />Live</span></header>
             <div className="rl-panel__body">
               {data.activityStream.length ? (
-                <div className="rl-activity-stream">
+                <div className="rl-activity-stream" role="region" aria-label="Flux d’activité recherche" tabIndex={0}>
                   {data.activityStream.map((event) => (
                     <div key={event.eventId} className="rl-activity-row">
                       <time>{formatTime(event.at)}</time>

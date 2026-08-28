@@ -15,7 +15,10 @@ export const THEORETICAL_ORDER_POLICY = Object.freeze({
 
 export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, contract = {}, candle = null, now = new Date().toISOString(), policy = THEORETICAL_ORDER_POLICY } = {}) {
   if (!intent?.order_intent_id) return noAction("ENTRY_INTENT_MISSING");
-  const portfolioOrderIntentId = intent.portfolio_order_intent_id || intent.order_intent_id || null;
+  // Legacy trade_order_intents and canonical portfolio OrderIntents are two
+  // distinct persistence identities. Falling back to order_intent_id here made
+  // the repository look up a legacy intent in portfolio_order_intent_lineage.
+  const portfolioOrderIntentId = intent.portfolio_order_intent_id || null;
   const candleTime = timestamp(candle?.timestamp_utc || candle?.time || now);
   const expiresAt = timestamp(intent.expires_at);
   if (expiresAt && candleTime && expiresAt <= candleTime) {

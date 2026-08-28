@@ -178,6 +178,24 @@ describe("toLiveTradingModel reconciliation", () => {
     expect(model.marketIntelligence.riskMultiplier).toBeNull();
   });
 
+  it("preserves an unpublished Risk utilization percentage as null", () => {
+    const signal = strategySignal("sig_risk_nullable", "ZC", "2026-08-16T12:00:00.000Z");
+    const envelope = liveEnvelope({
+      signals: [signal],
+      riskChecks: [{
+        riskCheckId: "risk_nullable",
+        signalId: signal.signalId,
+        status: "PASS",
+        limitLabel: "Per-trade risk",
+        usedPct: null,
+        reasonCode: "RISK_VALUE_NOT_PUBLISHED",
+      }],
+      canonicalRuntime: { latestSignals: [signal] },
+    });
+
+    expect(toLiveTradingModel(envelope).riskCheck?.usedPct).toBeNull();
+  });
+
   it("selects the StrategySignal linked by the OrderIntent instead of a newer unrelated signal", () => {
     const linked = strategySignal("sig_linked", "MNQ", "2026-08-16T12:00:00.000Z");
     const unrelated = strategySignal("sig_unrelated", "ZW", "2026-08-16T12:05:00.000Z");
@@ -195,6 +213,41 @@ describe("toLiveTradingModel reconciliation", () => {
     expect(model.latestSignal?.signalId).toBe("sig_linked");
   });
 
+  it("keeps a pinned signal's confirmed OrderIntent ahead of an unrelated pending intent", () => {
+    const selected = strategySignal("sig_confirmed", "ZC", "2026-08-16T12:00:00.000Z");
+    const unrelated = strategySignal("sig_pending", "ZW", "2026-08-16T12:05:00.000Z");
+    const confirmedIntent = {
+      ...orderIntent(),
+      portfolioOrderIntentId: "poi_confirmed",
+      orderIntentId: "poi_confirmed",
+      signalId: selected.signalId,
+      symbol: "ZC",
+      humanGate: { status: "CONFIRMED", allowedActions: [], gateId: "gate_confirmed" },
+    };
+    const pendingIntent = {
+      ...orderIntent(),
+      portfolioOrderIntentId: "poi_pending",
+      orderIntentId: "poi_pending",
+      signalId: unrelated.signalId,
+      symbol: "ZW",
+      humanGate: { status: "AWAITING_MANUAL_CONFIRMATION", allowedActions: [], gateId: "gate_pending" },
+    };
+    const envelope = liveEnvelope({
+      signals: [unrelated, selected],
+      portfolioOrderIntents: [pendingIntent, confirmedIntent],
+      canonicalRuntime: {
+        latestSignals: [unrelated, selected],
+        pendingOrderIntents: [pendingIntent, confirmedIntent],
+      },
+    });
+
+    const model = toLiveTradingModel(envelope, { signalId: selected.signalId });
+
+    expect(model.latestSignal?.signalId).toBe(selected.signalId);
+    expect(model.orderIntent?.portfolioOrderIntentId).toBe("poi_confirmed");
+    expect(model.orderIntent?.humanGate.status).toBe("CONFIRMED");
+  });
+
   it("fails closed when an OrderIntent has no matching StrategySignal", () => {
     const unrelated = strategySignal("sig_unrelated", "ZW", "2026-08-16T12:05:00.000Z");
     const intent = { ...orderIntent(), signalId: "sig_missing" };
@@ -205,6 +258,44 @@ describe("toLiveTradingModel reconciliation", () => {
     });
 
     expect(toLiveTradingModel(envelope).latestSignal).toBeNull();
+  });
+
+  it("does not borrow same-instrument lineage when a different signal dossier is pinned", () => {
+    const selected = strategySignal("sig_selected", "ZC", "2026-08-16T12:05:00.000Z");
+    const unrelated = strategySignal("sig_unrelated", "ZC", "2026-08-16T12:00:00.000Z");
+    const intent = { ...orderIntent(), signalId: unrelated.signalId, symbol: "ZC" };
+    const envelope = liveEnvelope({
+      signals: [selected, unrelated],
+      portfolioOrderIntents: [intent],
+      canonicalRuntime: {
+        latestSignals: [selected, unrelated],
+        pendingOrderIntents: [intent],
+        pendingTargetPositions: [{ targetPositionId: "target_1", signalId: unrelated.signalId, instrument: "ZC" }],
+      },
+      theoreticalExecution: {
+        schemaVersion: "live_theoretical_execution_v1",
+        availability: "KNOWN",
+        status: "TRACKING_OPEN",
+        source: "test",
+        asOf: "2026-08-16T12:06:00.000Z",
+        rows: [{
+          portfolioOrderIntentId: intent.portfolioOrderIntentId,
+          strategySignalId: unrelated.signalId,
+          instrument: "ZC",
+          side: "BUY",
+          status: "ENTRY_FILLED",
+          tradeId: "trade_unrelated",
+        }],
+      },
+    });
+
+    const model = toLiveTradingModel(envelope, { signalId: selected.signalId });
+
+    expect(model.latestSignal?.signalId).toBe(selected.signalId);
+    expect(model.orderIntent).toBeNull();
+    expect(model.targetPosition).toBeNull();
+    expect(model.selectedTheoreticalExecution).toBeNull();
+    expect(model.gateActions).toEqual([]);
   });
 
   it("distinguishes an expired Human Gate dossier from one awaiting confirmation", () => {

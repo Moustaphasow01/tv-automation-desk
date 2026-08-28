@@ -14,10 +14,9 @@ import { liveSignalDetail } from "./front-control-plane-live-signal-projection.j
 import {
   auditRelations,
   canonicalOrderIntentDossier,
+  currentLiveLineageCohort,
   frontAuditEvents,
   isNominalLiveSignal,
-  isNominalPortfolioIntent,
-  isCurrentLivePortfolioIntent,
   liveCanonicalRuntime,
   portfolioOrderIntentSummaryRow,
   telegramDrilldownFromHealth,
@@ -270,32 +269,33 @@ function normalizeCommandStatus(value) {
 async function loadControlPlaneView(store, viewName, query, actor = {}) {
   const started = currentTick(store?.clock);
   const warnings = [];
-  const source = (label, factory) => safeSource(
+  const deskQuery = viewName === "live-trading" ? withoutMarketSeriesScope(query) : query;
+  const source = (label, factory, cacheQuery = deskQuery) => safeSource(
     label,
-    cachedSource(store, label, query, factory, number(store?.frontControlPlaneSourceCacheTtlMs, FRONT_SOURCE_CACHE_TTL_MS)),
+    cachedSource(store, label, cacheQuery, factory, number(store?.frontControlPlaneSourceCacheTtlMs, FRONT_SOURCE_CACHE_TTL_MS)),
     warnings,
     number(store?.frontControlPlaneSourceTimeoutMs, FRONT_SOURCE_TIMEOUT_MS),
   );
   const loaders = {
-    execution: () => source("execution", () => call(store, "getExecutionOverview", query)),
-    strategy: () => source("strategy", () => call(store, "getStrategyV2Overview", query)),
-    performance: () => source("performance", () => call(store, "getOperationsPerformance", query)),
-    incidents: () => source("incidents", () => call(store, "listOperationsIncidents", { ...query, limit: 50 })),
-    "agent-runtime": () => source("agent-runtime", () => call(store, "listAgentRuntimeTasks", { ...query, limit: 50 })),
+    execution: () => source("execution", () => call(store, "getExecutionOverview", deskQuery)),
+    strategy: () => source("strategy", () => call(store, "getStrategyV2Overview", deskQuery)),
+    performance: () => source("performance", () => call(store, "getOperationsPerformance", deskQuery)),
+    incidents: () => source("incidents", () => call(store, "listOperationsIncidents", { ...deskQuery, limit: 50 })),
+    "agent-runtime": () => source("agent-runtime", () => call(store, "listAgentRuntimeTasks", { ...deskQuery, limit: 50 })),
     "agent-events": () => source("agent-events", () => call(store, "listAgentRuntimeEvents", { limit: 50 })),
-    research: () => source("research", () => call(store, "getResearchLabOverview", { ...query, limit: 100 })),
+    research: () => source("research", () => call(store, "getResearchLabOverview", { ...deskQuery, limit: 100 })),
     "strategy-promotion-lineage": () => UUID_PATTERN.test(String(query.strategyVersionId || ""))
       ? source("strategy-promotion-lineage", () => call(store, "getStrategyPromotionLineage", { strategyVersionId: query.strategyVersionId }))
       : Promise.resolve(null),
-    "data-foundation": () => source("data-foundation", () => call(store, "listDataFoundationDatasets", { ...query, limit: 100 })),
-    "simulation-runs": () => source("simulation-runs", () => call(store?.operations, "listSimulationRuns", { ...query, limit: 100 })),
-    "portfolio-risk": () => source("portfolio-risk", () => buildPortfolioRiskOverviewFromStore(store, query)),
-    "ai-context": () => source("ai-context", () => buildAiContextOverviewFromStore(store, query)),
-    "market-series": () => source("market-series", () => call(store, "getFrontMarketSeries", query)),
-    "live-market-snapshot": () => source("live-market-snapshot", () => call(store, "getFrontLiveMarketSnapshot", query)),
+    "data-foundation": () => source("data-foundation", () => call(store, "listDataFoundationDatasets", { ...deskQuery, limit: 100 })),
+    "simulation-runs": () => source("simulation-runs", () => call(store?.operations, "listSimulationRuns", { ...deskQuery, limit: 100 })),
+    "portfolio-risk": () => source("portfolio-risk", () => buildPortfolioRiskOverviewFromStore(store, deskQuery)),
+    "ai-context": () => source("ai-context", () => buildAiContextOverviewFromStore(store, deskQuery)),
+    "market-series": () => source("market-series", () => call(store, "getFrontMarketSeries", query), query),
+    "live-market-snapshot": () => source("live-market-snapshot", () => call(store, "getFrontLiveMarketSnapshot", deskQuery)),
     sessions: () => source("sessions", async () => {
       const scopes = ["asia_open", "ny_open"].map((session) => ({
-        ...normalizeFrontApiScope({ ...query, session }),
+        ...normalizeFrontApiScope({ ...deskQuery, session }),
         front_cache: true,
         defer_secondary_resources: true,
       }));
@@ -303,14 +303,14 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
       return sessions.map(sessionSummary);
     }),
     "live-session": () => source("live-session", () => loadFrontDeskSession(store, {
-      ...normalizeFrontApiScope(query),
+      ...normalizeFrontApiScope(deskQuery),
       front_cache: true,
       defer_secondary_resources: true,
     })),
-    "front-macro": () => source("front-macro", () => loadFrontMacroResource(store, { ...query, front_cache: true })),
-    "front-news": () => source("front-news", () => loadFrontNewsHeadlinesResource(store, { ...query, front_cache: true })),
-    observability: () => source("observability", () => call(store, "getOperationsObservability", { ...query, limit: 100 })),
-    "assistant-runtime": () => source("assistant-runtime", () => loadFrontAssistantRuntime(store, { ...query, limit: 20 })),
+    "front-macro": () => source("front-macro", () => loadFrontMacroResource(store, { ...deskQuery, front_cache: true })),
+    "front-news": () => source("front-news", () => loadFrontNewsHeadlinesResource(store, { ...deskQuery, front_cache: true })),
+    observability: () => source("observability", () => call(store, "getOperationsObservability", { ...deskQuery, limit: 100 })),
+    "assistant-runtime": () => source("assistant-runtime", () => loadFrontAssistantRuntime(store, { ...deskQuery, limit: 20 })),
     replays: () => source("replays", () => call(store, "listOperationsReplays", { ...query, limit: 200 })),
     "replay-detail": () => loadFrontReplayDetail(store, query),
     "replay-run-full": () => query.runId
@@ -1070,10 +1070,10 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
   const performance = executionValue.performance || {};
   const advisorySummary = (ai && ai.summary) || {};
   const scope = normalizeFrontApiScope(query);
-  const signals = rows(strategy?.signals).filter(isNominalLiveSignal).filter(hasSignalId).map(signalRow);
-  const nominalIntentRows = rows(executionValue.portfolioOrderIntents)
-    .filter(isNominalPortfolioIntent)
-    .filter((item) => isCurrentLivePortfolioIntent(item, nowIso));
+  const cohort = currentLiveLineageCohort({ execution: executionValue, strategy, nowIso });
+  const funnelSignals = cohort.signals.filter(hasSignalId).map(signalRow);
+  const signalInbox = rows(strategy?.signals).filter(isNominalLiveSignal).filter(hasSignalId).map(signalRow);
+  const nominalIntentRows = cohort.portfolioOrderIntents;
   const nominalIntentIds = new Set(nominalIntentRows.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
   const portfolioOrderIntents = nominalIntentRows.map((item) => portfolioOrderIntentSummaryRow({ execution: executionValue, item, actor }));
   const provider = canonicalProviderScope(executionValue, nominalIntentIds);
@@ -1088,19 +1088,20 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
     nowIso,
     health,
   });
-  const instancesWithConfidence = liveInstanceConfidence(canonicalRuntime.activeStrategyInstances, signals, nowIso);
-  const arbitrations = liveArbitrations(executionValue);
-  const riskChecks = liveRiskChecks(executionValue);
+  const instancesWithConfidence = liveInstanceConfidence(canonicalRuntime.activeStrategyInstances, funnelSignals, nowIso);
+  const arbitrations = liveArbitrations(executionValue, { signalIds: cohort.signalIds });
+  const riskChecks = liveRiskChecks(executionValue, { signalIds: cohort.signalIds, portfolioOrderIntentIds: nominalIntentIds });
   appendLiveWarnings({
     execution: executionValue,
     safety,
     canonicalRuntime,
+    riskChecks,
     liveSession: currentLiveSession,
     marketClosed: health?.data_readiness?.market_closed === true,
     warnings,
   });
   return {
-    summary: liveSummary({ signals, intents: portfolioOrderIntents, commands: provider.commands, events: provider.events, safety, risk, performance }),
+    summary: liveSummary({ signals: funnelSignals, intents: portfolioOrderIntents, commands: provider.commands, events: provider.events, safety, risk, performance }),
     session: liveSession({ execution: executionValue, liveSession: currentLiveSession, scope, launchGate, health, marketSeries, marketDataStatus: liveMarketDataStatus }),
     launchGate: publicLaunchGate(launchGate),
     pipeline: pipeline(executionValue, launchGate),
@@ -1108,7 +1109,7 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
     marketSeries: marketSeries || { availability: "UNAVAILABLE", points: [], supportedTimeframes: [], asOf: null, source: "market_candles" },
     watchlist: liveWatchlist(liveMarketSnapshot),
     macroSession: liveMacroSession({ macro, news, scope, marketSeries }),
-    signals,
+    signals: signalInbox,
     arbitrations,
     riskChecks,
     portfolioOrderIntents,
@@ -2992,6 +2993,18 @@ function cachedSource(store, label, query, factory, ttlMs = FRONT_SOURCE_CACHE_T
   const promise = Promise.resolve().then(factory).catch((error) => { cache.delete(key); throw error; });
   cache.set(key, { expiresAt: now + Math.max(0, ttlMs), promise });
   return promise;
+}
+function withoutMarketSeriesScope(query) {
+  const {
+    instrument: _instrument,
+    symbol: _symbol,
+    timeframe: _timeframe,
+    cursor: _cursor,
+    marketCursor: _marketCursor,
+    market_cursor: _marketCursorSnake,
+    ...deskQuery
+  } = query || {};
+  return deskQuery;
 }
 async function call(store, method, args) { if (typeof store?.[method] !== "function") throw codedError("FRONT_CONTROL_PLANE_SOURCE_UNAVAILABLE", `${method} unavailable`, 503); return store[method](args); }
 function rows(value) { return Array.isArray(value?.items) ? value.items : Array.isArray(value) ? value : []; }

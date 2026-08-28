@@ -2,18 +2,35 @@ import type { LiveTimeSeriesContract } from "@/domains/front-api/viewModels";
 import type { HumanGateAction } from "@/features/order-intent/model";
 import type { LiveTone, LiveTradingEnvelope, LiveTradingModel } from "./model";
 
-export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingModel {
+export type LiveTradingSelection = {
+  signalId?: string | null;
+};
+
+export function toLiveTradingModel(
+  envelope: LiveTradingEnvelope,
+  selection: LiveTradingSelection = {},
+): LiveTradingModel {
   const { data, meta } = envelope;
   const runtime = data.canonicalRuntime;
   const signalPool = uniqueBy([...(runtime.latestSignals ?? []), ...(data.signals ?? [])], (item) => item.signalId);
-  const selectedInstrument = normalizeInstrument(data.marketSeries?.instrument ?? null);
-  const orderIntent = selectOrderIntent([...runtime.pendingOrderIntents, ...data.portfolioOrderIntents], selectedInstrument);
-  const requiredSignalId = normalizeText(orderIntent?.signalId) || null;
+  const explicitlySelectedSignalId = normalizeText(selection.signalId) || null;
+  const orderIntent = selectOrderIntent(
+    [...runtime.pendingOrderIntents, ...data.portfolioOrderIntents],
+    explicitlySelectedSignalId,
+  );
+  const requiredSignalId = explicitlySelectedSignalId || normalizeText(orderIntent?.signalId) || null;
   const latestSignal = orderIntent && !requiredSignalId
     ? null
-    : selectLatestSignal(signalPool, selectedInstrument, requiredSignalId);
+    : selectLatestSignal(signalPool, requiredSignalId);
   const latestContextDecision = selectContextDecision(runtime.aiContextGate, latestSignal?.signalId ?? null);
-  const targetPosition = selectTargetPosition(runtime.pendingTargetPositions ?? [], orderIntent, selectedInstrument);
+  const riskCheck = selectRiskCheck(data.riskChecks ?? [], latestSignal?.signalId ?? null);
+  const targetPosition = selectTargetPosition(
+    runtime.pendingTargetPositions ?? [],
+    orderIntent,
+    latestSignal?.signalId ?? null,
+    latestSignal?.symbol ?? null,
+    Boolean(explicitlySelectedSignalId),
+  );
   const marketContract = seriesContracts(data).find((item) => item.seriesId === "market.ohlcv");
   const performanceContract = seriesContracts(data).find((item) => item.seriesId === "performance.r_equity");
   const resourceActions = new Set((orderIntent?.allowedActions.allowedActions ?? []).map((action) => String(action).trim().toUpperCase()));
@@ -21,10 +38,19 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
     .map(normalizeHumanGateAction)
     .filter((action) => resourceActions.has(action.action)) ?? [];
   const degraded = meta.stale || meta.availability !== "AVAILABLE";
-  const actionsUnavailable = meta.stale || meta.availability === "UNAVAILABLE";
+  // Sensitive actions fail closed unless the complete authoritative projection is
+  // available. A fresh PARTIAL response can still omit a decisive policy, risk,
+  // revision, or capability field and must therefore remain read-only.
+  const actionsUnavailable = meta.stale || meta.availability !== "AVAILABLE";
   const reconciliationNotApplicable = ["NOT_APPLICABLE_CURRENT_MODE", "DISABLED_BY_POLICY"]
     .includes(String(data.reconciliation?.availability ?? "").toUpperCase());
-  const selectedTheoreticalExecution = selectTheoreticalExecution(data.theoreticalExecution?.rows ?? [], orderIntent, selectedInstrument);
+  const selectedTheoreticalExecution = selectTheoreticalExecution(
+    data.theoreticalExecution?.rows ?? [],
+    orderIntent,
+    latestSignal?.signalId ?? null,
+    latestSignal?.symbol ?? null,
+    Boolean(explicitlySelectedSignalId),
+  );
   const theoreticalExpected = data.reconciliation?.expected
     ?? selectedTheoreticalExecution;
   const signalFunnel = buildSignalFunnel(data, signalPool);
@@ -59,6 +85,7 @@ export function toLiveTradingModel(envelope: LiveTradingEnvelope): LiveTradingMo
     strategyInstances: runtime.activeStrategyInstances,
     latestSignal,
     latestContextDecision,
+    riskCheck,
     orderIntent,
     targetPosition,
     theoreticalExecution: data.theoreticalExecution ?? null,
@@ -328,32 +355,44 @@ function normalizeHumanGateAction(action: HumanGateAction): HumanGateAction {
 
 function selectOrderIntent(
   intents: readonly NonNullable<LiveTradingEnvelope["data"]["canonicalRuntime"]["pendingOrderIntents"]>[number][],
-  selectedInstrument: string | null,
+  selectedSignalId: string | null,
 ) {
   const unique = uniqueBy(intents, (item) => item.portfolioOrderIntentId || item.orderIntentId);
   if (!unique.length) return null;
+  if (selectedSignalId) {
+    // A pinned signal owns its complete dossier, including a CONFIRMED, REJECTED
+    // or otherwise non-awaiting OrderIntent. An unrelated pending gate must never
+    // replace that canonical lineage merely because it remains actionable.
+    return unique.find((item) => normalizeText(item.signalId) === selectedSignalId) ?? null;
+  }
   const awaiting = unique.filter((item) => normalizeInstrument(item.humanGate.status) === "AWAITING_MANUAL_CONFIRMATION" || item.humanGate.allowedActions.length);
   const pool = awaiting.length ? awaiting : unique;
-  if (selectedInstrument) {
-    const sameInstrument = pool.find((item) => normalizeInstrument(intentInstrument(item)) === selectedInstrument);
-    if (sameInstrument) return sameInstrument;
-  }
   return pool[0] ?? null;
+}
+
+function selectRiskCheck(
+  riskChecks: LiveTradingEnvelope["data"]["riskChecks"],
+  signalId: string | null,
+): LiveTradingModel["riskCheck"] {
+  if (!signalId) return null;
+  const risk = riskChecks.find((item) => normalizeText(item.signalId) === signalId);
+  if (!risk) return null;
+  return {
+    ...risk,
+    // PostgreSQL/BFF may honestly publish null when no utilization percentage
+    // was computed. Preserve that absence instead of coercing it to zero.
+    usedPct: typeof risk.usedPct === "number" && Number.isFinite(risk.usedPct) ? risk.usedPct : null,
+  };
 }
 
 function selectLatestSignal(
   signals: readonly NonNullable<LiveTradingEnvelope["data"]["canonicalRuntime"]["latestSignals"]>[number][],
-  selectedInstrument: string | null,
   requiredSignalId: string | null,
 ) {
   if (!signals.length) return null;
   const sorted = [...signals].sort((left, right) => new Date(right.createdAt ?? "").getTime() - new Date(left.createdAt ?? "").getTime());
   if (requiredSignalId) {
     return sorted.find((item) => normalizeText(item.signalId) === requiredSignalId) ?? null;
-  }
-  if (selectedInstrument) {
-    const sameInstrument = sorted.find((item) => normalizeInstrument(item.symbol) === selectedInstrument);
-    if (sameInstrument) return sameInstrument;
   }
   return sorted[0] ?? null;
 }
@@ -369,7 +408,9 @@ function selectContextDecision(
 function selectTargetPosition(
   targetPositions: readonly Record<string, unknown>[],
   orderIntent: LiveTradingModel["orderIntent"],
+  selectedSignalId: string | null,
   selectedInstrument: string | null,
+  strictSignalSelection: boolean,
 ) {
   if (!targetPositions.length) return null;
   const targetId = normalizeText(orderIntent?.targetPositionId);
@@ -377,6 +418,11 @@ function selectTargetPosition(
     ? targetPositions.find((item) => normalizeText(recordValue(item, ["targetPositionId", "target_position_id", "target_position_id"])) === targetId)
     : null;
   if (byId) return byId;
+  if (selectedSignalId) {
+    const bySignal = targetPositions.find((item) => normalizeText(recordValue(item, ["signalId", "signal_id", "strategySignalId", "strategy_signal_id"])) === selectedSignalId);
+    if (bySignal) return bySignal;
+    if (strictSignalSelection) return null;
+  }
   const intentSymbol = normalizeInstrument(intentInstrument(orderIntent));
   const wantedInstrument = intentSymbol || selectedInstrument;
   if (wantedInstrument) {
@@ -389,13 +435,20 @@ function selectTargetPosition(
 function selectTheoreticalExecution(
   rows: readonly NonNullable<LiveTradingModel["theoreticalExecution"]>["rows"][number][],
   orderIntent: LiveTradingModel["orderIntent"],
+  selectedSignalId: string | null,
   selectedInstrument: string | null,
+  strictSignalSelection: boolean,
 ): NonNullable<LiveTradingModel["theoreticalExecution"]>["rows"][number] | null {
   if (!rows.length) return null;
   const intentId = normalizeText(orderIntent?.portfolioOrderIntentId ?? orderIntent?.orderIntentId);
   if (intentId) {
     const byIntent = rows.find((item) => normalizeText(item.portfolioOrderIntentId) === intentId);
     if (byIntent) return byIntent;
+  }
+  if (selectedSignalId) {
+    const bySignal = rows.find((item) => normalizeText(item.strategySignalId) === selectedSignalId);
+    if (bySignal) return bySignal;
+    if (strictSignalSelection) return null;
   }
   if (selectedInstrument) {
     const byInstrument = rows.find((item) => normalizeInstrument(item.instrument) === selectedInstrument);

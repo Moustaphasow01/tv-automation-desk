@@ -175,7 +175,7 @@ export function liveSession({ execution, liveSession: currentLiveSession, scope,
   };
 }
 
-export function appendLiveWarnings({ execution, safety, canonicalRuntime, liveSession: currentLiveSession, marketClosed = false, warnings }) {
+export function appendLiveWarnings({ execution, safety, canonicalRuntime, riskChecks = [], liveSession: currentLiveSession, marketClosed = false, warnings }) {
   const signalCount = rows(canonicalRuntime?.latestSignals).length;
   const intentCount = rows(canonicalRuntime?.pendingOrderIntents).length;
   if (!execution.session_id && !currentLiveSession?.id) warnings.push("live-session-id:UNAVAILABLE");
@@ -183,7 +183,7 @@ export function appendLiveWarnings({ execution, safety, canonicalRuntime, liveSe
   // A raw StrategySignal can be visible while portfolio arbitration has not
   // produced any current accepted candidate. That is a connected-empty business
   // state, not a front/runtime outage; avoid degrading the whole Live screen.
-  if (intentCount && !hasRiskCheckEvidence(execution)) warnings.push("live-risk-checks:UNAVAILABLE");
+  if (intentCount && !riskChecks.length) warnings.push("live-risk-checks:UNAVAILABLE");
   if (!rows(execution.pipeline).length && canonicalRuntime.pipeline.every((item) => item.status === "UNAVAILABLE")) warnings.push("live-pipeline:UNAVAILABLE");
   if (!marketClosed && (signalCount || intentCount) && !rows(execution.timeline).length && !rows(currentLiveSession?.timeline).length && !rows(currentLiveSession?.operationalTimeline).length) warnings.push("live-timeline:UNAVAILABLE");
 }
@@ -196,23 +196,29 @@ export function liveTimeline(execution) {
   return rows(execution.timeline).filter((item) => item?.event_id).map((item) => ({ eventId: String(item.event_id), at: text(item.occurred_at_utc || item.created_at_utc, "unavailable"), step: text(item.step || item.domain, "unavailable"), title: text(item.title || item.event_type, "Événement"), detail: text(item.detail || item.message, "Détail indisponible"), tone: ["HIGH", "WATCH"].includes(upper(item.tone || item.severity)) ? upper(item.tone || item.severity) : "INFO" }));
 }
 
-export function liveArbitrations(execution) {
-  return rows(execution.arbitrations).filter((item) => item?.arbitration_id && item?.signal_id).map((item) => ({ arbitrationId: String(item.arbitration_id), signalId: String(item.signal_id), decision: ["ACCEPTED", "SCALED", "REJECTED"].includes(upper(item.decision)) ? upper(item.decision) : "REJECTED", targetQuantity: numeric(item.target_quantity), conflictStatus: text(item.conflict_status, "UNKNOWN"), correlationPct: numeric(item.correlation_pct), reasonCode: text(item.reason_code, "REASON_UNAVAILABLE") }));
+export function liveArbitrations(execution, { signalIds = null } = {}) {
+  return rows(execution.arbitrations)
+    .filter((item) => item?.arbitration_id && item?.signal_id)
+    .filter((item) => matchesScope(signalIds, item.signal_id))
+    .map((item) => ({ arbitrationId: String(item.arbitration_id), signalId: String(item.signal_id), decision: ["ACCEPTED", "SCALED", "REJECTED"].includes(upper(item.decision)) ? upper(item.decision) : "REJECTED", targetQuantity: numeric(item.target_quantity), conflictStatus: text(item.conflict_status, "UNKNOWN"), correlationPct: numeric(item.correlation_pct), reasonCode: text(item.reason_code, "REASON_UNAVAILABLE") }));
 }
 
-export function liveRiskChecks(execution) {
-  return uniqueBy([
-    ...rows(execution.risk_checks).filter((item) => item?.risk_check_id && item?.signal_id).map((item) => ({
-      riskCheckId: String(item.risk_check_id),
-      signalId: String(item.signal_id),
-      status: riskStatus(item.status),
-      limitLabel: text(item.limit_label, "Limite non publiée"),
-      usedPct: nullableMetric(item.used_pct),
-      reasonCode: text(item.reason_code, "REASON_UNAVAILABLE"),
-      source: "execution.risk_checks",
-    })),
-    ...derivedRiskChecksFromOrderIntents(execution),
-  ], (item) => `${item.riskCheckId}:${item.signalId}`);
+export function liveRiskChecks(execution, { signalIds = null, portfolioOrderIntentIds = null } = {}) {
+  return preferCompleteRiskChecks([
+    ...rows(execution.risk_checks)
+      .filter((item) => item?.risk_check_id && item?.signal_id)
+      .filter((item) => matchesScope(signalIds, item.signal_id))
+      .map((item) => ({
+        riskCheckId: String(item.risk_check_id),
+        signalId: String(item.signal_id),
+        status: riskStatus(item.status),
+        limitLabel: text(item.limit_label, "Limite non publiée"),
+        usedPct: nullableMetric(item.used_pct),
+        reasonCode: text(item.reason_code, "REASON_UNAVAILABLE"),
+        source: "execution.risk_checks",
+      })),
+    ...derivedRiskChecksFromOrderIntents(execution, { signalIds, portfolioOrderIntentIds }),
+  ]).map(withNullableRiskUtilization);
 }
 
 export function nullableMetric(value) { if (value === null || value === undefined || value === "") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
@@ -222,22 +228,19 @@ function upper(value) { return String(value || "").toUpperCase(); }
 function numeric(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 function first(...values) { return values.find((value) => value !== null && value !== undefined); }
 
-function hasRiskCheckEvidence(execution = {}) {
-  if (rows(execution.risk_checks).some((item) => item?.risk_check_id && item?.signal_id)) return true;
-  return derivedRiskChecksFromOrderIntents(execution).length > 0;
-}
-
-function derivedRiskChecksFromOrderIntents(execution = {}) {
-  return rows(execution.portfolioOrderIntents).flatMap((intent, intentIndex) => {
-    const signalId = intentSignalId(intent);
-    if (!signalId) return [];
-    return rows(intent?.risk_decisions).map((decision, decisionIndex) => riskCheckFromDecision({
-      decision,
-      signalId,
-      intent,
-      fallbackIndex: `${intentIndex + 1}-${decisionIndex + 1}`,
-    })).filter(Boolean);
-  });
+function derivedRiskChecksFromOrderIntents(execution = {}, { signalIds = null, portfolioOrderIntentIds = null } = {}) {
+  return rows(execution.portfolioOrderIntents)
+    .filter((intent) => matchesScope(portfolioOrderIntentIds, intent.portfolio_order_intent_id))
+    .flatMap((intent, intentIndex) => {
+      const signalId = intentSignalId(intent);
+      if (!signalId || !matchesScope(signalIds, signalId)) return [];
+      return rows(intent?.risk_decisions).map((decision, decisionIndex) => riskCheckFromDecision({
+        decision,
+        signalId,
+        intent,
+        fallbackIndex: `${intentIndex + 1}-${decisionIndex + 1}`,
+      })).filter(Boolean);
+    });
 }
 
 function riskCheckFromDecision({ decision = {}, signalId, intent = {}, fallbackIndex }) {
@@ -285,14 +288,24 @@ function limitUtilizationPct(nearestLimit) {
   return raw <= 1 ? Math.round(raw * 10_000) / 100 : Math.round(raw * 100) / 100;
 }
 
-function uniqueBy(items, keyOf) {
-  const seen = new Set();
-  const result = [];
+function preferCompleteRiskChecks(items) {
+  const byIdentity = new Map();
   for (const item of items) {
-    const key = keyOf(item);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    result.push(item);
+    const key = `${item.riskCheckId}:${item.signalId}`;
+    if (!key || key === ":") continue;
+    const existing = byIdentity.get(key);
+    if (!existing || (!Number.isFinite(existing.usedPct) && Number.isFinite(item.usedPct))) byIdentity.set(key, item);
   }
-  return result;
+  return [...byIdentity.values()];
+}
+
+function withNullableRiskUtilization(item) {
+  return {
+    ...item,
+    usedPct: Number.isFinite(item?.usedPct) ? item.usedPct : null,
+  };
+}
+
+function matchesScope(scope, value) {
+  return !(scope instanceof Set) || scope.has(String(value || ""));
 }

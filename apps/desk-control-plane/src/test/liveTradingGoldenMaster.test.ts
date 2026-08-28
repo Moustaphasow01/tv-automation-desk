@@ -37,13 +37,14 @@ describe("Live Trading golden master", () => {
     expect(model.mode.ackIsFill).toBe(false);
   });
 
-  it("keeps explicitly allowed Human Gate actions available on a partial but fresh projection", () => {
+  it("fails closed on a partial projection even when Human Gate actions are published", () => {
     const envelope = withOrderIntent(false);
     envelope.meta = { ...envelope.meta, availability: "PARTIAL", stale: false, warnings: ["live-risk-checks:UNAVAILABLE"] };
     const model = toLiveTradingModel(envelope);
 
     expect(model.truth.label).toBe("PARTIAL");
-    expect(model.gateActions.map((action) => action.action)).toEqual(["CONFIRM", "REJECT"]);
+    expect(model.gateActions).toEqual([]);
+    expect(model.gateBlockedReason).toContain("PARTIAL");
   });
 
   it("keeps TargetPosition visible without inventing theoretical execution or audit events", () => {

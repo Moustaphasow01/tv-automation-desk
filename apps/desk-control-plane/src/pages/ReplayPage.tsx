@@ -105,6 +105,7 @@ export function ReplayPage() {
         <input
           className="rp-scrub"
           type="range"
+          aria-label="Position de lecture du replay"
           min={0}
           max={Math.max(0, data.candles.length - 1)}
           value={playheadIndex}
@@ -120,7 +121,7 @@ export function ReplayPage() {
         </div>
       </div>
 
-      <div className="rp-workspace">
+      <div className="rp-workspace" role="region" aria-label="Espace de travail du replay" tabIndex={0}>
         <section className="rp-session-strip" aria-label="Repères de session">
           <SessionCell label="Date" value={data.selectedRun?.tradingDate ?? "—"} />
           <SessionCell label="Session" value={data.selectedRun?.session ?? "—"} />
@@ -158,7 +159,8 @@ export function ReplayPage() {
               <div className="rp-panel__body">
                 <div className="rp-event-list">
                   {[...visibleTimeline].reverse().slice(0, 30).map((item) => (
-                    <div
+                    <button
+                      type="button"
                       key={item.eventId}
                       className="rp-event-row"
                       aria-selected={selectedEvent?.eventId === item.eventId}
@@ -167,7 +169,7 @@ export function ReplayPage() {
                       <time>{formatTime(item.at)}</time>
                       <span style={{ color: LAYER_COLORS[item.layer] }}>●</span>
                       <strong>{item.title}</strong>
-                    </div>
+                    </button>
                   ))}
                   {!visibleTimeline.length ? <p className="rp-empty">Aucun événement avant ce point de lecture.</p> : null}
                 </div>
@@ -260,7 +262,7 @@ function CandleChart({ candles, playheadIndex, events, onSelectEvent }: {
         const up = candle.close >= candle.open;
         const dimmed = index > playheadIndex;
         return (
-          <g key={candle.time} opacity={dimmed ? 0.25 : 1}>
+          <g key={`${candle.time}-${index}`} opacity={dimmed ? 0.25 : 1}>
             <line x1={x(index)} x2={x(index)} y1={y(candle.high)} y2={y(candle.low)} stroke={up ? "var(--rp-green)" : "var(--rp-red)"} strokeWidth="1" />
             <rect
               x={x(index) - candleWidth / 2}
@@ -278,13 +280,13 @@ function CandleChart({ candles, playheadIndex, events, onSelectEvent }: {
         const showLabel = eventPositions.length <= 12;
         const labelY = 10 + (position % 3) * 12;
         return (
-          <g key={event.eventId} onClick={() => onSelectEvent(event.eventId)} style={{ cursor: "pointer" }}>
+          <g key={`${event.eventId}-${position}`} onClick={() => onSelectEvent(event.eventId)} style={{ cursor: "pointer" }}>
             {showLabel ? <line x1={cx} x2={cx} y1={labelY + 4} y2={y(candles[Math.min(index, visible.length - 1)].high)} stroke={LAYER_COLORS[event.layer]} strokeWidth="1" strokeDasharray="2 2" opacity={0.6} /> : null}
             <circle cx={cx} cy={showLabel ? labelY : 8} r={4} fill={LAYER_COLORS[event.layer]}>
               <title>{event.title}</title>
             </circle>
             {showLabel ? (
-              <text x={cx + 6} y={labelY + 3} fontSize="8.5" fill={LAYER_COLORS[event.layer]} fontWeight="700">{event.title}</text>
+              <text x={cx + 6} y={labelY + 3} fontSize="11" fill={LAYER_COLORS[event.layer]} fontWeight="700">{event.title}</text>
             ) : null}
           </g>
         );
@@ -342,7 +344,7 @@ function SessionCell({ label, value }: { label: string; value: string }) {
 function ReplayLoading() {
   return (
     <div className="rp-page">
-      <div className="rp-workspace">
+      <div className="rp-workspace" role="region" aria-label="Chargement du replay" tabIndex={0}>
         <section className="rp-session-strip">
           {Array.from({ length: 6 }).map((_, index) => <article key={index} className="rp-session-card"><div className="skeleton-line" /></article>)}
         </section>

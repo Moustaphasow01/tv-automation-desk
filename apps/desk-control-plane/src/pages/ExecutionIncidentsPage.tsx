@@ -120,8 +120,8 @@ export function ExecutionIncidentsPage() {
                 <table className="io-table">
                   <thead><tr><th>Incident</th><th>Sév.</th><th>Statut</th><th>Impact</th></tr></thead>
                   <tbody>
-                    {data.incidents.map((incident) => (
-                      <tr key={incident.incidentId} aria-selected={selected.incidentId === incident.incidentId}>
+                    {data.incidents.map((incident, index) => (
+                      <tr key={`${incident.incidentId}-${index}`} aria-selected={selected.incidentId === incident.incidentId}>
                         <td><strong>{incident.title}</strong><br /><small style={{ color: "var(--io-muted)" }}>{formatTime(incident.openedAt)}</small></td>
                         <td><StatusBadge tone={severityTone(incident.severity)}>{presentSeverity(incident.severity).label}</StatusBadge></td>
                         <td><StatusBadge tone={statusTone(incident.status)}>{presentIncidentStatus(incident.status).label}</StatusBadge></td>
@@ -142,8 +142,8 @@ export function ExecutionIncidentsPage() {
               <div className="io-detail-grid" style={{ marginTop: 10 }}>
                 <div><small>Payload sélection</small></div>
               </div>
-              {selected.payloadPreview.map((item) => (
-                <div key={item.key} className="io-detail-grid" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 4 }}>
+              {selected.payloadPreview.map((item, index) => (
+                <div key={`${item.key}-${index}`} className="io-detail-grid" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 4 }}>
                   <div><small>{item.key}</small><strong style={{ fontSize: 11.5 }}>{item.value}</strong></div>
                 </div>
               ))}
@@ -154,8 +154,8 @@ export function ExecutionIncidentsPage() {
             <header><h2>Réconciliation</h2><small>{selected.reconciliationResults.length}</small></header>
             <div className="io-panel__body">
               <div className="io-reconcile-list">
-                {selected.reconciliationResults.map((result) => (
-                  <article key={result.resultId}>
+                {selected.reconciliationResults.map((result, index) => (
+                  <article key={`${result.resultId}-${index}`}>
                     <FaSyncAlt />
                     <div><strong>{result.label}</strong><small>Attendu {result.expected} · Réel {result.actual}</small></div>
                     <StatusBadge tone={reconciliationTone(result.status)}>{presentReconciliationStatus(result.status).label}</StatusBadge>
@@ -175,16 +175,15 @@ export function ExecutionIncidentsPage() {
           <section className="io-panel" aria-label="Chronologie incident">
             <header><h2>Chronologie</h2><small>{selected.incidentId}</small></header>
             <div className="io-panel__body">
-              <ol className="io-chronology">
-                {selected.chronology.map((step) => (
-                  <li key={step.stepId}>
+              {selected.chronology.length ? <ol className="io-chronology">
+                {selected.chronology.map((step, index) => (
+                  <li key={`${step.stepId}-${index}`}>
                     <span>{formatTime(step.at)}</span>
                     <div><strong>{step.title}</strong><small>{step.detail}</small></div>
                     <StatusBadge tone={step.state === "DONE" ? "success" : step.state === "FAILED" ? "danger" : "warning"}>{presentChronologyState(step.state).label}</StatusBadge>
                   </li>
                 ))}
-                {!selected.chronology.length ? <p className="io-empty">Aucune chronologie publiée.</p> : null}
-              </ol>
+              </ol> : <p className="io-empty">Aucune chronologie publiée.</p>}
               <div className="io-postmortem">
                 <FaProjectDiagram />
                 <div><strong>Post-mortem</strong><br /><small>{selected.postMortem.rootCause} · {selected.postMortem.permanentFix}</small></div>
@@ -196,8 +195,8 @@ export function ExecutionIncidentsPage() {
             <header><h2>Tentatives &amp; DLQ</h2><small>{data.retries.length}</small></header>
             <div className="io-panel__body">
               <div className="io-retry-list">
-                {data.retries.map((retry) => (
-                  <article key={retry.retryId}>
+                {data.retries.map((retry, index) => (
+                  <article key={`${retry.retryId}-${index}`}>
                     <FaRedoAlt />
                     <div><strong>{retry.retryId}</strong><small>tentative {retry.attempt} · backoff {retry.backoffSeconds}s</small></div>
                     <StatusBadge tone={retry.state === "SUCCEEDED" ? "success" : retry.state === "ABANDONED" || retry.state === "FAILED" ? "danger" : "warning"}>{presentRetryState(retry.state).label}</StatusBadge>
@@ -229,8 +228,8 @@ export function ExecutionIncidentsPage() {
                 <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder="actionId step-up" />
               </label>
               <div className="io-action-list" style={{ marginTop: 8 }}>
-                {data.commandActions.map((action) => (
-                  <article key={action.actionId} className={action.criticality === "EMERGENCY" ? "io-action-list__emergency" : undefined}>
+                {data.commandActions.map((action, index) => (
+                  <article key={`${action.actionId}-${index}`} className={action.criticality === "EMERGENCY" ? "io-action-list__emergency" : undefined}>
                     <span>{actionIcon(action)}</span>
                     <div><strong>{action.label}</strong><small>{action.impactSummary}</small></div>
                     <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
@@ -252,8 +251,8 @@ export function ExecutionIncidentsPage() {
               <table className="io-table">
                 <thead><tr><th>Worker</th><th>Rôle</th><th>Tâche</th><th>Statut</th><th>Dernier heartbeat</th></tr></thead>
                 <tbody>
-                  {data.workers.map((worker) => (
-                    <tr key={worker.workerId}>
+                  {data.workers.map((worker, index) => (
+                    <tr key={`${worker.workerId}-${index}`}>
                       <td><strong>{worker.workerId}</strong></td>
                       <td>{worker.role}</td>
                       <td>{worker.currentTask || "—"}</td>
@@ -273,8 +272,8 @@ export function ExecutionIncidentsPage() {
               <table className="io-table">
                 <thead><tr><th>Runbook</th><th>Déclenché par</th><th>Statut</th><th>Sévérité</th><th>Mis à jour</th></tr></thead>
                 <tbody>
-                  {data.runbooks.map((runbook) => (
-                    <tr key={runbook.runbookId}>
+                  {data.runbooks.map((runbook, index) => (
+                    <tr key={`${runbook.runbookId}-${index}`}>
                       <td><strong>{runbook.title}</strong></td>
                       <td>{runbook.triggeredBy}</td>
                       <td><StatusBadge tone="warning">{runbook.status}</StatusBadge></td>

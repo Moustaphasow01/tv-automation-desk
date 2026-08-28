@@ -65,4 +65,11 @@ foreach ($file in $files) {
     Write-Host "APPLIED $migrationId ($($stopwatch.ElapsedMilliseconds) ms)"
 }
 
+if (Test-Path -LiteralPath (Join-Path $SchemaDirectory "058_theoretical_execution_portfolio_lineage.sql") -PathType Leaf) {
+    & (Join-Path $PSScriptRoot "Test-DeskTheoreticalExecutionPortfolioLineage.ps1") `
+        -DatabaseUrl $DatabaseUrl `
+        -SchemaDirectory $SchemaDirectory `
+        -PostgresBin $PostgresBin
+}
+
 Write-Host "Desk PostgreSQL schema is current."

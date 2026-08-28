@@ -1,19 +1,40 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const operatorPin = process.env.DESK_OPERATOR_ADMIN_PIN || "";
 
 test("navigation réelle et détails paramétrés sur les projections V2", async ({ page, request }) => {
   await page.goto("/#/command-center", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible();
+  await establishOperatorSession(page);
   await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
   await expect(page.getByTestId("command-center-golden-master")).toBeVisible();
 
-  await page.getByRole("link", { name: "Live Trading", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Live Trading", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Trading en direct", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Trading en direct", exact: true })).toBeVisible();
   await expect(page.getByTestId("live-trading-golden-master")).toBeVisible();
-  await expect(page.getByText(/AUTO EXECUTION (ON|OFF)/)).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Human Execution Gate" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Confirm", exact: true })).toBeDisabled();
+  await expect(page.getByText(/EXÉCUTION AUTO (ACTIVÉE|DÉSACTIVÉE)/)).toBeVisible();
+  await expect(page.locator(".lt-decision-stack__step--gate")).toBeVisible();
+  await expect(page.locator(".lt-gate-actions button:not([disabled])")).toHaveCount(0);
+
+  const expandPanel = page.getByRole("button", { name: /^Agrandir / }).first();
+  await expandPanel.focus();
+  await expandPanel.click();
+  const expandedPanel = page.getByRole("dialog").filter({ has: page.getByRole("button", { name: /^Réduire / }) }).first();
+  await expect(expandedPanel).toBeVisible();
+  await expect(expandedPanel.getByRole("button", { name: /^Réduire / })).toBeFocused();
+  expect(await expandedPanel.evaluate((panel) => {
+    let current: HTMLElement = panel as HTMLElement;
+    while (current.parentElement && current.parentElement !== document.body) {
+      for (const sibling of current.parentElement.children) {
+        if (sibling === current || (sibling as HTMLElement).classList.contains("lt-panel-backdrop")) continue;
+        if (!(sibling as HTMLElement).inert) return false;
+      }
+      current = current.parentElement;
+    }
+    return true;
+  })).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(expandedPanel).toBeHidden();
+  await expect(expandPanel).toBeFocused();
 
   const live = await request.get("/front-api/v1/views/live-trading");
   expect(live.ok()).toBeTruthy();
@@ -22,7 +43,7 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
   if (signalId) {
     await page.goto(`/#/live/signals/${encodeURIComponent(signalId)}`, { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(new RegExp(encodeURIComponent(signalId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    await expect(page.getByText(signalId, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(new RegExp(signalId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))).first()).toBeVisible();
   } else {
     await page.goto("/#/live/signals", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Signaux live" })).toBeVisible();
@@ -37,8 +58,8 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
     await expect(page.getByText(orderId, { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: /dossier d'exécution/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Human Execution Gate" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Confirm OrderIntent" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Reject OrderIntent" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Confirmer OrderIntent|Confirm OrderIntent/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Rejeter OrderIntent|Reject OrderIntent/ })).toBeDisabled();
     await expect(page.locator(".order-dossier__terms input, .order-dossier__terms select, .order-dossier__terms textarea, .order-dossier__terms [contenteditable=true]")).toHaveCount(0);
     await expect(page.getByText(/Confirmation indisponible : le backend ne publie aucun allowedAction/).first()).toBeVisible();
   }
@@ -62,7 +83,7 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
   const replayId = replayEnvelope.data.items[0]?.id;
   if (replayId) {
     await page.goto(`/#/replay/runs/${encodeURIComponent(replayId)}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Détail Replay" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Détail (Replay|Rejeu)/ })).toBeVisible();
     await expect(page.getByText(replayId, { exact: true }).first()).toBeVisible();
   }
 
@@ -100,13 +121,36 @@ test("session opérateur → commande terminale → audit receipt", async ({ pag
 test.describe("reflow V2", () => {
   test.use({ viewport: { width: 320, height: 720 } });
   test("les domaines restent accessibles et aucun overflow global n'est imposé", async ({ page }) => {
-    for (const route of ["command-center", "live", "research", "execution/portfolio", "governance/access"]) {
+    test.setTimeout(180_000);
+    const routes = [
+      ["command-center", /Centre de contrôle|Command Center/],
+      ["live", /Trading en direct/],
+      ["research", /Laboratoire de recherche/],
+      ["execution/portfolio", /Portefeuille/],
+      ["governance/access", /Accès|Rôles/],
+    ] as const;
+    for (const [route, heading] of routes) {
       await page.goto(`/#/${route}`, { waitUntil: "domcontentloaded" });
-      await page.getByRole("button", { name: "Plus" }).click();
+      if (route === "command-center") await establishOperatorSession(page);
+      await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
+      await page.getByRole("button", { name: "Plus", exact: true }).click();
+      const drawer = page.getByRole("dialog", { name: "Toutes les rubriques" });
+      await expect(drawer).toBeVisible();
       await expect(page.getByRole("navigation", { name: "Toutes les rubriques" })).toBeVisible();
       const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
       expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
-      await page.getByRole("button", { name: "Fermer" }).click();
+      await page.keyboard.press("Escape");
+      await expect(drawer).toBeHidden();
     }
   });
 });
+
+async function establishOperatorSession(page: Page) {
+  const gate = page.locator(".operator-login-gate");
+  if (!await gate.isVisible({ timeout: 5_000 }).catch(() => false)) return;
+  const form = gate.locator(".operator-login-gate__form");
+  await form.locator("input[autocomplete='username']").fill(process.env.DESK_OPERATOR_LOGIN || "MSO");
+  await form.locator("input[autocomplete='current-password']").fill(process.env.DESK_OPERATOR_PASSWORD || "2018");
+  await form.locator("button[type='submit']").click();
+  await gate.waitFor({ state: "hidden", timeout: 45_000 });
+}

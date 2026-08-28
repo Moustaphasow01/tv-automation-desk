@@ -256,8 +256,8 @@ export function JarvisWorkspacePage() {
 
         <Card title="Alertes & commandes en cours" actions={<InlineAction>Observabilité</InlineAction>} density="compact">
           <div className="jarvis-alert-list">
-            {data.alerts.map((alert) => (
-              <Link key={alert.alertId} to={alert.route}>
+            {data.alerts.map((alert, index) => (
+              <Link key={`${alert.alertId}:${alert.route}:${index}`} to={alert.route}>
                 <FaBell />
                 <div><strong>{alert.title}</strong><small>{alert.alertId}</small></div>
                 <StatusBadge tone={alert.severity === "HIGH" ? "danger" : alert.severity === "MEDIUM" ? "warning" : "accent"}>{alert.severity}</StatusBadge>

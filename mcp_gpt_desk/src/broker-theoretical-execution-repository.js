@@ -936,10 +936,7 @@ function tradingDate(iso) {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : null;
 }
 function portfolioOrderIntentId(valueToInspect = {}) {
-  const direct = text(valueToInspect.portfolio_order_intent_id || valueToInspect.portfolioOrderIntentId);
-  if (direct) return direct;
-  const orderIntentId = text(valueToInspect.order_intent_id || valueToInspect.orderIntentId);
-  return orderIntentId.startsWith("portfolio_order_intent_") ? orderIntentId : null;
+  return text(valueToInspect.portfolio_order_intent_id || valueToInspect.portfolioOrderIntentId) || null;
 }
 function legacyOrderIntentId(valueToInspect = {}) {
   const portfolioId = portfolioOrderIntentId(valueToInspect);

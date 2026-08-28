@@ -101,10 +101,10 @@ export function ResearchAgentFleetPage() {
       <section className="operator-grid operator-grid--top" aria-label="Agents, files et conversations">
         <Card title="Roster agents IA" actions={<InlineAction>Zoom agent</InlineAction>} density="compact">
           <div className="research-agent-roster">
-            {data.agents.map((agent) => {
+            {data.agents.map((agent, index) => {
               const runtimeStatus = agentRuntimeStatus(agent.runtimeStatus);
               return (
-                <article key={agent.agentId} className={`research-agent-fleet-card research-agent-fleet-card--${runtimeStatus.toLowerCase()}`}>
+                <article key={`${agent.agentId}-${index}`} className={`research-agent-fleet-card research-agent-fleet-card--${runtimeStatus.toLowerCase()}`}>
                   <div className="research-agent-fleet-card__head">
                     <FaBrain />
                     <div>
@@ -131,18 +131,18 @@ export function ResearchAgentFleetPage() {
 
         <Card title="Mission file & attentes" actions={<InlineAction>File</InlineAction>} density="compact">
           <div className="research-agent-queue">
-            {data.queue.map((item) => (
-              <QueueItem key={item.queueItemId} item={item} agent={agentById(data.agents, item.agentId)} />
+            {data.queue.map((item, index) => (
+              <QueueItem key={`${item.queueItemId}-${index}`} item={item} agent={agentById(data.agents, item.agentId)} />
             ))}
           </div>
         </Card>
 
         <Card title="Conversations & leases" actions={<InlineAction>Threads</InlineAction>} density="compact">
           <div className="research-agent-lease-list">
-            {data.agents.map((agent) => {
+            {data.agents.map((agent, index) => {
               const conversation = data.conversations.find((item) => item.agentId === agent.agentId);
               return (
-                <article key={agent.agentId}>
+                <article key={`${agent.agentId}-${index}`}>
                   <FaComments />
                   <div>
                     <strong>{compactId(conversation?.conversationId ?? agent.conversationId)}</strong>
@@ -160,8 +160,8 @@ export function ResearchAgentFleetPage() {
       <section className="operator-grid operator-grid--bottom" aria-label="Budgets, incidents et commandes">
         <Card title="Budgets & santé IA" actions={<InlineAction>Budgets</InlineAction>} density="compact">
           <div className="research-agent-health-grid">
-            {data.agents.map((agent) => (
-              <article key={agent.agentId}>
+            {data.agents.map((agent, index) => (
+              <article key={`${agent.agentId}-${index}`}>
                 <div>
                   <strong>{agent.name}</strong>
                   <small>{agent.queueDepth} items · {agent.retryCount} retries</small>
@@ -175,10 +175,10 @@ export function ResearchAgentFleetPage() {
 
         <Card title="Incidents & retries" actions={<InlineAction>Audit</InlineAction>} density="compact">
           <div className="research-agent-incidents">
-            {data.incidents.map((incident) => {
+            {data.incidents.map((incident, index) => {
               const agent = agentById(data.agents, incident.agentId);
               return (
-                <article key={incident.incidentId}>
+                <article key={`${incident.incidentId}-${index}`}>
                   <FaExclamationTriangle />
                   <div>
                     <strong>{incident.title}</strong>
@@ -200,10 +200,10 @@ export function ResearchAgentFleetPage() {
 
         <Card title="Actions agent" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="research-agent-actions">
-            {data.commandActions.map((action) => {
+            {data.commandActions.map((action, index) => {
               const agent = agentById(data.agents, action.agentId);
               return (
-                <article key={action.actionId}>
+                <article key={`${action.actionId}-${index}`}>
                   <span>{actionIcon(action.commandType)}</span>
                   <div>
                     <strong>{action.label}</strong>

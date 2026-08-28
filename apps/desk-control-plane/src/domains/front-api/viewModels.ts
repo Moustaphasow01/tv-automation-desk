@@ -625,7 +625,7 @@ export type LiveTradingView = {
     signalId: string;
     status: "PASS" | "WATCH" | "BLOCK";
     limitLabel: string;
-    usedPct: number;
+    usedPct: number | null;
     reasonCode: string;
   }[];
   portfolioOrderIntents: readonly LivePortfolioOrderIntent[];

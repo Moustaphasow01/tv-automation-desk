@@ -8,10 +8,11 @@ import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
 import { commandForCurrentGate, type GateCommandBinding } from "@/features/live-trading/LiveHumanGate";
 import { LiveMarketLens } from "@/features/live-trading/LiveMarketLens";
 import { LiveTradingHeader } from "@/features/live-trading/LiveTradingHeader";
-import { InstrumentChartPanel } from "@/features/live-trading/LiveTradingPanels";
+import { InstrumentChartPanel } from "@/features/live-trading/chart/LiveMarketChart";
 import { toLiveTradingModel } from "@/features/live-trading/mapper";
 import "@/features/live-trading/live-trading.css";
 import "@/features/live-trading/live-cockpit.css";
+import "@/features/live-trading/live-continuity.css";
 
 export function LiveTradingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -19,12 +20,24 @@ export function LiveTradingPage() {
     instrument: searchParams.get("instrument") || undefined,
     timeframe: searchParams.get("timeframe") || undefined,
   }), [searchParams]);
-  const query = useFrontView("live-trading", marketScope);
+  const selectedSignalId = searchParams.get("signalId");
+  const deskQuery = useFrontView("live-trading");
+  const chartQuery = useFrontView("live-trading", marketScope, {
+    preservePreviousData: true,
+    queryScope: "market-series",
+    refetchInterval: 15_000,
+  });
   const repository = useFrontViewRepository();
   const [commandBinding, setCommandBinding] = useState<GateCommandBinding | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
-  const model = useMemo(() => query.data ? toLiveTradingModel(query.data) : null, [query.data]);
+  const model = useMemo(() => {
+    if (!deskQuery.data) return null;
+    const deskModel = toLiveTradingModel(deskQuery.data, { signalId: selectedSignalId });
+    if (!chartQuery.data) return deskModel;
+    const chartModel = toLiveTradingModel(chartQuery.data);
+    return { ...deskModel, marketSeries: chartModel.marketSeries };
+  }, [chartQuery.data, deskQuery.data, selectedSignalId]);
   const currentOrderIntentId = model?.orderIntent?.portfolioOrderIntentId ?? null;
   const command = commandForCurrentGate(commandBinding, currentOrderIntentId, model?.gateActions ?? []);
   const commandStatus = useCommandStatus(command?.commandId ?? null);
@@ -33,6 +46,18 @@ export function LiveTradingPage() {
     const next = new URLSearchParams(searchParams);
     if (nextScope.instrument) next.set("instrument", nextScope.instrument);
     if (nextScope.timeframe) next.set("timeframe", nextScope.timeframe);
+    setSearchParams(next, { replace: true });
+  };
+
+  const selectSignal = (signalId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("signalId", signalId);
+    setSearchParams(next, { replace: true });
+  };
+
+  const clearSignal = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("signalId");
     setSearchParams(next, { replace: true });
   };
 
@@ -52,7 +77,7 @@ export function LiveTradingPage() {
         expectedRevision: action.expectedRevision,
         receipt: accepted,
       });
-      await query.refetch();
+      await deskQuery.refetch();
     } catch (error) {
       setCommandError(error instanceof Error ? error.message : "HUMAN_GATE_COMMAND_FAILED");
     } finally {
@@ -60,8 +85,8 @@ export function LiveTradingPage() {
     }
   };
 
-  if (query.isError) return <LiveTradingFailure message={(query.error as Error).message} retry={() => query.refetch()} />;
-  if (query.isLoading || !model) return <LiveTradingLoading />;
+  if (deskQuery.isError) return <LiveTradingFailure message={(deskQuery.error as Error).message} retry={() => deskQuery.refetch()} />;
+  if (deskQuery.isLoading || !model) return <LiveTradingLoading />;
 
   return (
     <div
@@ -70,14 +95,21 @@ export function LiveTradingPage() {
       data-operator-state={model.operator.status}
       data-design-seed="c87167ea"
     >
-      <LiveTradingHeader model={model} onRefresh={() => void query.refetch()} refreshing={query.isFetching} />
-      <LiveCockpitStatusBar model={model} onScopeChange={updateMarketScope} />
+      <LiveTradingHeader model={model} onRefresh={() => { void deskQuery.refetch(); void chartQuery.refetch(); }} refreshing={deskQuery.isFetching || chartQuery.isFetching} />
+      <LiveCockpitStatusBar model={model} requestedScope={marketScope} scopeUpdating={chartQuery.isFetching} onScopeChange={updateMarketScope} />
       <div className="lt-cockpit__workspace" aria-label="Cockpit Live Trading semi-manuel">
         <aside className="lt-cockpit__market" aria-label="Lecture du marché">
           <LiveMarketLens model={model} />
         </aside>
         <section className="lt-cockpit__canvas" aria-label="Graphique de marché et plan de trade">
-          <InstrumentChartPanel model={model} onScopeChange={updateMarketScope} showScopeControls={false} />
+          <InstrumentChartPanel
+            model={model}
+            onScopeChange={updateMarketScope}
+            showScopeControls={false}
+            requestedScope={marketScope}
+            loading={chartQuery.isFetching}
+            error={chartQuery.isError ? (chartQuery.error as Error).message : null}
+          />
         </section>
         <aside className="lt-cockpit__decision" aria-label="Dossier de décision courant">
           <LiveDecisionStack
@@ -90,7 +122,13 @@ export function LiveTradingPage() {
             onScopeChange={updateMarketScope}
           />
         </aside>
-        <LiveActivityDock model={model} />
+        <LiveActivityDock
+          model={model}
+          selectedSignalId={selectedSignalId}
+          onSelectSignal={selectSignal}
+          onClearSignal={clearSignal}
+          onShowOnChart={(instrument) => updateMarketScope({ instrument })}
+        />
       </div>
       <div className="lt-accessible-status" aria-live="polite">Projection {model.truth.label}. {model.mode.executionMode}. Human Gate {model.mode.humanGateRequired ? "requis" : "non requis"}.</div>
     </div>

@@ -90,6 +90,12 @@ export function commandForCurrentGate(
   actions: readonly HumanGateAction[],
 ): CommandAccepted | null {
   if (!binding || !orderIntentId || binding.orderIntentId !== orderIntentId) return null;
+  // Once the backend accepts a command, its receipt is the stable identity used
+  // for status polling. A normal refetch may remove the consumed action and its
+  // revision; that must not make command tracking disappear. Conversely, a newly
+  // published action/revision for the same OrderIntent denotes a new gate cycle
+  // and must not be locked by the old receipt.
+  if (!actions.length) return binding.receipt;
   return actions.some((action) => (
     action.actionId === binding.actionId
     && action.expectedRevision === binding.expectedRevision

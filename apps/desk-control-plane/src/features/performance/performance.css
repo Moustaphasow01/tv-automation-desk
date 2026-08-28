@@ -35,15 +35,16 @@
 .pa-tabs { display: flex; align-items: stretch; gap: 2px; height: 40px; padding: 0 12px; border-bottom: 1px solid var(--pa-border); background: var(--pa-bg-header); overflow-x: auto; }
 .pa-tabs button { border: none; background: transparent; color: var(--pa-muted); font-size: 11.5px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; padding: 0 12px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
 .pa-tabs button:hover { color: var(--pa-secondary); }
-.pa-tabs button[aria-selected="true"] { color: var(--pa-text); border-bottom-color: var(--pa-blue); }
+.pa-tabs button[aria-pressed="true"] { color: var(--pa-text); border-bottom-color: var(--pa-blue); }
 
 .pa-workspace { min-height: 0; overflow-y: auto; padding: 14px; scrollbar-color: var(--pa-border-strong) transparent; display: grid; gap: 14px; align-content: start; }
+.pa-workspace:focus-visible { outline: 2px solid var(--pa-blue); outline-offset: -2px; }
 
 .pa-kpi-strip { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 8px; }
 .pa-kpi-card { display: grid; gap: 3px; padding: 9px 10px; border: 1px solid var(--pa-border-soft); border-radius: 7px; background: var(--pa-surface-1); }
 .pa-kpi-card--pos { border-color: rgba(55,210,124,.4); }
 .pa-kpi-card--neg { border-color: rgba(255,77,90,.45); }
-.pa-kpi-card small { color: var(--pa-muted); font-size: 9.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.pa-kpi-card small { color: var(--pa-muted); font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
 .pa-kpi-card strong { font-size: 16px; }
 .pa-kpi-card strong.pa-pos { color: var(--pa-green); }
 .pa-kpi-card strong.pa-neg { color: var(--pa-red); }
@@ -79,7 +80,7 @@
 
 .pa-drawdown-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
 .pa-drawdown-stats span { display: grid; gap: 2px; padding: 6px; border: 1px solid var(--pa-border-soft); border-radius: 5px; background: var(--pa-surface-2); text-align: center; }
-.pa-drawdown-stats small { color: var(--pa-muted); font-size: 9.5px; text-transform: uppercase; }
+.pa-drawdown-stats small { color: var(--pa-muted); font-size: 11px; text-transform: uppercase; }
 .pa-drawdown-stats strong { font-size: 13px; }
 
 .pa-empty { color: var(--pa-muted); font-size: 12px; padding: 8px 0; }

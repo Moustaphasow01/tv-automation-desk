@@ -1,5 +1,5 @@
 import { useContext, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FaBell, FaCircle, FaMoon, FaSearch, FaShieldAlt, FaSyncAlt } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
@@ -32,14 +32,13 @@ export function LiveTradingHeader({ model, onRefresh, refreshing }: { model: Liv
         <h1>Trading en direct</h1>
         <form className="lt-search" role="search" onSubmit={(event) => { event.preventDefault(); if (results[0]) navigate(results[0].route); }}>
           <FaSearch aria-hidden="true" />
-          <input aria-label="Rechercher dans les espaces du desk" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher instruments, stratégies, portefeuilles..." autoComplete="off" />
-          <kbd>⌘ K</kbd>
+          <input aria-label="Rechercher un espace du desk" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Naviguer vers stratégies, portefeuille, risque…" autoComplete="off" />
           {results.length ? <div role="listbox" aria-label="Résultats de recherche">{results.map((item) => <button key={item.route} type="button" role="option" onClick={() => navigate(item.route)}>{item.label}</button>)}</div> : null}
         </form>
         <div className="lt-header__environment"><small>Environnement</small><strong>{model.mode.environment}</strong></div>
         <time className="lt-header__clock" dateTime={now?.toISOString()}><strong>{now ? formatClock(now) : "—"} ET</strong><small>{now ? formatDate(now) : "Horloge indisponible"}</small></time>
         <button className="lt-icon-button" type="button" aria-label="Thème sombre actif" disabled><FaMoon /></button>
-        <button className="lt-icon-button" type="button" aria-label="Notifications indisponibles" disabled><FaBell /><span>—</span></button>
+        <Link className="lt-icon-button" to="/orders" aria-label="Ouvrir les décisions Human Gate"><FaBell /><span>Gate</span></Link>
         <OperatorMenu variant="live-trading" displayName={session?.principal.displayName ?? "Session indisponible"} roleLabel={session?.principal.roles.join(", ") || "Rôle indisponible"} />
       </header>
       <section className="lt-policy" aria-label="Politique opérationnelle autoritaire">

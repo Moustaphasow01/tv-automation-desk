@@ -1,5 +1,5 @@
 import { number, rows, stringList, text, upper } from "./front-control-plane-projection-helpers.js";
-import { normalizeProposedTradePlanV1 } from "../../packages/desk-domain/src/trade-plan-economics-v1.js";
+import { normalizeProposedTradePlanV1 } from "@tv-automation/desk-domain";
 
 export function activeOrderRow(item) {
   const payload = payloadOf(item);
@@ -305,7 +305,7 @@ function executionModeState(value) {
 
 function signalState(value) {
   const state = upper(value);
-  return ["NEW", "ARBITRATED", "REJECTED", "ORDERED", "FILLED", "EXPIRED"].includes(state) ? state : "NEW";
+  return ["NEW", "ARBITRATED", "REJECTED", "ORDERED", "FILLED", "EXPIRED", "CLOSED"].includes(state) ? state : "NEW";
 }
 
 function providerState(item) {

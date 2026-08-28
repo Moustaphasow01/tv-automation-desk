@@ -1,6 +1,5 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import type { IconType } from "react-icons";
 import {
   FaBell,
   FaAngleDoubleLeft,
@@ -27,39 +26,29 @@ import {
 } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
-import { vnextRoutes, type VNextNavGroup } from "@/app/routes";
-import { NAV_GROUP_LABELS } from "@/shell/navigation";
+import { vnextRoutes } from "@/app/routes";
+import { DESK_NAVIGATION_SECTIONS, deskPrimaryNavigation, NAV_GROUP_LABELS, type DeskNavigationIcon } from "@/shell/navigation";
 import { presentConnectionStatus } from "@/design-system/labels";
+import { DeskBrand } from "@/shell/DeskBrand";
+import { DeskCommandPalette } from "@/shell/DeskCommandPalette";
+import "@/shell/desk-shell-evolution.css";
 
-type SidebarSection = "Pilotage" | "Stratégie" | "Exécution" | "Supervision" | "Système";
-
-type DeskNavItem = {
-  label: string;
-  to: string;
-  icon: IconType;
-  badge?: string;
-  group: VNextNavGroup;
-  section: SidebarSection;
-};
-
-const SIDEBAR_SECTIONS: readonly SidebarSection[] = ["Pilotage", "Stratégie", "Exécution", "Supervision", "Système"];
-
-const deskNavItems: readonly DeskNavItem[] = [
-  { label: "Centre de contrôle", to: "/command-center", icon: FaTh, group: "pilotage", section: "Pilotage" },
-  { label: "Trading en direct", to: "/live", icon: FaBolt, group: "live", section: "Pilotage" },
-  { label: "Centre des stratégies", to: "/strategies", icon: FaListAlt, group: "strategy", section: "Stratégie" },
-  { label: "Laboratoire de recherche", to: "/research", icon: FaFlask, group: "research", section: "Stratégie" },
-  { label: "Rejeu", to: "/replay", icon: FaPlayCircle, group: "replay", section: "Stratégie" },
-  { label: "Performance", to: "/performance", icon: FaChartBar, group: "performance", section: "Stratégie" },
-  { label: "Portefeuille", to: "/portfolio", icon: FaWallet, group: "execution", section: "Exécution" },
-  { label: "Centre de risque", to: "/risk", icon: FaShieldAlt, group: "execution", section: "Exécution" },
-  { label: "Ordres", to: "/orders", icon: FaFileInvoiceDollar, group: "execution", section: "Exécution" },
-  { label: "Exécution", to: "/execution/providers", icon: FaProjectDiagram, group: "execution", section: "Exécution" },
-  { label: "Incidents", to: "/execution/incidents", icon: FaExclamationTriangle, group: "operations", section: "Supervision" },
-  { label: "Audit", to: "/events", icon: FaClipboardList, group: "operations", section: "Supervision" },
-  { label: "Jarvis", to: "/jarvis", icon: FaRobot, group: "governance", section: "Système" },
-  { label: "Réglages", to: "/settings", icon: FaCog, group: "governance", section: "Système" },
-];
+const navIcons = {
+  overview: FaTh,
+  live: FaBolt,
+  decisions: FaFileInvoiceDollar,
+  portfolio: FaWallet,
+  risk: FaShieldAlt,
+  strategies: FaListAlt,
+  research: FaFlask,
+  replay: FaPlayCircle,
+  performance: FaChartBar,
+  providers: FaProjectDiagram,
+  incidents: FaExclamationTriangle,
+  audit: FaClipboardList,
+  jarvis: FaRobot,
+  settings: FaCog,
+} satisfies Record<DeskNavigationIcon, typeof FaTh>;
 
 export function DeskShell() {
   const navigate = useNavigate();
@@ -67,6 +56,10 @@ export function DeskShell() {
   const realtime = useContext(RealtimeContext);
   const { session } = useOperatorSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const previousPathnameRef = useRef(location.pathname);
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuCloseRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuDrawerRef = useRef<HTMLElement>(null);
   const [liveSidebarCollapsed, setLiveSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const currentRoute = useMemo(
@@ -76,10 +69,43 @@ export function DeskShell() {
   useEffect(() => {
     document.title = currentRoute ? `${currentRoute.title} · Desk Control Plane` : "Desk Control Plane";
   }, [currentRoute]);
+  useLayoutEffect(() => {
+    if (previousPathnameRef.current === location.pathname) return;
+    previousPathnameRef.current = location.pathname;
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const drawer = mobileMenuDrawerRef.current;
+    const shell = drawer?.closest(".desk-app-shell");
+    const siblings = shell ? [...shell.children].filter((node) => node !== drawer && node instanceof HTMLElement) as HTMLElement[] : [];
+    siblings.forEach((node) => node.setAttribute("inert", ""));
+    mobileMenuCloseRef.current?.focus();
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileMenuOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !drawer) return;
+      const focusable = [...drawer.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable.at(-1) as HTMLElement;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      siblings.forEach((node) => node.removeAttribute("inert"));
+      mobileMenuTriggerRef.current?.focus();
+    };
+  }, [mobileMenuOpen]);
   const searchResults = useMemo(() => {
     const needle = searchQuery.trim().toLocaleLowerCase("fr");
     if (needle.length < 2) return [];
-    return deskNavItems.filter((item) => `${item.label} ${NAV_GROUP_LABELS[item.group]}`.toLocaleLowerCase("fr").includes(needle)).slice(0, 6);
+    return deskPrimaryNavigation.filter((item) => `${item.label} ${item.routeLabel} ${NAV_GROUP_LABELS[item.group]}`.toLocaleLowerCase("fr").includes(needle)).slice(0, 6);
   }, [searchQuery]);
   const submitSearch = () => {
     const target = searchResults[0];
@@ -109,10 +135,8 @@ export function DeskShell() {
   const isGoldenSurface = isGoldenCommandCenter || isGoldenLiveTrading || isGoldenStrategyCenter || isGoldenResearchLab
     || isGoldenRiskCenter || isGoldenOrdersHumanGate || isGoldenPortfolio || isGoldenExecutionProviders
     || isGoldenIncidentsOperations || isGoldenPerformance || isGoldenReplay;
-  const visibleDeskNavItems = isGoldenLiveTrading
-    ? deskNavItems.filter((item) => !["/performance", "/events"].includes(item.to))
-    : deskNavItems;
-  const visibleNavSections = SIDEBAR_SECTIONS
+  const visibleDeskNavItems = deskPrimaryNavigation;
+  const visibleNavSections = DESK_NAVIGATION_SECTIONS
     .map((section) => ({ section, items: visibleDeskNavItems.filter((item) => item.section === section) }))
     .filter((group) => group.items.length > 0);
 
@@ -121,23 +145,22 @@ export function DeskShell() {
       <a className="skip-link" href="#main-content">Aller au contenu principal</a>
       <aside className="desk-sidebar" aria-label="Barre latérale du desk">
         <div className="brand-block">
-          <span className="brand-mark" aria-hidden="true">D</span>
-          <div className="brand-copy">
-            <h1>DESK</h1>
-            <p className="eyebrow">Pilotage du portefeuille</p>
-          </div>
+          <DeskBrand />
         </div>
+        <DeskCommandPalette destinations={deskPrimaryNavigation.map((item) => ({ label: item.label, route: item.to, group: item.section, keywords: `${item.routeLabel} ${NAV_GROUP_LABELS[item.group]}` }))} />
         <nav className="sidebar-nav" tabIndex={0} aria-label="Navigation principale">
           {visibleNavSections.map(({ section, items }) => (
             <div className="sidebar-nav-group" key={section}>
               <h2>{section}</h2>
-              {items.map((item) => (
-                <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
-                  <item.icon className="nav-icon" aria-hidden="true" />
+              {items.map((item) => {
+                const Icon = navIcons[item.icon];
+                return (
+                <NavLink key={item.to} to={item.to} aria-label={item.label} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+                  <Icon className="nav-icon" aria-hidden="true" />
                   <span>{item.label}</span>
-                  {item.badge ? <small>{item.badge}</small> : null}
                 </NavLink>
-              ))}
+                );
+              })}
             </div>
           ))}
         </nav>
@@ -218,7 +241,7 @@ export function DeskShell() {
       </div>
 
       <nav className="desk-bottom-nav" aria-label="Navigation mobile">
-        {deskNavItems.slice(0, 4).map((route) => (
+        {deskPrimaryNavigation.filter((route) => route.mobile).map((route) => (
           <NavLink
             key={route.to}
             to={route.to}
@@ -227,13 +250,15 @@ export function DeskShell() {
             {route.label}
           </NavLink>
         ))}
-        <button type="button" className="bottom-nav-link" aria-expanded={mobileMenuOpen} aria-controls="mobile-full-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>Plus</button>
+        <button ref={mobileMenuTriggerRef} type="button" className="bottom-nav-link" aria-haspopup="dialog" aria-expanded={mobileMenuOpen} aria-controls="mobile-full-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>Plus</button>
       </nav>
       {mobileMenuOpen ? (
-        <nav id="mobile-full-navigation" className="desk-mobile-drawer" aria-label="Toutes les rubriques">
-          <button type="button" onClick={() => setMobileMenuOpen(false)}>Fermer</button>
-          {deskNavItems.map((route) => <NavLink key={route.to} to={route.to} onClick={() => setMobileMenuOpen(false)}>{route.label}</NavLink>)}
-        </nav>
+        <aside ref={mobileMenuDrawerRef} id="mobile-full-navigation" className="desk-mobile-drawer" role="dialog" aria-modal="true" aria-label="Toutes les rubriques">
+          <button ref={mobileMenuCloseRef} type="button" onClick={() => setMobileMenuOpen(false)}>Fermer</button>
+          <nav aria-label="Toutes les rubriques">
+            {deskPrimaryNavigation.map((route) => <NavLink key={route.to} to={route.to} onClick={() => setMobileMenuOpen(false)}>{route.label}</NavLink>)}
+          </nav>
+        </aside>
       ) : null}
     </div>
   );

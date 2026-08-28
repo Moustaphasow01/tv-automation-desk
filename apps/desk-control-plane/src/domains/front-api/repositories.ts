@@ -1,5 +1,5 @@
 import { useContext, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { DeskConfigContext } from "@/app/AppProviders";
 import { createDeskTransport, type DeskTransport, type OperatorLoginCredentials } from "@/shared/transport";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
@@ -148,15 +148,28 @@ export function useFrontViewRepository() {
 
 export function useFrontView<ViewName extends keyof ControlPlaneViews & FrontViewName>(
   viewName: ViewName,
-  params: Readonly<Record<string, string | undefined>> = {}
+  params: Readonly<Record<string, string | undefined>> = {},
+  options: { preservePreviousData?: boolean; queryScope?: string; refetchInterval?: number | false } = {},
 ) {
   const repository = useFrontViewRepository();
   const stableParams = Object.entries(params).filter((entry): entry is [string, string] => Boolean(entry[1])).sort(([left], [right]) => left.localeCompare(right));
 
   return useQuery({
-    queryKey: ["front-view", viewName, stableParams],
-    queryFn: () => repository.getView(viewName, Object.fromEntries(stableParams))
+    queryKey: frontViewQueryKey(viewName, stableParams, options.queryScope),
+    queryFn: () => repository.getView(viewName, Object.fromEntries(stableParams)),
+    placeholderData: options.preservePreviousData ? keepPreviousData : undefined,
+    refetchInterval: options.refetchInterval,
   });
+}
+
+export function frontViewQueryKey(
+  viewName: FrontViewName,
+  stableParams: readonly (readonly [string, string])[] = [],
+  queryScope?: string,
+) {
+  return queryScope
+    ? ["front-view-scope", queryScope, viewName, stableParams] as const
+    : ["front-view", viewName, stableParams] as const;
 }
 
 export function useCommandStatus(commandId: string | null) {

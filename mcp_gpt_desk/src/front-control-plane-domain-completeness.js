@@ -54,13 +54,11 @@ export function canonicalOrderIntentDossier({ execution, portfolioIntent, order,
 }
 
 export function liveCanonicalRuntime({ execution = {}, strategy = {}, ai = {}, risk = {}, launchGate, actor = {}, nowIso = currentUtc(), health = {} }) {
-  const nominalSignals = rows(strategy?.signals).filter(isNominalLiveSignal);
-  const signals = nominalSignals.filter(hasSignalId).map(signalRow);
-  const nominalSignalIds = new Set(nominalSignals.map((item) => String(item.signal_id || item.signal_outbox_id || "")).filter(Boolean));
-  const gateDecisions = rows(ai?.decisions).filter((item) => nominalSignalIds.has(String(item.signal_id || "")));
-  const portfolioOrderIntents = rows(execution?.portfolioOrderIntents)
-    .filter(isNominalPortfolioIntent)
-    .filter((item) => isCurrentLivePortfolioIntent(item, nowIso));
+  const cohort = currentLiveLineageCohort({ execution, strategy, nowIso });
+  const currentSignals = cohort.signals;
+  const signals = currentSignals.filter(hasSignalId).map(signalRow);
+  const gateDecisions = rows(ai?.decisions).filter((item) => cohort.signalIds.has(String(item.signal_id || "")));
+  const portfolioOrderIntents = cohort.portfolioOrderIntents;
   const nominalIntentIds = new Set(portfolioOrderIntents.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
   const humanGates = rows(execution?.humanExecutionGates).filter((item) => nominalIntentIds.has(String(item.portfolio_order_intent_id || "")));
   const providerCommands = rows(execution?.providerCommands).filter((item) => !item.portfolio_order_intent_id || nominalIntentIds.has(String(item.portfolio_order_intent_id)));
@@ -74,8 +72,8 @@ export function liveCanonicalRuntime({ execution = {}, strategy = {}, ai = {}, r
   return {
     schemaVersion: "live_canonical_runtime_v1",
     mode: executionPolicy(execution, health),
-    authoritativeSources: liveAuthoritativeSources({ execution, strategy, gateDecisions, portfolioOrderIntents }),
-    freshness: liveFreshness({ strategy, gateDecisions, portfolioOrderIntents, launchGate, nowIso }),
+    authoritativeSources: liveAuthoritativeSources({ execution, signals: currentSignals, gateDecisions, portfolioOrderIntents }),
+    freshness: liveFreshness({ signals: currentSignals, gateDecisions, portfolioOrderIntents, launchGate, nowIso }),
     pipeline: canonicalLivePipeline({
       signals,
       gateDecisions,
@@ -100,10 +98,48 @@ export function liveCanonicalRuntime({ execution = {}, strategy = {}, ai = {}, r
   };
 }
 
+export function currentLiveLineageCohort({ execution = {}, strategy = {}, nowIso = currentUtc() } = {}) {
+  const nominalSignals = rows(strategy?.signals).filter(isNominalLiveSignal);
+  const currentSignals = nominalSignals.filter((item) => isCurrentLiveSignal(item, nowIso));
+  const knownSignalIds = signalIds(nominalSignals);
+  const currentSignalIds = signalIds(currentSignals);
+  const portfolioOrderIntents = rows(execution?.portfolioOrderIntents)
+    .filter(isNominalPortfolioIntent)
+    .filter((item) => isCurrentLivePortfolioIntent(item, nowIso))
+    .filter((item) => belongsToCurrentSignalCohort(item, knownSignalIds, currentSignalIds));
+  const cohortSignalIds = new Set(currentSignalIds);
+  for (const intent of portfolioOrderIntents) {
+    const signalId = portfolioIntentSignalId(intent);
+    if (signalId) cohortSignalIds.add(signalId);
+  }
+  return { signals: currentSignals, portfolioOrderIntents, signalIds: cohortSignalIds };
+}
+
 export function isNominalLiveSignal(item = {}) {
   return String(item.source_class || item.sourceClass || "LIVE").toUpperCase() !== "CERTIFICATION_REPLAY"
     && !item.certification_run_id
     && !item.certificationRunId;
+}
+
+export function isCurrentLiveSignal(item = {}, nowIso = currentUtc()) {
+  const status = upper(firstValue(item.status, item.state, ""));
+  if (["EXPIRED", "CANCELLED", "CANCELED", "REJECTED", "FAILED", "SUPERSEDED", "CLOSED", "DONE"].includes(status)) return false;
+  const expiresAt = firstValue(item.expires_at_utc, item.expiresAt);
+  const nowMs = Date.parse(nowIso || currentUtc());
+  const expiresMs = Date.parse(expiresAt || "");
+  return !(Number.isFinite(nowMs) && Number.isFinite(expiresMs) && expiresMs <= nowMs);
+}
+
+export function portfolioIntentSignalId(item = {}) {
+  const payload = payloadOf(item);
+  const lineage = item.lineage || payload.lineage || payload.source?.lineage || {};
+  return text(firstValue(
+    item.signal_id,
+    item.strategy_signal_id,
+    payload.signal_id,
+    payload.strategy_signal_id,
+    rows(lineage.strategy_signal_ids)[0],
+  ), "");
 }
 
 export function isNominalPortfolioIntent(item = {}) {
@@ -119,13 +155,7 @@ export function isNominalPortfolioIntent(item = {}) {
     item.correlation_id,
     payload.correlation_id,
   ].map((value) => String(value || "").toLowerCase());
-  const strategySignalId = firstValue(
-    item.signal_id,
-    item.strategy_signal_id,
-    payload.signal_id,
-    payload.strategy_signal_id,
-    rows(lineage.strategy_signal_ids)[0],
-  );
+  const strategySignalId = portfolioIntentSignalId(item);
   const strategyInstanceId = firstValue(
     item.strategy_instance_id,
     payload.strategy_instance_id,
@@ -317,12 +347,12 @@ function canonicalDossierRiskSnapshot({ portfolioIntent, payload, riskDecision }
   };
 }
 
-function liveAuthoritativeSources({ execution, strategy, gateDecisions, portfolioOrderIntents }) {
+function liveAuthoritativeSources({ execution, signals, gateDecisions, portfolioOrderIntents }) {
   const providerCommands = rows(execution?.providerCommands);
   const providerEvents = rows(execution?.providerEvents);
   const riskDecisions = portfolioOrderIntents.flatMap((item) => rows(item?.risk_decisions));
   return [
-    { source: "strategy_signal_outbox", rows: rows(strategy?.signals).filter(hasSignalId).length, latestAt: latestTimestamp(rows(strategy?.signals), ["created_at_utc", "source_data_cutoff_utc", "updated_at_utc"]) },
+    { source: "strategy_signal_outbox", rows: rows(signals).filter(hasSignalId).length, latestAt: latestTimestamp(rows(signals), ["created_at_utc", "source_data_cutoff_utc", "updated_at_utc"]) },
     { source: "ai_context_gate_decisions", rows: gateDecisions.length, latestAt: latestTimestamp(gateDecisions, ["decided_at_utc", "updated_at_utc"]) },
     { source: "portfolio_risk_decisions", rows: riskDecisions.length, latestAt: latestTimestamp(riskDecisions, ["decided_at_utc", "created_at_utc"]) },
     { source: "portfolio_order_intent_lineage", rows: portfolioOrderIntents.length, latestAt: latestTimestamp(portfolioOrderIntents, ["updated_at_utc", "created_at_utc"]) },
@@ -331,10 +361,10 @@ function liveAuthoritativeSources({ execution, strategy, gateDecisions, portfoli
   ];
 }
 
-function liveFreshness({ strategy, gateDecisions, portfolioOrderIntents, launchGate, nowIso }) {
+function liveFreshness({ signals, gateDecisions, portfolioOrderIntents, launchGate, nowIso }) {
   return {
     marketData: liveMarketDataStatus(launchGate),
-    signalCutoffAt: latestTimestamp(rows(strategy?.signals), ["created_at_utc", "source_data_cutoff_utc", "updated_at_utc"]),
+    signalCutoffAt: latestTimestamp(rows(signals), ["created_at_utc", "source_data_cutoff_utc", "updated_at_utc"]),
     contextDecisionAt: latestTimestamp(gateDecisions, ["decided_at_utc", "updated_at_utc"]),
     orderIntentAt: latestTimestamp(portfolioOrderIntents, ["updated_at_utc", "created_at_utc"]),
     asOf: nowIso,
@@ -434,16 +464,65 @@ function activeStrategyInstanceRows(strategy, nowIso, health = {}) {
 
 function nominalRiskCenter(riskCenter, intents) {
   if (!riskCenter) return null;
-  if (!intents.length) return {
+  const decisions = intents.flatMap((item) => rows(item?.risk_decisions));
+  if (!intents.length || !decisions.length) return {
     ...riskCenter,
     availability: "CONNECTED_EMPTY",
     globalStatus: "NO_NOMINAL_DECISION",
-    reason: "Aucun OrderIntent nominal ne nécessite une décision Global Risk dans la fenêtre courante.",
+    reason: intents.length
+      ? "Aucune décision Global Risk n'est publiée pour les OrderIntents de la cohorte courante."
+      : "Aucun OrderIntent nominal ne nécessite une décision Global Risk dans la fenêtre courante.",
     openRisk: { availability: "CONNECTED_EMPTY", value: null, reasonCode: "NO_NOMINAL_RISK_DECISION" },
-    pendingOrderIntents: 0,
-    pendingTargetPositions: 0,
+    limits: [],
+    breaches: [],
+    nearestLimits: [],
+    policyVersions: [],
+    pendingOrderIntents: intents.length,
+    pendingTargetPositions: new Set(intents.map((item) => item?.target_position_id).filter(Boolean)).size,
   };
-  return { ...riskCenter, pendingOrderIntents: intents.length };
+  const riskAmounts = intents.map(currentIntentRiskAmount).filter((value) => value !== null);
+  const blocked = decisions.some(isBlockingRiskDecision) || decisions.some((item) => rows(item?.breaches).length > 0);
+  return {
+    ...riskCenter,
+    availability: "KNOWN",
+    globalStatus: blocked ? "BLOCKED" : "CONTROLLED",
+    openRisk: riskAmounts.length
+      ? { availability: "KNOWN", value: riskAmounts.reduce((sum, value) => sum + value, 0), currency: "USD", source: "portfolio_risk_decisions" }
+      : { availability: "UNAVAILABLE", value: null, reasonCode: "CURRENT_RISK_AMOUNT_UNAVAILABLE" },
+    limits: decisions.flatMap((item) => rows(item?.limits)),
+    breaches: decisions.flatMap((item) => rows(item?.breaches)),
+    nearestLimits: decisions.map((item) => item?.nearest_limit).filter(Boolean),
+    policyVersions: [...new Set(decisions.map((item) => item?.risk_rule_set_version).filter(Boolean))],
+    pendingOrderIntents: intents.length,
+    pendingTargetPositions: new Set(intents.map((item) => item?.target_position_id).filter(Boolean)).size,
+  };
+}
+
+function currentIntentRiskAmount(intent = {}) {
+  const payload = payloadOf(intent);
+  const decision = firstRow(intent.risk_decisions) || {};
+  const candidates = [
+    intent.risk_snapshot?.riskAmount,
+    intent.risk_snapshot?.risk_amount,
+    payload.risk_snapshot?.riskAmount,
+    payload.risk_snapshot?.risk_amount,
+    nested(decision, ["authorized", "risk_amount"]),
+    nested(decision, ["risk_economics", "authorized_risk_amount"]),
+  ];
+  return candidates.map(nullableNumber).find((value) => value !== null) ?? null;
+}
+
+function isBlockingRiskDecision(decision = {}) {
+  return ["BLOCK", "BLOCKED", "REJECT", "REJECTED", "FAILED", "DENIED"].includes(upper(firstValue(decision.status, decision.decision)));
+}
+
+function signalIds(items) {
+  return new Set(rows(items).map((item) => String(item.signal_id || item.signal_outbox_id || "")).filter(Boolean));
+}
+
+function belongsToCurrentSignalCohort(intent, knownSignalIds, currentSignalIds) {
+  const signalId = portfolioIntentSignalId(intent);
+  return !signalId || !knownSignalIds.has(signalId) || currentSignalIds.has(signalId);
 }
 
 function nominalPortfolioState(portfolioState, intentIds) {

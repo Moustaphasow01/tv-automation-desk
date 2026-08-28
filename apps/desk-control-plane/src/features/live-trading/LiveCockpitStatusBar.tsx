@@ -5,11 +5,13 @@ import type { LiveTradingModel } from "./model";
 
 type MarketScope = { instrument?: string; timeframe?: string };
 
-export function LiveCockpitStatusBar({ model, onScopeChange }: {
+export function LiveCockpitStatusBar({ model, requestedScope = {}, scopeUpdating = false, onScopeChange }: {
   model: LiveTradingModel;
+  requestedScope?: MarketScope;
+  scopeUpdating?: boolean;
   onScopeChange(scope: MarketScope): void;
 }) {
-  const currentInstrument = String(model.marketSeries.instrument ?? "").trim();
+  const currentInstrument = String(requestedScope.instrument ?? model.marketSeries.instrument ?? "").trim();
   const instruments = uniqueValues(model.marketSeries.supportedInstruments);
   const currentInstrumentIsPublished = instruments.some((value) => value.toUpperCase() === currentInstrument.toUpperCase());
   const instrumentOptions = uniqueValues([
@@ -18,7 +20,7 @@ export function LiveCockpitStatusBar({ model, onScopeChange }: {
   ]);
   const timeframes = uniqueValues(model.marketSeries.supportedTimeframes.map(normalizeTimeframe))
     .sort((left, right) => timeframeRank(left) - timeframeRank(right));
-  const activeTimeframe = normalizeTimeframe(model.marketSeries.timeframe);
+  const activeTimeframe = normalizeTimeframe(requestedScope.timeframe ?? model.marketSeries.timeframe);
   const activeTimeframeIsPublished = timeframes.includes(activeTimeframe);
   const milestone = nextMilestone(model);
 
@@ -61,6 +63,7 @@ export function LiveCockpitStatusBar({ model, onScopeChange }: {
             <span className="lt-flight-bar__scope-empty">Actif {formatTimeframe(activeTimeframe)} · hors catalogue publié</span>
           ) : null}
         </div>
+        {scopeUpdating ? <span className="lt-flight-bar__scope-progress" role="status">Mise à jour du graphique…</span> : null}
       </div>
 
       <div className={`lt-flight-bar__operator lt-flight-tone--${model.operator.tone}`} role="status">

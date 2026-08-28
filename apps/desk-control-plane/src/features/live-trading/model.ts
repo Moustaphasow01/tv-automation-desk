@@ -128,6 +128,7 @@ export type LiveTradingModel = {
   strategyInstances: LiveTradingView["canonicalRuntime"]["activeStrategyInstances"];
   latestSignal: LiveTradingView["signals"][number] | null;
   latestContextDecision: LiveTradingView["canonicalRuntime"]["aiContextGate"][number] | null;
+  riskCheck: LiveTradingView["riskChecks"][number] | null;
   orderIntent: LivePortfolioOrderIntent | null;
   targetPosition: Record<string, unknown> | null;
   theoreticalExecution: NonNullable<LiveTradingView["theoreticalExecution"]> | null;

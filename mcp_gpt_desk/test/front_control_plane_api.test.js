@@ -316,7 +316,14 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
         execution_terms: { instrument: "MNQ", side: "BUY", quantity: 1, order_type: "LIMIT", entry: { availability: "KNOWN", price: 21450.25 }, stop: { availability: "KNOWN", price: 21410.25 }, targets: [{ label: "T1", price: 21490.25 }], time_in_force: "DAY" },
         risk_snapshot: { authorizedQty: 1, riskAmount: 40, riskPerContract: 40, stopDistance: { points: 20, ticks: 80 } },
         immutability: { policy: "REJECT_AND_REPLAN", mutable_after_risk: false },
-        risk_decisions: [{ risk_decision_id: "risk-live-1", decision: "APPROVED", status: "PASS", authorized: { risk_amount: 40, risk_pct: 0.04 }, trade_risk: { risk_per_contract: 40 } }],
+        risk_decisions: [{
+          risk_decision_id: "risk-live-1",
+          decision: "APPROVED",
+          status: "PASS",
+          authorized: { risk_amount: 40, risk_pct: 0.04 },
+          trade_risk: { risk_per_contract: 40 },
+          nearest_limit: { type: "PORTFOLIO_RISK", utilization: 0.4 },
+        }],
         order_intent_payload: {
           order_intent_id: "portfolio_order_intent_live_1",
           target_position_id: "target_position_live_1",
@@ -401,6 +408,7 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
   assert.equal(envelope.data.riskChecks[0].source, "portfolio_risk_decisions");
   assert.equal(envelope.data.riskChecks[0].riskCheckId, "risk-live-1");
   assert.equal(envelope.data.riskChecks[0].status, "PASS");
+  assert.equal(envelope.data.riskChecks[0].usedPct, 40);
 
   const commandCenter = await handleFrontControlPlane(store, {
     pathname: "/front-api/v1/views/command-center",
@@ -409,6 +417,126 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
   assert.equal(commandCenter.data.signals.rows[0].gate, "TAKE");
   assert.equal(commandCenter.data.signals.rows[0].portfolioDecision, "READY");
   assert.equal(commandCenter.data.signals.rows[0].riskDecision, "PASS");
+});
+
+test("live trading keeps signal, portfolio and risk stages on the same current lineage cohort", async () => {
+  const currentIntent = portfolioIntentFixture({
+    intentId: "portfolio_order_intent_current",
+    signalId: "signal-current",
+    riskDecisionId: "risk-current",
+    limitId: "limit-current",
+    utilization: 0.25,
+  });
+  const historicalIntent = portfolioIntentFixture({
+    intentId: "portfolio_order_intent_historical",
+    signalId: "signal-historical",
+    riskDecisionId: "risk-historical",
+    limitId: "limit-historical",
+    utilization: 0.9,
+  });
+  const store = frontControlPlaneStore({
+    execution: {
+      portfolioOrderIntents: [currentIntent, historicalIntent],
+      humanExecutionGates: [],
+      arbitrations: [
+        { arbitration_id: "arb-current", signal_id: "signal-current", decision: "ACCEPTED", target_quantity: 1 },
+        { arbitration_id: "arb-historical", signal_id: "signal-historical", decision: "ACCEPTED", target_quantity: 1 },
+      ],
+      risk_checks: [
+        { risk_check_id: "risk-current", signal_id: "signal-current", status: "PASS", limit_label: "Raw limit without utilization", used_pct: null },
+        { risk_check_id: "risk-raw-historical", signal_id: "signal-historical", status: "PASS", used_pct: 90 },
+      ],
+    },
+    strategy: {
+      definitions: [],
+      versions: [],
+      instances: [],
+      signals: [
+        { signal_id: "signal-current", strategy_instance_id: "instance-current", instrument_code: "MNQ", side: "long", status: "NEW", expires_at_utc: "2026-08-11T09:00:00.000Z" },
+        { signal_id: "signal-historical", strategy_instance_id: "instance-historical", instrument_code: "MNQ", side: "short", status: "EXPIRED", expires_at_utc: "2026-08-11T07:00:00.000Z" },
+        { signal_id: "signal-rejected", strategy_instance_id: "instance-rejected", instrument_code: "MES", side: "long", status: "REJECTED" },
+        { signal_id: "signal-closed", strategy_instance_id: "instance-closed", instrument_code: "ZW", side: "short", status: "CLOSED" },
+      ],
+    },
+  });
+  store.listAiContextGateDecisions = async () => ({
+    items: [
+      { ai_context_gate_decision_id: "ctx-current", signal_id: "signal-current", recommendation: "TAKE" },
+      { ai_context_gate_decision_id: "ctx-historical", signal_id: "signal-historical", recommendation: "TAKE" },
+    ],
+  });
+
+  const envelope = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-trading", query: {} });
+
+  assert.deepEqual(envelope.data.signals.map((item) => item.signalId), ["signal-current", "signal-historical", "signal-rejected", "signal-closed"]);
+  assert.deepEqual(envelope.data.signals.map((item) => item.state), ["NEW", "EXPIRED", "REJECTED", "CLOSED"]);
+  assert.deepEqual(envelope.data.canonicalRuntime.latestSignals.map((item) => item.signalId), ["signal-current"]);
+  assert.deepEqual(envelope.data.portfolioOrderIntents.map((item) => item.portfolioOrderIntentId), ["portfolio_order_intent_current"]);
+  assert.deepEqual(envelope.data.arbitrations.map((item) => item.arbitrationId), ["arb-current"]);
+  assert.deepEqual(envelope.data.riskChecks.map((item) => item.riskCheckId), ["risk-current"]);
+  assert.equal(envelope.data.riskChecks[0].usedPct, 25);
+  assert.equal(envelope.data.riskChecks[0].source, "portfolio_risk_decisions");
+  assert.equal(envelope.data.riskChecks.every((item) => Number.isFinite(item.usedPct)), true);
+  assert.deepEqual(envelope.data.canonicalRuntime.aiContextGate.map((item) => item.decisionId), ["ctx-current"]);
+  assert.deepEqual(envelope.data.canonicalRuntime.riskCenter.limits.map((item) => item.limit_id), ["limit-current"]);
+  assert.equal(envelope.data.canonicalRuntime.riskCenter.openRisk.value, 40);
+});
+
+test("live trading keeps Human Gate actionable when Risk utilization is unavailable", async () => {
+  const intent = portfolioIntentFixture({
+    intentId: "portfolio_order_intent_without_utilization",
+    signalId: "signal-without-utilization",
+    riskDecisionId: "risk-without-utilization",
+    limitId: null,
+    utilization: null,
+  });
+  const store = frontControlPlaneStore({
+    execution: {
+      session_id: "live-session-without-utilization",
+      next_monitor_at: "2026-08-11T08:05:00.000Z",
+      pipeline: [{ step: "GLOBAL_RISK", status: "COMPLETED" }],
+      timeline: [{ event_id: "event-risk-without-utilization", event_type: "risk.completed", occurred_at_utc: "2026-08-11T08:00:00.000Z" }],
+      portfolioOrderIntents: [intent],
+      humanExecutionGates: [{
+        human_execution_gate_id: "gate-without-utilization",
+        portfolio_order_intent_id: "portfolio_order_intent_without_utilization",
+        status: "AWAITING_MANUAL_CONFIRMATION",
+        revision: 1,
+      }],
+    },
+    strategy: {
+      definitions: [], versions: [], instances: [],
+      signals: [{ signal_id: "signal-without-utilization", strategy_instance_id: "instance-1", instrument_code: "MNQ", side: "long", status: "NEW", expires_at_utc: "2026-08-11T09:00:00.000Z" }],
+    },
+  });
+  store.getFrontMarketSeries = async () => ({ availability: "AVAILABLE", points: [], supportedTimeframes: ["5"], asOf: "2026-08-11T08:00:00.000Z", source: "market_candles" });
+  store.getFrontLiveMarketSnapshot = async () => ({ instruments: [], asOf: "2026-08-11T08:00:00.000Z", source: "market_candles" });
+  store.getLiveDeskState = async (args = {}) => ({
+    resolved_scope: {
+      strategy_id: args.strategy_id || "asia_open",
+      trading_date: args.trading_date || "2026-08-11",
+      session: args.session || "asia_open",
+      mode: args.mode || "paper",
+    },
+  });
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-trading",
+    query: {},
+    actor: { kind: "operator_session", scopes: ["desk.write"] },
+  });
+
+  assert.deepEqual(envelope.meta.warnings, []);
+  assert.equal(envelope.meta.availability, "AVAILABLE");
+  assert.equal(envelope.data.riskChecks.length, 1);
+  assert.equal(envelope.data.riskChecks[0].riskCheckId, "risk-without-utilization");
+  assert.equal(envelope.data.riskChecks[0].status, "PASS");
+  assert.equal(envelope.data.riskChecks[0].limitLabel, "Global Risk");
+  assert.equal(envelope.data.riskChecks[0].reasonCode, "RISK_DECISION_PUBLISHED");
+  assert.equal(envelope.data.riskChecks[0].usedPct, null);
+  assert.deepEqual(envelope.data.portfolioOrderIntents[0].allowedActions.allowedActions, ["VIEW", "CONFIRM", "REJECT"]);
+  assert.deepEqual(envelope.data.portfolioOrderIntents[0].humanGate.allowedActions.map((item) => item.action), ["CONFIRM", "REJECT"]);
+  assert.equal(envelope.data.portfolioOrderIntents[0].humanGate.allowedActions.every((item) => item.permission === "ALLOWED"), true);
 });
 
 test("live trading reports healthy strategy instances as intentionally idle while the market is closed", async () => {
@@ -1352,6 +1480,7 @@ test("front control plane composes Command Center research truth and resolves de
     signals: [
       { signal_id: "signal-a", strategy_id: "strategy-a", instrument_code: "MNQ", side: "long", confidence: 61 },
       { signal_id: "signal-b", strategy_id: "strategy-b", instrument_code: "MES", side: "short", confidence: 73 },
+      { signal_id: "signal-expired", strategy_id: "strategy-c", instrument_code: "ZW", side: "long", confidence: 55, status: "EXPIRED", expires_at_utc: "2026-08-10T08:00:00.000Z" },
     ],
   });
 
@@ -1360,8 +1489,11 @@ test("front control plane composes Command Center research truth and resolves de
 
   const first = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "signal-a" } });
   const second = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "signal-b" } });
+  const expired = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "signal-expired" } });
   assert.equal(first.data.identity.signalId, "signal-a");
   assert.equal(second.data.identity.signalId, "signal-b");
+  assert.equal(expired.data.identity.signalId, "signal-expired");
+  assert.equal(expired.data.signal.state, "EXPIRED");
   assert.notEqual(first.data.signal.symbol, second.data.signal.symbol);
   await assert.rejects(
     () => handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-signal-detail", query: { signalId: "missing" } }),
@@ -1633,6 +1765,48 @@ test("front control plane risk view maps authoritative risk-engine limits into t
   assert.equal(instrumentLimit.headroomValue, 0);
 });
 
+test("live trading isolates chart scope from global strategy and execution sources", async () => {
+  const store = frontControlPlaneStore();
+  const strategyCalls = [];
+  const executionCalls = [];
+  const marketCalls = [];
+  const originalStrategy = store.getStrategyV2Overview.bind(store);
+  const originalExecution = store.getExecutionOverview.bind(store);
+  store.getStrategyV2Overview = async (args) => { strategyCalls.push(args); return originalStrategy(args); };
+  store.getExecutionOverview = async (args) => { executionCalls.push(args); return originalExecution(args); };
+  store.getFrontMarketSeries = async (args) => {
+    marketCalls.push(args);
+    return {
+      schemaVersion: "front_market_series_v1",
+      availability: "KNOWN",
+      source: "market_candles",
+      instrument: args.instrument,
+      timeframe: args.timeframe,
+      supportedInstruments: ["ZC", "ZW"],
+      supportedTimeframes: ["5", "15"],
+      points: [],
+    };
+  };
+
+  const base = { trading_date: "2026-08-27", session: "ny_open", mode: "paper" };
+  const first = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-trading", query: { ...base, instrument: "ZC", timeframe: "5" } });
+  const strategyCallsAfterFirstView = strategyCalls.length;
+  const executionCallsAfterFirstView = executionCalls.length;
+  const second = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-trading", query: { ...base, instrument: "ZW", timeframe: "15" } });
+
+  assert.equal(first.data.marketSeries.instrument, "ZC");
+  assert.equal(second.data.marketSeries.instrument, "ZW");
+  assert.equal(strategyCallsAfterFirstView > 0, true);
+  assert.equal(executionCallsAfterFirstView > 0, true);
+  assert.equal(strategyCalls.length, strategyCallsAfterFirstView);
+  assert.equal(executionCalls.length, executionCallsAfterFirstView);
+  assert.equal(marketCalls.length, 2);
+  assert.equal("instrument" in strategyCalls[0], false);
+  assert.equal("timeframe" in strategyCalls[0], false);
+  assert.equal("instrument" in executionCalls[0], false);
+  assert.deepEqual(marketCalls.map((item) => [item.instrument, item.timeframe]), [["ZC", "5"], ["ZW", "15"]]);
+});
+
 function frontControlPlaneStore(overrides = {}) {
   const execution = {
     safety: { executionEnabled: true, bridgeMode: "sim101_addon_approved_only", killSwitchEnv: false, submissionPossible: true, riskPercent: 0.25, maxContracts: 2, liveAccountAllowed: false, executionAuthorityMode: "auto", entryOperatorApprovalRequired: false, databaseLocked: false },
@@ -1770,6 +1944,38 @@ function frontControlPlaneStore(overrides = {}) {
     async listDataFoundationDatasets() { return datasets; },
     operations: {
       async listSimulationRuns() { return simulations; },
+    },
+  };
+}
+
+function portfolioIntentFixture({ intentId, signalId, riskDecisionId, limitId, utilization }) {
+  const nearestLimit = utilization === null ? null : { type: "PORTFOLIO_RISK", utilization };
+  const limits = limitId ? [{ limit_id: limitId, type: "PORTFOLIO_ABS_SIZE", current_utilization: utilization }] : [];
+  return {
+    portfolio_order_intent_id: intentId,
+    target_position_id: `target_${intentId}`,
+    target_account_id: "Sim101",
+    target_instrument: "MNQ",
+    quantity: 1,
+    status: "READY",
+    risk_snapshot: { riskAmount: 40 },
+    risk_decisions: [{
+      risk_decision_id: riskDecisionId,
+      decision: "APPROVED",
+      status: "PASS",
+      authorized: { risk_amount: 40 },
+      nearest_limit: nearestLimit,
+      limits,
+    }],
+    order_intent_payload: {
+      order_intent_id: intentId,
+      signal_id: signalId,
+      strategy_instance_id: `instance_${signalId}`,
+      account_id: "Sim101",
+      instrument: "MNQ",
+      action: "BUY",
+      quantity: 1,
+      status: "READY",
     },
   };
 }

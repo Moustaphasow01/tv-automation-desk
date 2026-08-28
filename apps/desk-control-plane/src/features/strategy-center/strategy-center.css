@@ -38,7 +38,9 @@
 .sc-header__title p { margin: 1px 0 0; color: var(--sc-muted); font-size: 12px; }
 
 .sc-header__search { display: flex; align-items: center; gap: 7px; flex: 0 1 340px; margin: 0 auto; padding: 6px 10px; border: 1px solid var(--sc-border); border-radius: 7px; background: var(--sc-surface-1); }
-.sc-header__search input { flex: 1 1 auto; border: 0; background: transparent; color: var(--sc-text); font-size: 12px; outline: none; }
+.sc-header__search input { flex: 1 1 auto; border: 0; background: transparent; color: var(--sc-text); font-size: 12px; outline: 2px solid transparent; outline-offset: 2px; }
+.sc-header__search input:focus-visible { outline-color: var(--sc-focus); }
+.sc-header__search:focus-within { border-color: var(--sc-focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sc-focus) 38%, transparent); }
 .sc-header__search input::placeholder { color: var(--sc-disabled); }
 .sc-header__search kbd { color: var(--sc-disabled); font-size: 11px; border: 1px solid var(--sc-border); border-radius: 4px; padding: 1px 5px; }
 

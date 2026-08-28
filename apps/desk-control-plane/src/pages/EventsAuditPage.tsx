@@ -111,9 +111,9 @@ export function EventsAuditPage() {
       <section className="operator-grid operator-grid--top" aria-label="Timeline, chemin et payload">
         <Card title="Timeline chronologique" actions={<InlineAction>Liens directs</InlineAction>} density="compact">
           <div className="events-timeline-list">
-            {shownEvents.map((event) => (
-              <Link key={event.eventId} to={`${event.route}?eventId=${event.eventId}&correlationId=${event.correlationId}`}>
-                <span className={`events-lane-dot events-lane-dot--${event.lane.toLowerCase()}`}>{laneIcon(event.lane)}</span>
+            {shownEvents.map((event, index) => (
+              <Link key={`${event.eventId}-${index}`} to={`${event.route}?eventId=${event.eventId}&correlationId=${event.correlationId}`}>
+                <span className={`events-lane-dot events-lane-dot--${(event.lane || "unknown").toLowerCase()}`}>{laneIcon(event.lane)}</span>
                 <div>
                   <strong>{event.eventType}</strong>
                   <small>{formatTime(event.at)} · {compactId(event.eventId)} · cause {event.causationId ? compactId(event.causationId) : "ROOT"}</small>
@@ -132,7 +132,7 @@ export function EventsAuditPage() {
               {selected.authoritativePath.map((eventId, index) => {
                 const event = eventById.get(eventId);
                 return (
-                  <article key={eventId}>
+                  <article key={`${eventId}-${index}`}>
                     <span>{String(index + 1).padStart(2, "0")}</span>
                     <div>
                       <strong>{event?.eventType ?? eventId}</strong>
@@ -145,10 +145,10 @@ export function EventsAuditPage() {
             </section>
             <section className="events-path events-path--advisory">
               <header><FaRobot /><strong>IA SHADOW / CONSULTATIF</strong><span>{selected.advisoryPath.length}</span></header>
-              {selected.advisoryPath.map((eventId) => {
+              {selected.advisoryPath.map((eventId, index) => {
                 const event = eventById.get(eventId);
                 return (
-                  <article key={eventId}>
+                  <article key={`${eventId}-${index}`}>
                     <span><FaCodeBranch /></span>
                     <div>
                       <strong>{event?.eventType ?? eventId}</strong>
@@ -164,16 +164,16 @@ export function EventsAuditPage() {
 
         <Card title="Payload métier & logs" actions={<InlineAction>Inspecter</InlineAction>} density="compact">
           <div className="events-payload-list">
-            {selected.payloadPreview.map((item) => (
-              <article key={item.key}>
+            {selected.payloadPreview.map((item, index) => (
+              <article key={`${item.key}-${index}`}>
                 <small>{item.key}</small>
                 <strong>{item.value}</strong>
               </article>
             ))}
           </div>
           <div className="events-log-list">
-            {selected.logs.map((log) => (
-              <article key={log.logId}>
+            {selected.logs.map((log, index) => (
+              <article key={`${log.logId}-${index}`}>
                 <StatusBadge tone={log.level === "ERROR" ? "danger" : log.level === "WARN" ? "warning" : "success"}>{log.level}</StatusBadge>
                 <div>
                   <strong>{compactId(log.logId)}</strong>
@@ -194,15 +194,15 @@ export function EventsAuditPage() {
             <MetricBox label="Statuts" value={data.filters.statuses.length} />
           </div>
           <div className="events-chip-cloud">
-            {data.filters.domains.map((domain) => <StatusBadge key={domain} tone="info">{domainLabel(domain)}</StatusBadge>)}
-            {data.filters.statuses.map((status) => <StatusBadge key={status} tone={statusTone(status)}>{statusLabel(status)}</StatusBadge>)}
+            {data.filters.domains.map((domain, index) => <StatusBadge key={`${domain}-${index}`} tone="info">{domainLabel(domain)}</StatusBadge>)}
+            {data.filters.statuses.map((status, index) => <StatusBadge key={`${status}-${index}`} tone={statusTone(status)}>{statusLabel(status)}</StatusBadge>)}
           </div>
         </Card>
 
         <Card title="Relations eventId / causationId" actions={<InlineAction>Graphe</InlineAction>} density="compact">
           <div className="events-relations-list">
-            {data.relations.map((relation) => (
-              <article key={`${relation.fromEventId}:${relation.toEventId}`}>
+            {data.relations.map((relation, index) => (
+              <article key={`${relation.fromEventId}:${relation.toEventId}-${index}`}>
                 <span><FaBezierCurve /></span>
                 <div>
                   <strong>{compactId(relation.fromEventId)}</strong>
@@ -220,8 +220,8 @@ export function EventsAuditPage() {
 
         <Card title="Export & commandes audit" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="events-command-actions">
-            {data.commandActions.map((action) => (
-              <article key={action.actionId}>
+            {data.commandActions.map((action, index) => (
+              <article key={`${action.actionId}-${index}`}>
                 <span>{action.commandType.includes("export") ? <FaDownload /> : action.commandType.includes("copy") ? <FaDatabase /> : <FaProjectDiagram />}</span>
                 <div>
                   <strong>{action.label}</strong>
@@ -262,7 +262,7 @@ function EventsAuditLoading() {
   );
 }
 
-function laneIcon(lane: AuditEvent["lane"]) {
+function laneIcon(lane: AuditEvent["lane"] | undefined) {
   if (lane === "ADVISORY") return <FaRobot />;
   if (lane === "SYSTEM") return <FaStream />;
   return <FaRoute />;
@@ -293,8 +293,11 @@ function domainLabel(domain: EventsAuditView["filters"]["domains"][number]) {
   return presentDomain(domain).label;
 }
 
-function compactId(value: string) {
-  return value
+function compactId(value: string | null | undefined) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) return "—";
+
+  return normalized
     .replace("corr_live_reconcile_", "corr:")
     .replace("evt_", "")
     .replace("provider_", "prov:")

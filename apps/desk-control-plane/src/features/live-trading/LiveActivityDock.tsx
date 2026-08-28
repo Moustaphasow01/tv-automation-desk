@@ -7,8 +7,8 @@ import {
   PerformancePanel,
   ProviderRuntimePanel,
   ReconciliationPanel,
-  SignalFunnelPanel,
 } from "./LiveTradingPanels";
+import { LiveSignalInbox } from "./LiveSignalInbox";
 import type { LiveTradingModel } from "./model";
 
 type DockTab = "POSITION" | "EVENTS" | "SIGNALS" | "QUALITY" | "PERFORMANCE" | "ADVISORY";
@@ -22,8 +22,15 @@ const DOCK_TABS: readonly { id: DockTab; label: string; icon: ReactNode }[] = [
   { id: "ADVISORY", label: "Avis Jarvis", icon: <FaRobot aria-hidden="true" /> },
 ];
 
-export function LiveActivityDock({ model }: { model: LiveTradingModel }) {
+export function LiveActivityDock({ model, selectedSignalId, onSelectSignal, onClearSignal, onShowOnChart }: {
+  model: LiveTradingModel;
+  selectedSignalId?: string | null;
+  onSelectSignal?(signalId: string): void;
+  onClearSignal?(): void;
+  onShowOnChart?(instrument: string): void;
+}) {
   const [activeTab, setActiveTab] = useState<DockTab>(() => initialTab(model));
+  const [expanded, setExpanded] = useState(false);
   const onTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -37,7 +44,7 @@ export function LiveActivityDock({ model }: { model: LiveTradingModel }) {
     event.currentTarget.querySelector<HTMLButtonElement>(`#lt-dock-tab-${nextTab.id.toLowerCase()}`)?.focus();
   };
   return (
-    <section className="lt-activity-dock" aria-labelledby="lt-activity-dock-title">
+    <section className={`lt-activity-dock${expanded ? " lt-activity-dock--expanded" : ""}`} aria-labelledby="lt-activity-dock-title">
       <header className="lt-activity-dock__header">
         <div>
           <h2 id="lt-activity-dock-title">Activité de session</h2>
@@ -47,6 +54,7 @@ export function LiveActivityDock({ model }: { model: LiveTradingModel }) {
           <span><small>Signaux</small><strong>{model.signalFunnel.rawSignals}</strong></span>
           <span><small>Suivis</small><strong>{model.signalFunnel.theoreticalTracked}</strong></span>
           <span><small>R clos</small><strong>{model.signalFunnel.totalClosedR === null ? "—" : `${model.signalFunnel.totalClosedR.toFixed(2)}R`}</strong></span>
+          <button type="button" aria-pressed={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? "Réduire la profondeur" : "Développer la profondeur"}</button>
         </div>
       </header>
       <div className="lt-activity-dock__tabs" role="tablist" aria-label="Détails de la session Live" onKeyDown={onTabKeyDown}>
@@ -72,16 +80,16 @@ export function LiveActivityDock({ model }: { model: LiveTradingModel }) {
         aria-labelledby={`lt-dock-tab-${activeTab.toLowerCase()}`}
         tabIndex={0}
       >
-        {renderTab(activeTab, model)}
+        {renderTab(activeTab, model, { selectedSignalId, onSelectSignal, onClearSignal, onShowOnChart })}
       </div>
     </section>
   );
 }
 
-function renderTab(tab: DockTab, model: LiveTradingModel): ReactNode {
+function renderTab(tab: DockTab, model: LiveTradingModel, signalProps: Omit<Parameters<typeof LiveSignalInbox>[0], "model">): ReactNode {
   if (tab === "POSITION") return <><ReconciliationPanel model={model} /><ProviderRuntimePanel model={model} /></>;
   if (tab === "EVENTS") return <AuditTimelinePanel model={model} />;
-  if (tab === "SIGNALS") return <SignalFunnelPanel model={model} />;
+  if (tab === "SIGNALS") return <LiveSignalInbox model={model} {...signalProps} />;
   if (tab === "QUALITY") return <DataQualityPanel model={model} />;
   if (tab === "PERFORMANCE") return <PerformancePanel model={model} />;
   return <JarvisPanel model={model} />;

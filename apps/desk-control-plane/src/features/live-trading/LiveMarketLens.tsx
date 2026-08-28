@@ -8,7 +8,7 @@ import {
 } from "@/design-system/labels";
 import { displayTime } from "./mapper";
 import type { LiveTradingModel } from "./model";
-import { LivePanel } from "./LiveTradingPanels";
+import { LivePanel } from "./LivePanel";
 
 type LensProps = { model: LiveTradingModel };
 

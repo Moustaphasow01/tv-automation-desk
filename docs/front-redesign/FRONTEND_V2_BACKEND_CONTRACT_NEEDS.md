@@ -2,6 +2,24 @@
 
 Les besoins ci-dessous complètent les contrats existants ; ils ne demandent aucune duplication de la logique domaine dans le Front.
 
+## CN-LIVE-010
+
+```text
+CONTRACT NEED
+ID: CN-LIVE-010
+Screen: Live Trading / graphique de marché
+Purpose: publier la série OHLCV seule sans recharger la projection complète du dossier opérateur.
+
+Backend object: market-series BFF view
+Required fields: instrument, timeframe, points[], source, asOf, availability, reason, supportedInstruments[], supportedTimeframes[]
+Required statuses: états de disponibilité déjà publiés par le BFF
+Required allowedActions: aucune
+Realtime requirement: événement marché ciblé ou polling borné ; reprise sur la dernière série valide
+Security requirement: lecture opérateur, aucune API provider/broker exposée
+Frontend behavior if unavailable: cache chart isolé, dernière série datée conservée, polling 15 secondes ; aucune invalidation par les événements métier ordinaires
+Blocking: NO pour la présente release ; YES pour réduire durablement le volume réseau
+```
+
 ## CN-EXE-001
 
 ```text
@@ -266,4 +284,40 @@ AllowedActions: aucune
 Realtime requirement: eventId, cursor, aggregateId, aggregateType, sequence, revision, occurredAt, receivedAt, correlationId, causationId
 Frontend behavior if unavailable: snapshot/refetch, déduplication connue, état RECONNECTING ; aucune transition provider inventée
 Blocking: NO pour lecture snapshot ; YES pour certification temps réel
+```
+
+## LT-SIGNAL-002
+
+```text
+CONTRACT NEED
+ID: LT-SIGNAL-002
+Screen: Live Trading / Inbox des signaux
+Purpose: parcourir l'historique global multi-instruments sans limite implicite du catalogue courant.
+
+Backend object: paged canonical StrategySignal projection
+Required fields: signalId, strategyId/version/instance, instrument, direction, state, setup, confidence, proposedTradePlan, sourceDataCutoffAt, createdAt, expiresAt, lineage IDs
+Required statuses: enums signal exacts
+Required allowedActions: aucune ; les actions restent attachées au Human Gate
+Realtime requirement: append par eventId/revision puis reprise par cursor
+Security requirement: aucune logique Risk ou allowedActions synthétisée
+Frontend behavior if unavailable: afficher la fenêtre publiée et sa limite, sans annoncer « tous les signaux »
+Blocking: NO pour le cockpit courant ; YES pour l'historique exhaustif
+```
+
+## LT-TIMELINE-002
+
+```text
+CONTRACT NEED
+ID: LT-TIMELINE-002
+Screen: Live Trading / Graphique et parcours Signal → Human Gate
+Purpose: positionner chaque étape sur le graphique sans l'inférer depuis un timestamp voisin.
+
+Backend object: canonical signal lineage timeline
+Required fields: entityId, entityType, eventType, occurredAt, source, correlationId, causationId, revision
+Required statuses: enums domaine exacts
+Required allowedActions: aucune
+Realtime requirement: ordre et déduplication par enveloppe canonique
+Security requirement: données d'audit filtrées selon la session
+Frontend behavior if unavailable: ne pas dessiner les marqueurs Portfolio/Risk/Human Gate concernés
+Blocking: NO pour les données ; YES pour déclarer la timeline graphique exhaustive
 ```

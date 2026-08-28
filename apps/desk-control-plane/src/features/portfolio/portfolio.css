@@ -33,7 +33,7 @@
 .pf-header__clock strong { font-size: 12px; font-weight: 700; }
 .pf-header__clock small { color: var(--pf-muted); font-size: 10px; }
 .pf-header__pill { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--pf-border); border-radius: 6px; background: var(--pf-surface-1); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
-.pf-header__pill small { display: block; color: var(--pf-muted); font-size: 9px; text-transform: uppercase; }
+.pf-header__pill small { display: block; color: var(--pf-muted); font-size: 11px; text-transform: uppercase; }
 .pf-header__pill--ok { color: var(--pf-green); }
 .pf-header__filters { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--pf-border); border-radius: 6px; background: var(--pf-surface-1); color: var(--pf-secondary); font-size: 12px; }
 
