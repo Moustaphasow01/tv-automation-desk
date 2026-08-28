@@ -83,7 +83,7 @@
 .sc-catalog-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--sc-border-soft); background: transparent; color: var(--sc-text); text-align: left; cursor: pointer; }
 .sc-catalog-row:hover { background: var(--sc-surface-2); }
 .sc-catalog-row--active { background: var(--sc-surface-3); box-shadow: inset 2px 0 0 var(--sc-blue); }
-.sc-catalog-row--active small { color: var(--sc-secondary); }
+.sc-catalog-row.sc-catalog-row--active small { color: var(--sc-secondary); }
 .sc-catalog-row strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-catalog-row small { color: var(--sc-muted); font-size: 11px; grid-column: 1 / -1; }
 .sc-catalog-row__badges { display: flex; gap: 4px; }

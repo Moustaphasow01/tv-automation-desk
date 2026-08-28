@@ -15,7 +15,7 @@ describe("strategy center accessibility regression", () => {
     const styles = readFileSync(resolve(appRoot, "src/features/strategy-center/strategy-center.css"), "utf8");
 
     expect(styles).toContain(".sc-header__search kbd { color: var(--sc-muted);");
-    expect(styles).toContain(".sc-catalog-row--active small { color: var(--sc-secondary); }");
+    expect(styles).toContain(".sc-catalog-row.sc-catalog-row--active small { color: var(--sc-secondary); }");
     expect(styles).toContain('.sc-meta-item strong[data-unavailable="true"] { color: var(--sc-muted);');
   });
 });
