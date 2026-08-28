@@ -41,17 +41,23 @@ export function EventsAuditPage() {
 
   if (query.isError) {
     return (
-      <Card title="Timeline & Audit indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
-        <p>{(query.error as Error).message}</p>
-      </Card>
+      <div className="operator-page events-page">
+        <h1 className="sr-only">Chronologie &amp; Audit</h1>
+        <Card title="Timeline & Audit indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+          <p>{(query.error as Error).message}</p>
+        </Card>
+      </div>
     );
   }
 
   if (!query.data) {
     return (
-      <Card title="Aucun événement" eyebrow="EMPTY" state="empty" density="compact">
-        <p>Le BFF ne retourne pas encore la projection `/views/events-audit`.</p>
-      </Card>
+      <div className="operator-page events-page">
+        <h1 className="sr-only">Chronologie &amp; Audit</h1>
+        <Card title="Aucun événement" eyebrow="EMPTY" state="empty" density="compact">
+          <p>Le BFF ne retourne pas encore la projection `/views/events-audit`.</p>
+        </Card>
+      </div>
     );
   }
 
@@ -255,6 +261,7 @@ export function EventsAuditPage() {
 function EventsAuditLoading() {
   return (
     <div className="operator-page events-page">
+      <h1 className="sr-only">Chronologie &amp; Audit</h1>
       <section className="operator-kpi-strip">
         {Array.from({ length: 6 }).map((_, index) => <Card key={index} state="loading" density="compact"><div className="skeleton-line" /></Card>)}
       </section>

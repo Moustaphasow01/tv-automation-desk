@@ -35,17 +35,23 @@ export function JarvisWorkspacePage() {
 
   if (query.isError) {
     return (
-      <Card title="Jarvis indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
-        <p>{(query.error as Error).message}</p>
-      </Card>
+      <div className="operator-page jarvis-page">
+        <h1 className="sr-only">Espace Jarvis</h1>
+        <Card title="Jarvis indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+          <p>{(query.error as Error).message}</p>
+        </Card>
+      </div>
     );
   }
 
   if (!query.data) {
     return (
-      <Card title="Aucune donnée Jarvis" eyebrow="EMPTY" state="empty" density="compact">
-        <p>Le BFF ne retourne pas encore la projection `/views/jarvis-workspace`.</p>
-      </Card>
+      <div className="operator-page jarvis-page">
+        <h1 className="sr-only">Espace Jarvis</h1>
+        <Card title="Aucune donnée Jarvis" eyebrow="EMPTY" state="empty" density="compact">
+          <p>Le BFF ne retourne pas encore la projection `/views/jarvis-workspace`.</p>
+        </Card>
+      </div>
     );
   }
 
@@ -302,6 +308,7 @@ function CitationLink({
 function JarvisLoading() {
   return (
     <div className="operator-page jarvis-page">
+      <h1 className="sr-only">Espace Jarvis</h1>
       <section className="operator-kpi-strip">
         {Array.from({ length: 6 }).map((_, index) => <Card key={index} state="loading" density="compact"><div className="skeleton-line" /></Card>)}
       </section>

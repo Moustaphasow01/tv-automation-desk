@@ -75,8 +75,8 @@ export function ReplayPage() {
   }, [data, selectedEvent]);
 
   if (query.isLoading) return <ReplayLoading />;
-  if (query.isError) return <div className="rp-page"><div className="rp-workspace"><p className="rp-empty">Replay indisponible : {(query.error as Error).message}</p></div></div>;
-  if (!data) return <div className="rp-page"><div className="rp-workspace"><p className="rp-empty">Le BFF ne retourne pas encore la projection `/views/replay-overview`.</p></div></div>;
+  if (query.isError) return <div className="rp-page"><h1 className="sr-only">Replay Center</h1><div className="rp-workspace"><p className="rp-empty">Replay indisponible : {(query.error as Error).message}</p></div></div>;
+  if (!data) return <div className="rp-page"><h1 className="sr-only">Replay Center</h1><div className="rp-workspace"><p className="rp-empty">Le BFF ne retourne pas encore la projection `/views/replay-overview`.</p></div></div>;
 
   return (
     <div className="rp-page" data-testid="replay-golden-master">
@@ -344,6 +344,7 @@ function SessionCell({ label, value }: { label: string; value: string }) {
 function ReplayLoading() {
   return (
     <div className="rp-page">
+      <h1 className="sr-only">Replay Center</h1>
       <div className="rp-workspace" role="region" aria-label="Chargement du replay" tabIndex={0}>
         <section className="rp-session-strip">
           {Array.from({ length: 6 }).map((_, index) => <article key={index} className="rp-session-card"><div className="skeleton-line" /></article>)}

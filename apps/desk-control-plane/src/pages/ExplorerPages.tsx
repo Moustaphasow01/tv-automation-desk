@@ -16,8 +16,8 @@ type ExplorerProps = { viewName: ExplorerViewName; title: string; description: s
 
 function ExplorerPage({ viewName, title, description, backTo, backLabel, params = {} }: ExplorerProps) {
   const query = useFrontView(viewName, params);
-  if (query.isLoading) return <main className="route-loading" aria-busy="true" aria-live="polite"><span>Chargement · {title}…</span></main>;
-  if (query.isError || !query.data) return <Card title={`${title} indisponible`} eyebrow="ERREUR CONTRAT" tone="danger" density="compact"><p>{query.error instanceof Error ? query.error.message : "Projection BFF absente."}</p></Card>;
+  if (query.isLoading) return <div className="route-loading" aria-busy="true" aria-live="polite"><h1 className="sr-only">{title}</h1><span>Chargement · {title}…</span></div>;
+  if (query.isError || !query.data) return <div className="operator-page explorer-page"><h1 className="sr-only">{title}</h1><Card title={`${title} indisponible`} eyebrow="ERREUR CONTRAT" tone="danger" density="compact"><p>{query.error instanceof Error ? query.error.message : "Projection BFF absente."}</p></Card></div>;
   const { data, meta } = query.data;
   const selected = data.items[0] ?? null;
   return (

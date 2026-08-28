@@ -127,7 +127,7 @@
 /* ---------------------------------------------------------------- Ranking */
 
 .rl-rank-cell { display: flex; align-items: center; gap: 6px; }
-.rl-rank-index { flex: 0 0 auto; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; background: var(--rl-surface-3); color: var(--rl-muted); font-size: 10px; font-weight: 700; }
+.rl-rank-index { flex: 0 0 auto; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; background: var(--rl-surface-3); color: var(--rl-secondary); font-size: 10px; font-weight: 700; }
 
 /* ----------------------------------------------------------- Mission detail */
 

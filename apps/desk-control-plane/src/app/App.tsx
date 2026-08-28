@@ -76,7 +76,7 @@ const pages: Record<string, LazyExoticComponent<PageComponent>> = {
 const SkeletonPage = lazy(async () => ({ default: (await import("@/pages/SkeletonPage")).SkeletonPage }));
 
 function RouteLoading() {
-  return <main className="route-loading" aria-busy="true" aria-live="polite"><span>Chargement de la vue…</span></main>;
+  return <div className="route-loading" aria-busy="true" aria-live="polite"><h1 className="sr-only">Chargement de la vue</h1><span>Chargement de la vue…</span></div>;
 }
 
 export function App() {

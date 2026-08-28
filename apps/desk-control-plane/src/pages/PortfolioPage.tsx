@@ -21,6 +21,7 @@ export function PortfolioPage() {
   if (query.isError) {
     return (
       <div className="pf-page">
+        <h1 className="sr-only">Portefeuille &amp; Positions</h1>
         <div className="pf-workspace"><p className="pf-empty">Portefeuille indisponible : {(query.error as Error).message}</p></div>
       </div>
     );
@@ -29,6 +30,7 @@ export function PortfolioPage() {
   if (!query.data) {
     return (
       <div className="pf-page">
+        <h1 className="sr-only">Portefeuille &amp; Positions</h1>
         <div className="pf-workspace"><p className="pf-empty">Le BFF ne retourne pas encore la projection `/views/portfolio`.</p></div>
       </div>
     );
@@ -339,6 +341,7 @@ function StrategyCell({ row }: { row: VirtualAllocation }) {
 function PortfolioLoadingState() {
   return (
     <div className="pf-page">
+      <h1 className="sr-only">Portefeuille &amp; Positions</h1>
       <div className="pf-workspace">
         <section className="pf-kpi-strip">
           {Array.from({ length: 9 }).map((_, index) => <article key={index} className="pf-kpi-card"><div className="skeleton-line" /></article>)}
@@ -441,4 +444,3 @@ function formatClockDate(value: Date | undefined) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", year: "numeric" }).format(value);
 }
-

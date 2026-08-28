@@ -48,7 +48,7 @@ export function CommandCenterPage() {
   return (
     <div className="cc-page" data-testid="command-center-golden-master">
       <CommandCenterHeader model={model} />
-      <main className="cc-workspace" aria-label="Command Center du Trading Desk">
+      <div className="cc-workspace" role="region" aria-label="Command Center du Trading Desk">
         <CommandCenterKpis model={model} />
         <section className="cc-grid cc-grid--top" aria-label="Contrôle et pipelines">
           <DeskControlPanel actions={capabilities.data?.actions ?? []} deskStatus={data.summary.deskStatus} systems={data.systems} disabled={capabilities.isLoading || capabilities.isError || session?.summary.environment !== "PAPER"} submitting={commandState.submitting} lastCommand={commandState.last} error={commandState.error} onSubmit={submitDeskControl} />
@@ -66,7 +66,7 @@ export function CommandCenterPage() {
           <JarvisPanel assistant={data.assistant} />
           <AuditTimelinePanel audit={data.audit} />
         </section>
-      </main>
+      </div>
     </div>
   );
 }

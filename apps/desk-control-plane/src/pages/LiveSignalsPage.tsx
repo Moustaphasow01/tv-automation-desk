@@ -20,9 +20,9 @@ export function LiveSignalsPage() {
     return needle ? rows.filter((row) => `${row.symbol} ${row.strategyId} ${row.state} ${row.direction}`.toLowerCase().includes(needle)) : rows;
   }, [query.data, search]);
 
-  if (query.isLoading) return <Card title="Chargement des signaux" state="loading" density="compact"><div className="skeleton-line" /></Card>;
-  if (query.isError) return <Card title="Signaux indisponibles" tone="danger" density="compact"><p>{(query.error as Error).message}</p><button type="button" onClick={() => query.refetch()}>Réessayer</button></Card>;
-  if (!query.data) return <Card title="Aucun signal" state="empty" density="compact"><p>La projection live est vide.</p></Card>;
+  if (query.isLoading) return <div className="operator-page live-signals-page"><h1 className="sr-only">Signaux live</h1><Card title="Chargement des signaux" state="loading" density="compact"><div className="skeleton-line" /></Card></div>;
+  if (query.isError) return <div className="operator-page live-signals-page"><h1 className="sr-only">Signaux live</h1><Card title="Signaux indisponibles" tone="danger" density="compact"><p>{(query.error as Error).message}</p><button type="button" onClick={() => query.refetch()}>Réessayer</button></Card></div>;
+  if (!query.data) return <div className="operator-page live-signals-page"><h1 className="sr-only">Signaux live</h1><Card title="Aucun signal" state="empty" density="compact"><p>La projection live est vide.</p></Card></div>;
 
   const { data, meta } = query.data;
   const accepted = data.signals.filter((item) => ["ARBITRATED", "ORDERED", "FILLED"].includes(item.state)).length;

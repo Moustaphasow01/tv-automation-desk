@@ -58,8 +58,8 @@ export function ExecutionIncidentsPage() {
   }, [data]);
 
   if (query.isLoading) return <IncidentsLoading />;
-  if (query.isError) return <div className="io-page"><div className="io-workspace"><p className="io-empty">Incidents indisponibles : {(query.error as Error).message}</p></div></div>;
-  if (!data || !selected) return <div className="io-page"><div className="io-workspace"><p className="io-empty">Le BFF ne retourne pas encore la projection `/views/execution-incidents`.</p></div></div>;
+  if (query.isError) return <div className="io-page"><h1 className="sr-only">Incidents &amp; Opérations</h1><div className="io-workspace"><p className="io-empty">Incidents indisponibles : {(query.error as Error).message}</p></div></div>;
+  if (!data || !selected) return <div className="io-page"><h1 className="sr-only">Incidents &amp; Opérations</h1><div className="io-workspace"><p className="io-empty">Le BFF ne retourne pas encore la projection `/views/execution-incidents`.</p></div></div>;
 
   const reconcileAction = data.commandActions.find((action) => action.commandType === "execution.incident.reconcile");
 
@@ -371,6 +371,7 @@ function SeverityDonut({ breakdown }: { breakdown: { key: string; count: number;
 function IncidentsLoading() {
   return (
     <div className="io-page">
+      <h1 className="sr-only">Incidents &amp; Opérations</h1>
       <div className="io-workspace">
         <section className="io-kpi-strip">
           {Array.from({ length: 8 }).map((_, index) => <article key={index} className="io-kpi-card"><div className="skeleton-line" /></article>)}
