@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "react-router-dom";
-import { FaArrowsAltH, FaCompressAlt, FaCrosshairs, FaPause, FaPlay, FaSearchMinus, FaSearchPlus } from "react-icons/fa";
+import { FaArrowsAltH, FaCompressAlt, FaCrosshairs, FaPause, FaPlay, FaSearchMinus, FaSearchPlus, FaSyncAlt } from "react-icons/fa";
 import { StatusBadge } from "@/design-system/primitives";
 import { presentAvailability, presentGeneric } from "@/design-system/labels";
 import { displayTime, displayValue } from "../mapper";
@@ -82,18 +82,13 @@ export function InstrumentChartPanel({
             overlay={overlay}
             markers={markers}
             scope={`${instrument} ${formatTimeframe(timeframe ?? "")}`}
+            refreshing={loading}
+            syncLabel={pendingDifferentScope ? `Chargement ${requestedInstrument || instrument} ${formatTimeframe(requestedTimeframe || timeframe || "")}` : "Synchronisation"}
           />
         ) : (
           <ChartEmpty model={model} />
         )}
-        {loading ? (
-          <div className="lt-chart-transition" role="status">
-            <span className="lt-chart-transition__pulse" aria-hidden="true" />
-            <strong>{pendingDifferentScope ? `Chargement ${requestedInstrument || instrument} ${formatTimeframe(requestedTimeframe || timeframe || "")}` : "Actualisation du graphique"}</strong>
-            <small>La dernière série reçue reste visible et datée ; le dossier opérateur ne change pas.</small>
-          </div>
-        ) : null}
-        {error ? <div className="lt-chart-transition lt-chart-transition--error" role="alert"><strong>Graphique non actualisé</strong><small>{error}</small></div> : null}
+        {error ? <div className="lt-chart-error" role="alert"><strong>Graphique non actualisé</strong><small>{error}</small></div> : null}
       </div>
       <footer className="lt-chart-footer">
         <span>{model.marketSeries.points.length} bougies clôturées · {model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</span>
@@ -136,11 +131,13 @@ function ChartToolbar({ model, showScopeControls, overlayMode, overlays, onOverl
 type ChartPoint = LiveTradingModel["marketSeries"]["points"][number];
 type ChartMarker = { id: string; at: string; label: string; tone: "signal" | "context" | "intent" | "fill"; selected?: boolean };
 
-function CandlestickChart({ points, overlay, markers, scope }: {
+function CandlestickChart({ points, overlay, markers, scope, refreshing, syncLabel }: {
   points: LiveTradingModel["marketSeries"]["points"];
   overlay?: TradeOverlay | null;
   markers: readonly ChartMarker[];
   scope: string;
+  refreshing: boolean;
+  syncLabel: string;
 }) {
   const drawable = useMemo(() => points.filter(isDrawable), [points]);
   const [viewport, dispatch] = useReducer(reduceViewport, drawable.length, (length) => createViewport(length));
@@ -242,7 +239,8 @@ function CandlestickChart({ points, overlay, markers, scope }: {
       onPointerCancel={() => { drag.current = null; }}
       onPointerLeave={() => { drag.current = null; setHoverIndex(null); }}
     >
-      <ChartControls viewport={viewport} length={drawable.length} volumeRatio={volumeRatio} dispatch={dispatch} setVolumeRatio={setVolumeRatio} />
+      <ChartControls viewport={viewport} length={drawable.length} volumeRatio={volumeRatio} dispatch={dispatch} setVolumeRatio={setVolumeRatio} refreshing={refreshing} syncLabel={syncLabel} />
+      <ChartInspectionBar point={hoverPoint ?? visible.at(-1)} inspected={hoverPoint !== null} />
       <svg className="lt-market-chart" viewBox={`0 0 ${geometry.width} ${geometry.height}`} role="img" aria-label={`Graphique OHLCV. Prix de ${geometry.candleMin.toFixed(2)} à ${geometry.candleMax.toFixed(2)}. Échelle affichée ${geometry.min.toFixed(2)} à ${geometry.max.toFixed(2)}.`} preserveAspectRatio="none">
         <SessionAndGapLayer visible={visible} geometry={geometry} />
         <AxisLayer visible={visible} geometry={geometry} />
@@ -255,7 +253,6 @@ function CandlestickChart({ points, overlay, markers, scope }: {
         {hoverPoint && hoverX !== null && hoverY !== null ? <Crosshair x={hoverX} y={hoverY} geometry={geometry} /> : null}
         {geometry.visibleOverlay ? <TradeLevelLabels overlay={geometry.visibleOverlay} y={geometry.y} x1={geometry.left} x2={geometry.width - geometry.right} labelWidth={geometry.right} /> : null}
       </svg>
-      {hoverPoint && hoverX !== null && hoverY !== null ? <ChartTooltip point={hoverPoint} x={hoverX} y={hoverY} geometry={geometry} /> : null}
       <ChartNavigator points={drawable} viewport={viewport} dispatch={dispatch} />
       <div className="lt-chart-readout">
         <span>{formatAxisTime(visible[0]?.timestamp ?? "")} → {formatAxisTime(visible.at(-1)?.timestamp ?? "")}</span>
@@ -271,12 +268,14 @@ function CandlestickChart({ points, overlay, markers, scope }: {
 
 type Geometry = ReturnType<typeof chartGeometry>;
 
-function ChartControls({ viewport, length, volumeRatio, dispatch, setVolumeRatio }: {
+function ChartControls({ viewport, length, volumeRatio, dispatch, setVolumeRatio, refreshing, syncLabel }: {
   viewport: ReturnType<typeof createViewport>;
   length: number;
   volumeRatio: number;
   dispatch: React.Dispatch<Parameters<typeof reduceViewport>[1]>;
   setVolumeRatio(value: number): void;
+  refreshing: boolean;
+  syncLabel: string;
 }) {
   return <div className="lt-chart-controls" aria-label="Navigation du graphique">
     {[24, 48, 96].map((size) => <button key={size} type="button" onClick={() => dispatch({ type: "SET_RANGE", size, length })}>{size}</button>)}
@@ -286,6 +285,28 @@ function ChartControls({ viewport, length, volumeRatio, dispatch, setVolumeRatio
     <button type="button" onClick={() => dispatch(viewport.followLatest ? { type: "PAUSE_FOLLOW" } : { type: "GO_LATEST", length })} aria-label={viewport.followLatest ? "Quitter le suivi du dernier prix" : "Revenir au dernier prix"} aria-pressed={viewport.followLatest}>{viewport.followLatest ? <FaPause aria-hidden="true" /> : <FaPlay aria-hidden="true" />}<span>Dernier</span></button>
     <label className="lt-chart-volume-control" title="Ajuster la hauteur du panneau de volume"><FaArrowsAltH aria-hidden="true" /><span>Volume</span><input type="range" min="12" max="32" step="2" value={Math.round(volumeRatio * 100)} onChange={(event) => setVolumeRatio(Number(event.target.value) / 100)} aria-label="Hauteur du panneau de volume en pourcentage" /><output>{Math.round(volumeRatio * 100)}%</output></label>
     <button type="button" onClick={() => dispatch({ type: "RESET", length })} aria-label="Réinitialiser le graphique"><FaCompressAlt aria-hidden="true" /><span>Reset</span></button>
+    <span className="lt-chart-sync" data-active={refreshing} role="img" aria-label={refreshing ? syncLabel : "Graphique à jour"} title={refreshing ? syncLabel : "Graphique à jour"}>
+      <FaSyncAlt aria-hidden="true" />
+      <span>{refreshing ? syncLabel : "À jour"}</span>
+    </span>
+  </div>;
+}
+
+function ChartInspectionBar({ point, inspected }: { point: ChartPoint | undefined; inspected: boolean }) {
+  if (!point) return null;
+  const range = isFiniteNumber(point.high) && isFiniteNumber(point.low) ? point.high - point.low : null;
+  const values = [
+    ["O", point.open],
+    ["H", point.high],
+    ["B", point.low],
+    ["C", point.close],
+    ["Range", range],
+    ["Vol", point.volume],
+    ["VWAP", point.vwap],
+  ] as const;
+  return <div className="lt-chart-inspector" data-inspected={inspected} role="group" aria-label={inspected ? "Données de la bougie inspectée" : "Données de la dernière bougie"} tabIndex={0}>
+    <strong><span>{inspected ? "Bougie inspectée" : "Dernière bougie"}</span>{formatFullTime(point.timestamp)}</strong>
+    <dl>{values.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{displayValue(value)}</dd></div>)}</dl>
   </div>;
 }
 
@@ -359,11 +380,6 @@ function MarkerLayer({ markers, visible, geometry }: { markers: readonly (ChartM
 
 function Crosshair({ x, y, geometry }: { x: number; y: number; geometry: Geometry }) {
   return <g className="lt-market-chart__crosshair" aria-hidden="true"><line x1={x} x2={x} y1={geometry.top} y2={geometry.volumeTop + geometry.volumeHeight} /><line x1={geometry.left} x2={geometry.width - geometry.right} y1={y} y2={y} /></g>;
-}
-
-function ChartTooltip({ point, x, y, geometry }: { point: ChartPoint; x: number; y: number; geometry: Geometry }) {
-  const range = isFiniteNumber(point.high) && isFiniteNumber(point.low) ? point.high - point.low : null;
-  return <div className="lt-chart-tooltip" style={{ left: `${(x / geometry.width) * 100}%`, top: `${Math.max(16, (y / geometry.height) * 100)}%` }}><strong>{formatFullTime(point.timestamp)}</strong><span>O {displayValue(point.open)} · H {displayValue(point.high)}</span><span>B {displayValue(point.low)} · C {displayValue(point.close)}</span><small>Range {displayValue(range)} · Vol {displayValue(point.volume)} · VWAP {displayValue(point.vwap)}</small></div>;
 }
 
 function ChartNavigator({ points, viewport, dispatch }: { points: readonly ChartPoint[]; viewport: ReturnType<typeof createViewport>; dispatch: React.Dispatch<Parameters<typeof reduceViewport>[1]> }) {

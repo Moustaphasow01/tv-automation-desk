@@ -235,6 +235,9 @@ describe("Live Trading cockpit components", () => {
     const markup = render(<LiveActivityDock model={model} />);
 
     expect(markup).toContain("Activité de session");
+    expect(markup).toContain("Plein écran");
+    expect(markup).toContain("aria-expanded=\"false\"");
+    expect(markup).not.toContain("Développer la profondeur");
     expect(markup).toMatch(/role="tab" aria-selected="true"[^>]+id="lt-dock-tab-position"/);
     expect(markup).toMatch(/role="tab" aria-selected="true" tabindex="0"/);
     expect(markup.match(/role="tab" aria-selected="false" tabindex="-1"/g)).toHaveLength(5);

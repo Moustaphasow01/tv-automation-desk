@@ -53,7 +53,9 @@
 .lt-cockpit :focus-visible { outline: 2px solid var(--lt-flight-blue); outline-offset: 2px; }
 .lt-cockpit button, .lt-cockpit select, .lt-cockpit input { font: inherit; }
 .lt-cockpit button { touch-action: manipulation; }
-.lt-cockpit .lt-panel-expand { display: none; }
+.lt-cockpit .lt-panel-expand { display: inline-grid; place-items: center; opacity: .68; }
+.lt-cockpit .lt-panel-expand:hover,
+.lt-cockpit .lt-panel-expand:focus-visible { opacity: 1; }
 
 .lt-cockpit .lt-header {
   height: 64px;
@@ -240,7 +242,6 @@
 .lt-cockpit__canvas .lt-market-chart__axis line { stroke: #1a3442; }
 .lt-cockpit__canvas .lt-chart-controls { top: 10px; right: 10px; gap: 3px; }
 .lt-cockpit__canvas .lt-chart-controls button { min-width: 34px; min-height: 34px; padding: 0 9px; font-size: 12px; }
-.lt-cockpit__canvas .lt-chart-tooltip { min-width: 184px; padding: 9px 11px; font-family: var(--lt-font-data); font-size: 12px; }
 .lt-cockpit__canvas .lt-chart-readout,
 .lt-cockpit__canvas .lt-chart-footer { min-height: 32px; font-size: 12px; }
 

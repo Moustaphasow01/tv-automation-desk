@@ -212,6 +212,9 @@ describe("Live Trading golden master", () => {
     expect(markup).toContain("STOP 506.25");
     expect(markup).toContain("T1 510.00");
     expect(markup).toContain("Navigation du graphique");
+    expect(markup).toContain("Dernière bougie");
+    expect(markup).toContain("<dt>O</dt><dd>507,75</dd>");
+    expect(markup).toContain("<dt>Vol</dt><dd>180</dd>");
     expect(markup).toContain("ZC");
     expect(markup).toContain("H1");
     expect(markup).toContain("H4");
@@ -233,6 +236,27 @@ describe("Live Trading golden master", () => {
 
     expect(markup).not.toContain("Dernier signal détecté");
     expect(markup).not.toContain("ENTRÉE 507.50");
+  });
+
+  it("keeps routine chart refresh feedback compact and outside the plotting area", () => {
+    const envelope = signalChartEnvelope({
+      direction: "LONG",
+      proposedTradePlan: { entry: { price: 507.5 }, stop: { price: 506.25 }, targets: [{ label: "T1", price: 510 }] },
+      tradePlanEconomics: { entry_price: 507.5 },
+    });
+    const markup = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(InstrumentChartPanel, {
+        model: toLiveTradingModel(envelope),
+        loading: true,
+      }))
+    );
+
+    expect(markup).toContain("class=\"lt-chart-sync\"");
+    expect(markup).toContain("data-active=\"true\"");
+    expect(markup).toContain("Synchronisation");
+    expect(markup).not.toContain("Actualisation du graphique");
+    expect(markup).not.toContain("lt-chart-transition");
+    expect(markup).not.toContain("lt-chart-tooltip");
   });
 
   it("does not render a trade overlay when the backend side is unknown", () => {

@@ -61,6 +61,27 @@ try {
         consoleErrors: consoleErrors.slice(consoleErrorOffset),
       });
     }
+    const activityFullscreen = {
+      exercised: false,
+      visible: false,
+      closedWithEscape: false,
+      focusRestored: false,
+      bounds: null,
+    };
+    const activityFullscreenButton = page.locator(".lt-activity-dock__focus");
+    if (await activityFullscreenButton.count()) {
+      await activityFullscreenButton.click();
+      activityFullscreen.exercised = true;
+      const activityDialog = page.locator(".lt-activity-dock--fullscreen[role='dialog']");
+      activityFullscreen.visible = await activityDialog.isVisible().catch(() => false);
+      if (activityFullscreen.visible) {
+        activityFullscreen.bounds = await activityDialog.evaluate((node) => node.getBoundingClientRect().toJSON());
+        if (scenario.golden) await page.screenshot({ path: resolve(outputRoot, "golden-activity-fullscreen.png"), fullPage: false });
+        await page.keyboard.press("Escape");
+        activityFullscreen.closedWithEscape = !await activityDialog.isVisible().catch(() => false);
+        activityFullscreen.focusRestored = await activityFullscreenButton.evaluate((node) => document.activeElement === node);
+      }
+    }
     const decisionStageMeasurements = [];
     const decisionStages = page.locator(".lt-decision-stack__flow details > summary");
     for (let index = 0; index < await decisionStages.count(); index += 1) {
@@ -106,6 +127,7 @@ try {
     await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
     const measurement = await page.evaluate(measureCockpit, { mobile: scenario.viewport.width <= 900 });
     measurement.dockTabs = dockTabMeasurements;
+    measurement.activityFullscreen = activityFullscreen;
     measurement.decisionStages = decisionStageMeasurements;
     measurement.gateDialog = gateDialog;
     measurement.minimumReadableTextPx = Math.min(
@@ -127,6 +149,10 @@ try {
       if (stage.consoleErrors.length) geometryFailures.push(`${stage.label}: ${stage.consoleErrors.length} console error(s)`);
     }
     if (gateDialog.exercised && !gateDialog.visible) geometryFailures.push("Human Gate action did not open its confirmation dialog");
+    if (!activityFullscreen.exercised || !activityFullscreen.visible) geometryFailures.push("Activity dock fullscreen mode is unavailable");
+    if (activityFullscreen.visible && !activityFullscreen.closedWithEscape) geometryFailures.push("Activity dock fullscreen mode does not close with Escape");
+    if (activityFullscreen.visible && !activityFullscreen.focusRestored) geometryFailures.push("Activity dock fullscreen mode does not restore trigger focus");
+    if (activityFullscreen.bounds && (activityFullscreen.bounds.width < scenario.viewport.width * .8 || activityFullscreen.bounds.height < scenario.viewport.height * .8)) geometryFailures.push("Activity dock fullscreen mode does not occupy the investigation viewport");
     if (scenario.viewport.width <= 900) {
       if (!measurement.mobileInstrumentSelector.visible) geometryFailures.push("mobile instrument selector must be visible in the viewport");
       if (!measurement.mobileInstrumentSelector.uncovered) geometryFailures.push("mobile instrument selector is covered by another element");

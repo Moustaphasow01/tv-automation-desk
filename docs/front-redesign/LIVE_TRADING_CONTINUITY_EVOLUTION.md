@@ -4,11 +4,13 @@
 - **Date** : 2026-08-28
 - **Autorité** : le backend décide ; le Front affiche, explique, navigue et transmet uniquement les commandes autorisées.
 - **Sécurité** : AUTO OFF et broker physique OFF restent inchangés.
-- **Statut** : implémentation terminée ; certification finale et publication VPS en cours.
+- **Statut** : continuité publiée en `.5` ; finition opérateur certifiée localement pour la release suivante.
 
 ## Résultat produit
 
 Le Live n'est plus une page dont tout le contenu dépend du sélecteur du graphique. Il devient un cockpit continu organisé autour de quatre objets distincts : marché affiché, flux global de signaux, dossier de décision sélectionné et action Human Gate courante.
+
+La finition opérateur ajoute trois garanties : l'Activité de session peut occuper tout le viewport avec focus piégé, fermeture par Échap et restitution du focus ; une synchronisation ordinaire n'occulte plus le graphique ; les données OHLCV de la bougie survolée restent dans un bandeau fixe au-dessus du tracé.
 
 ## Couverture des 20 évolutions du graphique
 
@@ -43,7 +45,7 @@ Les 50 évolutions sont implémentées sous dix ensembles de cinq capacités :
 4. **Lineage** : signal sélectionnable par ID, étape atteinte, liens vers le détail, affichage sur graphique, corrélation avec suivi théorique.
 5. **Dossier** : identité du signal, cutoff source, étape canonique, plan proposé, plan post-Risk, avertissement si l'OrderIntent courant appartient à un autre signal.
 6. **Décision** : Human Gate backend-driven, actions inchangées, statut commande séparé du broker, lecture seule post-Risk, navigation dossier canonique.
-7. **Activité** : dock Position, Événements, Signaux, Qualité, Performance, Jarvis ; compteurs réels et mode agrandi.
+7. **Activité** : dock Position, Événements, Signaux, Qualité, Performance, Jarvis ; compteurs réels et véritable mode plein écran.
 8. **Lisibilité** : densité cockpit, hiérarchie primaire/secondaire, états sémantiques, tooltips utiles, données techniques reléguées au détail.
 9. **Responsive** : hauteur courte scrollable, colonnes bornées, dock adaptable, contrôles tactiles, aucun fond bloquant.
 10. **Accessibilité** : tablist clavier, tableaux, libellés d'axes, zones live, focus visible, réduction des mouvements.
@@ -75,13 +77,13 @@ Ces limites n'ont pas été compensées par des données locales ou des états i
 
 ## Certification locale avant release
 
-- Frontend : **221/221** tests verts, dont Golden Master Live, continuité chart/Desk, viewport, navigation, cache et scope BFF.
+- Frontend : **235/235** tests verts, dont Golden Master Live, continuité chart/Desk, viewport, navigation, cache, scope BFF et feedback de synchronisation compact.
 - Backend/BFF/PostgreSQL : **1194/1194** tests verts ; contrôle ciblé final Human Gate/Risk/lineage : **3/3** vert.
-- Build production : **178 modules** générés sans erreur.
-- QA visuelle : **5/5** viewports (desktop, laptop et mobile), sans overflow, masque bloquant ni champ post-Risk éditable.
+- Build production : **179 modules** générés sans erreur.
+- QA visuelle : **5/5** viewports (desktop, laptop et mobile), sans overflow, masque bloquant ni champ post-Risk éditable ; le plein écran Activité est exercé, refermé par Échap et restitue le focus.
 - E2E non mutatif : **2 réussis, 1 ignoré** ; le scénario de commande exigeant un PIN administrateur n'a pas été exécuté et aucune commande Human Gate n'a été envoyée.
-- Rulebook UI/UX : **1 000 règles valides** ; scan statique de **156 fichiers**, **0 erreur bloquante**, 606 avertissements heuristiques historiques.
-- Accessibilité ciblée à froid : **8 audits**, **0 violation serious/critical**, **0 erreur runtime**.
+- Rulebook UI/UX : **1 000 règles valides** ; scan statique de **160 fichiers**, **0 erreur bloquante**, 604 avertissements heuristiques historiques.
+- Accessibilité ciblée Live après correction : **2 audits** (workstation et mobile), **0 violation serious/critical**, **0 erreur runtime**.
 - Migration 058 : ledger et checksum vérifiés, trois colonnes de lineage, trois clés étrangères `ON DELETE SET NULL` et trois index partiels valides.
 - `git diff --check` et syntaxe du runner Axe : verts.
 
