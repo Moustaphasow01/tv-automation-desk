@@ -107,3 +107,23 @@ Exécutée sur la branche `codex/front-complete-claude-backlog-20260829` avant m
 - Détecteur Impeccable final : cinq avertissements non bloquants (quatre accents latéraux intentionnels d'état opérateur, une police Inter historique), aucune erreur.
 
 AUTO et LIVE sont restés désactivés pendant toute la recette. Aucune commande broker ni confirmation Human Gate réelle n'a été envoyée.
+
+## Déploiement VPS certifié
+
+Déploiement réalisé le 2026-08-30 sur `vps-6d6969db.vps.ovh.net` :
+
+- Release servie : `preprod-v2-front-claude-backlog-20260830.1`.
+- Commit applicatif Front/Back/Evidence : `79f7a35799a21eb0a7572426735848d216127f3f`.
+- Archive : `preprod-v2-front-claude-backlog-20260830.1.zip`.
+- SHA-256 de l'archive : `f6068bbe9339eee7ce85244a1aae9e89c00bb3f05351f2eb41208d36c1e91565`.
+- Niveau de migration vérifié : `058_theoretical_execution_portfolio_lineage`.
+- Sauvegarde PostgreSQL : `C:\ProgramData\DeskFutures\backups\desk-native-20260829T222410Z.dump` (`110b0cd70f67d63fb5e114710c2d100e33914da340cf961c1bc66bfc52eace4a`).
+- Sauvegarde objets : `C:\ProgramData\DeskFutures\backups\desk-objects-20260829T223053Z.tar.gz` (`3e4577c1f95d6c32aec7e6a814b846c90cf765a8a14ffcd342c6a8deb56d1eaa`).
+- Canary loopback, santé locale, smoke public et onze services Windows : verts.
+- `/healthz`, `/readyz`, `/status` et `/front-api/v1/capabilities` : HTTP 200.
+- Bundle servi vérifié : `assets/index-CEdr2mYw.js`.
+- Recette visuelle publique Live : 5/5 formats, sans overflow, masquage ni erreur console.
+- Axe public ciblé Command Center + Live : 4/4 audits desktop/mobile, zéro violation, erreur runtime ou défaut de libellé opérateur.
+- `AUTO_EXECUTION=false` et `PHYSICAL_LIVE=false` confirmés dans le manifeste distant.
+
+La première tentative a été annulée automatiquement avant activation parce que le fichier de checksum externe n'avait pas été transféré. Après transfert du checksum, la même release a été redéployée avec les sauvegardes fraîches ci-dessus et validée entièrement. Ce rollback contrôlé n'a modifié ni le niveau de migration ni les politiques d'exécution.
