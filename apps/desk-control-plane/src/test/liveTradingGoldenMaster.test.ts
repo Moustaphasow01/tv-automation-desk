@@ -208,6 +208,8 @@ describe("Live Trading golden master", () => {
     );
 
     expect(markup).toContain("Dernier signal détecté");
+    expect(markup).toContain("class=\"lt-chart-header-stack\"");
+    expect(markup).toMatch(/class="lt-chart-header-stack">[\s\S]*class="lt-chart-toolbar"[\s\S]*class="lt-chart-signal-context"[\s\S]*<\/div><div class="lt-chart-frame"/);
     expect(markup).toContain("ENTRÉE 507.50");
     expect(markup).toContain("STOP 506.25");
     expect(markup).toContain("T1 510.00");

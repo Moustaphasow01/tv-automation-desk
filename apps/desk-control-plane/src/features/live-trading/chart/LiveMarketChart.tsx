@@ -69,15 +69,17 @@ export function InstrumentChartPanel({
       className="lt-panel--chart lt-panel--chart-pro"
       action={<Link to="/events">Audit</Link>}
     >
-      <ChartToolbar
-        model={model}
-        showScopeControls={showScopeControls}
-        overlayMode={overlayMode}
-        overlays={{ intentOverlay, theoreticalOverlay, signalOverlay, autoOverlay }}
-        onOverlayMode={setOverlayMode}
-        onScopeChange={onScopeChange}
-      />
-      <SignalChartContext model={model} chartInstrument={chartInstrument} focusAt={focusAt} />
+      <div className="lt-chart-header-stack">
+        <ChartToolbar
+          model={model}
+          showScopeControls={showScopeControls}
+          overlayMode={overlayMode}
+          overlays={{ intentOverlay, theoreticalOverlay, signalOverlay, autoOverlay }}
+          onOverlayMode={setOverlayMode}
+          onScopeChange={onScopeChange}
+        />
+        <SignalChartContext model={model} chartInstrument={chartInstrument} focusAt={focusAt} />
+      </div>
       <div className="lt-chart-frame" data-availability={model.marketSeries.availability} aria-busy={loading}>
         {model.marketSeries.points.length ? (
           <CandlestickChart

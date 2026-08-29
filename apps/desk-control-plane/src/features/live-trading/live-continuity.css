@@ -4,6 +4,7 @@
 
 .lt-cockpit .lt-panel--chart-pro .lt-panel-expand { display: inline-grid; place-items: center; }
 .lt-panel--chart-pro .lt-panel__body { grid-template-rows: auto minmax(0, 1fr) auto !important; }
+.lt-chart-header-stack { display: grid; min-height: 0; grid-template-rows: auto auto; }
 .lt-chart-canvas--pro { grid-template-rows: auto 34px minmax(0, 1fr) 34px auto auto; cursor: crosshair; }
 .lt-chart-canvas--pro:active { cursor: grabbing; }
 .lt-chart-canvas--pro .lt-chart-controls { position: relative; top: auto; right: auto; flex-wrap: wrap; min-height: 40px; padding: 4px 8px; }
