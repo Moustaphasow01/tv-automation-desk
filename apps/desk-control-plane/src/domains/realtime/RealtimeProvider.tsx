@@ -51,6 +51,7 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
   }, []);
 
   useEffect(() => {
+    const pendingInvalidations = pendingInvalidationsRef.current;
     const scheduleViewInvalidations = (viewNames: readonly FrontViewName[]) => {
       viewNames.forEach((viewName) => pendingInvalidationsRef.current.add(viewName));
       if (invalidationTimerRef.current !== null) return;
@@ -115,7 +116,7 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
       subscription.close();
       if (invalidationTimerRef.current !== null) window.clearTimeout(invalidationTimerRef.current);
       invalidationTimerRef.current = null;
-      pendingInvalidationsRef.current.clear();
+      pendingInvalidations.clear();
     };
   }, [config, queryClient, transport]);
 

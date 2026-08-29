@@ -32,6 +32,7 @@ export function ReplayPage() {
   const intervalRef = useRef<number | null>(null);
 
   const data = query.data?.data ?? null;
+  const candleCount = data?.candles.length ?? 0;
 
   useEffect(() => {
     if (!selectedRunId && data?.days.length) {
@@ -46,9 +47,9 @@ export function ReplayPage() {
   }, [data, selectedRunId]);
 
   useEffect(() => {
-    setPlayheadIndex(data?.candles.length ? data.candles.length - 1 : 0);
+    setPlayheadIndex(candleCount ? candleCount - 1 : 0);
     setSelectedEventId(null);
-  }, [data?.selectedRun?.runId]);
+  }, [data?.selectedRun?.runId, candleCount]);
 
   useEffect(() => {
     if (!isPlaying || !data?.candles.length) return;
@@ -81,8 +82,8 @@ export function ReplayPage() {
   }, [data, selectedEvent]);
 
   if (query.isLoading) return <ReplayLoading />;
-  if (query.isError) return <div className="rp-page"><h1 className="sr-only">Replay Center</h1><div className="rp-workspace"><p className="rp-empty">Replay indisponible : {(query.error as Error).message}</p></div></div>;
-  if (!data) return <div className="rp-page"><h1 className="sr-only">Replay Center</h1><div className="rp-workspace"><p className="rp-empty">Le BFF ne retourne pas encore la projection `/views/replay-overview`.</p></div></div>;
+  if (query.isError) return <div className="rp-page"><h1 className="sr-only">Rejeu</h1><div className="rp-workspace"><p className="rp-empty">Rejeu indisponible : {(query.error as Error).message}</p></div></div>;
+  if (!data) return <div className="rp-page"><h1 className="sr-only">Rejeu</h1><div className="rp-workspace"><p className="rp-empty">Le BFF ne retourne pas encore la projection `/views/replay-overview`.</p></div></div>;
 
   return (
     <div className="rp-page" data-testid="replay-golden-master">
@@ -357,7 +358,7 @@ function SessionCell({ label, value }: { label: string; value: string }) {
 function ReplayLoading() {
   return (
     <div className="rp-page">
-      <h1 className="sr-only">Replay Center</h1>
+      <h1 className="sr-only">Rejeu</h1>
       <div className="rp-workspace" role="region" aria-label="Chargement du replay" tabIndex={0}>
         <section className="rp-session-strip">
           {Array.from({ length: 6 }).map((_, index) => <article key={index} className="rp-session-card"><div className="skeleton-line" /></article>)}

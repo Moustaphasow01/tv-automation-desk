@@ -20,7 +20,7 @@ describe("page semantic accessibility regressions", () => {
   });
 
   it.each([
-    ["pages/ReplayPage.tsx", "Replay Center"],
+    ["pages/ReplayPage.tsx", "Rejeu"],
     ["pages/ExecutionIncidentsPage.tsx", "Incidents &amp; Opérations"],
     ["pages/EventsAuditPage.tsx", "Chronologie &amp; Audit"],
     ["pages/PortfolioPage.tsx", "Portefeuille &amp; Positions"],

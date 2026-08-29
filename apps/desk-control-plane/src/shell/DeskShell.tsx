@@ -90,6 +90,7 @@ export function DeskShell() {
   useEffect(() => {
     if (!mobileMenuOpen) return;
     const drawer = mobileMenuDrawerRef.current;
+    const mobileMenuTrigger = mobileMenuTriggerRef.current;
     const shell = drawer?.closest(".desk-app-shell");
     const siblings = shell ? [...shell.children].filter((node) => node !== drawer && node instanceof HTMLElement) as HTMLElement[] : [];
     siblings.forEach((node) => node.setAttribute("inert", ""));
@@ -112,7 +113,7 @@ export function DeskShell() {
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       siblings.forEach((node) => node.removeAttribute("inert"));
-      mobileMenuTriggerRef.current?.focus();
+      mobileMenuTrigger?.focus();
     };
   }, [mobileMenuOpen]);
   const searchResults = useMemo(() => {

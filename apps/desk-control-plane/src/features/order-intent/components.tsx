@@ -70,7 +70,7 @@ export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier })
         {dossier.executionPlan.targets.map((target, index) => <ReadonlyTerm key={index} label={`Cible ${index + 1}`} value={target} format="price" copyable />)}
         <ReadonlyTerm label="R attendu" value={dossier.executionPlan.expectedR} format="r" />
       </dl>
-      <div className={`order-dossier__market-context${dossier.marketContext.outsideTradeZone ? " is-outside" : ""}`} role={dossier.marketContext.outsideTradeZone ? "alert" : "status"}>
+      <div className={`order-dossier__market-context${dossier.marketContext.outsideTradeZone === true ? " is-outside" : ""}`} role={dossier.marketContext.outsideTradeZone === true ? "alert" : "status"}>
         <div>
           <small>Dernier prix connu</small>
           <DataMetric label="Marché" value={dossier.marketContext.lastPrice} />
@@ -81,10 +81,23 @@ export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier })
           <DataMetric label="Points" value={dossier.marketContext.distanceToEntryPoints} />
           <DataMetric label="R" value={dossier.marketContext.distanceToEntryR} />
         </div>
-        <p>{dossier.marketContext.outsideTradeZone ? "Attention : le dernier prix connu se situe hors de la zone entrée–stop–cible." : "Le marché reste dans l'enveloppe du plan publiée par le backend."}</p>
+        <p>{marketContextSummary(dossier)}</p>
       </div>
     </Card>
   );
+}
+
+export function marketContextSummary(dossier: OrderIntentDossier): string {
+  if (!["KNOWN", "STALE"].includes(dossier.marketContext.lastPrice.state)) {
+    return "Enveloppe non évaluée : le backend ne publie pas de prix de marché exploitable.";
+  }
+  if (dossier.marketContext.outsideTradeZone === true) {
+    return "Attention : le dernier prix connu se situe hors de la zone entrée–stop–cible.";
+  }
+  if (dossier.marketContext.outsideTradeZone === false) {
+    return "Le dernier prix connu reste dans l’enveloppe du plan évaluée par le backend.";
+  }
+  return "Position du marché par rapport au plan non publiée par le backend.";
 }
 
 export function HumanExecutionGatePanel({

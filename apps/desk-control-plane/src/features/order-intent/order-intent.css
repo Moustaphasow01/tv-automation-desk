@@ -27,6 +27,63 @@
   color: var(--muted);
 }
 
+.order-dossier__ticket-toggle {
+  min-height: 44px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface-raised);
+  padding: 0 12px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.order-dossier__ticket-toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface-raised));
+}
+
+.order-dossier__expiry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 8px 12px;
+}
+
+.order-dossier__expiry > span,
+.order-dossier__expiry > small { color: var(--muted); }
+.order-dossier__expiry > small { grid-column: 1; }
+.order-dossier__expiry > strong { grid-column: 2; grid-row: 1 / span 2; font: 800 24px/1 ui-monospace, monospace; }
+.order-dossier__expiry[data-tone="active"] > strong { color: var(--success); }
+.order-dossier__expiry[data-tone="urgent"] { border-color: color-mix(in srgb, var(--warning) 65%, var(--stroke)); }
+.order-dossier__expiry[data-tone="urgent"] > strong { color: var(--warning); }
+.order-dossier__expiry[data-tone="expired"] > strong { color: var(--danger); }
+
+.order-dossier__ticket-focus {
+  display: grid;
+  gap: 10px;
+  min-height: min(620px, calc(100vh - 300px));
+  align-content: start;
+}
+
+.order-dossier__ticket-instruction {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--stroke));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  padding: 12px;
+}
+
+.order-dossier__ticket-instruction strong { font-size: 22px; }
+.order-dossier__ticket-instruction span { color: var(--muted); }
+
 .order-dossier__lineage {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));

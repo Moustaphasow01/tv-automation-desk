@@ -447,9 +447,9 @@
   .lt-flight-bar__authority { min-height: 64px; }
   .lt-flight-bar__authority { grid-template-columns: 1fr; gap: 3px; }
   .lt-flight-bar__authority small { grid-column: 1; }
-  .lt-cockpit__workspace { grid-template-rows: 420px auto auto auto; }
+  .lt-cockpit__workspace { grid-template-rows: 600px auto auto auto; }
   .lt-cockpit__decision { min-height: 0; }
-  .lt-cockpit__canvas .lt-panel--chart { min-height: 420px; }
+  .lt-cockpit__canvas .lt-panel--chart { min-height: 600px; }
   .lt-cockpit__canvas .lt-chart-toolbar > span { display: none; }
   .lt-cockpit__canvas .lt-chart-selector button { min-height: 38px; }
   .lt-decision-stack__header { display: grid; }

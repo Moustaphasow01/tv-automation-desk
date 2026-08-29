@@ -87,7 +87,7 @@ export const presentAvailability = makePresenter({
   STALE: { label: "Périmée", tone: "warning" },
   PARTIAL: { label: "Partielle", tone: "warning" },
   ORDER_INTENT_PUBLISHED: { label: "Intention publiée", tone: "info" },
-  ACTIVE: { label: "Active", tone: "danger" },
+  ACTIVE: { label: "Active", tone: "success" },
   OFF: { label: "Inactive", tone: "neutral" },
   NOT_CONFIGURED: { label: "Non configuré", tone: "neutral" },
   DEMO: { label: "Démo", tone: "info" },
@@ -203,6 +203,9 @@ export const presentOperationalStatus = makePresenter({
   DONE: { label: "Terminé", tone: "success" },
   FILLED: { label: "Exécuté", tone: "success" },
   COMPLETED: { label: "Terminé", tone: "success" },
+  PASS: { label: "Validé", tone: "success" },
+  CONTROLLED: { label: "Sous contrôle", tone: "success" },
+  TAKE: { label: "Prendre", tone: "success" },
   BLOCKED: { label: "Bloqué", tone: "danger" },
   BLOCK: { label: "Bloqué", tone: "danger" },
   KILL_SWITCH_ACTIVE: { label: "Kill switch actif", tone: "danger" },
@@ -220,8 +223,14 @@ export const presentOperationalStatus = makePresenter({
   WAIT: { label: "En attente", tone: "warning" },
   WAITING: { label: "En attente", tone: "warning" },
   PARTIAL: { label: "Partiel", tone: "warning" },
+  TAKE_REDUCED: { label: "Prendre avec risque réduit", tone: "warning" },
   AWAITING: { label: "En attente", tone: "warning" },
   UNKNOWN: { label: "Inconnu", tone: "warning" },
+  CONNECTED_EMPTY: { label: "Connecté, sans donnée", tone: "info" },
+  NO_NOMINAL_DECISION: { label: "Aucune décision requise", tone: "info" },
+  ORDER_INTENT_PUBLISHED: { label: "Intention publiée", tone: "info" },
+  LAST_KNOWN: { label: "Dernière valeur connue", tone: "info" },
+  EXPIRED: { label: "Expiré", tone: "warning" },
   DISABLED_BY_POLICY: { label: "Désactivé par politique", tone: "info" },
   MARKET_CLOSED: { label: "Marché fermé", tone: "info" },
 });
@@ -242,6 +251,25 @@ export const presentGateState = makePresenter({
   WATCH: { label: "À surveiller", tone: "warning" },
   FAIL: { label: "Échec", tone: "danger" },
   PENDING: { label: "En attente", tone: "neutral" },
+});
+
+/** Conditions déterministes publiées par les moteurs de stratégie. */
+export const presentStrategyPredicate = makePresenter({
+  US_GRAINS_RTH_ONLY: { label: "Session grains US ouverte", tone: "info" },
+  CONTEXT_AVAILABLE: { label: "Contexte de marché disponible", tone: "info" },
+  SESSION_US: { label: "Dans la session américaine", tone: "info" },
+  BREAKOUT_CONFIRMED: { label: "Cassure confirmée", tone: "accent" },
+  PRICE_RELATION: { label: "Relation de prix validée", tone: "accent" },
+  PRICE_CROSS: { label: "Franchissement de prix validé", tone: "accent" },
+  ZONE_TOUCH: { label: "Zone technique touchée", tone: "accent" },
+  BREAKOUT_CLOSE: { label: "Bougie clôturée au-delà du niveau", tone: "accent" },
+  BREAK_RETEST_SEQUENCE: { label: "Cassure puis retest confirmés", tone: "accent" },
+  REJECTION_PATTERN: { label: "Rejet de niveau confirmé", tone: "accent" },
+  VWAP_RELATION: { label: "Position relative à la VWAP validée", tone: "accent" },
+  RSI_THRESHOLD: { label: "Seuil RSI atteint", tone: "accent" },
+  TIME_WINDOW: { label: "Fenêtre horaire respectée", tone: "info" },
+  INTERMARKET_CONFIRMATION: { label: "Confirmation intermarché présente", tone: "accent" },
+  EVENT_BLACKOUT: { label: "Aucun blackout événementiel actif", tone: "info" },
 });
 
 /** Ce qu'un opérateur est autorisé à demander pour une stratégie donnée. */

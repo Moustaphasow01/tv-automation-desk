@@ -78,6 +78,65 @@ test("strategy signal decision pipeline does not borrow protection from another 
   assert.deepEqual(orderIntent.protection.missing, ["STOP_PRICE_REQUIRED", "TARGET_PRICE_REQUIRED"]);
 });
 
+test("strategy signal decision pipeline preserves the complete grain trade plan through Risk and Human Gate", async () => {
+  const signalBusRepository = new InMemoryStrategySignalBusRepository();
+  await signalBusRepository.publish(signalOutbox({
+    signal_id: "signal-zw-plan",
+    dedupe_key: "signal-zw-plan",
+    instrument: "ZW",
+    proposed_size: 1,
+    proposed_trade_plan: {
+      schema_version: "strategy_signal_trade_plan_v1",
+      availability: "KNOWN",
+      instrument: "ZW",
+      direction: "LONG",
+      order_type: "LIMIT",
+      entry: { availability: "KNOWN", type: "ZONE", price: 754, low: 753.75, high: 754.25, calculation_price: 754 },
+      stop: { availability: "KNOWN", price: 752.25 },
+      targets: [{ availability: "KNOWN", label: "TP1", price: 756.75 }],
+      time_in_force: "DAY",
+    },
+    trade_plan_economics: {
+      schema_version: "trade_plan_economics_v1",
+      availability: "KNOWN",
+      instrument: "ZW",
+      direction: "LONG",
+      entry_price: 754,
+      stop_price: 752.25,
+      stop_distance_points: 1.75,
+      stop_distance_ticks: 7,
+      tick_size: 0.25,
+      tick_value: 12.5,
+      currency: "USD",
+      risk_per_contract: 87.5,
+      targets: [{ label: "TP1", price: 756.75, reward_risk: 1.5714, expected_r: 1.5714, availability: "KNOWN" }],
+    },
+  }));
+  const riskRepository = new InMemoryPortfolioRiskRuntimeRepository();
+  const executionRepository = new InMemoryPortfolioOrderIntentExecutionRepository();
+  const service = new StrategySignalDecisionPipelineService({
+    signalBusRepository,
+    contextGate: new AiContextGateService({ repository: new InMemoryAiContextGateRepository() }),
+    riskRuntime: new PortfolioRiskRuntimeService({ repository: riskRepository, clock: clock() }),
+    execution: new PortfolioOrderIntentExecutionService({ repository: executionRepository, clock: clock() }),
+    providerCounts: async () => ({ commands: 0, events: 0 }),
+    clock: clock(),
+  });
+
+  const result = await service.runOnce({ now_utc: NOW, account_id: "shadow_live" });
+  const orderIntent = [...riskRepository.orderIntents.values()][0];
+
+  assert.equal(result.status, "HUMAN_GATE_READY");
+  assert.equal(orderIntent.instrument, "ZW");
+  assert.equal(orderIntent.execution_terms.entry.price, 754);
+  assert.equal(orderIntent.execution_terms.entry.low, 753.75);
+  assert.equal(orderIntent.execution_terms.entry.high, 754.25);
+  assert.equal(orderIntent.execution_terms.stop.price, 752.25);
+  assert.equal(orderIntent.execution_terms.targets[0].price, 756.75);
+  assert.equal(orderIntent.risk_snapshot.risk_per_contract, 87.5);
+  assert.equal(orderIntent.broker_submission_allowed, false);
+});
+
 function signalCore(overrides = {}) {
   const signal = {
     signal_id: "signal-001",

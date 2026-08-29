@@ -7,6 +7,7 @@ export const DEFAULT_PORTFOLIO_CORRELATION_GROUPS_V1 = Object.freeze({
   equity_index: Object.freeze(["MES", "ES", "MNQ", "NQ", "MYM", "YM", "M2K", "RTY"]),
   energy_crude: Object.freeze(["MCL", "CL"]),
   metals: Object.freeze(["MGC", "GC", "SIL", "SI"]),
+  grains: Object.freeze(["ZC", "ZW", "ZS", "KE"]),
 });
 
 export function normalizePortfolioRiskBudgetV1(input = {}) {

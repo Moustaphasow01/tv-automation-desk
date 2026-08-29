@@ -86,18 +86,28 @@ export function App() {
         <HashRouter>
           <Suspense fallback={<RouteLoading />}>
             <OperatorLoginGate>
-            <DeskRouteErrorBoundary>
             <Routes>
               <Route element={<DeskShell />}>
                 <Route index element={<Navigate to="/command-center" replace />} />
                 {vnextRoutes.map((route) => {
                   const Page = pages[route.path];
-                  return <Route key={route.path} path={route.path} element={<PermissionGate capability={route.capability}>{Page ? <Page /> : <CapabilityUnavailablePage route={route} />}</PermissionGate>} />;
+                  return (
+                    <Route
+                      key={route.path}
+                      path={route.path}
+                      element={(
+                        <DeskRouteErrorBoundary resetKey={route.path}>
+                          <PermissionGate capability={route.capability}>
+                            {Page ? <Page /> : <CapabilityUnavailablePage route={route} />}
+                          </PermissionGate>
+                        </DeskRouteErrorBoundary>
+                      )}
+                    />
+                  );
                 })}
-                <Route path="*" element={<SkeletonPage route={null} />} />
+                <Route path="*" element={<DeskRouteErrorBoundary resetKey="not-found"><SkeletonPage route={null} /></DeskRouteErrorBoundary>} />
               </Route>
             </Routes>
-            </DeskRouteErrorBoundary>
             </OperatorLoginGate>
           </Suspense>
         </HashRouter>

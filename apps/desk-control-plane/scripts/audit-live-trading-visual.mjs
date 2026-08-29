@@ -247,7 +247,7 @@ function measureCockpit({ mobile, scopeSelector = null }) {
     return Boolean(hit && hit !== node && !node.contains(hit));
   };
   const interactionRoot = scopeSelector ? document.querySelector(scopeSelector) : document.querySelector(".lt-cockpit");
-  const interactives = [...(interactionRoot ?? document).querySelectorAll("a,button,input,select,textarea,[tabindex]")]
+  const interactives = [...(interactionRoot ?? document).querySelectorAll("a,button,input,select,textarea,[tabindex]:not([tabindex='-1'])")]
     .filter((node) => !node.classList.contains("lt-chart-canvas"))
     .filter(isRendered);
   const describeInteractive = (node) => ({

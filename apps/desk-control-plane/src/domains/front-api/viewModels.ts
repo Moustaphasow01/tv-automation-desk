@@ -929,13 +929,13 @@ export type LiveSignalDetailView = {
     generatedAt: string;
     expiresAt: string;
     confidence: number;
-    expectancyR: number;
-    rewardRisk: number;
+    expectancyR: number | null;
+    rewardRisk: number | null;
     regime: string;
-    entryZoneLow: number;
-    entryZoneHigh: number;
-    stopPrice: number;
-    targetPrice: number;
+    entryZoneLow: number | null;
+    entryZoneHigh: number | null;
+    stopPrice: number | null;
+    targetPrice: number | null;
   };
   predicates: readonly {
     predicateId: string;
@@ -1252,7 +1252,7 @@ export type OrdersView = {
 
 export type RiskView = {
   summary: {
-    globalStatus: "PASS" | "WATCH" | "BREACH" | "KILL_SWITCH_READY";
+    globalStatus: "PASS" | "WATCH" | "BREACH" | "BLOCKED" | "KILL_SWITCH_READY";
     riskUsedPct: number;
     dailyLossR: number;
     dailyLossLimitR: number;

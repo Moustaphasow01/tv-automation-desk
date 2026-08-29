@@ -31,6 +31,7 @@ type Inspector = StrategyCenterView["selectedInspector"];
 
 const STRATEGIES_PER_PAGE = 8;
 type CatalogFilter = "ALL" | "SHADOW" | "PAPER" | "VALIDATED" | "RETIRED";
+const EMPTY_STRATEGIES: readonly StrategyRow[] = [];
 
 export function StrategyCenterPage() {
   const { session } = useOperatorSession();
@@ -56,7 +57,7 @@ export function StrategyCenterPage() {
     }
   }, [selection.strategyId, inspector?.strategyId, inspector?.strategyVersionId]);
 
-  const strategies = query.data?.data.strategies ?? [];
+  const strategies = query.data?.data.strategies ?? EMPTY_STRATEGIES;
 
   const filteredStrategies = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("fr");

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card, KpiCard } from "@/design-system/primitives";
 import { OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
+import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { buildOrderIntentDossier } from "@/features/order-intent/mapper";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
 import {
@@ -27,6 +28,8 @@ export function OrderIntentDossierPage() {
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
+  const [ticketMode, setTicketMode] = useState(false);
+  const realtime = useContext(RealtimeContext);
 
   if (query.isLoading) return <DetailLoading />;
   if (query.isError) return <DetailError error={query.error as Error} />;
@@ -36,6 +39,10 @@ export function OrderIntentDossierPage() {
   const lifecycle = presentOrderLifecycleEvidence(dossier.brokerSummary);
   const instrument = readable(dossier.signal.instrument, "OrderIntent");
   const side = readable(dossier.signal.side, "");
+  const expiresAt = readable(dossier.executionPlan.expiresAt, "");
+  const expiryMs = Date.parse(expiresAt);
+  const nowMs = realtime?.now.getTime() ?? Date.parse(dossier.meta.asOf);
+  const remainingSec = Number.isFinite(expiryMs) ? Math.floor((expiryMs - nowMs) / 1_000) : null;
 
   const submitGateAction = async (action: HumanGateAction, reason: string) => {
     setSubmittingActionId(action.actionId);
@@ -57,7 +64,7 @@ export function OrderIntentDossierPage() {
       <OperatorPageHeader
         title={`${instrument} ${side} · dossier d'exécution`}
         description="De la décision stratégie à la preuve broker, sans recalcul ni mutation des termes validés."
-        actions={<><Link to="/execution/orders">Retour aux ordres</Link><Link to="/operations/events">Audit global</Link></>}
+        actions={<><button type="button" className="order-dossier__ticket-toggle" aria-pressed={ticketMode} onClick={() => setTicketMode((value) => !value)}>{ticketMode ? "Voir le dossier complet" : "Mode ticket d’exécution"}</button><Link to="/execution/orders">Retour aux ordres</Link><Link to="/operations/events">Audit global</Link></>}
       />
 
       {dossier.degradedReadOnly ? (
@@ -77,7 +84,26 @@ export function OrderIntentDossierPage() {
         <KpiCard label="HUMAN GATE" value={dossier.humanGate.actions.length ? "Disponible" : "Indisponible"} delta="backend-driven" tone={dossier.humanGate.actions.length ? "warning" : "neutral"} />
       </section>
 
-      <nav className="order-dossier__lineage" aria-label="Lineage du dossier" tabIndex={0}>
+      <section className="order-dossier__expiry" data-tone={expiryTone(remainingSec)} aria-label="Temps restant avant expiration de la décision">
+        <span>Fenêtre de décision</span>
+        <strong>{formatCountdown(remainingSec)}</strong>
+        <small>{expiresAt ? `Échéance backend ${formatTime(expiresAt)}` : "Échéance non publiée par le backend"}</small>
+      </section>
+
+      {ticketMode ? (
+        <section className="order-dossier__ticket-focus" aria-label="Ticket d'exécution semi-manuel">
+          <div className="order-dossier__ticket-instruction">
+            <strong>{instrument} {side}</strong>
+            <span>Recopiez uniquement les termes autorisés ci-dessous. La confirmation du Human Gate ne constitue jamais un fill broker.</span>
+          </div>
+          <div className="order-dossier__decision-grid">
+            <ReadonlyTradeTerms dossier={dossier} />
+            <HumanExecutionGatePanel gate={dossier.humanGate} onSubmit={submitGateAction} submittingActionId={submittingActionId} command={command} error={commandError} />
+          </div>
+        </section>
+      ) : null}
+
+      {!ticketMode ? <><nav className="order-dossier__lineage" aria-label="Lineage du dossier" tabIndex={0}>
         {["Signal", "Filtre de contexte", "Portefeuille", "Risque global", "Cible", "OrderIntent", "Human Gate", "Fournisseur", "Broker", "Réconciliation"].map((label, index) => (
           <span key={label}><b>{String(index + 1).padStart(2, "0")}</b>{label}</span>
         ))}
@@ -135,7 +161,7 @@ export function OrderIntentDossierPage() {
           {dossier.relations.length ? <div className="zoom-link-list">{dossier.relations.map((relation) => <Link key={`${relation.label}-${relation.id}`} to={relation.route}><strong>{relation.label}</strong><small>{relation.id}</small></Link>)}</div> : <p className="empty-state">Aucune relation canonique publiée.</p>}
         </Card>
         <Card title="Audit & provenance" eyebrow="TECHNIQUE" density="compact"><TechnicalInspector dossier={dossier} /></Card>
-      </section>
+      </section></> : null}
     </div>
   );
 }
@@ -147,6 +173,21 @@ function readable(value: { state: string; value?: string }, fallback: string): s
 function formatTime(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Heure indisponible" : new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
+}
+
+function formatCountdown(remainingSec: number | null): string {
+  if (remainingSec === null) return "Non publiée";
+  if (remainingSec <= 0) return "Expirée";
+  const minutes = Math.floor(remainingSec / 60);
+  const seconds = remainingSec % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function expiryTone(remainingSec: number | null): "unknown" | "expired" | "urgent" | "active" {
+  if (remainingSec === null) return "unknown";
+  if (remainingSec <= 0) return "expired";
+  if (remainingSec <= 180) return "urgent";
+  return "active";
 }
 
 function DetailLoading() { return <div className="operator-page"><Card state="loading" density="compact"><p>Chargement du dossier d'exécution…</p></Card></div>; }

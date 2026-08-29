@@ -465,6 +465,7 @@ function activeStrategyInstanceRows(strategy, nowIso, health = {}) {
       configuredState,
       runtimeState: effectiveRuntimeState,
       schedulerHealth: intentionallyIdle ? "IDLE_MARKET_CLOSED" : schedulerHealth,
+      instruments: stringList(item.instrument_scope),
       lastHeartbeatAt,
       lastEvaluationAt,
       nextEvaluationAt: text(item.next_evaluation_at_utc || item.next_run_at_utc, ""),

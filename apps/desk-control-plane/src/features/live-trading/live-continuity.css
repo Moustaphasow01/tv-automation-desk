@@ -19,9 +19,9 @@
 .lt-chart-signal-context > div { display: grid; min-width: 0; gap: 1px; }
 .lt-chart-signal-context strong { overflow: hidden; color: var(--lt-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .lt-chart-signal-context small,
-.lt-chart-signal-context > span { color: var(--lt-muted); font-size: 10px; }
+.lt-chart-signal-context > span { color: var(--lt-muted); font-size: 11px; }
 .lt-chart-signal-context[data-status="partial"] > span { color: var(--lt-flight-amber); }
-.lt-chart-signal-context a { display: inline-flex; min-height: 28px; align-items: center; padding: 0 7px; border: 1px solid var(--lt-flight-line); border-radius: 4px; color: var(--lt-flight-cyan); font-size: 10px; text-decoration: none; }
+.lt-chart-signal-context a { display: inline-flex; min-height: 28px; align-items: center; padding: 0 7px; border: 1px solid var(--lt-flight-line); border-radius: 4px; color: var(--lt-flight-cyan); font-size: 11px; text-decoration: none; }
 
 .lt-chart-error {
   position: absolute;
@@ -165,8 +165,10 @@
 }
 
 @media (max-width: 560px) {
-  .lt-page.lt-cockpit .lt-cockpit__workspace { grid-template-rows: 372px auto auto auto; }
-  .lt-page.lt-cockpit .lt-cockpit__canvas .lt-panel--chart { min-height: 372px; }
+  .lt-page.lt-cockpit .lt-cockpit__workspace { grid-template-rows: 600px auto auto auto; }
+  .lt-page.lt-cockpit .lt-cockpit__canvas .lt-panel--chart { min-height: 600px; }
+  .lt-chart-signal-context { min-height: 56px; }
+  .lt-chart-signal-context small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lt-chart-sync > span { display: none; }
   .lt-signal-inbox__header { display: grid; }
   .lt-signal-inbox__actions span { display: none; }

@@ -762,10 +762,10 @@ async function handleRestBridgeRequest(req, res, url, baseUrl) {
 
 async function prewarmOperationsSummary() {
   if (!FRONT_API_ENABLED || process.env.DESK_PREWARM_OPERATIONS_SUMMARY === "false") return;
-  const startedAt = Date.now();
+  const startedAt = performance.now();
   try {
     await store.getOperationsSummary({});
-    console.log(JSON.stringify({ event: "desk_operations_summary_prewarmed", elapsed_ms: Date.now() - startedAt }));
+    console.log(JSON.stringify({ event: "desk_operations_summary_prewarmed", elapsed_ms: performance.now() - startedAt }));
   } catch (error) {
     console.warn(JSON.stringify({ event: "desk_operations_summary_prewarm_failed", error: error.message || String(error) }));
   }

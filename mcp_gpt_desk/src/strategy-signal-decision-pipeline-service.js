@@ -167,8 +167,8 @@ function riskBudget(input) {
     budget_id: "shadow-live-risk-budget-v1",
     max_portfolio_abs_size: maxAbs,
     max_account_abs_size: { [account]: maxAbs },
-    max_instrument_abs_size: { MNQ: maxAbs, MES: maxAbs },
-    max_correlation_group_abs_size: { equity_index: maxAbs },
+    max_instrument_abs_size: { MNQ: maxAbs, MES: maxAbs, ZC: maxAbs, ZW: maxAbs },
+    max_correlation_group_abs_size: { equity_index: maxAbs, grains: maxAbs },
     metadata: {
       execution_mode: "SHADOW",
       source: "strategy-signal-decision-pipeline",

@@ -2334,7 +2334,7 @@ function createTool(store, { validator, handler, textResult, ...definition }) {
     securitySchemes: definition.securitySchemes || [{ type: "oauth2", scopes: requiredScopes }],
     validator,
     async call(rawArgs) {
-      const started = Date.now();
+      const started = performance.now();
       try {
         const args = validator.parse(rawArgs || {});
         const data = await handler(args);
@@ -2343,7 +2343,7 @@ function createTool(store, { validator, handler, textResult, ...definition }) {
         await safeLog(store, {
           tool_name: definition.name,
           status: "success",
-          latency_ms: Date.now() - started,
+          latency_ms: performance.now() - started,
           pack_id: args?.pack_id || data?.pack_id || null,
           decision_id: args?.decision_id || data?.decision_id || null,
           response_structured_bytes: transport.structured_bytes,
@@ -2358,7 +2358,7 @@ function createTool(store, { validator, handler, textResult, ...definition }) {
         await safeLog(store, {
           tool_name: definition.name,
           status: "error",
-          latency_ms: Date.now() - started,
+          latency_ms: performance.now() - started,
           pack_id: rawArgs?.pack_id || null,
           decision_id: rawArgs?.decision_id || null,
           error: message,

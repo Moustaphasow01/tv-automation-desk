@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { buildOrderTicketText, ReadonlyTradeTerms, ReconciliationPanel } from "@/features/order-intent/components";
+import { buildOrderTicketText, marketContextSummary, ReadonlyTradeTerms, ReconciliationPanel } from "@/features/order-intent/components";
 import { buildOrderIntentDossier } from "@/features/order-intent/mapper";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
 import { presentBackendStatus, presentOrderLifecycleEvidence } from "@/features/order-intent/statusRegistry";
@@ -115,6 +115,15 @@ describe("OrderIntent dossier semi-manual contract", () => {
     expect(dossier.executionPlan.targets[0].state).toBe("UNAVAILABLE");
     expect(html).toContain("Indisponible");
     expect(html).not.toMatch(/<dd[^>]*>0(?:[,.]0+)?<\/dd>/);
+  });
+
+  it("does not claim a trade-zone position when the backend publishes no market price", () => {
+    const dossier = buildOrderIntentDossier(orderDetailEnvelope());
+
+    expect(marketContextSummary(dossier)).toBe(
+      "Enveloppe non évaluée : le backend ne publie pas de prix de marché exploitable.",
+    );
+    expect(marketContextSummary(dossier)).not.toContain("reste dans");
   });
 
   it("builds a Human Gate command only from a complete backend-published action", () => {

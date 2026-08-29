@@ -1161,6 +1161,8 @@ export function marketFeedSymbol(instrument) {
     MES: "MES1!",
     NQ: "NQ1!",
     ES: "ES1!",
+    ZC: "ZC1!",
+    ZW: "ZW1!",
     GC: "GC1!",
     CL: "CL1!",
     DXY: "DXY",

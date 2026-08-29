@@ -156,7 +156,7 @@ export class CodexExecAdapter {
     const effectiveTimeoutMs = timeoutMs === null || timeoutMs === undefined
       ? this.timeoutMs
       : boundedInteger(timeoutMs, this.timeoutMs, 30_000, 780_000);
-    const analysisStartedAtMs = Date.now();
+    const analysisStartedAtMs = performance.now();
     const runRoot = await this.createRunDirectory();
     const schemaPath = join(runRoot, "output-schema.json");
     const outputPath = join(runRoot, "final-output.json");
@@ -314,7 +314,7 @@ export class CodexExecAdapter {
           reasoning_effort: effectiveReasoningEffort,
           configured_reasoning_effort: runtimeSettings.reasoningEffort,
           runtime_settings_revision: runtimeSettings.revision,
-          analysis_duration_ms: Math.max(0, Date.now() - analysisStartedAtMs),
+          analysis_duration_ms: Math.max(0, performance.now() - analysisStartedAtMs),
           context_mcp_enabled: Boolean(contextCapability),
           context_tool_call_count: contextEvidenceReceipts.length,
           stdout_truncated: result.stdoutTruncated === true,

@@ -1108,7 +1108,9 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
     pipeline: pipeline(executionValue, launchGate),
     canonicalRuntime: { ...canonicalRuntime, activeStrategyInstances: instancesWithConfidence },
     marketSeries: marketSeries || { availability: "UNAVAILABLE", points: [], supportedTimeframes: [], asOf: null, source: "market_candles" },
-    watchlist: liveWatchlist(liveMarketSnapshot),
+    watchlist: liveWatchlist(liveMarketSnapshot, {
+      preferredSymbols: canonicalRuntime.activeStrategyInstances.flatMap((item) => rows(item.instruments)),
+    }),
     macroSession: liveMacroSession({ macro, news, scope, marketSeries }),
     signals: signalInbox,
     arbitrations,

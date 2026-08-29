@@ -13,6 +13,10 @@ import "@/features/risk-center/risk-center.css";
 
 type RiskLimit = RiskView["limits"][number];
 type RiskAction = RiskView["commandActions"][number];
+type RiskBreach = RiskView["breaches"][number];
+
+const EMPTY_RISK_LIMITS: readonly RiskLimit[] = [];
+const EMPTY_RISK_BREACHES: readonly RiskBreach[] = [];
 
 const DONUT_COLORS = ["var(--rc-blue)", "var(--rc-amber)", "var(--rc-cyan)", "var(--rc-purple)", "var(--rc-green)", "var(--rc-red)"];
 
@@ -29,6 +33,21 @@ export function RiskCenterPage() {
   const [showAllLimits, setShowAllLimits] = useState(false);
   const [instrumentFilter, setInstrumentFilter] = useState("ALL");
   const [accountFilter, setAccountFilter] = useState("ALL");
+  const data = query.data?.data;
+  const limits = data?.limits ?? EMPTY_RISK_LIMITS;
+  const breaches = data?.breaches ?? EMPTY_RISK_BREACHES;
+  const instrumentOptions = useMemo(() => uniqueTargets(limits, "INSTRUMENT"), [limits]);
+  const accountOptions = useMemo(() => uniqueTargets(limits, "ACCOUNT"), [limits]);
+  const visibleLimits = useMemo(() => limits.filter((limit) => {
+    if (!showAllLimits && limit.status === "PASS" && limit.usedPct < 50) return false;
+    if (instrumentFilter !== "ALL" && !(limit.scope === "INSTRUMENT" && limit.targetId === instrumentFilter)) return false;
+    if (accountFilter !== "ALL" && !(limit.scope === "ACCOUNT" && limit.targetId === accountFilter)) return false;
+    return true;
+  }), [limits, showAllLimits, instrumentFilter, accountFilter]);
+  const shownBreaches = useMemo(
+    () => breachTab === "active" ? breaches.filter((breach) => breach.status === "OPEN") : breaches,
+    [breachTab, breaches]
+  );
 
   if (query.isLoading) return <RiskLoading />;
 
@@ -36,11 +55,10 @@ export function RiskCenterPage() {
     return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Centre de risque indisponible : {(query.error as Error).message}</p></div></div>;
   }
 
-  if (!query.data) {
+  if (!data) {
     return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Le BFF ne retourne pas encore la projection `/views/risk`.</p></div></div>;
   }
 
-  const { data } = query.data;
   const primaryStressAction = data.commandActions.find((action) => action.commandType === "risk.stress_test.run");
   const killSwitchAction = data.commandActions.find((action) => action.commandType === "risk.emergency.kill_switch");
 
@@ -57,16 +75,6 @@ export function RiskCenterPage() {
     }
   };
 
-  const shownBreaches = breachTab === "active" ? data.breaches : data.breaches;
-  const instrumentOptions = useMemo(() => uniqueTargets(data.limits, "INSTRUMENT"), [data.limits]);
-  const accountOptions = useMemo(() => uniqueTargets(data.limits, "ACCOUNT"), [data.limits]);
-  const visibleLimits = useMemo(() => data.limits.filter((limit) => {
-    if (!showAllLimits && limit.status === "PASS" && limit.usedPct < 50) return false;
-    if (instrumentFilter !== "ALL" && !(limit.scope === "INSTRUMENT" && limit.targetId === instrumentFilter)) return false;
-    if (accountFilter !== "ALL" && !(limit.scope === "ACCOUNT" && limit.targetId === accountFilter)) return false;
-    return true;
-  }), [data.limits, showAllLimits, instrumentFilter, accountFilter]);
-
   return (
     <div className="rc-page" data-testid="risk-center-golden-master">
       <header className="rc-header">
@@ -78,7 +86,9 @@ export function RiskCenterPage() {
           <strong>{formatClock(realtime?.now)}</strong>
           <small>{formatClockDate(realtime?.now)}</small>
         </div>
-        <span className={`rc-header__pill${data.summary.globalStatus === "BREACH" ? " rc-header__pill--breach" : " rc-header__pill--ok"}`}>{data.summary.globalStatus}</span>
+        <span className={`rc-header__pill${["BREACH", "BLOCKED"].includes(data.summary.globalStatus) ? " rc-header__pill--breach" : " rc-header__pill--ok"}`}>
+          {presentQueueStatus(data.summary.globalStatus).label}
+        </span>
         <label className="rc-step-up">
           <span>Step-up (kill switch / stress test)</span>
           <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder={killSwitchAction?.actionId ?? "actionId step-up"} />
@@ -107,11 +117,11 @@ export function RiskCenterPage() {
         <section className="rc-kpi-strip" aria-label="Indicateurs Centre de risque">
           <KpiCell label="Risque utilisé" value={formatPercent(data.summary.riskUsedPct)} tone={data.summary.riskUsedPct >= 80 ? "danger" : data.summary.riskUsedPct >= 60 ? "warn" : undefined} />
           <KpiCell label="Risque ouvert" value={formatCurrency(data.summary.openRiskUsd)} />
-          <KpiCell label="Exposition brute" value={data.summary.grossExposureUsd ? formatCurrency(data.summary.grossExposureUsd) : "Non disponible"} />
-          <KpiCell label="Exposition nette" value={data.summary.netExposureUsd ? formatCurrency(data.summary.netExposureUsd) : "Non disponible"} />
+          <KpiCell label="Exposition brute" value={Number.isFinite(data.summary.grossExposureUsd) ? formatCurrency(data.summary.grossExposureUsd) : "Non disponible"} />
+          <KpiCell label="Exposition nette" value={Number.isFinite(data.summary.netExposureUsd) ? formatCurrency(data.summary.netExposureUsd) : "Non disponible"} />
           <KpiCell label="Perte journalière" value={formatSignedR(data.summary.dailyLossR)} tone={data.summary.dailyLossR < 0 ? "danger" : undefined} />
           <KpiCell label="Limite perte/jour" value={formatSignedR(data.summary.dailyLossLimitR)} />
-          <KpiCell label="Drawdown glissant" value={data.summary.trailingDrawdownR ? formatSignedR(data.summary.trailingDrawdownR) : "Non disponible"} />
+          <KpiCell label="Drawdown glissant" value={Number.isFinite(data.summary.trailingDrawdownR) ? formatSignedR(data.summary.trailingDrawdownR) : "Non disponible"} />
           <KpiCell label="Dépassements actifs" value={String(data.summary.activeBreaches)} tone={data.summary.activeBreaches > 0 ? "danger" : undefined} />
           <KpiCell label="Stress tests (jour)" value={String(data.summary.stressTestsToday)} />
         </section>
@@ -127,6 +137,7 @@ export function RiskCenterPage() {
               </div>
               <div className="rc-table-scroll" role="region" aria-label="Limites de risque défilables" tabIndex={0}>
                 <table className="rc-table">
+                  <caption className="sr-only">Limites officielles de risque</caption>
                   <thead><tr><th>Limite</th><th>Utilisé</th><th>Limite</th><th>%</th><th>Marge</th><th>Statut</th></tr></thead>
                   <tbody>
                     {visibleLimits.map((limit, index) => (
@@ -139,7 +150,7 @@ export function RiskCenterPage() {
                         <td><StatusBadge tone={statusTone(limit.status)}>{presentQueueStatus(limit.status).label}</StatusBadge></td>
                       </tr>
                     ))}
-                    {!visibleLimits.length ? <tr><td colSpan={6}><p className="rc-empty">Aucune limite ne nécessite une attention immédiate.</p></td></tr> : null}
+                    {!visibleLimits.length ? <tr><td colSpan={6}><p className="rc-empty">{data.limits.length ? "Aucune limite ne correspond aux filtres actifs." : "Aucune limite de risque publiée."}</p></td></tr> : null}
                   </tbody>
                 </table>
               </div>
@@ -171,6 +182,7 @@ export function RiskCenterPage() {
             <div className="rc-panel__body" style={{ padding: 0 }}>
               <div className="rc-table-scroll" role="region" aria-label="Contraintes prop firm défilables" tabIndex={0}>
                 <table className="rc-table">
+                  <caption className="sr-only">Contraintes de risque prop firm</caption>
                   <thead><tr><th>Règle</th><th>Utilisé</th><th>Limite</th><th>Statut</th></tr></thead>
                   <tbody>
                     {data.propConstraints.map((item, index) => (
@@ -195,6 +207,7 @@ export function RiskCenterPage() {
             <div className="rc-panel__body" style={{ padding: 0 }}>
               <div className="rc-table-scroll" role="region" aria-label="Corrélations défilables" tabIndex={0}>
                 <table className="rc-table">
+                  <caption className="sr-only">Corrélations surveillées par le moteur de risque</caption>
                   <thead><tr><th>Paire</th><th>Valeur</th><th>Limite</th><th>Statut</th></tr></thead>
                   <tbody>
                     {data.correlations.map((item, index) => (
@@ -224,6 +237,7 @@ export function RiskCenterPage() {
             <div className="rc-panel__body" style={{ padding: 0 }}>
               <div className="rc-table-scroll" role="region" aria-label="Stress tests défilables" tabIndex={0}>
                 <table className="rc-table">
+                  <caption className="sr-only">Résultats des stress tests</caption>
                   <thead><tr><th>Scénario</th><th>État</th><th>Perte (R)</th><th>Marge utilisée</th></tr></thead>
                   <tbody>
                     {data.stressTests.map((item, index) => (
@@ -256,7 +270,7 @@ export function RiskCenterPage() {
                   <div><strong>{breach.title}</strong><small>{breach.detail}</small></div>
                   <StatusBadge tone={breach.severity === "HIGH" || breach.severity === "EMERGENCY" ? "danger" : breach.severity === "MEDIUM" ? "warning" : "accent"}>{breach.severity}</StatusBadge>
                 </div>
-              )) : <p className="rc-empty">Aucun dépassement actif.</p>}
+              )) : <p className="rc-empty">{breachTab === "active" ? "Aucun dépassement actif." : "Aucun dépassement publié."}</p>}
             </div>
           </section>
         </div>
@@ -266,6 +280,7 @@ export function RiskCenterPage() {
             <header><h2>Risque par compte</h2><small>{data.riskByAccount.length}</small></header>
             <div className="rc-panel__body" style={{ padding: 0 }}>
               <table className="rc-table">
+                <caption className="sr-only">Risque agrégé par compte</caption>
                 <thead><tr><th>Compte</th><th>Equity</th><th>Risque ouvert</th><th>Statut</th></tr></thead>
                 <tbody>
                   {data.riskByAccount.map((row, index) => (
@@ -286,6 +301,7 @@ export function RiskCenterPage() {
             <header><h2>Risque par stratégie</h2><small>Top {data.riskByStrategy.length}</small></header>
             <div className="rc-panel__body" style={{ padding: 0 }}>
               <table className="rc-table">
+                <caption className="sr-only">Risque agrégé par stratégie</caption>
                 <thead><tr><th>Stratégie</th><th>Risque</th><th>Décisions</th></tr></thead>
                 <tbody>
                   {data.riskByStrategy.map((row, index) => (
@@ -305,6 +321,7 @@ export function RiskCenterPage() {
             <header><h2>Risque par instrument</h2></header>
             <div className="rc-panel__body" style={{ padding: 0 }}>
               <table className="rc-table">
+                <caption className="sr-only">Risque agrégé par instrument</caption>
                 <thead><tr><th>Instrument</th><th>Risque</th><th>Décisions</th></tr></thead>
                 <tbody>
                   {data.riskByInstrument.map((row, index) => (
@@ -350,6 +367,7 @@ export function RiskCenterPage() {
             <div className="rc-panel__body" style={{ padding: 0 }}>
               <div className="rc-table-scroll" role="region" aria-label="Décisions de risque défilables" tabIndex={0}>
                 <table className="rc-table">
+                  <caption className="sr-only">Dernières décisions de risque</caption>
                   <thead><tr><th>Heure</th><th>Signal</th><th>Instrument</th><th>Demandé</th><th>Autorisé</th><th>Décision</th></tr></thead>
                   <tbody>
                     {data.riskDecisions.items.map((item, index) => (

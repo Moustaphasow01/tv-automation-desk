@@ -2,13 +2,13 @@ import { expect, test, type Page } from "@playwright/test";
 
 const operatorPin = process.env.DESK_OPERATOR_ADMIN_PIN || "";
 
-test("navigation réelle et détails paramétrés sur les projections V2", async ({ page, request }) => {
+test("navigation réelle et détails paramétrés sur les projections V2", async ({ page }) => {
   await page.goto("/#/command-center", { waitUntil: "domcontentloaded" });
   await establishOperatorSession(page);
   await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
   await expect(page.getByTestId("command-center-golden-master")).toBeVisible();
 
-  await page.getByRole("link", { name: "Trading en direct", exact: true }).click();
+  await page.getByRole("link", { name: "Live", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Trading en direct", exact: true })).toBeVisible();
   await expect(page.getByTestId("live-trading-golden-master")).toBeVisible();
   await expect(page.getByText(/EXÉCUTION AUTO (ACTIVÉE|DÉSACTIVÉE)/)).toBeVisible();
@@ -36,7 +36,7 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
   await expect(expandedPanel).toBeHidden();
   await expect(expandPanel).toBeFocused();
 
-  const live = await request.get("/front-api/v1/views/live-trading");
+  const live = await page.request.get("/front-api/v1/views/live-trading");
   expect(live.ok()).toBeTruthy();
   const liveEnvelope = await live.json();
   const signalId = liveEnvelope.data.signals[0]?.signalId;
@@ -49,7 +49,7 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
     await expect(page.getByRole("heading", { name: "Signaux live" })).toBeVisible();
   }
 
-  const orders = await request.get("/front-api/v1/views/orders");
+  const orders = await page.request.get("/front-api/v1/views/orders");
   expect(orders.ok()).toBeTruthy();
   const ordersEnvelope = await orders.json();
   const orderId = ordersEnvelope.data.activeOrders[0]?.orderId;
@@ -64,7 +64,7 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
     await expect(page.getByText(/Confirmation indisponible : le backend ne publie aucun allowedAction/).first()).toBeVisible();
   }
 
-  const portfolio = await request.get("/front-api/v1/views/portfolio");
+  const portfolio = await page.request.get("/front-api/v1/views/portfolio");
   expect(portfolio.ok()).toBeTruthy();
   const portfolioEnvelope = await portfolio.json();
   const positionId = portfolioEnvelope.data.brokerPositions[0]?.positionId;
@@ -74,10 +74,10 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
   }
 
   await page.goto("/#/replay", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Replay" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Rejeu" })).toBeVisible();
   await expect(page.getByText("Capacité backend indisponible")).toHaveCount(0);
 
-  const replays = await request.get("/front-api/v1/views/replay-runs");
+  const replays = await page.request.get("/front-api/v1/views/replay-runs");
   expect(replays.ok()).toBeTruthy();
   const replayEnvelope = await replays.json();
   const replayId = replayEnvelope.data.items[0]?.id;
@@ -87,7 +87,7 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
     await expect(page.getByText(replayId, { exact: true }).first()).toBeVisible();
   }
 
-  const datasets = await request.get("/front-api/v1/views/research-data-catalog");
+  const datasets = await page.request.get("/front-api/v1/views/research-data-catalog");
   expect(datasets.ok()).toBeTruthy();
   const datasetEnvelope = await datasets.json();
   const datasetId = datasetEnvelope.data.datasets[0]?.datasetId;
@@ -97,7 +97,7 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
     await expect(page.getByText(datasetId, { exact: true }).first()).toBeVisible();
   }
 
-  const missingReplay = await request.get("/front-api/v1/views/replay-run-detail?runId=missing-e2e");
+  const missingReplay = await page.request.get("/front-api/v1/views/replay-run-detail?runId=missing-e2e");
   expect(missingReplay.status()).toBe(404);
 });
 
@@ -123,9 +123,9 @@ test.describe("reflow V2", () => {
   test("les domaines restent accessibles et aucun overflow global n'est imposé", async ({ page }) => {
     test.setTimeout(180_000);
     const routes = [
-      ["command-center", /Centre de contrôle|Command Center/],
+      ["command-center", /Synthèse/],
       ["live", /Trading en direct/],
-      ["research", /Laboratoire de recherche/],
+      ["research", /Recherche/],
       ["execution/portfolio", /Portefeuille/],
       ["governance/access", /Accès|Rôles/],
     ] as const;

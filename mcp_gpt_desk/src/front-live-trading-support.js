@@ -73,19 +73,26 @@ export function liveInstanceConfidence(instances = [], signals = [], nowIso = nu
   });
 }
 
-export function liveWatchlist(liveMarketSnapshot = null) {
+export function liveWatchlist(liveMarketSnapshot = null, { preferredSymbols = [] } = {}) {
   const instruments = liveMarketSnapshot?.instruments || {};
-  return Object.values(instruments)
+  const preferred = new Set(rows(preferredSymbols).map(canonicalInstrument).filter(Boolean));
+  const available = Object.values(instruments)
     .filter((item) => item && item.symbol)
     .map((item) => ({
-      symbol: text(item.symbol, "unavailable"),
+      symbol: canonicalInstrument(text(item.symbol, "unavailable")),
       last: nullableMetric(item.latest_close),
       changePct: nullableMetric(item.change_pct),
       trend: rows(item.intraday_series).slice(-30).map((point) => nullableMetric(point.close)).filter((value) => value !== null),
       asOf: text(item.latest_timestamp_paris, "unavailable"),
       availability: text(item.availability, "UNAVAILABLE").toUpperCase(),
-    }))
-    .sort((a, b) => a.symbol.localeCompare(b.symbol));
+    }));
+  const focused = preferred.size ? available.filter((item) => preferred.has(item.symbol)) : available;
+  return focused.sort((a, b) => a.symbol.localeCompare(b.symbol));
+}
+
+function canonicalInstrument(value) {
+  const symbol = String(value || "").trim().toUpperCase();
+  return ({ "ZC1!": "ZC", "ZW1!": "ZW", "MNQ1!": "MNQ", "MES1!": "MES" })[symbol] || symbol;
 }
 
 export function livePerformanceR(performance = null) {

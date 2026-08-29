@@ -48,6 +48,12 @@ function liveSignalSummary({ signal, source, risk, nowIso }) {
 }
 function liveSignalBody({ source, nowIso }) {
   const signal = signalTemporalRow(source, nowIso);
+  const tradePlan = signal.proposedTradePlan || {};
+  const economics = signal.tradePlanEconomics || tradePlan.economics || {};
+  const entry = tradePlan.entry || {};
+  const stop = tradePlan.stop || {};
+  const firstTarget = rows(tradePlan.targets)[0] || {};
+  const firstTargetEconomics = rows(economics.targets)[0] || {};
   return {
     symbol: signal.symbol,
     direction: signal.direction,
@@ -58,13 +64,13 @@ function liveSignalBody({ source, nowIso }) {
     generatedAt: signal.createdAt,
     expiresAt: signal.expiresAt,
     confidence: signal.confidence,
-    expectancyR: signal.expectancyR,
-    rewardRisk: signal.rewardRisk,
+    expectancyR: nullableNumber(firstValue(source.expectancy_R, source.expectancy_r, firstTargetEconomics.expected_r, firstTarget.expected_r)),
+    rewardRisk: nullableNumber(firstValue(source.reward_risk, firstTargetEconomics.reward_risk, firstTarget.reward_risk)),
     regime: signal.regime,
-    entryZoneLow: number(firstValue(source.entry_zone_low, source.entry_price), 0),
-    entryZoneHigh: number(firstValue(source.entry_zone_high, source.entry_price), 0),
-    stopPrice: number(source.stop_price, 0),
-    targetPrice: number(source.target_price, 0),
+    entryZoneLow: nullableNumber(firstValue(source.entry_zone_low, entry.low, source.entry_price, entry.price, entry.calculation_price)),
+    entryZoneHigh: nullableNumber(firstValue(source.entry_zone_high, entry.high, source.entry_price, entry.price, entry.calculation_price)),
+    stopPrice: nullableNumber(firstValue(source.stop_price, stop.price)),
+    targetPrice: nullableNumber(firstValue(source.target_price, firstTarget.price)),
   };
 }
 function liveSignalFeatureSnapshot({ signal, source, nowIso }) {
@@ -156,6 +162,11 @@ function selectById(items, requestedId, idOf, errorCode) {
 function firstNumber(value, key) {
   const found = rows(value).map((item) => number(item?.[key], null)).find((item) => item !== null);
   return found || 0;
+}
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 function firstValue(...values) { for (const value of values) if (value !== null && value !== undefined && value !== "") return value; return undefined; }
 function nested(source, path) { let value = source; for (const key of path) { if (!value || typeof value !== "object") return undefined; value = value[key]; } return value; }

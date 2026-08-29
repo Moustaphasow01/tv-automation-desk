@@ -23,6 +23,7 @@ import {
   presentGeneric,
   presentPermission,
   presentQueueStatus,
+  presentStrategyPredicate,
   presentTradeDecision,
 } from "@/design-system/labels";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
@@ -83,7 +84,7 @@ export function LiveSignalDetailWorkspace({
                 {data.predicates.map((predicate, index) => (
                   <article key={`${predicate.predicateId}-${index}`}>
                     <StatusBadge tone={predicate.status === "PASS" ? "success" : predicate.status === "FAIL" ? "danger" : "warning"}>{presentGateState(predicate.status).label}</StatusBadge>
-                    <div><strong>{predicate.label}</strong><small>{predicate.enumCode} · observation {predicate.observedValue}</small></div>
+                    <div><strong>{presentStrategyPredicate(predicate.enumCode).label}</strong><small>{predicate.enumCode} · observation {predicate.observedValue}</small></div>
                     <span>{predicate.threshold}</span>
                   </article>
                 ))}
@@ -245,11 +246,11 @@ function lifecycleStages(data: LiveSignalDetailView, arbitrationPublished: boole
 
 function signalChartRoute(data: LiveSignalDetailView): string { const params = new URLSearchParams({ instrument: data.signal.symbol, signalId: data.identity.signalId, chartAt: data.featureSnapshot.cutoffAt || data.signal.generatedAt }); return `/live?${params.toString()}`; }
 function isUnavailable(value: string): boolean { return !value || ["UNAVAILABLE", "UNKNOWN", "NONE"].includes(value.trim().toUpperCase()); }
-function formatEntryZone(low: number, high: number): string { const left = formatPublishedPrice(low); const right = formatPublishedPrice(high); if (left === "Non publié" && right === "Non publié") return left; return left === right ? left : `${left} – ${right}`; }
-function formatPublishedPrice(value: number): string { return Number.isFinite(value) && value > 0 ? new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) : "Non publié"; }
+function formatEntryZone(low: number | null, high: number | null): string { const left = formatPublishedPrice(low); const right = formatPublishedPrice(high); if (left === "Non publié" && right === "Non publié") return left; return left === right ? left : `${left} – ${right}`; }
+function formatPublishedPrice(value: number | null): string { return Number.isFinite(value) && Number(value) > 0 ? new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value)) : "Non publié"; }
 function publishedQuantity(value: number): string { return Number.isFinite(value) && value > 0 ? `${value} contrat${value > 1 ? "s" : ""}` : "Non publiée"; }
-function formatRatio(value: number): string { return Number.isFinite(value) && value > 0 ? `${value.toFixed(2)} : 1` : "Non publié"; }
-function formatSignedR(value: number): string { return Number.isFinite(value) && value !== 0 ? `${value > 0 ? "+" : "−"}${Math.abs(value).toFixed(2).replace(".", ",")} R` : "Non publiée"; }
+function formatRatio(value: number | null): string { return Number.isFinite(value) && Number(value) > 0 ? `${Number(value).toFixed(2)} : 1` : "Non publié"; }
+function formatSignedR(value: number | null): string { return Number.isFinite(value) && Number(value) !== 0 ? `${Number(value) > 0 ? "+" : "−"}${Math.abs(Number(value)).toFixed(2).replace(".", ",")} R` : "Non publiée"; }
 function formatDuration(seconds: number): string { const minutes = Math.floor(seconds / 60); const rest = seconds % 60; return `${minutes}m ${String(rest).padStart(2, "0")}s`; }
 function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "Non publié" : new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date); }
 function compactId(value: string): string { return value.length > 34 ? `${value.slice(0, 16)}…${value.slice(-12)}` : value; }

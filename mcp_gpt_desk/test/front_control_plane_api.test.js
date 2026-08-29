@@ -1645,6 +1645,85 @@ test("live signal detail preserves canonical lineage and exposes its post-risk O
   assert.equal(envelope.data.navigation.some((item) => item.route === "/execution/orders/portfolio-intent-lineage-1"), true);
 });
 
+test("live signal detail reads grain prices and R from the canonical proposed trade plan", async () => {
+  const store = frontControlPlaneStore({
+    strategy: {
+      definitions: [],
+      versions: [],
+      instances: [],
+      signals: [{
+        signal_id: "signal-grain-plan-1",
+        instrument_code: "ZW",
+        side: "long",
+        confidence: 0.73,
+        created_at_utc: "2026-08-27T17:25:00.000Z",
+        expires_at_utc: "2026-08-27T18:05:00.000Z",
+        proposed_trade_plan: {
+          availability: "KNOWN",
+          entry: { availability: "KNOWN", type: "ZONE", price: 754, low: 753.75, high: 754.25 },
+          stop: { availability: "KNOWN", price: 752.25 },
+          targets: [{ availability: "KNOWN", label: "TP1", price: 756.75 }],
+        },
+        trade_plan_economics: {
+          availability: "KNOWN",
+          targets: [{ label: "TP1", price: 756.75, reward_risk: 1.5714, expected_r: 1.5714 }],
+        },
+      }],
+    },
+  });
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-signal-detail",
+    query: { signalId: "signal-grain-plan-1" },
+  });
+
+  assert.deepEqual({
+    entryZoneLow: envelope.data.signal.entryZoneLow,
+    entryZoneHigh: envelope.data.signal.entryZoneHigh,
+    stopPrice: envelope.data.signal.stopPrice,
+    targetPrice: envelope.data.signal.targetPrice,
+    rewardRisk: envelope.data.signal.rewardRisk,
+    expectancyR: envelope.data.signal.expectancyR,
+  }, {
+    entryZoneLow: 753.75,
+    entryZoneHigh: 754.25,
+    stopPrice: 752.25,
+    targetPrice: 756.75,
+    rewardRisk: 1.5714,
+    expectancyR: 1.5714,
+  });
+});
+
+test("live signal detail publishes null instead of a false zero when no trade-plan metric exists", async () => {
+  const store = frontControlPlaneStore({
+    strategy: {
+      definitions: [],
+      versions: [],
+      instances: [],
+      signals: [{
+        signal_id: "signal-without-plan",
+        instrument_code: "ZC",
+        side: "short",
+        confidence: 0.61,
+        created_at_utc: "2026-08-27T17:25:00.000Z",
+        expires_at_utc: "2026-08-27T18:05:00.000Z",
+      }],
+    },
+  });
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-signal-detail",
+    query: { signalId: "signal-without-plan" },
+  });
+
+  assert.equal(envelope.data.signal.entryZoneLow, null);
+  assert.equal(envelope.data.signal.entryZoneHigh, null);
+  assert.equal(envelope.data.signal.stopPrice, null);
+  assert.equal(envelope.data.signal.targetPrice, null);
+  assert.equal(envelope.data.signal.rewardRisk, null);
+  assert.equal(envelope.data.signal.expectancyR, null);
+});
+
 test("Command Center maps canonical incident fields and operational counters without generic placeholders", async () => {
   const store = frontControlPlaneStore({
     incidents: {
