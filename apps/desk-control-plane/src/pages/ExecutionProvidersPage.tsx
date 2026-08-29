@@ -4,7 +4,7 @@ import { routeDisplayName } from "@/app/routes";
 import { FaServer } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
 import { StatusBadge } from "@/design-system/primitives";
-import { presentAvailability } from "@/design-system/labels";
+import { presentAvailability, presentExecutionMode, presentOperationalStatus } from "@/design-system/labels";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
@@ -36,10 +36,34 @@ export function ExecutionProvidersPage() {
   const [commandTab, setCommandTab] = useState<CommandTab>("all");
 
   if (query.isLoading) return <ExecutionProvidersLoading />;
-  if (query.isError) return <div className="ep-page"><div className="ep-workspace"><p className="ep-empty">Fournisseurs indisponibles : {(query.error as Error).message}</p></div></div>;
-  if (!query.data) return <div className="ep-page"><div className="ep-workspace"><p className="ep-empty">Le BFF ne retourne pas encore la projection `/views/execution-providers`.</p></div></div>;
+  if (query.isError) return <div className="ep-page"><div className="ep-workspace" role="region" aria-label="État des fournisseurs" tabIndex={0}><p className="ep-empty">Fournisseurs indisponibles : {(query.error as Error).message}</p></div></div>;
+  if (!query.data) return <div className="ep-page"><div className="ep-workspace" role="region" aria-label="État des fournisseurs" tabIndex={0}><p className="ep-empty">Le BFF ne retourne pas encore la projection `/views/execution-providers`.</p></div></div>;
 
-  const { data } = query.data;
+  const rawData = query.data.data;
+  if (!rawData.summary || !rawData.executionModes) {
+    return <div className="ep-page"><div className="ep-workspace" role="region" aria-label="État des fournisseurs" tabIndex={0}><p className="ep-empty">Projection Fournisseurs connectée mais incomplète : les politiques autoritaires ne sont pas publiées.</p></div></div>;
+  }
+  const data: ExecutionProvidersView = {
+    ...rawData,
+    summary: rawData.summary,
+    providers: rawData.providers ?? [],
+    accounts: rawData.accounts ?? [],
+    adapters: rawData.adapters ?? [],
+    healthChecks: rawData.healthChecks ?? [],
+    switchWorkflow: rawData.switchWorkflow ?? [],
+    events: rawData.events ?? [],
+    incidents: rawData.incidents ?? [],
+    commandActions: rawData.commandActions ?? [],
+    executionModes: rawData.executionModes,
+    circuitBreakers: rawData.circuitBreakers ?? [],
+    providerCommands: {
+      counts: rawData.providerCommands?.counts ?? { all: 0, working: 0, pending: 0, filled: 0, partial: 0, rejected: 0, cancelled: 0 },
+      items: rawData.providerCommands?.items ?? [],
+    },
+    fills: rawData.fills ?? [],
+    partialFills: rawData.partialFills ?? [],
+    rejectsAndCancels: rawData.rejectsAndCancels ?? [],
+  };
   const switchAction = data.commandActions.find((action) => action.commandType === "execution.provider.switch_primary");
   const allowedStatuses = COMMAND_TAB_STATUSES[commandTab];
   const visibleCommands = allowedStatuses ? data.providerCommands.items.filter((item) => allowedStatuses.includes(item.status)) : data.providerCommands.items;
@@ -145,7 +169,7 @@ export function ExecutionProvidersPage() {
               {data.healthChecks.map((check) => (
                 <div key={check.checkId} className="ep-health-row">
                   <span>{check.label}</span>
-                  <StatusBadge tone={check.status === "PASS" ? "success" : check.status === "WATCH" ? "warning" : "danger"}>{check.status}</StatusBadge>
+                  <StatusBadge tone={presentOperationalStatus(check.status).tone}>{presentOperationalStatus(check.status).label}</StatusBadge>
                 </div>
               ))}
               {!data.healthChecks.length ? <p className="ep-empty">Aucun contrôle santé publié.</p> : null}
@@ -157,7 +181,7 @@ export function ExecutionProvidersPage() {
           <section className="ep-panel" aria-label="Modes d'exécution">
             <header><h2>Modes d'exécution</h2></header>
             <div className="ep-panel__body">
-              <div className="ep-mode-row"><strong>Mode courant</strong><StatusBadge tone="accent">{data.executionModes.current}</StatusBadge></div>
+              <div className="ep-mode-row"><strong>Mode courant</strong><StatusBadge tone={presentExecutionMode(data.executionModes.current).tone}>{presentExecutionMode(data.executionModes.current).label}</StatusBadge></div>
               <div className="ep-mode-row"><span>Exécution activée</span><StatusBadge tone={data.executionModes.executionEnabled ? "success" : "danger"}>{data.executionModes.executionEnabled ? "OUI" : "NON"}</StatusBadge></div>
               <div className="ep-mode-row"><span>Approbation opérateur requise</span><StatusBadge tone={data.executionModes.entryOperatorApprovalRequired ? "warning" : "success"}>{data.executionModes.entryOperatorApprovalRequired ? "OUI" : "NON"}</StatusBadge></div>
               <div className="ep-mode-row"><span>Exécution manuelle Telegram</span><StatusBadge tone={data.executionModes.manualTelegramExecutionEnabled ? "warning" : "success"}>{data.executionModes.manualTelegramExecutionEnabled ? "ACTIVE" : "INACTIVE"}</StatusBadge></div>

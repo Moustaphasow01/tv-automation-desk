@@ -143,6 +143,9 @@
 .lt-flight-bar__operator div { display: grid; gap: 2px; }
 .lt-flight-bar__operator strong { font-family: var(--lt-font-heading); font-size: 18px; font-weight: 650; line-height: 1; }
 .lt-flight-bar__operator > span { overflow: hidden; color: var(--lt-text-soft); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.lt-flight-bar__operator--actionable { box-shadow: inset 4px 0 0 var(--lt-flight-green); background: rgba(66, 211, 139, .08); }
+.lt-flight-bar__operator--rejected { box-shadow: inset 4px 0 0 var(--lt-flight-red); background: rgba(255, 102, 115, .07); }
+.lt-flight-bar__operator--expired { box-shadow: inset 4px 0 0 var(--lt-flight-amber); background: rgba(245, 185, 66, .07); }
 .lt-flight-tone--success { color: var(--lt-flight-green); }
 .lt-flight-tone--warning { color: var(--lt-flight-amber); }
 .lt-flight-tone--danger { color: var(--lt-flight-red); }
@@ -153,6 +156,7 @@
 .lt-flight-bar__milestone > svg { color: var(--lt-flight-cyan); }
 .lt-flight-bar__milestone div { display: grid; gap: 3px; }
 .lt-flight-bar__milestone strong { font-family: var(--lt-font-data); font-size: 15px; }
+.lt-flight-bar__milestone span { color: var(--lt-muted); font-size: 11px; }
 
 .lt-flight-bar__authority { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; align-content: center; }
 .lt-flight-bar__authority span { display: flex; gap: 6px; align-items: center; color: var(--lt-text-soft); font-size: 13px; font-weight: 650; }
@@ -284,8 +288,8 @@
 .lt-decision-stack__stage-title { overflow: hidden; font-family: var(--lt-font-heading); font-size: 14px; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .lt-decision-stack__stage-status { display: flex; min-width: 0; gap: 6px; align-items: center; justify-content: flex-end; }
 .lt-decision-stack__badges { display: flex; min-width: 0; gap: 3px; align-items: center; }
-.lt-decision-stack__status-help { display: block; min-width: 0; max-width: 164px; }
-.lt-decision-stack__stage-status .status-badge { display: block; width: 100%; max-width: 164px; min-height: 20px; overflow: hidden; justify-content: flex-start; padding-inline: 5px; font-size: 11px; letter-spacing: .035em; text-overflow: ellipsis; white-space: nowrap; }
+.lt-decision-stack__status-help { display: block; min-width: 0; max-width: 178px; }
+.lt-decision-stack__stage-status .status-badge { display: block; width: 100%; max-width: 178px; min-height: 20px; overflow: hidden; justify-content: flex-start; padding-inline: 5px; font-size: 11px; letter-spacing: .035em; text-overflow: ellipsis; white-space: nowrap; }
 .lt-decision-stack__chevron { color: var(--lt-muted); font-size: 14px; line-height: 1; transition: transform 140ms ease, color 140ms ease; }
 .lt-decision-stack__step details[open] .lt-decision-stack__chevron { color: var(--lt-flight-cyan); transform: rotate(180deg); }
 .lt-decision-stack__step[data-priority="true"] .lt-decision-stack__stage-title,

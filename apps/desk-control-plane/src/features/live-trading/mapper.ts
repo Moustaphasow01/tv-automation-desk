@@ -64,7 +64,15 @@ export function toLiveTradingModel(
       tone: degraded ? "warning" : "success",
       detail: meta.warnings?.join(" · ") || "Projection BFF autoritaire disponible",
     },
-    operator: buildOperatorState(meta.availability ?? "UNAVAILABLE", meta.stale, latestSignal, orderIntent, selectedTheoreticalExecution, meta.asOf),
+    operator: buildOperatorState(
+      meta.availability ?? "UNAVAILABLE",
+      meta.stale,
+      latestSignal,
+      orderIntent,
+      selectedTheoreticalExecution,
+      meta.asOf,
+      !actionsUnavailable && gateActions.some((action) => action.permission === "ALLOWED"),
+    ),
     signalFunnel,
     marketIntelligence: buildMarketIntelligence(data, latestSignal, latestContextDecision),
     selectedSignalPlan: buildSignalPlanSummary(latestSignal),
@@ -143,6 +151,7 @@ function buildOperatorState(
   orderIntent: LiveTradingModel["orderIntent"],
   theoretical: LiveTradingModel["selectedTheoreticalExecution"],
   asOf: string,
+  humanActionAllowed: boolean,
 ): LiveTradingModel["operator"] {
   if (stale || availability === "UNAVAILABLE") {
     return {
@@ -154,8 +163,7 @@ function buildOperatorState(
   }
   if (orderIntent) {
     const gateStatus = String(orderIntent.humanGate.status ?? "").trim().toUpperCase();
-    const awaitingHumanDecision = orderIntent.humanGate.allowedActions.length > 0
-      || ["AWAITING", "PENDING", "REQUIRED", "READY"].some((token) => gateStatus.includes(token));
+    const awaitingHumanDecision = humanActionAllowed;
     if (!awaitingHumanDecision) {
       const expired = gateStatus.includes("EXPIRED");
       const rejected = gateStatus.includes("REJECT");
@@ -169,9 +177,9 @@ function buildOperatorState(
     }
     return {
       status: "AWAITING_HUMAN_GATE",
-      label: "Dossier à confirmer",
+      label: "À prendre",
       detail: `${orderIntent.side} ${intentInstrument(orderIntent) ?? "instrument"} · qty ${orderIntent.quantity} · ${orderIntent.humanGate.status}`,
-      tone: orderIntent.humanGate.allowedActions.length ? "warning" : "info",
+      tone: "warning",
     };
   }
   if (theoretical) {
@@ -186,7 +194,7 @@ function buildOperatorState(
     const temporal = resolveSignalTemporalState(latestSignal, asOf);
     return {
       status: "SIGNAL_DETECTED",
-      label: temporal.effectiveState === "EXPIRED" ? "Dernier signal expiré" : "Signal détecté",
+      label: temporal.effectiveState === "EXPIRED" ? "Signal expiré" : "Signal surveillé",
       detail: `${latestSignal.symbol} ${latestSignal.direction} · ${temporal.label} · ${temporal.effectiveState === "EXPIRED" ? "expiré" : "expire"} ${displayTime(latestSignal.expiresAt)}`,
       tone: temporal.effectiveState === "REJECTED" || temporal.effectiveState === "EXPIRED" ? "warning" : "info",
     };

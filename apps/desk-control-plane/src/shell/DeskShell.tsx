@@ -27,12 +27,15 @@ import {
 } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
+import { useFrontView } from "@/domains/front-api/repositories";
 import { vnextRoutes } from "@/app/routes";
 import { DESK_NAVIGATION_SECTIONS, deskPrimaryNavigation, NAV_GROUP_LABELS, type DeskNavigationIcon } from "@/shell/navigation";
 import { presentConnectionStatus } from "@/design-system/labels";
 import { DeskBrand } from "@/shell/DeskBrand";
 import { DeskCommandPalette } from "@/shell/DeskCommandPalette";
 import { RealtimeAlertCenter } from "@/shell/RealtimeAlertCenter";
+import { DeskUpdateBanner } from "@/pwa/DeskUpdateBanner";
+import { DESK_BUILD_ID } from "@/pwa/buildInfo";
 import "@/shell/desk-shell-evolution.css";
 
 const navIcons = {
@@ -52,6 +55,9 @@ const navIcons = {
   settings: FaCog,
 } satisfies Record<DeskNavigationIcon, typeof FaTh>;
 
+type NavigationMode = "expanded" | "compact" | "hidden";
+const NAVIGATION_MODE_KEY = "desk.navigation.mode.v1";
+
 export function DeskShell() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -62,16 +68,32 @@ export function DeskShell() {
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileMenuCloseRef = useRef<HTMLButtonElement>(null);
   const mobileMenuDrawerRef = useRef<HTMLElement>(null);
-  const [liveSidebarCollapsed, setLiveSidebarCollapsed] = useState(false);
+  const [navigationMode, setNavigationMode] = useState<NavigationMode>(() => readNavigationMode());
+  const [compactViewport, setCompactViewport] = useState(() => isCompactDesktopViewport());
   const [searchQuery, setSearchQuery] = useState("");
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const ordersQuery = useFrontView("orders", {}, { refetchInterval: 30_000 });
+  const pendingHumanGates = readPendingHumanGates(ordersQuery.data);
   const currentRoute = useMemo(
     () => vnextRoutes.find((route) => matchPath({ path: `/${route.path}`, end: true }, location.pathname)),
     [location.pathname]
   );
   useEffect(() => {
-    document.title = currentRoute ? `${currentRoute.title} · Desk Control Plane` : "Desk Control Plane";
-  }, [currentRoute]);
+    const attention = pendingHumanGates && pendingHumanGates > 0 ? `(${pendingHumanGates}) ` : "";
+    document.title = currentRoute ? `${attention}${currentRoute.title} · Desk Control Plane` : `${attention}Desk Control Plane`;
+    const favicon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]') ?? document.createElement("link");
+    favicon.rel = "icon";
+    favicon.href = pendingHumanGates && pendingHumanGates > 0 ? actionableFavicon(pendingHumanGates) : "/icons/desk-control-plane.svg";
+    if (!favicon.parentNode) document.head.appendChild(favicon);
+  }, [currentRoute, pendingHumanGates]);
+  useEffect(() => {
+    window.localStorage.setItem(NAVIGATION_MODE_KEY, navigationMode);
+  }, [navigationMode]);
+  useEffect(() => {
+    const update = () => setCompactViewport(isCompactDesktopViewport());
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
   useEffect(() => {
     const onShortcutHelp = (event: globalThis.KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -150,12 +172,13 @@ export function DeskShell() {
     || isGoldenRiskCenter || isGoldenOrdersHumanGate || isGoldenPortfolio || isGoldenExecutionProviders
     || isGoldenIncidentsOperations || isGoldenPerformance || isGoldenReplay;
   const visibleDeskNavItems = deskPrimaryNavigation;
+  const effectiveNavigationMode: NavigationMode = navigationMode === "expanded" && compactViewport ? "compact" : navigationMode;
   const visibleNavSections = DESK_NAVIGATION_SECTIONS
     .map((section) => ({ section, items: visibleDeskNavItems.filter((item) => item.section === section) }))
     .filter((group) => group.items.length > 0);
 
   return (
-    <div className={`desk-app-shell${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isGoldenLiveTrading && liveSidebarCollapsed ? " desk-app-shell--live-collapsed" : ""}${isGoldenStrategyCenter ? " desk-app-shell--strategy-center" : ""}${isGoldenResearchLab ? " desk-app-shell--research-lab" : ""}${isGoldenRiskCenter ? " desk-app-shell--risk-center" : ""}${isGoldenOrdersHumanGate ? " desk-app-shell--orders-human-gate" : ""}${isGoldenPortfolio ? " desk-app-shell--portfolio" : ""}${isGoldenExecutionProviders ? " desk-app-shell--execution-providers" : ""}${isGoldenIncidentsOperations ? " desk-app-shell--incidents-operations" : ""}${isGoldenPerformance ? " desk-app-shell--performance" : ""}${isGoldenReplay ? " desk-app-shell--replay" : ""}`}>
+    <div className={`desk-app-shell desk-app-shell--nav-${effectiveNavigationMode}${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isGoldenStrategyCenter ? " desk-app-shell--strategy-center" : ""}${isGoldenResearchLab ? " desk-app-shell--research-lab" : ""}${isGoldenRiskCenter ? " desk-app-shell--risk-center" : ""}${isGoldenOrdersHumanGate ? " desk-app-shell--orders-human-gate" : ""}${isGoldenPortfolio ? " desk-app-shell--portfolio" : ""}${isGoldenExecutionProviders ? " desk-app-shell--execution-providers" : ""}${isGoldenIncidentsOperations ? " desk-app-shell--incidents-operations" : ""}${isGoldenPerformance ? " desk-app-shell--performance" : ""}${isGoldenReplay ? " desk-app-shell--replay" : ""}`}>
       <a className="skip-link" href="#main-content">Aller au contenu principal</a>
       <aside className="desk-sidebar" aria-label="Barre latérale du desk">
         <div className="brand-block">
@@ -172,26 +195,31 @@ export function DeskShell() {
                 <NavLink key={item.to} to={item.to} aria-label={item.label} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
                   <Icon className="nav-icon" aria-hidden="true" />
                   <span>{item.label}</span>
+                  {item.path === "orders" && pendingHumanGates && pendingHumanGates > 0 ? <small className="desk-nav-count" aria-label={`${pendingHumanGates} décisions à traiter`}>{pendingHumanGates}</small> : null}
                 </NavLink>
                 );
               })}
             </div>
           ))}
         </nav>
-        {isGoldenLiveTrading ? <button className="live-sidebar-collapse" type="button" aria-label={liveSidebarCollapsed ? "Déployer la navigation" : "Réduire la navigation"} aria-pressed={liveSidebarCollapsed} onClick={() => setLiveSidebarCollapsed((value) => !value)}>{liveSidebarCollapsed ? <FaAngleDoubleRight /> : <FaAngleDoubleLeft />}<span>{liveSidebarCollapsed ? "Déployer" : "Réduire"}</span></button> : null}
+        <button className="live-sidebar-collapse" type="button" aria-label={effectiveNavigationMode === "expanded" ? "Réduire la navigation" : effectiveNavigationMode === "compact" ? "Masquer la navigation" : "Déployer la navigation"} onClick={() => setNavigationMode(nextNavigationMode(effectiveNavigationMode))}>
+          {effectiveNavigationMode === "expanded" ? <FaAngleDoubleLeft aria-hidden="true" /> : <FaAngleDoubleRight aria-hidden="true" />}
+          <span>{effectiveNavigationMode === "expanded" ? "Réduire" : effectiveNavigationMode === "compact" ? "Masquer" : "Déployer"}</span>
+        </button>
         <div className="sidebar-status-stack">
           <section>
             <p>ENVIRONNEMENT</p>
-            <strong className={session?.summary.environment === "LIVE" ? "status-warn" : "status-ok"}><FaCircle aria-hidden="true" /> {session?.summary.environment ?? "INDISPONIBLE"}</strong>
+            <strong className={session?.summary?.environment === "LIVE" ? "status-warn" : "status-ok"}><FaCircle aria-hidden="true" /> {session?.summary?.environment ?? "INDISPONIBLE"}</strong>
           </section>
           <section>
             <p>SYSTÈME</p>
             <strong className={runtimeTone}><FaCircle aria-hidden="true" /> {realtime?.connectionStatus ? presentConnectionStatus(realtime.connectionStatus).label : "—"}</strong>
             <span>{realtime?.events.acceptedCount ?? 0} events · {realtime?.events.duplicateCount ?? 0} doublons</span>
           </section>
-          <small>Desk Control Plane<br />version publiée par le build</small>
+          <small>Desk Control Plane<br />build {DESK_BUILD_ID}</small>
         </div>
       </aside>
+      {effectiveNavigationMode === "hidden" ? <button className="desk-navigation-reveal" type="button" onClick={() => setNavigationMode("expanded")}>Navigation</button> : null}
 
       <div className="desk-main">
         {!isGoldenSurface ? <header className="desk-topbar">
@@ -255,15 +283,19 @@ export function DeskShell() {
       </div>
 
       <nav className="desk-bottom-nav" aria-label="Navigation mobile">
-        {deskPrimaryNavigation.filter((route) => route.mobile).map((route) => (
+        {deskPrimaryNavigation.slice(0, 4).map((route) => {
+          const Icon = navIcons[route.icon];
+          return (
           <NavLink
             key={route.to}
             to={route.to}
             className={({ isActive }) => `bottom-nav-link${isActive ? " active" : ""}`}
           >
-            {route.label}
+            <Icon aria-hidden="true" />
+            <span>{route.label}</span>
+            {route.path === "orders" && pendingHumanGates && pendingHumanGates > 0 ? <small>{pendingHumanGates}</small> : null}
           </NavLink>
-        ))}
+        );})}
         <button ref={mobileMenuTriggerRef} type="button" className="bottom-nav-link" aria-haspopup="dialog" aria-expanded={mobileMenuOpen} aria-controls="mobile-full-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>Plus</button>
       </nav>
       {mobileMenuOpen ? (
@@ -291,6 +323,42 @@ export function DeskShell() {
         </div>
       ) : null}
       <RealtimeAlertCenter />
+      <DeskUpdateBanner />
     </div>
   );
+}
+
+function readNavigationMode(): NavigationMode {
+  if (typeof window === "undefined") return "expanded";
+  const value = window.localStorage.getItem(NAVIGATION_MODE_KEY);
+  return value === "compact" || value === "hidden" ? value : "expanded";
+}
+
+function nextNavigationMode(mode: NavigationMode): NavigationMode {
+  if (mode === "expanded") return "compact";
+  if (mode === "compact") return "hidden";
+  return "expanded";
+}
+
+function isCompactDesktopViewport(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.innerWidth >= 1024 && window.innerWidth <= 1280;
+}
+
+function actionableFavicon(count: number): string {
+  const label = count > 99 ? "99+" : String(count);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#071620"/><path d="M15 42V22h11c15 0 23 6 23 20" fill="none" stroke="#38c8d8" stroke-width="6"/><circle cx="49" cy="15" r="14" fill="#f5b942"/><text x="49" y="20" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#071620">${label}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+function readPendingHumanGates(value: unknown): number | null {
+  if (!value || typeof value !== "object") return null;
+  const data = (value as { data?: unknown }).data;
+  if (!data || typeof data !== "object") return null;
+  const review = (data as { humanGateReview?: unknown }).humanGateReview;
+  if (!review || typeof review !== "object") return null;
+  const summary = (review as { summary?: unknown }).summary;
+  if (!summary || typeof summary !== "object") return null;
+  const count = (summary as { pendingCount?: unknown }).pendingCount;
+  return typeof count === "number" && Number.isFinite(count) && count >= 0 ? count : null;
 }

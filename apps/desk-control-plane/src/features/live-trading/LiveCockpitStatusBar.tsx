@@ -2,6 +2,7 @@ import { FaCircle, FaClock, FaLock, FaShieldAlt } from "react-icons/fa";
 import { presentAvailability, presentExecutionMode } from "@/design-system/labels";
 import { displayTime } from "./mapper";
 import type { LiveTradingModel } from "./model";
+import { operatorStateForSignal } from "./signalOperatorState";
 
 type MarketScope = { instrument?: string; timeframe?: string };
 
@@ -23,6 +24,10 @@ export function LiveCockpitStatusBar({ model, requestedScope = {}, scopeUpdating
   const activeTimeframe = normalizeTimeframe(requestedScope.timeframe ?? model.marketSeries.timeframe);
   const activeTimeframeIsPublished = timeframes.includes(activeTimeframe);
   const milestone = nextMilestone(model);
+  const signalState = model.latestSignal ? operatorStateForSignal(model, model.latestSignal) : null;
+  const operatorLabel = signalState?.label ?? model.operator.label;
+  const operatorDetail = signalState?.detail ?? model.operator.detail;
+  const operatorTone = signalState?.tone ?? model.operator.tone;
 
   return (
     <section className="lt-flight-bar" aria-label="Périmètre et état opérationnel du Live">
@@ -66,15 +71,15 @@ export function LiveCockpitStatusBar({ model, requestedScope = {}, scopeUpdating
         {scopeUpdating ? <span className="lt-flight-bar__scope-progress" role="status">Mise à jour du graphique…</span> : null}
       </div>
 
-      <div className={`lt-flight-bar__operator lt-flight-tone--${model.operator.tone}`} role="status">
+      <div className={`lt-flight-bar__operator lt-flight-bar__operator--${signalState?.code.toLowerCase() ?? "desk"} lt-flight-tone--${operatorTone}`} role="status">
         <FaCircle aria-hidden="true" />
-        <div><small>État courant</small><strong>{model.operator.label}</strong></div>
-        <span>{model.operator.detail}</span>
+        <div><small>Décision opérateur</small><strong>{operatorLabel}</strong></div>
+        <span>{operatorDetail}</span>
       </div>
 
       <div className="lt-flight-bar__milestone">
         <FaClock aria-hidden="true" />
-        <div><small>{milestone.label}</small><strong>{displayTime(milestone.at)}</strong></div>
+        <div><small>{milestone.label}</small><strong>{displayTime(milestone.at)}</strong><span>{remainingLabel(milestone.at, model.meta.asOf)}</span></div>
       </div>
 
       <div className="lt-flight-bar__authority">
@@ -84,6 +89,17 @@ export function LiveCockpitStatusBar({ model, requestedScope = {}, scopeUpdating
       </div>
     </section>
   );
+}
+
+function remainingLabel(value: string | null, reference: string): string {
+  const valueAt = timestamp(value);
+  const referenceAt = timestamp(reference);
+  if (valueAt === null || referenceAt === null) return "Échéance non publiée";
+  const seconds = Math.floor((valueAt - referenceAt) / 1000);
+  if (seconds <= 0) return "Échéance dépassée";
+  if (seconds < 60) return `${seconds} s restantes`;
+  if (seconds < 3600) return `${Math.ceil(seconds / 60)} min restantes`;
+  return `${Math.floor(seconds / 3600)} h ${Math.ceil((seconds % 3600) / 60)} min restantes`;
 }
 
 function nextMilestone(model: LiveTradingModel): { label: string; at: string | null } {

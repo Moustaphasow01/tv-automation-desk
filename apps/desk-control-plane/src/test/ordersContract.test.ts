@@ -75,4 +75,9 @@ describe("orders front contract", () => {
   it("rejects empty command reasons before submitting", () => {
     expect(() => buildOrdersCommand(ordersView.data.commandActions[0], " ")).toThrow("ORDERS_REASON_REQUIRED");
   });
+
+  it("fails closed when an order action is not backend-authorized", () => {
+    const denied = { ...ordersView.data.commandActions[0], permission: "DENIED" as const };
+    expect(() => buildOrdersCommand(denied, "Operator reviewed the action.")).toThrow("ORDERS_ACTION_NOT_ALLOWED");
+  });
 });

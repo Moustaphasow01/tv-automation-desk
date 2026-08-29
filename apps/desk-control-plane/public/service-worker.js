@@ -1,7 +1,7 @@
-const SHELL_CACHE = "desk-control-plane-shell-v1";
+const BUILD_ID = new URL(self.location.href).searchParams.get("build") || "development";
+const SHELL_CACHE_PREFIX = "desk-control-plane-shell-";
+const SHELL_CACHE = `${SHELL_CACHE_PREFIX}${BUILD_ID}`;
 const SHELL_ASSETS = [
-  "/",
-  "/index.html",
   "/manifest.webmanifest",
   "/icons/desk-control-plane.svg"
 ];
@@ -16,7 +16,9 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== SHELL_CACHE).map((key) => caches.delete(key)))
+      Promise.all(keys
+        .filter((key) => key.startsWith(SHELL_CACHE_PREFIX) && key !== SHELL_CACHE)
+        .map((key) => caches.delete(key)))
     )
   );
   self.clients.claim();
@@ -34,7 +36,13 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/index.html"))
+      fetch(request).then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put("/index.html", copy)));
+        }
+        return response;
+      }).catch(() => caches.match("/index.html"))
     );
     return;
   }

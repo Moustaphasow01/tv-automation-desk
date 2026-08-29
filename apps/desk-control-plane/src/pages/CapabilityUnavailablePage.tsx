@@ -11,9 +11,9 @@ export function CapabilityUnavailablePage({ route }: { route: VNextRoute }) {
         description={route.description}
         actions={<Link to="/command-center">Retour Command Center</Link>}
       />
-      <Card title="Capacité backend indisponible" eyebrow="NOT_IMPLEMENTED" tone="warning" density="compact">
+      <Card title="Capacité backend indisponible" eyebrow="Fonction non disponible" tone="warning" density="compact">
         <div className="capability-unavailable">
-          <StatusBadge tone="warning">BACKEND GAP</StatusBadge>
+          <StatusBadge tone="warning">Dépendance backend</StatusBadge>
           <p>La route frontend existe, mais aucune projection BFF canonique n'est encore publiée pour cet écran.</p>
           <dl>
             <div><dt>Route</dt><dd>/{route.path}</dd></div>

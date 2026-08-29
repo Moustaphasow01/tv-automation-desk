@@ -33,9 +33,9 @@ export function RiskCenterPage() {
   const [showAllLimits, setShowAllLimits] = useState(false);
   const [instrumentFilter, setInstrumentFilter] = useState("ALL");
   const [accountFilter, setAccountFilter] = useState("ALL");
-  const data = query.data?.data;
-  const limits = data?.limits ?? EMPTY_RISK_LIMITS;
-  const breaches = data?.breaches ?? EMPTY_RISK_BREACHES;
+  const rawData = query.data?.data;
+  const limits = rawData?.limits ?? EMPTY_RISK_LIMITS;
+  const breaches = rawData?.breaches ?? EMPTY_RISK_BREACHES;
   const instrumentOptions = useMemo(() => uniqueTargets(limits, "INSTRUMENT"), [limits]);
   const accountOptions = useMemo(() => uniqueTargets(limits, "ACCOUNT"), [limits]);
   const visibleLimits = useMemo(() => limits.filter((limit) => {
@@ -55,9 +55,32 @@ export function RiskCenterPage() {
     return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Centre de risque indisponible : {(query.error as Error).message}</p></div></div>;
   }
 
-  if (!data) {
+  if (!rawData) {
     return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Le BFF ne retourne pas encore la projection `/views/risk`.</p></div></div>;
   }
+  if (!rawData.summary) {
+    return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Projection Risque connectée mais incomplète : le résumé autoritaire n’est pas publié.</p></div></div>;
+  }
+
+  const data: RiskView = {
+    ...rawData,
+    summary: rawData.summary,
+    limits,
+    breaches,
+    exposures: rawData.exposures ?? [],
+    correlations: rawData.correlations ?? [],
+    propConstraints: rawData.propConstraints ?? [],
+    stressTests: rawData.stressTests ?? [],
+    commandActions: rawData.commandActions ?? [],
+    riskByAccount: rawData.riskByAccount ?? [],
+    riskByStrategy: rawData.riskByStrategy ?? [],
+    riskByInstrument: rawData.riskByInstrument ?? [],
+    riskDecisions: {
+      summary: rawData.riskDecisions?.summary ?? { total: 0, approved: 0, reduced: 0, rejected: 0, today: 0 },
+      items: rawData.riskDecisions?.items ?? [],
+    },
+    circuitBreakers: rawData.circuitBreakers ?? [],
+  };
 
   const primaryStressAction = data.commandActions.find((action) => action.commandType === "risk.stress_test.run");
   const killSwitchAction = data.commandActions.find((action) => action.commandType === "risk.emergency.kill_switch");
@@ -538,6 +561,7 @@ function formatRiskValue(value: number, unit: RiskLimit["unit"] | RiskView["prop
 }
 
 function shortId(value: string) {
+  if (!value || ["unavailable", "undefined", "unknown", "none"].includes(value.trim().toLowerCase())) return "Non publié";
   return value.length > 14 ? `${value.slice(0, 14)}…` : value;
 }
 

@@ -38,4 +38,23 @@ describe("page semantic accessibility regressions", () => {
     expect(readSource("app/App.tsx")).toContain('<h1 className="sr-only">Chargement de la vue</h1>');
     expect(readSource("pages/ExplorerPages.tsx")).toContain('<h1 className="sr-only">{title}</h1>');
   });
+
+  it("keeps one canonical responsive navigation with three persisted desktop modes", () => {
+    const shell = readSource("shell/DeskShell.tsx");
+    const navigation = readSource("shell/navigation.ts");
+
+    expect(shell).toContain('type NavigationMode = "expanded" | "compact" | "hidden"');
+    expect(shell).toContain('const NAVIGATION_MODE_KEY = "desk.navigation.mode.v1"');
+    expect(shell).toContain("deskPrimaryNavigation.slice(0, 4)");
+    expect(shell).not.toContain("deskPrimaryNavigation.filter((route) => route.mobile)");
+    expect(navigation.match(/const primaryNavigationSeed/g)).toHaveLength(1);
+  });
+
+  it("does not manufacture Human Gate commands from an item status", () => {
+    const orders = readSource("pages/OrdersPage.tsx");
+
+    expect(orders).not.toContain('expectedVersion: "unavailable"');
+    expect(orders).not.toContain('selected.status === "AWAITING_MANUAL_CONFIRMATION" ? (\n                    <>');
+    expect(orders).toContain("seules les actions et révisions publiées par le backend");
+  });
 });

@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { FaBullseye, FaChartLine, FaFilter, FaSearch } from "react-icons/fa";
 import { StatusBadge } from "@/design-system/primitives";
-import { presentGeneric, presentSignalState } from "@/design-system/labels";
+import { presentGeneric } from "@/design-system/labels";
 import { displayTime, displayValue } from "./mapper";
 import type { LiveTradingModel } from "./model";
 import { resolveSignalTemporalState } from "./signalTemporalState";
+import { operatorStateForSignal, type SignalOperatorStateCode } from "./signalOperatorState";
 
 type SignalRow = LiveTradingModel["source"]["signals"][number];
 
@@ -31,23 +32,32 @@ export function LiveSignalInbox({
   onClearSignal,
   onShowOnChart,
 }: LiveSignalInboxProps) {
-  const [instrument, setInstrument] = useState("ALL");
-  const [status, setStatus] = useState("ALL");
-  const [search, setSearch] = useState("");
-  const [limit, setLimit] = useState(12);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const instrument = searchParams.get("signalInstrument") || "ALL";
+  const status = searchParams.get("signalState") || "ALL";
+  const search = searchParams.get("signalQuery") || "";
+  const requestedPage = Number(searchParams.get("signalPage") || "1");
   const signals = useMemo(() => allSignals(model), [model]);
   const instruments = useMemo(() => unique(signals.map((signal) => signal.symbol)), [signals]);
-  const states = useMemo(() => unique(signals.map((signal) => effectiveSignalState(signal, model.meta.asOf))), [model.meta.asOf, signals]);
+  const states = useMemo(() => unique(signals.map((signal) => operatorStateForSignal(model, signal).code)), [model, signals]);
   const filtered = useMemo(() => signals.filter((signal) => {
     const matchesInstrument = instrument === "ALL" || signal.symbol === instrument;
-    const matchesStatus = status === "ALL" || effectiveSignalState(signal, model.meta.asOf) === status;
+    const matchesStatus = status === "ALL" || operatorStateForSignal(model, signal).code === status;
     const needle = search.trim().toLocaleLowerCase("fr-FR");
     const matchesSearch = !needle || `${signal.signalId} ${signal.strategyId} ${signal.symbol} ${signal.direction}`
       .toLocaleLowerCase("fr-FR")
       .includes(needle);
     return matchesInstrument && matchesStatus && matchesSearch;
   }), [instrument, model.meta.asOf, search, signals, status]);
-  const visible = filtered.slice(0, limit);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
+  const page = Number.isFinite(requestedPage) ? Math.min(Math.max(1, requestedPage), pageCount) : 1;
+  const visible = filtered.slice((page - 1) * 12, page * 12);
+  const updateFilter = (key: string, value: string, fallback = "ALL") => {
+    const next = new URLSearchParams(searchParams);
+    if (!value || value === fallback) next.delete(key); else next.set(key, value);
+    next.delete("signalPage");
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <section className="lt-signal-inbox" aria-labelledby="lt-signal-inbox-title">
@@ -58,10 +68,10 @@ export function LiveSignalInbox({
           <span>{signals.length} signaux backend · asOf {displayTime(model.meta.asOf)}</span>
         </div>
         <div className="lt-signal-inbox__metrics" aria-label="Résumé du pipeline de signaux">
-          <Metric label="Contexte OK" value={model.signalFunnel.contextTake} />
-          <Metric label="Risk PASS" value={model.signalFunnel.riskPass} />
-          <Metric label="Human Gate" value={model.signalFunnel.pendingHumanGates} />
-          <Metric label="Suivis" value={model.signalFunnel.theoreticalTracked} />
+          <Metric label="À prendre" value={signals.filter((signal) => operatorStateForSignal(model, signal).code === "ACTIONABLE").length} />
+          <Metric label="En évaluation" value={signals.filter((signal) => operatorStateForSignal(model, signal).code === "EVALUATING").length} />
+          <Metric label="Surveillés" value={signals.filter((signal) => operatorStateForSignal(model, signal).code === "WATCHED").length} />
+          <Metric label="Terminés" value={signals.filter((signal) => ["EXPIRED", "REJECTED"].includes(operatorStateForSignal(model, signal).code)).length} />
         </div>
         {selectedSignalId && onClearSignal ? (
           <button className="lt-signal-inbox__unpin" type="button" onClick={onClearSignal}>
@@ -74,21 +84,21 @@ export function LiveSignalInbox({
         <label className="lt-signal-inbox__search">
           <FaSearch aria-hidden="true" />
           <span className="sr-only">Rechercher un signal</span>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ID, stratégie, instrument…" />
+          <input value={search} onChange={(event) => updateFilter("signalQuery", event.target.value, "")} placeholder="ID, stratégie, instrument…" />
         </label>
         <label>
           <FaFilter aria-hidden="true" />
           <span className="sr-only">Filtrer par instrument</span>
-          <select value={instrument} onChange={(event) => setInstrument(event.target.value)}>
+          <select value={instrument} onChange={(event) => updateFilter("signalInstrument", event.target.value)}>
             <option value="ALL">Tous les instruments</option>
             {instruments.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
         </label>
         <label>
           <span className="sr-only">Filtrer par état</span>
-          <select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <select value={status} onChange={(event) => updateFilter("signalState", event.target.value)}>
             <option value="ALL">Tous les états</option>
-            {states.map((value) => <option key={value} value={value}>{presentSignalState(value).label}</option>)}
+            {states.map((value) => <option key={value} value={value}>{operatorStateLabel(value as SignalOperatorStateCode)}</option>)}
           </select>
         </label>
       </div>
@@ -103,6 +113,7 @@ export function LiveSignalInbox({
               const stage = signalStage(model, signal);
               const selected = selectedSignalId === signal.signalId || (!selectedSignalId && model.latestSignal?.signalId === signal.signalId);
               const temporal = resolveSignalTemporalState(signal, model.meta.asOf);
+              const operatorState = operatorStateForSignal(model, signal);
               const target = signalNavigationTarget(signal);
               return (
                 <tr key={signal.signalId} data-selected={selected ? "true" : "false"} data-expired={temporal.effectiveState === "EXPIRED" ? "true" : "false"}>
@@ -110,7 +121,8 @@ export function LiveSignalInbox({
                   <td><strong>{signal.symbol}</strong></td>
                   <td title={signal.strategyId}>{compactId(signal.strategyId)}</td>
                   <td>
-                    <StatusBadge tone={temporal.tone}>{presentGeneric(signal.direction).label} · {temporal.label}</StatusBadge>
+                    <StatusBadge tone={operatorState.tone}>{operatorState.label}</StatusBadge>
+                    <small>{presentGeneric(signal.direction).label} · {temporal.label}</small>
                     {temporal.mismatch ? <small className="lt-signal-inbox__temporal-note">état brut {temporal.backendState}</small> : null}
                   </td>
                   <td><span className={`lt-signal-stage lt-signal-stage--${stage.tone}`}>{stage.label}</span></td>
@@ -129,7 +141,13 @@ export function LiveSignalInbox({
         </table>
         {!visible.length ? <div className="lt-signal-inbox__empty" role="status"><strong>Aucun signal dans ce filtre</strong><span>La connexion reste active ; modifiez les filtres ou attendez une publication backend.</span></div> : null}
       </div>
-      {visible.length < filtered.length ? <button className="lt-signal-inbox__more" type="button" onClick={() => setLimit((value) => value + 12)}>Afficher 12 signaux de plus</button> : null}
+      {filtered.length > 12 ? (
+        <nav className="lt-signal-inbox__pagination" aria-label="Pagination des signaux">
+          <button type="button" disabled={page <= 1} onClick={() => updatePage(searchParams, setSearchParams, page - 1)}>Précédent</button>
+          <span>Page {page} sur {pageCount}</span>
+          <button type="button" disabled={page >= pageCount} onClick={() => updatePage(searchParams, setSearchParams, page + 1)}>Suivant</button>
+        </nav>
+      ) : null}
     </section>
   );
 }
@@ -170,8 +188,14 @@ function compactId(value: string): string {
   return value.length > 26 ? `${value.slice(0, 23)}…` : value;
 }
 
-function effectiveSignalState(signal: SignalRow, asOf: string): string {
-  return resolveSignalTemporalState(signal, asOf).effectiveState;
+function operatorStateLabel(value: SignalOperatorStateCode): string {
+  return ({ ACTIONABLE: "À prendre", EVALUATING: "En cours d’évaluation", WATCHED: "Surveillé", EXPIRED: "Expiré", REJECTED: "Refusé" })[value];
+}
+
+function updatePage(searchParams: URLSearchParams, setSearchParams: ReturnType<typeof useSearchParams>[1], page: number) {
+  const next = new URLSearchParams(searchParams);
+  if (page <= 1) next.delete("signalPage"); else next.set("signalPage", String(page));
+  setSearchParams(next, { replace: true });
 }
 
 function signalNavigationTarget(signal: SignalRow): LiveSignalNavigationTarget {

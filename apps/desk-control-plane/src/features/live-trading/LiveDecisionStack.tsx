@@ -173,7 +173,7 @@ function OrderIntentStage({ model, defaultExpanded }: { model: LiveTradingModel;
   const presentation = intent ? presentBackendStatus(intent.state) : presentAvailability("CONNECTED_EMPTY");
   const unrelated = Boolean(intent && model.latestSignal && intent.signalId !== model.latestSignal.signalId);
   return (
-    <StageShell stage="order-intent" index="04" title="Position cible & ordre" status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />} defaultExpanded={defaultExpanded}>
+    <StageShell stage="order-intent" index="04" title="Position & ordre" status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />} defaultExpanded={defaultExpanded}>
       {intent ? (
         <>
           {unrelated ? <p className="lt-decision-stack__warning" role="status">Cette intention est liée au signal {shortId(intent.signalId)}, pas au signal affiché ci-dessus.</p> : null}
@@ -208,7 +208,7 @@ function HumanGateStage({ model, defaultExpanded, children }: { model: LiveTradi
     <StageShell
       stage="human-gate"
       index="05"
-      title="Validation humaine"
+      title="Human Gate"
       status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />}
       priority={actionable || model.operator.status === "AWAITING_HUMAN_GATE"}
       defaultExpanded={defaultExpanded}

@@ -22,8 +22,6 @@ export function OrdersPage() {
   const query = useFrontView("orders", selectedId ? { orderIntentId: selectedId } : {}, { preservePreviousData: true });
   const repository = useFrontViewRepository();
   const [reason, setReason] = useState("Contrôle opérateur : décision Human Gate depuis Orders & Human Gate.");
-  const [submitting, setSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
@@ -55,30 +53,8 @@ export function OrdersPage() {
   );
 
   if (query.isLoading) return <OrdersLoading />;
-  if (query.isError) return <div className="oh-page"><div className="oh-workspace"><p className="oh-empty">Orders &amp; Human Gate indisponible : {(query.error as Error).message}</p></div></div>;
-  if (!data || !review) return <div className="oh-page"><div className="oh-workspace"><p className="oh-empty">Le BFF ne retourne pas encore la projection `/views/orders`.</p></div></div>;
-
-  const decide = async (action: "confirm" | "reject") => {
-    if (!selected) return;
-    setSubmitting(true);
-    setFeedback(null);
-    try {
-      const command: SubmitDeskCommandInput = {
-        commandType: action === "confirm" ? "execution.order_intent.confirm" : "execution.order_intent.reject",
-        environment: "PAPER",
-        expectedVersion: "unavailable",
-        reason,
-        payload: { portfolioOrderIntentId: selected.orderIntentId },
-      };
-      const accepted = await repository.submitCommand(command);
-      setFeedback(`Commande ${accepted.status} · ${accepted.commandId}`);
-      void query.refetch();
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "HUMAN_GATE_COMMAND_FAILED");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  if (query.isError) return <div className="oh-page"><div className="oh-workspace" role="region" aria-label="État Orders et Human Gate" tabIndex={0}><p className="oh-empty">Orders &amp; Human Gate indisponible : {(query.error as Error).message}</p></div></div>;
+  if (!data || !review) return <div className="oh-page"><div className="oh-workspace" role="region" aria-label="État Orders et Human Gate" tabIndex={0}><p className="oh-empty">Le BFF ne retourne pas encore la projection `/views/orders`.</p></div></div>;
 
   const confirmOrderAction = async (action: OrderAction) => {
     setSubmittingActionId(action.actionId);
@@ -198,15 +174,12 @@ export function OrdersPage() {
                     </div>
                   ) : null}
                   {selected.status === "AWAITING_MANUAL_CONFIRMATION" ? (
-                    <>
-                      <ReasonInput label="Justification opérateur" value={reason} onChange={setReason} />
-                      <div className="oh-action-row">
-                        <button type="button" className="reject" disabled={submitting || !reason.trim()} onClick={() => decide("reject")}>Rejeter</button>
-                        <button type="button" className="approve" disabled={submitting || !reason.trim()} onClick={() => decide("confirm")}>Confirmer</button>
-                      </div>
-                    </>
+                    <div className="oh-empty" role="status">
+                      <strong>Décision backend requise</strong>
+                      <span>Ouvrez le dossier canonique : seules les actions et révisions publiées par le backend y sont exécutables.</span>
+                      <Link to={selected.route}>Ouvrir le Human Gate</Link>
+                    </div>
                   ) : <p className="oh-empty">Cette décision est déjà finalisée.</p>}
-                  {feedback ? <p className="oh-empty">{feedback}</p> : null}
                 </div>
               ) : <p className="oh-empty">Aucun OrderIntent sélectionné.</p>}
             </div>
@@ -384,6 +357,9 @@ export function OrdersPage() {
 }
 
 export function buildOrdersCommand(action: OrderAction, reason: string): SubmitDeskCommandInput {
+  if (action.permission !== "ALLOWED") {
+    throw Object.assign(new Error("ORDERS_ACTION_NOT_ALLOWED"), { code: "ORDERS_ACTION_NOT_ALLOWED" });
+  }
   const normalizedReason = reason.trim();
   if (!normalizedReason) {
     throw Object.assign(new Error("ORDERS_REASON_REQUIRED"), { code: "ORDERS_REASON_REQUIRED" });
@@ -517,6 +493,7 @@ function gateTone(status: ReviewItem["status"]) {
 }
 
 function shortId(value: string) {
+  if (!value || ["unavailable", "undefined", "unknown", "none"].includes(value.trim().toLowerCase())) return "Non publié";
   return value.length > 12 ? `${value.slice(0, 12)}…` : value;
 }
 

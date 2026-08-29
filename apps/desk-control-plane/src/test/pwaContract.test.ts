@@ -37,7 +37,9 @@ describe("front vnext PWA shell contract", () => {
 
   it("registers only in production-capable browsers", () => {
     const loadHandlers: Array<() => void> = [];
-    const register = vi.fn().mockResolvedValue(undefined);
+    const update = vi.fn().mockResolvedValue(undefined);
+    const addEventListener = vi.fn();
+    const register = vi.fn().mockResolvedValue({ update, addEventListener, installing: null });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     vi.stubGlobal("navigator", { serviceWorker: { register } });
@@ -54,9 +56,22 @@ describe("front vnext PWA shell contract", () => {
     expect(loadHandlers).toHaveLength(1);
 
     loadHandlers[0]();
-    expect(register).toHaveBeenCalledWith("/service-worker.js", { scope: "/" });
+    expect(register).toHaveBeenCalledWith(expect.stringMatching(/^\/service-worker\.js\?build=/), {
+      scope: "/",
+      updateViaCache: "none",
+    });
 
     vi.unstubAllGlobals();
     warn.mockRestore();
+  });
+
+  it("versions the shell cache and keeps navigation network-first", () => {
+    const serviceWorker = readFileSync(resolve(appRoot, "public/service-worker.js"), "utf8");
+
+    expect(serviceWorker).toContain('searchParams.get("build")');
+    expect(serviceWorker).toContain("SHELL_CACHE_PREFIX");
+    expect(serviceWorker).toContain('cache.put("/index.html"');
+    expect(serviceWorker).not.toContain('const SHELL_CACHE = "desk-control-plane-shell-v1"');
+    expect(serviceWorker).not.toMatch(/SHELL_ASSETS\s*=\s*\[\s*"\/",/);
   });
 });

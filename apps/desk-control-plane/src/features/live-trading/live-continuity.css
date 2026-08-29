@@ -120,6 +120,7 @@
 .lt-signal-inbox__table-wrap { min-height: 0; overflow: auto; }
 .lt-signal-inbox table { width: 100%; border-collapse: collapse; }
 .lt-signal-inbox th, .lt-signal-inbox td { height: 34px; padding: 5px 8px; border-bottom: 1px solid rgba(42, 83, 102, .4); font-size: 11px; text-align: left; white-space: nowrap; }
+.lt-signal-inbox td > small { display: block; margin-top: 2px; color: var(--lt-muted); font-size: 14px; }
 .lt-signal-inbox thead th { position: sticky; z-index: 1; top: 0; background: #091923; color: var(--lt-muted); }
 .lt-signal-inbox tbody tr[data-selected="true"] { background: rgba(56, 200, 216, .09); box-shadow: inset 3px 0 var(--lt-flight-cyan); }
 .lt-signal-inbox tbody tr[data-expired="true"] { opacity: .82; }
@@ -133,7 +134,10 @@
 .lt-signal-stage--danger { color: var(--lt-flight-red); }
 .lt-signal-stage--info { color: var(--lt-flight-cyan); }
 .lt-signal-inbox__empty { display: grid; place-content: center; gap: 4px; min-height: 100px; color: var(--lt-muted); text-align: center; }
-.lt-signal-inbox__more { min-height: 34px; border: 0; border-top: 1px solid var(--lt-flight-line); background: #0a202c; color: var(--lt-flight-cyan); cursor: pointer; }
+.lt-signal-inbox__pagination { display: flex; min-height: 44px; align-items: center; justify-content: center; gap: 12px; border-top: 1px solid var(--lt-flight-line); background: #0a202c; }
+.lt-signal-inbox__pagination button { min-height: 34px; padding-inline: 12px; border: 1px solid var(--lt-flight-line-strong); border-radius: 4px; background: #0b202b; color: var(--lt-flight-cyan); cursor: pointer; }
+.lt-signal-inbox__pagination button:disabled { color: var(--lt-muted); cursor: not-allowed; opacity: .65; }
+.lt-signal-inbox__pagination span { color: var(--lt-secondary); font-size: 12px; }
 
 @media (max-height: 820px) and (min-width: 1241px) {
   .lt-cockpit { height: auto; min-height: 100dvh; overflow: visible; }

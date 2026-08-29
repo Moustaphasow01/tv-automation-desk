@@ -15,11 +15,11 @@ const requestedScenario = process.env.DESK_VNEXT_VISUAL_SCENARIO;
 const scenarios = requestedScenario ? scenarioCatalog.filter((scenario) => scenario.name === requestedScenario) : scenarioCatalog;
 if (!scenarios.length) throw new Error(`UNKNOWN_VISUAL_SCENARIO:${requestedScenario}`);
 const flightDirectorGolden = {
-  sidebar: { x: 0, y: 0, width: 96, height: 941 },
-  header: { x: 96, y: 0, width: 1576, height: 64 },
-  policy: { x: 96, y: 64, width: 1576, height: 38 },
-  flightBar: { x: 96, y: 102, width: 1576, height: 76 },
-  workspace: { x: 96, y: 178, width: 1576, height: 763 },
+  sidebar: { x: 0, y: 0, width: 196, height: 941 },
+  header: { x: 196, y: 0, width: 1476, height: 64 },
+  policy: { x: 196, y: 64, width: 1476, height: 38 },
+  flightBar: { x: 196, y: 102, width: 1476, height: 76 },
+  workspace: { x: 196, y: 178, width: 1476, height: 763 },
 };
 
 await mkdir(outputRoot, { recursive: true });
