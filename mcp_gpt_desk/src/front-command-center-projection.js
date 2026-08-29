@@ -5,19 +5,21 @@ import {
   isNominalPortfolioIntent,
   portfolioOrderIntentSummaryRow,
 } from "./front-control-plane-domain-completeness.js";
+import { canonicalIncidentMetrics } from "./front-control-plane-incident-projection.js";
 
 export function buildCommandCenterProjection(context) {
   const execution = nominalExecution(context.execution);
   const strategy = nominalStrategy(context.strategy);
   const nominalContext = { ...context, execution, strategy };
-  const incidents = rows(context.incidents);
+  const incidentMetrics = canonicalIncidentMetrics(context.incidents);
+  const incidents = incidentMetrics.rawOpen;
   const incidentsAvailable = context.incidents != null;
   return {
     mode: modeProjection(nominalContext),
-    summary: summaryProjection(nominalContext, incidents, incidentsAvailable),
+    summary: summaryProjection(nominalContext, incidentMetrics, incidentsAvailable),
     systems: systemsProjection(nominalContext),
     activity: activityProjection(nominalContext),
-    risk: riskProjection(nominalContext, incidents, incidentsAvailable),
+    risk: riskProjection(nominalContext, incidentMetrics, incidentsAvailable),
     lanes: lanesProjection(nominalContext),
     upcoming: upcomingProjection(nominalContext),
     market: marketProjection(context.health),
@@ -26,7 +28,7 @@ export function buildCommandCenterProjection(context) {
     humanGate: humanGateProjection(execution, context.actor, context.nowIso),
     provider: providerProjection(execution),
     performance: performanceProjection(context.performance),
-    incidents: incidentProjection(context.incidents),
+    incidents: incidentProjection(incidents),
     operations: operationsProjection(nominalContext),
     assistant: assistantProjection(context.assistantRuntime),
     audit: auditProjection(nominalContext),
@@ -74,8 +76,8 @@ function modeProjection({ execution, health }) {
   };
 }
 
-function summaryProjection({ execution, strategy, runtime, warnings }, incidents, incidentsAvailable) {
-  const criticalIncidents = incidents.filter((item) => severity(item) === "CRITICAL").length;
+function summaryProjection({ execution, strategy, runtime, warnings }, incidentMetrics, incidentsAvailable) {
+  const criticalIncidents = incidentMetrics.criticalIncidents;
   return {
     deskStatus: deskStatus({ execution, warnings, criticalIncidents }),
     activeStrategies: strategy ? rows(strategy.instances).filter(activeInstance).length : null,
@@ -102,7 +104,7 @@ function systemsProjection({ execution, strategy, runtime, risk, warnings, healt
   ];
 }
 
-function riskProjection({ execution, risk }, incidents, incidentsAvailable) {
+function riskProjection({ execution, risk }, incidentMetrics, incidentsAvailable) {
   const summary = risk?.summary;
   return {
     capitalStatus: riskCapitalStatus(summary),
@@ -111,7 +113,7 @@ function riskProjection({ execution, risk }, incidents, incidentsAvailable) {
     openPositions: nullableNumber(summary?.openTrades),
     healthyLimits: summary ? (summary.submission_possible ? 1 : 0) : null,
     totalLimits: summary ? 1 : null,
-    activeAlerts: incidentsAvailable ? incidents.length : null,
+    activeAlerts: incidentsAvailable ? incidentMetrics.openIncidents : null,
   };
 }
 

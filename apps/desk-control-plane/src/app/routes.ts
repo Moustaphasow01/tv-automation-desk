@@ -39,8 +39,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "command-center",
-    label: "Centre de contrôle",
-    title: "Centre de contrôle",
+    label: "Synthèse",
+    title: "Synthèse",
     description: "Vue globale lisible : santé, activité, risques, prochains événements et raccourcis de zoom.",
     navGroup: "pilotage",
     capability: "command-center.read",
@@ -61,8 +61,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "events",
-    label: "Événements",
-    title: "Explorateur d'événements",
+    label: "Audit",
+    title: "Audit",
     description: "Journal transversal des événements métier et système, pensé pour le debug opérateur.",
     navGroup: "operations",
     capability: "events.read",
@@ -73,8 +73,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "research",
-    label: "Laboratoire de recherche",
-    title: "Laboratoire de recherche",
+    label: "Recherche",
+    title: "Recherche",
     description: "Pilotage des expérimentations, backtests, datasets et agent researchers.",
     navGroup: "research",
     capability: "research.read",
@@ -139,8 +139,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "strategies",
-    label: "Centre des stratégies",
-    title: "Centre des stratégies",
+    label: "Stratégies",
+    title: "Stratégies",
     description: "Catalogue des stratégies, versions, instances, kernels et statuts de promotion.",
     navGroup: "strategy",
     capability: "strategies.read",
@@ -172,8 +172,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "live",
-    label: "Trading en direct",
-    title: "Trading en direct",
+    label: "Live",
+    title: "Live",
     description: "Session live, signaux déterministes, état de marché, décisions IA et exécution simulée/live.",
     navGroup: "live",
     capability: "live.read",
@@ -217,8 +217,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "orders",
-    label: "Ordres",
-    title: "Ordres",
+    label: "Décisions",
+    title: "Décisions",
     description: "Intentions d’ordre, états broker, fills, protections post-fill et réconciliation.",
     navGroup: "execution",
     capability: "orders.read",
@@ -230,7 +230,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "risk",
     label: "Risque",
-    title: "Centre de risque",
+    title: "Risque",
     description: "Budgets, limites, circuit breakers, règles prop firm et contrôles opérateur.",
     navGroup: "execution",
     capability: "risk.read",
@@ -241,8 +241,8 @@ const implementedRoutes: readonly VNextRoute[] = [
   },
   {
     path: "execution/providers",
-    label: "Providers",
-    title: "Fournisseurs d'exécution",
+    label: "Fournisseurs",
+    title: "Fournisseurs",
     description: "NinjaTrader, PickMyTrade, shadow mode, cutover, santé provider et fallback.",
     navGroup: "execution",
     capability: "execution.providers.read",
@@ -253,7 +253,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "execution/incidents",
     label: "Incidents",
-    title: "Incidents d'exécution",
+    title: "Incidents",
     description: "Incidents d’exécution, dead letters, retries, runbooks et preuves de résolution.",
     navGroup: "operations",
     capability: "execution.incidents.read",
@@ -265,7 +265,7 @@ const implementedRoutes: readonly VNextRoute[] = [
   {
     path: "jarvis",
     label: "Jarvis",
-    title: "Espace Jarvis",
+    title: "Jarvis",
     description: "Espace agentique pour orchestrer recherches, décisions, prompts et actions longues.",
     navGroup: "governance",
     capability: "jarvis.read",
@@ -301,9 +301,9 @@ const implementedRoutes: readonly VNextRoute[] = [
 const backendGapRoutes: readonly VNextRoute[] = [
   wired("operations/incidents", "Incidents", "Incidents", "operations", "Incidents d'exécution et reprise opérateur.", "/views/execution-incidents"),
   wired("operations/events", "Événements & Audit", "Événements et audit", "operations", "Journal transversal et corrélations.", "/views/events-audit"),
-  wired("execution/orders", "Ordres", "Ordres", "execution", "Intentions, ordres, fills et protections.", "/views/orders"),
+  wired("execution/orders", "Décisions à traiter", "Décisions à traiter", "execution", "Intentions, ordres, fills et protections.", "/views/orders"),
   wired("execution/portfolio", "Portefeuille", "Portefeuille", "execution", "Expositions, positions et netting.", "/views/portfolio"),
-  wired("execution/risk", "Centre de risque", "Centre de risque", "execution", "Budgets, limites et dépassements.", "/views/risk"),
+  wired("execution/risk", "Risque", "Risque", "execution", "Budgets, limites et dépassements.", "/views/risk"),
   wired("governance/access", "Accès & Rôles", "Accès et rôles", "governance", "Session, permissions et accès courants.", "/views/admin-access"),
   wired("governance/administration", "Administration", "Administration", "governance", "Administration protégée et audit d'accès.", "/views/admin-access"),
   wired("sessions", "Sessions", "Sessions de trading", "pilotage", "Sessions, calendrier opérationnel et historique d'ouverture.", "/views/sessions"),
@@ -315,11 +315,11 @@ const backendGapRoutes: readonly VNextRoute[] = [
   wired("research/candidates", "Candidats", "Candidats stratégie", "research", "Candidats, verdicts, promotions et rejets.", "/views/research-candidates"),
   wired("research/data/:datasetId", "Dataset", "Détail dataset", "research", "Lineage, couverture et qualité d'un dataset par identifiant.", "/views/research-dataset-detail"),
   wired("strategies/deployments", "Déploiements", "Déploiements stratégie", "strategy", "Instances, environnements et historique de déploiement.", "/views/strategy-deployments"),
-  wired("replay", "Vue d'ensemble Rejeu", "Rejeu", "replay", "Vue globale des runs et de leur progression.", "/views/replay-overview"),
+  wired("replay", "Rejeu", "Rejeu", "replay", "Vue globale des runs et de leur progression.", "/views/replay-overview"),
   wired("replay/runs", "Runs Rejeu", "Runs Rejeu", "replay", "Liste et filtres des runs Rejeu.", "/views/replay-runs"),
   wired("replay/runs/:runId", "Run Rejeu", "Détail Rejeu", "replay", "Jour, sessions, processus GPT et trades du run.", "/views/replay-run-detail"),
   wired("replay/compare", "Comparer Rejeu", "Comparaison Rejeu", "replay", "Comparaison de baselines et variantes.", "/views/replay-compare"),
-  wired("performance", "Performance", "Performance", "performance", "Vue consolidée, PnL en R et drawdowns.", "/views/performance-overview"),
+  wired("performance", "Résultats", "Résultats", "performance", "Vue consolidée, PnL en R et drawdowns.", "/views/performance-overview"),
   wired("performance/calendar", "Calendrier", "Calendrier de performance", "performance", "Résultats et drill-down par journée.", "/views/performance-calendar"),
   wired("performance/days/:dayId", "Journée", "Détail performance jour", "performance", "Trades et attribution d'une journée.", "/views/performance-day-detail"),
   wired("performance/strategies", "Par stratégie", "Performance stratégies", "performance", "Comparaison de performance par stratégie.", "/views/performance-strategies"),
@@ -337,6 +337,12 @@ const backendGapRoutes: readonly VNextRoute[] = [
 ];
 
 export const vnextRoutes: readonly VNextRoute[] = [...implementedRoutes, ...backendGapRoutes];
+
+export function routeDisplayName(path: string): string {
+  const route = vnextRoutes.find((candidate) => candidate.path === path);
+  if (!route) throw new Error(`Route is not registered: ${path}`);
+  return route.label;
+}
 
 function wired(path: string, label: string, title: string, navGroup: VNextNavGroup, description: string, viewEndpoint: string): VNextRoute {
   return { path, label, title, description, navGroup, capability: capabilityForViewEndpoint(viewEndpoint), journey: "global-to-zoom", status: "foundation", viewEndpoint };

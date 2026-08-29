@@ -451,7 +451,7 @@ function medianInterval(points: readonly ChartPoint[]): number { const deltas = 
 function isDrawable(point: ChartPoint): boolean { return [point.open, point.high, point.low, point.close].every(isFiniteNumber); }
 function isFiniteNumber(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
 function sameInstrument(left: unknown, right: unknown): boolean { const a = normalizeInstrument(left); const b = normalizeInstrument(right); return Boolean(a && b && a === b); }
-function normalizeInstrument(value: unknown): string | null { return String(value ?? "").trim().toUpperCase() || null; }
+function normalizeInstrument(value: unknown): string | null { const normalized = String(value ?? "").trim().toUpperCase(); if (!normalized) return null; return ({ "MNQ1!": "MNQ", "MES1!": "MES", "NQ1!": "NQ", "ES1!": "ES", "ZC1!": "ZC", "ZW1!": "ZW" } as Record<string, string>)[normalized] ?? normalized; }
 function normalizeTimeframe(value: unknown): string { const normalized = String(value ?? "").trim().toUpperCase().replace(/^M/, ""); if (["H1", "1H", "60"].includes(normalized)) return "60"; if (["H4", "4H", "240"].includes(normalized)) return "240"; if (["D", "D1", "1D", "1440"].includes(normalized)) return "D"; return normalized; }
 function coversTimestamp(points: readonly ChartPoint[], at: string): boolean { const target = Date.parse(at); const start = Date.parse(points[0]?.timestamp ?? ""); const end = Date.parse(points.at(-1)?.timestamp ?? ""); return Number.isFinite(target) && Number.isFinite(start) && Number.isFinite(end) && target >= start && target <= end; }
 function shortSignalId(value: string): string { return value.length > 30 ? `${value.slice(0, 15)}…${value.slice(-10)}` : value; }

@@ -21,7 +21,7 @@ export type OperatorLoginCredentials = {
 };
 
 export type DeskTransport = {
-  getView<T>(viewName: FrontViewName, params?: Readonly<Record<string, string | undefined>>): Promise<ViewEnvelope<T>>;
+  getView<T>(viewName: FrontViewName, params?: Readonly<Record<string, string | undefined>>, signal?: AbortSignal): Promise<ViewEnvelope<T>>;
   getCommand(commandId: string): Promise<CommandSnapshot>;
   getCapabilities(): Promise<CapabilityCatalog>;
   subscribeEvents(handlers: RealtimeEventHandlers, lastState?: RealtimeEventState): RealtimeSubscription;
@@ -36,8 +36,11 @@ export function createDeskTransport(config: DeskAppConfig): DeskTransport {
 
 function createBffTransport(config: DeskAppConfig): DeskTransport {
   return {
-    async getView<T>(viewName: FrontViewName, params: Readonly<Record<string, string | undefined>> = {}): Promise<ViewEnvelope<T>> {
+    async getView<T>(viewName: FrontViewName, params: Readonly<Record<string, string | undefined>> = {}, externalSignal?: AbortSignal): Promise<ViewEnvelope<T>> {
       const controller = new AbortController();
+      const cancelFromCaller = () => controller.abort(externalSignal?.reason);
+      externalSignal?.addEventListener("abort", cancelFromCaller, { once: true });
+      if (externalSignal?.aborted) cancelFromCaller();
       const timeout = window.setTimeout(() => controller.abort(), config.frontApiTimeoutMs);
 
       try {
@@ -61,8 +64,17 @@ function createBffTransport(config: DeskAppConfig): DeskTransport {
         }
 
         return (await response.json()) as ViewEnvelope<T>;
+      } catch (error) {
+        if (controller.signal.aborted) {
+          if (externalSignal?.aborted) {
+            throw Object.assign(new Error("BFF_VIEW_REQUEST_CANCELLED"), { name: "AbortError", code: "BFF_VIEW_REQUEST_CANCELLED" });
+          }
+          throw Object.assign(new Error("BFF_VIEW_TIMEOUT"), { name: "TimeoutError", code: "BFF_VIEW_TIMEOUT" });
+        }
+        throw error;
       } finally {
         window.clearTimeout(timeout);
+        externalSignal?.removeEventListener("abort", cancelFromCaller);
       }
     },
     async getCommand(commandId: string): Promise<CommandSnapshot> {

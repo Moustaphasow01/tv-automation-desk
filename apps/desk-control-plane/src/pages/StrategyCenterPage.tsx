@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { routeDisplayName } from "@/app/routes";
 import {
   FaBalanceScale,
   FaCheckCircle,
@@ -19,6 +20,7 @@ import {
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { OperatorMenu } from "@/shell/OperatorMenu";
+import { commandShortcutLabel } from "@/shell/DeskCommandPalette";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import type { StrategyCenterView } from "@/domains/front-api/viewModels";
@@ -121,7 +123,7 @@ export function StrategyCenterPage() {
     <div className="sc-page" data-testid="strategy-center-golden-master">
       <header className="sc-header">
         <div className="sc-header__title">
-          <h1>Centre des stratégies</h1>
+          <h1>{routeDisplayName("strategies")}</h1>
           <p>Catalogue, gates de promotion et gouvernance</p>
         </div>
         <div className="sc-header__search">
@@ -132,7 +134,7 @@ export function StrategyCenterPage() {
             value={search}
             onChange={(event) => { setSearch(event.target.value); setCatalogPage(1); }}
           />
-          <kbd>⌘K</kbd>
+          <kbd>{commandShortcutLabel()}</kbd>
         </div>
         <span className="sc-header__pill">{session?.summary.environment ?? "—"}</span>
         <label className="sc-header__pill">

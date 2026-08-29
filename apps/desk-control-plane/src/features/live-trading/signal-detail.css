@@ -185,6 +185,16 @@
 .signal-related-records section { display: grid; gap: 5px; }
 .signal-related-records h3 { margin: 0; color: var(--signal-secondary); font-size: 10px; }
 .signal-related-records article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: center; padding: 7px; border: 1px solid var(--signal-line); border-radius: 4px; }
+.signal-related-records__link { display: grid; min-height: 44px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 7px; border: 1px solid var(--signal-line); border-radius: 4px; color: inherit; text-decoration: none; }
+.signal-related-records__link:hover { border-color: var(--signal-cyan); }
+.signal-related-records__link:focus-visible {
+  border-color: var(--signal-cyan);
+  outline: 2px solid var(--signal-cyan);
+  outline-offset: 2px;
+}
+.signal-related-records__link div { display: grid; min-width: 0; gap: 2px; }
+.signal-related-records__link strong { font-size: 10px; }
+.signal-related-records__link small { color: var(--signal-muted); font-size: 10px; }
 .signal-related-records article div { display: grid; min-width: 0; gap: 2px; }
 .signal-related-records article strong { font-size: 10px; }
 .signal-related-records article small,

@@ -1,5 +1,6 @@
 import { useContext, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { routeDisplayName } from "@/app/routes";
 import {
   FaCheckCircle,
   FaClipboardList,
@@ -119,7 +120,7 @@ export function ResearchLabPage() {
     <div className="rl-page" data-testid="research-lab-golden-master">
       <header className="rl-header">
         <div className="rl-header__title">
-          <h1>Laboratoire de recherche</h1>
+          <h1>{routeDisplayName("research")}</h1>
           <p>Découverte et validation automatisée de stratégies</p>
         </div>
         <div className="rl-header__engine">

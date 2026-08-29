@@ -7,7 +7,7 @@ const MARKET_SERIES_CLOCK = new SystemClock();
 
 export async function loadFrontMarketSeries(persistence, input = {}) {
   const pool = persistence?.pool || null;
-  if (!pool) return unavailable("PostgreSQL market series repository is unavailable.");
+  if (!pool) return unavailable("La source PostgreSQL des données de marché est indisponible.");
   await persistence.initialized;
   const scope = marketScope(input);
   const result = await queryMarketSeries(pool, scope);
@@ -77,7 +77,7 @@ async function queryMarketSeries(pool, scope) {
 }
 
 function canonicalStorageInstrument(instrument) {
-  return ({ MNQ: "MNQ1!", MES: "MES1!", NQ: "NQ1!", ES: "ES1!" })[instrument] || instrument;
+  return ({ MNQ: "MNQ1!", MES: "MES1!", NQ: "NQ1!", ES: "ES1!", ZC: "ZC1!", ZW: "ZW1!" })[instrument] || instrument;
 }
 
 function marketSeriesResponse(scope, result) {
@@ -201,7 +201,7 @@ function unavailable(reason) {
 
 function normalizeInstrument(value) {
   const normalized = String(value || "").trim().toUpperCase();
-  const alias = ({ MQ: "MNQ", MS: "MES", MQM5: "MNQ", MSM5: "MES" })[normalized];
+  const alias = ({ MQ: "MNQ", MS: "MES", MQM5: "MNQ", MSM5: "MES", "MNQ1!": "MNQ", "MES1!": "MES", "NQ1!": "NQ", "ES1!": "ES", "ZC1!": "ZC", "ZW1!": "ZW" })[normalized];
   if (alias) return alias;
   if (!INSTRUMENT.test(normalized)) throw inputError("MARKET_SERIES_INSTRUMENT_INVALID", "Invalid market instrument.");
   return normalized;
@@ -214,7 +214,7 @@ function supportedDeskInstruments(rows, requestedInstrument) {
 
 function deskInstrumentFromStorage(value) {
   const symbol = String(value || "").trim().toUpperCase();
-  return ({ "MNQ1!": "MNQ", "MES1!": "MES", "NQ1!": "NQ", "ES1!": "ES" })[symbol] || symbol;
+  return ({ "MNQ1!": "MNQ", "MES1!": "MES", "NQ1!": "NQ", "ES1!": "ES", "ZC1!": "ZC", "ZW1!": "ZW" })[symbol] || symbol;
 }
 
 function normalizeTimeframe(value) {

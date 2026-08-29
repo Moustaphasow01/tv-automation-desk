@@ -100,6 +100,30 @@
   font-size: 15px;
 }
 
+.order-dossier__copy-value {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: copy;
+}
+
+.order-dossier__copy-value:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
+.order-dossier__copy-value:focus-visible {
+  border-color: var(--focus);
+  background: var(--surface-raised);
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 .order-dossier-page .order-dossier__unavailable {
   color: var(--muted);
   font-style: italic;
@@ -154,6 +178,23 @@
 .order-dossier__terms dd {
   margin: 0;
 }
+
+.order-dossier__market-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+  border: 1px solid var(--stroke);
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+}
+
+.order-dossier__market-context > div { display: grid; gap: 4px; }
+.order-dossier__market-context > div > small { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.order-dossier__market-context > p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 13px; }
+.order-dossier__market-context.is-outside { border-color: color-mix(in srgb, var(--danger) 64%, var(--stroke)); background: color-mix(in srgb, var(--danger) 12%, var(--panel-strong)); }
+.order-dossier__market-context.is-outside > p { color: var(--danger); font-weight: 750; }
 
 .order-dossier__gate-status,
 .order-dossier__gate-rule,

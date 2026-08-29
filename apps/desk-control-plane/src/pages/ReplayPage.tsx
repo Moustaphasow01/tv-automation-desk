@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { routeDisplayName } from "@/app/routes";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useFrontView } from "@/domains/front-api/repositories";
 import type { ReplayOverviewView, ReplayTimelineLayer } from "@/domains/front-api/viewModels";
@@ -34,8 +35,13 @@ export function ReplayPage() {
 
   useEffect(() => {
     if (!selectedRunId && data?.days.length) {
-      const firstWithRun = data.days.find((day) => day.primaryRunId);
-      if (firstWithRun?.primaryRunId) setSelectedRunId(firstWithRun.primaryRunId);
+      const candidates = data.days.filter((day) => day.primaryRunId);
+      const latestCompleted = [...candidates]
+        .filter((day) => String(day.status).toUpperCase() === "COMPLETED")
+        .sort((left, right) => right.date.localeCompare(left.date))[0];
+      const fallback = [...candidates].sort((left, right) => right.date.localeCompare(left.date))[0];
+      const defaultRun = latestCompleted ?? fallback;
+      if (defaultRun?.primaryRunId) setSelectedRunId(defaultRun.primaryRunId);
     }
   }, [data, selectedRunId]);
 
@@ -82,7 +88,7 @@ export function ReplayPage() {
     <div className="rp-page" data-testid="replay-golden-master">
       <header className="rp-header">
         <div className="rp-header__title">
-          <h1>Replay Center</h1>
+          <h1>{routeDisplayName("replay")}</h1>
           <p>Rejeu des journées &amp; contexte de décision</p>
         </div>
         <div className="rp-header__clock">
@@ -95,9 +101,16 @@ export function ReplayPage() {
         <label>
           Session
           <select value={selectedRunId} onChange={(event) => setSelectedRunId(event.target.value)}>
-            {data.days.filter((day) => day.primaryRunId).map((day) => (
-              <option key={day.primaryRunId} value={day.primaryRunId!}>{day.date} · {day.status}</option>
-            ))}
+            <optgroup label="Terminées">
+              {data.days.filter((day) => day.primaryRunId && String(day.status).toUpperCase() === "COMPLETED").map((day) => (
+                <option key={day.primaryRunId} value={day.primaryRunId!}>{day.date} · {day.status}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Autres sessions">
+              {data.days.filter((day) => day.primaryRunId && String(day.status).toUpperCase() !== "COMPLETED").map((day) => (
+                <option key={day.primaryRunId} value={day.primaryRunId!}>{day.date} · {day.status}</option>
+              ))}
+            </optgroup>
           </select>
         </label>
         <label>Stratégie <strong>{data.selectedRun?.strategyId ?? "—"}</strong></label>

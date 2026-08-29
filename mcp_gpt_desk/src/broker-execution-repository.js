@@ -32,7 +32,7 @@ export class PostgresBrokerExecutionRepository {
   async overview({ limit = 100 } = {}) {
     await this.ready();
     const bounded = Math.max(1, Math.min(Number(limit) || 100, 500));
-    const [providers, accounts, accountSnapshots, contracts, policies, policyAudits, bridges, locks, decisions, intents, orders, trades, reconciliations, managementIntents, managementApprovals, managementOutbox, addonSnapshots, addonEvents, adapterParityRuns, theoreticalEvents, manualExecutionEvents, portfolioOrderIntents, humanExecutionGates, portfolioExecutionStates, providerCommands, providerEvents] = await Promise.all([
+    const [providers, accounts, accountSnapshots, contracts, policies, policyAudits, bridges, locks, decisions, intents, orders, trades, reconciliations, managementIntents, managementApprovals, managementOutbox, addonSnapshots, addonEvents, adapterParityRuns, theoreticalEvents, manualExecutionEvents, portfolioOrderIntents, humanExecutionGates, humanExecutionGateEvents, portfolioExecutionStates, providerCommands, providerEvents] = await Promise.all([
       rows(this.pool, "SELECT * FROM broker_providers ORDER BY broker_provider_code"),
       rows(this.pool, "SELECT * FROM broker_accounts ORDER BY broker_account_id"),
       rows(this.pool, "SELECT DISTINCT ON (broker_account_id) * FROM broker_account_snapshots ORDER BY broker_account_id, captured_at DESC"),
@@ -49,15 +49,22 @@ export class PostgresBrokerExecutionRepository {
         JOIN broker_contracts c ON c.broker_contract_id = i.broker_contract_id
         LEFT JOIN broker_accounts a ON a.broker_account_id = i.broker_account_id
         ORDER BY i.created_at DESC LIMIT $1`, [bounded]),
-      rows(this.pool, "SELECT * FROM broker_orders ORDER BY created_at DESC LIMIT $1", [bounded]),
+      rows(this.pool, `SELECT o.*, c.instrument_code, c.broker_symbol, a.account_label
+        FROM broker_orders o
+        LEFT JOIN broker_contracts c ON c.broker_contract_id = o.broker_contract_id
+        LEFT JOIN broker_accounts a ON a.broker_account_id = o.broker_account_id
+        ORDER BY o.created_at DESC LIMIT $1`, [bounded]),
       rows(this.pool, `SELECT t.*, o.schema_version AS canonical_outcome_schema_version,
-          o.engine_version AS canonical_outcome_engine_version, o.status AS canonical_outcome_status
+          o.engine_version AS canonical_outcome_engine_version, o.status AS canonical_outcome_status,
+          c.instrument_code, c.broker_symbol, a.account_label
         FROM trades t
         LEFT JOIN LATERAL (
           SELECT * FROM trade_outcomes candidate
           WHERE candidate.trade_id = t.trade_id
           ORDER BY candidate.revision DESC LIMIT 1
         ) o ON true
+        LEFT JOIN broker_contracts c ON c.broker_contract_id = t.broker_contract_id
+        LEFT JOIN broker_accounts a ON a.broker_account_id = t.broker_account_id
         ORDER BY t.created_at DESC LIMIT $1`, [bounded]),
       rows(this.pool, "SELECT * FROM broker_reconciliation_runs ORDER BY started_at DESC LIMIT $1", [bounded]),
       rows(this.pool, `SELECT m.*, t.status AS trade_status, t.side AS trade_side, t.quantity_open,
@@ -106,11 +113,12 @@ export class PostgresBrokerExecutionRepository {
         GROUP BY l.portfolio_order_intent_id, t.target_position_id
         ORDER BY l.created_at_utc DESC LIMIT $1`, [bounded]),
       optionalRows(this.pool, "SELECT * FROM human_execution_gates ORDER BY updated_at_utc DESC LIMIT $1", [bounded]),
+      optionalRows(this.pool, "SELECT * FROM human_execution_gate_events ORDER BY occurred_at_utc DESC LIMIT $1", [bounded]),
       optionalRows(this.pool, "SELECT * FROM portfolio_order_intent_execution_states ORDER BY updated_at_utc DESC LIMIT $1", [bounded]),
       optionalRows(this.pool, "SELECT * FROM broker_provider_commands ORDER BY updated_at DESC LIMIT $1", [bounded]),
       optionalRows(this.pool, "SELECT * FROM broker_provider_events ORDER BY created_at DESC LIMIT $1", [bounded]),
     ]);
-    return { providers, accounts, accountSnapshots, contracts, policies, policyAudits, bridges, locks, decisions, intents, orders, trades, reconciliations, managementIntents, managementApprovals, managementOutbox, addonSnapshots, addonEvents, adapterParityRuns, theoreticalEvents, manualExecutionEvents, portfolioOrderIntents, humanExecutionGates, portfolioExecutionStates, providerCommands, providerEvents };
+    return { providers, accounts, accountSnapshots, contracts, policies, policyAudits, bridges, locks, decisions, intents, orders, trades, reconciliations, managementIntents, managementApprovals, managementOutbox, addonSnapshots, addonEvents, adapterParityRuns, theoreticalEvents, manualExecutionEvents, portfolioOrderIntents, humanExecutionGates, humanExecutionGateEvents, portfolioExecutionStates, providerCommands, providerEvents };
   }
 
   async configureSizingPolicy({ policyProfileId, expectedRevision, riskPercent, maxRoundingExcessPercent = 0.25, maxDecisionAgeSeconds = 120, fallbackCapitalEnabled, fallbackCapital, idempotencyKey, actor, reason, now }) {
@@ -1245,7 +1253,7 @@ async function persistManagementFill(client, { intent, trade, order, update, ext
 
 export class DisabledBrokerExecutionRepository {
   get available() { return false; }
-  async overview() { return { providers: [], accounts: [], accountSnapshots: [], contracts: [], policies: [], policyAudits: [], bridges: [], locks: [], decisions: [], intents: [], orders: [], trades: [], reconciliations: [], managementIntents: [], managementApprovals: [], managementOutbox: [], addonSnapshots: [], addonEvents: [], adapterParityRuns: [], portfolioOrderIntents: [], humanExecutionGates: [], portfolioExecutionStates: [], providerCommands: [], providerEvents: [] }; }
+  async overview() { return { providers: [], accounts: [], accountSnapshots: [], contracts: [], policies: [], policyAudits: [], bridges: [], locks: [], decisions: [], intents: [], orders: [], trades: [], reconciliations: [], managementIntents: [], managementApprovals: [], managementOutbox: [], addonSnapshots: [], addonEvents: [], adapterParityRuns: [], portfolioOrderIntents: [], humanExecutionGates: [], humanExecutionGateEvents: [], portfolioExecutionStates: [], providerCommands: [], providerEvents: [] }; }
 }
 
 export function createBrokerExecutionRepository(persistence) {

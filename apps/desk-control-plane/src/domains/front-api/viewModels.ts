@@ -1006,6 +1006,16 @@ export type LiveSignalDetailView = {
     targetRiskR: number;
     roundedQuantity: number;
   };
+  linkedOrderIntents: readonly {
+    portfolioOrderIntentId: string;
+    orderIntentId: string;
+    targetPositionId: string;
+    instrument: string;
+    side: "BUY" | "SELL";
+    quantity: number;
+    state: string;
+    route: string;
+  }[];
   linkedOrders: readonly {
     orderId: string;
     providerId: string;
@@ -1106,6 +1116,9 @@ export type OrdersView = {
       };
     } | null;
     reasonCodes: readonly { code: string; count: number }[];
+    refusalJournal: readonly { eventId: string; orderIntentId: string; instrument: string; strategyInstanceId: string; reason: string; operatorId: string; at: string }[];
+    refusalReasons: readonly { reason: string; count: number }[];
+    expirationByStrategy: readonly { strategyInstanceId: string; expired: number; total: number; expirationPct: number }[];
     pendingByStrategy: readonly { strategyInstanceId: string; pending: number; oldestAgeSeconds: number }[];
     recentDecisions: readonly {
       orderIntentId: string;
@@ -3344,6 +3357,17 @@ export type OrderDetailView = {
     broker: readonly { label: string; value: string | number }[];
     mismatches: readonly { field: string; expected: string; actual: string; reason: string }[];
   } | null;
+  marketContext?: {
+    instrument: string;
+    lastPrice: number | null;
+    asOf: string;
+    availability: string;
+    source: string;
+    distanceToEntryPoints: number | null;
+    distanceToEntryR: number | null;
+    expectedR: number | null;
+    outsideTradeZone: boolean | null;
+  } | null;
   fills: OrdersView["fills"];
   protections: OrdersView["protections"];
   lifecycle: readonly { eventId: string; at: string; state: string; detail: string }[];
@@ -3655,6 +3679,7 @@ export function isLiveSignalDetailView(value: unknown): value is LiveSignalDetai
       Array.isArray(candidate.existingPositions) &&
       candidate.arbitration &&
       candidate.riskCheck &&
+      Array.isArray(candidate.linkedOrderIntents) &&
       Array.isArray(candidate.linkedOrders) &&
       Array.isArray(candidate.auditTrail) &&
       candidate.aiAdvisory &&

@@ -1,11 +1,12 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
+import { canonicalIncidentMetrics } from "./front-control-plane-incident-projection.js";
 
 export function jarvisWorkspace(input = {}) {
   const source = jarvisSources(input);
   const providers = providerRows(source.execution);
   const signals = rows(source.strategySignals).filter(hasSignalId).map(signalRow);
   const sourceAgents = rows(source.runtime).filter(hasAgentRuntimeIdentity);
-  const sourceIncidents = rows(source.incidents).filter(hasIncidentId);
+  const sourceIncidents = canonicalIncidentMetrics(source.incidents).rawOpen;
   const datasets = rows(source.dataFoundation).filter(hasDatasetId);
   const experiments = rows(source.researchExperiments).filter(hasExperimentId);
   const candidates = rows(source.researchCandidates).filter(hasCandidateId);

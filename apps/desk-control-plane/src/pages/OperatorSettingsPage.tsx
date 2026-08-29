@@ -30,12 +30,16 @@ import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { OperatorSettingsView } from "@/domains/front-api/viewModels";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
+import { useDeskDensity } from "@/shell/DeskDensityViewport";
+import { readRealtimeAlertPreference, setRealtimeAlertPreference } from "@/shell/RealtimeAlertCenter";
 
 type SettingsPreference = OperatorSettingsView["cockpitPreferences"][number];
 type SettingsAction = OperatorSettingsView["commandActions"][number];
 type SettingsDevice = OperatorSettingsView["devices"][number];
 
 export function OperatorSettingsPage() {
+  const density = useDeskDensity();
+  const [realtimeAlertsEnabled, setRealtimeAlertsEnabled] = useState(readRealtimeAlertPreference);
   const query = useFrontView("operator-settings");
   const repository = useFrontViewRepository();
   const [reason, setReason] = useState("Contrôle opérateur : modification de préférence non critique via le flux de commande BFF.");
@@ -117,6 +121,13 @@ export function OperatorSettingsPage() {
 
       <section className="operator-grid operator-grid--top" aria-label="Préférences cockpit, widgets et notifications">
         <Card title="Préférences cockpit" actions={<InlineAction>Optimiste autorisé</InlineAction>} density="compact">
+          <fieldset className="settings-density-choice">
+            <legend>Densité d’affichage</legend>
+            <button type="button" aria-pressed={density.preference === "auto"} onClick={() => density.setPreference("auto")}>Automatique</button>
+            <button type="button" aria-pressed={density.preference === "native"} onClick={() => density.setPreference("native")}>Confort</button>
+            <button type="button" aria-pressed={density.preference === "workstation"} onClick={() => density.setPreference("workstation")}>Compact</button>
+            <small>Préférence enregistrée sur ce poste · mode actif : {density.mode === "native" ? "confort" : "compact"}.</small>
+          </fieldset>
           <DataTable rows={data.cockpitPreferences} rowKey={(row) => row.preferenceId} columns={preferenceColumns} />
           <MobileDataList
             rows={data.cockpitPreferences}
@@ -144,6 +155,10 @@ export function OperatorSettingsPage() {
         </Card>
 
         <Card title="Notifications & alertes" actions={<InlineAction>Canaux</InlineAction>} density="compact">
+          <div className="settings-local-alerts">
+            <div><FaBell /><span><strong>Alertes temps réel sur ce poste</strong><small>Préférence visuelle locale ; elle ne modifie aucune policy backend.</small></span></div>
+            <button type="button" aria-pressed={realtimeAlertsEnabled} onClick={() => { const next = !realtimeAlertsEnabled; setRealtimeAlertsEnabled(next); setRealtimeAlertPreference(next); }}>{realtimeAlertsEnabled ? "Activées" : "Désactivées"}</button>
+          </div>
           <div className="settings-notification-list">
             {data.notificationRules.map((rule) => (
               <article key={rule.ruleId}>

@@ -186,6 +186,46 @@ export const presentQueueStatus = makePresenter({
   BLOCK: { label: "Bloqué", tone: "danger" },
 });
 
+/**
+ * État opérationnel générique partagé par les surfaces de supervision.
+ *
+ * Ce registre ne crée aucun état métier : il garantit seulement qu'un même
+ * code backend garde la même gravité visuelle partout dans le Desk.
+ */
+export const presentOperationalStatus = makePresenter({
+  OK: { label: "OK", tone: "success" },
+  NOMINAL: { label: "Nominal", tone: "success" },
+  HEALTHY: { label: "Sain", tone: "success" },
+  FRESH: { label: "À jour", tone: "success" },
+  READY: { label: "Prêt", tone: "success" },
+  APPROVED: { label: "Approuvé", tone: "success" },
+  ACCEPTED: { label: "Accepté", tone: "success" },
+  DONE: { label: "Terminé", tone: "success" },
+  FILLED: { label: "Exécuté", tone: "success" },
+  COMPLETED: { label: "Terminé", tone: "success" },
+  BLOCKED: { label: "Bloqué", tone: "danger" },
+  BLOCK: { label: "Bloqué", tone: "danger" },
+  KILL_SWITCH_ACTIVE: { label: "Kill switch actif", tone: "danger" },
+  CRITICAL: { label: "Critique", tone: "danger" },
+  DOWN: { label: "Indisponible", tone: "danger" },
+  FAILED: { label: "En échec", tone: "danger" },
+  REJECTED: { label: "Rejeté", tone: "danger" },
+  BREACH: { label: "Dépassement", tone: "danger" },
+  STOP: { label: "Arrêt critique", tone: "danger" },
+  UNAVAILABLE: { label: "Indisponible", tone: "danger" },
+  DEGRADED: { label: "Dégradé", tone: "warning" },
+  STALE: { label: "Périmé", tone: "warning" },
+  DELAYED: { label: "En retard", tone: "warning" },
+  WATCH: { label: "À surveiller", tone: "warning" },
+  WAIT: { label: "En attente", tone: "warning" },
+  WAITING: { label: "En attente", tone: "warning" },
+  PARTIAL: { label: "Partiel", tone: "warning" },
+  AWAITING: { label: "En attente", tone: "warning" },
+  UNKNOWN: { label: "Inconnu", tone: "warning" },
+  DISABLED_BY_POLICY: { label: "Désactivé par politique", tone: "info" },
+  MARKET_CLOSED: { label: "Marché fermé", tone: "info" },
+});
+
 /** État d'un signal de stratégie dans son cycle de vie. */
 export const presentSignalState = makePresenter({
   NEW: { label: "Nouveau", tone: "info" },

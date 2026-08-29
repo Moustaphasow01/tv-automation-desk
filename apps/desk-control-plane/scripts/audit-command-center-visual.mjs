@@ -42,6 +42,7 @@ try {
     });
     page.on("pageerror", (error) => consoleErrors.push(error.message));
     await page.goto(`${baseUrl}/#/command-center`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await establishOperatorSession(page);
     await page.locator(".cc-page").waitFor({ state: "visible", timeout: 45_000 });
     await page.locator(".cc-panel").first().waitFor({ state: "visible", timeout: 45_000 });
     await page.screenshot({ path: resolve(outputRoot, `${scenario.name}.png`), fullPage: false });
@@ -56,6 +57,19 @@ try {
           const bounds = node.getBoundingClientRect();
           return style.display !== "none" && style.visibility !== "hidden" && bounds.width > 0 && bounds.height > 0;
         });
+      const isInsideHorizontalScroller = (node) => {
+        let ancestor = node.parentElement;
+        while (ancestor && ancestor !== document.body) {
+          const style = getComputedStyle(ancestor);
+          if (["auto", "scroll"].includes(style.overflowX) && ancestor.scrollWidth > ancestor.clientWidth) return true;
+          ancestor = ancestor.parentElement;
+        }
+        return false;
+      };
+      const clippedInteractives = interactive.filter((node) => {
+        const bounds = node.getBoundingClientRect();
+        return (bounds.right > innerWidth + 1 || bounds.left < -1) && !isInsideHorizontalScroller(node);
+      });
       return {
         viewport: { width: innerWidth, height: innerHeight },
         document: { clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth },
@@ -69,10 +83,13 @@ try {
         kpiCount: document.querySelectorAll(".cc-kpis > .cc-kpi").length,
         panelCount: document.querySelectorAll(".cc-panel").length,
         horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
-        clippedInteractiveCount: interactive.filter((node) => {
-          const bounds = node.getBoundingClientRect();
-          return bounds.right > innerWidth + 1 || bounds.left < -1;
-        }).length,
+        clippedInteractiveCount: clippedInteractives.length,
+        clippedInteractives: clippedInteractives.map((node) => ({
+          tag: node.tagName,
+          className: node.className,
+          text: (node.textContent || "").trim().slice(0, 80),
+          bounds: node.getBoundingClientRect().toJSON(),
+        })),
       };
     });
     const geometryFailures = [];
@@ -120,4 +137,26 @@ function browserLaunchOptions() {
       ? { executablePath: process.env.DESK_PLAYWRIGHT_EXECUTABLE_PATH }
       : {}),
   };
+}
+
+async function establishOperatorSession(page) {
+  const gate = page.locator(".operator-login-gate");
+  if (!await gate.isVisible({ timeout: 5_000 }).catch(() => false)) return;
+
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    const form = gate.locator(".operator-login-gate__form");
+    if (await form.isVisible().catch(() => false)) {
+      await form.locator("input[autocomplete='username']").fill(process.env.DESK_OPERATOR_LOGIN || "MSO");
+      await form.locator("input[autocomplete='current-password']").fill(process.env.DESK_OPERATOR_PASSWORD || "2018");
+      await form.locator("button[type='submit']").click();
+      await gate.waitFor({ state: "hidden", timeout: 45_000 }).catch(() => undefined);
+      if (!await gate.isVisible().catch(() => false)) return;
+    }
+
+    const retry = gate.locator("button.operator-login-gate__secondary");
+    if (await retry.isVisible().catch(() => false)) await retry.click();
+    await page.waitForTimeout(1_000);
+  }
+
+  throw new Error(`OPERATOR_SESSION_NOT_ESTABLISHED: ${(await gate.innerText().catch(() => "")).slice(0, 500)}`);
 }

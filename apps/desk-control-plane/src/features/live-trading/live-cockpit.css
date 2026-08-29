@@ -284,8 +284,8 @@
 .lt-decision-stack__stage-title { overflow: hidden; font-family: var(--lt-font-heading); font-size: 14px; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .lt-decision-stack__stage-status { display: flex; min-width: 0; gap: 6px; align-items: center; justify-content: flex-end; }
 .lt-decision-stack__badges { display: flex; min-width: 0; gap: 3px; align-items: center; }
-.lt-decision-stack__status-help { display: block; min-width: 0; max-width: 116px; }
-.lt-decision-stack__stage-status .status-badge { display: block; width: 100%; max-width: 116px; min-height: 20px; overflow: hidden; justify-content: flex-start; padding-inline: 5px; font-size: 11px; letter-spacing: .035em; text-overflow: ellipsis; white-space: nowrap; }
+.lt-decision-stack__status-help { display: block; min-width: 0; max-width: 164px; }
+.lt-decision-stack__stage-status .status-badge { display: block; width: 100%; max-width: 164px; min-height: 20px; overflow: hidden; justify-content: flex-start; padding-inline: 5px; font-size: 11px; letter-spacing: .035em; text-overflow: ellipsis; white-space: nowrap; }
 .lt-decision-stack__chevron { color: var(--lt-muted); font-size: 14px; line-height: 1; transition: transform 140ms ease, color 140ms ease; }
 .lt-decision-stack__step details[open] .lt-decision-stack__chevron { color: var(--lt-flight-cyan); transform: rotate(180deg); }
 .lt-decision-stack__step[data-priority="true"] .lt-decision-stack__stage-title,

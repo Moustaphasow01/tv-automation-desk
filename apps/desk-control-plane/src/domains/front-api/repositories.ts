@@ -107,9 +107,10 @@ export class FrontViewRepository {
 
   async getView<ViewName extends keyof ControlPlaneViews & FrontViewName>(
     viewName: ViewName,
-    params: Readonly<Record<string, string | undefined>> = {}
+    params: Readonly<Record<string, string | undefined>> = {},
+    signal?: AbortSignal,
   ): Promise<ViewEnvelope<ControlPlaneViews[ViewName]>> {
-    const raw = await this.transport.getView<ControlPlaneViews[ViewName]>(viewName, params);
+    const raw = await this.transport.getView<ControlPlaneViews[ViewName]>(viewName, params, signal);
     return assertViewEnvelope(raw, validators[viewName]);
   }
 
@@ -156,7 +157,7 @@ export function useFrontView<ViewName extends keyof ControlPlaneViews & FrontVie
 
   return useQuery({
     queryKey: frontViewQueryKey(viewName, stableParams, options.queryScope),
-    queryFn: () => repository.getView(viewName, Object.fromEntries(stableParams)),
+    queryFn: ({ signal }) => repository.getView(viewName, Object.fromEntries(stableParams), signal),
     placeholderData: options.preservePreviousData ? keepPreviousData : undefined,
     refetchInterval: options.refetchInterval,
   });

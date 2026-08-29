@@ -122,7 +122,7 @@
 .lt-signal-inbox thead th { position: sticky; z-index: 1; top: 0; background: #091923; color: var(--lt-muted); }
 .lt-signal-inbox tbody tr[data-selected="true"] { background: rgba(56, 200, 216, .09); box-shadow: inset 3px 0 var(--lt-flight-cyan); }
 .lt-signal-inbox tbody tr[data-expired="true"] { opacity: .82; }
-.lt-signal-inbox__temporal-note { display: block; margin-top: 2px; color: var(--lt-flight-amber); font-size: 10px; }
+.lt-signal-inbox__temporal-note { display: block; margin-top: 2px; color: var(--lt-flight-amber); font-size: 11px; }
 .lt-signal-inbox__actions { display: flex; gap: 4px; align-items: center; }
 .lt-signal-inbox__actions button, .lt-signal-inbox__actions a { display: inline-flex; min-height: 28px; gap: 4px; align-items: center; padding: 0 6px; border: 1px solid var(--lt-flight-line); border-radius: 4px; background: #0a202c; color: var(--lt-secondary); font-size: 11px; text-decoration: none; cursor: pointer; }
 .lt-signal-inbox__actions button[aria-pressed="true"] { border-color: var(--lt-flight-cyan); color: #c9f8fb; }

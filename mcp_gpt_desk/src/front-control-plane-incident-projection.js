@@ -13,7 +13,8 @@ import {
 } from "./front-control-plane-projection-helpers.js";
 
 export function executionIncidents({ incidents, warnings, runtime, runbooks }) {
-  const list = rows(incidents).filter(hasIncidentId).map(incidentRow);
+  const metrics = canonicalIncidentMetrics(incidents);
+  const list = metrics.list;
   if (!list.length) warnings.push("incidents:EMPTY");
   const workers = rows(runtime).filter((item) => item?.worker_id || item?.assigned_worker_id || item?.task_id).map(workerRow);
   return {
@@ -26,8 +27,8 @@ export function executionIncidents({ incidents, warnings, runtime, runbooks }) {
     },
     runbooks: rows(runbooks).slice(0, 20).map(runbookSummaryRow),
     summary: {
-      openIncidents: countBy(list, (item) => !["RESOLVED", "CLOSED", "EXPECTED_STOPPED"].includes(upper(item.status))),
-      criticalIncidents: countBy(list, (item) => item.severity === "HIGH" && item.category === "ACTIVE_FAILURE"),
+      openIncidents: metrics.openIncidents,
+      criticalIncidents: metrics.criticalIncidents,
       highIncidents: countBy(list, (item) => item.severity === "HIGH"),
       retryableIncidents: countBy(list, (item) => item.retryable),
       pendingReconciliations: countBy(list, (item) => item.category === "RECONCILIATION_REQUIRED"),
@@ -50,16 +51,38 @@ export function executionIncidents({ incidents, warnings, runtime, runbooks }) {
   };
 }
 
+/**
+ * Canonical incident population shared by every BFF surface.
+ * Counts and visible rows use exactly the same open/closed semantics.
+ */
+export function canonicalIncidentMetrics(incidents) {
+  const entries = rows(incidents)
+    .filter(hasIncidentId)
+    .map((source) => ({ source, row: incidentRow(source) }));
+  const openEntries = entries.filter(({ row }) => (
+    !["RESOLVED", "CLOSED"].includes(upper(row.status))
+    && row.category !== "EXPECTED_STOPPED"
+  ));
+  return {
+    list: entries.map(({ row }) => row),
+    open: openEntries.map(({ row }) => row),
+    rawOpen: openEntries.map(({ source }) => source),
+    openIncidents: openEntries.length,
+    criticalIncidents: countBy(openEntries, ({ row }) => row.severity === "HIGH" && row.category === "ACTIVE_FAILURE"),
+  };
+}
+
 export function incidentSummary(item) {
   const classification = classifyIncident(item);
+  const incidentId = text(item.incident_id || item.id, "");
   return {
-    incidentId: text(item.incident_id, ""),
+    incidentId,
     severity: severity(item.severity),
     title: text(item.title, "Incident"),
     detail: text(item.detail || item.message, "Incident backend"),
     category: classification.category,
     sourceKind: classification.sourceKind,
-    route: `/operations/incidents/${encodeURIComponent(String(item.incident_id))}`,
+    route: `/operations/incidents/${encodeURIComponent(incidentId)}`,
   };
 }
 
@@ -79,7 +102,7 @@ export function incidentRow(item) {
     impactR: number(item.impact_R ?? item.impact_r, 0),
     impactedOrderIds,
     correlationId: text(item.correlation_id, "none"),
-    route: `/operations/incidents/${encodeURIComponent(String(item.incident_id))}`,
+    route: `/operations/incidents/${encodeURIComponent(text(item.incident_id || item.id, ""))}`,
     chronology: incidentChronology(item, createdAt),
     reconciliationResults: rows(item.reconciliation_results || item.reconciliations),
     retries: incidentRetries(item),
@@ -89,7 +112,7 @@ export function incidentRow(item) {
       { label: "Kind", value: classification.sourceKind },
     ],
     payloadPreview: [
-      { key: "incident_id", value: text(item.incident_id, "unknown") },
+      { key: "incident_id", value: text(item.incident_id || item.id, "unknown") },
       ...objectFacts(item, Object.keys(item).slice(0, 6)).map((factItem) => ({ key: factItem.label, value: factItem.value })),
     ],
     postMortem: item.post_mortem || emptyPostMortem(),
@@ -179,4 +202,3 @@ function runbookSummaryRow(item) {
     updatedAt: text(item.updatedAt, "unavailable"),
   };
 }
-

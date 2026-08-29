@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ReadonlyTradeTerms, ReconciliationPanel } from "@/features/order-intent/components";
+import { buildOrderTicketText, ReadonlyTradeTerms, ReconciliationPanel } from "@/features/order-intent/components";
 import { buildOrderIntentDossier } from "@/features/order-intent/mapper";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
 import { presentBackendStatus, presentOrderLifecycleEvidence } from "@/features/order-intent/statusRegistry";
@@ -80,8 +80,41 @@ describe("OrderIntent dossier semi-manual contract", () => {
     expect(html).toContain("Entrée");
     expect(html).toContain("Stop");
     expect(html).toContain("Cible 1");
+    expect(html).toContain("Copier le ticket");
     expect(html).not.toMatch(/<(input|select|textarea)\b/i);
     expect(html).not.toContain("contenteditable");
+  });
+
+  it("builds a stable semi-manual broker ticket from post-Risk terms", () => {
+    const envelope = orderDetailEnvelope();
+    envelope.data.authority = {
+      strategy: { strategyId: "strategy-1", strategyInstanceId: "strategy-instance-1", strategyVersion: "v1" },
+      signal: { signalId: "signal-1", instrument: "MNQ", side: "BUY" },
+      contextGate: { label: "Context Gate", decision: "TAKE", reasonCodes: [], authorityId: "ctx-1", version: "v1" },
+      portfolioArbitration: { label: "Portfolio", decision: "ALLOCATED", reasonCodes: [], authorityId: "arb-1", version: "v1" },
+      globalRisk: { label: "Risk", decision: "APPROVED", reasonCodes: [], authorityId: "risk-1", version: "v1" },
+      targetPosition: { targetPositionId: "target-1", account: "SIM-101", authorizedQuantity: 2 },
+    };
+
+    expect(buildOrderTicketText(buildOrderIntentDossier(envelope))).toBe(
+      "MNQ | BUY | 2 | LIMIT 21450.25 | STOP 21410.25 | TARGET 21490.25 | DAY",
+    );
+  });
+
+  it("never renders a zero sentinel as an official price", () => {
+    const envelope = orderDetailEnvelope();
+    envelope.data.order.limitPrice = 0;
+    envelope.data.order.stopPrice = 0;
+    envelope.data.order.targetPrice = 0;
+
+    const dossier = buildOrderIntentDossier(envelope);
+    const html = renderToStaticMarkup(<ReadonlyTradeTerms dossier={dossier} />);
+
+    expect(dossier.executionPlan.entry.state).toBe("UNAVAILABLE");
+    expect(dossier.executionPlan.stop.state).toBe("UNAVAILABLE");
+    expect(dossier.executionPlan.targets[0].state).toBe("UNAVAILABLE");
+    expect(html).toContain("Indisponible");
+    expect(html).not.toMatch(/<dd[^>]*>0(?:[,.]0+)?<\/dd>/);
   });
 
   it("builds a Human Gate command only from a complete backend-published action", () => {

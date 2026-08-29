@@ -19,7 +19,7 @@ import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, StatusBadge } from "@/design-system/primitives";
 import { presentDomain, presentPermission, presentQueueStatus, presentRelationKind } from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
-import { ViewTruthBanner } from "@/design-system/states";
+import { DataBoundary, ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
 import type { EventsAuditView } from "@/domains/front-api/viewModels";
@@ -207,7 +207,8 @@ export function EventsAuditPage() {
 
         <Card title="Relations eventId / causationId" actions={<InlineAction>Graphe</InlineAction>} density="compact">
           <div className="events-relations-list">
-            {data.relations.map((relation, index) => (
+            <DataBoundary value={data.relations} empty="Aucune relation causale n'est publiée pour la corrélation active.">
+            {(relations) => relations.map((relation, index) => (
               <article key={`${relation.fromEventId}:${relation.toEventId}-${index}`}>
                 <span><FaBezierCurve /></span>
                 <div>
@@ -221,6 +222,7 @@ export function EventsAuditPage() {
                 </div>
               </article>
             ))}
+            </DataBoundary>
           </div>
         </Card>
 

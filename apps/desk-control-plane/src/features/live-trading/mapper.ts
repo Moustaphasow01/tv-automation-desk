@@ -74,7 +74,7 @@ export function toLiveTradingModel(
     marketSeries: {
       availability: data.marketSeries?.availability ?? marketContract?.availability ?? "UNAVAILABLE",
       source: data.marketSeries?.source ?? marketContract?.source ?? "market.ohlcv",
-      reason: data.marketSeries?.reason || marketContract?.reason || (data.marketSeries?.points.length ? "" : "Aucune bougie clôturée publiée pour la fenêtre."),
+      reason: localizeMarketSeriesReason(data.marketSeries?.reason || marketContract?.reason || (data.marketSeries?.points.length ? "" : "Aucune bougie clôturée publiée pour la fenêtre.")),
       asOf: data.marketSeries?.asOf ?? data.timeSeriesContracts.asOf ?? meta.asOf,
       instrument: data.marketSeries?.instrument ?? null,
       timeframe: data.marketSeries?.timeframe ?? null,
@@ -126,6 +126,14 @@ export function toLiveTradingModel(
       series: data.performanceR?.series ?? [],
     },
   };
+}
+
+function localizeMarketSeriesReason(reason: string): string {
+  const translations: Readonly<Record<string, string>> = {
+    "No closed market candles exist in the requested window.": "Aucune bougie clôturée disponible pour cette période.",
+    "PostgreSQL market series repository is unavailable.": "La source des données de marché est indisponible.",
+  };
+  return translations[reason] ?? reason;
 }
 
 function buildOperatorState(
@@ -467,7 +475,9 @@ function intentInstrument(intent: LiveTradingModel["orderIntent"]): unknown {
 
 function normalizeInstrument(value: unknown): string | null {
   const normalized = normalizeText(value);
-  return normalized ? normalized.toUpperCase() : null;
+  if (!normalized) return null;
+  const upper = normalized.toUpperCase();
+  return ({ "MNQ1!": "MNQ", "MES1!": "MES", "NQ1!": "NQ", "ES1!": "ES", "ZC1!": "ZC", "ZW1!": "ZW" } as Record<string, string>)[upper] ?? upper;
 }
 
 function normalizeText(value: unknown): string {

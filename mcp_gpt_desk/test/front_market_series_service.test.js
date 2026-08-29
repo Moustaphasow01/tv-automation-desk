@@ -51,6 +51,26 @@ describe("Front canonical market series", () => {
     assert.deepEqual(result.supportedInstruments, ["MES", "MNQ"]);
   });
 
+  test("resolves grain roots to continuous-contract storage symbols without leaking aliases to the Front", async () => {
+    const queriedSymbols = [];
+    const persistence = {
+      initialized: Promise.resolve(),
+      pool: {
+        async query(sql, values = []) {
+          if (values.length) queriedSymbols.push(values[0]);
+          if (sql.includes("DISTINCT symbol_code")) return { rows: [{ symbol_code: "ZW1!" }, { symbol_code: "ZC1!" }] };
+          return { rows: [] };
+        },
+      },
+    };
+
+    const result = await loadFrontMarketSeries(persistence, { instrument: "ZW", timeframe: "5" });
+
+    assert.deepEqual(queriedSymbols, ["ZW1!", "ZW1!"]);
+    assert.equal(result.instrument, "ZW");
+    assert.deepEqual(result.supportedInstruments, ["ZC", "ZW"]);
+  });
+
   test("rejects unsupported timeframes and malformed cursors", async () => {
     const persistence = fixturePersistence();
     await assert.rejects(() => loadFrontMarketSeries(persistence, { instrument: "MNQ", timeframe: "2" }), (error) => error.code === "MARKET_SERIES_TIMEFRAME_INVALID");

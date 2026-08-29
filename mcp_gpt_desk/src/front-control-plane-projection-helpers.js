@@ -48,7 +48,7 @@ export function hasFillId(item) {
 }
 
 export function hasIncidentId(item) {
-  return Boolean(item?.incident_id);
+  return Boolean(item?.incident_id || item?.id);
 }
 
 export function isActiveExecutionMode(item) {

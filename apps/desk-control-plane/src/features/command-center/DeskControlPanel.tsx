@@ -1,7 +1,7 @@
 import { FaClock, FaGlobe, FaPlay, FaRedo, FaStethoscope, FaStop, FaSyncAlt } from "react-icons/fa";
 import type { CommandSnapshot } from "@/domains/realtime/commandRuntime";
 import type { DeskControlCapability, DeskControlCommand } from "./model";
-import { healthLabel } from "./mapper";
+import { healthLabel, statusTone } from "./mapper";
 import { CommandPanel, PanelStatus } from "./panelPrimitives";
 
 const ACTIONS: readonly { commandType: DeskControlCommand; label: string; icon: JSX.Element }[] = [
@@ -29,14 +29,20 @@ export function DeskControlPanel(props: DeskControlPanelProps) {
       <div className="cc-desk-state">
         <span>Statut du desk</span>
         <strong>{healthLabel(props.deskStatus)}</strong>
-        <PanelStatus tone="success">Contrôle plan uniquement</PanelStatus>
+        <PanelStatus tone="info">Contrôle plan uniquement</PanelStatus>
       </div>
       <div className="cc-desk-actions">
         {ACTIONS.map((action) => {
           const capability = props.actions.find((item) => item.commandType === action.commandType);
           const allowed = capability?.allowed === true && capability.brokerExecution === false;
           return (
-            <button key={action.commandType} type="button" disabled={props.disabled || !allowed || Boolean(props.submitting)} onClick={() => props.onSubmit(action.commandType)}>
+            <button
+              key={action.commandType}
+              type="button"
+              className={["desk.stop", "desk.restart"].includes(action.commandType) ? "is-destructive" : undefined}
+              disabled={props.disabled || !allowed || Boolean(props.submitting)}
+              onClick={() => props.onSubmit(action.commandType)}
+            >
               {props.submitting === action.commandType ? <FaClock /> : action.icon}<span>{action.label}</span>
             </button>
           );
@@ -51,9 +57,9 @@ export function DeskControlPanel(props: DeskControlPanelProps) {
 }
 
 export function SystemHealthGrid({ systems }: { systems: readonly { id: string; label: string; status: string }[] }) {
-  return <div className="cc-system-grid">{systems.map((system) => <SystemLine key={system.id} label={system.label} state={system.status} tone={system.status === "OK" ? "success" : "warning"} />)}</div>;
+  return <div className="cc-system-grid">{systems.map((system) => <SystemLine key={system.id} label={system.label} state={system.status} tone={statusTone(system.status)} />)}</div>;
 }
 
-function SystemLine({ label, state, tone = "success" }: { label: string; state: string; tone?: "success" | "warning" | "danger" }) {
+function SystemLine({ label, state, tone = "success" }: { label: string; state: string; tone?: "neutral" | "info" | "success" | "warning" | "danger" }) {
   return <span><small>{label}</small><strong className={`cc-tone--${tone}`}><FaSyncAlt aria-hidden="true" />{state}</strong></span>;
 }

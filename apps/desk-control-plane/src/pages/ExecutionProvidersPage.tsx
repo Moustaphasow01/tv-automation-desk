@@ -1,5 +1,6 @@
 import { useContext, useState } from "react";
 import { Link } from "react-router-dom";
+import { routeDisplayName } from "@/app/routes";
 import { FaServer } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
 import { StatusBadge } from "@/design-system/primitives";
@@ -60,7 +61,7 @@ export function ExecutionProvidersPage() {
     <div className="ep-page" data-testid="execution-providers-golden-master">
       <header className="ep-header">
         <div className="ep-header__title">
-          <h1>Exécution &amp; Fournisseurs</h1>
+          <h1>{routeDisplayName("execution/providers")}</h1>
           <p>Connectivité provider &amp; cycle de vie des ordres</p>
         </div>
         <div className="ep-header__clock">

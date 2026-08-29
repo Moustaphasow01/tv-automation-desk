@@ -6983,6 +6983,28 @@ body {
   gap: 6px;
 }
 
+.settings-density-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  border: 1px solid #193852;
+  border-radius: 7px;
+  padding: 8px;
+}
+
+.settings-density-choice legend { padding: 0 4px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.settings-density-choice button { min-width: 88px; min-height: 44px; border: 1px solid #244b68; border-radius: 6px; background: #0a1d2c; color: var(--text); font: inherit; cursor: pointer; }
+.settings-density-choice button[aria-pressed="true"] { border-color: var(--accent); background: rgba(56,214,197,.12); color: var(--accent-strong); }
+.settings-density-choice small { flex-basis: 100%; color: var(--muted); }
+.settings-local-alerts { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 12px; border: 1px solid #244b68; border-radius: 6px; background: #081923; }
+.settings-local-alerts > div { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.settings-local-alerts span { display: grid; min-width: 0; gap: 2px; }
+.settings-local-alerts small { color: var(--muted); }
+.settings-local-alerts button { min-width: 112px; min-height: 44px; border: 1px solid #244b68; border-radius: 6px; color: var(--text); background: #0a1d2c; cursor: pointer; }
+.settings-local-alerts button[aria-pressed="true"] { border-color: var(--success); color: var(--success); background: rgba(40, 200, 140, .12); }
+
 .settings-guard-note,
 .settings-jarvis-card,
 .settings-command-result {
@@ -10491,6 +10513,8 @@ body {
   transition: color 160ms ease-out, background-color 160ms ease-out, border-color 160ms ease-out;
 }
 
+.nav-link > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .nav-link:hover {
   border-color: #1a3447;
   background: #102a3d;
@@ -10546,6 +10570,47 @@ body {
 }
 
 .sidebar-status-stack span { color: #6f8295; font-size: 12px; }
+
+.desk-realtime-alert {
+  position: fixed;
+  z-index: 1200;
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  grid-template-columns: 20px minmax(220px, 340px) auto 44px;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 24px));
+  border: 1px solid #28506d;
+  border-radius: 9px;
+  padding: 10px 8px 10px 12px;
+  background: #071827;
+  color: #f4f7fb;
+  box-shadow: 0 16px 44px rgba(0,0,0,.48);
+}
+.desk-realtime-alert > div { display: grid; gap: 2px; }
+.desk-realtime-alert strong { font-size: 14px; }
+.desk-realtime-alert span, .desk-realtime-alert small { color: #a8b8c8; font-size: 12px; }
+.desk-realtime-alert a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 6px; background: #113a5a; color: #8dc7ff; font-size: 13px; font-weight: 750; text-decoration: none; }
+.desk-realtime-alert button { width: 44px; height: 44px; border: 0; border-radius: 6px; background: transparent; color: #a8b8c8; cursor: pointer; }
+.desk-realtime-alert--warning { border-color: #98722d; }
+.desk-realtime-alert--danger { border-color: #a74652; background: #211018; }
+.desk-realtime-alert--danger > svg { color: #ff7180; }
+@media (max-width: 640px) { .desk-realtime-alert { left: 12px; right: 12px; bottom: 70px; grid-template-columns: 20px minmax(0, 1fr) 44px; } .desk-realtime-alert a { grid-column: 2; width: max-content; } }
+
+.desk-shortcut-help-trigger { position: fixed; z-index: 900; left: 10px; bottom: 10px; display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; gap: 4px; border: 1px solid #284b66; border-radius: 50%; background: #071827; color: #8dc7ff; font: inherit; cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.desk-shortcut-help-trigger span { font-weight: 800; }
+.desk-shortcut-help-backdrop { position: fixed; z-index: 1300; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(1,7,15,.78); }
+.desk-shortcut-help { width: min(560px, 100%); border: 1px solid #28506d; border-radius: 10px; padding: 14px; background: #071827; color: #f4f7fb; box-shadow: 0 26px 80px rgba(0,0,0,.55); }
+.desk-shortcut-help header { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #183347; padding-bottom: 10px; }
+.desk-shortcut-help h2 { margin: 2px 0 0; font-size: 19px; }
+.desk-shortcut-help header small { color: #71879b; }
+.desk-shortcut-help header button { min-width: 72px; min-height: 44px; border: 1px solid #28506d; border-radius: 6px; background: #0b2234; color: #a8b8c8; cursor: pointer; }
+.desk-shortcut-help dl { display: grid; gap: 0; margin: 12px 0; }
+.desk-shortcut-help dl > div { display: grid; grid-template-columns: 130px 1fr; gap: 12px; min-height: 44px; align-items: center; border-bottom: 1px solid #122a3d; }
+.desk-shortcut-help dt { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: #8dc7ff; font-weight: 750; }
+.desk-shortcut-help dd { margin: 0; color: #a8b8c8; }
+.desk-shortcut-help p { margin: 0; color: #71879b; font-size: 12px; line-height: 1.5; }
 
 .brand-mark { flex: 0 0 auto; }
 

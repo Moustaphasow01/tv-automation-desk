@@ -1398,6 +1398,18 @@ export const liveSignalDetailView: ViewEnvelope<LiveSignalDetailView> = {
       targetRiskR: 0.24,
       roundedQuantity: 2
     },
+    linkedOrderIntents: [
+      {
+        portfolioOrderIntentId: "poi_sig_vnext_demo_mnq_0940_001",
+        orderIntentId: "oi_sig_vnext_demo_mnq_0940_001",
+        targetPositionId: "tp_sig_vnext_demo_mnq_0940_001",
+        instrument: "MNQ",
+        side: "BUY",
+        quantity: 2,
+        state: "AWAITING_HUMAN_CONFIRMATION",
+        route: "/orders/oi_sig_vnext_demo_mnq_0940_001"
+      }
+    ],
     linkedOrders: [
       {
         orderId: "ord_sig_vnext_demo_mnq_0940_001",
@@ -1554,6 +1566,15 @@ export const ordersView: ViewEnvelope<OrdersView> = {
       reasonCodes: [
         { code: "MAX_RISK_PER_TRADE", count: 6 },
         { code: "DAILY_RISK_BUDGET", count: 3 }
+      ],
+      refusalJournal: [
+        { eventId: "hgate_event_refused_001", orderIntentId: "oint_sig_old_rejected", instrument: "ZW", strategyInstanceId, reason: "Liquidité insuffisante avant la publication macro", operatorId: "operator-demo", at: "2026-08-10T09:35:00.000Z" }
+      ],
+      refusalReasons: [
+        { reason: "Liquidité insuffisante avant la publication macro", count: 1 }
+      ],
+      expirationByStrategy: [
+        { strategyInstanceId, expired: 1, total: 3, expirationPct: 33 }
       ],
       pendingByStrategy: [
         { strategyInstanceId, pending: 1, oldestAgeSeconds: 180 }

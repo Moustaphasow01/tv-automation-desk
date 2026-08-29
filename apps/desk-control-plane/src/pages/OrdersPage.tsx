@@ -1,5 +1,6 @@
 import { useContext, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { routeDisplayName } from "@/app/routes";
 import { FaFingerprint } from "react-icons/fa";
 import { ReasonInput } from "@/design-system/actions";
 import { StatusBadge } from "@/design-system/primitives";
@@ -11,24 +12,46 @@ import "@/features/orders-human-gate/orders-human-gate.css";
 
 type ReviewItem = OrdersView["humanGateReview"]["items"][number];
 type OrderAction = OrdersView["commandActions"][number];
+type DecisionStatusFilter = "ACTIONABLE" | "ALL" | ReviewItem["status"];
+
+const REVIEW_PAGE_SIZE = 15;
 
 export function OrdersPage() {
   const realtime = useContext(RealtimeContext);
-  const query = useFrontView("orders");
-  const repository = useFrontViewRepository();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const query = useFrontView("orders", selectedId ? { orderIntentId: selectedId } : {}, { preservePreviousData: true });
+  const repository = useFrontViewRepository();
   const [reason, setReason] = useState("Contrôle opérateur : décision Human Gate depuis Orders & Human Gate.");
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<DecisionStatusFilter>("ACTIONABLE");
+  const [instrumentFilter, setInstrumentFilter] = useState("ALL");
+  const [reviewPage, setReviewPage] = useState(1);
 
   const data = query.data?.data ?? null;
   const review = data?.humanGateReview ?? null;
+  const instrumentOptions = useMemo(
+    () => review ? [...new Set(review.items.map((item) => item.instrument).filter(Boolean))].sort() : [],
+    [review]
+  );
+  const filteredItems = useMemo(() => {
+    if (!review) return [];
+    return review.items.filter((item) => {
+      const statusMatches = statusFilter === "ALL"
+        || (statusFilter === "ACTIONABLE" && item.status === "AWAITING_MANUAL_CONFIRMATION")
+        || item.status === statusFilter;
+      return statusMatches && (instrumentFilter === "ALL" || item.instrument === instrumentFilter);
+    });
+  }, [instrumentFilter, review, statusFilter]);
+  const totalReviewPages = Math.max(1, Math.ceil(filteredItems.length / REVIEW_PAGE_SIZE));
+  const safeReviewPage = Math.min(reviewPage, totalReviewPages);
+  const pagedItems = filteredItems.slice((safeReviewPage - 1) * REVIEW_PAGE_SIZE, safeReviewPage * REVIEW_PAGE_SIZE);
   const selected = useMemo(
-    () => (review ? review.items.find((item) => item.orderIntentId === selectedId) ?? review.items[0] ?? null : null),
-    [review, selectedId]
+    () => (review ? review.items.find((item) => item.orderIntentId === selectedId) ?? filteredItems[0] ?? null : null),
+    [filteredItems, review, selectedId]
   );
 
   if (query.isLoading) return <OrdersLoading />;
@@ -74,7 +97,7 @@ export function OrdersPage() {
     <div className="oh-page" data-testid="orders-human-gate-golden-master">
       <header className="oh-header">
         <div className="oh-header__title">
-          <h1>Orders &amp; Human Gate</h1>
+          <h1>{routeDisplayName("orders")}</h1>
           <p>Revue des OrderIntents &amp; approbation opérateur</p>
         </div>
         <div className="oh-header__clock">
@@ -96,13 +119,36 @@ export function OrdersPage() {
 
         <div className="oh-row1">
           <section className="oh-panel" aria-label="OrderIntents en revue">
-            <header><h2>OrderIntents en revue</h2><small>{review.items.length}</small></header>
+            <header>
+              <h2>OrderIntents en revue</h2>
+              <small>{filteredItems.length}/{review.items.length}</small>
+              <div className="oh-decision-filters" aria-label="Filtres des décisions">
+                <label>
+                  <span className="sr-only">Statut</span>
+                  <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as DecisionStatusFilter); setReviewPage(1); }}>
+                    <option value="ACTIONABLE">À traiter</option>
+                    <option value="ALL">Tous</option>
+                    <option value="AWAITING_MANUAL_CONFIRMATION">En attente</option>
+                    <option value="CONFIRMED">Confirmés</option>
+                    <option value="REJECTED">Rejetés</option>
+                    <option value="EXPIRED">Expirés</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="sr-only">Instrument</span>
+                  <select value={instrumentFilter} onChange={(event) => { setInstrumentFilter(event.target.value); setReviewPage(1); }}>
+                    <option value="ALL">Tous instruments</option>
+                    {instrumentOptions.map((instrument) => <option key={instrument} value={instrument}>{instrument}</option>)}
+                  </select>
+                </label>
+              </div>
+            </header>
             <div className="oh-panel__body" style={{ padding: 0 }}>
               <div className="oh-table-scroll" role="region" aria-label="Liste des OrderIntents en revue" tabIndex={0}>
                 <table className="oh-table">
                   <thead><tr><th>OrderIntent</th><th>Instrument</th><th>Côté</th><th>Qté (aut.)</th><th>Âge</th><th>Statut</th></tr></thead>
                   <tbody>
-                    {review.items.map((item) => (
+                    {pagedItems.map((item) => (
                       <tr key={item.orderIntentId} aria-selected={selected?.orderIntentId === item.orderIntentId} onClick={() => setSelectedId(item.orderIntentId)}>
                         <td><strong>{shortId(item.orderIntentId)}</strong></td>
                         <td>{item.instrument}</td>
@@ -112,10 +158,17 @@ export function OrdersPage() {
                         <td><StatusBadge tone={gateTone(item.status)}>{item.status}</StatusBadge></td>
                       </tr>
                     ))}
-                    {!review.items.length ? <tr><td colSpan={6}><p className="oh-empty">Aucun OrderIntent avec Human Gate publié.</p></td></tr> : null}
+                    {!pagedItems.length ? <tr><td colSpan={6}><p className="oh-empty">Aucune décision ne correspond aux filtres.</p></td></tr> : null}
                   </tbody>
                 </table>
               </div>
+              {filteredItems.length > REVIEW_PAGE_SIZE ? (
+                <nav className="oh-pagination" aria-label="Pagination des décisions">
+                  <button type="button" disabled={safeReviewPage <= 1} onClick={() => setReviewPage((page) => Math.max(1, page - 1))}>Précédent</button>
+                  <span>Page {safeReviewPage} sur {totalReviewPages}</span>
+                  <button type="button" disabled={safeReviewPage >= totalReviewPages} onClick={() => setReviewPage((page) => Math.min(totalReviewPages, page + 1))}>Suivant</button>
+                </nav>
+              ) : null}
             </div>
           </section>
 
@@ -130,7 +183,11 @@ export function OrdersPage() {
                     <div><small>Statut</small><strong>{selected.status}</strong></div>
                     <div><small>Instrument</small><strong>{selected.instrument}</strong></div>
                     <div><small>Côté</small><strong>{selected.side}</strong></div>
-                    <div><small>Expire</small><strong>{formatTime(selected.expiresAt)}</strong></div>
+                    <div>
+                      <small>Échéance</small>
+                      <strong className={`text-${expiryTone(selected.expiresAt, realtime?.now)}`}>{formatExpiryCountdown(selected.expiresAt, realtime?.now)}</strong>
+                      <span className="oh-detail__timestamp">{formatTime(selected.expiresAt)}</span>
+                    </div>
                     <div><small>Décision risque</small><strong>{review.selectedDossier?.lineage.riskDecision.decision ?? "Non publié"}</strong></div>
                   </div>
                   {review.selectedDossier ? (
@@ -209,6 +266,46 @@ export function OrdersPage() {
                     {!review.recentDecisions.length ? <tr><td colSpan={3}><p className="oh-empty">Aucune décision récente publiée.</p></td></tr> : null}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="oh-row2">
+          <section className="oh-panel" aria-label="Journal des refus opérateur">
+            <header><h2>Journal des refus</h2><small>{(review.refusalJournal ?? []).length}</small></header>
+            <div className="oh-panel__body" style={{ padding: 0 }}>
+              <div className="oh-table-scroll" role="region" aria-label="Refus Human Gate audités" tabIndex={0}>
+                <table className="oh-table">
+                  <thead><tr><th>Heure</th><th>Instrument</th><th>Motif</th><th>Opérateur</th></tr></thead>
+                  <tbody>
+                    {(review.refusalJournal ?? []).map((item) => (
+                      <tr key={item.eventId || `${item.orderIntentId}-${item.at}`}>
+                        <td><Link to={`/execution/orders/${encodeURIComponent(item.orderIntentId)}`}>{formatTime(item.at)}</Link></td>
+                        <td>{item.instrument}</td>
+                        <td title={item.reason}>{item.reason}</td>
+                        <td>{shortId(item.operatorId)}</td>
+                      </tr>
+                    ))}
+                    {!(review.refusalJournal ?? []).length ? <tr><td colSpan={4}><p className="oh-empty">Aucun refus opérateur audité.</p></td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="oh-panel" aria-label="Analyse des refus et expirations">
+            <header><h2>Boucle de feedback</h2><small>Human Gate</small></header>
+            <div className="oh-panel__body oh-feedback-grid">
+              <div>
+                <h3>Motifs fréquents</h3>
+                {(review.refusalReasons ?? []).map((item) => <div key={item.reason} className="oh-reason-row"><span>{item.reason}</span><strong>{item.count}</strong></div>)}
+                {!(review.refusalReasons ?? []).length ? <p className="oh-empty">Aucun motif de refus publié.</p> : null}
+              </div>
+              <div>
+                <h3>Expiration par stratégie</h3>
+                {(review.expirationByStrategy ?? []).map((item) => <div key={item.strategyInstanceId} className="oh-reason-row"><span title={item.strategyInstanceId}>{shortId(item.strategyInstanceId)}</span><strong>{item.expirationPct}%</strong><small>{item.expired}/{item.total}</small></div>)}
+                {!(review.expirationByStrategy ?? []).length ? <p className="oh-empty">Aucune expiration attribuable à une stratégie.</p> : null}
               </div>
             </div>
           </section>
@@ -440,6 +537,27 @@ function formatTime(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+export function formatExpiryCountdown(value: string | null, now: Date | undefined) {
+  if (!value || !now) return "Échéance non publiée";
+  const expiresAt = new Date(value);
+  if (Number.isNaN(expiresAt.getTime())) return "Échéance non publiée";
+  const remainingSeconds = Math.floor((expiresAt.getTime() - now.getTime()) / 1000);
+  if (remainingSeconds <= 0) return "Expiré";
+  if (remainingSeconds < 60) return `Expire dans ${remainingSeconds}s`;
+  if (remainingSeconds < 3600) return `Expire dans ${Math.ceil(remainingSeconds / 60)} min`;
+  return `Expire dans ${Math.floor(remainingSeconds / 3600)} h ${Math.ceil((remainingSeconds % 3600) / 60)} min`;
+}
+
+function expiryTone(value: string | null, now: Date | undefined) {
+  if (!value || !now) return "muted";
+  const expiresAt = new Date(value);
+  if (Number.isNaN(expiresAt.getTime())) return "muted";
+  const remainingSeconds = (expiresAt.getTime() - now.getTime()) / 1000;
+  if (remainingSeconds <= 0) return "danger";
+  if (remainingSeconds <= 120) return "warning";
+  return "success";
 }
 
 function formatClock(value: Date | undefined) {

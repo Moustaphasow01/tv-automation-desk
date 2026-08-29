@@ -276,9 +276,11 @@
 .cc-panel--desk-control .cc-panel__body { padding: 7px 9px; }
 .cc-desk-state { display: flex; gap: 10px; align-items: center; min-height: 26px; color: var(--cc-secondary); font-size: 12px; }
 .cc-desk-state strong { color: var(--cc-green-bright); font-size: 16px; }
-.cc-desk-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; margin: 3px 0 6px; }
-.cc-desk-actions button { display: flex; min-width: 0; min-height: 27px; gap: 4px; align-items: center; justify-content: center; padding: 0 4px; border: 1px solid var(--cc-border-strong); border-radius: 3px; background: #0b2234; color: #8fb5d8; font: inherit; font-size: 12px; cursor: pointer; }
+.cc-desk-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; margin: 5px 0 8px; }
+.cc-desk-actions button { display: flex; min-width: 44px; min-height: 44px; gap: 4px; align-items: center; justify-content: center; padding: 0 7px; border: 1px solid var(--cc-border-strong); border-radius: 4px; background: #0b2234; color: #8fb5d8; font: inherit; font-size: 12px; cursor: pointer; }
 .cc-desk-actions button:hover:not(:disabled) { border-color: var(--cc-blue); color: var(--cc-text); }
+.cc-desk-actions button.is-destructive { border-color: color-mix(in srgb, var(--cc-red) 58%, var(--cc-border-strong)); color: var(--cc-red); }
+.cc-desk-actions button.is-destructive:hover:not(:disabled) { border-color: var(--cc-red); background: rgba(176,64,65,.12); }
 .cc-desk-actions button:focus-visible { outline: 2px solid var(--cc-focus); outline-offset: 1px; }
 .cc-desk-actions button:disabled { color: var(--cc-disabled); cursor: not-allowed; }
 .cc-desk-note { margin: 0 0 7px; color: var(--cc-muted); font-size: 12px; }

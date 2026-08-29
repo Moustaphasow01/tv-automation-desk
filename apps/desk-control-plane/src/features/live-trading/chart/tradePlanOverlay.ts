@@ -165,7 +165,9 @@ function uniqueTargets(targets: readonly TradeOverlayTarget[]): TradeOverlayTarg
 }
 
 function normalizeInstrument(value: unknown): string | null {
-  return String(value ?? "").trim().toUpperCase() || null;
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (!normalized) return null;
+  return ({ "MNQ1!": "MNQ", "MES1!": "MES", "NQ1!": "NQ", "ES1!": "ES", "ZC1!": "ZC", "ZW1!": "ZW" } as Record<string, string>)[normalized] ?? normalized;
 }
 
 function priceValue(value: unknown): unknown {

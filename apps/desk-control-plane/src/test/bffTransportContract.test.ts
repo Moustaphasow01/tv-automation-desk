@@ -40,6 +40,24 @@ describe("front vnext BFF transport contract", () => {
     expect(envelope.data.summary.activeStrategies).toBe(commandCenterView.data.summary.activeStrategies);
   });
 
+  it("classifies route-change cancellation without exposing the browser AbortError message", async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason ?? new DOMException("Aborted", "AbortError")), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("window", { setTimeout, clearTimeout });
+
+    const controller = new AbortController();
+    const request = createDeskTransport(bffConfig).getView<CommandCenterView>("command-center", {}, controller.signal);
+    controller.abort();
+
+    await expect(request).rejects.toMatchObject({
+      name: "AbortError",
+      message: "BFF_VIEW_REQUEST_CANCELLED",
+      code: "BFF_VIEW_REQUEST_CANCELLED",
+    });
+  });
+
   it("submits operator commands to /front-api/v1/commands with idempotency and revision headers", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const headers = init?.headers as Record<string, string>;

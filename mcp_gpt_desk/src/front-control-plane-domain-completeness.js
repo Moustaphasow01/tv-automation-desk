@@ -236,18 +236,31 @@ export function frontAuditEvents({ execution = {}, strategy = {}, incidents = {}
 
 export function auditRelations(events) {
   const byCorrelation = new Map();
+  const byEventId = new Map(events.map((event) => [event.eventId, event]));
   for (const event of events) {
     const key = event.correlationId || "none";
     if (!byCorrelation.has(key)) byCorrelation.set(key, []);
     byCorrelation.get(key).push(event);
   }
-  return [...byCorrelation.entries()].map(([correlationId, items]) => ({
-    correlationId,
-    eventIds: items.map((item) => item.eventId),
-    domains: [...new Set(items.map((item) => item.domain))],
-    authoritativeSteps: countBy(items, (item) => item.authority === "AUTHORITATIVE"),
-    advisoryBranches: countBy(items, (item) => item.authority === "ADVISORY"),
-  }));
+  const relations = [];
+  const seen = new Set();
+  for (const items of byCorrelation.values()) {
+    const ordered = [...items].sort((left, right) => String(left.at).localeCompare(String(right.at)));
+    ordered.forEach((event, index) => {
+      const explicitCause = event.causationId ? byEventId.get(event.causationId) : null;
+      const previous = ordered[index - 1];
+      const from = explicitCause?.eventId || previous?.eventId;
+      if (!from || from === event.eventId) return;
+      const relation = explicitCause
+        ? (event.authority === "ADVISORY" ? "ADVISES" : "CAUSES")
+        : "FOLLOWS";
+      const key = `${from}:${event.eventId}:${relation}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      relations.push({ fromEventId: from, toEventId: event.eventId, relation });
+    });
+  }
+  return relations;
 }
 
 export function telegramDrilldownFromHealth(health = {}) {
@@ -295,17 +308,18 @@ function canonicalDossierMeta({ portfolioIntent, payload, nowIso }) {
 
 function canonicalDossierLineage({ execution, portfolioIntent, payload, humanGate, riskDecision }) {
   const source = payload.source || {};
+  const lineage = firstValue(portfolioIntent.lineage, payload.lineage, source.lineage) || {};
   const portfolioOrderIntentId = text(portfolioIntent.portfolio_order_intent_id, "");
   const providerCommands = rows(execution.providerCommands).filter((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId);
   const providerEvents = rows(execution.providerEvents).filter((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId);
   return {
-    strategyDefinition: { id: text(firstValue(payload.strategy_definition_id, payload.strategy_id), "unavailable") },
-    strategyVersion: { id: text(firstValue(payload.strategy_version_id, payload.strategy_version), "unavailable") },
-    strategyInstance: { id: text(payload.strategy_instance_id, "unavailable") },
-    strategySignal: { id: text(firstValue(payload.signal_id, source.signal_id), "unavailable") },
+    strategyDefinition: { id: text(firstValue(payload.strategy_definition_id, payload.strategy_id, rows(lineage.strategy_definition_ids)[0]), "unavailable") },
+    strategyVersion: { id: text(firstValue(payload.strategy_version_id, payload.strategy_version, rows(lineage.strategy_version_ids)[0]), "unavailable") },
+    strategyInstance: { id: text(firstValue(payload.strategy_instance_id, rows(lineage.strategy_instance_ids)[0]), "unavailable") },
+    strategySignal: { id: text(firstValue(portfolioIntentSignalId(portfolioIntent), payload.signal_id, source.signal_id), "unavailable") },
     contextDecision: { id: text(firstValue(payload.context_gate_decision_id, payload.ai_context_gate_decision_id), "unavailable") },
     portfolioDecision: { id: text(firstValue(portfolioIntent.portfolio_arbitration_run_id, payload.portfolio_arbitration_run_id, source.portfolio_arbitration_run_id), "unavailable"), candidateAllocationIds: rows(firstValue(portfolioIntent.candidate_allocation_ids, source.candidate_allocation_ids)).map(String) },
-    riskDecision: { id: text(firstValue(riskDecision?.risk_decision_id, rows(firstValue(portfolioIntent.risk_decision_ids, source.risk_decision_ids))[0]), "unavailable"), decision: text(riskDecision?.decision, "unavailable") },
+    riskDecision: { id: text(firstValue(riskDecision?.risk_decision_id, rows(firstValue(portfolioIntent.risk_decision_ids, source.risk_decision_ids, lineage.risk_decision_ids))[0]), "unavailable"), decision: text(riskDecision?.decision, "unavailable") },
     targetPosition: { id: text(firstValue(portfolioIntent.target_position_id, payload.target_position_id), "unavailable"), payload: portfolioIntent.target_position_payload || null },
     orderIntent: { id: text(firstValue(portfolioIntent.portfolio_order_intent_id, payload.order_intent_id), "unavailable") },
     humanGate: { id: humanGate.gateId || "unavailable", status: humanGate.status },
@@ -655,25 +669,26 @@ function auditRuntimeEvents(runtime, nowIso) {
 
 function auditIncidentEvents(incidents, nowIso) {
   return rows(incidents).filter(hasIncidentId).map((item) => auditEventRow({
-    id: item.incident_id,
+    id: item.incident_id || item.id,
     at: item.created_at_utc || item.opened_at_utc || nowIso,
     domain: text(item.domain, "Incident"),
     eventType: "incident.created",
     status: item.status || item.severity || "OPEN",
     title: item.title,
     detail: item.detail || item.message,
-    correlationId: item.correlation_id || item.incident_id,
+    correlationId: item.correlation_id || item.incident_id || item.id,
     causationId: item.order_id || item.position_id || item.workflow_id,
     authority: "AUTHORITATIVE",
-    route: `/operations/incidents/${encodeURIComponent(String(item.incident_id))}`,
+    route: `/operations/incidents/${encodeURIComponent(String(item.incident_id || item.id))}`,
     payload: item,
   }));
 }
 
 function auditEventRow({ id, at, domain, eventType, status, title, detail, correlationId, causationId, authority, route, payload }) {
   const sourcePayload = payload && typeof payload === "object" ? payload : {};
+  const eventId = text(id, "");
   return {
-    eventId: text(id, ""),
+    eventId,
     at: text(at, "unavailable"),
     domain: text(domain, "operations"),
     eventType: text(eventType, "event"),
@@ -684,7 +699,7 @@ function auditEventRow({ id, at, domain, eventType, status, title, detail, corre
     causationId: text(causationId, ""),
     authority: authority === "ADVISORY" ? "ADVISORY" : "AUTHORITATIVE",
     latencyMs: nullableNumber(sourcePayload.latency_ms ?? sourcePayload.latencyMs),
-    route: route || null,
+    route: route || `/events/${encodeURIComponent(eventId)}`,
     payloadPreview: objectFacts(sourcePayload, Object.keys(sourcePayload).slice(0, 8)),
   };
 }

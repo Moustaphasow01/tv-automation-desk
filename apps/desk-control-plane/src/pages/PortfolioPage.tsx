@@ -1,5 +1,6 @@
 import { Fragment, useContext, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
+import { routeDisplayName } from "@/app/routes";
 import { ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
@@ -43,7 +44,7 @@ export function PortfolioPage() {
     <div className="pf-page" data-testid="portfolio-golden-master">
       <header className="pf-header">
         <div className="pf-header__title">
-          <h1>Portefeuille &amp; Positions</h1>
+          <h1>{routeDisplayName("portfolio")}</h1>
           <p>Vue temps réel du portefeuille et gestion des positions</p>
         </div>
         <div className="pf-header__clock">
@@ -392,6 +393,7 @@ function formatDecimal(value: number) {
 }
 
 function formatPrice(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "Non publié";
   return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: value < 10 ? 4 : 2, maximumFractionDigits: value < 10 ? 5 : 2 }).format(value);
 }
 

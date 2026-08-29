@@ -1,5 +1,6 @@
 import { useContext, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { routeDisplayName } from "@/app/routes";
 import {
   FaBell,
   FaBug,
@@ -80,7 +81,7 @@ export function ExecutionIncidentsPage() {
     <div className="io-page" data-testid="incidents-operations-golden-master">
       <header className="io-header">
         <div className="io-header__title">
-          <h1>Incidents &amp; Opérations</h1>
+          <h1>{routeDisplayName("execution/incidents")}</h1>
           <p>Incidents, réconciliation &amp; post-mortem</p>
         </div>
         <div className="io-header__clock">

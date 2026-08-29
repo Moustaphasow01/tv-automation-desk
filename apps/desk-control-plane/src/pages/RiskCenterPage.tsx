@@ -1,5 +1,6 @@
-import { useContext, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { routeDisplayName } from "@/app/routes";
 import { FaSkullCrossbones } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
 import { StatusBadge } from "@/design-system/primitives";
@@ -25,6 +26,9 @@ export function RiskCenterPage() {
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
   const [breachTab, setBreachTab] = useState<"active" | "all">("active");
+  const [showAllLimits, setShowAllLimits] = useState(false);
+  const [instrumentFilter, setInstrumentFilter] = useState("ALL");
+  const [accountFilter, setAccountFilter] = useState("ALL");
 
   if (query.isLoading) return <RiskLoading />;
 
@@ -54,12 +58,20 @@ export function RiskCenterPage() {
   };
 
   const shownBreaches = breachTab === "active" ? data.breaches : data.breaches;
+  const instrumentOptions = useMemo(() => uniqueTargets(data.limits, "INSTRUMENT"), [data.limits]);
+  const accountOptions = useMemo(() => uniqueTargets(data.limits, "ACCOUNT"), [data.limits]);
+  const visibleLimits = useMemo(() => data.limits.filter((limit) => {
+    if (!showAllLimits && limit.status === "PASS" && limit.usedPct < 50) return false;
+    if (instrumentFilter !== "ALL" && !(limit.scope === "INSTRUMENT" && limit.targetId === instrumentFilter)) return false;
+    if (accountFilter !== "ALL" && !(limit.scope === "ACCOUNT" && limit.targetId === accountFilter)) return false;
+    return true;
+  }), [data.limits, showAllLimits, instrumentFilter, accountFilter]);
 
   return (
     <div className="rc-page" data-testid="risk-center-golden-master">
       <header className="rc-header">
         <div className="rc-header__title">
-          <h1>Centre de risque</h1>
+          <h1>{routeDisplayName("risk")}</h1>
           <p>Surveillance du risque en temps réel &amp; moteur de décision</p>
         </div>
         <div className="rc-header__clock">
@@ -106,13 +118,18 @@ export function RiskCenterPage() {
 
         <div className="rc-row1">
           <section className="rc-panel" aria-label="Limites officielles">
-            <header><h2>Limites</h2><small>{data.limits.length}</small></header>
+            <header><h2>Limites</h2><small>{visibleLimits.length} / {data.limits.length}</small><button className="rc-show-all" type="button" onClick={() => setShowAllLimits((value) => !value)}>{showAllLimits ? "Voir les alertes" : "Voir tout"}</button></header>
             <div className="rc-panel__body" style={{ padding: 0 }}>
+              <div className="rc-limit-filters" aria-label="Filtres des limites de risque">
+                <label><span>Instrument</span><select value={instrumentFilter} onChange={(event) => setInstrumentFilter(event.target.value)}><option value="ALL">Tous les instruments</option>{instrumentOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+                <label><span>Compte</span><select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}><option value="ALL">Tous les comptes</option>{accountOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+                {!showAllLimits ? <p>Affichage prioritaire : anomalies et utilisation ≥ 50 %.</p> : <p>Catalogue complet des limites.</p>}
+              </div>
               <div className="rc-table-scroll" role="region" aria-label="Limites de risque défilables" tabIndex={0}>
                 <table className="rc-table">
                   <thead><tr><th>Limite</th><th>Utilisé</th><th>Limite</th><th>%</th><th>Marge</th><th>Statut</th></tr></thead>
                   <tbody>
-                    {data.limits.map((limit, index) => (
+                    {visibleLimits.map((limit, index) => (
                       <tr key={`${limit.limitId}-${index}`}>
                         <td><LimitCell row={limit} /></td>
                         <td>{formatRiskValue(limit.usedValue, limit.unit)}</td>
@@ -122,7 +139,7 @@ export function RiskCenterPage() {
                         <td><StatusBadge tone={statusTone(limit.status)}>{presentQueueStatus(limit.status).label}</StatusBadge></td>
                       </tr>
                     ))}
-                    {!data.limits.length ? <tr><td colSpan={6}><p className="rc-empty">Aucune limite publiée.</p></td></tr> : null}
+                    {!visibleLimits.length ? <tr><td colSpan={6}><p className="rc-empty">Aucune limite ne nécessite une attention immédiate.</p></td></tr> : null}
                   </tbody>
                 </table>
               </div>
@@ -449,6 +466,10 @@ function LimitCell({ row }: { row: RiskLimit }) {
       <small style={{ color: "var(--rc-muted)" }}>{row.officialSource ?? "Source non publiée"} · {(row.reasonCodes ?? []).map((code) => presentGeneric(code).label).join(", ")}</small>
     </span>
   );
+}
+
+function uniqueTargets(limits: RiskView["limits"], scope: RiskLimit["scope"]): string[] {
+  return [...new Set(limits.filter((limit) => limit.scope === scope).map((limit) => limit.targetId).filter(Boolean))].sort();
 }
 
 function RiskLoading() {

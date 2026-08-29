@@ -39,6 +39,8 @@ export class DeskFrontService {
     const specs = [
       { instrument: "MNQ", symbol: "MNQ", timeframes: ["1", "5"], lookbackDays: 8 },
       { instrument: "MES", symbol: "MES", timeframes: ["1", "5"], lookbackDays: 8 },
+      { instrument: "ZC", symbol: "ZC", timeframes: ["1", "5"], lookbackDays: 8 },
+      { instrument: "ZW", symbol: "ZW", timeframes: ["1", "5"], lookbackDays: 8 },
       { instrument: "CL", symbol: "MCL", timeframes: ["1", "5"], lookbackDays: 8 },
       { instrument: "NVDA", symbol: "NVDA", timeframes: ["1", "5"], lookbackDays: 7 },
       { instrument: "AAPL", symbol: "AAPL", timeframes: ["1", "5"], lookbackDays: 7 },

@@ -1,7 +1,9 @@
 import { useContext, useMemo, useState } from "react";
+import { routeDisplayName } from "@/app/routes";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useFrontView } from "@/domains/front-api/repositories";
 import type { PerformanceDimension, PerformanceView } from "@/domains/front-api/viewModels";
+import { downloadJson, printCurrentView } from "@/shared/export";
 import "@/features/performance/performance.css";
 
 type AttributionGroup = PerformanceView["attribution"][number];
@@ -41,12 +43,16 @@ export function PerformancePage() {
     <div className="pa-page" data-testid="performance-golden-master">
       <header className="pa-header">
         <div className="pa-header__title">
-          <h1>Performance Analytics</h1>
+          <h1>{routeDisplayName("performance")}</h1>
           <p>Résultats officiels en R, risque &amp; attribution</p>
         </div>
         <div className="pa-header__clock">
           <strong>{formatClock(realtime?.now)}</strong>
           <small>{formatClockDate(realtime?.now)}</small>
+        </div>
+        <div className="pa-header__exports">
+          <button type="button" onClick={() => downloadJson(`desk-performance-${new Date().toISOString().slice(0, 10)}.json`, data)}>Exporter JSON</button>
+          <button type="button" onClick={printCurrentView}>Imprimer</button>
         </div>
       </header>
 

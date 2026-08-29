@@ -12,6 +12,7 @@ export function buildOrderIntentDossier(envelope: ViewEnvelope<OrderDetailView>)
   const authority = data.authority ?? null;
   const backendHumanGate = data.humanGate ?? null;
   const backendReconciliation = data.reconciliation ?? null;
+  const backendMarket = data.marketContext ?? null;
   const lifecycle = data.lifecycle.map((event): ProviderTimelineEvent => ({
     eventId: event.eventId,
     occurredAt: event.at,
@@ -56,17 +57,24 @@ export function buildOrderIntentDossier(envelope: ViewEnvelope<OrderDetailView>)
     executionPlan: {
       orderType: textValue(terms.type, meta, source, "Type d'ordre non publié"),
       timeInForce: textValue(terms.tif, meta, source, "Time in force non publié"),
-      entry: numericValue(terms.limitPrice, meta, source, "Prix d'entrée officiel non publié"),
-      stop: numericValue(terms.stopPrice, meta, source, "Stop officiel non publié"),
-      targets: typeof terms.targetPrice === "number"
+      entry: priceValue(terms.limitPrice, meta, source, "Prix d'entrée officiel non publié"),
+      stop: priceValue(terms.stopPrice, meta, source, "Stop officiel non publié"),
+      targets: typeof terms.targetPrice === "number" && Number.isFinite(terms.targetPrice) && terms.targetPrice > 0
         ? [known(terms.targetPrice, { asOf: meta.asOf, source })]
         : [unavailable("Targets officiels non publiés", { source })],
-      expectedR: unavailable("Expected R officiel non publié", { source }),
+      expectedR: numericValue(backendMarket?.expectedR ?? undefined, meta, source, "Expected R officiel non publié"),
       expectedRevision: textValue(data.order.expectedVersion, meta, source, "Révision non publiée"),
       createdAt: data.intent
         ? textValue(data.intent.createdAt, meta, source, "Date de création non publiée")
         : unavailable("Date de création OrderIntent non publiée", { source }),
-      expiresAt: unavailable("Expiration OrderIntent non publiée", { source }),
+      expiresAt: textValue(backendHumanGate?.expiresAt, meta, source, "Expiration OrderIntent non publiée"),
+    },
+    marketContext: {
+      lastPrice: marketNumberValue(backendMarket?.lastPrice, backendMarket?.availability, backendMarket?.asOf, backendMarket?.source, "Dernier prix de marché non publié"),
+      asOf: textValue(backendMarket?.asOf, meta, backendMarket?.source || source, "Horodatage du marché non publié"),
+      distanceToEntryPoints: numericValue(backendMarket?.distanceToEntryPoints ?? undefined, meta, backendMarket?.source || source, "Écart à l'entrée non calculable"),
+      distanceToEntryR: numericValue(backendMarket?.distanceToEntryR ?? undefined, meta, backendMarket?.source || source, "Écart en R non calculable"),
+      outsideTradeZone: backendMarket?.outsideTradeZone ?? null,
     },
     executionMode: textValue(data.executionMode ?? undefined, meta, source, "Mode d'exécution autoritaire absent de cette projection") as OrderIntentDossier["executionMode"],
     humanGate: {
@@ -137,6 +145,20 @@ function textValue(value: string | undefined, meta: ViewMeta, source: string, re
 
 function numericValue(value: number | undefined, meta: ViewMeta, source: string, reason: string): DataValue<number> {
   return typeof value === "number" && Number.isFinite(value) ? known(value, { asOf: meta.asOf, source }) : unavailable(reason, { source });
+}
+
+function priceValue(value: number | undefined, meta: ViewMeta, source: string, reason: string): DataValue<number> {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? known(value, { asOf: meta.asOf, source })
+    : unavailable(reason, { source });
+}
+
+function marketNumberValue(value: number | null | undefined, availability: string | undefined, asOf: string | undefined, source: string | undefined, reason: string): DataValue<number> {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return unavailable(reason, { source });
+  if (["LAST_CLOSED_SESSION", "MARKET_CLOSED", "STALE"].includes(String(availability || "").toUpperCase())) {
+    return { state: "STALE", value, asOf: asOf || "", reason: "Dernier prix connu ; le marché est fermé ou la cotation est ancienne.", source };
+  }
+  return known(value, { asOf: asOf || "", source: source || "market_candles" });
 }
 
 function isPlaceholder(value: string | undefined): boolean {

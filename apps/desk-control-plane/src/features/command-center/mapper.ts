@@ -1,5 +1,6 @@
 import type { CommandCenterView } from "@/domains/front-api/viewModels";
 import type { ViewEnvelope } from "@/shared/contracts";
+import { presentOperationalStatus } from "@/design-system/labels";
 import type { CommandCenterKpi, CommandCenterModel, CommandCenterTone } from "./model";
 
 export function toCommandCenterModel(envelope: ViewEnvelope<CommandCenterView>): CommandCenterModel {
@@ -65,12 +66,10 @@ function kpiProjection(data: CommandCenterView): readonly CommandCenterKpi[] {
   ];
 }
 
-export function statusTone(value: string): CommandCenterTone {
-  const status = value.toUpperCase();
-  if (["OK", "NOMINAL", "FRESH", "HEALTHY", "READY", "APPROVED", "DONE", "FILLED"].includes(status)) return "success";
-  if (["CRITICAL", "DOWN", "FAILED", "REJECTED", "BREACH", "STOP"].includes(status)) return "danger";
-  if (["DEGRADED", "STALE", "DELAYED", "WATCH", "WAIT", "PARTIAL", "AWAITING", "UNKNOWN", "UNAVAILABLE"].some((item) => status.includes(item))) return "warning";
-  return "info";
+export function statusTone(value: string): Exclude<CommandCenterTone, "neutral"> {
+  const presentation = presentOperationalStatus(value);
+  if (presentation.tone === "accent" || presentation.tone === "neutral") return "info";
+  return presentation.tone;
 }
 
 export function truthTone(availability: string | undefined, stale = false): CommandCenterTone {

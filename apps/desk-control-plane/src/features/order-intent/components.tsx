@@ -44,8 +44,17 @@ export function AuthorityStageCard({ stage }: { stage: AuthorityStage }) {
 }
 
 export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier }) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const copyTicket = async () => {
+    try {
+      await copyToClipboard(buildOrderTicketText(dossier));
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  };
   return (
-    <Card title="Position cible & plan d'exécution" eyebrow="LECTURE SEULE APRÈS RISQUE" density="compact" state="readonly">
+    <Card title="Position cible & plan d'exécution" eyebrow="LECTURE SEULE APRÈS RISQUE" density="compact" state="readonly" actions={<DeskButton variant="ghost" onClick={() => void copyTicket()}>{copyState === "copied" ? "Ticket copié" : copyState === "failed" ? "Copie indisponible" : "Copier le ticket"}</DeskButton>}>
       <div className="order-dossier__immutable-banner" role="note">
         Ces termes sont affichés uniquement. Toute modification exige le rejet puis un nouveau cycle Risk backend.
       </div>
@@ -53,14 +62,27 @@ export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier })
         <ReadonlyTerm label="Instrument" value={dossier.signal.instrument} />
         <ReadonlyTerm label="Sens" value={dossier.signal.side} />
         <ReadonlyTerm label="Compte" value={dossier.targetPosition.account} />
-        <ReadonlyTerm label="Quantité autorisée" value={dossier.targetPosition.authorizedQuantity} />
+        <ReadonlyTerm label="Quantité autorisée" value={dossier.targetPosition.authorizedQuantity} copyable />
         <ReadonlyTerm label="Type" value={dossier.executionPlan.orderType} />
         <ReadonlyTerm label="TIF" value={dossier.executionPlan.timeInForce} />
-        <ReadonlyTerm label="Entrée" value={dossier.executionPlan.entry} format="price" />
-        <ReadonlyTerm label="Stop" value={dossier.executionPlan.stop} format="price" />
-        {dossier.executionPlan.targets.map((target, index) => <ReadonlyTerm key={index} label={`Cible ${index + 1}`} value={target} format="price" />)}
+        <ReadonlyTerm label="Entrée" value={dossier.executionPlan.entry} format="price" copyable />
+        <ReadonlyTerm label="Stop" value={dossier.executionPlan.stop} format="price" copyable />
+        {dossier.executionPlan.targets.map((target, index) => <ReadonlyTerm key={index} label={`Cible ${index + 1}`} value={target} format="price" copyable />)}
         <ReadonlyTerm label="R attendu" value={dossier.executionPlan.expectedR} format="r" />
       </dl>
+      <div className={`order-dossier__market-context${dossier.marketContext.outsideTradeZone ? " is-outside" : ""}`} role={dossier.marketContext.outsideTradeZone ? "alert" : "status"}>
+        <div>
+          <small>Dernier prix connu</small>
+          <DataMetric label="Marché" value={dossier.marketContext.lastPrice} />
+          <DataValueLine label="Cotation à" value={dossier.marketContext.asOf} />
+        </div>
+        <div>
+          <small>Écart à l'entrée</small>
+          <DataMetric label="Points" value={dossier.marketContext.distanceToEntryPoints} />
+          <DataMetric label="R" value={dossier.marketContext.distanceToEntryR} />
+        </div>
+        <p>{dossier.marketContext.outsideTradeZone ? "Attention : le dernier prix connu se situe hors de la zone entrée–stop–cible." : "Le marché reste dans l'enveloppe du plan publiée par le backend."}</p>
+      </div>
     </Card>
   );
 }
@@ -228,9 +250,15 @@ export function DataMetric({ label, value }: { label: string; value: DataValue<s
   return <MetricBox label={label} value={<span className={display.available ? undefined : "order-dossier__unavailable"}>{display.text}</span>} />;
 }
 
-function ReadonlyTerm({ label, value, format }: { label: string; value: DataValue<string | number>; format?: "price" | "r" }) {
+function ReadonlyTerm({ label, value, format, copyable = false }: { label: string; value: DataValue<string | number>; format?: "price" | "r"; copyable?: boolean }) {
+  const [copied, setCopied] = useState(false);
   const display = valueString(value, format);
-  return <div><dt>{label}</dt><dd className={display.available ? undefined : "order-dossier__unavailable"}>{display.text}</dd></div>;
+  const copy = async () => {
+    if (!display.available) return;
+    await copyToClipboard(display.raw);
+    setCopied(true);
+  };
+  return <div><dt>{label}</dt><dd className={display.available ? undefined : "order-dossier__unavailable"}>{copyable && display.available ? <button className="order-dossier__copy-value" type="button" title={`Copier ${label.toLowerCase()}`} onClick={() => void copy()}>{display.text}<span className="sr-only">{copied ? " copié" : ""}</span></button> : display.text}</dd></div>;
 }
 
 function DataValueLine({ label, value }: { label: string; value: DataValue<string | number> }) {
@@ -252,6 +280,25 @@ function valueString(value: DataValue<string | number>, format?: "price" | "r"):
 
 function isKnown(value: DataValue<unknown>): boolean {
   return value.state === "KNOWN" || value.state === "STALE";
+}
+
+export function buildOrderTicketText(dossier: OrderIntentDossier): string {
+  const field = (value: DataValue<string | number>) => valueString(value).available ? valueString(value).raw : "NON_PUBLIE";
+  const targets = dossier.executionPlan.targets.map(field).join(",");
+  return [
+    field(dossier.signal.instrument),
+    field(dossier.signal.side),
+    field(dossier.targetPosition.authorizedQuantity),
+    `${field(dossier.executionPlan.orderType)} ${field(dossier.executionPlan.entry)}`,
+    `STOP ${field(dossier.executionPlan.stop)}`,
+    `TARGET ${targets || "NON_PUBLIE"}`,
+    field(dossier.executionPlan.timeInForce),
+  ].join(" | ");
+}
+
+async function copyToClipboard(value: string): Promise<void> {
+  if (!globalThis.navigator?.clipboard?.writeText) throw new Error("CLIPBOARD_UNAVAILABLE");
+  await globalThis.navigator.clipboard.writeText(value);
 }
 
 function formatTimestamp(value: string): ReactNode {

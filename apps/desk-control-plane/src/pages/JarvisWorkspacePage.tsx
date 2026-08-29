@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { routeDisplayName } from "@/app/routes";
 import {
   FaBell,
   FaCheckCircle,
@@ -123,7 +124,7 @@ export function JarvisWorkspacePage() {
           <>
             <span title="Création de brief non exposée par le backend">Nouveau brief indisponible</span>
             <span title="Commande vocale non exposée par le backend">Push-to-talk indisponible</span>
-            <Link className="operator-primary-action" to="/command-center">Retour Centre de contrôle</Link>
+            <Link className="operator-primary-action" to="/command-center">Retour {routeDisplayName("command-center")}</Link>
           </>
         }
       />

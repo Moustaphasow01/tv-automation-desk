@@ -17,6 +17,7 @@ import {
   FaListAlt,
   FaPlayCircle,
   FaProjectDiagram,
+  FaQuestionCircle,
   FaRobot,
   FaSearch,
   FaShieldAlt,
@@ -31,6 +32,7 @@ import { DESK_NAVIGATION_SECTIONS, deskPrimaryNavigation, NAV_GROUP_LABELS, type
 import { presentConnectionStatus } from "@/design-system/labels";
 import { DeskBrand } from "@/shell/DeskBrand";
 import { DeskCommandPalette } from "@/shell/DeskCommandPalette";
+import { RealtimeAlertCenter } from "@/shell/RealtimeAlertCenter";
 import "@/shell/desk-shell-evolution.css";
 
 const navIcons = {
@@ -62,6 +64,7 @@ export function DeskShell() {
   const mobileMenuDrawerRef = useRef<HTMLElement>(null);
   const [liveSidebarCollapsed, setLiveSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const currentRoute = useMemo(
     () => vnextRoutes.find((route) => matchPath({ path: `/${route.path}`, end: true }, location.pathname)),
     [location.pathname]
@@ -69,6 +72,16 @@ export function DeskShell() {
   useEffect(() => {
     document.title = currentRoute ? `${currentRoute.title} · Desk Control Plane` : "Desk Control Plane";
   }, [currentRoute]);
+  useEffect(() => {
+    const onShortcutHelp = (event: globalThis.KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
+      if (event.key === "?") { event.preventDefault(); setShortcutHelpOpen(true); }
+      if (event.key === "Escape") setShortcutHelpOpen(false);
+    };
+    document.addEventListener("keydown", onShortcutHelp);
+    return () => document.removeEventListener("keydown", onShortcutHelp);
+  }, []);
   useLayoutEffect(() => {
     if (previousPathnameRef.current === location.pathname) return;
     previousPathnameRef.current = location.pathname;
@@ -260,6 +273,23 @@ export function DeskShell() {
           </nav>
         </aside>
       ) : null}
+      <button className="desk-shortcut-help-trigger" type="button" aria-label="Afficher les raccourcis clavier" onClick={() => setShortcutHelpOpen(true)}><FaQuestionCircle aria-hidden="true" /><span>?</span></button>
+      {shortcutHelpOpen ? (
+        <div className="desk-shortcut-help-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setShortcutHelpOpen(false); }}>
+          <section className="desk-shortcut-help" role="dialog" aria-modal="true" aria-labelledby="desk-shortcuts-title">
+            <header><div><small>AIDE OPÉRATEUR</small><h2 id="desk-shortcuts-title">Raccourcis clavier</h2></div><button type="button" onClick={() => setShortcutHelpOpen(false)}>Fermer</button></header>
+            <dl>
+              <div><dt>Ctrl + K</dt><dd>Ouvrir la navigation rapide</dd></div>
+              <div><dt>?</dt><dd>Afficher cette aide</dd></div>
+              <div><dt>Échap</dt><dd>Fermer un panneau ou une boîte de dialogue</dd></div>
+              <div><dt>Tab / Maj + Tab</dt><dd>Parcourir les actions sans souris</dd></div>
+              <div><dt>Entrée</dt><dd>Activer l’élément sélectionné</dd></div>
+            </dl>
+            <p>Les raccourcis n’exécutent jamais une action Risk, Human Gate ou provider sans la confirmation backend prévue.</p>
+          </section>
+        </div>
+      ) : null}
+      <RealtimeAlertCenter />
     </div>
   );
 }

@@ -103,6 +103,13 @@ export type OrderIntentDossier = {
     createdAt: DataValue<string>;
     expiresAt: DataValue<string>;
   };
+  marketContext: {
+    lastPrice: DataValue<number>;
+    asOf: DataValue<string>;
+    distanceToEntryPoints: DataValue<number>;
+    distanceToEntryR: DataValue<number>;
+    outsideTradeZone: boolean | null;
+  };
   executionMode: DataValue<ExecutionMode>;
   humanGate: HumanGate;
   providerLifecycle: readonly ProviderTimelineEvent[];

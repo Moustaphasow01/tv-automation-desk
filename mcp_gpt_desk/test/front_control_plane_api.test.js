@@ -348,6 +348,18 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
       }],
     },
   });
+  store.getFrontLiveMarketSnapshot = async () => ({
+    source: "postgres_market_feeds",
+    instruments: {
+      MNQ: {
+        symbol: "MNQ",
+        latest_close: 21470.25,
+        latest_timestamp_paris: "2026-08-11T10:00:00+02:00",
+        availability: "live_postgres",
+        source: "market_feeds/MNQ_1/candles",
+      },
+    },
+  });
   store.getStrategyV2Overview = async () => ({
     definitions: [{ strategy_definition_id: "strdef-1", name: "Breakout Retest", family: "index" }],
     versions: [{ strategy_version_id: "strver-1", strategy_definition_id: "strdef-1", version_label: "v1", status: "VALIDATED" }],
@@ -769,6 +781,25 @@ test("front control plane audit and incidents use unified backend sources instea
   assert.equal(incidents.data.summary.impactedOrders, 1);
 });
 
+test("events audit publishes causal edges and display-ready logs without undefined placeholders", async () => {
+  const store = frontControlPlaneStore({
+    execution: {
+      timeline: [
+        { event_id: "evt-signal", correlation_id: "corr-audit", event_type: "signal.created", status: "OK", occurred_at_utc: "2026-08-11T08:00:00.000Z", title: "Signal créé" },
+        { event_id: "evt-risk", correlation_id: "corr-audit", causation_id: "evt-signal", event_type: "risk.approved", status: "WATCH", occurred_at_utc: "2026-08-11T08:00:01.000Z", title: "Risque approuvé" },
+      ],
+    },
+  });
+
+  const envelope = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/events-audit", query: {} });
+  assert.deepEqual(envelope.data.relations.find((item) => item.toEventId === "evt-risk"), {
+    fromEventId: "evt-signal",
+    toEventId: "evt-risk",
+    relation: "CAUSES",
+  });
+  assert.equal(envelope.data.selectedCorrelation.logs.every((item) => item.logId && item.level && item.message && !item.message.includes("undefined")), true);
+});
+
 test("front control plane P0 operational views preserve empty-state and reconciliation truth", async () => {
   const store = frontControlPlaneStore({
     execution: {
@@ -995,12 +1026,29 @@ test("front control plane orders humanGateReview lists real portfolio order inte
           portfolio_order_intent_id: "poi-confirmed",
           target_instrument: "MES",
           created_at_utc: "2026-08-11T07:50:00.000Z",
-          payload: { action: "SELL", quantity: 1 },
+          payload: { action: "SELL", quantity: 1, strategy_instance_id: "strategy-confirmed" },
+        },
+        {
+          portfolio_order_intent_id: "poi-rejected",
+          target_instrument: "ZW",
+          created_at_utc: "2026-08-11T07:45:00.000Z",
+          payload: { action: "BUY", quantity: 1, strategy_instance_id: "strategy-rejected" },
+        },
+        {
+          portfolio_order_intent_id: "poi-expired",
+          target_instrument: "ZC",
+          created_at_utc: "2026-08-11T07:40:00.000Z",
+          payload: { action: "BUY", quantity: 1, strategy_instance_id: "strategy-expired" },
         },
       ],
       humanExecutionGates: [
         { human_execution_gate_id: "hg-pending", portfolio_order_intent_id: "poi-pending", status: "AWAITING_MANUAL_CONFIRMATION" },
         { human_execution_gate_id: "hg-confirmed", portfolio_order_intent_id: "poi-confirmed", status: "CONFIRMED", confirmed_at_utc: "2026-08-11T07:51:42.000Z" },
+        { human_execution_gate_id: "hg-rejected", portfolio_order_intent_id: "poi-rejected", status: "REJECTED", rejected_at_utc: "2026-08-11T07:46:00.000Z" },
+        { human_execution_gate_id: "hg-expired", portfolio_order_intent_id: "poi-expired", status: "EXPIRED" },
+      ],
+      humanExecutionGateEvents: [
+        { human_execution_gate_event_id: "hge-rejected", portfolio_order_intent_id: "poi-rejected", event_type: "REJECTED", operator_id: "operator-1", occurred_at_utc: "2026-08-11T07:46:00.000Z", payload: { reason: "Prix sorti de la zone" } },
       ],
     },
   });
@@ -1012,16 +1060,25 @@ test("front control plane orders humanGateReview lists real portfolio order inte
   });
 
   const review = envelope.data.humanGateReview;
-  assert.equal(review.items.length, 2);
+  assert.equal(review.items.length, 4);
   assert.equal(review.summary.pendingCount, 1);
   assert.equal(review.summary.approvedToday, 1);
-  assert.equal(review.summary.avgDecisionSeconds, 102);
+  assert.equal(review.summary.rejectedToday, 1);
+  assert.equal(review.summary.avgDecisionSeconds, 81);
   const pendingItem = review.items.find((item) => item.orderIntentId === "poi-pending");
   assert.equal(pendingItem.instrument, "MNQ");
   assert.equal(pendingItem.side, "BUY");
   assert.equal(pendingItem.authorizedQuantity, 2);
   assert.equal(pendingItem.status, "AWAITING_MANUAL_CONFIRMATION");
   assert.equal(pendingItem.route, "/execution/orders/poi-pending");
+  assert.equal(review.refusalJournal[0].reason, "Prix sorti de la zone");
+  assert.deepEqual(review.refusalReasons, [{ reason: "Prix sorti de la zone", count: 1 }]);
+  assert.deepEqual(review.expirationByStrategy.find((item) => item.strategyInstanceId === "strategy-expired"), {
+    strategyInstanceId: "strategy-expired",
+    expired: 1,
+    total: 1,
+    expirationPct: 100,
+  });
 });
 
 test("front control plane auth-session reflects read-only versus operator write session", async () => {
@@ -1506,6 +1563,88 @@ test("front control plane composes Command Center research truth and resolves de
   );
 });
 
+test("live signal detail preserves canonical lineage and exposes its post-risk OrderIntent", async () => {
+  const store = frontControlPlaneStore({
+    strategy: {
+      definitions: [],
+      versions: [],
+      instances: [],
+      signals: [{
+        signal_id: "signal-lineage-1",
+        instrument_code: "ZW1!",
+        side: "long",
+        confidence: 0.81,
+        created_at_utc: "2026-08-11T07:45:00.000Z",
+        expires_at_utc: "2026-08-11T09:00:00.000Z",
+        rule_hits: ["SESSION_US", "BREAKOUT_CONFIRMED"],
+        lineage: {
+          strategy_definition_ids: ["strdef-grain-breakout"],
+          strategy_version_ids: ["strver-grain-breakout-v3"],
+          strategy_instance_ids: ["strinst-grain-breakout-shadow"],
+          strategy_signal_ids: ["signal-lineage-1"],
+        },
+      }],
+    },
+    execution: {
+      portfolioOrderIntents: [{
+        portfolio_order_intent_id: "portfolio-intent-lineage-1",
+        target_position_id: "target-lineage-1",
+        target_account_id: "Sim101",
+        target_instrument: "ZW",
+        risk_approved_net_size: 1,
+        status: "READY",
+        execution_terms: {
+          instrument: "ZW",
+          side: "BUY",
+          quantity: 1,
+          order_type: "LIMIT",
+          entry: { availability: "KNOWN", price: 528.25 },
+          stop: { availability: "KNOWN", price: 525.75 },
+          targets: [{ label: "T1", price: 533.25 }],
+          time_in_force: "DAY",
+        },
+        lineage: {
+          strategy_definition_ids: ["strdef-grain-breakout"],
+          strategy_version_ids: ["strver-grain-breakout-v3"],
+          strategy_instance_ids: ["strinst-grain-breakout-shadow"],
+          strategy_signal_ids: ["signal-lineage-1"],
+          risk_decision_ids: ["risk-lineage-1"],
+        },
+        risk_decisions: [{
+          risk_decision_id: "risk-lineage-1",
+          decision: "APPROVED",
+          status: "PASS",
+          approved_size: 1,
+          reason_codes: ["GRAIN_RISK_OK"],
+        }],
+      }],
+      humanExecutionGates: [{
+        human_execution_gate_id: "gate-lineage-1",
+        portfolio_order_intent_id: "portfolio-intent-lineage-1",
+        status: "AWAITING_MANUAL_CONFIRMATION",
+        revision: 1,
+      }],
+    },
+  });
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-signal-detail",
+    query: { signalId: "signal-lineage-1" },
+    actor: { kind: "operator_session", scopes: ["desk.read", "desk.write"] },
+  });
+
+  assert.equal(envelope.data.identity.strategyDefinitionId, "strdef-grain-breakout");
+  assert.equal(envelope.data.identity.strategyVersionId, "strver-grain-breakout-v3");
+  assert.equal(envelope.data.identity.strategyInstanceId, "strinst-grain-breakout-shadow");
+  assert.deepEqual(envelope.data.predicates.map((item) => item.label), ["SESSION_US", "BREAKOUT_CONFIRMED"]);
+  assert.equal(envelope.data.riskCheck.riskCheckId, "risk-lineage-1");
+  assert.equal(envelope.data.linkedOrderIntents.length, 1);
+  assert.equal(envelope.data.linkedOrderIntents[0].orderIntentId, "portfolio-intent-lineage-1");
+  assert.equal(envelope.data.linkedOrderIntents[0].instrument, "ZW");
+  assert.equal(envelope.data.linkedOrderIntents[0].route, "/execution/orders/portfolio-intent-lineage-1");
+  assert.equal(envelope.data.navigation.some((item) => item.route === "/execution/orders/portfolio-intent-lineage-1"), true);
+});
+
 test("Command Center maps canonical incident fields and operational counters without generic placeholders", async () => {
   const store = frontControlPlaneStore({
     incidents: {
@@ -1542,6 +1681,31 @@ test("Command Center maps canonical incident fields and operational counters wit
   assert.equal(envelope.data.research.rows[0].dataset, "NOT_LINKED");
   assert.equal(envelope.data.research.rows[0].run, "NO_ACTIVE_RUN");
   assert.equal(envelope.data.summary.criticalIncidents, 0, "warning incidents must not inflate the critical KPI");
+});
+
+test("command center, incidents view and Jarvis share one canonical open-incident population", async () => {
+  const store = frontControlPlaneStore({
+    incidents: {
+      items: [
+        { incident_id: "inc-open", status: "OPEN", severity: "CRITICAL", title: "Provider failed", created_at_utc: "2026-08-11T08:00:00.000Z" },
+        { incident_id: "inc-resolved", status: "RESOLVED", severity: "CRITICAL", title: "Resolved failure", created_at_utc: "2026-08-11T07:00:00.000Z" },
+        { incident_id: "inc-expected", status: "STOPPED", severity: "HIGH", title: "Expected operator stop", created_at_utc: "2026-08-11T06:00:00.000Z" },
+      ],
+    },
+  });
+
+  const [commandCenter, executionIncidents, jarvis] = await Promise.all([
+    handleFrontControlPlane(store, { pathname: "/front-api/v1/views/command-center", query: {} }),
+    handleFrontControlPlane(store, { pathname: "/front-api/v1/views/execution-incidents", query: {} }),
+    handleFrontControlPlane(store, { pathname: "/front-api/v1/views/jarvis-workspace", query: {} }),
+  ]);
+
+  assert.equal(commandCenter.data.summary.criticalIncidents, 1);
+  assert.equal(commandCenter.data.risk.activeAlerts, 1);
+  assert.equal(commandCenter.data.incidents.length, 1);
+  assert.equal(executionIncidents.data.summary.openIncidents, 1);
+  assert.equal(executionIncidents.data.summary.criticalIncidents, 1);
+  assert.equal(jarvis.data.deskSnapshot.openIncidents, 1);
 });
 
 test("front control plane resolves execution drill-downs strictly by requested id", async () => {
@@ -1634,6 +1798,18 @@ test("front control plane order-detail publishes post-risk portfolio OrderIntent
       }],
     },
   });
+  store.getFrontLiveMarketSnapshot = async () => ({
+    source: "postgres_market_feeds",
+    instruments: {
+      MNQ: {
+        symbol: "MNQ",
+        latest_close: 21470.25,
+        latest_timestamp_paris: "2026-08-11T10:00:00+02:00",
+        availability: "live_postgres",
+        source: "market_feeds/MNQ_1/candles",
+      },
+    },
+  });
 
   const envelope = await handleFrontControlPlane(store, {
     pathname: "/front-api/v1/views/order-detail",
@@ -1648,6 +1824,14 @@ test("front control plane order-detail publishes post-risk portfolio OrderIntent
   assert.equal(envelope.data.canonicalDossier.schemaVersion, "canonical_order_intent_dossier_v1");
   assert.equal(envelope.data.canonicalDossier.lineage.riskDecision.id, "risk-1");
   assert.equal(envelope.data.canonicalDossier.executionTerms.entry.price, 21450.25);
+  assert.equal(envelope.data.order.limitPrice, 21450.25);
+  assert.equal(envelope.data.marketContext.lastPrice, 21470.25);
+  assert.equal(envelope.data.marketContext.distanceToEntryPoints, 20);
+  assert.equal(envelope.data.marketContext.distanceToEntryR, 0.5);
+  assert.equal(envelope.data.marketContext.expectedR, 1);
+  assert.equal(envelope.data.intent.limitPrice, 21450.25);
+  assert.equal(envelope.data.intent.stopPrice, 21410.25);
+  assert.equal(envelope.data.intent.targetPrice, 21490.25);
   assert.equal(envelope.data.canonicalDossier.riskSnapshot.riskPerContract, 40);
   assert.equal(envelope.data.canonicalDossier.policy.autoExecutionEnabled, false);
   assert.equal(envelope.data.canonicalDossier.policy.ackIsFill, false);

@@ -1,4 +1,5 @@
 import { FaChevronDown, FaCircle } from "react-icons/fa";
+import { routeDisplayName } from "@/app/routes";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { OperatorMenu } from "@/shell/OperatorMenu";
 import type { CommandCenterModel } from "./model";
@@ -11,7 +12,7 @@ export function CommandCenterHeader({ model }: { model: CommandCenterModel }) {
   return (
     <header className="cc-header">
       <div className="cc-header__title">
-        <h1>Centre de contrôle</h1>
+        <h1>{routeDisplayName("command-center")}</h1>
         <p>Centre de contrôle opérationnel du Trading Desk</p>
       </div>
       <div className="cc-header__divider" aria-hidden="true" />
