@@ -217,10 +217,27 @@ function normalizeInvalidation(source) {
 }
 
 function normalizeSource(source) {
+  const nestedSource = record(source.source);
   return {
-    kind: text(firstDefined(source.source_kind, source.sourceKind, source.source, "STRATEGY")),
-    provenance: record(source.provenance) || null,
-    source_data_cutoff_utc: iso(firstDefined(source.source_data_cutoff_utc, source.sourceDataCutoff, source.cutoff_at_utc, source.cutoffAtUtc)),
+    kind: text(firstDefined(
+      source.source_kind,
+      source.sourceKind,
+      nestedSource?.kind,
+      nestedSource?.source_kind,
+      nestedSource?.sourceKind,
+      nestedSource?.type,
+      typeof source.source === "string" ? source.source : undefined,
+      "STRATEGY",
+    )),
+    provenance: record(source.provenance) || record(nestedSource?.provenance) || null,
+    source_data_cutoff_utc: iso(firstDefined(
+      source.source_data_cutoff_utc,
+      source.sourceDataCutoff,
+      source.cutoff_at_utc,
+      source.cutoffAtUtc,
+      nestedSource?.source_data_cutoff_utc,
+      nestedSource?.sourceDataCutoff,
+    )),
   };
 }
 

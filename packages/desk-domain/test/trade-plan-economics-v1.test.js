@@ -96,6 +96,26 @@ describe("trade plan economics V1", () => {
     assert.ok(economics.reason_codes.includes("STOP_UNAVAILABLE"));
   });
 
+  it("preserves structured source provenance without stringifying the object", () => {
+    const result = normalizeProposedTradePlanV1({
+      instrument: "CBOT:ZW1!",
+      direction: "LONG",
+      entry_price: 754,
+      stop_price: 752.25,
+      targets: [{ label: "T1", price: 756.75 }],
+      source: {
+        kind: "strategy_signal_outbox",
+        source_data_cutoff_utc: "2026-08-27T17:20:00.000Z",
+        provenance: { signal_id: "signal-zw" },
+      },
+    });
+
+    assert.equal(result.proposed_trade_plan.source.kind, "strategy_signal_outbox");
+    assert.equal(result.proposed_trade_plan.source.source_data_cutoff_utc, "2026-08-27T17:20:00.000Z");
+    assert.deepEqual(result.proposed_trade_plan.source.provenance, { signal_id: "signal-zw" });
+    assert.notEqual(result.proposed_trade_plan.source.kind, "[object Object]");
+  });
+
   it("canonicalizes common futures symbols", () => {
     assert.equal(canonicalFuturesInstrumentV1("CME_MINI:MNQ1!__5"), "MNQ");
     assert.equal(canonicalFuturesInstrumentV1("CME_MINI:MES1!"), "MES");
