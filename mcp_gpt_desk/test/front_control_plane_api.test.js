@@ -374,8 +374,15 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
       confidence: 72,
       created_at_utc: "2026-08-11T08:00:00.000Z",
       source_data_cutoff_utc: "2026-08-11T07:59:00.000Z",
-      proposed_trade_plan: { order_type: "LIMIT", entry: { price: 21450.25 }, stop: { price: 21410.25 }, targets: [{ price: 21490.25 }] },
-      trade_plan_economics: { risk_per_contract: 40 },
+      proposed_trade_plan: {
+        availability: "KNOWN",
+        order_type: "LIMIT",
+        entry: { price: 21450.25 },
+        stop: { price: 21410.25 },
+        targets: [{ price: 21490.25 }],
+        source: { kind: "[object Object]", source_data_cutoff_utc: "2026-08-11T07:59:00.000Z" },
+      },
+      trade_plan_economics: { availability: "KNOWN", risk_per_contract: 40 },
     }],
   });
   store.listAiContextGateDecisions = async () => ({
@@ -409,6 +416,8 @@ test("front control plane live trading exposes canonical semi-manual pipeline wi
   assert.equal(envelope.data.portfolioOrderIntents[0].providerCommandCount, 0);
   assert.equal(envelope.data.portfolioOrderIntents[0].ackIsFill, false);
   assert.equal(envelope.data.signals[0].proposedTradePlan.entry.price, 21450.25);
+  assert.equal(envelope.data.signals[0].proposedTradePlan.source.kind, "strategy_signal_outbox");
+  assert.equal(envelope.data.signals[0].proposedTradePlan.source.source_data_cutoff_utc, "2026-08-11T07:59:00.000Z");
   assert.equal(envelope.data.timeSeriesContracts.schemaVersion, "front_time_series_contracts_v1");
   assert.equal(envelope.data.timeSeriesContracts.series.find((series) => series.seriesId === "trading.order_intent_overlays")?.availability, "KNOWN");
   assert.equal(envelope.data.timeSeriesContracts.series.find((series) => series.seriesId === "market.ohlcv")?.availability, "UNAVAILABLE");

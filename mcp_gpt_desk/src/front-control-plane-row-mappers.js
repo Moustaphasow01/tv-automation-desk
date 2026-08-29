@@ -132,54 +132,83 @@ function confidencePct(value) {
 
 function frontSignalTradePlan(item = {}) {
   const existingPlan = item.proposed_trade_plan || null;
+  const canonicalExistingPlan = canonicalStoredSignalPlan(existingPlan, item);
   const existingEconomics = item.trade_plan_economics || null;
-  if (existingPlan?.availability === "KNOWN" && existingEconomics?.availability === "KNOWN") {
+  if (canonicalExistingPlan?.availability === "KNOWN" && existingEconomics?.availability === "KNOWN") {
     return {
-      proposedTradePlan: existingPlan,
+      proposedTradePlan: canonicalExistingPlan,
       tradePlanEconomics: existingEconomics,
-      availability: item.availability || existingPlan.availability,
+      availability: item.availability || canonicalExistingPlan.availability,
     };
   }
   const setup = item.setup || {};
   if (!hasTradePlanHints(existingPlan, setup)) {
     return {
-      proposedTradePlan: existingPlan,
+      proposedTradePlan: canonicalExistingPlan,
       tradePlanEconomics: existingEconomics,
-      availability: item.availability || existingPlan?.availability || null,
+      availability: item.availability || canonicalExistingPlan?.availability || null,
     };
   }
   try {
     const normalized = normalizeProposedTradePlanV1({
-      ...object(existingPlan),
-      instrument: firstValue(item.instrument, item.instrument_code, item.symbol, existingPlan?.instrument),
-      direction: firstValue(item.direction, item.side, existingPlan?.direction),
-      order_type: firstValue(existingPlan?.order_type, setup.order_type, setup.orderType),
-      time_in_force: firstValue(existingPlan?.time_in_force, setup.time_in_force, setup.timeInForce, "DAY"),
+      ...object(canonicalExistingPlan),
+      instrument: firstValue(item.instrument, item.instrument_code, item.symbol, canonicalExistingPlan?.instrument),
+      direction: firstValue(item.direction, item.side, canonicalExistingPlan?.direction),
+      order_type: firstValue(canonicalExistingPlan?.order_type, setup.order_type, setup.orderType),
+      time_in_force: firstValue(canonicalExistingPlan?.time_in_force, setup.time_in_force, setup.timeInForce, "DAY"),
       entry_price: firstValue(
-        existingPlan?.entry_price,
-        existingPlan?.entry?.price,
-        existingPlan?.entry?.calculation_price,
+        canonicalExistingPlan?.entry_price,
+        canonicalExistingPlan?.entry?.price,
+        canonicalExistingPlan?.entry?.calculation_price,
         setup.entry_price,
         setup.entryPrice,
         setup.entry,
       ),
-      entry_zone: firstValue(existingPlan?.entry_zone, setup.entry_zone, setup.entryZone),
-      stop_price: firstValue(existingPlan?.stop?.price, existingPlan?.stop_price, setup.stop_price, setup.stopPrice, setup.stop, setup.stop_loss, setup.stopLoss),
-      targets: firstValue(existingPlan?.targets, setup.targets, setup.take_profit_targets, setup.takeProfitTargets, setup.target_prices, setup.targetPrices),
-      source_data_cutoff_utc: firstValue(item.source_data_cutoff_utc, item.cutoff_at_utc, existingPlan?.source?.source_data_cutoff_utc),
+      entry_zone: firstValue(canonicalExistingPlan?.entry_zone, setup.entry_zone, setup.entryZone),
+      stop_price: firstValue(canonicalExistingPlan?.stop?.price, canonicalExistingPlan?.stop_price, setup.stop_price, setup.stopPrice, setup.stop, setup.stop_loss, setup.stopLoss),
+      targets: firstValue(canonicalExistingPlan?.targets, setup.targets, setup.take_profit_targets, setup.takeProfitTargets, setup.target_prices, setup.targetPrices),
+      source_data_cutoff_utc: firstValue(item.source_data_cutoff_utc, item.cutoff_at_utc, canonicalExistingPlan?.source?.source_data_cutoff_utc),
     });
     return {
-      proposedTradePlan: normalized.proposed_trade_plan || existingPlan,
+      proposedTradePlan: normalized.proposed_trade_plan || canonicalExistingPlan,
       tradePlanEconomics: normalized.economics || existingEconomics,
-      availability: normalized.proposed_trade_plan?.availability || item.availability || existingPlan?.availability || null,
+      availability: normalized.proposed_trade_plan?.availability || item.availability || canonicalExistingPlan?.availability || null,
     };
   } catch {
     return {
-      proposedTradePlan: existingPlan,
+      proposedTradePlan: canonicalExistingPlan,
       tradePlanEconomics: existingEconomics,
-      availability: item.availability || existingPlan?.availability || null,
+      availability: item.availability || canonicalExistingPlan?.availability || null,
     };
   }
+}
+
+function canonicalStoredSignalPlan(plan, item = {}) {
+  if (!plan || typeof plan !== "object" || Array.isArray(plan)) return plan;
+  const source = object(plan.source);
+  const rawKind = source.kind;
+  const nestedKind = rawKind && typeof rawKind === "object"
+    ? firstValue(rawKind.kind, rawKind.source_kind, rawKind.sourceKind, rawKind.type)
+    : undefined;
+  const kind = typeof firstValue(nestedKind, rawKind) === "string"
+    ? firstValue(nestedKind, rawKind).trim()
+    : "";
+  const validKind = kind && kind.toLowerCase() !== "[object object]";
+  if (validKind) return plan;
+
+  return {
+    ...plan,
+    source: {
+      ...source,
+      kind: "strategy_signal_outbox",
+      source_data_cutoff_utc: firstValue(
+        source.source_data_cutoff_utc,
+        source.sourceDataCutoff,
+        item.source_data_cutoff_utc,
+        item.cutoff_at_utc,
+      ) || null,
+    },
+  };
 }
 
 function hasTradePlanHints(existingPlan, setup = {}) {
