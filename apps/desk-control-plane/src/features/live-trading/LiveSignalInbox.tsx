@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { FaBullseye, FaChartLine, FaFilter, FaSearch } from "react-icons/fa";
+import { FaBullseye, FaChartLine, FaClock, FaFilter, FaSearch } from "react-icons/fa";
 import { StatusBadge } from "@/design-system/primitives";
-import { presentGeneric } from "@/design-system/labels";
+import { presentDataAbsence, presentGeneric } from "@/design-system/labels";
 import { displayTime, displayValue } from "./mapper";
 import type { LiveTradingModel } from "./model";
 import { resolveSignalTemporalState } from "./signalTemporalState";
@@ -36,19 +36,22 @@ export function LiveSignalInbox({
   const instrument = searchParams.get("signalInstrument") || "ALL";
   const status = searchParams.get("signalState") || "ALL";
   const search = searchParams.get("signalQuery") || "";
+  const lane = searchParams.get("signalLane") || "ACTIVE";
   const requestedPage = Number(searchParams.get("signalPage") || "1");
   const signals = useMemo(() => allSignals(model), [model]);
   const instruments = useMemo(() => unique(signals.map((signal) => signal.symbol)), [signals]);
   const states = useMemo(() => unique(signals.map((signal) => operatorStateForSignal(model, signal).code)), [model, signals]);
   const filtered = useMemo(() => signals.filter((signal) => {
+    const operatorState = operatorStateForSignal(model, signal).code;
     const matchesInstrument = instrument === "ALL" || signal.symbol === instrument;
-    const matchesStatus = status === "ALL" || operatorStateForSignal(model, signal).code === status;
+    const matchesStatus = status === "ALL" || operatorState === status;
+    const matchesLane = lane === "ALL" || (lane === "ACTIVE" ? !["EXPIRED", "REJECTED"].includes(operatorState) : ["EXPIRED", "REJECTED"].includes(operatorState));
     const needle = search.trim().toLocaleLowerCase("fr-FR");
     const matchesSearch = !needle || `${signal.signalId} ${signal.strategyId} ${signal.symbol} ${signal.direction}`
       .toLocaleLowerCase("fr-FR")
       .includes(needle);
-    return matchesInstrument && matchesStatus && matchesSearch;
-  }), [instrument, model.meta.asOf, search, signals, status]);
+    return matchesInstrument && matchesStatus && matchesLane && matchesSearch;
+  }).sort((left, right) => urgencyRank(model, left) - urgencyRank(model, right) || expiryRank(left) - expiryRank(right) || Date.parse(right.createdAt) - Date.parse(left.createdAt)), [instrument, lane, model, search, signals, status]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
   const page = Number.isFinite(requestedPage) ? Math.min(Math.max(1, requestedPage), pageCount) : 1;
   const visible = filtered.slice((page - 1) * 12, page * 12);
@@ -81,6 +84,11 @@ export function LiveSignalInbox({
       </header>
 
       <div className="lt-signal-inbox__filters" aria-label="Filtres de l'inbox">
+        <div className="lt-signal-inbox__lanes" aria-label="Périmètre de la file">
+          <button type="button" aria-pressed={lane === "ACTIVE"} onClick={() => updateFilter("signalLane", "ACTIVE", "ACTIVE")}>À traiter</button>
+          <button type="button" aria-pressed={lane === "HISTORY"} onClick={() => updateFilter("signalLane", "HISTORY", "ACTIVE")}>Historique</button>
+          <button type="button" aria-pressed={lane === "ALL"} onClick={() => updateFilter("signalLane", "ALL", "ACTIVE")}>Tous</button>
+        </div>
         <label className="lt-signal-inbox__search">
           <FaSearch aria-hidden="true" />
           <span className="sr-only">Rechercher un signal</span>
@@ -116,8 +124,13 @@ export function LiveSignalInbox({
               const operatorState = operatorStateForSignal(model, signal);
               const target = signalNavigationTarget(signal);
               return (
-                <tr key={signal.signalId} data-selected={selected ? "true" : "false"} data-expired={temporal.effectiveState === "EXPIRED" ? "true" : "false"}>
-                  <td><time dateTime={signal.createdAt}>{displayTime(signal.createdAt)}</time></td>
+                <tr
+                  key={signal.signalId}
+                  data-selected={selected ? "true" : "false"}
+                  data-expired={temporal.effectiveState === "EXPIRED" ? "true" : "false"}
+                  data-operator-state={operatorState.code}
+                >
+                  <td><time dateTime={signal.createdAt} title={displayTime(signal.createdAt)}>{relativeTime(signal.createdAt, model.meta.asOf)}</time></td>
                   <td><strong>{signal.symbol}</strong></td>
                   <td title={signal.strategyId}>{compactId(signal.strategyId)}</td>
                   <td>
@@ -126,12 +139,18 @@ export function LiveSignalInbox({
                     {temporal.mismatch ? <small className="lt-signal-inbox__temporal-note">état brut {temporal.backendState}</small> : null}
                   </td>
                   <td><span className={`lt-signal-stage lt-signal-stage--${stage.tone}`}>{stage.label}</span></td>
-                  <td>{displayValue(signal.rewardRisk)}</td>
+                  <td>{displayValue(signal.rewardRisk)}{operatorState.code === "ACTIONABLE" ? <small className="lt-signal-inbox__urgency"><FaClock aria-hidden="true" />{remainingTime(signal.expiresAt, model.meta.asOf)}</small> : null}</td>
                   <td>
                     <div className="lt-signal-inbox__actions">
                       <button type="button" aria-pressed={selected} onClick={() => onSelectSignal?.(target)} title="Examiner ce signal dans la chaîne de décision"><FaBullseye aria-hidden="true" /><span>Décision</span></button>
                       <button type="button" onClick={() => onShowOnChart?.(target)} title={`Centrer le graphique ${signal.symbol} sur ce signal`}><FaChartLine aria-hidden="true" /><span>Graphique</span></button>
                       <Link to={`/live/signals/${encodeURIComponent(signal.signalId)}`} title="Ouvrir le dossier signal complet">Dossier complet</Link>
+                    </div>
+                    <div className="lt-signal-inbox__preview" role="tooltip">
+                      <strong>{signal.symbol} · {presentGeneric(signal.direction).label}</strong>
+                      <span>RR {displayValue(signal.rewardRisk)} · confiance {displayValue(signal.confidence)} %</span>
+                      <span>{operatorState.detail}</span>
+                      <small>Échéance {displayTime(signal.expiresAt)} · {stage.label}</small>
                     </div>
                   </td>
                 </tr>
@@ -205,4 +224,32 @@ function signalNavigationTarget(signal: SignalRow): LiveSignalNavigationTarget {
     at: signal.sourceDataCutoffAt || signal.createdAt,
     timeframe: signal.timeframe,
   };
+}
+
+function urgencyRank(model: LiveTradingModel, signal: SignalRow): number {
+  const state = operatorStateForSignal(model, signal).code;
+  return ({ ACTIONABLE: 0, EVALUATING: 1, WATCHED: 2, EXPIRED: 3, REJECTED: 4 } as const)[state];
+}
+
+function expiryRank(signal: SignalRow): number {
+  const parsed = Date.parse(signal.expiresAt);
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+}
+
+function relativeTime(value: string, reference: string): string {
+  const at = Date.parse(value);
+  const now = Date.parse(reference);
+  if (!Number.isFinite(at) || !Number.isFinite(now)) return presentDataAbsence("NOT_PUBLISHED").label;
+  const seconds = Math.max(0, Math.floor((now - at) / 1000));
+  if (seconds < 60) return `il y a ${seconds} s`;
+  if (seconds < 3600) return `il y a ${Math.floor(seconds / 60)} min`;
+  return `il y a ${Math.floor(seconds / 3600)} h`;
+}
+
+function remainingTime(value: string, reference: string): string {
+  const seconds = Math.max(0, Math.floor((Date.parse(value) - Date.parse(reference)) / 1000));
+  if (!Number.isFinite(seconds)) return presentDataAbsence("NOT_PUBLISHED").label;
+  if (seconds <= 0) return "Expiré";
+  if (seconds < 60) return `${seconds} s`;
+  return `${Math.ceil(seconds / 60)} min`;
 }

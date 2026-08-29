@@ -41,6 +41,8 @@ const SEVERITY_COLORS: Record<string, string> = { HIGH: "var(--io-red)", MEDIUM:
 export function ExecutionIncidentsPage() {
   const realtime = useContext(RealtimeContext);
   const query = useFrontView("execution-incidents");
+  const observabilityQuery = useFrontView("operations-observability");
+  const runbooksQuery = useFrontView("operations-runbooks");
   const repository = useFrontViewRepository();
   const [reason, setReason] = useState("Contrôle opérateur : traitement incident via le flux de commande, sans action broker directe.");
   const [stepUpToken, setStepUpToken] = useState("");
@@ -59,10 +61,23 @@ export function ExecutionIncidentsPage() {
   }, [data]);
 
   if (query.isLoading) return <IncidentsLoading />;
-  if (query.isError) return <div className="io-page"><h1 className="sr-only">Incidents &amp; Opérations</h1><div className="io-workspace"><p className="io-empty">Incidents indisponibles : {(query.error as Error).message}</p></div></div>;
+  if (query.isError) return <div className="io-page"><h1 className="sr-only">Incidents &amp; Opérations</h1><div className="io-workspace"><p className="io-empty">La projection des incidents ne répond pas. Réessayez dans quelques instants.</p></div></div>;
   if (!data || !selected) return <div className="io-page"><h1 className="sr-only">Incidents &amp; Opérations</h1><div className="io-workspace"><p className="io-empty">Le BFF ne retourne pas encore la projection `/views/execution-incidents`.</p></div></div>;
 
   const reconcileAction = data.commandActions.find((action) => action.commandType === "execution.incident.reconcile");
+  const workers = observabilityQuery.data?.data.workers
+    ? observabilityQuery.data.data.workers.map((worker) => ({
+        workerId: worker.workerId,
+        role: worker.model,
+        currentTask: worker.task,
+        status: worker.status,
+        lastHeartbeatAt: worker.lastSeenAt
+      }))
+    : (data.workers ?? []);
+  const workerSummary = observabilityQuery.data?.data.workerSummary;
+  const activeWorkers = workerSummary?.active ?? data.workersSummary?.active ?? workers.filter((worker) => worker.status === "ACTIVE").length;
+  const registeredWorkers = workerSummary?.registered ?? data.workersSummary?.total ?? workers.length;
+  const runbooks = runbooksQuery.data?.data.items ?? [];
 
   const confirmAction = async (action: IncidentAction) => {
     setSubmittingActionId(action.actionId);
@@ -71,7 +86,7 @@ export function ExecutionIncidentsPage() {
       const accepted = await repository.submitCommand(buildExecutionIncidentCommand(action, reason, stepUpToken));
       setCommand(accepted);
     } catch (error) {
-      setCommandError(error instanceof Error ? error.message : "EXECUTION_INCIDENT_COMMAND_FAILED");
+      setCommandError("La commande n'a pas abouti. Aucun changement n'a été appliqué.");
     } finally {
       setSubmittingActionId(null);
     }
@@ -247,12 +262,12 @@ export function ExecutionIncidentsPage() {
 
         <div className="io-row3">
           <section className="io-panel" aria-label="Statut des workers">
-            <header><h2>Workers</h2><small>{data.workersSummary.active} actifs / {data.workersSummary.total}</small></header>
+            <header><h2>Workers</h2><small>{activeWorkers} actifs / {registeredWorkers}</small></header>
             <div className="io-panel__body" style={{ padding: 0 }}>
               <table className="io-table">
                 <thead><tr><th>Worker</th><th>Rôle</th><th>Tâche</th><th>Statut</th><th>Dernier heartbeat</th></tr></thead>
                 <tbody>
-                  {data.workers.map((worker, index) => (
+                  {workers.map((worker, index) => (
                     <tr key={`${worker.workerId}-${index}`}>
                       <td><strong>{worker.workerId}</strong></td>
                       <td>{worker.role}</td>
@@ -261,28 +276,28 @@ export function ExecutionIncidentsPage() {
                       <td>{formatTime(worker.lastHeartbeatAt)}</td>
                     </tr>
                   ))}
-                  {!data.workers.length ? <tr><td colSpan={5}><p className="io-empty">Aucun worker publié.</p></td></tr> : null}
+                  {!workers.length ? <tr><td colSpan={5}><p className="io-empty">Aucun worker enregistré dans la projection d'observabilité.</p></td></tr> : null}
                 </tbody>
               </table>
             </div>
           </section>
 
           <section className="io-panel" aria-label="Runbooks récents">
-            <header><h2>Runbooks récents</h2><small>{data.runbooks.length}</small></header>
+            <header><h2>Runbooks récents</h2><small>{runbooks.length}</small></header>
             <div className="io-panel__body" style={{ padding: 0 }}>
               <table className="io-table">
                 <thead><tr><th>Runbook</th><th>Déclenché par</th><th>Statut</th><th>Sévérité</th><th>Mis à jour</th></tr></thead>
                 <tbody>
-                  {data.runbooks.map((runbook, index) => (
-                    <tr key={`${runbook.runbookId}-${index}`}>
+                  {runbooks.map((runbook, index) => (
+                    <tr key={`${runbook.id}-${index}`}>
                       <td><strong>{runbook.title}</strong></td>
-                      <td>{runbook.triggeredBy}</td>
+                      <td>{runbook.secondary || "Non publié"}</td>
                       <td><StatusBadge tone="warning">{runbook.status}</StatusBadge></td>
-                      <td><StatusBadge tone={severityTone(runbook.severity)}>{presentSeverity(runbook.severity).label}</StatusBadge></td>
-                      <td>{formatTime(runbook.updatedAt)}</td>
+                      <td>{runbook.tags.join(", ") || "—"}</td>
+                      <td>{runbook.route ? <Link to={runbook.route}>Ouvrir</Link> : <span>Non publié</span>}</td>
                     </tr>
                   ))}
-                  {!data.runbooks.length ? <tr><td colSpan={5}><p className="io-empty">Aucun runbook publié.</p></td></tr> : null}
+                  {!runbooks.length ? <tr><td colSpan={5}><p className="io-empty">Aucun runbook publié.</p></td></tr> : null}
                 </tbody>
               </table>
             </div>

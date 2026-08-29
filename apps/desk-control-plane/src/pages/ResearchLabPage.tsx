@@ -14,7 +14,7 @@ import {
 } from "react-icons/fa";
 import { DeskButton, TrackedCommandReceipt } from "@/design-system/actions";
 import { Card, ProgressBar, StatusBadge } from "@/design-system/primitives";
-import { presentResearchDecision } from "@/design-system/labels";
+import { presentOperationalStatus, presentOperatorText, presentResearchDecision } from "@/design-system/labels";
 import { useCapabilityCatalog, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
@@ -198,8 +198,8 @@ export function ResearchLabPage() {
                   <tbody>
                     {pagedMissions.map((row, index) => (
                       <tr key={`${row.experimentId}_${index}`} aria-selected={row.experimentId === selectedExperiment?.experimentId} onClick={() => setSelectedMissionId(row.experimentId)}>
-                        <td><strong>{row.title}</strong><span className="rl-mission-id">{row.missionId}</span></td>
-                        <td>{row.ownerAgent}</td>
+                        <td><strong>{row.title}</strong><span className="rl-mission-id">{presentOperatorText(row.missionId)}</span></td>
+                        <td>{presentOperatorText(row.ownerAgent)}</td>
                         <td><StatusBadge tone={stageTone(row.stage)}>{row.stage}</StatusBadge></td>
                         <td>
                           <div className="rl-progress-cell">
@@ -208,8 +208,8 @@ export function ResearchLabPage() {
                           </div>
                         </td>
                         <td>{row.score}</td>
-                        <td>{row.eta}</td>
-                        <td><StatusBadge tone={experimentTone(row.status)}>{row.status}</StatusBadge></td>
+                        <td>{presentOperatorText(row.eta)}</td>
+                        <td><StatusBadge tone={experimentTone(row.status)}>{presentOperationalStatus(row.status).label}</StatusBadge></td>
                       </tr>
                     ))}
                     {!pagedMissions.length ? (
@@ -304,7 +304,7 @@ export function ResearchLabPage() {
                   <div className="rl-mission-box">
                     <small>Résumé mission</small>
                     <div className="rl-mission-box__grid">
-                      <div><small>Agent</small><strong>{selectedExperiment.ownerAgent}</strong></div>
+                      <div><small>Agent</small><strong>{presentOperatorText(selectedExperiment.ownerAgent)}</strong></div>
                       <div><small>Étape</small><strong>{selectedExperiment.stage}</strong></div>
                       <div><small>Tâche en cours</small><strong>{selectedExperiment.currentTask}</strong></div>
                       <div><small>Score</small><strong>{selectedExperiment.score}</strong></div>
@@ -317,14 +317,14 @@ export function ResearchLabPage() {
                       <div><small>Avancement</small><strong>{selectedExperiment.progressPct}%</strong></div>
                       <div><small>Budget tokens</small><strong>{formatPercent(selectedExperiment.tokenBudgetPct)}</strong></div>
                       <div><small>Budget compute</small><strong>{formatPercent(selectedExperiment.computeBudgetPct)}</strong></div>
-                      <div><small>ETA</small><strong>{selectedExperiment.eta}</strong></div>
+                      <div><small>ETA</small><strong>{presentOperatorText(selectedExperiment.eta)}</strong></div>
                     </div>
                   </div>
                   <div className="rl-mission-box rl-mission-box--next">
                     <span className="rl-mission-box--next__play"><FaPlay /></span>
                     <div>
                       <small>Prochaine action automatisée</small>
-                      <strong>{selectedExperiment.expectedEvent}</strong>
+                      <strong>{presentOperatorText(selectedExperiment.expectedEvent)}</strong>
                     </div>
                   </div>
                 </div>
@@ -384,9 +384,9 @@ function WorkerRow({ agent }: { agent: AgentRow }) {
       <span className="rl-worker-dot" aria-hidden="true" />
       <div>
         <strong>{agent.name}</strong>
-        <small>{agent.role} · {agent.model} · {agent.task}</small>
+        <small>{presentOperatorText(agent.role)} · {presentOperatorText(agent.model)} · {presentOperatorText(agent.task)}</small>
       </div>
-      <StatusBadge tone={agent.status === "ACTIVE" ? "success" : agent.status === "BLOCKED" ? "danger" : "warning"}>{agent.status}</StatusBadge>
+      <StatusBadge tone={agent.status === "ACTIVE" ? "success" : agent.status === "BLOCKED" ? "danger" : "warning"}>{presentOperationalStatus(agent.status).label}</StatusBadge>
     </Link>
   );
 }

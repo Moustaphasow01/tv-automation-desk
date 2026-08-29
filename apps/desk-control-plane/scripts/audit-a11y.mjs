@@ -47,7 +47,16 @@ try {
           if (readySelector) await page.locator(readySelector).waitFor({ state: "visible", timeout: 45_000 });
           if (route === "live") await page.locator(".lt-panel").first().waitFor({ state: "visible", timeout: 45_000 });
           const result = await new AxeBuilder({ page }).analyze();
-          findings.push({ viewport: viewport.name, route, violations: result.violations, runtimeErrors: uniqueRuntimeErrors(runtimeErrors) });
+          const operatorCopyAudit = await page.locator("body").innerText().then((content) => {
+            const matches = content.match(/\b(?:unavailable|undefined)\b/gi) ?? [];
+            return {
+              defects: [...new Set(matches.map((match) => match.toLowerCase()))],
+              contexts: [...new Set([...content.matchAll(/\b(?:unavailable|undefined)\b/gi)].map((match) =>
+                content.slice(Math.max(0, (match.index ?? 0) - 120), Math.min(content.length, (match.index ?? 0) + 180)).replace(/\s+/g, " ").trim()
+              ))]
+            };
+          });
+          findings.push({ viewport: viewport.name, route, violations: result.violations, runtimeErrors: uniqueRuntimeErrors(runtimeErrors), operatorCopyDefects: operatorCopyAudit.defects, operatorCopyContexts: operatorCopyAudit.contexts });
           completed = true;
           console.log(`Axe progress ${findings.length}/${routes.length * 2}: ${viewport.name} /${route}`);
           break;
@@ -77,10 +86,12 @@ await mkdir(resolve(reportPath, ".."), { recursive: true });
 await writeFile(reportPath, `${JSON.stringify({ generatedAt: new Date().toISOString(), baseUrl, findings }, null, 2)}\n`);
 const blockers = findings.flatMap((finding) => finding.violations.map((violation) => ({ ...finding, violation }))).filter(({ violation }) => ["critical", "serious"].includes(violation.impact));
 const runtimeBlockers = findings.flatMap((finding) => finding.runtimeErrors.map((runtimeError) => ({ ...finding, runtimeError })));
-console.log(`Axe: ${findings.length} audits · ${blockers.length} blocker(s) serious/critical · ${runtimeBlockers.length} runtime error(s) · ${reportPath}`);
-if (blockers.length || runtimeBlockers.length) {
+const copyBlockers = findings.filter((finding) => finding.operatorCopyDefects.length);
+console.log(`Axe: ${findings.length} audits · ${blockers.length} blocker(s) serious/critical · ${runtimeBlockers.length} runtime error(s) · ${copyBlockers.length} operator-copy defect(s) · ${reportPath}`);
+if (blockers.length || runtimeBlockers.length || copyBlockers.length) {
   blockers.forEach(({ viewport, route, violation }) => console.error(`${violation.impact} ${viewport} /${route} ${violation.id}: ${violation.help}`));
   runtimeBlockers.forEach(({ viewport, route, runtimeError }) => console.error(`runtime ${viewport} /${route} ${runtimeError.type}: ${runtimeError.text}`));
+  copyBlockers.forEach(({ viewport, route, operatorCopyDefects }) => console.error(`operator-copy ${viewport} /${route}: ${operatorCopyDefects.join(", ")}`));
   process.exitCode = 1;
 }
 

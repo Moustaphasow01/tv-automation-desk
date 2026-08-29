@@ -17,7 +17,7 @@ import {
 } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, StatusBadge } from "@/design-system/primitives";
-import { presentDomain, presentPermission, presentQueueStatus, presentRelationKind } from "@/design-system/labels";
+import { presentDomain, presentOperatorText, presentPermission, presentQueueStatus, presentRelationKind } from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { DataBoundary, ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -142,7 +142,7 @@ export function EventsAuditPage() {
                     <span>{String(index + 1).padStart(2, "0")}</span>
                     <div>
                       <strong>{event?.eventType ?? eventId}</strong>
-                      <small>{event ? `${presentDomain(event.domain).label} · ${event.schemaVersion}` : "manquant"}</small>
+                      <small>{event ? `${presentDomain(event.domain).label} · ${presentOperatorText(event.schemaVersion)}` : "manquant"}</small>
                     </div>
                     <StatusBadge tone={event ? statusTone(event.status) : "danger"}>{event ? statusLabel(event.status) : "MANQUANT"}</StatusBadge>
                   </article>

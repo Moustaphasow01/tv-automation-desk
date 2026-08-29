@@ -14,7 +14,7 @@ import {
   FaTools
 } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
-import { presentGateState, presentPermission } from "@/design-system/labels";
+import { presentGateState, presentOperatorText, presentPermission } from "@/design-system/labels";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
@@ -244,7 +244,7 @@ function DatasetCard({ dataset }: { dataset: DatasetRow }) {
         </div>
         <StatusBadge tone={qualityTone(dataset.quality)}>{dataset.quality}</StatusBadge>
       </header>
-      <p>{dataset.source}</p>
+      <p>{presentOperatorText(dataset.source)}</p>
       <div className="research-data-dataset-meta">
         <MetricBox label="Période" value={dataset.period} />
         <MetricBox label="Frais" value={dataset.freshness} />

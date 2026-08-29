@@ -113,7 +113,7 @@ describe("OrderIntent dossier semi-manual contract", () => {
     expect(dossier.executionPlan.entry.state).toBe("UNAVAILABLE");
     expect(dossier.executionPlan.stop.state).toBe("UNAVAILABLE");
     expect(dossier.executionPlan.targets[0].state).toBe("UNAVAILABLE");
-    expect(html).toContain("Indisponible");
+    expect(html).toContain("Non publié");
     expect(html).not.toMatch(/<dd[^>]*>0(?:[,.]0+)?<\/dd>/);
   });
 

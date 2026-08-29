@@ -9,7 +9,7 @@ const scenarios = [
     name: "workstation-1792x1024",
     viewport: { width: 1792, height: 1024 },
     deviceScaleFactor: 1,
-    expectedPhysical: { sidebarWidth: 196, topbarHeight: 64, footerHeight: 32 }
+    expectedPhysical: { sidebarWidth: 200, topbarHeight: 64, footerHeight: 32 }
   },
   {
     name: "windows150-1920x878",
@@ -17,7 +17,7 @@ const scenarios = [
     deviceScaleFactor: 1.5,
     platform: "Win32",
     screenWidth: 1280,
-    expectedPhysical: { sidebarWidth: 196, topbarHeight: 64, footerHeight: 32 }
+    expectedPhysical: { sidebarWidth: 200, topbarHeight: 64, footerHeight: 32 }
   },
   { name: "laptop-1366x768", viewport: { width: 1366, height: 768 }, deviceScaleFactor: 1 },
   { name: "mobile-320x720", viewport: { width: 320, height: 720 }, deviceScaleFactor: 1 }
@@ -48,7 +48,8 @@ try {
     });
     page.on("pageerror", (error) => consoleErrors.push(error.message));
     await page.goto(`${baseUrl}/#/execution/portfolio`, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    await page.getByRole("heading", { name: "Portefeuille & Positions" }).waitFor({ state: "visible", timeout: 45_000 });
+    await establishOperatorSession(page);
+    await page.locator(".pf-page").waitFor({ state: "visible", timeout: 45_000 });
     const screenshot = resolve(outputRoot, `${scenario.name}.png`);
     await page.screenshot({ path: screenshot, fullPage: false });
     const geometry = await page.evaluate(() => {
@@ -64,7 +65,7 @@ try {
         sidebar: rect(".desk-sidebar"),
         topbar: rect(".desk-topbar"),
         footer: rect(".desk-status-footer"),
-        kpiCount: document.querySelectorAll(".portfolio-kpi-strip > .ds-card").length,
+        kpiCount: document.querySelectorAll(".pf-kpi-strip > .pf-kpi-card").length,
         sidebarOverflow: (() => {
           const sidebar = document.querySelector(".desk-sidebar");
           if (!sidebar || getComputedStyle(sidebar).display === "none") return false;
@@ -97,8 +98,30 @@ await writeFile(report, `${JSON.stringify({ generatedAt: new Date().toISOString(
 const failures = results.filter((result) => result.geometry.globalOverflow
   || result.geometry.sidebarOverflow
   || result.consoleErrors.length
-  || result.geometry.kpiCount !== 6
+  || result.geometry.kpiCount !== 9
   || result.geometryFailures.length);
 console.log(`Visual QA: ${results.length} captures · ${failures.length} failure(s) · ${report}`);
 for (const result of results) console.log(`${result.name}: ${JSON.stringify(result.geometry)} · physical=${JSON.stringify(result.physicalGeometry)} · geometryFailures=${result.geometryFailures.length} · consoleErrors=${result.consoleErrors.length}`);
 if (failures.length) process.exitCode = 1;
+
+async function establishOperatorSession(page) {
+  const gate = page.locator(".operator-login-gate");
+  if (!await gate.isVisible({ timeout: 5_000 }).catch(() => false)) return;
+
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    const form = gate.locator(".operator-login-gate__form");
+    if (await form.isVisible().catch(() => false)) {
+      await form.locator("input[autocomplete='username']").fill(process.env.DESK_OPERATOR_LOGIN || "MSO");
+      await form.locator("input[autocomplete='current-password']").fill(process.env.DESK_OPERATOR_PASSWORD || "2018");
+      await form.locator("button[type='submit']").click();
+      await gate.waitFor({ state: "hidden", timeout: 45_000 }).catch(() => undefined);
+      if (!await gate.isVisible().catch(() => false)) return;
+    }
+
+    const retry = gate.locator("button.operator-login-gate__secondary");
+    if (await retry.isVisible().catch(() => false)) await retry.click();
+    await page.waitForTimeout(1_000);
+  }
+
+  throw new Error(`OPERATOR_SESSION_NOT_ESTABLISHED: ${(await gate.innerText().catch(() => "")).slice(0, 500)}`);
+}

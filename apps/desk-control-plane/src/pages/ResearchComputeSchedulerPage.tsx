@@ -14,7 +14,7 @@ import {
   FaTasks
 } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
-import { presentPermission } from "@/design-system/labels";
+import { presentOperationalStatus, presentOperatorText, presentPermission } from "@/design-system/labels";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
@@ -121,11 +121,11 @@ export function ResearchComputeSchedulerPage() {
                 <FaServer />
                 <div>
                   <strong>{worker.workerId}</strong>
-                  <small>{worker.kind} · {worker.poolId}</small>
-                  <span>{worker.currentJobId ?? "inactif"} · {formatTime(worker.heartbeatAt)}</span>
+                  <small>{presentOperatorText(worker.kind)} · {presentOperatorText(worker.poolId)}</small>
+                  <span>{worker.currentJobId ? presentOperatorText(worker.currentJobId) : "Inactif"} · {formatTime(worker.heartbeatAt)}</span>
                 </div>
                 <ProgressBar value={Math.max(worker.cpuPct, worker.memoryPct, worker.gpuPct)} label={`${worker.workerId} charge`} tone={worker.status === "DEGRADED" ? "danger" : worker.status === "IDLE" ? "neutral" : "accent"} />
-                <StatusBadge tone={workerTone(worker.status)}>{worker.status}</StatusBadge>
+                <StatusBadge tone={workerTone(worker.status)}>{presentOperationalStatus(worker.status).label}</StatusBadge>
               </article>
             ))}
           </div>
@@ -248,11 +248,11 @@ function JobRow({ job, pool }: { job: ComputeJob; pool?: ComputePool }) {
       <FaTasks />
       <div>
         <strong>{job.label}</strong>
-        <small>{compactId(job.jobId)} · {pool?.label ?? job.poolId}</small>
+        <small>{presentOperatorText(compactId(job.jobId))} · {presentOperatorText(pool?.label ?? job.poolId)}</small>
       </div>
       <ProgressBar value={job.progressPct} label={`${job.label} progression`} tone={job.priority === "LIVE_PROTECTED" ? "success" : job.state === "RETRYING" ? "warning" : "accent"} />
-      <span>{job.eta}</span>
-      <StatusBadge tone={jobTone(job.state)}>{job.state}</StatusBadge>
+      <span>{presentOperatorText(job.eta)}</span>
+      <StatusBadge tone={jobTone(job.state)}>{presentOperationalStatus(job.state).label}</StatusBadge>
     </article>
   );
 }

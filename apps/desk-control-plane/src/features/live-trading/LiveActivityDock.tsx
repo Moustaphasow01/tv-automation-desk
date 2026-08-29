@@ -69,6 +69,9 @@ export function LiveActivityDock({ model, selectedSignalId, onSelectSignal, onCl
           <div className="lt-activity-dock__summary" aria-label="Résumé de session">
             <span><small>Signaux</small><strong>{model.signalFunnel.rawSignals}</strong></span>
             <span><small>Suivis</small><strong>{model.signalFunnel.theoreticalTracked}</strong></span>
+            <span><small>À décider</small><strong>{model.signalFunnel.pendingHumanGates}</strong></span>
+            <span><small>Expirés</small><strong>{model.signalFunnel.expired}</strong></span>
+            <span><small>Ouverts</small><strong>{model.signalFunnel.theoreticalOpen}</strong></span>
             <span><small>R clos</small><strong>{model.signalFunnel.totalClosedR === null ? "—" : `${model.signalFunnel.totalClosedR.toFixed(2)}R`}</strong></span>
             <button
               ref={fullscreen.triggerRef}

@@ -23,7 +23,7 @@ export function PortfolioPage() {
     return (
       <div className="pf-page">
         <h1 className="sr-only">Portefeuille &amp; Positions</h1>
-        <div className="pf-workspace"><p className="pf-empty">Portefeuille indisponible : {(query.error as Error).message}</p></div>
+        <div className="pf-workspace"><p className="pf-empty">La projection du portefeuille ne répond pas. Réessayez dans quelques instants.</p></div>
       </div>
     );
   }
@@ -38,7 +38,24 @@ export function PortfolioPage() {
   }
 
   const portfolio = query.data.data;
-  const primaryAccount = portfolio.accountsSummary[0];
+  const accounts = portfolio.accountsSummary ?? (portfolio.authoritativeState?.accounts ?? []).map((account) => ({
+    accountId: account.accountId,
+    label: account.accountId,
+    mode: account.source,
+    equity: account.equity.availability === "KNOWN" ? account.equity.value : null,
+    openPnl: null,
+    openPositions: (portfolio.authoritativeState?.positions ?? []).filter((position) => position.accountId === account.accountId).length,
+    asOf: account.equity.asOf ?? portfolio.authoritativeState?.asOf ?? null
+  }));
+  const primaryAccount = accounts[0];
+  const brokerPositions = portfolio.brokerPositions ?? [];
+  const positionsLong = portfolio.summary.positionsLong ?? brokerPositions.filter((position) => position.side === "LONG").length;
+  const positionsShort = portfolio.summary.positionsShort ?? brokerPositions.filter((position) => position.side === "SHORT").length;
+  const strategiesWithPositions = portfolio.summary.strategiesWithPositions ?? new Set((portfolio.positions ?? []).map((position) => position.strategyInstanceId)).size;
+  const timeline = portfolio.timeline ?? [];
+  const openRisk = portfolio.authoritativeState?.openRisk.availability === "KNOWN" && portfolio.authoritativeState.openRisk.value != null
+    ? portfolio.authoritativeState.openRisk.value
+    : portfolio.summary.exposureUsd;
 
   return (
     <div className="pf-page" data-testid="portfolio-golden-master">
@@ -61,23 +78,23 @@ export function PortfolioPage() {
           <KpiCell label="Net liquidation" value={formatDataValue(portfolio.summaryTruth.equity, formatCurrencyCompact)} tone="up" />
           <KpiCell label="PnL journalier" value={formatSignedR(portfolio.summary.dailyR)} tone={portfolio.summary.dailyR >= 0 ? "up" : "down"} />
           <KpiCell label="PnL latent" value={formatDataValue(portfolio.summaryTruth.unrealizedPnl, formatSignedCurrency)} tone={portfolio.summary.unrealizedPnl >= 0 ? "up" : "down"} />
-          <KpiCell label="Risque ouvert" value={formatCurrencyCompact(portfolio.summary.exposureUsd)} />
+          <KpiCell label="Risque ouvert" value={formatCurrencyCompact(openRisk)} />
           <KpiCell label="Drawdown max" value={formatSignedR(portfolio.summary.maxDrawdownR)} tone={portfolio.summary.maxDrawdownR < 0 ? "down" : undefined} />
-          <KpiCell label="Positions" value={String(portfolio.summary.openPositions)} detail={`${portfolio.summary.positionsLong} Long / ${portfolio.summary.positionsShort} Short`} />
-          <KpiCell label="Stratégies" value={String(portfolio.summary.strategiesWithPositions)} detail="Avec positions ouvertes" />
-          <KpiCell label="Human Gate" value={String(portfolio.summary.humanGatePending)} detail="En attente" />
-          <KpiCell label="Ordres en attente" value={String(portfolio.summary.pendingOrders)} detail="En cours" />
+          <KpiCell label="Positions" value={String(portfolio.summary.openPositions)} detail={`${positionsLong} Long / ${positionsShort} Short`} />
+          <KpiCell label="Stratégies" value={String(strategiesWithPositions)} detail="Avec positions ouvertes" />
+          <KpiCell label="Human Gate" value={formatOptionalCount(portfolio.summary.humanGatePending)} detail="En attente" />
+          <KpiCell label="Ordres en attente" value={formatOptionalCount(portfolio.summary.pendingOrders)} detail="En cours" />
         </section>
 
         <div className="pf-row1">
           <section className="pf-panel" aria-label="Résumé des comptes">
-            <header><h2>Comptes</h2><small>{portfolio.accountsSummary.length}</small></header>
+            <header><h2>Comptes</h2><small>{accounts.length}</small></header>
             <div className="pf-panel__body" style={{ padding: 0 }}>
-              {portfolio.accountsSummary.length ? (
+              {accounts.length ? (
                 <table className="pf-table">
                   <thead><tr><th>Compte</th><th>Mode</th><th>Positions</th><th>Equity</th><th>PnL latent</th><th>Au</th></tr></thead>
                   <tbody>
-                    {portfolio.accountsSummary.map((account) => (
+                    {accounts.map((account) => (
                       <tr key={account.accountId}>
                         <td><strong>{account.label}</strong></td>
                         <td><StatusBadge tone="accent">{account.mode}</StatusBadge></td>
@@ -128,7 +145,7 @@ export function PortfolioPage() {
 
         <div className="pf-row2">
           <section className="pf-panel" aria-label="Positions broker">
-            <header><h2>Positions</h2><small>{portfolio.brokerPositions.length}</small><Link to="/execution/portfolio/positions">Toutes les positions</Link></header>
+            <header><h2>Positions</h2><small>{brokerPositions.length}</small><Link to="/execution/portfolio/positions">Toutes les positions</Link></header>
             <div className="pf-panel__body" style={{ padding: 0 }}>
               <div className="pf-table-scroll">
                 <table className="pf-table">
@@ -136,7 +153,7 @@ export function PortfolioPage() {
                     <tr><th>Compte</th><th>Instrument</th><th>Côté</th><th>Qté</th><th>Prix moy.</th><th>Mark</th><th>PnL</th><th>Protection</th><th>Réconciliation</th></tr>
                   </thead>
                   <tbody>
-                    {portfolio.brokerPositions.map((row) => (
+                    {brokerPositions.map((row) => (
                       <tr key={`${row.positionId}_${row.account}_${row.instrument}`}>
                         <td>{formatAccount(row.account)}</td>
                         <td><strong><Link to={`/execution/portfolio/positions/${encodeURIComponent(row.positionId)}`}>{row.instrument}</Link></strong></td>
@@ -149,7 +166,7 @@ export function PortfolioPage() {
                         <td><StatusBadge tone={row.reconciliationStatus === "MATCHED" ? "success" : "warning"}>{reconciliationLabel(row)}</StatusBadge></td>
                       </tr>
                     ))}
-                    {!portfolio.brokerPositions.length ? <tr><td colSpan={9}><p className="pf-empty">Aucune position ouverte.</p></td></tr> : null}
+                    {!brokerPositions.length ? <tr><td colSpan={9}><p className="pf-empty">Aucune position broker ouverte.</p></td></tr> : null}
                   </tbody>
                 </table>
               </div>
@@ -234,8 +251,8 @@ export function PortfolioPage() {
             <header><h2>Éléments en attente</h2></header>
             <div className="pf-panel__body">
               <div className="pf-impact-list">
-                <div className="pf-impact-row"><strong>Human Gate en attente</strong><span>{portfolio.summary.humanGatePending}</span></div>
-                <div className="pf-impact-row"><strong>Ordres en attente</strong><span>{portfolio.summary.pendingOrders}</span></div>
+                <div className="pf-impact-row"><strong>Human Gate en attente</strong><span>{formatOptionalCount(portfolio.summary.humanGatePending)}</span></div>
+                <div className="pf-impact-row"><strong>Ordres en attente</strong><span>{formatOptionalCount(portfolio.summary.pendingOrders)}</span></div>
               </div>
               <p className="pf-impact-note">Valeurs estimées à partir des intents et gates ouverts. Aucun impact chiffré publié par le backend.</p>
             </div>
@@ -244,9 +261,9 @@ export function PortfolioPage() {
           <section className="pf-panel" aria-label="Activité récente">
             <header><h2>Activité récente</h2></header>
             <div className="pf-panel__body">
-              {portfolio.timeline.length ? (
+              {timeline.length ? (
                 <div className="pf-activity-list">
-                  {portfolio.timeline.map((event) => (
+                  {timeline.map((event) => (
                     <div key={event.id} className="pf-activity-row">
                       <time>{formatTime(event.at)}</time>
                       <div><strong>{event.title}</strong><small>{event.description}</small></div>
@@ -435,6 +452,10 @@ function formatTime(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function formatOptionalCount(value: number | undefined) {
+  return value == null ? "Non publié" : String(value);
 }
 
 function formatClock(value: Date | undefined) {

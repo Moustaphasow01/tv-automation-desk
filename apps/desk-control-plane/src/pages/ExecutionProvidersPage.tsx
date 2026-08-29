@@ -36,12 +36,12 @@ export function ExecutionProvidersPage() {
   const [commandTab, setCommandTab] = useState<CommandTab>("all");
 
   if (query.isLoading) return <ExecutionProvidersLoading />;
-  if (query.isError) return <div className="ep-page"><div className="ep-workspace" role="region" aria-label="État des fournisseurs" tabIndex={0}><p className="ep-empty">Fournisseurs indisponibles : {(query.error as Error).message}</p></div></div>;
-  if (!query.data) return <div className="ep-page"><div className="ep-workspace" role="region" aria-label="État des fournisseurs" tabIndex={0}><p className="ep-empty">Le BFF ne retourne pas encore la projection `/views/execution-providers`.</p></div></div>;
+  if (query.isError) return <div className="ep-page"><h1 className="sr-only">Fournisseurs d'exécution</h1><div className="ep-workspace" role="region" aria-label="État des fournisseurs" tabIndex={0}><p className="ep-empty">La projection des fournisseurs ne répond pas. Toute action reste bloquée.</p></div></div>;
+  if (!query.data) return <div className="ep-page"><h1 className="sr-only">Fournisseurs d'exécution</h1><div className="ep-workspace" role="region" aria-label="État des fournisseurs" tabIndex={0}><p className="ep-empty">Aucune projection des fournisseurs n'est publiée.</p></div></div>;
 
   const rawData = query.data.data;
   if (!rawData.summary || !rawData.executionModes) {
-    return <div className="ep-page"><div className="ep-workspace" role="region" aria-label="État des fournisseurs" tabIndex={0}><p className="ep-empty">Projection Fournisseurs connectée mais incomplète : les politiques autoritaires ne sont pas publiées.</p></div></div>;
+    return <div className="ep-page"><h1 className="sr-only">Fournisseurs d'exécution</h1><div className="ep-workspace" role="region" aria-label="État des fournisseurs" tabIndex={0}><p className="ep-empty">Projection Fournisseurs connectée mais incomplète : les politiques autoritaires ne sont pas publiées.</p></div></div>;
   }
   const data: ExecutionProvidersView = {
     ...rawData,
@@ -392,6 +392,7 @@ function KpiCell({ label, value, detail, tone }: { label: string; value: string;
 function ExecutionProvidersLoading() {
   return (
     <div className="ep-page">
+      <h1 className="sr-only">Fournisseurs d'exécution</h1>
       <div className="ep-workspace">
         <section className="ep-kpi-strip">
           {Array.from({ length: 6 }).map((_, index) => <article key={index} className="ep-kpi-card"><div className="skeleton-line" /></article>)}

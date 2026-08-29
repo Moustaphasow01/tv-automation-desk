@@ -31,7 +31,7 @@ export function LiveMarketLens({ model }: LensProps) {
 }
 
 function MarketTape({ model }: LensProps) {
-  const rows = model.watchlist.slice(0, 6);
+  const rows = prioritizedWatchlist(model).slice(0, 6);
   return (
     <section className="lt-market-lens__section lt-market-lens__tape" aria-labelledby="market-lens-tape">
       <LensHeading id="market-lens-tape" title="Prix suivis" />
@@ -51,6 +51,24 @@ function MarketTape({ model }: LensProps) {
       <p className="lt-market-lens__source">Marché asOf {displayTime(model.marketSeries.asOf)} · {model.marketSeries.source}</p>
     </section>
   );
+}
+
+export function prioritizedWatchlist(model: LiveTradingModel): LiveTradingModel["watchlist"] {
+  const priority = uniqueSymbols([
+    model.marketSeries.instrument,
+    model.latestSignal?.symbol,
+    ...model.source.signals.map((signal) => signal.symbol),
+    ...model.source.canonicalRuntime.latestSignals.map((signal) => signal.symbol),
+  ]);
+  const rank = new Map(priority.map((symbol, index) => [symbol, index]));
+  return [...model.watchlist].sort((left, right) => (
+    (rank.get(left.symbol.trim().toUpperCase()) ?? Number.MAX_SAFE_INTEGER)
+    - (rank.get(right.symbol.trim().toUpperCase()) ?? Number.MAX_SAFE_INTEGER)
+  ));
+}
+
+function uniqueSymbols(values: readonly (string | null | undefined)[]): string[] {
+  return [...new Set(values.map((value) => String(value ?? "").trim().toUpperCase()).filter(Boolean))];
 }
 
 function ContextBrief({ model }: LensProps) {

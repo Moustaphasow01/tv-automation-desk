@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { Card } from "@/design-system/primitives";
 import type { ViewMeta } from "@/shared/contracts";
 import { emitFrontTelemetry } from "@/core/telemetry/frontendTelemetry";
+import { presentOperatorText } from "./labels";
 
 export type ViewLoadState = "loading" | "ready" | "empty" | "partial" | "stale" | "error" | "forbidden";
 
@@ -49,7 +50,7 @@ export function ViewTruthBanner({ meta }: { meta: ViewMeta }) {
   return (
     <div className={`view-truth-banner view-truth-banner--${state}`} role="status">
       <strong>{state === "stale" ? "Données périmées" : "Projection partielle"}</strong>
-      <span>{meta.warnings?.length ? meta.warnings.join(" · ") : "Une ou plusieurs sources backend sont indisponibles."}</span>
+      <span>{meta.warnings?.length ? meta.warnings.map((warning) => presentOperatorText(warning)).join(" · ") : "Une ou plusieurs sources backend ne répondent pas."}</span>
       <small>asOf {meta.asOf} · corrélation {meta.correlationId}</small>
     </div>
   );

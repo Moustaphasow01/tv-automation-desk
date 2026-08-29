@@ -53,8 +53,8 @@ export function OrdersPage() {
   );
 
   if (query.isLoading) return <OrdersLoading />;
-  if (query.isError) return <div className="oh-page"><div className="oh-workspace" role="region" aria-label="État Orders et Human Gate" tabIndex={0}><p className="oh-empty">Orders &amp; Human Gate indisponible : {(query.error as Error).message}</p></div></div>;
-  if (!data || !review) return <div className="oh-page"><div className="oh-workspace" role="region" aria-label="État Orders et Human Gate" tabIndex={0}><p className="oh-empty">Le BFF ne retourne pas encore la projection `/views/orders`.</p></div></div>;
+  if (query.isError) return <div className="oh-page"><h1 className="sr-only">Ordres et Human Gate</h1><div className="oh-workspace" role="region" aria-label="État Orders et Human Gate" tabIndex={0}><p className="oh-empty">La projection des ordres ne répond pas. Aucune action n'est disponible.</p></div></div>;
+  if (!data || !review) return <div className="oh-page"><h1 className="sr-only">Ordres et Human Gate</h1><div className="oh-workspace" role="region" aria-label="État Orders et Human Gate" tabIndex={0}><p className="oh-empty">Aucune projection des ordres n'est publiée.</p></div></div>;
 
   const confirmOrderAction = async (action: OrderAction) => {
     setSubmittingActionId(action.actionId);
@@ -465,6 +465,7 @@ function KpiCell({ label, value }: { label: string; value: string }) {
 function OrdersLoading() {
   return (
     <div className="oh-page">
+      <h1 className="sr-only">Ordres et Human Gate</h1>
       <div className="oh-workspace">
         <section className="oh-kpi-strip">
           {Array.from({ length: 6 }).map((_, index) => <article key={index} className="oh-kpi-card"><div className="skeleton-line" /></article>)}

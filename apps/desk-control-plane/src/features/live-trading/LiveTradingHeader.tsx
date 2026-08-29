@@ -1,9 +1,10 @@
 import { useContext, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaBell, FaCircle, FaMoon, FaSearch, FaShieldAlt, FaSyncAlt } from "react-icons/fa";
+import { FaBell, FaCircle, FaSearch, FaShieldAlt, FaSyncAlt } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { OperatorMenu } from "@/shell/OperatorMenu";
+import { useDeskDensity } from "@/shell/DeskDensityViewport";
 import type { LiveTradingModel } from "./model";
 
 const searchTargets = [
@@ -18,6 +19,7 @@ export function LiveTradingHeader({ model, onRefresh, refreshing }: { model: Liv
   const navigate = useNavigate();
   const realtime = useContext(RealtimeContext);
   const { session } = useOperatorSession();
+  const density = useDeskDensity();
   const [query, setQuery] = useState("");
   const results = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("fr");
@@ -37,8 +39,8 @@ export function LiveTradingHeader({ model, onRefresh, refreshing }: { model: Liv
         </form>
         <div className="lt-header__environment"><small>Environnement</small><strong>{model.mode.environment}</strong></div>
         <time className="lt-header__clock" dateTime={now?.toISOString()}><strong>{now ? formatClock(now) : "—"} ET</strong><small>{now ? formatDate(now) : "Horloge indisponible"}</small></time>
-        <button className="lt-icon-button" type="button" aria-label="Thème sombre actif" disabled><FaMoon /></button>
-        <Link className="lt-icon-button" to="/orders" aria-label="Ouvrir les décisions Human Gate"><FaBell /><span>Gate</span></Link>
+        <label className="lt-density-control" title="Densité du cockpit"><span className="sr-only">Densité du cockpit</span><select value={density.preference} onChange={(event) => density.setPreference(event.target.value as typeof density.preference)}><option value="auto">Auto</option><option value="native">Confort</option><option value="workstation">Compact</option></select></label>
+        <Link className="lt-icon-button" to="/orders" aria-label={`Ouvrir les décisions Human Gate · ${model.signalFunnel.pendingHumanGates} en attente`}><FaBell /><span>{model.signalFunnel.pendingHumanGates || "Gate"}</span></Link>
         <OperatorMenu variant="live-trading" displayName={session?.principal.displayName ?? "Session indisponible"} roleLabel={session?.principal.roles.join(", ") || "Rôle indisponible"} />
       </header>
       <section className="lt-policy" aria-label="Politique opérationnelle autoritaire">

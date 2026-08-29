@@ -10596,7 +10596,15 @@ body {
 .desk-realtime-alert--warning { border-color: #98722d; }
 .desk-realtime-alert--danger { border-color: #a74652; background: #211018; }
 .desk-realtime-alert--danger > svg { color: #ff7180; }
-@media (max-width: 640px) { .desk-realtime-alert { left: 12px; right: 12px; bottom: 70px; grid-template-columns: 20px minmax(0, 1fr) 44px; } .desk-realtime-alert a { grid-column: 2; width: max-content; } }
+@media (max-width: 640px) {
+  .desk-realtime-alert { right: 8px; bottom: 70px; left: 8px; min-height: 56px; grid-template-columns: 20px minmax(0, 1fr) auto 44px; padding: 6px 8px; }
+  .desk-realtime-alert > div { min-width: 0; }
+  .desk-realtime-alert > div strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .desk-realtime-alert > div span,
+  .desk-realtime-alert > div small { display: none; }
+  .desk-realtime-alert a { min-height: 40px; padding-inline: 8px; }
+  .desk-realtime-alert button { width: 40px; height: 40px; }
+}
 
 .desk-shortcut-help-trigger { position: fixed; z-index: 900; left: 10px; bottom: 10px; display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; gap: 4px; border: 1px solid #284b66; border-radius: 50%; background: #071827; color: #8dc7ff; font: inherit; cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
 .desk-shortcut-help-trigger span { font-weight: 800; }

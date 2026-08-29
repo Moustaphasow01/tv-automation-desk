@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Card, StatusBadge } from "@/design-system/primitives";
 import { DeskButton, ReasonInput, TrackedCommandReceipt } from "@/design-system/actions";
 import { MetricBox } from "@/design-system/workspace";
+import { presentDataAbsence } from "@/design-system/labels";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
 import type { DataValue } from "@/shared/contracts";
 import type {
@@ -287,8 +288,8 @@ function valueString(value: DataValue<string | number>, format?: "price" | "r"):
       : value.value;
     return { text, raw, available: true, reason: value.state === "STALE" ? value.reason : "" };
   }
-  const reason = "reason" in value ? value.reason : "Donnée indisponible";
-  return { text: "Indisponible", raw: "UNKNOWN_STATUS", available: false, reason };
+  const reason = "reason" in value ? value.reason : "Valeur non publiée par le backend";
+  return { text: presentDataAbsence("NOT_PUBLISHED").label, raw: "NOT_PUBLISHED", available: false, reason };
 }
 
 function isKnown(value: DataValue<unknown>): boolean {
@@ -296,7 +297,7 @@ function isKnown(value: DataValue<unknown>): boolean {
 }
 
 export function buildOrderTicketText(dossier: OrderIntentDossier): string {
-  const field = (value: DataValue<string | number>) => valueString(value).available ? valueString(value).raw : "NON_PUBLIE";
+  const field = (value: DataValue<string | number>) => valueString(value).available ? valueString(value).raw : "NON PUBLIÉ";
   const targets = dossier.executionPlan.targets.map(field).join(",");
   return [
     field(dossier.signal.instrument),
@@ -304,7 +305,7 @@ export function buildOrderTicketText(dossier: OrderIntentDossier): string {
     field(dossier.targetPosition.authorizedQuantity),
     `${field(dossier.executionPlan.orderType)} ${field(dossier.executionPlan.entry)}`,
     `STOP ${field(dossier.executionPlan.stop)}`,
-    `TARGET ${targets || "NON_PUBLIE"}`,
+    `TARGET ${targets || "NON PUBLIÉ"}`,
     field(dossier.executionPlan.timeInForce),
   ].join(" | ");
 }
@@ -316,6 +317,6 @@ async function copyToClipboard(value: string): Promise<void> {
 
 function formatTimestamp(value: string): ReactNode {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Heure indisponible";
+  if (Number.isNaN(date.getTime())) return presentDataAbsence("NOT_PUBLISHED").label;
   return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
 }

@@ -97,6 +97,14 @@ export const presentAvailability = makePresenter({
   DISABLED: { label: "Désactivé", tone: "neutral" },
 });
 
+/** Absence de valeur métier : indique si l'opérateur doit attendre, ignorer ou constater une non-publication. */
+export type DataAbsenceKind = "COMPUTING" | "NOT_APPLICABLE" | "NOT_PUBLISHED";
+export const presentDataAbsence = makePresenter({
+  COMPUTING: { label: "En cours de calcul", tone: "info" },
+  NOT_APPLICABLE: { label: "Non applicable", tone: "neutral" },
+  NOT_PUBLISHED: { label: "Non publié", tone: "neutral" },
+});
+
 /** Fraîcheur d'une projection ou d'un flux de données. */
 export const presentFreshness = makePresenter({
   LIVE: { label: "Live", tone: "success" },
@@ -164,6 +172,8 @@ export const presentSeverity = makePresenter({
 
 /** Statut d'un item dans une file d'opérations (missions, événements, gates). */
 export const presentQueueStatus = makePresenter({
+  UNAVAILABLE: { label: "Non publié", tone: "neutral" },
+  UNKNOWN: { label: "État non publié", tone: "neutral" },
   OPERATOR_GATE_REQUIRED: { label: "Validation opérateur requise", tone: "warning" },
   WAITING_EVENT: { label: "En attente d'événement", tone: "info" },
   DLQ: { label: "File d'erreurs", tone: "danger" },
@@ -234,6 +244,20 @@ export const presentOperationalStatus = makePresenter({
   DISABLED_BY_POLICY: { label: "Désactivé par politique", tone: "info" },
   MARKET_CLOSED: { label: "Marché fermé", tone: "info" },
 });
+
+/**
+ * Nettoie uniquement la copie présentée à l'opérateur. La valeur brute reste
+ * disponible dans les contrats et inspecteurs techniques ; elle n'est jamais
+ * utilisée pour déduire un état métier.
+ */
+export function presentOperatorText(value: unknown, fallback = "Non publié"): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || ["unavailable", "undefined", "unknown", "none"].includes(normalized.toLowerCase())) return fallback;
+  return normalized
+    .replace(/\bunavailable\b/gi, "non disponible")
+    .replace(/\bundefined\b/gi, "non publié")
+    .replace(/\bunknown\b/gi, "inconnu");
+}
 
 /** État d'un signal de stratégie dans son cycle de vie. */
 export const presentSignalState = makePresenter({

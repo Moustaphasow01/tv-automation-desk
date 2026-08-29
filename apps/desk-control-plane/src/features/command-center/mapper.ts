@@ -72,6 +72,10 @@ export function statusTone(value: string): Exclude<CommandCenterTone, "neutral">
   return presentation.tone;
 }
 
+export function statusLabel(value: string): string {
+  return presentOperationalStatus(value).label;
+}
+
 export function truthTone(availability: string | undefined, stale = false): CommandCenterTone {
   if (stale) return "warning";
   const status = String(availability || "UNKNOWN").toUpperCase();

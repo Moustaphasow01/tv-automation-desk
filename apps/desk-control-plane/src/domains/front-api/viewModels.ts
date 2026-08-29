@@ -95,11 +95,11 @@ export type PortfolioView = {
     maxDrawdownR: number;
     openPositions: number;
     riskUsagePct: number;
-    positionsLong: number;
-    positionsShort: number;
-    strategiesWithPositions: number;
-    humanGatePending: number;
-    pendingOrders: number;
+    positionsLong?: number;
+    positionsShort?: number;
+    strategiesWithPositions?: number;
+    humanGatePending?: number;
+    pendingOrders?: number;
   };
   summaryTruth: {
     equity: DataValue<number>;
@@ -110,7 +110,7 @@ export type PortfolioView = {
     correlatedExposurePct: DataValue<number>;
   };
   equityCurve: readonly number[];
-  accountsSummary: readonly {
+  accountsSummary?: readonly {
     accountId: string;
     label: string;
     mode: string;
@@ -119,6 +119,40 @@ export type PortfolioView = {
     openPositions: number;
     asOf: string | null;
   }[];
+  authoritativeState?: {
+    schemaVersion: string;
+    asOf: string;
+    availability: string;
+    accounts: readonly {
+      accountId: string;
+      source: string;
+      equity: {
+        availability: string;
+        value: number | null;
+        asOf?: string;
+      };
+    }[];
+    positions: readonly {
+      accountId?: string;
+      instrument?: string;
+      side?: string;
+      quantity?: number;
+    }[];
+    pendingTargetPositions: readonly {
+      targetPositionId: string;
+      orderIntentId?: string;
+      accountId?: string;
+      instrument?: string;
+      targetNetSize?: number;
+      deltaSize?: number;
+      riskApprovedNetSize?: number;
+    }[];
+    openRisk: {
+      availability: string;
+      value: number | null;
+      currency?: string;
+    };
+  };
   positions: readonly PortfolioPosition[];
   exposureTree: readonly ExposureTreeItem[];
   brokerPositions: readonly BrokerPosition[];
@@ -126,7 +160,7 @@ export type PortfolioView = {
   virtualAllocations: readonly VirtualAllocation[];
   reconciliation: BrokerNettingReconciliation;
   attribution: PnlRiskAttribution;
-  timeline: readonly {
+  timeline?: readonly {
     id: string;
     at: string;
     title: string;
@@ -755,7 +789,7 @@ export type LivePortfolioOrderIntent = {
     gateId: string | null;
     status: string;
     allowedActions: readonly {
-      action: "CONFIRM" | "REJECT";
+      action: "CONFIRM" | "REJECT" | "UNDO";
       actionId: string;
       label: string;
       commandType: string;
@@ -1644,7 +1678,7 @@ export type ExecutionIncidentsView = {
     impactSummary: string;
     payload: Record<string, string | number | boolean>;
   }[];
-  workers: readonly {
+  workers?: readonly {
     workerId: string;
     role: string;
     status: "ACTIVE" | "WAITING" | "FAILED";
@@ -1652,8 +1686,8 @@ export type ExecutionIncidentsView = {
     lastHeartbeatAt: string;
     leaseExpiresAt: string;
   }[];
-  workersSummary: { total: number; active: number; idle: number; failed: number };
-  runbooks: readonly {
+  workersSummary?: { total: number; active: number; idle: number; failed: number };
+  runbooks?: readonly {
     runbookId: string;
     title: string;
     triggeredBy: string;

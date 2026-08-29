@@ -33,6 +33,7 @@ import { DESK_NAVIGATION_SECTIONS, deskPrimaryNavigation, NAV_GROUP_LABELS, type
 import { presentConnectionStatus } from "@/design-system/labels";
 import { DeskBrand } from "@/shell/DeskBrand";
 import { DeskCommandPalette } from "@/shell/DeskCommandPalette";
+import { useDeskDensity } from "@/shell/DeskDensityViewport";
 import { RealtimeAlertCenter } from "@/shell/RealtimeAlertCenter";
 import { DeskUpdateBanner } from "@/pwa/DeskUpdateBanner";
 import { DESK_BUILD_ID } from "@/pwa/buildInfo";
@@ -62,6 +63,7 @@ export function DeskShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const realtime = useContext(RealtimeContext);
+  const { mode: densityMode } = useDeskDensity();
   const { session } = useOperatorSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const previousPathnameRef = useRef(location.pathname);
@@ -73,7 +75,9 @@ export function DeskShell() {
   const [searchQuery, setSearchQuery] = useState("");
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const ordersQuery = useFrontView("orders", {}, { refetchInterval: 30_000 });
+  const incidentsQuery = useFrontView("execution-incidents", {}, { refetchInterval: 30_000 });
   const pendingHumanGates = readPendingHumanGates(ordersQuery.data);
+  const criticalIncidents = readCriticalIncidents(incidentsQuery.data);
   const currentRoute = useMemo(
     () => vnextRoutes.find((route) => matchPath({ path: `/${route.path}`, end: true }, location.pathname)),
     [location.pathname]
@@ -172,7 +176,7 @@ export function DeskShell() {
     || isGoldenRiskCenter || isGoldenOrdersHumanGate || isGoldenPortfolio || isGoldenExecutionProviders
     || isGoldenIncidentsOperations || isGoldenPerformance || isGoldenReplay;
   const visibleDeskNavItems = deskPrimaryNavigation;
-  const effectiveNavigationMode: NavigationMode = navigationMode === "expanded" && compactViewport ? "compact" : navigationMode;
+  const effectiveNavigationMode: NavigationMode = navigationMode === "expanded" && compactViewport && densityMode !== "workstation" ? "compact" : navigationMode;
   const visibleNavSections = DESK_NAVIGATION_SECTIONS
     .map((section) => ({ section, items: visibleDeskNavItems.filter((item) => item.section === section) }))
     .filter((group) => group.items.length > 0);
@@ -196,6 +200,7 @@ export function DeskShell() {
                   <Icon className="nav-icon" aria-hidden="true" />
                   <span>{item.label}</span>
                   {item.path === "orders" && pendingHumanGates && pendingHumanGates > 0 ? <small className="desk-nav-count" aria-label={`${pendingHumanGates} décisions à traiter`}>{pendingHumanGates}</small> : null}
+                  {item.path === "execution/incidents" && criticalIncidents && criticalIncidents > 0 ? <small className="desk-nav-count desk-nav-count--critical" aria-label={`${criticalIncidents} incidents critiques`}>{criticalIncidents}</small> : null}
                 </NavLink>
                 );
               })}
@@ -283,7 +288,7 @@ export function DeskShell() {
       </div>
 
       <nav className="desk-bottom-nav" aria-label="Navigation mobile">
-        {deskPrimaryNavigation.slice(0, 4).map((route) => {
+        {deskPrimaryNavigation.filter((route) => route.mobile).slice(0, 4).map((route) => {
           const Icon = navIcons[route.icon];
           return (
           <NavLink
@@ -294,6 +299,7 @@ export function DeskShell() {
             <Icon aria-hidden="true" />
             <span>{route.label}</span>
             {route.path === "orders" && pendingHumanGates && pendingHumanGates > 0 ? <small>{pendingHumanGates}</small> : null}
+            {route.path === "execution/incidents" && criticalIncidents && criticalIncidents > 0 ? <small className="desk-nav-count--critical">{criticalIncidents}</small> : null}
           </NavLink>
         );})}
         <button ref={mobileMenuTriggerRef} type="button" className="bottom-nav-link" aria-haspopup="dialog" aria-expanded={mobileMenuOpen} aria-controls="mobile-full-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>Plus</button>
@@ -360,5 +366,15 @@ function readPendingHumanGates(value: unknown): number | null {
   const summary = (review as { summary?: unknown }).summary;
   if (!summary || typeof summary !== "object") return null;
   const count = (summary as { pendingCount?: unknown }).pendingCount;
+  return typeof count === "number" && Number.isFinite(count) && count >= 0 ? count : null;
+}
+
+function readCriticalIncidents(value: unknown): number | null {
+  if (!value || typeof value !== "object") return null;
+  const data = (value as { data?: unknown }).data;
+  if (!data || typeof data !== "object") return null;
+  const summary = (data as { summary?: unknown }).summary;
+  if (!summary || typeof summary !== "object") return null;
+  const count = (summary as { criticalIncidents?: unknown }).criticalIncidents;
   return typeof count === "number" && Number.isFinite(count) && count >= 0 ? count : null;
 }

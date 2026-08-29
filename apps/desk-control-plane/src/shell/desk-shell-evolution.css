@@ -50,10 +50,10 @@
 
 /* Navigation globale autoritaire : une seule source, trois densités, aucun rail mobile concurrent. */
 @media (min-width: 1024px) {
-  .desk-app-shell.desk-app-shell--nav-expanded { grid-template-columns: 196px minmax(0, 1fr) !important; }
+  .desk-app-shell.desk-app-shell--nav-expanded { grid-template-columns: 200px minmax(0, 1fr) !important; }
   .desk-app-shell.desk-app-shell--nav-compact { grid-template-columns: 56px minmax(0, 1fr) !important; }
   .desk-app-shell.desk-app-shell--nav-hidden { grid-template-columns: 0 minmax(0, 1fr) !important; }
-  .desk-app-shell--nav-expanded > .desk-sidebar { width: 196px !important; }
+  .desk-app-shell--nav-expanded > .desk-sidebar { width: 200px !important; }
   .desk-app-shell--nav-expanded .desk-brand { justify-content: flex-start !important; }
   .desk-app-shell--nav-expanded .desk-brand__copy { display: grid !important; }
   .desk-app-shell--nav-expanded .desk-command-trigger { justify-content: flex-start !important; padding-inline: 9px !important; }
@@ -78,19 +78,20 @@
 }
 
 @media (min-width: 1024px) and (max-width: 1279px) {
-  .desk-app-shell:not(.desk-app-shell--nav-hidden) { grid-template-columns: 56px minmax(0, 1fr) !important; }
-  .desk-app-shell:not(.desk-app-shell--nav-hidden) > .desk-sidebar { width: 56px !important; padding-inline: 5px !important; }
-  .desk-app-shell:not(.desk-app-shell--nav-hidden) .desk-brand__copy,
-  .desk-app-shell:not(.desk-app-shell--nav-hidden) .desk-command-trigger span,
-  .desk-app-shell:not(.desk-app-shell--nav-hidden) .desk-command-trigger kbd,
-  .desk-app-shell:not(.desk-app-shell--nav-hidden) .sidebar-nav-group h2,
-  .desk-app-shell:not(.desk-app-shell--nav-hidden) .nav-link > span,
-  .desk-app-shell:not(.desk-app-shell--nav-hidden) .sidebar-status-stack,
-  .desk-app-shell:not(.desk-app-shell--nav-hidden) .live-sidebar-collapse span { display: none !important; }
+  .desk-density-viewport:not([data-density-mode="workstation"]) .desk-app-shell:not(.desk-app-shell--nav-hidden) { grid-template-columns: 56px minmax(0, 1fr) !important; }
+  .desk-density-viewport:not([data-density-mode="workstation"]) .desk-app-shell:not(.desk-app-shell--nav-hidden) > .desk-sidebar { width: 56px !important; padding-inline: 5px !important; }
+  .desk-density-viewport:not([data-density-mode="workstation"]) .desk-app-shell:not(.desk-app-shell--nav-hidden) .desk-brand__copy,
+  .desk-density-viewport:not([data-density-mode="workstation"]) .desk-app-shell:not(.desk-app-shell--nav-hidden) .desk-command-trigger span,
+  .desk-density-viewport:not([data-density-mode="workstation"]) .desk-app-shell:not(.desk-app-shell--nav-hidden) .desk-command-trigger kbd,
+  .desk-density-viewport:not([data-density-mode="workstation"]) .desk-app-shell:not(.desk-app-shell--nav-hidden) .sidebar-nav-group h2,
+  .desk-density-viewport:not([data-density-mode="workstation"]) .desk-app-shell:not(.desk-app-shell--nav-hidden) .nav-link > span,
+  .desk-density-viewport:not([data-density-mode="workstation"]) .desk-app-shell:not(.desk-app-shell--nav-hidden) .sidebar-status-stack,
+  .desk-density-viewport:not([data-density-mode="workstation"]) .desk-app-shell:not(.desk-app-shell--nav-hidden) .live-sidebar-collapse span { display: none !important; }
 }
 
 .desk-nav-count,
 .desk-bottom-nav small { display: inline-grid; min-width: 20px; height: 20px; place-items: center; padding-inline: 5px; border-radius: 10px; background: #f5b942; color: #071620; font-size: 11px; font-weight: 800; }
+.desk-nav-count--critical { background: #ff6673 !important; color: #071620 !important; }
 .desk-sidebar .nav-link.active { position: relative; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 700; }
 .desk-sidebar .nav-link.active::after { position: absolute; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); content: ""; }
 .desk-navigation-reveal { position: fixed; z-index: 45; top: 45%; left: 0; min-height: 44px; padding: 8px 6px; border: 1px solid var(--stroke-strong); border-left: 0; border-radius: 0 6px 6px 0; background: var(--panel-strong); color: var(--text); cursor: pointer; writing-mode: vertical-rl; }

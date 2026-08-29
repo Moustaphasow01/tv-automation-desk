@@ -23,6 +23,7 @@ import {
   presentDeviceState,
   presentNotificationSeverity,
   presentPermission,
+  presentOperatorText,
   presentQueueStatus
 } from "@/design-system/labels";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
@@ -31,7 +32,14 @@ import { useFrontView, useFrontViewRepository } from "@/domains/front-api/reposi
 import type { OperatorSettingsView } from "@/domains/front-api/viewModels";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import { useDeskDensity } from "@/shell/DeskDensityViewport";
-import { readRealtimeAlertPreference, setRealtimeAlertPreference } from "@/shell/RealtimeAlertCenter";
+import {
+  desktopNotificationPermission,
+  readRealtimeAlertPreference,
+  readRealtimeSoundPreference,
+  requestDesktopNotificationPermission,
+  setRealtimeAlertPreference,
+  setRealtimeSoundPreference,
+} from "@/shell/RealtimeAlertCenter";
 
 type SettingsPreference = OperatorSettingsView["cockpitPreferences"][number];
 type SettingsAction = OperatorSettingsView["commandActions"][number];
@@ -40,6 +48,8 @@ type SettingsDevice = OperatorSettingsView["devices"][number];
 export function OperatorSettingsPage() {
   const density = useDeskDensity();
   const [realtimeAlertsEnabled, setRealtimeAlertsEnabled] = useState(readRealtimeAlertPreference);
+  const [realtimeSoundEnabled, setRealtimeSoundEnabled] = useState(readRealtimeSoundPreference);
+  const [notificationPermission, setNotificationPermission] = useState(desktopNotificationPermission);
   const query = useFrontView("operator-settings");
   const repository = useFrontViewRepository();
   const [reason, setReason] = useState("Contrôle opérateur : modification de préférence non critique via le flux de commande BFF.");
@@ -158,6 +168,14 @@ export function OperatorSettingsPage() {
           <div className="settings-local-alerts">
             <div><FaBell /><span><strong>Alertes temps réel sur ce poste</strong><small>Préférence visuelle locale ; elle ne modifie aucune policy backend.</small></span></div>
             <button type="button" aria-pressed={realtimeAlertsEnabled} onClick={() => { const next = !realtimeAlertsEnabled; setRealtimeAlertsEnabled(next); setRealtimeAlertPreference(next); }}>{realtimeAlertsEnabled ? "Activées" : "Désactivées"}</button>
+          </div>
+          <div className="settings-local-alerts">
+            <div><FaVolumeUp /><span><strong>Signal sonore différencié</strong><small>Option locale, désactivée par défaut. Le son varie selon la sévérité.</small></span></div>
+            <button type="button" aria-pressed={realtimeSoundEnabled} onClick={() => { const next = !realtimeSoundEnabled; setRealtimeSoundEnabled(next); setRealtimeSoundPreference(next); }}>{realtimeSoundEnabled ? "Activé" : "Désactivé"}</button>
+          </div>
+          <div className="settings-local-alerts">
+            <div><FaDesktop /><span><strong>Notifications du bureau</strong><small>{notificationPermissionLabel(notificationPermission)}</small></span></div>
+            <button type="button" disabled={notificationPermission === "granted" || notificationPermission === "unsupported"} onClick={() => void requestDesktopNotificationPermission().then(setNotificationPermission)}>{notificationPermission === "granted" ? "Autorisées" : "Autoriser"}</button>
           </div>
           <div className="settings-notification-list">
             {data.notificationRules.map((rule) => (
@@ -327,6 +345,13 @@ function actionIcon(action: SettingsAction) {
   return <FaSlidersH />;
 }
 
+function notificationPermissionLabel(permission: NotificationPermission | "unsupported") {
+  if (permission === "granted") return "Le navigateur peut notifier lorsque le Desk est en arrière-plan.";
+  if (permission === "denied") return "Permission refusée dans le navigateur ; réactivez-la dans les réglages du site.";
+  if (permission === "unsupported") return "Notifications du bureau non prises en charge sur ce navigateur.";
+  return "Autorisation explicite requise ; aucune demande n’est déclenchée automatiquement.";
+}
+
 function notificationIcon(channel: OperatorSettingsView["notificationRules"][number]["channel"]) {
   if (channel === "SOUND") return <FaVolumeUp />;
   if (channel === "TELEGRAM") return <FaBell />;
@@ -349,6 +374,6 @@ function permissionTone(permission: SettingsAction["permission"]) {
 
 function formatTime(value: string) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) return presentOperatorText(value);
   return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date);
 }

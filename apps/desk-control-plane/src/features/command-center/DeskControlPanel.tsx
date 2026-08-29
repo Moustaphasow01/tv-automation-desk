@@ -1,7 +1,7 @@
 import { FaClock, FaGlobe, FaPlay, FaRedo, FaStethoscope, FaStop, FaSyncAlt } from "react-icons/fa";
 import type { CommandSnapshot } from "@/domains/realtime/commandRuntime";
 import type { DeskControlCapability, DeskControlCommand } from "./model";
-import { healthLabel, statusTone } from "./mapper";
+import { healthLabel, statusLabel, statusTone } from "./mapper";
 import { CommandPanel, PanelStatus } from "./panelPrimitives";
 
 const ACTIONS: readonly { commandType: DeskControlCommand; label: string; icon: JSX.Element }[] = [
@@ -61,5 +61,5 @@ export function SystemHealthGrid({ systems }: { systems: readonly { id: string; 
 }
 
 function SystemLine({ label, state, tone = "success" }: { label: string; state: string; tone?: "neutral" | "info" | "success" | "warning" | "danger" }) {
-  return <span><small>{label}</small><strong className={`cc-tone--${tone}`}><FaSyncAlt aria-hidden="true" />{state}</strong></span>;
+  return <span><small>{label}</small><strong className={`cc-tone--${tone}`}><FaSyncAlt aria-hidden="true" />{statusLabel(state)}</strong></span>;
 }

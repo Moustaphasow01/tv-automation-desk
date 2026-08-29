@@ -82,8 +82,8 @@ export function ReplayPage() {
   }, [data, selectedEvent]);
 
   if (query.isLoading) return <ReplayLoading />;
-  if (query.isError) return <div className="rp-page"><h1 className="sr-only">Rejeu</h1><div className="rp-workspace"><p className="rp-empty">Rejeu indisponible : {(query.error as Error).message}</p></div></div>;
-  if (!data) return <div className="rp-page"><h1 className="sr-only">Rejeu</h1><div className="rp-workspace"><p className="rp-empty">Le BFF ne retourne pas encore la projection `/views/replay-overview`.</p></div></div>;
+  if (query.isError) return <div className="rp-page"><h1 className="sr-only">Rejeu</h1><div className="rp-workspace" role="region" aria-label="Espace de travail du replay" tabIndex={0}><p className="rp-empty">La projection du replay ne répond pas. Réessayez dans quelques instants.</p></div></div>;
+  if (!data) return <div className="rp-page"><h1 className="sr-only">Rejeu</h1><div className="rp-workspace" role="region" aria-label="Espace de travail du replay" tabIndex={0}><p className="rp-empty">Aucune projection de replay n'est publiée.</p></div></div>;
 
   return (
     <div className="rp-page" data-testid="replay-golden-master">

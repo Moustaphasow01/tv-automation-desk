@@ -8,10 +8,11 @@ function event(eventType: string, payload: Record<string, unknown>): EventEnvelo
 
 describe("alertes opérateur temps réel", () => {
   it("links a signal alert to its canonical signal dossier", () => {
-    expect(presentRealtimeAlert(event("strategy.signal.created", { signal_id: "signal-1", instrument: "ZW" }))).toMatchObject({
+    expect(presentRealtimeAlert(event("strategy.signal.created", { signal_id: "signal-1", instrument: "ZW", direction: "LONG", expires_at: "2026-08-29T10:20:00Z" }))).toMatchObject({
       title: "Nouveau signal de stratégie",
       route: "/live/signals/signal-1",
       tone: "info",
+      detail: expect.stringContaining("ZW · LONG"),
     });
   });
 

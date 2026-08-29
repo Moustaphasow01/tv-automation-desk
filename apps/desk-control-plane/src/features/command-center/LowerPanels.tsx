@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { CommandCenterView } from "@/domains/front-api/viewModels";
-import { displayNumber, displayTime, statusTone } from "./mapper";
+import { displayNumber, displayTime, statusLabel, statusTone } from "./mapper";
 import { CommandPanel, EmptyPanelState, PanelStatus } from "./panelPrimitives";
 
 export function IncidentsOperationsPanel({ incidents, operations }: { incidents: CommandCenterView["incidents"]; operations: CommandCenterView["operations"] }) {
@@ -25,7 +25,7 @@ export function JarvisPanel({ assistant }: { assistant: CommandCenterView["assis
 export function AuditTimelinePanel({ audit }: { audit: CommandCenterView["audit"] }) {
   return (
     <CommandPanel code="C" title="Timeline d'audit (corrélée)" className="cc-panel--audit" action={<Link to="/events">Voir tout</Link>}>
-      {audit.length ? <ol className="cc-audit-list">{audit.map((event) => <li key={event.id}><time>{displayTime(event.at)}</time><i className={`cc-audit-dot cc-audit-dot--${statusTone(event.status)}`} aria-hidden="true" /><strong>{event.eventType}</strong><span>{event.detail}</span><small>{event.actor}</small><PanelStatus tone={statusTone(event.status)}>{event.status}</PanelStatus></li>)}</ol> : <EmptyPanelState label="Aucun événement corrélé publié" />}
+      {audit.length ? <ol className="cc-audit-list">{audit.map((event) => <li key={event.id}><time>{displayTime(event.at)}</time><i className={`cc-audit-dot cc-audit-dot--${statusTone(event.status)}`} aria-hidden="true" /><strong>{event.eventType}</strong><span>{event.detail}</span><small>{event.actor}</small><PanelStatus tone={statusTone(event.status)}>{statusLabel(event.status)}</PanelStatus></li>)}</ol> : <EmptyPanelState label="Aucun événement corrélé publié" />}
     </CommandPanel>
   );
 }

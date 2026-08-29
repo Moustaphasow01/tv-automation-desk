@@ -36,8 +36,8 @@ export function PerformancePage() {
   }, [data]);
 
   if (query.isLoading) return <PerformanceLoading />;
-  if (query.isError) return <div className="pa-page"><div className="pa-workspace"><p className="pa-empty">Performance indisponible : {(query.error as Error).message}</p></div></div>;
-  if (!data) return <div className="pa-page"><div className="pa-workspace"><p className="pa-empty">Le BFF ne retourne pas encore la projection `/views/performance-overview`.</p></div></div>;
+  if (query.isError) return <div className="pa-page"><h1 className="sr-only">Performance</h1><div className="pa-workspace" role="region" aria-label="Analyse de performance" tabIndex={0}><p className="pa-empty">La projection de performance ne répond pas. Réessayez dans quelques instants.</p></div></div>;
+  if (!data) return <div className="pa-page"><h1 className="sr-only">Performance</h1><div className="pa-workspace" role="region" aria-label="Analyse de performance" tabIndex={0}><p className="pa-empty">Aucune projection de performance n'est publiée.</p></div></div>;
 
   return (
     <div className="pa-page" data-testid="performance-golden-master">
@@ -386,6 +386,7 @@ function KpiCell({ label, value, detail, tone }: { label: string; value: string;
 function PerformanceLoading() {
   return (
     <div className="pa-page">
+      <h1 className="sr-only">Performance</h1>
       <div className="pa-workspace" role="region" aria-label="Chargement de l’analyse de performance" tabIndex={0}>
         <section className="pa-kpi-strip">
           {Array.from({ length: 9 }).map((_, index) => <article key={index} className="pa-kpi-card"><div className="skeleton-line" /></article>)}

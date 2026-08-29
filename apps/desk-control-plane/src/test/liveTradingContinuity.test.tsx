@@ -61,7 +61,7 @@ describe("Live Trading continuity", () => {
       expiresAt: "2026-08-27T22:05:00.000Z",
     }));
     envelope.data.canonicalRuntime.latestSignals = envelope.data.signals;
-    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(LiveSignalInbox, { model: toLiveTradingModel(envelope) })));
+    const markup = renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: ["/?signalLane=ALL"] }, createElement(LiveSignalInbox, { model: toLiveTradingModel(envelope) })));
 
     expect(markup).toContain("Décision");
     expect(markup).toContain("Graphique");

@@ -18,7 +18,7 @@ import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
-import { presentPermission } from "@/design-system/labels";
+import { presentOperationalStatus, presentOperatorText, presentPermission, presentQueueStatus } from "@/design-system/labels";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { ResearchAgentFleetView } from "@/domains/front-api/viewModels";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
@@ -109,14 +109,14 @@ export function ResearchAgentFleetPage() {
                     <FaBrain />
                     <div>
                       <strong>{agent.name}</strong>
-                      <small>{agent.type} · {agent.model} · {agent.reasoningLevel}</small>
+                      <small>{presentOperatorText(agent.type)} · {presentOperatorText(agent.model)} · {presentOperatorText(agent.reasoningLevel)}</small>
                     </div>
-                    <StatusBadge tone={agentTone(runtimeStatus)}>{runtimeStatus}</StatusBadge>
+                    <StatusBadge tone={agentTone(runtimeStatus)}>{presentOperationalStatus(runtimeStatus).label}</StatusBadge>
                   </div>
-                  <p>{agent.role}</p>
+                  <p>{presentOperatorText(agent.role)}</p>
                   <div className="research-agent-fleet-card__task">
                     <FaRoute />
-                    <span>{agent.currentTask}</span>
+                    <span>{presentOperatorText(agent.currentTask)}</span>
                   </div>
                   <div className="research-agent-fleet-budget-grid">
                     <BudgetLine label="Tokens" value={agent.tokenBudgetPct} tone="accent" />
@@ -146,8 +146,8 @@ export function ResearchAgentFleetPage() {
                   <FaComments />
                   <div>
                     <strong>{compactId(conversation?.conversationId ?? agent.conversationId)}</strong>
-                    <small>{conversation?.retainedContext ?? "Contexte non retourné"}</small>
-                    <span>{agent.leaseId} · {formatTime(agent.heartbeatAt)}</span>
+                    <small>{presentOperatorText(conversation?.retainedContext, "Contexte non publié")}</small>
+                    <span>{presentOperatorText(agent.leaseId)} · {formatTime(agent.heartbeatAt)}</span>
                   </div>
                   <StatusBadge tone={lockTone(agent.lockState)}>{agent.lockState}</StatusBadge>
                 </article>
@@ -262,11 +262,11 @@ function QueueItem({ item, agent }: { item: QueueRow; agent?: AgentRow }) {
     <article>
       <FaClock />
       <div>
-        <strong>{item.expectedEvent}</strong>
-        <small>{agent?.name ?? item.agentId} · {compactId(item.missionId)}</small>
+        <strong>{presentOperatorText(item.expectedEvent)}</strong>
+        <small>{presentOperatorText(agent?.name ?? item.agentId)} · {presentOperatorText(compactId(item.missionId))}</small>
       </div>
-      <span>{item.eta}</span>
-      <StatusBadge tone={queueTone(item.state)}>{item.state}</StatusBadge>
+      <span>{presentOperatorText(item.eta)}</span>
+      <StatusBadge tone={queueTone(item.state)}>{presentQueueStatus(item.state).label}</StatusBadge>
     </article>
   );
 }

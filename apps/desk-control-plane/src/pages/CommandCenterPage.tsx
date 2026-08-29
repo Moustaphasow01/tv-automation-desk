@@ -78,9 +78,9 @@ function deskControlReason(commandType: DeskControlCommand) {
 }
 
 function CommandCenterLoading() {
-  return <div className="cc-page cc-page--loading" aria-busy="true" aria-live="polite"><div className="cc-loading-header" /><div className="cc-loading-grid">{Array.from({ length: 12 }, (_, index) => <div key={index} />)}</div></div>;
+  return <div className="cc-page cc-page--loading" aria-busy="true" aria-live="polite"><h1 className="sr-only">Command Center</h1><div className="cc-loading-header" /><div className="cc-loading-grid">{Array.from({ length: 12 }, (_, index) => <div key={index} />)}</div></div>;
 }
 
-function CommandCenterFailure({ message, retry }: { message: string; retry(): void }) {
-  return <div className="cc-page cc-page--failure"><section role="alert"><strong>Command Center indisponible</strong><p>{message}</p><button type="button" onClick={retry}>Réessayer</button></section></div>;
+function CommandCenterFailure({ message: _message, retry }: { message: string; retry(): void }) {
+  return <div className="cc-page cc-page--failure"><h1 className="sr-only">Command Center</h1><section role="alert"><strong>Command Center non joignable</strong><p>La projection opérateur ne répond pas. Aucun état n'est extrapolé localement.</p><button type="button" onClick={retry}>Réessayer</button></section></div>;
 }

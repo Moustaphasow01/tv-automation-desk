@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCommandStatus, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
 import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
+import { LiveAttentionCenter } from "@/features/live-trading/LiveAttentionCenter";
 import type { LiveSignalNavigationTarget } from "@/features/live-trading/LiveSignalInbox";
 import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
@@ -11,9 +12,11 @@ import { LiveMarketLens } from "@/features/live-trading/LiveMarketLens";
 import { LiveTradingHeader } from "@/features/live-trading/LiveTradingHeader";
 import { InstrumentChartPanel } from "@/features/live-trading/chart/LiveMarketChart";
 import { toLiveTradingModel } from "@/features/live-trading/mapper";
+import { operatorStateForSignal } from "@/features/live-trading/signalOperatorState";
 import "@/features/live-trading/live-trading.css";
 import "@/features/live-trading/live-cockpit.css";
 import "@/features/live-trading/live-continuity.css";
+import "@/features/live-trading/live-operator-experience.css";
 
 export function LiveTradingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,6 +38,7 @@ export function LiveTradingPage() {
   const [commandBinding, setCommandBinding] = useState<GateCommandBinding | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
+  const initialChartAlignmentDone = useRef(false);
   const model = useMemo(() => {
     if (!deskQuery.data) return null;
     const deskModel = toLiveTradingModel(deskQuery.data, { signalId: selectedSignalId });
@@ -43,8 +47,20 @@ export function LiveTradingPage() {
     return { ...deskModel, marketSeries: chartModel.marketSeries };
   }, [chartQuery.data, deskQuery.data, selectedSignalId]);
   const currentOrderIntentId = model?.orderIntent?.portfolioOrderIntentId ?? null;
+  const actionable = Boolean(model && [...model.source.signals, ...model.source.canonicalRuntime.latestSignals]
+    .some((signal) => operatorStateForSignal(model, signal).code === "ACTIONABLE"));
   const command = commandForCurrentGate(commandBinding, currentOrderIntentId, model?.gateActions ?? []);
   const commandStatus = useCommandStatus(command?.commandId ?? null);
+
+  useEffect(() => {
+    if (!model || initialChartAlignmentDone.current || searchParams.has("instrument")) return;
+    const signalInstrument = model.latestSignal?.symbol;
+    if (!signalInstrument || !model.marketSeries.supportedInstruments.some((item) => item.toUpperCase() === signalInstrument.toUpperCase())) return;
+    initialChartAlignmentDone.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.set("instrument", signalInstrument);
+    setSearchParams(next, { replace: true });
+  }, [model, searchParams, setSearchParams]);
 
   const updateMarketScope = (nextScope: { instrument?: string; timeframe?: string }) => {
     const next = new URLSearchParams(searchParams);
@@ -112,10 +128,12 @@ export function LiveTradingPage() {
       className="lt-page lt-cockpit"
       data-testid="live-trading-golden-master"
       data-operator-state={model.operator.status}
+      data-actionable={actionable ? "true" : "false"}
       data-design-seed="c87167ea"
     >
       <LiveTradingHeader model={model} onRefresh={() => { void deskQuery.refetch(); void chartQuery.refetch(); }} refreshing={deskQuery.isFetching || chartQuery.isFetching} />
       <LiveCockpitStatusBar model={model} requestedScope={marketScope} scopeUpdating={chartQuery.isFetching} onScopeChange={updateMarketScope} />
+      <LiveAttentionCenter model={model} />
       <div className="lt-cockpit__workspace" aria-label="Cockpit Live Trading semi-manuel">
         <aside className="lt-cockpit__market" aria-label="Lecture du marché">
           <LiveMarketLens model={model} />
@@ -174,6 +192,6 @@ function LiveTradingLoading() {
   return <div className="lt-page lt-page--loading" aria-busy="true" aria-live="polite"><div className="lt-loading-header" /><div className="lt-loading-policy" /><div className="lt-loading-grid">{Array.from({ length: 8 }, (_, index) => <div key={index} />)}</div></div>;
 }
 
-function LiveTradingFailure({ message, retry }: { message: string; retry(): void }) {
-  return <div className="lt-page lt-page--failure"><section role="alert"><strong>Live Trading indisponible</strong><p>{message}</p><button type="button" onClick={retry}>Réessayer</button></section></div>;
+function LiveTradingFailure({ retry }: { message: string; retry(): void }) {
+  return <div className="lt-page lt-page--failure"><section role="alert"><strong>Live Trading indisponible</strong><p>La projection opérationnelle n’a pas pu être chargée. Aucune donnée locale ne remplace la réponse du backend.</p><button type="button" onClick={retry}>Réessayer</button><details><summary>Que faire ?</summary><p>Réessayez, puis consultez l’écran Incidents si la projection ne revient pas.</p></details></section></div>;
 }

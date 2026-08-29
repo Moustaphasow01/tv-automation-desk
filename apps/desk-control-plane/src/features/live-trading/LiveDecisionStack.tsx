@@ -6,6 +6,7 @@ import { StatusBadge } from "@/design-system/primitives";
 import type { HumanGateAction } from "@/features/order-intent/model";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import { LiveHumanGate } from "./LiveHumanGate";
+import { LiveDecisionSupport } from "./LiveDecisionSupport";
 import { displayTime, displayValue, recordValue } from "./mapper";
 import type { LiveTradingModel } from "./model";
 import { resolveSignalTemporalState } from "./signalTemporalState";
@@ -65,6 +66,8 @@ export function LiveDecisionStack(props: LiveDecisionStackProps) {
         <span><small>Cutoff source</small><strong>{displayTime(model.latestSignal?.sourceDataCutoffAt ?? model.latestSignal?.createdAt)}</strong></span>
         <span><small>Étape atteinte</small><strong>{stageLabel(mostAdvancedStage)}</strong></span>
       </div>
+
+      {model.latestSignal ? <LiveDecisionSupport model={model} /> : null}
 
       <ol className="lt-decision-stack__flow" aria-label="Progression causale de la décision">
         <SignalStage model={model} defaultExpanded={mostAdvancedStage === "signal"} />
@@ -159,7 +162,7 @@ function PortfolioRiskStage({ model, defaultExpanded }: { model: LiveTradingMode
           ]} />
           <AuthorityEvidence title="Risque global" status={riskStatus.label} facts={[
             ["Limite", displayValue(risk?.limitLabel)],
-            ["Utilisation", risk?.usedPct === null || risk?.usedPct === undefined ? "Non publiée" : `${risk.usedPct.toFixed(1)}%`],
+            ["Utilisation", risk?.usedPct === null || risk?.usedPct === undefined ? "Non publié" : `${risk.usedPct.toFixed(1)}%`],
             ["Motif", displayValue(risk?.reasonCode)],
           ]} />
         </div>

@@ -14,7 +14,7 @@ export type AuthorityStage = {
 };
 
 export type HumanGateAction = {
-  action: "CONFIRM" | "REJECT";
+  action: "CONFIRM" | "REJECT" | "UNDO";
   actionId: string;
   label: string;
   commandType: string;

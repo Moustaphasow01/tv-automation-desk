@@ -15,11 +15,11 @@ const requestedScenario = process.env.DESK_VNEXT_VISUAL_SCENARIO;
 const scenarios = requestedScenario ? scenarioCatalog.filter((scenario) => scenario.name === requestedScenario) : scenarioCatalog;
 if (!scenarios.length) throw new Error(`UNKNOWN_VISUAL_SCENARIO:${requestedScenario}`);
 const flightDirectorGolden = {
-  sidebar: { x: 0, y: 0, width: 196, height: 941 },
-  header: { x: 196, y: 0, width: 1476, height: 64 },
-  policy: { x: 196, y: 64, width: 1476, height: 38 },
-  flightBar: { x: 196, y: 102, width: 1476, height: 76 },
-  workspace: { x: 196, y: 178, width: 1476, height: 763 },
+  sidebar: { x: 0, y: 0, width: 200, height: 941 },
+  header: { x: 200, y: 0, width: 1472, height: 64 },
+  policy: { x: 200, y: 64, width: 1472, height: 38 },
+  flightBar: { x: 200, y: 102, width: 1472, height: 76 },
+  workspace: { x: 200, y: 212, width: 1472, height: 729 },
 };
 
 await mkdir(outputRoot, { recursive: true });
@@ -45,6 +45,12 @@ try {
       throw new Error(`LIVE_TRADING_PANEL_NOT_VISIBLE\n${bodyText}\n${consoleErrors.join("\n")}`, { cause: error });
     }
     await page.screenshot({ path: resolve(outputRoot, `${scenario.name}.png`), fullPage: false });
+    // Shell geometry is certified before the audit deliberately scrolls every
+    // dock and decision panel into view. Chromium can retain a visual offset
+    // after those nested scroll operations even when the document itself has
+    // no horizontal overflow; that offset is an audit side effect, not the
+    // initial operator viewport.
+    const initialLayout = await page.evaluate(measureCockpit, { mobile: scenario.viewport.width <= 900 });
     const dockTabMeasurements = [];
     const dockTabs = page.locator(".lt-activity-dock__tabs [role='tab']");
     for (let index = 0; index < await dockTabs.count(); index += 1) {
@@ -154,11 +160,11 @@ try {
     if (activityFullscreen.visible && !activityFullscreen.focusRestored) geometryFailures.push("Activity dock fullscreen mode does not restore trigger focus");
     if (activityFullscreen.bounds && (activityFullscreen.bounds.width < scenario.viewport.width * .8 || activityFullscreen.bounds.height < scenario.viewport.height * .8)) geometryFailures.push("Activity dock fullscreen mode does not occupy the investigation viewport");
     if (scenario.viewport.width <= 900) {
-      if (!measurement.mobileInstrumentSelector.visible) geometryFailures.push("mobile instrument selector must be visible in the viewport");
-      if (!measurement.mobileInstrumentSelector.uncovered) geometryFailures.push("mobile instrument selector is covered by another element");
+      if (!initialLayout.mobileInstrumentSelector.visible) geometryFailures.push("mobile instrument selector must be visible in the initial viewport");
+      if (!initialLayout.mobileInstrumentSelector.uncovered) geometryFailures.push("mobile instrument selector is covered in the initial viewport");
     }
     if (scenario.golden) for (const [key, expected] of Object.entries(flightDirectorGolden)) {
-      const actual = measurement[key];
+      const actual = initialLayout[key];
       if (!actual) geometryFailures.push(`${key}: missing`);
       else for (const metric of ["x", "y", "width", "height"]) if (Math.abs(actual[metric] - expected[metric]) > 1) geometryFailures.push(`${key}.${metric}: expected ${expected[metric]}, got ${actual[metric]}`);
     }
@@ -171,7 +177,7 @@ try {
     if (measurement.dockSiblingOverlapCount > 0) geometryFailures.push(`${measurement.dockSiblingOverlapCount} overlapping dock row(s)`);
     if (scenario.viewport.width > 1240 && measurement.chart && measurement.marketLens && measurement.chart.width <= measurement.marketLens.width) geometryFailures.push("chart must remain wider than market lens on desktop");
     if (!measurement.chartBeforeDecisionOnMobile) geometryFailures.push("chart must precede the decision stack on mobile");
-    results.push({ scenario, measurement, geometryFailures, consoleErrors });
+    results.push({ scenario, initialLayout, measurement, geometryFailures, consoleErrors });
   }
 } finally { await page.close(); await context.close(); await browser.close(); }
 

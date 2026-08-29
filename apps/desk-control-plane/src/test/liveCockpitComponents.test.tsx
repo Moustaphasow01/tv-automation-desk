@@ -146,7 +146,7 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("505,75");
     expect(markup).toContain("T1 511");
     expect(markup).not.toContain("[object Object]");
-    expect(markup).toContain("Confirmer");
+    expect(markup).toContain("J’ai passé l’ordre");
     expect(markup).toContain("Rejeter");
     expect(markup).toMatch(/class="lt-gate-confirm" disabled=""/);
     expect(markup).toMatch(/class="lt-gate-reject" disabled=""/);
@@ -175,7 +175,7 @@ describe("Live Trading cockpit components", () => {
     );
 
     expect(markup).toContain("Utilisation");
-    expect(markup).toContain("Non publiée");
+    expect(markup).toContain("Non publié");
   });
 
   it("locks Human Gate actions throughout an accepted command and permits only terminal-failure retry", () => {

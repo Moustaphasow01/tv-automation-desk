@@ -45,8 +45,7 @@ describe("page semantic accessibility regressions", () => {
 
     expect(shell).toContain('type NavigationMode = "expanded" | "compact" | "hidden"');
     expect(shell).toContain('const NAVIGATION_MODE_KEY = "desk.navigation.mode.v1"');
-    expect(shell).toContain("deskPrimaryNavigation.slice(0, 4)");
-    expect(shell).not.toContain("deskPrimaryNavigation.filter((route) => route.mobile)");
+    expect(shell).toContain("deskPrimaryNavigation.filter((route) => route.mobile).slice(0, 4)");
     expect(navigation.match(/const primaryNavigationSeed/g)).toHaveLength(1);
   });
 
