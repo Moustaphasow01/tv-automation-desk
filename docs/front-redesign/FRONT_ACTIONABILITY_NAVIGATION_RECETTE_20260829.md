@@ -42,3 +42,16 @@ Sélection principale : UXR-0049, UXR-0057, UXR-0058, UXR-0081, UXR-0082, UXR-00
 - Les compteurs ne s’affichent que lorsque le BFF publie un nombre réel ; une projection partielle reste honnêtement sans compteur.
 - Les actions Human Gate vivantes devront encore être recettées avec une véritable fenêtre backend ouverte ; aucune capacité n’a été simulée pour les besoins du test.
 - L’unification complète des anciens tokens par écran reste un chantier de fond distinct ; elle n’a pas été mélangée à ce correctif P0.
+
+## Déploiement VPS
+
+- Release : `preprod-v2-front-actionability-20260829.1`.
+- Commit applicatif : `893f4eff7331b48e676004f7a1309f6e69cf3f33`.
+- Archive SHA-256 : `4d72bbf00f058a458d7c0f14fc3a0f39b60ffab60a0be1777f0726df20d276ba`.
+- Sauvegardes native et objet réalisées avant drain.
+- Niveau PostgreSQL : `058_theoretical_execution_portfolio_lineage`, inchangé et vérifié.
+- Canari local, santé locale et smoke test public : réussis.
+- Claims et contrôles d’exécution restaurés automatiquement par le pipeline.
+- Vérification publique : `/healthz` et `/readyz` publient la nouvelle release ; le bundle `assets/index-DgiUHKoK.js` contient le même identifiant de build.
+- Recette VPS : scénario Live 1672×941 réussi, sans overflow, clipping, backdrop ni erreur console ; 4 audits Axe Command Center/Live desktop-mobile sans violation sérieuse/critique ni erreur runtime.
+- Politique publique vérifiée : `PREPROD`, `SEMI_MANUAL`, `autoExecutionEnabled=false`, exécution physique désactivée par politique.
