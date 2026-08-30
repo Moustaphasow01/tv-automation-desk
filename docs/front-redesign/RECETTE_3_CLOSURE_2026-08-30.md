@@ -4,6 +4,7 @@
 
 - Rapport source : Recette 3 du build `index-CEdr2mYw.js`.
 - Baseline de correction : `main@5ca2f4e4cd1a2396a115c3c59b72a9742ed0b589`.
+- Commit livré : `921b97a026da27cd0e9c09f0ba1bb0c0421c486d`.
 - Écran prioritaire : Live Trading semi-manuel.
 - Autorité : le frontend présente les états, échéances et `allowedActions` publiés ; il ne crée ni signal, ni décision Risk, ni permission Human Gate.
 
@@ -47,3 +48,19 @@ Le lot ne redessine pas le cockpit. Il conserve le langage « flight director »
 - Portfolio visual QA : `4/4`, dont Windows à 150 % et mobile.
 - Axe ciblé : zéro violation serious/critical et zéro défaut de vocabulaire opérateur. Deux réponses `502` transitoires du BFF VPS ont été observées pendant la première passe; les endpoints `jarvis-workspace` et `risk` répondaient ensuite `200`, sans erreur de contrat frontend.
 - Rulebook : `1 000/1 000` règles valides; scanner heuristique `0` erreur et `715` avertissements historiques non bloquants.
+
+## Déploiement et certification VPS
+
+- Release installée : `preprod-v2-recette3-closure-20260830.1`.
+- Archive certifiée : SHA-256 `bd6e6c34d9625f74feb169ac026fb00a06e677c7424444e29645e82ddaf66ef7`, `5 102` fichiers vérifiés.
+- Sauvegarde PostgreSQL préalable : `desk-native-20260830T140430Z.dump`, SHA-256 `a0388bd8b5b10716ae8debf779c3e31a9a0539c521f87643db3c0f80cf683205`.
+- Schéma : toutes les migrations `001` à `059` déjà appliquées; contrat de migration `058` vérifié; aucune migration destructive exécutée.
+- Pipeline : installation, santé locale, front public, `/healthz`, `/readyz`, métadonnées OAuth et rejet d'un webhook sans secret validés; contrôles de claim et d'exécution restaurés après la bascule.
+- Santé publique : release attendue publiée, `ok=true`, `ready=true`, opérations saines, aucun service runtime manquant.
+- Services Windows : `11/11` en exécution et démarrage automatique, incluant API, Live Runtime, Telegram, supervisors/workers et gateway HTTPS.
+- Sécurité opérationnelle : environnement `preprod`, workers Live en `shadow`, exécution broker non soumise automatiquement; aucun ordre réel émis pendant la recette.
+- Données : marché fermé au moment de la certification; calendrier macro `READY`; Telegram `healthy`.
+- Front servi : `index-OXFYcsr7.js` SHA-256 `2745d86cf60d2834fc267a9ef6f5b6ac40fbc9afa7ad35de0dae6f1d422eab75`, `index-CPWMUV8P.css` SHA-256 `ebf70070c95288cd4f2a509a874e08215c77ab129b4b9eeb97f0935f2eeb3a1e`.
+- PWA publique : cache isolé par build, `skipWaiting`, `clients.claim`, navigation network-first et exclusion explicite de `/front-api/` et `/api/`.
+- QA publique Golden Master : Live Trading `1/1`, Command Center `1/1`, aucun overflow, élément masqué ou défaut de géométrie et aucune erreur console.
+- Axe public ciblé : `4/4` audits Command Center/Live (workstation et mobile), zéro violation serious/critical, zéro erreur runtime et zéro défaut de vocabulaire opérateur.
