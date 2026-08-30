@@ -74,6 +74,7 @@ export function signalRow(item) {
   const source = { ...payload, ...item };
   const lineage = item.lineage || payload.lineage || payload.source?.lineage || {};
   const tradePlan = frontSignalTradePlan(source);
+  const rawReasonCodes = stringList(source.reason_codes);
   return {
     signalId: text(firstValue(source.signal_outbox_id, source.signal_id, rows(lineage.strategy_signal_ids)[0]), ""),
     strategyId: text(firstValue(source.strategy_definition_id, source.strategy_id, rows(lineage.strategy_definition_ids)[0]), "unavailable"),
@@ -93,7 +94,8 @@ export function signalRow(item) {
     setup: source.setup || null,
     predicates: rows(source.predicates),
     evidence: rows(source.evidence),
-    reasonCodes: stringList(source.reason_codes),
+    reasonCodes: currentTradePlanReasonCodes(rawReasonCodes, tradePlan),
+    rawReasonCodes,
     signalQuality: source.signal_quality || null,
     confidenceBreakdown: firstValue(source.confidence_breakdown, source.signal_quality?.confidence_breakdown, source.signal_quality?.components) || null,
     confidenceHistory: rows(firstValue(source.confidence_history, source.signal_quality?.confidence_history)),
@@ -109,6 +111,25 @@ export function signalRow(item) {
     regime: text(firstValue(source.regime, source.setup?.context?.market_regime, source.signal_quality?.context_bias), "unavailable"),
     conflicts: rows(firstValue(source.conflicts, source.signal_quality?.conflicts)),
   };
+}
+
+function currentTradePlanReasonCodes(reasonCodes, tradePlan = {}) {
+  const proposedTradePlan = object(tradePlan.proposedTradePlan);
+  const economics = object(tradePlan.tradePlanEconomics);
+  const entry = object(proposedTradePlan.entry);
+  const units = object(firstValue(proposedTradePlan.units, economics.units));
+  const entryKnown = entry.availability === "KNOWN"
+    && Number.isFinite(Number(firstValue(entry.price, entry.calculation_price)));
+  const instrumentSpecKnown = units.availability === "KNOWN"
+    && Number.isFinite(Number(units.tick_size))
+    && Number.isFinite(Number(units.tick_value))
+    && Number.isFinite(Number(units.point_value));
+
+  return reasonCodes.filter((reasonCode) => {
+    if (reasonCode === "ENTRY_UNAVAILABLE" && entryKnown) return false;
+    if (reasonCode === "INSTRUMENT_SPEC_UNAVAILABLE" && instrumentSpecKnown) return false;
+    return true;
+  });
 }
 
 export function signalTemporalRow(item, nowIso) {
