@@ -120,6 +120,7 @@ export function HumanExecutionGatePanel({
   const presentation = presentBackendStatus(status.raw);
   const confirm = gate.actions.find((action) => action.action === "CONFIRM");
   const reject = gate.actions.find((action) => action.action === "REJECT");
+  const undo = gate.actions.find((action) => action.action === "UNDO");
 
   const requestAction = (action: HumanGateAction) => {
     if (action.permission !== "ALLOWED") return;
@@ -141,6 +142,7 @@ export function HumanExecutionGatePanel({
       {gate.actions.some((action) => action.requiresReason) ? <ReasonInput label="Motif opérateur" value={reason} onChange={setReason} /> : null}
 
       <div className="order-dossier__gate-actions">
+        <ActionButton action={undo} fallbackLabel="Annuler la décision" variant="secondary" submittingActionId={submittingActionId} onClick={requestAction} />
         <ActionButton action={reject} fallbackLabel="Rejeter OrderIntent" variant="danger" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
         <ActionButton action={confirm} fallbackLabel="Confirmer OrderIntent" variant="primary" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
       </div>
@@ -153,7 +155,7 @@ export function HumanExecutionGatePanel({
           <div className="order-dossier__gate-actions">
             <DeskButton variant="ghost" onClick={() => setPendingAction(null)}>Annuler</DeskButton>
             <DeskButton
-              variant={pendingAction.action === "REJECT" ? "danger" : "primary"}
+              variant={pendingAction.action === "REJECT" ? "danger" : pendingAction.action === "UNDO" ? "secondary" : "primary"}
               disabled={submittingActionId === pendingAction.actionId || (pendingAction.requiresReason && !reason.trim())}
               onClick={() => void onSubmit(pendingAction, reason).then(() => setPendingAction(null))}
             >
@@ -179,7 +181,7 @@ function ActionButton({
 }: {
   action?: HumanGateAction;
   fallbackLabel: string;
-  variant: "primary" | "danger";
+  variant: "primary" | "secondary" | "danger";
   submittingActionId: string | null;
   onClick: (action: HumanGateAction) => void;
   fallbackReason?: string;

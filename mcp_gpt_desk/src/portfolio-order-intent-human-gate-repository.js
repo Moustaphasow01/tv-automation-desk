@@ -12,6 +12,11 @@ import {
   text,
 } from "./portfolio-order-intent-execution-repository-common.js";
 import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
+import {
+  evaluateHumanGateUndoV1,
+  humanGateUndoDeadlineV1,
+  normalizeHumanGateUndoPolicyV1,
+} from "@tv-automation/desk-domain";
 
 export class PostgresHumanExecutionGateRepository {
   constructor(repository) {
@@ -84,6 +89,8 @@ export class PostgresHumanExecutionGateRepository {
       if (issueCode) return await refused(client, { gate, portfolioOrderIntentId, reason: issueCode, input, nowUtc, domainEvents: this.domainEvents });
       const terms = confirmationTerms(normalized, input.approvedTerms || input.approved_terms || {});
       const termsHash = hash(terms);
+      const undoPolicy = normalizeHumanGateUndoPolicyV1(input.undoPolicy || input.undo_policy || {});
+      const undoExpiresAtUtc = humanGateUndoDeadlineV1({ decidedAtUtc: nowUtc, gateExpiresAtUtc: gate.expires_at_utc, policy: undoPolicy });
       const confirmedGate = await one(client,
         `UPDATE human_execution_gates SET
           status = 'CONFIRMED',
@@ -93,11 +100,15 @@ export class PostgresHumanExecutionGateRepository {
           confirmed_at_utc = $4,
           terms_hash = $5,
           payload = payload || $6::jsonb,
+          rejected_at_utc = NULL,
+          reason = NULL,
+          undo_expires_at_utc = $7,
+          undone_at_utc = NULL,
           updated_at_utc = now()
          WHERE human_execution_gate_id = $1
          RETURNING *`,
         [gate.human_execution_gate_id, text(input.operatorId || input.operator_id || "operator"), idempotencyKey || null, nowUtc,
-          termsHash, json({ approved_terms: terms, confirmation_reason: input.reason || null })],
+          termsHash, json({ approved_terms: terms, confirmation_reason: input.reason || null, undo_policy_version: undoPolicy.schemaVersion }), undoExpiresAtUtc],
       );
       await insertHumanGateEventWithClient(client, {
         gate: confirmedGate,
@@ -127,10 +138,27 @@ export class PostgresHumanExecutionGateRepository {
     await this.ready();
     const portfolioOrderIntentId = text(input.portfolioOrderIntentId || input.portfolio_order_intent_id);
     const nowUtc = input.nowUtc || DEFAULT_REPOSITORY_NOW_UTC;
-    const gate = await this.ensureHumanGate({ portfolioOrderIntentId, nowUtc });
+    const idempotencyKey = text(input.idempotencyKey || input.idempotency_key);
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (idempotencyKey) {
+        const duplicate = await one(client, `SELECT e.*, g.* FROM human_execution_gate_events e
+          JOIN human_execution_gates g ON g.human_execution_gate_id = e.human_execution_gate_id
+          WHERE e.idempotency_key = $1`, [idempotencyKey]);
+        if (duplicate) {
+          await client.query("COMMIT");
+          return { status: duplicate.event_type === "REJECTED" ? "REJECTED" : "REFUSED", idempotent: true, gate: duplicate };
+        }
+      }
+      const lineage = await one(client, "SELECT * FROM portfolio_order_intent_lineage WHERE portfolio_order_intent_id = $1 FOR UPDATE", [portfolioOrderIntentId]);
+      if (!lineage) return await refused(client, { portfolioOrderIntentId, reason: "PORTFOLIO_ORDER_INTENT_NOT_FOUND", input, nowUtc, domainEvents: this.domainEvents });
+      let gate = await one(client, "SELECT * FROM human_execution_gates WHERE portfolio_order_intent_id = $1 FOR UPDATE", [portfolioOrderIntentId]);
+      if (!gate) gate = await insertGateForConfirmation(client, { portfolioOrderIntentId, lineage, nowUtc });
+      const rejectionIssue = humanGateRejectionIssue({ gate, input, nowUtc });
+      if (rejectionIssue) return await refused(client, { gate, portfolioOrderIntentId, reason: rejectionIssue, input, nowUtc, domainEvents: this.domainEvents });
+      const undoPolicy = normalizeHumanGateUndoPolicyV1(input.undoPolicy || input.undo_policy || {});
+      const undoExpiresAtUtc = humanGateUndoDeadlineV1({ decidedAtUtc: nowUtc, gateExpiresAtUtc: gate.expires_at_utc, policy: undoPolicy });
       const result = await client.query(
       `UPDATE human_execution_gates SET
         status = 'REJECTED',
@@ -139,19 +167,83 @@ export class PostgresHumanExecutionGateRepository {
         idempotency_key = $3,
         rejected_at_utc = $4,
         reason = $5,
+        confirmed_at_utc = NULL,
+        terms_hash = NULL,
+        undo_expires_at_utc = $6,
+        undone_at_utc = NULL,
+        payload = payload || $7::jsonb,
         updated_at_utc = now()
        WHERE human_execution_gate_id = $1
-       RETURNING *`,
+      RETURNING *`,
       [gate.human_execution_gate_id, text(input.operatorId || input.operator_id || "operator"),
-        text(input.idempotencyKey || input.idempotency_key) || null, nowUtc, input.reason || null],
+        idempotencyKey || null, nowUtc, input.reason || null, undoExpiresAtUtc,
+        json({ rejection_reason: input.reason || null, undo_policy_version: undoPolicy.schemaVersion })],
       );
       const rejectedGate = result.rows[0];
-      await insertHumanGateEventWithClient(client, { gate: rejectedGate, eventType: "REJECTED", operatorId: rejectedGate.operator_id, idempotencyKey: text(input.idempotencyKey || input.idempotency_key) || null, nowUtc, payload: { reason: input.reason || null } });
+      await insertHumanGateEventWithClient(client, { gate: rejectedGate, eventType: "REJECTED", operatorId: rejectedGate.operator_id, idempotencyKey, nowUtc, payload: { reason: input.reason || null, undo_expires_at_utc: undoExpiresAtUtc } });
+      await upsertGateStateWithClient(client, { portfolioOrderIntentId, status: "BLOCKED", payload: { human_gate_status: "REJECTED", rejected_at_utc: nowUtc } });
       await appendHumanGateDomainEvent(this.domainEvents, client, { gate: rejectedGate, eventType: "state_changed", nowUtc, payload: { previousState: gate.status, state: rejectedGate.status, operatorId: rejectedGate.operator_id, reason: input.reason || null } });
       await client.query("COMMIT");
-      return { status: "REJECTED", gate: rejectedGate };
+      return { status: "REJECTED", idempotent: false, gate: rejectedGate };
     } catch (error) {
       await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async undoHumanGate(input = {}) {
+    await this.ready();
+    const portfolioOrderIntentId = text(input.portfolioOrderIntentId || input.portfolio_order_intent_id);
+    const nowUtc = input.nowUtc || DEFAULT_REPOSITORY_NOW_UTC;
+    const idempotencyKey = text(input.idempotencyKey || input.idempotency_key);
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      if (idempotencyKey) {
+        const duplicate = await one(client, `SELECT e.*, g.* FROM human_execution_gate_events e
+          JOIN human_execution_gates g ON g.human_execution_gate_id = e.human_execution_gate_id
+          WHERE e.idempotency_key = $1`, [idempotencyKey]);
+        if (duplicate) {
+          await client.query("COMMIT");
+          return { status: duplicate.event_type === "REVERTED" ? "REVERTED" : "REFUSED", idempotent: true, gate: duplicate };
+        }
+      }
+      const gate = await one(client, "SELECT * FROM human_execution_gates WHERE portfolio_order_intent_id = $1 FOR UPDATE", [portfolioOrderIntentId]);
+      if (!gate) return await refused(client, { portfolioOrderIntentId, reason: "HUMAN_GATE_NOT_FOUND", input, nowUtc, domainEvents: this.domainEvents });
+      const providerCommands = await one(client, "SELECT count(*)::integer AS count FROM broker_provider_commands WHERE portfolio_order_intent_id = $1", [portfolioOrderIntentId]);
+      const eligibility = evaluateHumanGateUndoV1({
+        gate,
+        nowUtc,
+        expectedRevision: input.expectedRevision ?? input.expected_revision,
+        providerCommandCount: Number(providerCommands?.count || 0),
+        policy: input.undoPolicy || input.undo_policy || {},
+      });
+      if (!eligibility.allowed) {
+        await insertHumanGateEventWithClient(client, { gate, eventType: "REFUSED", operatorId: input.operatorId || input.operator_id || "operator", idempotencyKey, nowUtc, payload: { attempted_action: "UNDO", reason: eligibility.reason } });
+        await client.query("COMMIT");
+        return { status: "REFUSED", reason: eligibility.reason, idempotent: false, gate };
+      }
+      const revertedGate = await one(client, `UPDATE human_execution_gates SET
+          status = 'AWAITING_MANUAL_CONFIRMATION', revision = revision + 1,
+          operator_id = NULL, idempotency_key = $2, confirmed_at_utc = NULL,
+          rejected_at_utc = NULL, terms_hash = NULL, reason = NULL,
+          undo_expires_at_utc = NULL, undone_at_utc = $3,
+          payload = payload || $4::jsonb, updated_at_utc = now()
+        WHERE human_execution_gate_id = $1 RETURNING *`, [
+        gate.human_execution_gate_id,
+        idempotencyKey || null,
+        nowUtc,
+        json({ undone_at_utc: nowUtc, undo_reason: input.reason || null, reverted_from_status: gate.status }),
+      ]);
+      await insertHumanGateEventWithClient(client, { gate: revertedGate, eventType: "REVERTED", operatorId: input.operatorId || input.operator_id || "operator", idempotencyKey, nowUtc, payload: { previous_status: gate.status, reason: input.reason || null } });
+      await upsertGateStateWithClient(client, { portfolioOrderIntentId, status: "AWAITING_MANUAL_CONFIRMATION", payload: { human_gate_status: "AWAITING_MANUAL_CONFIRMATION", undone_at_utc: nowUtc } });
+      await appendHumanGateDomainEvent(this.domainEvents, client, { gate: revertedGate, eventType: "state_changed", nowUtc, payload: { previousState: gate.status, state: revertedGate.status, operatorId: input.operatorId || input.operator_id || "operator", reason: input.reason || null } });
+      await client.query("COMMIT");
+      return { status: "REVERTED", idempotent: false, gate: revertedGate };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
       throw error;
     } finally {
       client.release();
@@ -177,6 +269,8 @@ export class InMemoryHumanExecutionGateRepository {
       idempotency_key: null,
       confirmed_at_utc: null,
       rejected_at_utc: null,
+      undo_expires_at_utc: null,
+      undone_at_utc: null,
       expires_at_utc: expiresAtUtc || null,
       terms_hash: null,
       reason: null,
@@ -203,6 +297,8 @@ export class InMemoryHumanExecutionGateRepository {
     if (issueCode) return refusedInMemory(this.repository, { gate, portfolioOrderIntentId: id, reason: issueCode, input, nowUtc });
     const terms = confirmationTerms(lineage, input.approvedTerms || input.approved_terms || {});
     const termsHash = hash(terms);
+    const undoPolicy = normalizeHumanGateUndoPolicyV1(input.undoPolicy || input.undo_policy || {});
+    const undoExpiresAtUtc = humanGateUndoDeadlineV1({ decidedAtUtc: nowUtc, gateExpiresAtUtc: gate.expires_at_utc, policy: undoPolicy });
     const confirmed = {
       ...gate,
       status: "CONFIRMED",
@@ -210,6 +306,9 @@ export class InMemoryHumanExecutionGateRepository {
       operator_id: text(input.operatorId || input.operator_id || "operator"),
       idempotency_key: idempotencyKey || null,
       confirmed_at_utc: nowUtc,
+      rejected_at_utc: null,
+      undo_expires_at_utc: undoExpiresAtUtc,
+      undone_at_utc: null,
       terms_hash: termsHash,
       payload: { ...(gate.payload || {}), approved_terms: terms, confirmation_reason: input.reason || null },
       updated_at_utc: nowUtc,
@@ -224,6 +323,10 @@ export class InMemoryHumanExecutionGateRepository {
     const id = text(input.portfolioOrderIntentId || input.portfolio_order_intent_id);
     const nowUtc = input.nowUtc || DEFAULT_REPOSITORY_NOW_UTC;
     const gate = await this.ensureHumanGate({ portfolioOrderIntentId: id, nowUtc });
+    const issueCode = humanGateRejectionIssue({ gate, input, nowUtc });
+    if (issueCode) return refusedInMemory(this.repository, { gate, portfolioOrderIntentId: id, reason: issueCode, input, nowUtc });
+    const undoPolicy = normalizeHumanGateUndoPolicyV1(input.undoPolicy || input.undo_policy || {});
+    const undoExpiresAtUtc = humanGateUndoDeadlineV1({ decidedAtUtc: nowUtc, gateExpiresAtUtc: gate.expires_at_utc, policy: undoPolicy });
     const rejected = {
       ...gate,
       status: "REJECTED",
@@ -231,12 +334,52 @@ export class InMemoryHumanExecutionGateRepository {
       operator_id: text(input.operatorId || input.operator_id || "operator"),
       idempotency_key: text(input.idempotencyKey || input.idempotency_key) || null,
       rejected_at_utc: nowUtc,
+      confirmed_at_utc: null,
+      terms_hash: null,
+      undo_expires_at_utc: undoExpiresAtUtc,
+      undone_at_utc: null,
       reason: input.reason || null,
       updated_at_utc: nowUtc,
     };
     this.repository.humanGates.set(id, clone(rejected));
     recordHumanGateEvent(this.repository, { gate: rejected, eventType: "REJECTED", operatorId: rejected.operator_id, idempotencyKey: rejected.idempotency_key, nowUtc, payload: { reason: input.reason || null } });
-    return { status: "REJECTED", gate: clone(rejected) };
+    upsertState(this.repository, { portfolioOrderIntentId: id, status: "BLOCKED", payload: { human_gate_status: "REJECTED", rejected_at_utc: nowUtc } });
+    return { status: "REJECTED", idempotent: false, gate: clone(rejected) };
+  }
+
+  async undoHumanGate(input = {}) {
+    const id = text(input.portfolioOrderIntentId || input.portfolio_order_intent_id);
+    const nowUtc = input.nowUtc || DEFAULT_REPOSITORY_NOW_UTC;
+    const idempotencyKey = text(input.idempotencyKey || input.idempotency_key);
+    const duplicate = idempotencyKey ? [...this.repository.humanGateEvents.values()].find((event) => event.idempotency_key === idempotencyKey) : null;
+    if (duplicate) return { status: duplicate.event_type === "REVERTED" ? "REVERTED" : "REFUSED", idempotent: true, gate: clone(this.repository.humanGates.get(id)) };
+    const gate = this.repository.humanGates.get(id);
+    if (!gate) return { status: "REFUSED", reason: "HUMAN_GATE_NOT_FOUND", idempotent: false, gate: null };
+    const providerCommandCount = [...this.repository.providerCommands.values()].filter((command) => command.portfolio_order_intent_id === id).length;
+    const eligibility = evaluateHumanGateUndoV1({ gate, nowUtc, expectedRevision: input.expectedRevision ?? input.expected_revision, providerCommandCount, policy: input.undoPolicy || input.undo_policy || {} });
+    if (!eligibility.allowed) {
+      recordHumanGateEvent(this.repository, { gate, eventType: "REFUSED", operatorId: input.operatorId || input.operator_id || "operator", idempotencyKey, nowUtc, payload: { attempted_action: "UNDO", reason: eligibility.reason } });
+      return { status: "REFUSED", reason: eligibility.reason, idempotent: false, gate: clone(gate) };
+    }
+    const reverted = {
+      ...gate,
+      status: "AWAITING_MANUAL_CONFIRMATION",
+      revision: Number(gate.revision || 1) + 1,
+      operator_id: null,
+      idempotency_key: idempotencyKey || null,
+      confirmed_at_utc: null,
+      rejected_at_utc: null,
+      terms_hash: null,
+      reason: null,
+      undo_expires_at_utc: null,
+      undone_at_utc: nowUtc,
+      payload: { ...(gate.payload || {}), undone_at_utc: nowUtc, undo_reason: input.reason || null, reverted_from_status: gate.status },
+      updated_at_utc: nowUtc,
+    };
+    this.repository.humanGates.set(id, clone(reverted));
+    recordHumanGateEvent(this.repository, { gate: reverted, eventType: "REVERTED", operatorId: input.operatorId || input.operator_id || "operator", idempotencyKey, nowUtc, payload: { previous_status: gate.status, reason: input.reason || null } });
+    upsertState(this.repository, { portfolioOrderIntentId: id, status: "AWAITING_MANUAL_CONFIRMATION", payload: { human_gate_status: "AWAITING_MANUAL_CONFIRMATION", undone_at_utc: nowUtc } });
+    return { status: "REVERTED", idempotent: false, gate: clone(reverted) };
   }
 }
 
@@ -250,6 +393,8 @@ export function gateToLineageFields(gate = null) {
     human_gate_idempotency_key: gate.idempotency_key || null,
     human_gate_confirmed_at_utc: gate.confirmed_at_utc || null,
     human_gate_rejected_at_utc: gate.rejected_at_utc || null,
+    human_gate_undo_expires_at_utc: gate.undo_expires_at_utc || null,
+    human_gate_undone_at_utc: gate.undone_at_utc || null,
     human_gate_expires_at_utc: gate.expires_at_utc || null,
     human_gate_terms_hash: gate.terms_hash || null,
   };
@@ -278,6 +423,15 @@ function humanGateConfirmationIssue({ lineage, gate, input, nowUtc }) {
   if (hasValue(approvedTerms.broker_account_id) && text(approvedTerms.broker_account_id) !== text(lineage.payload?.broker_account_id || lineage.target_account_id)) return "HUMAN_GATE_ACCOUNT_IMMUTABLE";
   if (hasValue(approvedTerms.instrument) && text(approvedTerms.instrument).toUpperCase() !== text(lineage.target_instrument || lineage.payload?.instrument).toUpperCase()) return "HUMAN_GATE_INSTRUMENT_IMMUTABLE";
   if (hasValue(approvedTerms.action) && text(approvedTerms.action).toUpperCase() !== text(lineage.payload?.action || lineage.payload?.side).toUpperCase()) return "HUMAN_GATE_SIDE_IMMUTABLE";
+  return null;
+}
+
+function humanGateRejectionIssue({ gate, input, nowUtc }) {
+  const status = String(gate.status || "").toUpperCase();
+  if (status !== "AWAITING_MANUAL_CONFIRMATION") return `HUMAN_GATE_${status || "MISSING"}`;
+  if (isExpired(gate.expires_at_utc, nowUtc)) return "HUMAN_GATE_EXPIRED";
+  const expectedRevision = Number(input.expectedRevision ?? input.expected_revision);
+  if (Number.isInteger(expectedRevision) && expectedRevision !== Number(gate.revision || 1)) return "HUMAN_GATE_REVISION_CONFLICT";
   return null;
 }
 

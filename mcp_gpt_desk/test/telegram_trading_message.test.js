@@ -55,3 +55,41 @@ test("manual Telegram management ticket highlights the operator action", () => {
   assert.match(message, /Nouveau stop: 30 010/);
   assert.match(message, /Modifier manuellement la position/);
 });
+
+test("theoretical execution alert is explicit, readable and never presented as a broker fill", () => {
+  const message = buildTelegramTradingMessage({
+    kind: "theoretical_execution_event",
+    state: "target_hit",
+    sourceId: "theoretical_event_1",
+    occurredAt: "2026-08-30T16:05:00.000Z",
+    payload: {
+      portfolio_order_intent_id: "poi_1",
+      trade_id: "trade_1",
+      event_type: "target_hit",
+      instrument: "ZC",
+      side: "buy",
+      price: 430.25,
+      entry_price: 427.5,
+      exit_price: 430.25,
+      result_r: 1.75,
+    },
+  });
+
+  assert.match(message, /🎯 OBJECTIF THÉORIQUE TOUCHÉ/);
+  assert.match(message, /\+1,75R/);
+  assert.match(message, /Simulation backend déterministe/);
+  assert.match(message, /Aucun fill broker n’est déduit/);
+  assert.match(message, /OrderIntent: poi_1/);
+});
+
+test("manual execution receipt remains observational", () => {
+  const message = buildTelegramTradingMessage({
+    kind: "manual_execution_event",
+    state: "filled",
+    sourceId: "manual_event_1",
+    occurredAt: "2026-08-30T16:06:00.000Z",
+    payload: { portfolio_order_intent_id: "poi_1", instrument: "ZW", event_type: "filled", quantity: 1, price: 520, source: "front", actor: "MSO" },
+  });
+  assert.match(message, /DÉCLARATION OPÉRATEUR — FILLED/);
+  assert.match(message, /ne réécrit pas le suivi théorique/);
+});

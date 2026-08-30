@@ -392,6 +392,20 @@ export type LiveTheoreticalExecutionRow = {
   sourceTimeframe: string;
   physicalExecutionCreated: boolean;
   brokerEvidence: string;
+  operatorDecision?: string;
+  operatorDecisionAt?: string;
+  operatorActor?: string;
+  manualExecutionStatus?: string;
+  manualExecutionAt?: string;
+  outcomeAttribution?: {
+    policyVersion: string;
+    status: string;
+    theoreticalResultR: number | null;
+    capturedR: number | null;
+    missedR: number | null;
+    avoidedLossR: number | null;
+    reasonCode: string;
+  };
 };
 
 export type LiveTradingView = {
@@ -583,6 +597,7 @@ export type LiveTradingView = {
     status: string;
     source: string;
     asOf: string | null;
+    attributionPolicyVersion?: string;
     summary: {
       trackedIntents: number;
       working: number;
@@ -594,6 +609,10 @@ export type LiveTradingView = {
       openTrades: number;
       closedTrades: number;
       totalClosedR: number;
+      operatorCaptured?: number;
+      operatorMissed?: number;
+      operatorAvoidedLoss?: number;
+      operatorUnverified?: number;
     };
     rows: readonly LiveTheoreticalExecutionRow[];
   };
@@ -641,12 +660,15 @@ export type LiveTradingView = {
     evidence?: readonly unknown[];
     reasonCodes?: readonly string[];
     signalQuality?: Record<string, unknown> | null;
+    confidenceBreakdown?: Record<string, unknown> | readonly unknown[] | null;
+    confidenceHistory?: readonly unknown[];
     proposedTradePlan?: Record<string, unknown> | null;
     tradePlanEconomics?: Record<string, unknown> | null;
     availability?: string;
     sourceClass?: string;
     certificationRunId?: string | null;
     correlationId?: string | null;
+    conflicts?: readonly unknown[];
   }[];
   arbitrations: readonly {
     arbitrationId: string;
@@ -664,6 +686,21 @@ export type LiveTradingView = {
     limitLabel: string;
     usedPct: number | null;
     reasonCode: string;
+    decision?: string;
+    policyVersion?: string;
+    reasonCodes?: readonly string[];
+    requestedQuantity?: number | null;
+    authorizedQuantity?: number | null;
+    requestedRiskPct?: number | null;
+    authorizedRiskPct?: number | null;
+    riskAmount?: number | null;
+    riskPerContract?: number | null;
+    stopDistancePoints?: number | null;
+    stopDistanceTicks?: number | null;
+    nearestLimit?: Record<string, unknown> | null;
+    portfolioBefore?: Record<string, unknown> | null;
+    portfolioAfter?: Record<string, unknown> | null;
+    breaches?: readonly unknown[];
   }[];
   portfolioOrderIntents: readonly LivePortfolioOrderIntent[];
   orders: readonly {

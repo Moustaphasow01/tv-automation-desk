@@ -185,6 +185,7 @@ export class PostgresPortfolioOrderIntentExecutionRepository {
   async ensureHumanGate(input = {}) { return this.humanGateRepository.ensureHumanGate(input); }
   async confirmHumanGate(input = {}) { return this.humanGateRepository.confirmHumanGate(input); }
   async rejectHumanGate(input = {}) { return this.humanGateRepository.rejectHumanGate(input); }
+  async undoHumanGate(input = {}) { return this.humanGateRepository.undoHumanGate(input); }
   async claimProviderCommand(input = {}) { return this.providerLifecycleRepository.claimProviderCommand(input); }
   async completeProviderDispatch(input = {}) { return this.providerLifecycleRepository.completeProviderDispatch(input); }
   async recordBrokerProviderEvent(input = {}) { return this.providerLifecycleRepository.recordBrokerProviderEvent(input); }
@@ -275,6 +276,7 @@ export class InMemoryPortfolioOrderIntentExecutionRepository {
   async ensureHumanGate(input = {}) { return this.humanGateRepository.ensureHumanGate(input); }
   async confirmHumanGate(input = {}) { return this.humanGateRepository.confirmHumanGate(input); }
   async rejectHumanGate(input = {}) { return this.humanGateRepository.rejectHumanGate(input); }
+  async undoHumanGate(input = {}) { return this.humanGateRepository.undoHumanGate(input); }
   async claimProviderCommand(input = {}) { return this.providerLifecycleRepository.claimProviderCommand(input); }
   async completeProviderDispatch(input = {}) { return this.providerLifecycleRepository.completeProviderDispatch(input); }
   async recordBrokerProviderEvent(input = {}) { return this.providerLifecycleRepository.recordBrokerProviderEvent(input); }

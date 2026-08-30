@@ -12,6 +12,7 @@ import { LiveSignalInbox } from "./LiveSignalInbox";
 import type { LiveSignalNavigationTarget } from "./LiveSignalInbox";
 import type { LiveTradingModel } from "./model";
 import { useFullscreenSurface } from "./useFullscreenSurface";
+import { OperatorOutcomeHistoryPanel } from "./OperatorOutcomeHistoryPanel";
 
 type DockTab = "POSITION" | "EVENTS" | "SIGNALS" | "QUALITY" | "PERFORMANCE" | "ADVISORY";
 
@@ -121,7 +122,7 @@ export function LiveActivityDock({ model, selectedSignalId, onSelectSignal, onCl
 }
 
 function renderTab(tab: DockTab, model: LiveTradingModel, signalProps: Omit<Parameters<typeof LiveSignalInbox>[0], "model">): ReactNode {
-  if (tab === "POSITION") return <><ReconciliationPanel model={model} /><ProviderRuntimePanel model={model} /></>;
+  if (tab === "POSITION") return <><OperatorOutcomeHistoryPanel model={model} /><ReconciliationPanel model={model} /><ProviderRuntimePanel model={model} /></>;
   if (tab === "EVENTS") return <AuditTimelinePanel model={model} />;
   if (tab === "SIGNALS") return <LiveSignalInbox model={model} {...signalProps} />;
   if (tab === "QUALITY") return <DataQualityPanel model={model} />;

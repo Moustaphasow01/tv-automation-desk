@@ -37,7 +37,7 @@ export function buildSignalDecisionSupport(model: LiveTradingModel): SignalDecis
   const durations = relatedSignals
     .map((item) => elapsedMinutes(item.createdAt, item.expiresAt))
     .filter((value): value is number => value !== null);
-  const confidenceFactors = confidenceRows(signal?.signalQuality);
+  const confidenceFactors = confidenceRows(signal?.confidenceBreakdown ?? signal?.signalQuality);
   const arbitration = signal ? model.source.arbitrations.find((item) => item.signalId === signal.signalId) : null;
   const positionConflict = signal ? model.source.positions.find((position) => (
     position.symbol === signal.symbol && position.side !== "FLAT"
@@ -116,23 +116,26 @@ function distanceToRange(price: number | null, low: number | null, high: number 
 }
 
 function confidenceRows(value: unknown): SignalDecisionSupport["confidenceFactors"] {
+  if (Array.isArray(value)) return confidenceCandidates(value);
   const quality = asRecord(value);
   if (!quality) return [];
   const candidates = recordValue(quality, ["components", "factors", "breakdown", "scores"]);
-  if (Array.isArray(candidates)) {
-    return candidates.flatMap((item, index) => {
-      const row = asRecord(item);
-      if (!row) return [];
-      return [{
-        label: String(row.label ?? row.name ?? row.code ?? `Facteur ${index + 1}`),
-        value: finite(row.value ?? row.score ?? row.weight),
-        status: String(row.status ?? row.state ?? "PUBLISHED"),
-      }];
-    });
-  }
+  if (Array.isArray(candidates)) return confidenceCandidates(candidates);
   return Object.entries(quality)
     .filter(([, item]) => typeof item === "number")
     .map(([label, item]) => ({ label, value: finite(item), status: "PUBLISHED" }));
+}
+
+function confidenceCandidates(candidates: readonly unknown[]): SignalDecisionSupport["confidenceFactors"] {
+  return candidates.flatMap((item, index) => {
+    const row = asRecord(item);
+    if (!row) return [];
+    return [{
+      label: String(row.label ?? row.name ?? row.code ?? `Facteur ${index + 1}`),
+      value: finite(row.value ?? row.score ?? row.weight),
+      status: String(row.status ?? row.state ?? "PUBLISHED"),
+    }];
+  });
 }
 
 function elapsedMinutes(start: string, end: string): number | null {

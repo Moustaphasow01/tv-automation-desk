@@ -1,4 +1,5 @@
 import { number, rows, text, upper } from "./front-control-plane-projection-helpers.js";
+import { currentUtc } from "./front-control-plane-common.js";
 
 export function permissions(actor = {}) {
   const writeAllowed = ["operator_session", "api_key", "oauth"].includes(String(actor.kind || "")) && rows(actor.scopes).includes("desk.write");
@@ -10,7 +11,7 @@ export function permissions(actor = {}) {
   ];
 }
 
-export function orderHumanGateProjection({ execution, portfolioIntent, actor }) {
+export function orderHumanGateProjection({ execution, portfolioIntent, actor, nowIso = currentUtc() }) {
   const gate = findHumanGate(execution, portfolioIntent);
   const status = gateStatus(gate, portfolioIntent);
   const operatorCanWrite = permissions(actor).some((item) => item.capability === "front.command" && item.allowed);
@@ -21,8 +22,10 @@ export function orderHumanGateProjection({ execution, portfolioIntent, actor }) 
     expiresAt: text(gate?.expires_at_utc || portfolioIntent?.human_gate_expires_at_utc || portfolioIntent?.expires_at_utc, ""),
     confirmedAt: text(gate?.confirmed_at_utc || portfolioIntent?.human_gate_confirmed_at_utc, ""),
     rejectedAt: text(gate?.rejected_at_utc || portfolioIntent?.human_gate_rejected_at_utc, ""),
-    actions: gateActions({ gate, status, portfolioIntent, operatorCanWrite }),
-    unavailableReason: gateUnavailableReason(gate, operatorCanWrite),
+    undoExpiresAt: text(gate?.undo_expires_at_utc || portfolioIntent?.human_gate_undo_expires_at_utc, ""),
+    undoneAt: text(gate?.undone_at_utc || portfolioIntent?.human_gate_undone_at_utc, ""),
+    actions: gateActions({ execution, gate, status, portfolioIntent, operatorCanWrite, nowIso }),
+    unavailableReason: gateUnavailableReason(gate, operatorCanWrite, nowIso),
   };
 }
 
@@ -37,18 +40,29 @@ function gateStatus(gate, portfolioIntent) {
   return gate ? upper(gate.status || portfolioIntent?.human_gate_status || "UNKNOWN") : "NOT_CREATED";
 }
 
-function gateActions({ gate, status, portfolioIntent, operatorCanWrite }) {
-  return gate && status === "AWAITING_MANUAL_CONFIRMATION"
-    ? humanGateActions({ portfolioIntent, operatorCanWrite })
-    : [];
+function gateActions({ execution, gate, status, portfolioIntent, operatorCanWrite, nowIso }) {
+  if (!gate) return [];
+  if (status === "AWAITING_MANUAL_CONFIRMATION") return humanGateActions({ gate, portfolioIntent, operatorCanWrite });
+  const undoExpiry = Date.parse(gate.undo_expires_at_utc || "");
+  const now = Date.parse(nowIso || "");
+  const portfolioOrderIntentId = text(portfolioIntent?.portfolio_order_intent_id || portfolioIntent?.payload?.order_intent_id, "");
+  const providerCommandExists = rows(execution?.providerCommands).some((command) => text(command.portfolio_order_intent_id, "") === portfolioOrderIntentId);
+  if (["CONFIRMED", "REJECTED"].includes(status) && Number.isFinite(undoExpiry) && Number.isFinite(now) && undoExpiry > now && !providerCommandExists) {
+    return humanGateActions({ gate, portfolioIntent, operatorCanWrite, onlyUndo: true });
+  }
+  return [];
 }
 
-function gateUnavailableReason(gate, operatorCanWrite) {
+function gateUnavailableReason(gate, operatorCanWrite, nowIso) {
   if (!gate) return "HUMAN_GATE_NOT_CREATED";
-  return operatorCanWrite ? "" : "Session desk.write requise ; le front ne peut pas inventer d'autorisation locale.";
+  if (!operatorCanWrite) return "Session desk.write requise ; le front ne peut pas inventer d'autorisation locale.";
+  const undoExpiry = Date.parse(gate.undo_expires_at_utc || "");
+  const now = Date.parse(nowIso || "");
+  if (["CONFIRMED", "REJECTED"].includes(upper(gate.status)) && (!Number.isFinite(undoExpiry) || undoExpiry <= now)) return "Fenêtre d’annulation backend terminée.";
+  return "";
 }
 
-export function resourceAllowedActions({ resourceType, status, revision = "unavailable", actor = {}, expiresAt = "" }) {
+export function resourceAllowedActions({ resourceType, status, revision = "unavailable", actor = {}, expiresAt = "", additionalAllowedActions = [] }) {
   const operatorCanRead = permissions(actor).some((item) => item.capability === "front.read" && item.allowed);
   const operatorCanWrite = permissions(actor).some((item) => item.capability === "front.command" && item.allowed);
   const normalizedStatus = upper(status);
@@ -58,6 +72,9 @@ export function resourceAllowedActions({ resourceType, status, revision = "unava
   if (["OrderIntent", "HumanGate"].includes(resourceType) && operatorCanWrite && awaitingGate) actions.push("CONFIRM", "REJECT");
   else if (["OrderIntent", "HumanGate"].includes(resourceType) && awaitingGate) denialReasons.push("WRITE_REQUIRES_OPERATOR_SESSION");
   if (["OrderIntent", "HumanGate"].includes(resourceType) && normalizedStatus === "HUMAN_GATE_NOT_CREATED") denialReasons.push("HUMAN_GATE_NOT_CREATED");
+  if (["OrderIntent", "HumanGate"].includes(resourceType) && operatorCanWrite) {
+    for (const action of rows(additionalAllowedActions).map(upper)) if (!["VIEW", "CONFIRM", "REJECT"].includes(action) && !actions.includes(action)) actions.push(action);
+  }
   if (resourceType === "BrokerOrder") denialReasons.push("BROKER_ORDER_DIRECT_MUTATION_DENIED");
   return {
     resourceType,
@@ -70,12 +87,12 @@ export function resourceAllowedActions({ resourceType, status, revision = "unava
   };
 }
 
-function humanGateActions({ portfolioIntent, operatorCanWrite }) {
+function humanGateActions({ gate, portfolioIntent, operatorCanWrite, onlyUndo = false }) {
   const payload = portfolioIntent.order_intent_payload || portfolioIntent.payload || {};
   const portfolioOrderIntentId = text(portfolioIntent.portfolio_order_intent_id || payload.order_intent_id, "");
-  const expectedRevision = text(portfolioIntent.order_intent_hash || payload.order_intent_hash || portfolioIntent.human_gate_revision, "unavailable");
+  const expectedRevision = text(gate?.revision || portfolioIntent.human_gate_revision, "unavailable");
   const permission = operatorCanWrite ? "ALLOWED" : "DENIED";
-  return [
+  const decisionActions = [
     {
       action: "CONFIRM",
       actionId: `human-gate.confirm.${portfolioOrderIntentId}`,
@@ -103,4 +120,18 @@ function humanGateActions({ portfolioIntent, operatorCanWrite }) {
       payload: { portfolioOrderIntentId },
     },
   ];
+  if (!onlyUndo) return decisionActions;
+  return [{
+    action: "UNDO",
+    actionId: `human-gate.undo.${portfolioOrderIntentId}.${expectedRevision}`,
+    label: "Annuler la décision",
+    commandType: "execution.order_intent.undo",
+    environment: "PAPER",
+    permission,
+    requiresConfirmation: true,
+    requiresReason: true,
+    expectedRevision,
+    impactPreview: "Rouvre le Human Gate uniquement si la fenêtre backend est encore active et qu’aucune commande provider n’existe.",
+    payload: { portfolioOrderIntentId },
+  }];
 }

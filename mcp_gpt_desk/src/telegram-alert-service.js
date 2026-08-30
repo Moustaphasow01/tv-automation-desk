@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { TelegramClient } from "./telegram-client.js";
+import { loadCanonicalTelegramExecutionRows } from "./telegram-canonical-execution-source.js";
 import { buildTelegramTradingCandidate, isTelegramTradingAlertSourceAllowed } from "./telegram-trading-message.js";
-
 const CONFIG_ID = "desk_telegram";
 const ACTIVE_NOTIFICATION_STATES = new Set(["pending", "active", "watching", "action_required", "open"]);
 export { isTelegramTradingAlertSourceAllowed };
@@ -579,12 +579,11 @@ export class TelegramAlertService {
                 'expires_at', toi.expires_at,
                 'approval_status', toi.approval_status
               )
-       FROM trade_order_intents toi
-       LEFT JOIN broker_contracts bc ON bc.broker_contract_id = toi.broker_contract_id
-       ORDER BY occurred_at DESC
-       LIMIT 200`,
+       FROM trade_order_intents toi LEFT JOIN broker_contracts bc ON bc.broker_contract_id = toi.broker_contract_id
+       WHERE NOT EXISTS (SELECT 1 FROM portfolio_order_intent_lineage lineage WHERE lineage.trade_order_intent_id = toi.order_intent_id)
+       ORDER BY occurred_at DESC LIMIT 200`,
     );
-    const [events, trades, management] = await Promise.all([
+    const [events, trades, management, canonicalExecution] = await Promise.all([
       this.persistence.pool.query(
         `SELECT 'broker_order_event'::text AS source_kind,
                 boe.broker_order_event_id AS source_id,
@@ -606,8 +605,8 @@ export class TelegramAlertService {
                   'realized_pnl', t.realized_pnl, 'unrealized_pnl', t.unrealized_pnl,
                   'stop', t.current_stop_price, 'target', t.current_target_price
                 ) AS payload
-         FROM trades t
-         LEFT JOIN broker_contracts bc ON bc.broker_contract_id = t.broker_contract_id
+         FROM trades t LEFT JOIN broker_contracts bc ON bc.broker_contract_id = t.broker_contract_id
+         WHERE t.portfolio_order_intent_id IS NULL
          ORDER BY t.updated_at DESC LIMIT 100`,
       ),
       this.persistence.pool.query(
@@ -626,9 +625,10 @@ export class TelegramAlertService {
          LEFT JOIN broker_contracts bc ON bc.broker_contract_id = t.broker_contract_id
          ORDER BY tmi.updated_at DESC LIMIT 100`,
       ),
+      loadCanonicalTelegramExecutionRows(this.persistence.pool),
     ]);
     const manualTelegramExecution = String(this.env.DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED || "false").toLowerCase() === "true";
-    return [...result.rows, ...events.rows, ...trades.rows, ...management.rows]
+    return [...canonicalExecution, ...result.rows, ...events.rows, ...trades.rows, ...management.rows]
       .map((row) => buildTelegramTradingCandidate(row, { manualTelegramExecution, hash }))
       .filter(Boolean);
   }

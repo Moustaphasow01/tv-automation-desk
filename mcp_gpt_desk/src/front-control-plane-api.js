@@ -34,7 +34,6 @@ import {
   liveInstanceConfidence,
   liveLegacyHistory,
   liveMacroSession,
-  livePerformanceR,
   liveReconciliation,
   liveRiskChecks,
   liveSession,
@@ -49,6 +48,11 @@ import { executionAuthorityMode, orderIntentReconciliation } from "./front-order
 import { orderHumanGateProjection, permissions, resourceAllowedActions } from "./front-control-plane-permissions.js";
 import { accountRow, activeOrderRow, fillRow, intentRow, orderFillRow, orderRow, positionRow, providerRows, signalRow, signalTemporalRow } from "./front-control-plane-row-mappers.js";
 import { frontTimeSeriesContracts } from "./front-control-plane-time-series-contracts.js";
+import {
+  buildLiveTheoreticalExecution,
+  theoreticalPerformanceR,
+  theoreticalTimelineEvents,
+} from "./front-live-theoretical-execution-projection.js";
 
 export {
   frontControlPlaneSseFrame,
@@ -1076,7 +1080,7 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
   const signalInbox = rows(strategy?.signals).filter(isNominalLiveSignal).filter(hasSignalId).map((item) => signalTemporalRow(item, nowIso));
   const nominalIntentRows = cohort.portfolioOrderIntents;
   const nominalIntentIds = new Set(nominalIntentRows.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
-  const portfolioOrderIntents = nominalIntentRows.map((item) => portfolioOrderIntentSummaryRow({ execution: executionValue, item, actor }));
+  const portfolioOrderIntents = nominalIntentRows.map((item) => portfolioOrderIntentSummaryRow({ execution: executionValue, item, actor, nowIso }));
   const provider = canonicalProviderScope(executionValue, nominalIntentIds);
   const launchGate = demoPaperLaunchGate({ health, execution: executionValue, nowIso, rows });
   const canonicalRuntime = liveCanonicalRuntime({
@@ -1092,6 +1096,10 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
   const instancesWithConfidence = liveInstanceConfidence(canonicalRuntime.activeStrategyInstances, funnelSignals, nowIso);
   const arbitrations = liveArbitrations(executionValue, { signalIds: cohort.signalIds });
   const riskChecks = liveRiskChecks(executionValue, { signalIds: cohort.signalIds, portfolioOrderIntentIds: nominalIntentIds });
+  const theoreticalExecution = buildLiveTheoreticalExecution({
+    execution: { ...executionValue, portfolioOrderIntents: nominalIntentRows },
+    nowIso,
+  });
   appendLiveWarnings({
     execution: executionValue,
     safety,
@@ -1125,9 +1133,11 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
     legacyHistory: liveLegacyHistory(executionValue),
     providers: providerRows(execution),
     incidents: rows(incidents).filter(hasIncidentId).map(incidentSummary),
-    timeline: canonicalLiveTimeline(executionValue),
+    theoreticalExecution,
+    timeline: [...canonicalLiveTimeline(executionValue), ...theoreticalTimelineEvents(theoreticalExecution)]
+      .sort((left, right) => Date.parse(right.at || "") - Date.parse(left.at || "")),
     reconciliation: liveReconciliation(executionValue, nominalIntentIds),
-    performanceR: livePerformanceR(operationsPerformance),
+    performanceR: theoreticalPerformanceR(theoreticalExecution, nowIso),
     timeSeriesContracts: frontTimeSeriesContracts({ view: "live-trading", execution: executionValue, strategy, risk, marketSeries, performance: operationsPerformance, nowIso }),
     telegramDrilldown: telegramDrilldownFromHealth(health),
     aiAdvisory: liveAssistantAdvisory({ assistantRuntime, ai, advisorySummary, nowIso }),

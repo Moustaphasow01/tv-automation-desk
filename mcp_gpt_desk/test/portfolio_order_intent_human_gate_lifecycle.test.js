@@ -186,6 +186,47 @@ describe("LOT-005 Human Execution Gate + provider lifecycle", () => {
     assert.equal(replay.status, "DUPLICATE_PROTECTED");
     assert.equal(unknown.repository.providerCommands.size, 1);
   });
+
+  test("operator can undo a decision inside the backend window before provider dispatch", async () => {
+    const { lineage, repository } = await runtime();
+    const service = new PortfolioOrderIntentExecutionService({ repository, clock: clock(), humanGateUndoPolicy: { enabled: true, windowSeconds: 10 } });
+    const confirmed = await service.confirmHumanGate(confirmInput(lineage));
+
+    const reverted = await service.undoHumanGate({
+      portfolioOrderIntentId: lineage.portfolio_order_intent_id,
+      expectedRevision: confirmed.gate.revision,
+      idempotencyKey: "undo-human-gate-1",
+      operatorId: "operator@example.test",
+      reason: "Correction immédiate de la déclaration opérateur.",
+      as_of_utc: "2026-08-14T09:20:05.000Z",
+    });
+
+    assert.equal(reverted.status, "REVERTED");
+    assert.equal(reverted.gate.status, "AWAITING_MANUAL_CONFIRMATION");
+    assert.equal(reverted.gate.revision, 3);
+    assert.equal([...repository.humanGateEvents.values()].at(-1).event_type, "REVERTED");
+    assert.equal(repository.providerCommands.size, 0);
+  });
+
+  test("undo fails closed once a provider command exists", async () => {
+    const { lineage, repository } = await runtime();
+    const service = new PortfolioOrderIntentExecutionService({ repository, clock: clock(), humanGateUndoPolicy: { enabled: true, windowSeconds: 10 } });
+    const confirmed = await service.confirmHumanGate(confirmInput(lineage));
+    await service.materializeReadyCommands({ provider_profile: providerProfile() });
+
+    const reverted = await service.undoHumanGate({
+      portfolioOrderIntentId: lineage.portfolio_order_intent_id,
+      expectedRevision: confirmed.gate.revision,
+      idempotencyKey: "undo-human-gate-after-provider",
+      operatorId: "operator@example.test",
+      reason: "Tentative trop tardive.",
+      as_of_utc: "2026-08-14T09:20:05.000Z",
+    });
+
+    assert.equal(reverted.status, "REFUSED");
+    assert.equal(reverted.reason, "HUMAN_GATE_PROVIDER_COMMAND_EXISTS");
+    assert.equal(repository.humanGates.get(lineage.portfolio_order_intent_id).status, "CONFIRMED");
+  });
 });
 
 async function runtime(overrides = {}) {

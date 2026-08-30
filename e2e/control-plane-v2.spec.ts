@@ -13,7 +13,16 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
   await expect(page.getByTestId("live-trading-golden-master")).toBeVisible();
   await expect(page.getByText(/EXÉCUTION AUTO (ACTIVÉE|DÉSACTIVÉE)/)).toBeVisible();
   await expect(page.locator(".lt-decision-stack__step--gate")).toBeVisible();
-  await expect(page.locator(".lt-gate-actions button:not([disabled])")).toHaveCount(0);
+  const enabledGateActions = page.locator(".lt-gate-actions button:not([disabled])");
+  if (await enabledGateActions.count()) {
+    const gateResponse = await page.request.get("/front-api/v1/views/live-trading");
+    expect(gateResponse.ok()).toBeTruthy();
+    const gateEnvelope = await gateResponse.json();
+    const backendAllowsGateAction = gateEnvelope.data.portfolioOrderIntents
+      .flatMap((item: { humanGate?: { allowedActions?: { permission?: string }[] } }) => item.humanGate?.allowedActions ?? [])
+      .some((action: { permission?: string }) => action.permission === "ALLOWED");
+    expect(backendAllowsGateAction).toBe(true);
+  }
 
   const expandPanel = page.getByRole("button", { name: /^Agrandir / }).first();
   await expandPanel.focus();

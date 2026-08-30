@@ -28,6 +28,7 @@ import { buildBrokerExecutionOverview } from "./broker-execution-overview-projec
 import { positionKey } from "./broker-execution-normalizers.js";
 import { assertBrokerOrderIntentAuthority, assertLegacyPositionExecutionRollbackEnabled } from "./broker-order-intent-authority.js";
 import { maybeExecutePortfolioExecutionAction } from "./broker-portfolio-execution-actions.js";
+import { humanGateUndoPolicyFromEnvironment } from "./human-gate-undo-policy.js";
 import { PortfolioOrderIntentExecutionService } from "./portfolio-order-intent-execution-service.js";
 
 const C = DESK_COLLECTIONS;
@@ -41,14 +42,14 @@ export const BROKER_RECONCILIATION_MODES = Object.freeze(["disabled", "alert_onl
 export const BROKER_RECONCILIATION_BLOCKING_CONFIRMATION = "PROMOTE_RECONCILIATION_BLOCKING";
 
 export class BrokerExecutionService {
-  constructor({ repository, persistence, clock, environment = brokerExecutionEnvironment(process.env), addonAtmStrategyName = process.env.DESK_NINJA_ATM_STRATEGY_NAME || "", startupControl = null, portfolioOrderIntentExecutionService = null }) {
+  constructor({ repository, persistence, clock, environment = brokerExecutionEnvironment(process.env), addonAtmStrategyName = process.env.DESK_NINJA_ATM_STRATEGY_NAME || "", startupControl = null, portfolioOrderIntentExecutionService = null, humanGateUndoPolicy = humanGateUndoPolicyFromEnvironment(process.env) }) {
     this.repository = repository;
     this.persistence = persistence;
     this.clock = clock;
     this.environment = environment;
     this.addonAtmStrategyName = String(addonAtmStrategyName || "").trim();
     this.startupControl = startupControl;
-    this.portfolioOrderIntentExecutionService = portfolioOrderIntentExecutionService || new PortfolioOrderIntentExecutionService({ persistence, clock });
+    this.portfolioOrderIntentExecutionService = portfolioOrderIntentExecutionService || new PortfolioOrderIntentExecutionService({ persistence, clock, humanGateUndoPolicy });
   }
 
   async overview(filters = {}) {

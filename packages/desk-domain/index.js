@@ -122,6 +122,10 @@ export {
   TRADE_OUTCOME_SCHEMA_VERSION,
   calculateTradeOutcome,
 } from "./src/trade-outcome.js";
+export { DEFAULT_HUMAN_GATE_UNDO_WINDOW_SECONDS_V1, HUMAN_EXECUTION_GATE_EVENTS_V1,
+  HUMAN_EXECUTION_GATE_POLICY_VERSION_V1, HUMAN_EXECUTION_GATE_STATES_V1,
+  evaluateHumanGateUndoV1, humanGateUndoDeadlineV1, normalizeHumanGateUndoPolicyV1,
+} from "./src/human-execution-gate-v1.js";
 export {
   DETERMINISTIC_COMPILER_VERSION_V1,
   MASTER_PLAN_SCHEMA_VERSION_V1,

@@ -23,7 +23,7 @@ import { intentRow, signalRow } from "./front-control-plane-row-mappers.js";
 export function canonicalOrderIntentDossier({ execution, portfolioIntent, order, actor, nowIso, health }) {
   const payload = portfolioIntent.order_intent_payload || portfolioIntent.payload || {};
   const riskDecision = firstRow(portfolioIntent.risk_decisions);
-  const humanGate = orderHumanGateProjection({ execution, portfolioIntent, actor });
+  const humanGate = orderHumanGateProjection({ execution, portfolioIntent, actor, nowIso });
   return {
     schemaVersion: "canonical_order_intent_dossier_v1",
     meta: canonicalDossierMeta({ portfolioIntent, payload, nowIso }),
@@ -41,6 +41,7 @@ export function canonicalOrderIntentDossier({ execution, portfolioIntent, order,
         status: text(portfolioIntent.status || payload.status, "READY"),
         revision: text(portfolioIntent.immutable_terms_hash || portfolioIntent.order_intent_hash || payload.order_intent_hash, "unavailable"),
         actor,
+        additionalAllowedActions: humanGate.actions.map((action) => action.action),
       }),
       humanGate: resourceAllowedActions({
         resourceType: "HumanGate",
@@ -48,6 +49,7 @@ export function canonicalOrderIntentDossier({ execution, portfolioIntent, order,
         revision: text(humanGate.revision, "0"),
         actor,
         expiresAt: humanGate.expiresAt,
+        additionalAllowedActions: humanGate.actions.map((action) => action.action),
       }),
     },
   };
@@ -189,11 +191,11 @@ export function isCurrentPortfolioIntent(item = {}, nowIso = currentUtc()) {
   return isCurrentLivePortfolioIntent(item, nowIso);
 }
 
-export function portfolioOrderIntentSummaryRow({ execution = {}, item = {}, actor = {} }) {
+export function portfolioOrderIntentSummaryRow({ execution = {}, item = {}, actor = {}, nowIso = currentUtc() }) {
   const intent = intentRow(item);
   const payload = payloadOf(item);
   const portfolioOrderIntentId = text(firstValue(item.portfolio_order_intent_id, payload.order_intent_id), intent.orderIntentId);
-  const humanGate = orderHumanGateProjection({ execution, portfolioIntent: item, actor });
+  const humanGate = orderHumanGateProjection({ execution, portfolioIntent: item, actor, nowIso });
   const providerCommands = rows(execution.providerCommands).filter((command) => text(command.portfolio_order_intent_id, "") === portfolioOrderIntentId);
   const providerEvents = rows(execution.providerEvents).filter((event) => text(event.portfolio_order_intent_id, "") === portfolioOrderIntentId);
   return {
@@ -204,13 +206,14 @@ export function portfolioOrderIntentSummaryRow({ execution = {}, item = {}, acto
     executionTerms: firstValue(item.execution_terms, payload.execution_terms, null),
     riskSnapshot: firstValue(item.risk_snapshot, payload.risk_snapshot, nested(firstRow(item.risk_decisions), ["risk_economics"]), null),
     immutability: firstValue(item.immutability, payload.immutability, null),
-    humanGate: { gateId: humanGate.gateId || null, status: humanGate.status, allowedActions: humanGate.actions },
+    humanGate: { gateId: humanGate.gateId || null, status: humanGate.status, undoExpiresAt: humanGate.undoExpiresAt || null, undoneAt: humanGate.undoneAt || null, allowedActions: humanGate.actions },
     allowedActions: resourceAllowedActions({
       resourceType: "OrderIntent",
       status: humanGate.gateId ? humanGate.status : "HUMAN_GATE_NOT_CREATED",
       revision: text(firstValue(item.immutable_terms_hash, item.order_intent_hash, payload.order_intent_hash), "unavailable"),
       actor,
       expiresAt: text(item.expires_at_utc || payload.expires_at_utc, ""),
+      additionalAllowedActions: humanGate.actions.map((action) => action.action),
     }),
     providerCommandCount: providerCommands.length,
     providerEventCount: providerEvents.length,
@@ -335,7 +338,7 @@ function canonicalDossierExecutionTerms({ portfolioIntent, payload, order }) {
     broker_account_id: text(payload.broker_account_id, "unavailable"),
     instrument: text(firstValue(payload.instrument, portfolioIntent.target_instrument), "unavailable"),
     side: text(firstValue(payload.side, payload.action, order.side), "unavailable"),
-    quantity: number(firstValue(payload.quantity, portfolioIntent.quantity), 0),
+    quantity: nullableNumber(firstValue(payload.quantity, portfolioIntent.quantity)),
     order_type: text(firstValue(payload.order_type, order.type), "unavailable"),
     entry: payload.entry || { availability: "UNAVAILABLE", reason_code: "ENTRY_UNAVAILABLE" },
     stop: stopTerm(payload),
@@ -346,8 +349,8 @@ function canonicalDossierExecutionTerms({ portfolioIntent, payload, order }) {
 
 function canonicalDossierRiskSnapshot({ portfolioIntent, payload, riskDecision }) {
   return firstValue(portfolioIntent.risk_snapshot, payload.risk_snapshot) || {
-    requestedQty: number(firstValue(payload.quantity, portfolioIntent.quantity), 0),
-    authorizedQty: number(firstValue(portfolioIntent.risk_approved_net_size, nested(riskDecision, ["approved_size"]), payload.quantity), 0),
+    requestedQty: nullableNumber(firstValue(payload.quantity, portfolioIntent.quantity)),
+    authorizedQty: nullableNumber(firstValue(portfolioIntent.risk_approved_net_size, nested(riskDecision, ["approved_size"]), payload.quantity)),
     requestedRiskPct: firstValue(nested(riskDecision, ["requested", "risk_pct"]), null),
     authorizedRiskPct: firstValue(nested(riskDecision, ["authorized", "risk_pct"]), null),
     riskAmount: firstValue(nested(riskDecision, ["authorized", "risk_amount"]), null),

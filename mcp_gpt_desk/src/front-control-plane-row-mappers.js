@@ -95,6 +95,8 @@ export function signalRow(item) {
     evidence: rows(source.evidence),
     reasonCodes: stringList(source.reason_codes),
     signalQuality: source.signal_quality || null,
+    confidenceBreakdown: firstValue(source.confidence_breakdown, source.signal_quality?.confidence_breakdown, source.signal_quality?.components) || null,
+    confidenceHistory: rows(firstValue(source.confidence_history, source.signal_quality?.confidence_history)),
     proposedTradePlan: tradePlan.proposedTradePlan,
     tradePlanEconomics: tradePlan.tradePlanEconomics,
     availability: tradePlan.availability,
@@ -105,6 +107,7 @@ export function signalRow(item) {
     expectancyR: number(firstValue(source.expectancy_R, source.expectancy_r), 0),
     rewardRisk: number(source.reward_risk, 0),
     regime: text(firstValue(source.regime, source.setup?.context?.market_regime, source.signal_quality?.context_bias), "unavailable"),
+    conflicts: rows(firstValue(source.conflicts, source.signal_quality?.conflicts)),
   };
 }
 

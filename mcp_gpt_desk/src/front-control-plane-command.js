@@ -69,6 +69,12 @@ export const FRONT_COMMAND_CATALOG = Object.freeze({
     mutation: "execution.order_intent.reject",
     brokerExecution: false,
   }),
+  "execution.order_intent.undo": Object.freeze({
+    capability: "execution.paper",
+    environments: Object.freeze(["PAPER"]),
+    mutation: "execution.order_intent.undo",
+    brokerExecution: false,
+  }),
 });
 
 export async function acceptControlPlaneCommand(store, { body, headers, actor }) {
@@ -173,6 +179,7 @@ function runtimeMutationPlan(context) {
   if (context.commandType === "strategy.version.fork") return { kind: "strategy.version.fork", broker_execution: false };
   if (context.commandType === "execution.order_intent.confirm") return { kind: "execution.order_intent.confirm", broker_execution: false };
   if (context.commandType === "execution.order_intent.reject") return { kind: "execution.order_intent.reject", broker_execution: false };
+  if (context.commandType === "execution.order_intent.undo") return { kind: "execution.order_intent.undo", broker_execution: false };
   return null;
 }
 
@@ -191,7 +198,7 @@ async function executeRuntimeMutation(store, context) {
       actor: context.actor,
     });
   }
-  if (context.mutationPlan.kind === "execution.order_intent.confirm" || context.mutationPlan.kind === "execution.order_intent.reject") {
+  if (["execution.order_intent.confirm", "execution.order_intent.reject", "execution.order_intent.undo"].includes(context.mutationPlan.kind)) {
     return executeOrderIntentHumanGateMutation(store, context);
   }
   if (context.mutationPlan.kind === "assistant.question.submit") {
@@ -346,14 +353,15 @@ async function executeOrderIntentHumanGateMutation(store, context) {
   const portfolioOrderIntentId = text(payload.portfolioOrderIntentId || payload.portfolio_order_intent_id, "");
   if (!portfolioOrderIntentId) throw codedError("PORTFOLIO_ORDER_INTENT_ID_REQUIRED", "portfolioOrderIntentId is required.", 400);
   const confirm = context.mutationPlan.kind === "execution.order_intent.confirm";
+  const undo = context.mutationPlan.kind === "execution.order_intent.undo";
   return store.executeBrokerAction({
     input: {
-      action: confirm ? "confirm_human_execution_gate" : "reject_human_execution_gate",
+      action: confirm ? "confirm_human_execution_gate" : undo ? "undo_human_execution_gate" : "reject_human_execution_gate",
       portfolioOrderIntentId,
       expectedRevision: context.body.expectedVersion || payload.expectedRevision || payload.expected_revision || null,
       idempotencyKey: context.idempotencyKey,
       reason: text(context.body.reason || payload.reason, ""),
-      confirmationPhrase: confirm ? "CONFIRM_PORTFOLIO_ORDER_INTENT" : "CONFIRM_REJECT",
+      confirmationPhrase: confirm ? "CONFIRM_PORTFOLIO_ORDER_INTENT" : undo ? "CONFIRM_UNDO_HUMAN_GATE" : "CONFIRM_REJECT",
       approvedTerms: confirm ? (payload.approvedTerms || payload.approved_terms || {}) : undefined,
     },
     actor: context.actor,

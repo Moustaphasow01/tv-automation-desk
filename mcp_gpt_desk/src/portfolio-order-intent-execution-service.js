@@ -12,9 +12,10 @@ import {
 const DEFAULT_SERVICE_NOW_UTC = "1970-01-01T00:00:00.000Z";
 
 export class PortfolioOrderIntentExecutionService {
-  constructor({ repository, persistence = null, clock } = {}) {
+  constructor({ repository, persistence = null, clock, humanGateUndoPolicy = null } = {}) {
     this.repository = repository || createPortfolioOrderIntentExecutionRepository(persistence);
     this.clock = clock || new SystemClock();
+    this.humanGateUndoPolicy = humanGateUndoPolicy || { enabled: false };
   }
 
   async materializeReadyCommands(input = {}) {
@@ -96,12 +97,17 @@ export class PortfolioOrderIntentExecutionService {
 
   async confirmHumanGate(input = {}) {
     if (!this.repository?.available || !this.repository?.confirmHumanGate) return skipped("EXECUTION_PROVIDER_REPOSITORY_UNAVAILABLE");
-    return this.repository.confirmHumanGate({ ...input, nowUtc: this.#asOf(input) });
+    return this.repository.confirmHumanGate({ ...input, undoPolicy: this.humanGateUndoPolicy, nowUtc: this.#asOf(input) });
   }
 
   async rejectHumanGate(input = {}) {
     if (!this.repository?.available || !this.repository?.rejectHumanGate) return skipped("EXECUTION_PROVIDER_REPOSITORY_UNAVAILABLE");
-    return this.repository.rejectHumanGate({ ...input, nowUtc: this.#asOf(input) });
+    return this.repository.rejectHumanGate({ ...input, undoPolicy: this.humanGateUndoPolicy, nowUtc: this.#asOf(input) });
+  }
+
+  async undoHumanGate(input = {}) {
+    if (!this.repository?.available || !this.repository?.undoHumanGate) return skipped("EXECUTION_PROVIDER_REPOSITORY_UNAVAILABLE");
+    return this.repository.undoHumanGate({ ...input, undoPolicy: this.humanGateUndoPolicy, nowUtc: this.#asOf(input) });
   }
 
   async claimProviderCommand(input = {}) {

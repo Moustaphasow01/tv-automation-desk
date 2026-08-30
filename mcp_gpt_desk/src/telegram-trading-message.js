@@ -12,6 +12,12 @@ const MANAGEMENT_ACTION_LABELS = Object.freeze({
 });
 
 export function buildTelegramTradingMessage({ kind, state, sourceId, payload = {}, occurredAt = null, manualTelegramExecution = false } = {}) {
+  if (kind === "theoretical_execution_event") {
+    return formatTheoreticalExecutionTicket({ state, sourceId, payload, occurredAt });
+  }
+  if (kind === "manual_execution_event") {
+    return formatManualExecutionReceipt({ state, sourceId, payload, occurredAt });
+  }
   if (kind === "order_intent" && manualTelegramExecution) {
     return formatManualEntryTicket({ state, sourceId, payload, occurredAt });
   }
@@ -33,7 +39,7 @@ export function buildTelegramTradingCandidate(row = {}, { manualTelegramExecutio
     sourceKind: kind,
     state,
     fingerprint: hash({ state, payload }),
-    priority: kind === "broker_order_event" || kind === "trade" ? 80 : 65,
+    priority: kind === "broker_order_event" || kind === "trade" || kind === "theoretical_execution_event" ? 80 : 65,
     silent: kind === "trade_decision" && ["draft", "no_trade"].includes(state),
     message: buildTelegramTradingMessage({
       kind,
@@ -45,6 +51,47 @@ export function buildTelegramTradingCandidate(row = {}, { manualTelegramExecutio
     }),
     payload: { source_id: row.source_id, occurred_at: dateTime(row.occurred_at), ...payload },
   };
+}
+
+function formatTheoreticalExecutionTicket({ state, sourceId, payload, occurredAt }) {
+  const event = String(payload.event_type || state || "unknown").toLowerCase();
+  const presentation = {
+    entry_filled: ["🟦", "ENTRÉE THÉORIQUE TOUCHÉE"],
+    target_hit: ["🎯", "OBJECTIF THÉORIQUE TOUCHÉ"],
+    stop_hit: ["🛑", "STOP THÉORIQUE TOUCHÉ"],
+    entry_expired: ["⌛", "ORDRE THÉORIQUE EXPIRÉ"],
+    exit_review_required: ["⚠️", "SORTIE THÉORIQUE À REVOIR"],
+  }[event] || ["📊", `SUIVI THÉORIQUE ${upper(event)}`];
+  const resultR = finite(payload.result_r);
+  const lines = [
+    `${presentation[0]} ${presentation[1]}`,
+    "━━━━━━━━━━━━━━━━━━━━",
+    `📍 ${text(payload.instrument, "Instrument N/D")} · ${upper(payload.side)}`,
+    `• Prix événement: ${price(payload.price)}`,
+    `• Entrée suivie: ${price(payload.entry_price)}`,
+    `• Sortie: ${price(payload.exit_price)}`,
+    `• Résultat théorique: ${resultR === null ? "en cours / N.D." : `${resultR >= 0 ? "+" : ""}${formatNumber(resultR)}R`}`,
+    "",
+    "🧪 Simulation backend déterministe",
+    "⚠️ Aucun fill broker n’est déduit de cet événement.",
+    `🧾 OrderIntent: ${text(payload.portfolio_order_intent_id, "N/D")}`,
+    `🔎 Trade: ${text(payload.trade_id, "N/D")} · Réf: ${text(sourceId)} · ${dateTime(occurredAt)}`,
+  ];
+  return lines.join("\n");
+}
+
+function formatManualExecutionReceipt({ state, sourceId, payload, occurredAt }) {
+  return [
+    `👤 DÉCLARATION OPÉRATEUR — ${upper(payload.event_type || state)}`,
+    "━━━━━━━━━━━━━━━━━━━━",
+    `📍 ${text(payload.instrument, "Instrument N/D")}`,
+    `• Quantité déclarée: ${quantity(payload.quantity)}`,
+    `• Prix déclaré: ${price(payload.price)}`,
+    `• Source: ${text(payload.source, "N/D")} · acteur: ${text(payload.actor, "N/D")}`,
+    `📝 ${oneLine(payload.reason || "Aucun motif publié")}`,
+    "ℹ️ Cette déclaration sert à l’attribution opérateur ; elle ne réécrit pas le suivi théorique.",
+    `🔎 OrderIntent: ${text(payload.portfolio_order_intent_id, "N/D")} · Réf: ${text(sourceId)} · ${dateTime(occurredAt)}`,
+  ].join("\n");
 }
 
 export function isTelegramTradingAlertSourceAllowed({ kind, sourceId, payload = {} } = {}) {
@@ -140,6 +187,8 @@ function formatGenericTradingMessage({ kind, state, sourceId, payload }) {
     broker_order_event: "Événement broker",
     trade: "Cycle de trade",
     management_intent: "Gestion de position",
+    theoretical_execution_event: "Suivi théorique",
+    manual_execution_event: "Déclaration opérateur",
   }[kind] || "Événement trading";
   const details = Object.entries(payload)
     .filter(([, value]) => value !== null && value !== undefined && typeof value !== "object")
@@ -185,6 +234,12 @@ function quantity(value) {
 function price(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? formatNumber(parsed) : "N/D";
+}
+
+function finite(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function formatNumber(value) {

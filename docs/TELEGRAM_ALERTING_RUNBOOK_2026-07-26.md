@@ -2,13 +2,13 @@
 
 ## État livré
 
-- Release VPS : `vps-staging-20260726.24`
+- Release initiale : `vps-staging-20260726.24` (consulter `/status` pour la release active)
 - Service Windows : `DeskFuturesTelegram`
 - Stockage : PostgreSQL natif
 - Transport : API Bot Telegram sortante, sans webhook ni port entrant
 - Bots :
   - administration : incidents, infrastructure, données, files GPT, NinjaTrader et risque ;
-  - trading : décisions exécutables, ordres, événements broker, trades et gestion de position.
+- trading : `OrderIntent` canoniques post-Risk, décisions Human Gate, suivi théorique, déclarations opérateur, événements broker et gestion de position.
 - Commandes : lecture seule sur le bot administration.
 - Exécution d’ordres par Telegram : interdite.
 
@@ -23,6 +23,23 @@
 - regroupement des dépassements SLA par file `LIVE` ou `REPLAY` ;
 - une alerte de file lors du passage à `active`, puis une récupération lors du passage à `cleared` ;
 - tokens absents du front, des réponses API et des logs.
+- source principale des tickets semi-manuels : `portfolio_order_intent_lineage` + `human_execution_gates` ;
+- événements d’entrée/TP/SL/expiration : `trade_theoretical_execution_events`, toujours libellés **théoriques** ;
+- déclarations opérateur : `trade_manual_execution_events`, sans modification du suivi théorique ;
+- les anciens `trade_order_intents` ne sont notifiés que lorsqu’ils ne possèdent aucune lignée canonique, afin d’éviter les doublons ;
+- `CONFIRMED`, `ACK`, `PARTIAL_FILL` et `FILL` restent des états distincts ; aucune notification ne transforme une confirmation en fill.
+
+## Politique de notification trading
+
+| Événement | Canal | Priorité | Sémantique |
+| --- | --- | --- | --- |
+| OrderIntent + Human Gate | trading | normale | ticket opérateur, aucun ordre broker envoyé |
+| Entrée théorique touchée | trading | haute | simulation déterministe, pas un fill broker |
+| TP/SL/expiration théorique | trading | haute | résultat théorique clôturé ou ordre expiré |
+| Déclaration opérateur | trading | normale | preuve déclarative pour attribution, pas une preuve provider |
+| Provider/broker event | trading | haute | état physique uniquement si un provider réel le publie |
+
+La clé de source et l’empreinte du payload rendent chaque transition idempotente. Une requête Telegram ambiguë n’est jamais renvoyée aveuglément.
 
 ## Commandes administration
 

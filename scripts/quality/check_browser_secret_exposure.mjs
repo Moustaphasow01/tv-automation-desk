@@ -11,6 +11,7 @@ const warnings = [];
 
 const allowedViteKeys = new Set([
   "VITE_DATA_MODE",
+  "VITE_DESK_BUILD_ID",
   "VITE_OPERATOR_AUTH_BASE_URL",
   "VITE_FRONT_API_BASE_URL",
   "VITE_FRONT_API_TIMEOUT_MS",

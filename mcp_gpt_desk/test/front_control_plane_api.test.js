@@ -57,6 +57,7 @@ test("front control plane publishes only executable catalogued actions", async (
     "desk.stop",
     "execution.order_intent.confirm",
     "execution.order_intent.reject",
+    "execution.order_intent.undo",
     "research.bootstrap_demo_paper",
     "strategy.version.fork",
   ]);
@@ -1534,6 +1535,43 @@ test("front control plane Human Gate confirm routes through broker service witho
   assert.equal(commandRecord.result.aggregate_id, "portfolio_order_intent_test");
   assert.equal(commandRecord.broker_execution, false);
   assert.equal(commandRecord.order_submission_enabled, false);
+});
+
+test("front control plane Human Gate undo routes through the audited backend transition", async () => {
+  const calls = [];
+  const store = {
+    ...frontControlPlaneStore(),
+    async commitFrontOperatorCommandMutation(plan) { return { replayed: false, command: plan.commandDoc, result: plan.result }; },
+    async executeBrokerAction({ input, actor }) {
+      calls.push({ input, actor });
+      return { status: "REVERTED", idempotent: false, gate: { portfolio_order_intent_id: input.portfolioOrderIntentId, status: "AWAITING_MANUAL_CONFIRMATION" } };
+    },
+  };
+  const accepted = await handleFrontControlPlane(store, {
+    pathname: FRONT_CONTROL_PLANE_COMMANDS_PATH,
+    method: "POST",
+    body: {
+      commandType: "execution.order_intent.undo",
+      environment: "PAPER",
+      expectedVersion: 4,
+      payload: { portfolioOrderIntentId: "portfolio_order_intent_undo_test" },
+      reason: "Correction immédiate de la décision opérateur.",
+    },
+    headers: { "idempotency-key": "idem-human-gate-undo-001", "x-correlation-id": "corr-human-gate-undo-001" },
+    actor: { kind: "test-operator", authorized: true, scopes: ["desk.read", "desk.write"] },
+  });
+  assert.equal(accepted.runtimeMutation, "EXECUTED");
+  assert.equal(accepted.mutationResult.status, "REVERTED");
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].input, {
+    action: "undo_human_execution_gate",
+    portfolioOrderIntentId: "portfolio_order_intent_undo_test",
+    expectedRevision: 4,
+    idempotencyKey: "idem-human-gate-undo-001",
+    reason: "Correction immédiate de la décision opérateur.",
+    confirmationPhrase: "CONFIRM_UNDO_HUMAN_GATE",
+    approvedTerms: undefined,
+  });
 });
 
 test("front control plane composes Command Center research truth and resolves detail views by route identifier", async () => {
