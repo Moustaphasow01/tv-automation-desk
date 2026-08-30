@@ -47,7 +47,7 @@ export function LiveFocusMode({ model, busy, error, onExit, onSelectDecision, on
   const timing = gateTiming(
     model.orderIntent?.createdAt ?? model.latestSignal?.createdAt ?? null,
     model.orderIntent?.allowedActions.expiresAt ?? model.latestSignal?.expiresAt ?? null,
-    realtime?.now ?? new Date(),
+    realtime?.now ?? new Date(model.meta.asOf),
   );
   useFocusPerception({ model, stateCode: state.code, stateLabel: state.label, timingLabel: timing.label, timingUrgency: timing.urgency, soundProfile });
 

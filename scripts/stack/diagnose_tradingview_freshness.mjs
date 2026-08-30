@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { fetchStatus } from "./check_demo_paper_gate.mjs";
 import { isCliEntrypoint } from "../runtime/cli-entrypoint.mjs";
+import { SystemClock } from "../../packages/desk-time/index.js";
 
 const DEFAULT_STATUS_URL = "http://127.0.0.1:8787/status";
 const DEFAULT_MAX_AGE_SECONDS = 900;
@@ -208,7 +209,7 @@ function resolveCheckedAt(dataReadiness, checkedAtUtc) {
   if (explicit) return explicit;
   const sessionTime = parseDate(dataReadiness?.market_session?.timestamp_paris);
   if (sessionTime) return sessionTime;
-  return new Date();
+  return parseDate(new SystemClock().now().utc);
 }
 
 function freshnessMaxAgeSeconds(dataReadiness) {
