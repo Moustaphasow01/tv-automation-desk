@@ -113,7 +113,12 @@ test("navigation réelle et détails paramétrés sur les projections V2", async
 test("session opérateur → commande terminale → audit receipt", async ({ page }) => {
   test.skip(!operatorPin, "DESK_OPERATOR_ADMIN_PIN requis pour la preuve d’écriture opérateur.");
   await page.goto("/#/auth", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Auth & Session" })).toBeVisible();
+  const authenticationGate = page.getByRole("heading", { name: "Authentification", exact: true });
+  if (await authenticationGate.isVisible()) {
+    await page.getByLabel("Mot de passe").fill(operatorPin);
+    await page.getByRole("button", { name: "Entrer dans le desk" }).click();
+  }
+  await expect(page.getByRole("heading", { name: "Authentification & Session" })).toBeVisible();
   const login = page.getByRole("button", { name: /Login opérateur/ });
   if (await login.count()) {
     await page.getByLabel("PIN opérateur").fill(operatorPin);
@@ -123,8 +128,8 @@ test("session opérateur → commande terminale → audit receipt", async ({ pag
   const verify = page.getByRole("button", { name: "Vérifier le Control Plane" });
   await expect(verify).toBeEnabled();
   await verify.click();
-  await expect(page.getByText("SUCCEEDED", { exact: true })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText(/Audit Receipt/)).toBeVisible();
+  await expect(page.getByText("Réussie", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/Reçu d'audit/)).toBeVisible();
 });
 
 test.describe("reflow V2", () => {
