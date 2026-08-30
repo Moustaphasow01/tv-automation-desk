@@ -84,3 +84,5 @@
 6. cohérence du rendu Live et de la chronologie.
 
 Cette validation dépend uniquement du retour du marché. Les composants nécessaires sont actifs et prêts.
+
+À l'heure de la clôture, le fournisseur ForexFactory/FairEconomy publie encore la semaine du 23 au 29 août (72 événements) et pas encore le 31 août. Le scheduler l'a correctement classé `PARTIAL`, continue sa récupération automatique et ne présente pas cette absence externe comme une panne du Desk. La présence du calendrier du 31 août devra donc être incluse dans le contrôle de réouverture avant d'autoriser l'interprétation contextuelle des nouveaux signaux.
