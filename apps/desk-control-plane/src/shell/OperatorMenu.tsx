@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaChevronDown, FaCog, FaIdBadge, FaSignOutAlt, FaUserCircle } from "react-icons/fa";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
+import { DESK_BUILD_ID } from "@/pwa/buildInfo";
 import "@/shell/operator-menu.css";
 
 type OperatorMenuProps = {
@@ -75,6 +76,7 @@ export function OperatorMenu({ displayName, roleLabel, variant }: OperatorMenuPr
           <Link role="menuitem" to="/settings" onClick={() => setOpen(false)}><FaCog aria-hidden="true" /><span>Réglages opérateur</span></Link>
           <button className="operator-menu__logout" role="menuitem" type="button" disabled={loggingOut} onClick={() => void logout()}><FaSignOutAlt aria-hidden="true" /><span>{loggingOut ? "Déconnexion…" : "Se déconnecter"}</span></button>
           {logoutError ? <p className="operator-menu__error" role="alert">{logoutError}</p> : null}
+          <small className="operator-menu__build">Build {DESK_BUILD_ID}</small>
         </div>
       ) : null}
     </div>

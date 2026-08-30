@@ -92,8 +92,11 @@
 .desk-nav-count,
 .desk-bottom-nav small { display: inline-grid; min-width: 20px; height: 20px; place-items: center; padding-inline: 5px; border-radius: 10px; background: #f5b942; color: #071620; font-size: 11px; font-weight: 800; }
 .desk-nav-count--critical { background: #ff6673 !important; color: #071620 !important; }
-.desk-sidebar .nav-link.active { position: relative; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 700; }
+.desk-app-shell .desk-sidebar .nav-link.active { position: relative; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); font-weight: 700; }
 .desk-sidebar .nav-link.active::after { position: absolute; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); content: ""; }
+.desk-app-shell--nav-expanded .sidebar-status-stack > small { display: block; }
+.desk-global-operator-menu { position: fixed; z-index: 70; top: 8px; right: 12px; width: min(188px, calc(100vw - 24px)); min-height: 40px; padding: 2px 6px; border: 1px solid var(--stroke); border-radius: 7px; background: var(--panel-strong); color: var(--text); box-shadow: var(--shadow); }
+.desk-global-operator-menu .operator-menu { min-height: 36px; }
 .desk-navigation-reveal { position: fixed; z-index: 45; top: 45%; left: 0; min-height: 44px; padding: 8px 6px; border: 1px solid var(--stroke-strong); border-left: 0; border-radius: 0 6px 6px 0; background: var(--panel-strong); color: var(--text); cursor: pointer; writing-mode: vertical-rl; }
 .desk-update-banner { position: fixed; z-index: 120; right: 16px; bottom: 16px; display: flex; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 7px; background: var(--panel-strong); color: var(--text); box-shadow: var(--shadow); }
 .desk-update-banner button { min-height: 36px; padding-inline: 12px; border: 1px solid var(--accent); border-radius: 5px; background: color-mix(in srgb, var(--accent) 18%, var(--panel)); color: var(--text); cursor: pointer; }
@@ -108,6 +111,10 @@
   .desk-bottom-nav .bottom-nav-link > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .desk-bottom-nav .bottom-nav-link.active { box-shadow: inset 0 3px 0 var(--accent); color: var(--text); font-weight: 700; }
   .desk-bottom-nav small { position: absolute; top: 2px; right: 8px; }
+  .desk-global-operator-menu { top: 7px; right: 8px; width: 44px; padding: 2px; }
+  .desk-global-operator-menu .operator-menu__copy,
+  .desk-global-operator-menu .operator-menu__chevron { display: none; }
+  .desk-global-operator-menu .operator-menu__trigger { grid-template-columns: 31px; justify-content: center; }
 }
 
 @media (forced-colors: active) {

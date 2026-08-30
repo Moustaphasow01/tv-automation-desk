@@ -4,22 +4,25 @@ import { resolve } from "node:path";
 
 const baseUrl = process.env.DESK_VNEXT_BASE_URL || "http://127.0.0.1:8190";
 const outputRoot = resolve(process.cwd(), "../../reports/ui-ux/command-center");
-const scenarios = [
+const scenarioCatalog = [
   { name: "golden-1672x941", viewport: { width: 1672, height: 941 }, golden: true },
   { name: "desktop-full-hd-1920x1080", viewport: { width: 1920, height: 1080 } },
   { name: "laptop-1440x900", viewport: { width: 1440, height: 900 } },
   { name: "tablet-1024x768", viewport: { width: 1024, height: 768 } },
   { name: "mobile-390x844", viewport: { width: 390, height: 844 } },
 ];
+const requestedScenario = process.env.DESK_VNEXT_VISUAL_SCENARIO;
+const scenarios = requestedScenario ? scenarioCatalog.filter((scenario) => scenario.name === requestedScenario) : scenarioCatalog;
+if (!scenarios.length) throw new Error(`UNKNOWN_VISUAL_SCENARIO:${requestedScenario}`);
 
 const golden = {
-  sidebar: { x: 0, y: 0, width: 164, height: 941 },
-  header: { x: 164, y: 0, width: 1508, height: 57 },
-  workspace: { x: 164, y: 57, width: 1508, height: 884 },
-  kpis: { x: 178, y: 66, width: 1484, height: 93 },
-  top: { x: 178, y: 168, width: 1484, height: 288 },
-  middle: { x: 178, y: 465, width: 1484, height: 214 },
-  bottom: { x: 178, y: 688, width: 1484, height: 202 },
+  sidebar: { x: 0, y: 0, width: 200, height: 941 },
+  header: { x: 200, y: 0, width: 1472, height: 57 },
+  workspace: { x: 200, y: 57, width: 1472, height: 884 },
+  kpis: { x: 214, y: 66, width: 1448, height: 93 },
+  top: { x: 214, y: 168, width: 1448, height: 288 },
+  middle: { x: 214, y: 465, width: 1448, height: 214 },
+  bottom: { x: 214, y: 688, width: 1448, height: 202 },
 };
 
 const rect = (value) => value ? {
@@ -41,6 +44,9 @@ try {
       if (message.type() === "error") consoleErrors.push(message.text());
     });
     page.on("pageerror", (error) => consoleErrors.push(error.message));
+    page.on("response", (response) => {
+      if (response.status() >= 400) consoleErrors.push(`HTTP ${response.status()} ${response.url()}`);
+    });
     await page.goto(`${baseUrl}/#/command-center`, { waitUntil: "domcontentloaded", timeout: 45_000 });
     await establishOperatorSession(page);
     await page.locator(".cc-page").waitFor({ state: "visible", timeout: 45_000 });

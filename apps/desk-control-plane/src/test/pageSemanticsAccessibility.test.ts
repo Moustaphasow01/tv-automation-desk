@@ -49,6 +49,27 @@ describe("page semantic accessibility regressions", () => {
     expect(navigation.match(/const primaryNavigationSeed/g)).toHaveLength(1);
   });
 
+  it("keeps operator access available on integrated, generic and fallback golden surfaces", () => {
+    const shell = readSource("shell/DeskShell.tsx");
+    const shellEvolution = readSource("shell/desk-shell-evolution.css");
+
+    expect(shell).toContain("const hasIntegratedOperatorMenu =");
+    expect(shell).toContain('className="desk-global-operator-menu"');
+    expect(shell).toContain('<OperatorMenu\n              variant="command-center"');
+    expect(shellEvolution).toContain(".desk-global-operator-menu");
+  });
+
+  it("keeps active navigation and the deployed build visibly identifiable", () => {
+    const shell = readSource("shell/DeskShell.tsx");
+    const shellEvolution = readSource("shell/desk-shell-evolution.css");
+    const liveStyles = readSource("features/live-trading/live-trading.css");
+
+    expect(shell).toContain("build {DESK_BUILD_ID}");
+    expect(shellEvolution).toContain(".desk-app-shell--nav-expanded .sidebar-status-stack > small { display: block; }");
+    expect(shellEvolution).toContain(".desk-app-shell .desk-sidebar .nav-link.active");
+    expect(liveStyles).toMatch(/\.desk-app-shell--live-trading \.nav-link \{[\s\S]*?min-height: 38px/);
+  });
+
   it("does not manufacture Human Gate commands from an item status", () => {
     const orders = readSource("pages/OrdersPage.tsx");
 

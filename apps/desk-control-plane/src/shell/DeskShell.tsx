@@ -22,7 +22,6 @@ import {
   FaSearch,
   FaShieldAlt,
   FaTh,
-  FaUserCircle,
   FaWallet
 } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
@@ -34,7 +33,8 @@ import { presentConnectionStatus } from "@/design-system/labels";
 import { DeskBrand } from "@/shell/DeskBrand";
 import { DeskCommandPalette } from "@/shell/DeskCommandPalette";
 import { useDeskDensity } from "@/shell/DeskDensityViewport";
-import { RealtimeAlertCenter } from "@/shell/RealtimeAlertCenter";
+import { OperatorMenu } from "@/shell/OperatorMenu";
+import { desktopNotificationPermission, readRealtimeAlertPreference, RealtimeAlertCenter } from "@/shell/RealtimeAlertCenter";
 import { DeskUpdateBanner } from "@/pwa/DeskUpdateBanner";
 import { DESK_BUILD_ID } from "@/pwa/buildInfo";
 import "@/shell/desk-shell-evolution.css";
@@ -78,6 +78,8 @@ export function DeskShell() {
   const incidentsQuery = useFrontView("execution-incidents", {}, { refetchInterval: 30_000 });
   const pendingHumanGates = readPendingHumanGates(ordersQuery.data);
   const criticalIncidents = readCriticalIncidents(incidentsQuery.data);
+  const realtimeAlertsEnabled = readRealtimeAlertPreference();
+  const notificationPermission = desktopNotificationPermission();
   const currentRoute = useMemo(
     () => vnextRoutes.find((route) => matchPath({ path: `/${route.path}`, end: true }, location.pathname)),
     [location.pathname]
@@ -175,6 +177,7 @@ export function DeskShell() {
   const isGoldenSurface = isGoldenCommandCenter || isGoldenLiveTrading || isGoldenStrategyCenter || isGoldenResearchLab
     || isGoldenRiskCenter || isGoldenOrdersHumanGate || isGoldenPortfolio || isGoldenExecutionProviders
     || isGoldenIncidentsOperations || isGoldenPerformance || isGoldenReplay;
+  const hasIntegratedOperatorMenu = isGoldenCommandCenter || isGoldenLiveTrading || isGoldenStrategyCenter || isGoldenResearchLab;
   const visibleDeskNavItems = deskPrimaryNavigation;
   const effectiveNavigationMode: NavigationMode = navigationMode === "expanded" && compactViewport && densityMode !== "workstation" ? "compact" : navigationMode;
   const visibleNavSections = DESK_NAVIGATION_SECTIONS
@@ -251,9 +254,15 @@ export function DeskShell() {
           <div className="topbar-ops">
             <span className="timezone-chip"><FaGlobeEurope aria-hidden="true" />Europe/Paris</span>
             <strong><FaCircle aria-hidden="true" />OPÉRATIONNEL</strong>
-            <span className="notification-chip" title="Notifications indisponibles"><FaBell aria-hidden="true" /><small>—</small></span>
+            <Link className="notification-chip" to="/settings" title={realtimeAlertsEnabled ? "Alertes temps réel activées sur ce poste" : "Alertes temps réel désactivées sur ce poste"} aria-label="Configurer les notifications et alertes">
+              <FaBell aria-hidden="true" /><small>{realtimeAlertsEnabled ? notificationPermission === "granted" ? "ON" : "UI" : "OFF"}</small>
+            </Link>
             <span className="notification-chip" title="Messages indisponibles"><FaEnvelope aria-hidden="true" /><small>—</small></span>
-            <span className="user-chip"><FaUserCircle aria-hidden="true" /><span>{session?.principal.displayName ?? "Session indisponible"}<small>{session?.principal.roles.join(", ") || "—"}</small></span></span>
+            <OperatorMenu
+              variant="command-center"
+              displayName={session?.principal.displayName ?? "Session indisponible"}
+              roleLabel={session?.principal.roles.join(", ") || "Rôle indisponible"}
+            />
           </div>
         </header> : null}
 
@@ -286,6 +295,16 @@ export function DeskShell() {
           </div>
         </footer> : null}
       </div>
+
+      {isGoldenSurface && !hasIntegratedOperatorMenu ? (
+        <div className="desk-global-operator-menu" aria-label="Accès opérateur global">
+          <OperatorMenu
+            variant="command-center"
+            displayName={session?.principal.displayName ?? "Session indisponible"}
+            roleLabel={session?.principal.roles.join(", ") || "Rôle indisponible"}
+          />
+        </div>
+      ) : null}
 
       <nav className="desk-bottom-nav" aria-label="Navigation mobile">
         {deskPrimaryNavigation.filter((route) => route.mobile).slice(0, 4).map((route) => {
