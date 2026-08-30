@@ -60,7 +60,11 @@ export class TelegramClient {
         throw telegramError(
           `TELEGRAM_HTTP_${code}`,
           `Telegram ${this.profile} request failed (${code}): ${String(data?.description || response.statusText || "unknown error").slice(0, 300)}`,
-          { retryable: code === 429 || code >= 500, statusCode: code },
+          {
+            retryable: code === 429 || code >= 500,
+            statusCode: code,
+            retryAfterSeconds: positiveInteger(data?.parameters?.retry_after),
+          },
         );
       }
       return data.result;
@@ -73,6 +77,11 @@ export class TelegramClient {
       clearTimeout(timer);
     }
   }
+}
+
+function positiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function telegramError(code, message, extra = {}) {

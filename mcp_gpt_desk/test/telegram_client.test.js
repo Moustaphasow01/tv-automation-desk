@@ -30,12 +30,12 @@ test("Telegram client classifies rate limiting as retryable", async () => {
       ok: false,
       status: 429,
       statusText: "Too Many Requests",
-      async json() { return { ok: false, error_code: 429, description: "retry later" }; },
+      async json() { return { ok: false, error_code: 429, description: "retry later", parameters: { retry_after: 26 } }; },
     }),
   });
   await assert.rejects(
     client.getMe(),
-    (error) => error.code === "TELEGRAM_HTTP_429" && error.retryable === true,
+    (error) => error.code === "TELEGRAM_HTTP_429" && error.retryable === true && error.retryAfterSeconds === 26,
   );
 });
 

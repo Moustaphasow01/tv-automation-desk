@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { TelegramClient } from "./telegram-client.js";
 import { loadCanonicalTelegramExecutionRows } from "./telegram-canonical-execution-source.js";
 import { buildTelegramTradingCandidate, isTelegramTradingAlertSourceAllowed } from "./telegram-trading-message.js";
+import { boundedNumber, countBy, formatCounts, inferScope, iso, telegramRetryDelaySeconds, telegramSourceKindsToBaseline } from "./telegram-alert-utilities.js";
 const CONFIG_ID = "desk_telegram";
 const ACTIVE_NOTIFICATION_STATES = new Set(["pending", "active", "watching", "action_required", "open"]);
 export { isTelegramTradingAlertSourceAllowed };
@@ -13,6 +14,7 @@ export class TelegramAlertService {
     this.clock = clock;
     this.env = env;
     this.pollMs = boundedNumber(env.DESK_TELEGRAM_POLL_MS, 5000, 1000, 60000);
+    this.deliveryMinIntervalMs = boundedNumber(env.DESK_TELEGRAM_DELIVERY_MIN_INTERVAL_MS, 1200, 1000, 60000);
     this.adminChatId = String(env.TELEGRAM_ADMIN_CHAT_ID || "").trim();
     this.tradingChatId = String(env.TELEGRAM_ALERT_CHAT_ID || "").trim();
     this.clients = {
@@ -28,6 +30,7 @@ export class TelegramAlertService {
       tradingConfigured: this.clients.trading.configured && Boolean(this.tradingChatId),
       commandsRequested: String(this.env.DESK_TELEGRAM_COMMANDS_ENABLED || "true").toLowerCase() !== "false",
       pollMs: this.pollMs,
+      deliveryMinIntervalMs: this.deliveryMinIntervalMs,
     };
   }
 
@@ -214,9 +217,19 @@ export class TelegramAlertService {
       this.#tradingCandidates(),
       this.#aiWorkerCandidates(),
     ]);
+    const candidates = [...notifications, ...trading, ...aiWorkers];
+    const sourceKindsResult = await this.persistence.pool.query("SELECT DISTINCT source_kind FROM telegram_source_state");
+    const sourceKindsToBaseline = telegramSourceKindsToBaseline({
+      candidates,
+      existingSourceKinds: sourceKindsResult.rows.map((row) => row.source_kind),
+      globalBaseline: baseline,
+    });
     let queued = 0;
-    for (const candidate of [...notifications, ...trading, ...aiWorkers]) {
-      queued += await this.#observeCandidate(candidate, { config, baseline });
+    for (const candidate of candidates) {
+      queued += await this.#observeCandidate(candidate, {
+        config,
+        baseline: baseline || sourceKindsToBaseline.has(candidate.sourceKind),
+      });
     }
     if (baseline) {
       await this.persistence.pool.query(
@@ -226,7 +239,12 @@ export class TelegramAlertService {
         [CONFIG_ID],
       );
     }
-    return { baseline, observed: notifications.length + trading.length + aiWorkers.length, queued };
+    return {
+      baseline,
+      baselinedSourceKinds: [...sourceKindsToBaseline].sort(),
+      observed: candidates.length,
+      queued,
+    };
   }
 
   async deliverNext() {
@@ -249,9 +267,17 @@ export class TelegramAlertService {
         `SELECT *
          FROM telegram_delivery_outbox
          WHERE status = 'pending' AND available_at_utc <= now()
+           AND NOT EXISTS (
+             SELECT 1
+             FROM telegram_delivery_outbox recent
+             WHERE recent.profile = telegram_delivery_outbox.profile
+               AND recent.status = 'sent'
+               AND recent.sent_at_utc > now() - ($1 * interval '1 millisecond')
+           )
          ORDER BY priority DESC, created_at_utc
          FOR UPDATE SKIP LOCKED
          LIMIT 1`,
+        [this.deliveryMinIntervalMs],
       );
       delivery = selected.rows[0];
       if (!delivery) {
@@ -334,7 +360,7 @@ export class TelegramAlertService {
     } catch (error) {
       const retryable = error?.retryable !== false && Number(delivery.attempt_count) < 3;
       const nextStatus = retryable ? "pending" : "failed";
-      const retryDelaySeconds = Math.min(300, 15 * (2 ** Math.max(0, Number(delivery.attempt_count) - 1)));
+      const retryDelaySeconds = telegramRetryDelaySeconds(error, delivery.attempt_count);
       const failed = await this.persistence.pool.connect();
       try {
         await failed.query("BEGIN");
@@ -825,12 +851,6 @@ function publicIdentity(identity, configured) {
   };
 }
 
-function inferScope(item = {}) {
-  const text = [item.scope, item.run_scope, item.workflow, item.workflow_id, item.run_id, item.process_id]
-    .filter(Boolean).join(" ").toLowerCase();
-  return text.includes("replay") || text.includes("backtest") ? "replay" : "live";
-}
-
 function hash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -839,11 +859,6 @@ function safeError(error) {
   return String(error?.message || error || "unknown error")
     .replace(/bot[0-9]+:[A-Za-z0-9_-]+/g, "bot[redacted]")
     .slice(0, 500);
-}
-
-function boundedNumber(value, fallback, min, max) {
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
 }
 
 function actorName(actor = {}) {
@@ -857,23 +872,4 @@ function assertProfile(value) {
 
 function apiError(code, message, statusCode) {
   return Object.assign(new Error(message), { code, statusCode });
-}
-
-function iso(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
-}
-
-function countBy(items, selector) {
-  const counts = {};
-  for (const item of items) {
-    const key = selector(item);
-    counts[key] = (counts[key] || 0) + 1;
-  }
-  return counts;
-}
-
-function formatCounts(counts) {
-  return Object.entries(counts).sort((left, right) => right[1] - left[1]).map(([key, value]) => `${key}: ${value}`).join("\n") || "Aucun élément";
 }

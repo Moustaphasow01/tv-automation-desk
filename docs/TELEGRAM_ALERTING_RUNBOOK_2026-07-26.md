@@ -62,12 +62,18 @@ Variables de service :
 DESK_TELEGRAM_ENABLED=true
 DESK_TELEGRAM_COMMANDS_ENABLED=true
 DESK_TELEGRAM_POLL_MS=5000
+DESK_TELEGRAM_DELIVERY_MIN_INTERVAL_MS=1200
 TELEGRAM_ADMIN_BOT_TOKEN=<secret VPS>
 TELEGRAM_ADMIN_CHAT_ID=<secret VPS>
 TELEGRAM_ALERT_BOT_TOKEN=<secret VPS>
 TELEGRAM_ALERT_CHAT_ID=<secret VPS>
 TELEGRAM_LEGACY_FALLBACK=false
 ```
+
+Chaque nouveau `source_kind` est d'abord baseliné sans rejouer son historique.
+Les messages sont espacés par profil et un `retry_after` Telegram est respecté
+avant toute nouvelle tentative. Ce mécanisme évite qu'une release introduisant
+une nouvelle source canonique transforme l'historique en rafale de notifications.
 
 Le fichier VPS est `C:\ProgramData\DeskFutures\config\desk.env` avec ACL
 restreinte à `SYSTEM` et `Administrators`.
