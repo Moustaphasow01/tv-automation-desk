@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promis
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import pg from "pg";
 import { buildPostgresDataHealth } from "./postgres-data-health.js";
+import { projectOperationalServices } from "./postgres-operational-health.js";
 
 const { Pool } = pg;
 
@@ -88,20 +89,12 @@ export class PostgresDeskPersistence {
          ORDER BY started_at_utc DESC LIMIT 1`,
       ),
     ]);
-    const services = heartbeats.rows.map((row) => ({
-      ...row,
-      age_seconds: Number(row.age_seconds || 0),
-      healthy: ["healthy", "starting"].includes(row.status)
-        && Number(row.age_seconds || 0) <= staleAfterSeconds,
-    }));
-    const actualServiceIds = new Set(services.map((service) => service.service_id));
-    const missingServices = expectedServices.filter((serviceId) => !actualServiceIds.has(serviceId));
+    const operational = projectOperationalServices(heartbeats.rows, { expectedServices, staleAfterSeconds });
     const objectRow = objects.rows[0] || {};
     return {
-      ok: missingServices.length === 0
-        && services.every((service) => service.healthy || service.status === "disabled"),
-      services,
-      missing_services: missingServices,
+      ok: operational.ok,
+      services: operational.services,
+      missing_services: operational.missingServices,
       objects: {
         count: Number(objectRow.count || 0),
         catalog_size_bytes: Number(objectRow.catalog_size_bytes || 0),
@@ -1092,6 +1085,7 @@ export class PostgresDeskPersistence {
     }
   }
 }
+
 
 function resolveSchemaMode(explicitMode) {
   const configured = String(explicitMode || process.env.DESK_POSTGRES_SCHEMA_MODE || "").trim().toLowerCase();
