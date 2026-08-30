@@ -8,7 +8,7 @@ describe("strategy center accessibility regression", () => {
   it("keeps an accessible name on the catalog filter", () => {
     const source = readFileSync(resolve(appRoot, "src/pages/StrategyCenterPage.tsx"), "utf8");
 
-    expect(source).toContain('<span className="sr-only">Filtrer le catalogue des stratégies</span>');
+    expect(source).toContain('role="group" aria-label="Filtrer le catalogue des stratégies"');
   });
 
   it("uses readable semantic tokens for cold and selected labels", () => {

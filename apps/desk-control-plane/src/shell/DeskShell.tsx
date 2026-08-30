@@ -30,6 +30,7 @@ import { useFrontView } from "@/domains/front-api/repositories";
 import { vnextRoutes } from "@/app/routes";
 import { DESK_NAVIGATION_SECTIONS, deskPrimaryNavigation, NAV_GROUP_LABELS, type DeskNavigationIcon } from "@/shell/navigation";
 import { presentConnectionStatus } from "@/design-system/labels";
+import { operatorCopy } from "@/design-system/operatorVocabulary";
 import { DeskBrand } from "@/shell/DeskBrand";
 import { DeskCommandPalette } from "@/shell/DeskCommandPalette";
 import { useDeskDensity } from "@/shell/DeskDensityViewport";
@@ -247,14 +248,14 @@ export function DeskShell() {
           </form>
           <div className="market-tape" role="status" aria-label="État du flux temps réel">
             <article className={`market-tick ${runtimeTone}`}>
-              <strong>ÉVÉNEMENTS</strong>
+              <strong>Événements</strong>
               <span>{realtime?.events.acceptedCount ?? "—"}</span>
-              <small>{realtime?.heartbeatLabel ? `asOf ${realtime.heartbeatLabel}` : "source indisponible"}</small>
+              <small>{realtime?.heartbeatLabel ? `Arrêté à ${realtime.heartbeatLabel}` : "source indisponible"}</small>
             </article>
           </div>
           <div className="topbar-ops">
             <span className="timezone-chip"><FaGlobeEurope aria-hidden="true" />Europe/Paris</span>
-            <strong><FaCircle aria-hidden="true" />OPÉRATIONNEL</strong>
+            <strong><FaCircle aria-hidden="true" />Opérationnel</strong>
             <Link className="notification-chip" to="/settings" title={realtimeAlertsEnabled ? "Alertes temps réel activées sur ce poste" : "Alertes temps réel désactivées sur ce poste"} aria-label="Configurer les notifications et alertes">
               <FaBell aria-hidden="true" /><small>{realtimeAlertsEnabled ? notificationPermission === "granted" ? "ON" : "UI" : "OFF"}</small>
             </Link>
@@ -283,16 +284,16 @@ export function DeskShell() {
         {!isGoldenSurface ? <footer className="desk-status-footer">
           <div>
             <span className={runtimeTone}><FaCircle aria-hidden="true" /> {realtime?.connectionStatus ? presentConnectionStatus(realtime.connectionStatus).label : "Runtime"}</span>
-            <span>asOf {realtime?.heartbeatLabel ?? "—"}</span>
+            <span>Arrêté à {realtime?.heartbeatLabel ?? "—"}</span>
             <span>·</span>
             <span>{realtime?.events.acceptedCount ?? 0} événements reçus</span>
             <span>·</span>
-            <span>dernier {realtime?.events.lastEventId ?? "—"}</span>
+            <span>{realtime?.events.lastEventId ? "Dernier événement reçu" : "Aucun événement reçu"}</span>
           </div>
           <div>
             <span>Commandes suivies : {Object.keys(realtime?.commands.commands ?? {}).length}</span>
-            <span>Hors-ordre : {realtime?.events.outOfOrderCount ?? 0}</span>
-            <span>{realtime?.latestError ? `Runtime : ${realtime.latestError}` : "Runtime : nominal"}</span>
+            <span>Événements reçus dans le désordre : {realtime?.events.outOfOrderCount ?? 0}</span>
+            <span>{realtime?.latestError ? `Système : ${operatorCopy(realtime.latestError)}` : "Système : normal"}</span>
           </div>
         </footer> : null}
       </div>
@@ -336,7 +337,7 @@ export function DeskShell() {
       {shortcutHelpOpen ? (
         <div className="desk-shortcut-help-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setShortcutHelpOpen(false); }}>
           <section className="desk-shortcut-help" role="dialog" aria-modal="true" aria-labelledby="desk-shortcuts-title">
-            <header><div><small>AIDE OPÉRATEUR</small><h2 id="desk-shortcuts-title">Raccourcis clavier</h2></div><button type="button" onClick={() => setShortcutHelpOpen(false)}>Fermer</button></header>
+            <header><div><small>Aide opérateur</small><h2 id="desk-shortcuts-title">Raccourcis clavier</h2></div><button type="button" onClick={() => setShortcutHelpOpen(false)}>Fermer</button></header>
             <dl>
               <div><dt>Ctrl + K</dt><dd>Ouvrir la navigation rapide</dd></div>
               <div><dt>?</dt><dd>Afficher cette aide</dd></div>
@@ -344,7 +345,7 @@ export function DeskShell() {
               <div><dt>Tab / Maj + Tab</dt><dd>Parcourir les actions sans souris</dd></div>
               <div><dt>Entrée</dt><dd>Activer l’élément sélectionné</dd></div>
             </dl>
-            <p>Les raccourcis n’exécutent jamais une action Risk, Human Gate ou provider sans la confirmation backend prévue.</p>
+            <p>Les raccourcis n’exécutent jamais une action de risque, de validation ou de fournisseur sans la confirmation prévue par le desk.</p>
           </section>
         </div>
       ) : null}

@@ -2,6 +2,7 @@ import { FaChevronDown, FaCircle } from "react-icons/fa";
 import { routeDisplayName } from "@/app/routes";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { OperatorMenu } from "@/shell/OperatorMenu";
+import { operatorCode } from "@/design-system/operatorVocabulary";
 import type { CommandCenterModel } from "./model";
 import { statusTone } from "./mapper";
 
@@ -18,15 +19,15 @@ export function CommandCenterHeader({ model }: { model: CommandCenterModel }) {
       <div className="cc-header__divider" aria-hidden="true" />
       <div className="cc-header__modes" role="region" tabIndex={0} aria-label="Contexte opérationnel">
         <span className="cc-header__field">Environnement:</span>
-        <span className="cc-header__select">{environment}<FaChevronDown aria-hidden="true" /></span>
+        <span className="cc-header__select">{operatorCode(environment)}<FaChevronDown aria-hidden="true" /></span>
         <ModeChip label="Mode d'exécution" value={mode.executionMode} tone="warning" />
-        <ModeChip label="AUTO" value={mode.autoExecution} tone={mode.autoExecution === "OFF" ? "danger" : "warning"} />
-        <ModeChip label="Broker LIVE" value={mode.liveBroker} tone={mode.liveBroker === "OFF" ? "danger" : "warning"} />
+        <ModeChip label="Automatique" value={mode.autoExecution} tone={mode.autoExecution === "OFF" ? "danger" : "warning"} />
+        <ModeChip label="Courtier réel" value={mode.liveBroker} tone={mode.liveBroker === "OFF" ? "danger" : "warning"} />
         <span className="cc-header__release">{releaseLabel(mode.release)}</span>
       </div>
       <div className={`cc-header__freshness cc-tone--${statusTone(mode.marketData)}`}>
         <FaCircle aria-hidden="true" />
-        <span>Données de marché {mode.marketData.toLowerCase()}</span>
+        <span>Données de marché : {operatorCode(mode.marketData).toLowerCase()}</span>
       </div>
       <OperatorMenu variant="command-center" displayName={session?.principal.displayName ?? "Session non authentifiée"} roleLabel={session?.principal.roles[0] ?? "Lecture seule"} />
     </header>
@@ -34,7 +35,7 @@ export function CommandCenterHeader({ model }: { model: CommandCenterModel }) {
 }
 
 function ModeChip({ label, value, tone }: { label: string; value: string; tone: "warning" | "danger" }) {
-  return <span className={`cc-header__mode cc-header__mode--${tone}`}><small>{label}:</small><strong>{value}</strong></span>;
+  return <span className={`cc-header__mode cc-header__mode--${tone}`}><small>{label} :</small><strong>{operatorCode(value)}</strong></span>;
 }
 
 function releaseLabel(value: string) {

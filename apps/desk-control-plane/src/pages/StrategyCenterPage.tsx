@@ -97,8 +97,8 @@ export function StrategyCenterPage() {
 
   if (!query.data || !inspector) {
     return (
-      <Card title="Aucune donnée stratégie" eyebrow="EMPTY" state="empty" density="compact">
-        <p>Le BFF ne retourne pas encore la projection `/views/strategy-center`.</p>
+      <Card title="Aucune donnée stratégie" eyebrow="ÉTAT VIDE" state="empty" density="compact">
+        <p>Le catalogue des stratégies n’est pas encore publié.</p>
       </Card>
     );
   }
@@ -125,7 +125,7 @@ export function StrategyCenterPage() {
       <header className="sc-header">
         <div className="sc-header__title">
           <h1>{routeDisplayName("strategies")}</h1>
-          <p>Catalogue, gates de promotion et gouvernance</p>
+          <p>Catalogue, étapes de promotion et gouvernance</p>
         </div>
         <div className="sc-header__search">
           <FaSearch aria-hidden="true" color="var(--sc-muted)" />
@@ -138,16 +138,6 @@ export function StrategyCenterPage() {
           <kbd>{commandShortcutLabel()}</kbd>
         </div>
         <span className="sc-header__pill">{session?.summary.environment ?? "—"}</span>
-        <label className="sc-header__pill">
-          <span className="sr-only">Filtrer le catalogue des stratégies</span>
-          <select value={catalogFilter} onChange={(event) => setFilter(event.target.value as CatalogFilter)}>
-            <option value="ALL">TOUS</option>
-            <option value="SHADOW">SHADOW</option>
-            <option value="PAPER">PAPER</option>
-            <option value="VALIDATED">VALIDATED</option>
-            <option value="RETIRED">ARCHIVÉES</option>
-          </select>
-        </label>
         <div className="sc-header__clock">
           <strong>{formatClock(realtime?.now)}</strong>
           <small>{formatClockDate(realtime?.now)}</small>
@@ -158,9 +148,9 @@ export function StrategyCenterPage() {
       <div className="sc-workspace">
         <section className="sc-kpi-strip" aria-label="Indicateurs Centre des stratégies">
           <article className="sc-kpi-card"><small>Stratégies</small><strong>{data.summary.totalStrategies}</strong><span>Suspendues {data.summary.suspendedStrategies}</span></article>
-          <article className="sc-kpi-card"><small>Live</small><strong>{data.summary.liveStrategies}</strong></article>
-          <article className="sc-kpi-card"><small>Paper</small><strong>{data.summary.paperStrategies}</strong></article>
-          <article className="sc-kpi-card"><small>Watchlist</small><strong>{data.summary.watchlistStrategies}</strong></article>
+          <article className="sc-kpi-card"><small>En direct</small><strong>{data.summary.liveStrategies}</strong></article>
+          <article className="sc-kpi-card"><small>Simulation</small><strong>{data.summary.paperStrategies}</strong></article>
+          <article className="sc-kpi-card"><small>Liste de suivi</small><strong>{data.summary.watchlistStrategies}</strong></article>
           <article className="sc-kpi-card"><small>Profit factor moyen</small><strong>{data.summary.averageProfitFactor.toFixed(2)}</strong><span>DD {formatSignedR(data.summary.averageDrawdownR)}</span></article>
         </section>
 
@@ -168,10 +158,10 @@ export function StrategyCenterPage() {
           <div className="sc-column">
             <section className="sc-panel" aria-label="Catalogue stratégies">
               <header><h2>Catalogue</h2><small>{filteredStrategies.length}</small></header>
-              <div className="sc-filter-pills">
+              <div className="sc-filter-pills" role="group" aria-label="Filtrer le catalogue des stratégies">
                 <FilterPill active={catalogFilter === "ALL"} onClick={() => setFilter("ALL")}>Tous <strong>{strategies.length}</strong></FilterPill>
-                <FilterPill active={catalogFilter === "SHADOW"} onClick={() => setFilter("SHADOW")}>Shadow <strong>{strategies.filter((s) => s.executionMode === "SHADOW").length}</strong></FilterPill>
-                <FilterPill active={catalogFilter === "PAPER"} onClick={() => setFilter("PAPER")}>Paper <strong>{strategies.filter((s) => s.executionMode === "PAPER").length}</strong></FilterPill>
+                <FilterPill active={catalogFilter === "SHADOW"} onClick={() => setFilter("SHADOW")}>Observation seule <strong>{strategies.filter((s) => s.executionMode === "SHADOW").length}</strong></FilterPill>
+                <FilterPill active={catalogFilter === "PAPER"} onClick={() => setFilter("PAPER")}>Simulation <strong>{strategies.filter((s) => s.executionMode === "PAPER").length}</strong></FilterPill>
                 <FilterPill active={catalogFilter === "VALIDATED"} onClick={() => setFilter("VALIDATED")}>Validées <strong>{strategies.filter((s) => s.versionStatus === "VALIDATED").length}</strong></FilterPill>
                 <FilterPill active={catalogFilter === "RETIRED"} onClick={() => setFilter("RETIRED")}>Archivées <strong>{strategies.filter((s) => s.versionStatus === "RETIRED").length}</strong></FilterPill>
               </div>
@@ -215,7 +205,7 @@ export function StrategyCenterPage() {
                 <div className="sc-detail-title">
                   <h2>{selectedName}</h2>
                   <StatusBadge tone={versionTone(inspector.meta.executionMode)}>{presentExecutionMode(inspector.meta.executionMode).label}</StatusBadge>
-                  <small style={{ color: "var(--sc-muted)", fontSize: 11 }}>{inspector.strategyVersionId}</small>
+                  <small style={{ color: "var(--sc-muted)", fontSize: 11 }} title={inspector.strategyVersionId}>Version {formatDate(inspector.meta.publishedAt)}</small>
                 </div>
                 <p className="sc-detail-thesis">{inspector.thesis}</p>
 
@@ -226,27 +216,27 @@ export function StrategyCenterPage() {
                     disabled={submitting || inspector.currentCommandEligibility === "READ_ONLY"}
                     onClick={requestShadowTest}
                   >
-                    {submitting ? "Envoi..." : "Demander shadow test"}
+                    {submitting ? "Envoi..." : "Demander un test en observation"}
                   </button>
                   <Link to={`/strategies/${inspector.strategyId}/compare`}><FaBalanceScale aria-hidden="true" /> Comparer versions</Link>
-                  <Link to="/research"><FaChartBar aria-hidden="true" /> Voir Research</Link>
+                  <Link to="/research"><FaChartBar aria-hidden="true" /> Voir la recherche</Link>
                 </div>
 
                 <div className="sc-meta-grid">
                   <MetaItem label="Instruments" value={inspector.meta.instruments.join(", ") || null} />
-                  <MetaItem label="Timeframe" value={inspector.meta.timeframe} />
+                  <MetaItem label="Unité de temps" value={inspector.meta.timeframe} />
                   <MetaItem label="Session" value={inspector.meta.sessionScope.join(", ") || null} />
                   <MetaItem label="Auteur" value={inspector.meta.owner} />
                   <MetaItem label="Publiée le" value={formatDate(inspector.meta.publishedAt)} />
-                  <MetaItem label="Build / Hash" value={inspector.meta.compiledArtifactHash} monospace />
+                  <MetaItem label="Version de calcul" value={inspector.meta.compiledArtifactHash ? "Version certifiée" : null} />
                   <MetaItem label="Mode déploiement" value={presentExecutionMode(inspector.meta.executionMode).label} />
                   <MetaItem label="Compte" value={inspector.meta.accountScope} />
                 </div>
                 <div className="sc-meta-grid">
-                  <MetaItem label="Modèle d'entrée" value={inspector.spec.entryModel} />
-                  <MetaItem label="Modèle de stop" value={inspector.spec.stopModel} />
-                  <MetaItem label="Modèle de cible" value={inspector.spec.targetModel} />
-                  <MetaItem label="Modèle de risque" value={inspector.spec.riskModel} />
+                  <MetaItem label="Règle d'entrée" value={inspector.spec.entryModel} />
+                  <MetaItem label="Règle de stop" value={inspector.spec.stopModel} />
+                  <MetaItem label="Règle d'objectif" value={inspector.spec.targetModel} />
+                  <MetaItem label="Dimensionnement" value={inspector.spec.riskModel} />
                 </div>
                 {inspector.rulesSummary.length ? (
                   <div className="strategy-rules">
@@ -255,10 +245,10 @@ export function StrategyCenterPage() {
                 ) : null}
                 <div className="sc-command-box">
                   <div>
-                    <small>Éligibilité commande</small>
+                    <small>Actions possibles</small>
                     <strong>{presentCommandEligibility(inspector.currentCommandEligibility).label}</strong>
                   </div>
-                  {command ? <span className="text-success">Acceptée · {command.commandId}</span> : null}
+                  {command ? <span className="text-success" title={command.commandId}>Commande acceptée</span> : null}
                   {commandError ? <span className="text-danger">{commandError}</span> : null}
                 </div>
               </div>

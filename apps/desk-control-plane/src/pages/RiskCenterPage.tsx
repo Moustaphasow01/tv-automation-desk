@@ -4,6 +4,7 @@ import { routeDisplayName } from "@/app/routes";
 import { FaSkullCrossbones } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
 import { StatusBadge } from "@/design-system/primitives";
+import { operatorCode } from "@/design-system/operatorVocabulary";
 import { presentGeneric, presentQueueStatus } from "@/design-system/labels";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -56,7 +57,7 @@ export function RiskCenterPage() {
   }
 
   if (!rawData) {
-    return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Le BFF ne retourne pas encore la projection `/views/risk`.</p></div></div>;
+    return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Les données du risque ne sont pas encore publiées.</p></div></div>;
   }
   if (!rawData.summary) {
     return <div className="rc-page"><div className="rc-workspace"><p className="rc-empty">Projection Risque connectée mais incomplète : le résumé autoritaire n’est pas publié.</p></div></div>;
@@ -113,7 +114,7 @@ export function RiskCenterPage() {
           {presentQueueStatus(data.summary.globalStatus).label}
         </span>
         <label className="rc-step-up">
-          <span>Step-up (kill switch / stress test)</span>
+          <span>Confirmation renforcée (arrêt d'urgence / test de résistance)</span>
           <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder={killSwitchAction?.actionId ?? "actionId step-up"} />
         </label>
         {killSwitchAction ? (
@@ -121,10 +122,10 @@ export function RiskCenterPage() {
             type="button"
             className="rc-header__kill"
             disabled={isActionDisabled(killSwitchAction, reason, stepUpToken) || submittingActionId === killSwitchAction.actionId}
-            title={killSwitchAction.permission === "STEP_UP_REQUIRED" ? "Nécessite une confirmation renforcée (step-up)" : killSwitchAction.permission === "DENIED" ? "Action refusée par la politique en vigueur" : undefined}
+            title={killSwitchAction.permission === "STEP_UP_REQUIRED" ? "Nécessite une confirmation renforcée" : killSwitchAction.permission === "DENIED" ? "Action refusée par la politique en vigueur" : undefined}
             onClick={() => confirmAction(killSwitchAction)}
           >
-            <FaSkullCrossbones aria-hidden="true" /> {submittingActionId === killSwitchAction.actionId ? "Envoi..." : "Kill Switch"}
+            <FaSkullCrossbones aria-hidden="true" /> {submittingActionId === killSwitchAction.actionId ? "Envoi..." : "Arrêt d’urgence"}
           </button>
         ) : null}
       </header>
@@ -266,7 +267,7 @@ export function RiskCenterPage() {
                     {data.stressTests.map((item, index) => (
                       <tr key={`${item.stressTestId}-${index}`}>
                         <td><Link to={item.route}>{item.scenario}</Link></td>
-                        <td><StatusBadge tone={item.state === "PASSED" ? "success" : item.state === "FAILED" ? "danger" : "accent"}>{item.state}</StatusBadge></td>
+                        <td><StatusBadge tone={item.state === "PASSED" ? "success" : item.state === "FAILED" ? "danger" : "accent"}>{operatorCode(item.state)}</StatusBadge></td>
                         <td className={item.lossR >= 0 ? "text-success" : "text-danger"}>{formatSignedR(item.lossR)}</td>
                         <td>{formatPercent(item.marginUsedPct)}</td>
                       </tr>
@@ -291,7 +292,7 @@ export function RiskCenterPage() {
                 <div key={`${breach.breachId}-${index}`} className="rc-breach-row">
                   <time>{formatTime(breach.openedAt)}</time>
                   <div><strong>{breach.title}</strong><small>{breach.detail}</small></div>
-                  <StatusBadge tone={breach.severity === "HIGH" || breach.severity === "EMERGENCY" ? "danger" : breach.severity === "MEDIUM" ? "warning" : "accent"}>{breach.severity}</StatusBadge>
+                  <StatusBadge tone={breach.severity === "HIGH" || breach.severity === "EMERGENCY" ? "danger" : breach.severity === "MEDIUM" ? "warning" : "accent"}>{operatorCode(breach.severity)}</StatusBadge>
                 </div>
               )) : <p className="rc-empty">{breachTab === "active" ? "Aucun dépassement actif." : "Aucun dépassement publié."}</p>}
             </div>
@@ -311,7 +312,7 @@ export function RiskCenterPage() {
                       <td><strong>{row.label}</strong></td>
                       <td>{row.equityUsd != null ? formatCurrency(row.equityUsd) : "Non disponible"}</td>
                       <td>{formatCurrency(row.openRiskUsd)}</td>
-                      <td><StatusBadge tone={row.status === "CONTROLLED" ? "success" : "warning"}>{row.status}</StatusBadge></td>
+                      <td><StatusBadge tone={row.status === "CONTROLLED" ? "success" : "warning"}>{operatorCode(row.status)}</StatusBadge></td>
                     </tr>
                   ))}
                   {!data.riskByAccount.length ? <tr><td colSpan={4}><p className="rc-empty">Aucun compte publié.</p></td></tr> : null}
@@ -400,7 +401,7 @@ export function RiskCenterPage() {
                         <td>{item.instrument}</td>
                         <td>{item.requestedQty}</td>
                         <td>{item.authorizedQty}</td>
-                        <td><StatusBadge tone={item.verdict === "APPROVED" ? "success" : item.verdict === "REDUCED" ? "warning" : "danger"}>{item.verdict}</StatusBadge></td>
+                        <td><StatusBadge tone={item.verdict === "APPROVED" ? "success" : item.verdict === "REDUCED" ? "warning" : "danger"}>{operatorCode(item.verdict)}</StatusBadge></td>
                       </tr>
                     ))}
                     {!data.riskDecisions.items.length ? <tr><td colSpan={6}><p className="rc-empty">Aucune décision de risque publiée.</p></td></tr> : null}
@@ -410,8 +411,8 @@ export function RiskCenterPage() {
             </div>
           </section>
 
-          <section className="rc-panel" aria-label="Kill switch et disjoncteurs">
-            <header><h2>Kill Switch &amp; Disjoncteurs</h2></header>
+          <section className="rc-panel" aria-label="Arrêt d'urgence et coupe-circuits">
+            <header><h2>Arrêt d'urgence et coupe-circuits</h2></header>
             <div className="rc-panel__body">
               <div className="rc-kill-panel">
                 {data.circuitBreakers.map((breaker, index) => (

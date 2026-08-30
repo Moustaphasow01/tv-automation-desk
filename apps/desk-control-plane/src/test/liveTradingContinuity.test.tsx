@@ -34,7 +34,7 @@ describe("Live Trading continuity", () => {
     ));
 
     expect(markup).toContain("Flux global · tous instruments");
-    expect(markup).toContain("9 signaux backend");
+    expect(markup).toContain("9 signaux publiés");
     expect(markup.match(/<tbody>/g)).toHaveLength(1);
     expect(markup).toContain("signal-zc-8");
   });
@@ -102,8 +102,8 @@ describe("Live Trading continuity", () => {
       createElement(LiveSignalInbox, { model }),
     ));
 
-    expect(markup).toContain("OrderIntent ·");
-    expect(markup).not.toContain("Human Gate ·");
+    expect(markup).toContain("Ordre proposé ·");
+    expect(markup).not.toContain("Votre validation ·");
   });
 
 });

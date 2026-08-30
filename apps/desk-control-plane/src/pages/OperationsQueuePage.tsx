@@ -14,6 +14,7 @@ import {
 import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { presentPermission, presentQueueStatus, presentSeverity } from "@/design-system/labels";
+import { operatorCode, operatorCopy, operatorDuration, operatorReason } from "@/design-system/operatorVocabulary";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -35,7 +36,7 @@ export function OperationsQueuePage() {
 
   if (query.isError) {
     return (
-      <Card title="Operations Queue indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
+      <Card title="File d’opérations indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact">
         <p>{(query.error as Error).message}</p>
       </Card>
     );
@@ -43,8 +44,8 @@ export function OperationsQueuePage() {
 
   if (!query.data) {
     return (
-      <Card title="Aucune donnée Operations" eyebrow="EMPTY" state="empty" density="compact">
-        <p>Le BFF ne retourne pas encore la projection `/views/operations-queue`.</p>
+      <Card title="Aucune donnée d’opération" eyebrow="ÉTAT VIDE" state="empty" density="compact">
+        <p>La file d’opérations n’est pas encore publiée.</p>
       </Card>
     );
   }
@@ -75,7 +76,7 @@ export function OperationsQueuePage() {
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
         title="File d'opérations autonomes"
-        description="Missions IA, événements attendus, transitions automatiques, retries et DLQ — sans assignation humaine."
+        description="Missions IA, événements attendus, transitions automatiques, nouvelles tentatives et traitements en échec — sans assignation humaine."
         actions={
           <>
             <Link to="/events">Voir les événements</Link>
@@ -85,23 +86,23 @@ export function OperationsQueuePage() {
       />
 
       <section className="operator-kpi-strip" aria-label="Indicateurs Opérations">
-        <KpiCard label="MISSIONS ACTIVES" value={`${data.summary.activeMissions}`} delta="Propriétaire = agent IA" tone="success" />
-        <KpiCard label="ÉVÉNEMENTS ATTENDUS" value={`${data.summary.waitingEvents}`} delta="Transitions en attente" tone="info" />
-        <KpiCard label="GATES BLOQUANTS" value={`${data.summary.blockedGates}`} delta="Operator gate exceptionnel" tone={data.summary.blockedGates > 0 ? "warning" : "success"} />
-        <KpiCard label="BACKLOG DE TENTATIVES" value={`${data.summary.retryBacklog}`} delta="Backoff contrôlé" tone="warning" />
-        <KpiCard label="DLQ" value={`${data.summary.dlqItems}`} delta="À investiguer" tone={data.summary.dlqItems > 0 ? "danger" : "success"} />
-        <KpiCard label="BUDGET UTILISÉ" value={`${data.summary.budgetUsedPct}%`} delta={`Projection ${meta.latencyMs} ms`} tone="info" />
+        <KpiCard label="Missions actives" value={`${data.summary.activeMissions}`} delta="Pilotées par un agent IA" tone="success" />
+        <KpiCard label="Événements attendus" value={`${data.summary.waitingEvents}`} delta="Transitions en attente" tone="info" />
+        <KpiCard label="Validations bloquantes" value={`${data.summary.blockedGates}`} delta="Intervention opérateur exceptionnelle" tone={data.summary.blockedGates > 0 ? "warning" : "success"} />
+        <KpiCard label="Nouvelles tentatives" value={`${data.summary.retryBacklog}`} delta="Délai contrôlé" tone="warning" />
+        <KpiCard label="Traitements en échec" value={`${data.summary.dlqItems}`} delta="À examiner" tone={data.summary.dlqItems > 0 ? "danger" : "success"} />
+        <KpiCard label="Budget utilisé" value={`${data.summary.budgetUsedPct}%`} delta={`Réponse en ${meta.latencyMs} ms`} tone="info" />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Queue autonome et événements">
-        <Card title="Mission queue autonome" actions={<InlineAction>Missions</InlineAction>} density="compact">
+        <Card title="File des missions autonomes" actions={<InlineAction>Missions</InlineAction>} density="compact">
           <div className="operations-mission-list">
             {data.missions.map((mission, index) => (
               <article key={uniqueViewKey(mission.missionId, index)} className={`operations-mission operations-mission--${mission.state.toLowerCase()}`}>
                 <span><FaRobot /></span>
                 <div>
                   <strong>{mission.title}</strong>
-                  <small>{mission.ownerAgent} · {mission.currentTask}</small>
+                  <small>{mission.ownerAgent} · {operatorCopy(mission.currentTask)}</small>
                 </div>
                 <StatusBadge tone={stateTone(mission.state)}>{presentQueueStatus(mission.state).label}</StatusBadge>
                 <small>{mission.retryCount}/{mission.maxRetries}</small>
@@ -111,14 +112,14 @@ export function OperationsQueuePage() {
           </div>
         </Card>
 
-        <Card title="Events attendus/reçus" actions={<InlineAction>IDs de corrélation</InlineAction>} density="compact">
+        <Card title="Événements attendus et reçus" actions={<InlineAction>Traçabilité</InlineAction>} density="compact">
           <div className="operations-event-flow">
             {data.eventFlow.map((event, index) => (
               <Link key={uniqueViewKey(event.eventId, index)} to={`/events?correlationId=${event.correlationId}`}>
                 <span><FaBolt /></span>
                 <div>
-                  <strong>{event.eventType}</strong>
-                  <small>{event.correlationId} · {formatTime(event.at)}</small>
+                  <strong title={event.eventType}>{operatorCode(event.eventType)}</strong>
+                  <small>{formatTime(event.at)}</small>
                 </div>
                 <b>{event.latencyMs ? `${event.latencyMs}ms` : "—"}</b>
                 <StatusBadge tone={eventTone(event.status)}>{presentQueueStatus(event.status).label}</StatusBadge>
@@ -127,14 +128,14 @@ export function OperationsQueuePage() {
           </div>
         </Card>
 
-        <Card title="Gates de politique & commandes" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
+        <Card title="Contrôles de politique et commandes" actions={<InlineAction>Flux de commande</InlineAction>} density="compact">
           <div className="operations-gate-list">
             {data.policyGates.map((gate, index) => (
               <article key={uniqueViewKey(gate.gateId, index)}>
                 <FaShieldAlt />
                 <div>
                   <strong>{gate.label}</strong>
-                  <small>{gate.reason}</small>
+                  <small title={gate.reason}>{operatorReason(gate.reason)}</small>
                 </div>
                 <StatusBadge tone={gateTone(gate.state)}>{presentQueueStatus(gate.state).label}</StatusBadge>
               </article>
@@ -145,7 +146,7 @@ export function OperationsQueuePage() {
               <article key={uniqueViewKey(action.actionId, index)}>
                 <div>
                   <strong>{action.label}</strong>
-                  <small>{action.commandType} · {action.missionId}</small>
+                  <small title={`${action.commandType} · ${action.missionId}`}>{operatorCode(action.commandType)}</small>
                 </div>
                 <StatusBadge tone={action.permission === "ALLOWED" ? "success" : action.permission === "STEP_UP_REQUIRED" ? "warning" : "danger"}>{presentPermission(action.permission).label}</StatusBadge>
                 <DeskButton
@@ -161,23 +162,23 @@ export function OperationsQueuePage() {
         </Card>
       </section>
 
-      <section className="operator-grid operator-grid--bottom" aria-label="DLQ, incidents et preuve d'autonomie">
-        <Card title="Tentatives, DLQ & budgets" actions={<InlineAction>Backoff</InlineAction>} density="compact">
+      <section className="operator-grid operator-grid--bottom" aria-label="Traitements en échec, incidents et preuve d'autonomie">
+        <Card title="Tentatives, traitements en échec et budgets" actions={<InlineAction>Délais</InlineAction>} density="compact">
           <div className="operations-budget-grid">
             <MetricBox label="Budget tokens max" value={`${Math.max(...data.missions.map((mission) => mission.tokenBudgetPct))}%`} />
             <MetricBox label="Budget compute max" value={`${Math.max(...data.missions.map((mission) => mission.computeBudgetPct))}%`} />
             <MetricBox label="Retry max" value={`${Math.max(...data.missions.map((mission) => mission.retryCount))}`} />
-            <MetricBox label="DLQ retryable" value={`${data.deadLetters.filter((item) => item.retryable).length}`} />
+            <MetricBox label="Échecs récupérables" value={`${data.deadLetters.filter((item) => item.retryable).length}`} />
           </div>
           <div className="operations-dlq-list">
             {data.deadLetters.map((item, index) => (
               <article key={uniqueViewKey(item.dlqId, index)}>
                 <FaServer />
                 <div>
-                  <strong>{item.reason}</strong>
-                  <small>{item.dlqId} · {item.lastErrorCode}</small>
+                  <strong title={item.reason}>{operatorReason(item.reason)}</strong>
+                  <small title={`${item.dlqId} · ${item.lastErrorCode}`}>{operatorCode(item.lastErrorCode)}</small>
                 </div>
-                <b>{item.ageMinutes}m</b>
+                <b>{operatorDuration(item.ageMinutes * 60)}</b>
                 <StatusBadge tone={item.retryable ? "warning" : "danger"}>{item.retryable ? "Réessayable" : "Définitif"}</StatusBadge>
               </article>
             ))}
@@ -191,7 +192,7 @@ export function OperationsQueuePage() {
                 <FaExclamationTriangle />
                 <div>
                   <strong>{incident.title}</strong>
-                  <small>{incident.incidentId} · {incident.missionId}</small>
+                  <small title={`${incident.incidentId} · ${incident.missionId}`}>Ouvrir l’incident</small>
                 </div>
                 <span>{incident.domain}</span>
                 <StatusBadge tone={incidentTone(incident.severity)}>{presentSeverity(incident.severity).label}</StatusBadge>
@@ -199,8 +200,8 @@ export function OperationsQueuePage() {
             ))}
           </div>
           <div className="operations-command-result">
-            <small>Dernière commande Operations</small>
-            <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+            <small>Dernière commande d’opération</small>
+            <strong title={command?.commandId}>{command ? "Commande acceptée" : "Aucune commande confirmée"}</strong>
             {commandError ? <span className="text-danger">{commandError}</span> : null}
           </div>
         </Card>
@@ -208,13 +209,13 @@ export function OperationsQueuePage() {
         <Card title="Preuve autonomie machine" actions={<InlineAction>Audit</InlineAction>} density="compact">
           <div className="operations-autonomy-flow">
             <article><FaRoute /><strong>Mission</strong><small>Objectif métier atomique</small></article>
-            <article><FaRobot /><strong>Agent IA</strong><small>Owner logique, pas humain</small></article>
-            <article><FaClock /><strong>Event attendu</strong><small>Transition déclenchée par événement</small></article>
-            <article><FaRandom /><strong>Prochaine transition</strong><small>Automatique ou gate explicite</small></article>
+            <article><FaRobot /><strong>Agent IA</strong><small>Responsable logique, pas humain</small></article>
+            <article><FaClock /><strong>Événement attendu</strong><small>Transition déclenchée par événement</small></article>
+            <article><FaRandom /><strong>Prochaine transition</strong><small>Automatique ou validation explicite</small></article>
           </div>
           <div className="operations-autonomy-note">
             <FaProjectDiagram />
-            <span>Aucun champ d’assignation humaine n’est exposé. L’opérateur agit seulement via gates exceptionnels et commandes idempotentes.</span>
+            <span>Aucun champ d’assignation humaine n’est exposé. L’opérateur agit seulement via des validations exceptionnelles et des commandes sans doublon.</span>
           </div>
         </Card>
       </section>

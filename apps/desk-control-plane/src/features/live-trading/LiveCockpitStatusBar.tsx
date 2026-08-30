@@ -85,7 +85,7 @@ export function LiveCockpitStatusBar({ model, requestedScope = {}, scopeUpdating
       <div className="lt-flight-bar__authority">
         <span><FaShieldAlt aria-hidden="true" />{presentExecutionMode(model.mode.executionMode).label}</span>
         <span className={model.mode.autoExecutionEnabled ? "is-danger" : "is-safe"}><FaLock aria-hidden="true" />Auto {model.mode.autoExecutionEnabled ? "activée" : "désactivée"}</span>
-        <small>{presentAvailability(model.freshness.marketData).label} · {model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</small>
+        <small>{presentAvailability(model.freshness.marketData).label} · {model.marketSeries.source} · arrêté à {displayTime(model.marketSeries.asOf)}</small>
       </div>
     </section>
   );
@@ -105,7 +105,7 @@ function remainingLabel(value: string | null, reference: string): string {
 function nextMilestone(model: LiveTradingModel): { label: string; at: string | null } {
   const asOf = timestamp(model.meta.asOf);
   const gateExpiry = model.orderIntent?.allowedActions.expiresAt ?? null;
-  if (gateExpiry) return { label: isAtOrBefore(gateExpiry, asOf) ? "Human Gate expiré" : "Expiration Human Gate", at: gateExpiry };
+  if (gateExpiry) return { label: isAtOrBefore(gateExpiry, asOf) ? "Validation expirée" : "Expiration de votre validation", at: gateExpiry };
   if (model.latestSignal?.expiresAt) {
     return {
       label: isAtOrBefore(model.latestSignal.expiresAt, asOf) ? "Signal expiré" : "Expiration du signal",

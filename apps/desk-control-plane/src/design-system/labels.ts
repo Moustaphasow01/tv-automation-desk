@@ -287,19 +287,23 @@ export const presentStrategyPredicate = makePresenter({
   PRICE_CROSS: { label: "Franchissement de prix validé", tone: "accent" },
   ZONE_TOUCH: { label: "Zone technique touchée", tone: "accent" },
   BREAKOUT_CLOSE: { label: "Bougie clôturée au-delà du niveau", tone: "accent" },
+  BREAKOUT_CLOSE_ABOVE_RANGE: { label: "Clôture de cassure au-dessus du range", tone: "accent" },
   BREAK_RETEST_SEQUENCE: { label: "Cassure puis retest confirmés", tone: "accent" },
+  RETEST_ZONE_CONFIRMED: { label: "Retest de zone confirmé", tone: "accent" },
   REJECTION_PATTERN: { label: "Rejet de niveau confirmé", tone: "accent" },
   VWAP_RELATION: { label: "Position relative à la VWAP validée", tone: "accent" },
   RSI_THRESHOLD: { label: "Seuil RSI atteint", tone: "accent" },
   TIME_WINDOW: { label: "Fenêtre horaire respectée", tone: "info" },
   INTERMARKET_CONFIRMATION: { label: "Confirmation intermarché présente", tone: "accent" },
+  CROSS_ASSET_VOL_FILTER_OK: { label: "Volatilité des marchés liés compatible", tone: "accent" },
+  PORTFOLIO_CORRELATION_WATCH: { label: "Corrélation du portefeuille à surveiller", tone: "warning" },
   EVENT_BLACKOUT: { label: "Aucun blackout événementiel actif", tone: "info" },
 });
 
 /** Ce qu'un opérateur est autorisé à demander pour une stratégie donnée. */
 export const presentCommandEligibility = makePresenter({
-  CAN_REQUEST_SHADOW: { label: "Shadow test disponible", tone: "info" },
-  CAN_REQUEST_PAPER: { label: "Paper test disponible", tone: "info" },
+  CAN_REQUEST_SHADOW: { label: "Test en observation disponible", tone: "info" },
+  CAN_REQUEST_PAPER: { label: "Test en simulation disponible", tone: "info" },
   READ_ONLY: { label: "Lecture seule", tone: "neutral" },
 });
 

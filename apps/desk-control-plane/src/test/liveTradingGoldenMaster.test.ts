@@ -152,7 +152,7 @@ describe("Live Trading golden master", () => {
     );
 
     expect(markup).toContain("Prix de 29310.00 à 29355.00");
-    expect(markup).toContain("Niveaux MES masqués sur chart MNQ");
+    expect(markup).toContain("Niveaux MES masqués sur le graphique MNQ");
     expect(markup).not.toContain("ENTRÉE 0.00");
     expect(markup).not.toContain("7710.00");
   });
@@ -215,8 +215,8 @@ describe("Live Trading golden master", () => {
     expect(markup).toContain("T1 510.00");
     expect(markup).toContain("Navigation du graphique");
     expect(markup).toContain("Dernière bougie");
-    expect(markup).toContain("<dt>O</dt><dd>507,75</dd>");
-    expect(markup).toContain("<dt>Vol</dt><dd>180</dd>");
+    expect(markup).toContain("<dt>Ouv.</dt><dd>507,75</dd>");
+    expect(markup).toContain("<dt>Volume</dt><dd>180</dd>");
     expect(markup).toContain("ZC");
     expect(markup).toContain("H1");
     expect(markup).toContain("H4");

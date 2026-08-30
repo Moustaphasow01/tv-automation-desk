@@ -5,6 +5,7 @@ import type { CommandAccepted, CommandStatus } from "@/domains/realtime/commandR
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { TrackedCommandReceipt } from "@/design-system/actions";
 import { presentAvailability } from "@/design-system/labels";
+import { operatorCopy, operatorTerm } from "@/design-system/operatorVocabulary";
 import type { HumanGateAction } from "@/features/order-intent/model";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import { displayTime } from "./mapper";
@@ -45,7 +46,7 @@ export function LiveHumanGate({ model, onSubmit, submittingActionId, command, co
   const request = useCallback((action: HumanGateAction | undefined) => {
     if (!action || action.permission !== "ALLOWED" || actionsLocked) return;
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setReason(action.action === "CONFIRM" ? "OrderIntent autorisé par l’opérateur en mode semi-manuel." : "");
+    setReason(action.action === "CONFIRM" ? "Ordre proposé validé par l’opérateur en mode semi-manuel." : "");
     setPending(action);
   }, [actionsLocked]);
   const submit = async () => {
@@ -84,12 +85,12 @@ export function LiveHumanGate({ model, onSubmit, submittingActionId, command, co
   }, [pending]);
 
   return (
-    <LivePanel title="Human Gate d'exécution" className={`lt-panel--gate${embedded ? " lt-panel--embedded" : ""}`} expandable={!embedded}>
-      <div className="lt-gate-status"><FaHourglassHalf aria-hidden="true" /><strong className="lt-gate-status__badge">{statusLabel}</strong><span>{model.orderIntent ? "Une déclaration opérateur est requise ; elle ne constitue jamais une preuve de fill broker." : model.gateBlockedReason}</span></div>
+    <LivePanel title={operatorTerm("HUMAN_GATE")} className={`lt-panel--gate${embedded ? " lt-panel--embedded" : ""}`} expandable={!embedded}>
+      <div className="lt-gate-status"><FaHourglassHalf aria-hidden="true" /><strong className="lt-gate-status__badge">{statusLabel}</strong><span>{model.orderIntent ? "Une décision opérateur est requise ; elle ne constitue jamais une preuve d’exécution broker." : operatorCopy(model.gateBlockedReason)}</span></div>
       {model.orderIntent ? <GateCountdown timing={timing} requestedAt={model.orderIntent.createdAt ?? null} expiresAt={model.orderIntent.allowedActions.expiresAt} /> : null}
-      <div className="lt-gate-actions" aria-label="Actions Human Gate publiées par le backend">
-        <button type="button" className="lt-gate-confirm" disabled={!confirm || confirm.permission !== "ALLOWED" || actionsLocked || timing.expired} onClick={() => request(confirm)}><FaCheck aria-hidden="true" />Confirmer l’OrderIntent<kbd>G</kbd></button>
-        <button type="button" className="lt-gate-reject" disabled={!reject || reject.permission !== "ALLOWED" || actionsLocked || timing.expired} onClick={() => request(reject)}><FaTimes aria-hidden="true" />Rejeter<kbd>R</kbd></button>
+      <div className="lt-gate-actions" aria-label="Actions de validation publiées par le backend">
+        <button type="button" className="lt-gate-confirm" disabled={!confirm || confirm.permission !== "ALLOWED" || actionsLocked || timing.expired} onClick={() => request(confirm)}><FaCheck aria-hidden="true" />Valider l’ordre proposé<kbd>G</kbd></button>
+        <button type="button" className="lt-gate-reject" disabled={!reject || reject.permission !== "ALLOWED" || actionsLocked || timing.expired} onClick={() => request(reject)}><FaTimes aria-hidden="true" />Refuser<kbd>R</kbd></button>
         {undo ? <button type="button" className="lt-gate-undo" disabled={undo.permission !== "ALLOWED" || actionsLocked} onClick={() => request(undo)}><FaUndo aria-hidden="true" />Annuler la décision</button> : null}
       </div>
       <Link className="lt-gate-audit-link" to="/events">Voir l'audit</Link>
@@ -116,7 +117,7 @@ function GateDecisionDialog({ action, intent, reason, dialogRef, actionsLocked, 
   onCancel(): void;
   onSubmit(): void;
 }) {
-  return <div ref={dialogRef} className="lt-gate-dialog" role="alertdialog" aria-modal="true" aria-labelledby="lt-gate-dialog-title"><strong id="lt-gate-dialog-title">{action.action === "CONFIRM" ? "Confirmer l’OrderIntent" : action.label}</strong><p>{action.impactPreview}</p><dl><div><dt>OrderIntent</dt><dd>{intent?.portfolioOrderIntentId}</dd></div><div><dt>Instrument</dt><dd>{orderIntentInstrument(intent)}</dd></div><div><dt>Quantité</dt><dd>{intent?.quantity}</dd></div><div><dt>Environnement</dt><dd>{action.environment}</dd></div></dl>{action.action === "REJECT" ? <div className="lt-gate-reason-presets" aria-label="Motifs de rejet fréquents">{REJECT_REASONS.map((item) => <button key={item} type="button" aria-pressed={reason === item} onClick={() => onReasonChange(item)}>{item}</button>)}</div> : null}<label>Motif opérateur<input value={reason} onChange={(event) => onReasonChange(event.target.value)} autoFocus /></label><small>Révision attendue : {action.expectedRevision}. Cette action ne prouve ni ACK ni FILL.</small><div className="lt-gate-dialog__footer"><button type="button" onClick={onCancel}>Annuler</button><DeliberateActionSlider disabled={actionsLocked || (action.requiresReason && !reason.trim())} label={action.action === "REJECT" ? "Glisser pour rejeter" : action.action === "UNDO" ? "Glisser pour annuler la décision" : "Glisser pour confirmer"} onComplete={onSubmit} /></div></div>;
+  return <div ref={dialogRef} className="lt-gate-dialog" role="alertdialog" aria-modal="true" aria-labelledby="lt-gate-dialog-title"><strong id="lt-gate-dialog-title">{action.action === "CONFIRM" ? "Valider l’ordre proposé" : operatorCopy(action.label)}</strong><p>{operatorCopy(action.impactPreview)}</p><dl><div><dt>Ordre proposé</dt><dd title={intent?.portfolioOrderIntentId}>{intent ? `${orderIntentInstrument(intent)} · ${intent.side} · ${intent.quantity}` : "Non publié"}</dd></div><div><dt>Instrument</dt><dd>{orderIntentInstrument(intent)}</dd></div><div><dt>Quantité</dt><dd>{intent?.quantity}</dd></div><div><dt>Environnement</dt><dd>{operatorCopy(action.environment)}</dd></div></dl>{action.action === "REJECT" ? <div className="lt-gate-reason-presets" aria-label="Motifs de rejet fréquents">{REJECT_REASONS.map((item) => <button key={item} type="button" aria-pressed={reason === item} onClick={() => onReasonChange(item)}>{item}</button>)}</div> : null}<label>Motif opérateur<input value={reason} onChange={(event) => onReasonChange(event.target.value)} autoFocus /></label><small>Révision attendue : {action.expectedRevision}. Cette action ne prouve ni accusé de réception ni exécution.</small><div className="lt-gate-dialog__footer"><button type="button" onClick={onCancel}>Annuler</button><DeliberateActionSlider disabled={actionsLocked || (action.requiresReason && !reason.trim())} label={action.action === "REJECT" ? "Glisser pour rejeter" : action.action === "UNDO" ? "Glisser pour annuler la décision" : "Glisser pour confirmer"} onComplete={onSubmit} /></div></div>;
 }
 
 function DeliberateActionSlider({ disabled, label, onComplete }: { disabled: boolean; label: string; onComplete(): void }) {
@@ -134,8 +135,8 @@ export function gateTiming(createdAt: string | null, expiresAt: string | null, n
   const durationSeconds = Number.isFinite(start) && end > start ? Math.floor((end - start) / 1000) : null;
   const remainingPct = durationSeconds ? Math.max(0, Math.min(100, Math.round((remainingSeconds / durationSeconds) * 100))) : 0;
   if (remainingSeconds <= 0) return { label: "Expiré", urgency: "expired", remainingPct: 0, expired: true };
-  const label = remainingSeconds < 60 ? `${remainingSeconds} s` : `${Math.floor(remainingSeconds / 60)} min ${remainingSeconds % 60} s`;
-  const urgency = remainingSeconds <= 120 ? "urgent" : remainingSeconds <= 600 ? "attention" : "comfortable";
+  const label = remainingSeconds < 60 ? `Expire dans ${remainingSeconds} s` : `Expire dans ${Math.floor(remainingSeconds / 60)} min ${remainingSeconds % 60} s`;
+  const urgency = remainingSeconds <= 60 ? "urgent" : remainingSeconds <= 600 ? "attention" : "comfortable";
   return { label, urgency, remainingPct, expired: false };
 }
 
@@ -154,8 +155,8 @@ export function liveHumanGateStatus(model: LiveTradingModel): string { return mo
 function gateHelper(model: LiveTradingModel, status: string | null, actionsLocked: boolean): string {
   if (actionsLocked) return "Commande déjà transmise : les actions restent verrouillées jusqu’à une réponse terminale du backend.";
   if (status && RETRYABLE_COMMAND_FAILURES.has(status)) return "Le backend autorisera un nouvel essai uniquement s’il republie une action et une révision.";
-  if (model.gateActions.length) return "Capabilities et allowedActions publiés par le backend. Raccourcis G et R disponibles sans soumission automatique.";
-  return model.gateBlockedReason;
+  if (model.gateActions.length) return "Actions autorisées par le backend. Raccourcis G et R disponibles sans soumission automatique.";
+  return operatorCopy(model.gateBlockedReason);
 }
 
 function orderIntentInstrument(intent: LiveTradingModel["orderIntent"]): string {

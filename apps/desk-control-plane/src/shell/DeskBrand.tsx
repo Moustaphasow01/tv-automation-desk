@@ -8,7 +8,7 @@ export function DeskBrand() {
         <path d="M20 10h6l7 10-7 10h-6l7-10-7-10Z" />
         <circle cx="33" cy="20" r="2.4" />
       </svg>
-      <span className="desk-brand__copy"><strong>Desk Control Plane</strong><small>Research · Risk · Execution</small></span>
+      <span className="desk-brand__copy"><strong>Desk Control Plane</strong><small>Recherche · Risque · Exécution</small></span>
     </Link>
   );
 }

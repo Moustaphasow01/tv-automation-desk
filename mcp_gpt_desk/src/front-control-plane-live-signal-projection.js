@@ -13,7 +13,7 @@ export function liveSignalDetail({ strategy, execution, risk, ai, query, nowIso,
   const contextDecisions = rows(nested(ai, ["decisions"])).filter((item) => text(item.signal_id || item.strategy_signal_id, "") === signal.signalId);
   const identityValue = { signalId: signal.signalId, strategyId: signal.strategyId, strategyDefinitionId: signal.strategyId, strategyVersionId: signal.strategyVersionId, strategyInstanceId: signal.strategyInstanceId, runtimeBundleId: text(source.runtime_bundle_id, "unavailable"), sessionId: text(source.session_id, "unavailable"), correlationId: text(source.correlation_id, "unavailable"), featureSnapshotId: signal.featureSnapshotId, expectedVersion: text(source.revision, "0") };
   return {
-    summary: liveSignalSummary({ signal, source, risk, nowIso }),
+    summary: liveSignalSummary({ signal, source, risk, primaryIntent, nowIso }),
     identity: identityValue,
     signal: liveSignalBody({ source, nowIso }),
     predicates: liveSignalPredicates(source),
@@ -36,12 +36,13 @@ export function liveSignalDetail({ strategy, execution, risk, ai, query, nowIso,
   };
 }
 
-function liveSignalSummary({ signal, source, risk, nowIso }) {
+function liveSignalSummary({ signal, source, risk, primaryIntent, nowIso }) {
+  const payload = primaryIntent?.order_intent_payload || primaryIntent?.payload || {};
   return {
     signalScore: signal.confidence,
     timeToExpirySec: Math.max(0, Math.floor((Date.parse(signal.expiresAt) - Date.parse(nowIso)) / 1000)),
     acceptanceProbabilityPct: signal.confidence,
-    targetQuantity: number(source.target_quantity, 0),
+    targetQuantity: number(firstValue(primaryIntent?.risk_approved_net_size, payload.quantity, source.target_quantity), 0),
     riskUsedPct: number(nested(risk, ["summary", "risk_percent"]), 0),
     conflictCount: 0,
   };

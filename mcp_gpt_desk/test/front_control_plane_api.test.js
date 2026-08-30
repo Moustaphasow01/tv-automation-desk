@@ -1767,6 +1767,7 @@ test("live signal detail preserves canonical lineage and exposes its post-risk O
   assert.equal(envelope.data.identity.strategyInstanceId, "strinst-grain-breakout-shadow");
   assert.deepEqual(envelope.data.predicates.map((item) => item.label), ["SESSION_US", "BREAKOUT_CONFIRMED"]);
   assert.equal(envelope.data.riskCheck.riskCheckId, "risk-lineage-1");
+  assert.equal(envelope.data.summary.targetQuantity, 1);
   assert.equal(envelope.data.linkedOrderIntents.length, 1);
   assert.equal(envelope.data.linkedOrderIntents[0].orderIntentId, "portfolio-intent-lineage-1");
   assert.equal(envelope.data.linkedOrderIntents[0].instrument, "ZW");
@@ -1851,6 +1852,7 @@ test("live signal detail publishes null instead of a false zero when no trade-pl
   assert.equal(envelope.data.signal.targetPrice, null);
   assert.equal(envelope.data.signal.rewardRisk, null);
   assert.equal(envelope.data.signal.expectancyR, null);
+  assert.equal(envelope.data.summary.targetQuantity, 0);
 });
 
 test("Command Center maps canonical incident fields and operational counters without generic placeholders", async () => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { presentExecutionMode } from "@/design-system/labels";
 import { useCommandStatus, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { LiveManualExecutionAction } from "@/domains/front-api/viewModels";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
@@ -246,7 +247,7 @@ export function LiveTradingPage() {
           onShowOnChart={showSignalOnChart}
         />
       </div>
-      <div className="lt-accessible-status" aria-live="polite">Projection {model.truth.label}. {model.mode.executionMode}. Human Gate {model.mode.humanGateRequired ? "requis" : "non requis"}.</div>
+      <div className="lt-accessible-status" aria-live="polite">Projection {model.truth.label}. Mode {presentExecutionMode(model.mode.executionMode).label}. Validation opérateur {model.mode.humanGateRequired ? "requise" : "non requise"}.</div>
     </div>
   );
 }

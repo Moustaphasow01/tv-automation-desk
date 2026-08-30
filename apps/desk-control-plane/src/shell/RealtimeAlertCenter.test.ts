@@ -18,7 +18,7 @@ describe("alertes opérateur temps réel", () => {
 
   it("keeps Human Gate distinct from broker execution", () => {
     expect(presentRealtimeAlert(event("human_gate.created", { portfolio_order_intent_id: "intent-1", instrument: "ZC" }))).toMatchObject({
-      title: "Décision opérateur requise",
+      title: "Votre validation est requise",
       route: "/execution/orders/intent-1",
       tone: "warning",
     });

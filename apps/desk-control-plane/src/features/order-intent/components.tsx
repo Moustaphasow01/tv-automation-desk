@@ -3,6 +3,7 @@ import { Card, StatusBadge } from "@/design-system/primitives";
 import { DeskButton, ReasonInput, TrackedCommandReceipt } from "@/design-system/actions";
 import { MetricBox } from "@/design-system/workspace";
 import { presentDataAbsence } from "@/design-system/labels";
+import { operatorCode, operatorCopy, operatorReason, operatorStatusPresentation } from "@/design-system/operatorVocabulary";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
 import type { DataValue } from "@/shared/contracts";
 import type {
@@ -17,29 +18,28 @@ import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 
 export function ExecutionAuthorityPanel({ dossier }: { dossier: OrderIntentDossier }) {
   return (
-    <Card title="Autorité d'exécution" eyebrow="POLITIQUE BACKEND" density="compact" state={dossier.degradedReadOnly ? "degraded" : "readonly"}>
+    <Card title="Autorité d'exécution" eyebrow="POLITIQUE" density="compact" state={dossier.degradedReadOnly ? "degraded" : "readonly"}>
       <div className="order-dossier__authority-pair">
         <DataMetric label="Mode d'exécution" value={dossier.executionMode} />
         <MetricBox label="Environnement" value="Non publié dans ce dossier" />
       </div>
-      <p className="order-dossier__helper">Le mode d'exécution et l'environnement sont indépendants. Aucune valeur locale ne remplace la policy backend.</p>
+      <p className="order-dossier__helper">Le mode d'exécution et l'environnement sont indépendants. Aucune préférence locale ne remplace la politique publiée.</p>
     </Card>
   );
 }
 
 export function AuthorityStageCard({ stage }: { stage: AuthorityStage }) {
   return (
-    <Card title={stage.label} eyebrow="AUTORITÉ BACKEND" density="compact" state={isKnown(stage.decision) ? "nominal" : "partial"}>
+    <Card title={operatorCopy(stage.label)} eyebrow="AUTORITÉ" density="compact" state={isKnown(stage.decision) ? "nominal" : "partial"}>
       <div className="order-dossier__authority-pair">
-        <DataMetric label="Décision" value={stage.decision} />
+        <DataMetric label="Décision" value={translatedValue(stage.decision)} />
         <DataMetric label="Version" value={stage.version} />
       </div>
-      <DataValueLine label="Identifiant" value={stage.authorityId} />
       {stage.reasonCodes.length ? (
-        <ul className="order-dossier__reason-list" aria-label={`Codes motif ${stage.label}`}>
-          {stage.reasonCodes.map((reason) => <li key={reason}>{reason}</li>)}
+        <ul className="order-dossier__reason-list" aria-label={`Motifs ${operatorCopy(stage.label)}`}>
+          {stage.reasonCodes.map((reason) => <li key={reason} title={reason}>{operatorReason(reason)}</li>)}
         </ul>
-      ) : <p className="order-dossier__helper">Aucun reason code publié.</p>}
+      ) : <p className="order-dossier__helper">Aucun motif publié.</p>}
     </Card>
   );
 }
@@ -55,13 +55,13 @@ export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier })
     }
   };
   return (
-    <Card title="Position cible & plan d'exécution" eyebrow="LECTURE SEULE APRÈS RISQUE" density="compact" state="readonly" actions={<DeskButton variant="ghost" onClick={() => void copyTicket()}>{copyState === "copied" ? "Ticket copié" : copyState === "failed" ? "Copie indisponible" : "Copier le ticket"}</DeskButton>}>
+    <Card title="Position cible et plan d'exécution" eyebrow="LECTURE SEULE APRÈS CONTRÔLE DU RISQUE" density="compact" state="readonly" actions={<DeskButton variant="ghost" onClick={() => void copyTicket()}>{copyState === "copied" ? "Ticket copié" : copyState === "failed" ? "Copie indisponible" : "Copier le ticket"}</DeskButton>}>
       <div className="order-dossier__immutable-banner" role="note">
-        Ces termes sont affichés uniquement. Toute modification exige le rejet puis un nouveau cycle Risk backend.
+        Ces termes sont affichés uniquement. Toute modification exige le rejet puis un nouveau contrôle du risque.
       </div>
       <dl className="order-dossier__terms" aria-label="Termes immuables de l'ordre">
         <ReadonlyTerm label="Instrument" value={dossier.signal.instrument} />
-        <ReadonlyTerm label="Sens" value={dossier.signal.side} />
+        <ReadonlyTerm label="Sens" value={translatedValue(dossier.signal.side)} />
         <ReadonlyTerm label="Compte" value={dossier.targetPosition.account} />
         <ReadonlyTerm label="Quantité autorisée" value={dossier.targetPosition.authorizedQuantity} copyable />
         <ReadonlyTerm label="Type" value={dossier.executionPlan.orderType} />
@@ -90,15 +90,15 @@ export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier })
 
 export function marketContextSummary(dossier: OrderIntentDossier): string {
   if (!["KNOWN", "STALE"].includes(dossier.marketContext.lastPrice.state)) {
-    return "Enveloppe non évaluée : le backend ne publie pas de prix de marché exploitable.";
+    return "Enveloppe non évaluée : aucun prix de marché exploitable n'est publié.";
   }
   if (dossier.marketContext.outsideTradeZone === true) {
     return "Attention : le dernier prix connu se situe hors de la zone entrée–stop–cible.";
   }
   if (dossier.marketContext.outsideTradeZone === false) {
-    return "Le dernier prix connu reste dans l’enveloppe du plan évaluée par le backend.";
+    return "Le dernier prix connu reste dans l’enveloppe du plan évaluée par le système.";
   }
-  return "Position du marché par rapport au plan non publiée par le backend.";
+  return "Position du marché par rapport au plan non publiée.";
 }
 
 export function HumanExecutionGatePanel({
@@ -129,28 +129,28 @@ export function HumanExecutionGatePanel({
   };
 
   return (
-    <Card title="Human Execution Gate" eyebrow="DÉCISION OPÉRATEUR" density="compact" tone={presentation.tone} state={gate.actions.length ? "nominal" : "readonly"}>
+    <Card title="Votre validation" eyebrow="Décision opérateur" density="compact" tone={presentation.tone} state={gate.actions.length ? "nominal" : "readonly"}>
       <div className="order-dossier__gate-status">
         <StatusBadge tone={presentation.tone}>{status.available ? presentation.label : "Action indisponible"}</StatusBadge>
         <p>{status.available ? presentation.helper : status.reason}</p>
       </div>
       <div className="order-dossier__gate-rule">
         <strong>Confirmer ≠ exécuter</strong>
-        <span>Une confirmation autorise le runtime. ACK, partial fill, fill et réconciliation restent des preuves distinctes.</span>
+        <span>Une confirmation autorise l’étape suivante. Accusé de réception, exécution partielle, exécution et rapprochement restent des preuves distinctes.</span>
       </div>
 
       {gate.actions.some((action) => action.requiresReason) ? <ReasonInput label="Motif opérateur" value={reason} onChange={setReason} /> : null}
 
       <div className="order-dossier__gate-actions">
         <ActionButton action={undo} fallbackLabel="Annuler la décision" variant="secondary" submittingActionId={submittingActionId} onClick={requestAction} />
-        <ActionButton action={reject} fallbackLabel="Rejeter OrderIntent" variant="danger" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
-        <ActionButton action={confirm} fallbackLabel="Confirmer OrderIntent" variant="primary" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
+        <ActionButton action={reject} fallbackLabel="Refuser l’ordre proposé" variant="danger" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
+        <ActionButton action={confirm} fallbackLabel="Valider l’ordre proposé" variant="primary" submittingActionId={submittingActionId} onClick={requestAction} fallbackReason={gate.unavailableReason} />
       </div>
 
       {pendingAction ? (
         <div className="order-dossier__impact-preview" role="alertdialog" aria-labelledby="human-gate-confirm-title">
-          <strong id="human-gate-confirm-title">Confirmer la commande backend</strong>
-          <p>{pendingAction.impactPreview || "Aucun impact preview n'a été publié."}</p>
+          <strong id="human-gate-confirm-title">Confirmer la demande</strong>
+          <p>{pendingAction.impactPreview || "Aucun aperçu de l’impact n’a été publié."}</p>
           <small>Révision attendue : {pendingAction.expectedRevision}</small>
           <div className="order-dossier__gate-actions">
             <DeskButton variant="ghost" onClick={() => setPendingAction(null)}>Annuler</DeskButton>
@@ -187,11 +187,11 @@ function ActionButton({
   fallbackReason?: string;
 }) {
   const disabled = !action || action.permission !== "ALLOWED" || submittingActionId === action.actionId;
-  const reason = !action ? fallbackReason : action.permission === "STEP_UP_REQUIRED" ? "Step-up backend requis" : action.permission === "DENIED" ? "Action refusée par le backend" : undefined;
+  const reason = !action ? fallbackReason : action.permission === "STEP_UP_REQUIRED" ? "Confirmation renforcée requise" : action.permission === "DENIED" ? "Action refusée" : undefined;
   return (
     <span className="order-dossier__action-with-reason">
       <DeskButton variant={variant} disabled={disabled} onClick={() => action && onClick(action)}>
-        {action?.label ?? fallbackLabel}
+        {action ? operatorCopy(action.label) : fallbackLabel}
       </DeskButton>
       {reason ? <small>{reason}</small> : null}
     </span>
@@ -199,9 +199,9 @@ function ActionButton({
 }
 
 export function ProviderLifecycleTimeline({ events }: { events: readonly ProviderTimelineEvent[] }) {
-  if (!events.length) return <p className="empty-state">Aucun événement provider publié. Aucun ACK ou fill n'est supposé.</p>;
+  if (!events.length) return <p className="empty-state">Aucun événement fournisseur publié. Aucun accusé de réception ni aucune exécution n'est supposé.</p>;
   return (
-    <ol className="order-dossier__timeline" aria-label="Cycle de vie provider">
+    <ol className="order-dossier__timeline" aria-label="Cycle de vie fournisseur">
       {events.map((event) => {
         const status = presentBackendStatus(event.status);
         return (
@@ -209,9 +209,9 @@ export function ProviderLifecycleTimeline({ events }: { events: readonly Provide
             <time dateTime={event.occurredAt}>{formatTimestamp(event.occurredAt)}</time>
             <span className={`order-dossier__timeline-marker order-dossier__timeline-marker--${status.tone}`} aria-hidden="true" />
             <div>
-              <span className="order-dossier__timeline-title"><strong>{status.label}</strong><StatusBadge tone={status.tone}>{status.code}</StatusBadge></span>
+              <span className="order-dossier__timeline-title"><strong>{status.label}</strong></span>
               <p>{event.details || status.helper}</p>
-              <small>{event.source} · {event.actor} · {event.correlationId}</small>
+              <small>{operatorCode(event.source)} · {operatorCode(event.actor)}</small>
               {!status.known ? <small>Code brut conservé : {event.status}</small> : null}
             </div>
           </li>
@@ -226,7 +226,7 @@ export function ReconciliationPanel({ reconciliation }: { reconciliation: Reconc
   const status = presentBackendStatus(statusValue.raw);
   const hasMismatch = reconciliation.mismatches.length > 0;
   return (
-    <Card title="Réconciliation" eyebrow="ATTENDU VS BROKER" density="compact" tone={hasMismatch ? "danger" : status.tone} state={statusValue.available ? "nominal" : "partial"}>
+    <Card title="Réconciliation" eyebrow="ATTENDU ET COURTIER" density="compact" tone={hasMismatch ? "danger" : status.tone} state={statusValue.available ? "nominal" : "partial"}>
       <div className="order-dossier__reconciliation-heading" role={hasMismatch ? "alert" : undefined}>
         <StatusBadge tone={hasMismatch ? "danger" : status.tone}>{hasMismatch ? "ÉCART DE RÉCONCILIATION" : statusValue.available ? status.label : "NON PUBLIÉE"}</StatusBadge>
         <DataValueLine label="Dernier contrôle" value={reconciliation.checkedAt} />
@@ -234,9 +234,9 @@ export function ReconciliationPanel({ reconciliation }: { reconciliation: Reconc
       {reconciliation.expected.length || reconciliation.broker.length ? (
         <div className="order-dossier__comparison">
           <ComparisonColumn title="État attendu" values={reconciliation.expected} />
-          <ComparisonColumn title="État broker" values={reconciliation.broker} />
+          <ComparisonColumn title="État du courtier" values={reconciliation.broker} />
         </div>
-      ) : <p className="empty-state">L'état attendu et l'état broker ne sont pas encore publiés pour cet OrderIntent.</p>}
+      ) : <p className="empty-state">L'état attendu et l'état du courtier ne sont pas encore publiés pour cet ordre proposé.</p>}
       {hasMismatch ? (
         <ul className="order-dossier__mismatches">
           {reconciliation.mismatches.map((mismatch) => <li key={mismatch.field}><strong>{mismatch.field}</strong><span>{mismatch.expected} → {mismatch.actual}</span><small>{mismatch.reason}</small></li>)}
@@ -296,6 +296,13 @@ function valueString(value: DataValue<string | number>, format?: "price" | "r"):
 
 function isKnown(value: DataValue<unknown>): boolean {
   return value.state === "KNOWN" || value.state === "STALE";
+}
+
+function translatedValue(value: DataValue<string | number>): DataValue<string | number> {
+  if ((value.state === "KNOWN" || value.state === "STALE") && typeof value.value === "string") {
+    return { ...value, value: operatorStatusPresentation(value.value).label };
+  }
+  return value;
 }
 
 export function buildOrderTicketText(dossier: OrderIntentDossier): string {

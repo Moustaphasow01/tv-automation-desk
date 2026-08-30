@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { FaArrowsAltH, FaCompressAlt, FaCrosshairs, FaPause, FaPlay, FaSearchMinus, FaSearchPlus, FaSyncAlt } from "react-icons/fa";
 import { StatusBadge } from "@/design-system/primitives";
 import { presentAvailability, presentGeneric } from "@/design-system/labels";
+import { operatorCode, operatorCopy } from "@/design-system/operatorVocabulary";
 import { displayTime, displayValue } from "../mapper";
 import { LivePanel } from "../LivePanel";
 import type { LiveTradingModel } from "../model";
@@ -98,7 +99,7 @@ export function InstrumentChartPanel({
         {error ? <div className="lt-chart-error" role="alert"><strong>Graphique non actualisé</strong><small>{error}</small></div> : null}
       </div>
       <footer className="lt-chart-footer">
-        <span>{model.marketSeries.points.length} bougies clôturées · {model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</span>
+        <span>{model.marketSeries.points.length} bougies clôturées · {operatorCode(model.marketSeries.source)} · arrêté à {displayTime(model.marketSeries.asOf)}</span>
         <OverlayScopeNote model={model} chartInstrument={chartInstrument} />
         <StatusBadge tone={presentAvailability(model.marketSeries.availability).tone}>{presentAvailability(model.marketSeries.availability).label}</StatusBadge>
       </footer>
@@ -143,7 +144,7 @@ function ChartToolbar({ model, showScopeControls, overlayMode, overlays, onOverl
     ["AUTO", "Plan prioritaire", Boolean(overlays.autoOverlay)],
     ["SIGNAL", "Signal", Boolean(overlays.signalOverlay)],
     ["THEORETICAL", "Théorie", Boolean(overlays.theoreticalOverlay)],
-    ["ORDER_INTENT", "Post-Risk", Boolean(overlays.intentOverlay)],
+    ["ORDER_INTENT", "Après contrôle du risque", Boolean(overlays.intentOverlay)],
     ["NONE", "Sans plan", true],
   ] as const;
   return (
@@ -153,7 +154,7 @@ function ChartToolbar({ model, showScopeControls, overlayMode, overlays, onOverl
       <div className="lt-chart-selector lt-chart-selector--overlays" aria-label="Plan affiché sur le graphique">
         {options.map(([value, label, enabled]) => <button key={value} type="button" aria-pressed={overlayMode === value} disabled={!enabled} onClick={() => onOverlayMode(value)}>{label}</button>)}
       </div>
-      <span>OHLCV · VWAP · étapes backend</span>
+      <span>Prix, volume, VWAP et étapes du desk</span>
     </div>
   );
 }
@@ -302,7 +303,7 @@ function CandlestickChart({ points, overlay, markers, scope, refreshing, syncLab
         {geometry.visibleOverlay && geometry.hiddenOverlayLevelCount ? <span className="lt-chart-readout__warning">{geometry.hiddenOverlayLevelCount} niveau{geometry.hiddenOverlayLevelCount > 1 ? "x" : ""} du plan hors échelle</span> : null}
         {geometry.visibleOverlay ? <span>{geometry.visibleOverlay.label} · {geometry.visibleOverlay.side} · entrée {geometry.visibleOverlay.entry.toFixed(2)}{geometry.visibleOverlay.expiresAt ? ` · expire ${displayTime(geometry.visibleOverlay.expiresAt)}` : ""}</span> : null}
       </div>
-      <details className="lt-chart-data-table"><summary>Tableau accessible des bougies visibles</summary><table><thead><tr><th>Heure</th><th>O</th><th>H</th><th>B</th><th>C</th><th>Volume</th><th>VWAP</th></tr></thead><tbody>{visible.slice(-24).map((point) => <tr key={point.timestamp}><td>{formatAxisTime(point.timestamp)}</td><td>{displayValue(point.open)}</td><td>{displayValue(point.high)}</td><td>{displayValue(point.low)}</td><td>{displayValue(point.close)}</td><td>{displayValue(point.volume)}</td><td>{displayValue(point.vwap)}</td></tr>)}</tbody></table></details>
+      <details className="lt-chart-data-table"><summary>Tableau accessible des bougies visibles</summary><table><thead><tr><th>Heure</th><th>Ouverture</th><th>Plus haut</th><th>Plus bas</th><th>Clôture</th><th>Volume</th><th>VWAP</th></tr></thead><tbody>{visible.slice(-24).map((point) => <tr key={point.timestamp}><td>{formatAxisTime(point.timestamp)}</td><td>{displayValue(point.open)}</td><td>{displayValue(point.high)}</td><td>{displayValue(point.low)}</td><td>{displayValue(point.close)}</td><td>{displayValue(point.volume)}</td><td>{displayValue(point.vwap)}</td></tr>)}</tbody></table></details>
     </div>
   );
 }
@@ -322,10 +323,10 @@ function ChartControls({ viewport, length, volumeRatio, dispatch, setVolumeRatio
     {[24, 48, 96].map((size) => <button key={size} type="button" onClick={() => dispatch({ type: "SET_RANGE", size, length })}>{size}</button>)}
     <button type="button" onClick={() => dispatch({ type: "ZOOM_X", factor: 0.76, anchor: 0.5, length })} aria-label="Zoomer dans le temps"><FaSearchPlus /></button>
     <button type="button" onClick={() => dispatch({ type: "ZOOM_X", factor: 1.24, anchor: 0.5, length })} aria-label="Dézoomer dans le temps"><FaSearchMinus /></button>
-    <button type="button" onClick={() => dispatch({ type: "AUTO_Y" })} aria-label="Ajuster automatiquement l'échelle des prix" aria-pressed={viewport.autoScaleY} title="Ajuster automatiquement l'échelle des prix"><FaCrosshairs aria-hidden="true" /><span>Auto Y</span></button>
+    <button type="button" onClick={() => dispatch({ type: "AUTO_Y" })} aria-label="Ajuster automatiquement l'échelle des prix" aria-pressed={viewport.autoScaleY} title="Ajuster automatiquement l'échelle des prix"><FaCrosshairs aria-hidden="true" /><span>Échelle auto</span></button>
     <button type="button" onClick={() => dispatch(viewport.followLatest ? { type: "PAUSE_FOLLOW" } : { type: "GO_LATEST", length })} aria-label={viewport.followLatest ? "Quitter le suivi du dernier prix" : "Revenir au dernier prix"} aria-pressed={viewport.followLatest}>{viewport.followLatest ? <FaPause aria-hidden="true" /> : <FaPlay aria-hidden="true" />}<span>Dernier</span></button>
     <label className="lt-chart-volume-control" title="Ajuster la hauteur du panneau de volume"><FaArrowsAltH aria-hidden="true" /><span>Volume</span><input type="range" min="12" max="32" step="2" value={Math.round(volumeRatio * 100)} onChange={(event) => setVolumeRatio(Number(event.target.value) / 100)} aria-label="Hauteur du panneau de volume en pourcentage" /><output>{Math.round(volumeRatio * 100)}%</output></label>
-    <button type="button" onClick={() => dispatch({ type: "RESET", length })} aria-label="Réinitialiser le graphique"><FaCompressAlt aria-hidden="true" /><span>Reset</span></button>
+    <button type="button" onClick={() => dispatch({ type: "RESET", length })} aria-label="Réinitialiser le graphique"><FaCompressAlt aria-hidden="true" /><span>Réinitialiser</span></button>
     <span className="lt-chart-sync" data-active={refreshing} role="img" aria-label={refreshing ? syncLabel : "Graphique à jour"} title={refreshing ? syncLabel : "Graphique à jour"}>
       <FaSyncAlt aria-hidden="true" />
       <span>{refreshing ? syncLabel : "À jour"}</span>
@@ -337,12 +338,12 @@ function ChartInspectionBar({ point, inspected }: { point: ChartPoint | undefine
   if (!point) return null;
   const range = isFiniteNumber(point.high) && isFiniteNumber(point.low) ? point.high - point.low : null;
   const values = [
-    ["O", point.open],
-    ["H", point.high],
-    ["B", point.low],
-    ["C", point.close],
-    ["Range", range],
-    ["Vol", point.volume],
+    ["Ouv.", point.open],
+    ["Haut", point.high],
+    ["Bas", point.low],
+    ["Clôt.", point.close],
+    ["Amplitude", range],
+    ["Volume", point.volume],
     ["VWAP", point.vwap],
   ] as const;
   return <div className="lt-chart-inspector" data-inspected={inspected} role="group" aria-label={inspected ? "Données de la bougie inspectée" : "Données de la dernière bougie"} tabIndex={0}>
@@ -407,7 +408,7 @@ function VwapLayer({ visible, geometry }: { visible: readonly ChartPoint[]; geom
 function LatestPriceLayer({ point, geometry }: { point: ChartPoint | undefined; geometry: Geometry }) {
   if (!point || !isFiniteNumber(point.close)) return null;
   const priceY = geometry.y(point.close);
-  return <g className="lt-market-chart__last-price"><line x1={geometry.left} x2={geometry.width - geometry.right} y1={priceY} y2={priceY} /><rect x={geometry.width - geometry.right + 6} y={priceY - 10} width={geometry.right - 12} height={20} rx={4} /><text x={geometry.width - geometry.right / 2} y={priceY + 4} textAnchor="middle">LAST {point.close.toFixed(2)}</text></g>;
+  return <g className="lt-market-chart__last-price"><line x1={geometry.left} x2={geometry.width - geometry.right} y1={priceY} y2={priceY} /><rect x={geometry.width - geometry.right + 6} y={priceY - 10} width={geometry.right - 12} height={20} rx={4} /><text x={geometry.width - geometry.right / 2} y={priceY + 4} textAnchor="middle">DERNIER {point.close.toFixed(2)}</text></g>;
 }
 
 function SessionAndGapLayer({ visible, geometry }: { visible: readonly ChartPoint[]; geometry: Geometry }) {
@@ -441,7 +442,7 @@ function TradeLevelLabels({ overlay, y, x1, x2, labelWidth }: { overlay: TradeOv
 export function chartMarkers(model: LiveTradingModel, instrument: string | null): ChartMarker[] {
   const markers: ChartMarker[] = model.source.signals.filter((signal) => sameInstrument(instrument, signal.symbol)).map((signal) => ({ id: `signal:${signal.signalId}`, at: signal.sourceDataCutoffAt ?? signal.createdAt, label: `${signal.symbol} ${presentGeneric(signal.direction).label} · ${resolveSignalTemporalState(signal, model.meta.asOf).label}`, tone: "signal", selected: signal.signalId === model.latestSignal?.signalId }));
   const context = model.latestContextDecision; if (context?.decidedAt && sameInstrument(instrument, model.latestSignal?.symbol)) markers.push({ id: `context:${context.decisionId}`, at: context.decidedAt, label: `Contexte · ${presentGeneric(context.recommendation).label}`, tone: "context", selected: true });
-  if (model.orderIntent?.createdAt && sameInstrument(instrument, instrumentCode(model.orderIntent))) markers.push({ id: `intent:${model.orderIntent.portfolioOrderIntentId}`, at: model.orderIntent.createdAt, label: `OrderIntent · ${presentGeneric(model.orderIntent.state).label}`, tone: "intent", selected: true });
+  if (model.orderIntent?.createdAt && sameInstrument(instrument, instrumentCode(model.orderIntent))) markers.push({ id: `intent:${model.orderIntent.portfolioOrderIntentId}`, at: model.orderIntent.createdAt, label: `Ordre proposé · ${presentGeneric(model.orderIntent.state).label}`, tone: "intent", selected: true });
   const theoretical = model.selectedTheoreticalExecution; if (theoretical && sameInstrument(instrument, theoretical.instrument)) { if (theoretical.entryFilledAt) markers.push({ id: `fill:${theoretical.tradeId}`, at: theoretical.entryFilledAt, label: "Entrée théorique exécutée", tone: "fill", selected: true }); if (theoretical.exitAt) markers.push({ id: `exit:${theoretical.tradeId}`, at: theoretical.exitAt, label: `Sortie théorique · ${presentGeneric(theoretical.status).label}`, tone: "fill", selected: true }); }
   return markers;
 }
@@ -465,5 +466,5 @@ function formatFullTime(value: string): string { const date = new Date(value); r
 function utcDate(value: string): string { return value.slice(0, 10); }
 function uniqueNumbers(values: readonly number[]): number[] { return [...new Set(values.filter((value) => Number.isFinite(value) && value >= 0))]; }
 function selectOverlay(mode: OverlayMode, values: { intentOverlay: TradeOverlay | null; theoreticalOverlay: TradeOverlay | null; signalOverlay: TradeOverlay | null; autoOverlay: TradeOverlay | null }): TradeOverlay | null { if (mode === "NONE") return null; if (mode === "ORDER_INTENT") return values.intentOverlay; if (mode === "THEORETICAL") return values.theoreticalOverlay; if (mode === "SIGNAL") return values.signalOverlay; return values.autoOverlay; }
-function ChartEmpty({ model }: { model: LiveTradingModel }) { return <div className="lt-chart-empty" role="status"><strong>{presentAvailability(model.marketSeries.availability).label}</strong><span>{model.marketSeries.reason}</span><small>{model.marketSeries.source} · asOf {displayTime(model.marketSeries.asOf)}</small></div>; }
-function OverlayScopeNote({ model, chartInstrument }: { model: LiveTradingModel; chartInstrument: string | null }) { const intentInstrument = instrumentCode(model.orderIntent); const theoreticalInstrument = normalizeInstrument(model.selectedTheoreticalExecution?.instrument); const signalInstrument = normalizeInstrument(model.latestSignal?.symbol); if (model.orderIntent && !sameInstrument(chartInstrument, intentInstrument)) return <span className="lt-chart-scope-note">Niveaux {intentInstrument ?? "—"} masqués sur chart {chartInstrument ?? "—"} · dossier post-Risk conservé</span>; if (!model.orderIntent && model.selectedTheoreticalExecution && !sameInstrument(chartInstrument, theoreticalInstrument)) return <span className="lt-chart-scope-note">Suivi {theoreticalInstrument ?? "—"} conservé hors du chart {chartInstrument ?? "—"}</span>; if (!model.orderIntent && !model.selectedTheoreticalExecution && model.latestSignal && !sameInstrument(chartInstrument, signalInstrument)) return <span className="lt-chart-scope-note">Signal {signalInstrument ?? "—"} conservé hors du chart {chartInstrument ?? "—"}</span>; return null; }
+function ChartEmpty({ model }: { model: LiveTradingModel }) { return <div className="lt-chart-empty" role="status"><strong>{presentAvailability(model.marketSeries.availability).label}</strong><span>{operatorCopy(model.marketSeries.reason)}</span><small>{operatorCode(model.marketSeries.source)} · arrêté à {displayTime(model.marketSeries.asOf)}</small></div>; }
+function OverlayScopeNote({ model, chartInstrument }: { model: LiveTradingModel; chartInstrument: string | null }) { const intentInstrument = instrumentCode(model.orderIntent); const theoreticalInstrument = normalizeInstrument(model.selectedTheoreticalExecution?.instrument); const signalInstrument = normalizeInstrument(model.latestSignal?.symbol); if (model.orderIntent && !sameInstrument(chartInstrument, intentInstrument)) return <span className="lt-chart-scope-note">Niveaux {intentInstrument ?? "—"} masqués sur le graphique {chartInstrument ?? "—"} · dossier après contrôle du risque conservé</span>; if (!model.orderIntent && model.selectedTheoreticalExecution && !sameInstrument(chartInstrument, theoreticalInstrument)) return <span className="lt-chart-scope-note">Suivi {theoreticalInstrument ?? "—"} conservé hors du graphique {chartInstrument ?? "—"}</span>; if (!model.orderIntent && !model.selectedTheoreticalExecution && model.latestSignal && !sameInstrument(chartInstrument, signalInstrument)) return <span className="lt-chart-scope-note">Signal {signalInstrument ?? "—"} conservé hors du graphique {chartInstrument ?? "—"}</span>; return null; }

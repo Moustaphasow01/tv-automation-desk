@@ -27,6 +27,7 @@ import {
   presentRetryState,
   presentSeverity
 } from "@/design-system/labels";
+import { operatorCode, operatorCopy, operatorDuration } from "@/design-system/operatorVocabulary";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
@@ -62,7 +63,7 @@ export function ExecutionIncidentsPage() {
 
   if (query.isLoading) return <IncidentsLoading />;
   if (query.isError) return <div className="io-page"><h1 className="sr-only">Incidents &amp; Opérations</h1><div className="io-workspace"><p className="io-empty">La projection des incidents ne répond pas. Réessayez dans quelques instants.</p></div></div>;
-  if (!data || !selected) return <div className="io-page"><h1 className="sr-only">Incidents &amp; Opérations</h1><div className="io-workspace"><p className="io-empty">Le BFF ne retourne pas encore la projection `/views/execution-incidents`.</p></div></div>;
+  if (!data || !selected) return <div className="io-page"><h1 className="sr-only">Incidents &amp; Opérations</h1><div className="io-workspace"><p className="io-empty">Le service du desk ne publie pas encore les incidents.</p></div></div>;
 
   const reconcileAction = data.commandActions.find((action) => action.commandType === "execution.incident.reconcile");
   const workers = observabilityQuery.data?.data.workers
@@ -156,11 +157,11 @@ export function ExecutionIncidentsPage() {
             <div className="io-panel__body">
               <SeverityDonut breakdown={severityBreakdown} />
               <div className="io-detail-grid" style={{ marginTop: 10 }}>
-                <div><small>Payload sélection</small></div>
+                <div><small>Détail de l’incident</small></div>
               </div>
               {selected.payloadPreview.map((item, index) => (
                 <div key={`${item.key}-${index}`} className="io-detail-grid" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 4 }}>
-                  <div><small>{item.key}</small><strong style={{ fontSize: 11.5 }}>{item.value}</strong></div>
+                  <div><small>{incidentFieldLabel(item.key)}</small><strong style={{ fontSize: 11.5 }}>{operatorCopy(item.value)}</strong></div>
                 </div>
               ))}
             </div>
@@ -189,32 +190,32 @@ export function ExecutionIncidentsPage() {
 
         <div className="io-row2">
           <section className="io-panel" aria-label="Chronologie incident">
-            <header><h2>Chronologie</h2><small>{selected.incidentId}</small></header>
+            <header><h2>Chronologie</h2><small title={selected.incidentId}>Incident sélectionné</small></header>
             <div className="io-panel__body">
               {selected.chronology.length ? <ol className="io-chronology">
                 {selected.chronology.map((step, index) => (
                   <li key={`${step.stepId}-${index}`}>
                     <span>{formatTime(step.at)}</span>
-                    <div><strong>{step.title}</strong><small>{step.detail}</small></div>
+                    <div><strong>{operatorCopy(step.title)}</strong><small>{operatorCopy(step.detail)}</small></div>
                     <StatusBadge tone={step.state === "DONE" ? "success" : step.state === "FAILED" ? "danger" : "warning"}>{presentChronologyState(step.state).label}</StatusBadge>
                   </li>
                 ))}
               </ol> : <p className="io-empty">Aucune chronologie publiée.</p>}
               <div className="io-postmortem">
                 <FaProjectDiagram />
-                <div><strong>Post-mortem</strong><br /><small>{selected.postMortem.rootCause} · {selected.postMortem.permanentFix}</small></div>
+                <div><strong>Analyse après incident</strong><br /><small>{operatorCopy(selected.postMortem.rootCause)} · {operatorCopy(selected.postMortem.permanentFix)}</small></div>
               </div>
             </div>
           </section>
 
-          <section className="io-panel" aria-label="Tentatives & DLQ">
-            <header><h2>Tentatives &amp; DLQ</h2><small>{data.retries.length}</small></header>
+          <section className="io-panel" aria-label="Tentatives et traitements en échec">
+            <header><h2>Tentatives et traitements en échec</h2><small>{data.retries.length}</small></header>
             <div className="io-panel__body">
               <div className="io-retry-list">
                 {data.retries.map((retry, index) => (
                   <article key={`${retry.retryId}-${index}`}>
                     <FaRedoAlt />
-                    <div><strong>{retry.retryId}</strong><small>tentative {retry.attempt} · backoff {retry.backoffSeconds}s</small></div>
+                    <div title={retry.retryId}><strong>Tentative {retry.attempt}</strong><small>nouvel essai après {operatorDuration(retry.backoffSeconds)}</small></div>
                     <StatusBadge tone={retry.state === "SUCCEEDED" ? "success" : retry.state === "ABANDONED" || retry.state === "FAILED" ? "danger" : "warning"}>{presentRetryState(retry.state).label}</StatusBadge>
                   </article>
                 ))}
@@ -222,7 +223,7 @@ export function ExecutionIncidentsPage() {
               </div>
               <div className="io-postmortem">
                 <FaLifeRing />
-                <span>L'humain intervient comme gate exceptionnel ; aucune assignation quotidienne n'est exposée.</span>
+                <span>L’opérateur intervient uniquement lors d’une validation exceptionnelle ; aucune assignation quotidienne n’est exposée.</span>
               </div>
             </div>
           </section>
@@ -234,20 +235,20 @@ export function ExecutionIncidentsPage() {
                 <FaFingerprint />
                 <div>
                   <small>Dernière commande</small>
-                  <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+                  <strong title={command?.commandId}>{command ? "Commande acceptée" : "Aucune commande confirmée"}</strong>
                   {commandError ? <div style={{ color: "var(--io-red)" }}>{commandError}</div> : null}
                 </div>
               </div>
               <ReasonInput label="Motif obligatoire" value={reason} onChange={setReason} />
               <label className="io-step-up">
-                <span>Step-up pour resolve/suspend</span>
-                <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder="actionId step-up" />
+                <span>Confirmation renforcée pour résoudre ou suspendre</span>
+                <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder="Code de confirmation renforcée" />
               </label>
               <div className="io-action-list" style={{ marginTop: 8 }}>
                 {data.commandActions.map((action, index) => (
                   <article key={`${action.actionId}-${index}`} className={action.criticality === "EMERGENCY" ? "io-action-list__emergency" : undefined}>
                     <span>{actionIcon(action)}</span>
-                    <div><strong>{action.label}</strong><small>{action.impactSummary}</small></div>
+                    <div><strong>{operatorCopy(action.label)}</strong><small>{operatorCopy(action.impactSummary)}</small></div>
                     <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                     <button type="button" disabled={isActionDisabled(action, reason, stepUpToken) || submittingActionId === action.actionId} onClick={() => confirmAction(action)}>
                       {submittingActionId === action.actionId ? "Envoi..." : "Confirmer"}
@@ -261,43 +262,43 @@ export function ExecutionIncidentsPage() {
         </div>
 
         <div className="io-row3">
-          <section className="io-panel" aria-label="Statut des workers">
-            <header><h2>Workers</h2><small>{activeWorkers} actifs / {registeredWorkers}</small></header>
+          <section className="io-panel" aria-label="Statut des agents de calcul">
+            <header><h2>Agents de calcul</h2><small>{activeWorkers} actifs / {registeredWorkers}</small></header>
             <div className="io-panel__body" style={{ padding: 0 }}>
               <table className="io-table">
-                <thead><tr><th>Worker</th><th>Rôle</th><th>Tâche</th><th>Statut</th><th>Dernier heartbeat</th></tr></thead>
+                <thead><tr><th>Agent</th><th>Rôle</th><th>Tâche</th><th>Statut</th><th>Dernier signal de vie</th></tr></thead>
                 <tbody>
                   {workers.map((worker, index) => (
                     <tr key={`${worker.workerId}-${index}`}>
-                      <td><strong>{worker.workerId}</strong></td>
-                      <td>{worker.role}</td>
-                      <td>{worker.currentTask || "—"}</td>
-                      <td><StatusBadge tone={worker.status === "ACTIVE" ? "success" : worker.status === "FAILED" ? "danger" : "warning"}>{worker.status}</StatusBadge></td>
+                      <td><strong title={worker.workerId}>Agent de calcul n° {index + 1}</strong></td>
+                      <td>{operatorCopy(worker.role)}</td>
+                      <td>{operatorCopy(worker.currentTask || "—")}</td>
+                      <td><StatusBadge tone={worker.status === "ACTIVE" ? "success" : worker.status === "FAILED" ? "danger" : "warning"}>{operatorCode(worker.status)}</StatusBadge></td>
                       <td>{formatTime(worker.lastHeartbeatAt)}</td>
                     </tr>
                   ))}
-                  {!workers.length ? <tr><td colSpan={5}><p className="io-empty">Aucun worker enregistré dans la projection d'observabilité.</p></td></tr> : null}
+                  {!workers.length ? <tr><td colSpan={5}><p className="io-empty">Aucun agent de calcul enregistré dans l’observabilité.</p></td></tr> : null}
                 </tbody>
               </table>
             </div>
           </section>
 
-          <section className="io-panel" aria-label="Runbooks récents">
-            <header><h2>Runbooks récents</h2><small>{runbooks.length}</small></header>
+          <section className="io-panel" aria-label="Procédures récentes">
+            <header><h2>Procédures récentes</h2><small>{runbooks.length}</small></header>
             <div className="io-panel__body" style={{ padding: 0 }}>
               <table className="io-table">
-                <thead><tr><th>Runbook</th><th>Déclenché par</th><th>Statut</th><th>Sévérité</th><th>Mis à jour</th></tr></thead>
+                <thead><tr><th>Procédure</th><th>Déclenchée par</th><th>Statut</th><th>Sévérité</th><th>Action</th></tr></thead>
                 <tbody>
                   {runbooks.map((runbook, index) => (
                     <tr key={`${runbook.id}-${index}`}>
                       <td><strong>{runbook.title}</strong></td>
                       <td>{runbook.secondary || "Non publié"}</td>
-                      <td><StatusBadge tone="warning">{runbook.status}</StatusBadge></td>
-                      <td>{runbook.tags.join(", ") || "—"}</td>
+                      <td><StatusBadge tone="warning">{operatorCode(runbook.status)}</StatusBadge></td>
+                      <td>{runbook.tags.map((tag) => operatorCode(tag)).join(", ") || "—"}</td>
                       <td>{runbook.route ? <Link to={runbook.route}>Ouvrir</Link> : <span>Non publié</span>}</td>
                     </tr>
                   ))}
-                  {!runbooks.length ? <tr><td colSpan={5}><p className="io-empty">Aucun runbook publié.</p></td></tr> : null}
+                  {!runbooks.length ? <tr><td colSpan={5}><p className="io-empty">Aucune procédure publiée.</p></td></tr> : null}
                 </tbody>
               </table>
             </div>
@@ -437,6 +438,19 @@ function permissionTone(permission: IncidentAction["permission"]) {
   if (permission === "ALLOWED") return "success" as const;
   if (permission === "STEP_UP_REQUIRED") return "warning" as const;
   return "danger" as const;
+}
+
+function incidentFieldLabel(key: string) {
+  const labels: Record<string, string> = {
+    sourceId: "Référence",
+    source_id: "Référence",
+    sourceCollection: "Origine",
+    source_collection: "Origine",
+    kind: "Type",
+    title: "Titre",
+    message: "Détail",
+  };
+  return labels[key] ?? operatorCode(key);
 }
 
 function formatSignedR(value: number) {

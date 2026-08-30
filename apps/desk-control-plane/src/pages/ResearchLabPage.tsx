@@ -15,6 +15,7 @@ import {
 import { DeskButton, TrackedCommandReceipt } from "@/design-system/actions";
 import { Card, ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { presentOperationalStatus, presentOperatorText, presentResearchDecision } from "@/design-system/labels";
+import { operatorCode, operatorCopy } from "@/design-system/operatorVocabulary";
 import { useCapabilityCatalog, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
@@ -198,9 +199,9 @@ export function ResearchLabPage() {
                   <tbody>
                     {pagedMissions.map((row, index) => (
                       <tr key={`${row.experimentId}_${index}`} aria-selected={row.experimentId === selectedExperiment?.experimentId} onClick={() => setSelectedMissionId(row.experimentId)}>
-                        <td><strong>{row.title}</strong><span className="rl-mission-id">{presentOperatorText(row.missionId)}</span></td>
+                        <td title={row.missionId}><strong>{row.title}</strong><span className="rl-mission-id">Mission de recherche</span></td>
                         <td>{presentOperatorText(row.ownerAgent)}</td>
-                        <td><StatusBadge tone={stageTone(row.stage)}>{row.stage}</StatusBadge></td>
+                        <td><StatusBadge tone={stageTone(row.stage)}>{operatorCode(row.stage)}</StatusBadge></td>
                         <td>
                           <div className="rl-progress-cell">
                             <ProgressBar value={row.progressPct} tone="accent" />
@@ -235,7 +236,7 @@ export function ResearchLabPage() {
 
           <div className="rl-column">
             <section className="rl-panel" aria-label="Pipeline de recherche">
-              <header><h2>Pipeline de recherche</h2><small>Idée → Paper Ready</small></header>
+              <header><h2>Étapes de recherche</h2><small>Idée → Prêt pour test réel</small></header>
               <div className="rl-panel__body">
                 <div className="rl-pipeline-flow">
                   {data.pipeline.map((stage, index) => (
@@ -245,7 +246,7 @@ export function ResearchLabPage() {
                           {stage.state === "DONE" ? <FaCheckCircle /> : stage.activeExperiments}
                         </div>
                         <strong>{stage.activeExperiments}</strong>
-                        <small title={stage.label}>{stage.label.replace(/_/g, " ")}</small>
+                        <small title={stage.stageId}>{operatorCode(stage.label)}</small>
                       </div>
                       {index < data.pipeline.length - 1 ? <span className="rl-pipe-arrow">→</span> : null}
                     </div>
@@ -254,8 +255,8 @@ export function ResearchLabPage() {
               </div>
             </section>
 
-            <section className="rl-panel" aria-label="Workers actifs">
-              <header><h2>Workers actifs</h2><small>{activeAgents} / {data.agents.length}</small><Link to="/research/agents">Tous les workers</Link></header>
+            <section className="rl-panel" aria-label="Agents de calcul actifs">
+              <header><h2>Agents de calcul actifs</h2><small>{activeAgents} / {data.agents.length}</small><Link to="/research/agents">Tous les agents</Link></header>
               <div className="rl-panel__body rl-worker-list">
                 {data.agents.map((agent, index) => <WorkerRow key={`${agent.taskId || agent.agentId}_${index}`} agent={agent} />)}
               </div>
@@ -305,8 +306,8 @@ export function ResearchLabPage() {
                     <small>Résumé mission</small>
                     <div className="rl-mission-box__grid">
                       <div><small>Agent</small><strong>{presentOperatorText(selectedExperiment.ownerAgent)}</strong></div>
-                      <div><small>Étape</small><strong>{selectedExperiment.stage}</strong></div>
-                      <div><small>Tâche en cours</small><strong>{selectedExperiment.currentTask}</strong></div>
+                      <div><small>Étape</small><strong>{operatorCode(selectedExperiment.stage)}</strong></div>
+                      <div><small>Tâche en cours</small><strong>{operatorCopy(selectedExperiment.currentTask)}</strong></div>
                       <div><small>Score</small><strong>{selectedExperiment.score}</strong></div>
                     </div>
                   </div>
@@ -324,7 +325,7 @@ export function ResearchLabPage() {
                     <span className="rl-mission-box--next__play"><FaPlay /></span>
                     <div>
                       <small>Prochaine action automatisée</small>
-                      <strong>{presentOperatorText(selectedExperiment.expectedEvent)}</strong>
+                      <strong>{operatorCopy(selectedExperiment.expectedEvent)}</strong>
                     </div>
                   </div>
                 </div>
@@ -335,7 +336,7 @@ export function ResearchLabPage() {
           </section>
 
           <section className="rl-panel" aria-label="Flux d'activité recherche">
-            <header><h2>Activité recherche</h2><span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, color: "var(--rl-green)", fontSize: 11 }}><FaCircleDot />Live</span></header>
+            <header><h2>Activité de recherche</h2><span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, color: "var(--rl-green)", fontSize: 11 }}><FaCircleDot />En direct</span></header>
             <div className="rl-panel__body">
               {data.activityStream.length ? (
                 <div className="rl-activity-stream" role="region" aria-label="Flux d’activité recherche" tabIndex={0}>
@@ -343,8 +344,8 @@ export function ResearchLabPage() {
                     <div key={event.eventId} className="rl-activity-row">
                       <time>{formatTime(event.at)}</time>
                       <div>
-                        <strong style={{ color: activityTone(event.eventType) }}>{event.eventType}</strong>
-                        <small>{event.missionKey} · {event.detail}</small>
+                        <strong style={{ color: activityTone(event.eventType) }} title={event.eventType}>{operatorCode(event.eventType)}</strong>
+                        <small title={event.missionKey}>{operatorCopy(event.detail)}</small>
                       </div>
                     </div>
                   ))}

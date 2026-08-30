@@ -74,7 +74,7 @@ describe("OrderIntent dossier semi-manual contract", () => {
   it("renders post-Risk trade terms as definitions without editable controls", () => {
     const html = renderToStaticMarkup(<ReadonlyTradeTerms dossier={buildOrderIntentDossier(orderDetailEnvelope())} />);
 
-    expect(html).toContain("LECTURE SEULE APRÈS RISQUE");
+    expect(html).toContain("LECTURE SEULE APRÈS CONTRÔLE DU RISQUE");
     expect(html).toContain("Instrument");
     expect(html).toContain("Quantité autorisée");
     expect(html).toContain("Entrée");
@@ -121,7 +121,7 @@ describe("OrderIntent dossier semi-manual contract", () => {
     const dossier = buildOrderIntentDossier(orderDetailEnvelope());
 
     expect(marketContextSummary(dossier)).toBe(
-      "Enveloppe non évaluée : le backend ne publie pas de prix de marché exploitable.",
+      "Enveloppe non évaluée : aucun prix de marché exploitable n'est publié.",
     );
     expect(marketContextSummary(dossier)).not.toContain("reste dans");
   });

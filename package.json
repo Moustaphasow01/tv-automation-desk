@@ -65,6 +65,7 @@
     "audit:front-a11y": "npm --prefix apps/desk-control-plane run audit:a11y",
     "audit:front-visual": "npm --prefix apps/desk-control-plane run audit:visual",
     "audit:front-performance": "npm --prefix apps/desk-control-plane run audit:performance",
+    "audit:front-vocabulary": "npm --prefix apps/desk-control-plane run audit:vocabulary",
     "rules:uiux": "node docs/ui-ux/scripts/select-ui-ux-rules.mjs",
     "validate:uiux-rulebook": "python3 docs/ui-ux/scripts/validate-rulebook.py",
     "test:uiux-selector": "node docs/ui-ux/scripts/test-select-ui-ux-rules.mjs",

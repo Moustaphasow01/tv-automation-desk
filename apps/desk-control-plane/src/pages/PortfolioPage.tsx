@@ -2,6 +2,7 @@ import { Fragment, useContext, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { routeDisplayName } from "@/app/routes";
 import { ProgressBar, StatusBadge } from "@/design-system/primitives";
+import { operatorCode } from "@/design-system/operatorVocabulary";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useFrontView } from "@/domains/front-api/repositories";
@@ -32,7 +33,7 @@ export function PortfolioPage() {
     return (
       <div className="pf-page">
         <h1 className="sr-only">Portefeuille &amp; Positions</h1>
-        <div className="pf-workspace"><p className="pf-empty">Le BFF ne retourne pas encore la projection `/views/portfolio`.</p></div>
+        <div className="pf-workspace"><p className="pf-empty">Les données du portefeuille ne sont pas encore publiées.</p></div>
       </div>
     );
   }
@@ -75,14 +76,14 @@ export function PortfolioPage() {
 
       <div className="pf-workspace">
         <section className="pf-kpi-strip" aria-label="Indicateurs portefeuille">
-          <KpiCell label="Net liquidation" value={formatDataValue(portfolio.summaryTruth.equity, formatCurrencyCompact)} tone="up" />
+          <KpiCell label="Valeur du compte" value={formatDataValue(portfolio.summaryTruth.equity, formatCurrencyCompact)} tone="up" />
           <KpiCell label="PnL journalier" value={formatSignedR(portfolio.summary.dailyR)} tone={portfolio.summary.dailyR >= 0 ? "up" : "down"} />
           <KpiCell label="PnL latent" value={formatDataValue(portfolio.summaryTruth.unrealizedPnl, formatSignedCurrency)} tone={portfolio.summary.unrealizedPnl >= 0 ? "up" : "down"} />
           <KpiCell label="Risque ouvert" value={formatCurrencyCompact(openRisk)} />
           <KpiCell label="Drawdown max" value={formatSignedR(portfolio.summary.maxDrawdownR)} tone={portfolio.summary.maxDrawdownR < 0 ? "down" : undefined} />
           <KpiCell label="Positions" value={String(portfolio.summary.openPositions)} detail={`${positionsLong} Long / ${positionsShort} Short`} />
           <KpiCell label="Stratégies" value={String(strategiesWithPositions)} detail="Avec positions ouvertes" />
-          <KpiCell label="Human Gate" value={formatOptionalCount(portfolio.summary.humanGatePending)} detail="En attente" />
+          <KpiCell label="Validations requises" value={formatOptionalCount(portfolio.summary.humanGatePending)} detail="En attente" />
           <KpiCell label="Ordres en attente" value={formatOptionalCount(portfolio.summary.pendingOrders)} detail="En cours" />
         </section>
 
@@ -97,7 +98,7 @@ export function PortfolioPage() {
                     {accounts.map((account) => (
                       <tr key={account.accountId}>
                         <td><strong>{account.label}</strong></td>
-                        <td><StatusBadge tone="accent">{account.mode}</StatusBadge></td>
+                        <td><StatusBadge tone="accent">{operatorCode(account.mode)}</StatusBadge></td>
                         <td>{account.openPositions}</td>
                         <td>{account.equity != null ? formatCurrencyCompact(account.equity) : "—"}</td>
                         <td className={account.openPnl != null ? (account.openPnl >= 0 ? "text-success" : "text-danger") : undefined}>{account.openPnl != null ? formatSignedCurrency(account.openPnl) : "—"}</td>
@@ -110,8 +111,8 @@ export function PortfolioPage() {
             </div>
           </section>
 
-          <section className="pf-panel" aria-label="Net liquidation dans le temps">
-            <header><h2>Net liquidation</h2></header>
+          <section className="pf-panel" aria-label="Valeur du compte dans le temps">
+            <header><h2>Valeur du compte</h2></header>
             <div className="pf-panel__body">
               {portfolio.equityCurve.length >= 2 ? (
                 <EquityChart points={portfolio.equityCurve} />
@@ -157,7 +158,7 @@ export function PortfolioPage() {
                       <tr key={`${row.positionId}_${row.account}_${row.instrument}`}>
                         <td>{formatAccount(row.account)}</td>
                         <td><strong><Link to={`/execution/portfolio/positions/${encodeURIComponent(row.positionId)}`}>{row.instrument}</Link></strong></td>
-                        <td><StatusBadge tone={row.side === "LONG" ? "success" : row.side === "SHORT" ? "danger" : "neutral"}>{row.side}</StatusBadge></td>
+                        <td><StatusBadge tone={row.side === "LONG" ? "success" : row.side === "SHORT" ? "danger" : "neutral"}>{operatorCode(row.side)}</StatusBadge></td>
                         <td>{formatQuantity(row.quantity)}</td>
                         <td>{formatPrice(row.averagePrice)}</td>
                         <td>{formatPrice(row.markPrice)}</td>
@@ -251,10 +252,10 @@ export function PortfolioPage() {
             <header><h2>Éléments en attente</h2></header>
             <div className="pf-panel__body">
               <div className="pf-impact-list">
-                <div className="pf-impact-row"><strong>Human Gate en attente</strong><span>{formatOptionalCount(portfolio.summary.humanGatePending)}</span></div>
+                <div className="pf-impact-row"><strong>Validations opérateur en attente</strong><span>{formatOptionalCount(portfolio.summary.humanGatePending)}</span></div>
                 <div className="pf-impact-row"><strong>Ordres en attente</strong><span>{formatOptionalCount(portfolio.summary.pendingOrders)}</span></div>
               </div>
-              <p className="pf-impact-note">Valeurs estimées à partir des intents et gates ouverts. Aucun impact chiffré publié par le backend.</p>
+              <p className="pf-impact-note">Décompte issu des ordres proposés et validations ouverts. Aucun impact chiffré n'est publié.</p>
             </div>
           </section>
 

@@ -48,7 +48,7 @@ export function CommandCenterPage() {
   return (
     <div className="cc-page" data-testid="command-center-golden-master">
       <CommandCenterHeader model={model} />
-      <div className="cc-workspace" role="region" aria-label="Command Center du Trading Desk">
+      <div className="cc-workspace" role="region" aria-label="Synthèse du Trading Desk">
         <CommandCenterKpis model={model} />
         <section className="cc-grid cc-grid--top" aria-label="Contrôle et pipelines">
           <DeskControlPanel actions={capabilities.data?.actions ?? []} deskStatus={data.summary.deskStatus} systems={data.systems} disabled={capabilities.isLoading || capabilities.isError || session?.summary.environment !== "PAPER"} submitting={commandState.submitting} lastCommand={commandState.last} error={commandState.error} onSubmit={submitDeskControl} />
@@ -56,7 +56,7 @@ export function CommandCenterPage() {
           <ResearchPipelinePanel research={data.research} />
           <SignalsRiskPanel signals={data.signals} />
         </section>
-        <section className="cc-grid cc-grid--middle" aria-label="Human Gate et exécution">
+        <section className="cc-grid cc-grid--middle" aria-label="Votre validation et exécution">
           <HumanGatePanel humanGate={data.humanGate} />
           <ProviderRuntimePanel provider={data.provider} />
           <ResearchPerformancePanel performance={data.performance} />
@@ -78,9 +78,9 @@ function deskControlReason(commandType: DeskControlCommand) {
 }
 
 function CommandCenterLoading() {
-  return <div className="cc-page cc-page--loading" aria-busy="true" aria-live="polite"><h1 className="sr-only">Command Center</h1><div className="cc-loading-header" /><div className="cc-loading-grid">{Array.from({ length: 12 }, (_, index) => <div key={index} />)}</div></div>;
+  return <div className="cc-page cc-page--loading" aria-busy="true" aria-live="polite"><h1 className="sr-only">Synthèse</h1><div className="cc-loading-header" /><div className="cc-loading-grid">{Array.from({ length: 12 }, (_, index) => <div key={index} />)}</div></div>;
 }
 
 function CommandCenterFailure({ message: _message, retry }: { message: string; retry(): void }) {
-  return <div className="cc-page cc-page--failure"><h1 className="sr-only">Command Center</h1><section role="alert"><strong>Command Center non joignable</strong><p>La projection opérateur ne répond pas. Aucun état n'est extrapolé localement.</p><button type="button" onClick={retry}>Réessayer</button></section></div>;
+  return <div className="cc-page cc-page--failure"><h1 className="sr-only">Synthèse</h1><section role="alert"><strong>Synthèse non joignable</strong><p>La projection opérateur ne répond pas. Aucun état n'est extrapolé localement.</p><button type="button" onClick={retry}>Réessayer</button></section></div>;
 }

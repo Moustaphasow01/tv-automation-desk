@@ -48,7 +48,7 @@ function MarketTape({ model }: LensProps) {
           ))}</tbody>
         </table>
       ) : <LensEmpty title="Watchlist non publiée" detail="Aucun instantané de marché n'est présent dans la projection live." />}
-      <p className="lt-market-lens__source">Marché asOf {displayTime(model.marketSeries.asOf)} · {model.marketSeries.source}</p>
+      <p className="lt-market-lens__source">Marché arrêté à {displayTime(model.marketSeries.asOf)} · {model.marketSeries.source}</p>
     </section>
   );
 }

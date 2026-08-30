@@ -20,13 +20,13 @@ import {
   presentEventLane,
   presentFreshness,
   presentGateState,
-  presentGeneric,
   presentPermission,
   presentQueueStatus,
   presentStrategyPredicate,
   presentTradeDecision,
 } from "@/design-system/labels";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
+import { operatorCode, operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";
 import type { CommandAccepted } from "@/domains/realtime/commandRuntime";
 import type { LiveSignalDetailView } from "@/domains/front-api/viewModels";
 import type { SignalTemporalPresentation } from "./signalTemporalState";
@@ -58,6 +58,7 @@ export function LiveSignalDetailWorkspace({
   const arbitrationPublished = !isUnavailable(data.arbitration.arbitrationId);
   const riskPublished = !isUnavailable(data.riskCheck.riskCheckId);
   const lifecycle = lifecycleStages(data, arbitrationPublished, riskPublished);
+  const predicates = data.predicates.filter((predicate) => !isUnavailable(predicate.enumCode) && !isUnavailable(predicate.predicateId));
 
   return (
     <>
@@ -78,14 +79,14 @@ export function LiveSignalDetailWorkspace({
             <p className="signal-section-note">Ces niveaux sont ceux du signal. Ils ne deviennent un plan autorisé qu’après publication explicite des décisions Portfolio et Risk.</p>
           </DossierSection>
 
-          <DossierSection eyebrow="Preuves" title="Pourquoi le moteur a publié ce signal" icon={<FaCheckCircle aria-hidden="true" />} badge={`${data.predicates.length} prédicat${data.predicates.length > 1 ? "s" : ""}`}>
-            {data.predicates.length ? (
+          <DossierSection eyebrow="Preuves" title="Pourquoi le moteur a publié ce signal" icon={<FaCheckCircle aria-hidden="true" />} badge={`${predicates.length} règle${predicates.length > 1 ? "s" : ""}`}>
+            {predicates.length ? (
               <div className="signal-evidence-list">
-                {data.predicates.map((predicate, index) => (
+                {predicates.map((predicate, index) => (
                   <article key={`${predicate.predicateId}-${index}`}>
                     <StatusBadge tone={predicate.status === "PASS" ? "success" : predicate.status === "FAIL" ? "danger" : "warning"}>{presentGateState(predicate.status).label}</StatusBadge>
-                    <div><strong>{presentStrategyPredicate(predicate.enumCode).label}</strong><small>{predicate.enumCode} · observation {predicate.observedValue}</small></div>
-                    <span>{predicate.threshold}</span>
+                    <div title={`Code de traçabilité : ${predicate.enumCode}`}><strong>{presentStrategyPredicate(predicate.enumCode).label}</strong><small>Valeur observée : {operatorCode(predicate.observedValue)}</small></div>
+                    <span>{operatorCopy(predicate.threshold)}</span>
                   </article>
                 ))}
               </div>
@@ -100,41 +101,41 @@ export function LiveSignalDetailWorkspace({
                 title="Contexte"
                 status={data.context.length ? "Publié" : "Sans décision liée"}
                 tone={data.context.length ? "info" : "neutral"}
-                rows={data.context.map((item) => [item.label, `${item.value} · ${item.interpretation}`])}
+                rows={data.context.map((item) => [operatorCopy(item.label), `${operatorCopy(item.value)} · ${operatorCopy(item.interpretation)}`])}
                 empty="Aucune décision contextuelle liée par ID à ce signal."
               />
               <AuthorityCard
                 index="02"
-                title="Portfolio"
+                title="Portefeuille"
                 status={arbitrationPublished ? presentArbitrationDecision(data.arbitration.decision).label : "Non publié"}
                 tone={arbitrationPublished ? (data.arbitration.decision === "REJECTED" ? "danger" : "success") : "neutral"}
-                rows={arbitrationPublished ? [["Quantité cible", String(data.arbitration.targetQuantity)], ["Motif", presentGeneric(data.arbitration.reasonCode).label], ["Corrélation", `${data.arbitration.correlationPct}%`]] : []}
-                empty="Aucun arbitrage Portfolio canonique lié à ce signal."
+                rows={arbitrationPublished ? [["Quantité cible", publishedQuantity(data.arbitration.targetQuantity)], ["Motif", operatorReason(data.arbitration.reasonCode)], ["Corrélation", `${data.arbitration.correlationPct}%`]] : []}
+                empty="Aucun arbitrage de portefeuille lié à ce signal."
               />
               <AuthorityCard
                 index="03"
-                title="Global Risk"
+                title="Risque global"
                 status={riskPublished ? presentQueueStatus(data.riskCheck.status).label : "Non publié"}
                 tone={riskPublished ? (data.riskCheck.status === "PASS" ? "success" : data.riskCheck.status === "BLOCK" ? "danger" : "warning") : "neutral"}
-                rows={riskPublished ? [["Limite", data.riskCheck.limitLabel], ["Motif", presentGeneric(data.riskCheck.reasonCode).label], ["Quantité arrondie", String(data.riskCheck.roundedQuantity)]] : []}
-                empty="Aucune décision Risk canonique liée à ce signal."
+                rows={riskPublished ? [["Limite", operatorCopy(data.riskCheck.limitLabel)], ["Motif", operatorReason(data.riskCheck.reasonCode)], ["Quantité autorisée", publishedQuantity(data.riskCheck.roundedQuantity)]] : []}
+                empty="Aucune décision de risque liée à ce signal."
               />
               <AuthorityCard
                 index="04"
                 title="Avis IA"
                 status={presentTradeDecision(data.aiAdvisory.recommendation).label}
                 tone="advisory"
-                rows={[["Mode", presentGeneric(data.aiAdvisory.mode).label], ["Autorité", presentGeneric(data.aiAdvisory.authority).label], ["Synthèse", data.aiAdvisory.summary]]}
+                rows={[["Rôle", "Consultatif, sans autorité de décision"], ["Synthèse", operatorCopy(data.aiAdvisory.summary)]]}
                 empty=""
               />
             </div>
           </DossierSection>
 
-          <DossierSection eyebrow="Lineage" title="Chronologie vérifiable" icon={<FaClock aria-hidden="true" />} badge={`${data.auditTrail.length} événement${data.auditTrail.length > 1 ? "s" : ""}`}>
+          <DossierSection eyebrow="Filiation" title="Chronologie vérifiable" icon={<FaClock aria-hidden="true" />} badge={`${data.auditTrail.length} événement${data.auditTrail.length > 1 ? "s" : ""}`}>
             <ol className="signal-audit-timeline">
-              <TimelineItem at={data.signal.generatedAt} title="Signal publié" detail={`${data.signal.symbol} ${data.signal.direction} · ${data.identity.signalId}`} tone="authoritative" />
+              <TimelineItem at={data.signal.generatedAt} title="Signal publié" detail={`${data.signal.symbol} · ${operatorCode(data.signal.direction)}`} tone="authoritative" />
               {data.auditTrail.map((event, index) => (
-                <TimelineItem key={`${event.eventId}-${index}`} at={event.at} title={event.title} detail={`${event.domain} · ${event.eventId}`} tone={event.lane === "ADVISORY" ? "advisory" : "authoritative"} route={event.route} badge={presentEventLane(event.lane).label} />
+                <TimelineItem key={`${event.eventId}-${index}`} at={event.at} title={operatorCopy(event.title)} detail={operatorCopy(event.domain)} tone={event.lane === "ADVISORY" ? "advisory" : "authoritative"} route={event.route} badge={presentEventLane(event.lane).label} />
               ))}
               <TimelineItem at={data.signal.expiresAt} title="Fin de validité contractuelle" detail={temporal.effectiveState === "EXPIRED" ? "Échéance dépassée" : "Échéance future"} tone={temporal.effectiveState === "EXPIRED" ? "expired" : "pending"} />
             </ol>
@@ -142,19 +143,19 @@ export function LiveSignalDetailWorkspace({
         </main>
 
         <aside className="signal-dossier-sidebar" aria-label="Contexte et actions du dossier">
-          <DossierSection eyebrow="Provenance" title="Identité canonique" icon={<FaFingerprint aria-hidden="true" />} compact>
+          <DossierSection eyebrow="Origine" title="Traçabilité" icon={<FaFingerprint aria-hidden="true" />} compact>
             <dl className="signal-identity-list">
               <IdentityRow label="Signal" value={data.identity.signalId} />
               <IdentityRow label="Stratégie" value={data.identity.strategyId} />
               <IdentityRow label="Version" value={data.identity.strategyVersionId} />
               <IdentityRow label="Instance" value={data.identity.strategyInstanceId} />
-              <IdentityRow label="Snapshot" value={data.identity.featureSnapshotId} />
-              <IdentityRow label="Cutoff" value={formatDateTime(data.featureSnapshot.cutoffAt)} />
+              <IdentityRow label="État instantané" value={data.identity.featureSnapshotId} />
+              <IdentityRow label="Données arrêtées à" value={formatDateTime(data.featureSnapshot.cutoffAt)} />
               <IdentityRow label="Corrélation" value={data.identity.correlationId} />
             </dl>
             <nav className="signal-related-links" aria-label="Objets liés">
-              {data.navigation.map((item) => <Link key={`${item.kind}-${item.route}`} to={item.route}>{item.kind === "STRATEGY" ? <FaProjectDiagram aria-hidden="true" /> : item.kind === "PORTFOLIO" ? <FaBalanceScale aria-hidden="true" /> : <FaRoute aria-hidden="true" />}{item.label}</Link>)}
-              <Link to="/events"><FaRoute aria-hidden="true" /> Audit global</Link>
+              {data.navigation.map((item) => <Link key={`${item.kind}-${item.route}`} to={item.route}>{item.kind === "STRATEGY" ? <FaProjectDiagram aria-hidden="true" /> : item.kind === "PORTFOLIO" ? <FaBalanceScale aria-hidden="true" /> : <FaRoute aria-hidden="true" />}{operatorCopy(item.label)}</Link>)}
+              <Link to="/events"><FaRoute aria-hidden="true" /> Journal d’audit</Link>
             </nav>
           </DossierSection>
 
@@ -173,13 +174,13 @@ export function LiveSignalDetailWorkspace({
             <div className="signal-command-actions">
               {data.commandActions.length ? data.commandActions.map((action, index) => (
                 <article key={`${action.actionId}-${index}`}>
-                  <div><strong>{action.label}</strong><small>{action.capability}</small></div>
+                  <div title={`Droit requis : ${action.capability}`}><strong>{operatorCopy(action.label)}</strong><small>Action contrôlée par le desk</small></div>
                   <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
                   <DeskButton variant="primary" disabled={action.permission !== "ALLOWED" || !reason.trim() || submittingActionId === action.actionId} onClick={() => onConfirm(action)}>
                     {submittingActionId === action.actionId ? "Envoi…" : "Confirmer"}
                   </DeskButton>
                 </article>
-              )) : <EvidenceEmpty title="Aucune action autorisée" detail="Le backend ne publie aucune capability opérateur pour ce signal." />}
+              )) : <EvidenceEmpty title="Aucune action autorisée" detail="Le desk ne publie aucune action possible pour ce signal." />}
             </div>
           </DossierSection>
         </aside>
@@ -192,8 +193,8 @@ function SignalHero({ data, temporal, remainingSec, chartRoute }: { data: LiveSi
   return (
     <section className="signal-hero" data-tone={temporal.effectiveState === "EXPIRED" ? "expired" : "active"}>
       <div className="signal-hero__identity">
-        <span className="signal-hero__direction">{data.signal.direction}</span>
-        <div><p>Signal déterministe</p><h2>{data.signal.symbol}</h2><span>{data.signal.regime} · confiance {data.signal.confidence}%</span></div>
+        <span className="signal-hero__direction">{operatorCode(data.signal.direction)}</span>
+        <div><p>Signal déterministe</p><h2>{data.signal.symbol}</h2><span>{operatorCode(data.signal.regime)} · confiance {data.signal.confidence}%</span></div>
       </div>
       <div className="signal-hero__validity">
         <StatusBadge tone={temporal.tone}>{temporal.label}</StatusBadge>
@@ -202,14 +203,14 @@ function SignalHero({ data, temporal, remainingSec, chartRoute }: { data: LiveSi
       </div>
       <div className="signal-hero__clock">
         <span><small>Généré</small><strong>{formatDateTime(data.signal.generatedAt)}</strong></span>
-        <span><small>Cutoff source</small><strong>{formatDateTime(data.featureSnapshot.cutoffAt)}</strong></span>
-        <span><small>État backend brut</small><strong>{temporal.backendState}</strong></span>
+        <span><small>Données arrêtées à</small><strong>{formatDateTime(data.featureSnapshot.cutoffAt)}</strong></span>
+        <details><summary>Traçabilité</summary><strong title="État technique fourni par le backend">{operatorCode(temporal.backendState)}</strong></details>
       </div>
       <div className="signal-hero__actions">
         <Link to={chartRoute}><FaChartLine aria-hidden="true" /> Fenêtre du signal</Link>
         <Link to={`/live?signalId=${encodeURIComponent(data.identity.signalId)}`}><FaBolt aria-hidden="true" /> Chaîne Live</Link>
       </div>
-      {temporal.mismatch ? <div className="signal-hero__warning" role="status"><FaExclamationTriangle aria-hidden="true" /><span><strong>État temporel corrigé pour l’affichage</strong>{temporal.detail} La valeur brute reste visible pour l’audit.</span></div> : null}
+      {temporal.mismatch ? <div className="signal-hero__warning" role="status"><FaExclamationTriangle aria-hidden="true" /><span><strong>État temporel corrigé pour l’affichage</strong>{temporal.detail} L’état d’origine reste consultable dans Traçabilité.</span></div> : null}
     </section>
   );
 }
@@ -223,24 +224,24 @@ function DossierSection({ eyebrow, title, icon, action, badge, compact = false, 
 }
 
 function TradeMetric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "danger" | "success" }) { return <div data-tone={tone}><small>{label}</small><strong>{value}</strong></div>; }
-function FeatureSnapshot({ data }: { data: LiveSignalDetailView }) { return <div className="signal-feature-snapshot"><FaDatabase aria-hidden="true" /><div><strong>{data.featureSnapshot.featureSnapshotId}</strong><small>{data.featureSnapshot.datasetId} · cutoff {formatDateTime(data.featureSnapshot.cutoffAt)}</small></div><StatusBadge tone={data.featureSnapshot.freshness === "FRESH" ? "success" : data.featureSnapshot.freshness === "STALE" ? "danger" : "warning"}>{presentFreshness(data.featureSnapshot.freshness).label}</StatusBadge></div>; }
+function FeatureSnapshot({ data }: { data: LiveSignalDetailView }) { return <div className="signal-feature-snapshot" title={`État instantané : ${data.featureSnapshot.featureSnapshotId}`}><FaDatabase aria-hidden="true" /><div><strong>État des données au déclenchement</strong><small>{operatorCopy(data.featureSnapshot.datasetId)} · arrêté à {formatDateTime(data.featureSnapshot.cutoffAt)}</small></div><StatusBadge tone={data.featureSnapshot.freshness === "FRESH" ? "success" : data.featureSnapshot.freshness === "STALE" ? "danger" : "warning"}>{presentFreshness(data.featureSnapshot.freshness).label}</StatusBadge></div>; }
 function AuthorityCard({ index, title, status, tone, rows, empty }: { index: string; title: string; status: string; tone: "neutral" | "info" | "success" | "warning" | "danger" | "advisory"; rows: readonly (readonly [string, string])[]; empty: string }) { return <article className="signal-authority-card" data-tone={tone}><header><span>{index}</span><div><strong>{title}</strong><small>{status}</small></div></header>{rows.length ? <dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : <p>{empty}</p>}</article>; }
 function TimelineItem({ at, title, detail, tone, route, badge }: { at: string; title: string; detail: string; tone: "authoritative" | "advisory" | "expired" | "pending"; route?: string; badge?: string }) { const content = <><time dateTime={at}>{formatDateTime(at)}</time><span className="signal-audit-timeline__dot" /><div><strong>{title}</strong><small>{detail}</small></div>{badge ? <em>{badge}</em> : null}</>; return <li data-tone={tone}>{route ? <Link to={route}>{content}</Link> : <div>{content}</div>}</li>; }
 function IdentityRow({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd title={value}>{compactId(value)}</dd></div>; }
 function EvidenceEmpty({ title, detail }: { title: string; detail: string }) { return <div className="signal-evidence-empty" role="status"><strong>{title}</strong><span>{detail}</span></div>; }
 
 function RelatedRecords({ data }: { data: LiveSignalDetailView }) {
-  return <div className="signal-related-records"><section><h3>OrderIntents post-Risk</h3>{data.linkedOrderIntents.length ? data.linkedOrderIntents.map((intent) => <Link className="signal-related-records__link" key={intent.portfolioOrderIntentId} to={intent.route}><div><strong>{intent.instrument} {intent.side} · {intent.quantity}</strong><small>{intent.portfolioOrderIntentId}</small></div><StatusBadge tone="info">{presentBackendStatus(intent.state).label}</StatusBadge></Link>) : <EvidenceEmpty title="Aucun OrderIntent lié" detail="Aucun dossier post-Risk n’est relié à ce signal." />}</section><section><h3>Positions théoriques / broker</h3>{data.existingPositions.length ? data.existingPositions.map((position) => <article key={position.positionId}><div><strong>{position.symbol} {position.side}</strong><small>{position.positionId}</small></div><span>{position.quantity} · {formatSignedR(position.pnlR)}</span></article>) : <EvidenceEmpty title="Aucune position liée" detail="État vide confirmé pour ce signal." />}</section><section><h3>Ordres broker liés</h3>{data.linkedOrders.length ? data.linkedOrders.map((order) => <article key={order.orderId}><div><strong>{order.side} {order.quantity} · {order.type}</strong><small>{order.orderId}</small></div><StatusBadge tone={order.state === "FILLED" || order.state === "ACKED" ? "success" : order.state === "REJECTED" ? "danger" : "warning"}>{presentBackendStatus(order.state).label}</StatusBadge></article>) : <EvidenceEmpty title="Aucun ordre broker lié" detail="Aucun ordre physique n’est supposé tant que l’exécution reste fermée." />}</section></div>;
+  return <div className="signal-related-records"><section><h3>Ordres proposés après contrôle du risque</h3>{data.linkedOrderIntents.length ? data.linkedOrderIntents.map((intent) => <Link className="signal-related-records__link" key={intent.portfolioOrderIntentId} to={intent.route} title={intent.portfolioOrderIntentId}><div><strong>{intent.instrument} · {operatorCode(intent.side)} · {publishedQuantity(intent.quantity)}</strong><small>Ouvrir le dossier</small></div><StatusBadge tone="info">{presentBackendStatus(intent.state).label}</StatusBadge></Link>) : <EvidenceEmpty title="Aucun ordre proposé lié" detail="Aucun dossier après contrôle du risque n’est relié à ce signal." />}</section><section><h3>Positions théoriques et courtier</h3>{data.existingPositions.length ? data.existingPositions.map((position) => <article key={position.positionId} title={position.positionId}><div><strong>{position.symbol} · {operatorCode(position.side)}</strong><small>Position liée</small></div><span>{publishedQuantity(position.quantity)} · {formatSignedR(position.pnlR)}</span></article>) : <EvidenceEmpty title="Aucune position liée" detail="État vide confirmé pour ce signal." />}</section><section><h3>Ordres chez le courtier</h3>{data.linkedOrders.length ? data.linkedOrders.map((order) => <article key={order.orderId} title={order.orderId}><div><strong>{operatorCode(order.side)} · {publishedQuantity(order.quantity)} · {operatorCode(order.type)}</strong><small>Ordre lié</small></div><StatusBadge tone={order.state === "FILLED" || order.state === "ACKED" ? "success" : order.state === "REJECTED" ? "danger" : "warning"}>{presentBackendStatus(order.state).label}</StatusBadge></article>) : <EvidenceEmpty title="Aucun ordre chez le courtier" detail="Aucun ordre physique n’est supposé tant que l’exécution reste fermée." />}</section></div>;
 }
 
 function lifecycleStages(data: LiveSignalDetailView, arbitrationPublished: boolean, riskPublished: boolean) {
   return [
     { label: "Signal", state: "done" as const, detail: formatDateTime(data.signal.generatedAt) },
     { label: "Contexte", state: data.context.length ? "done" as const : "missing" as const, detail: data.context.length ? `${data.context.length} preuve(s)` : "Non lié" },
-    { label: "Portfolio", state: arbitrationPublished ? "done" as const : "missing" as const, detail: arbitrationPublished ? presentArbitrationDecision(data.arbitration.decision).label : "Non publié" },
-    { label: "Risk", state: riskPublished ? "done" as const : "missing" as const, detail: riskPublished ? presentQueueStatus(data.riskCheck.status).label : "Non publié" },
+    { label: "Portefeuille", state: arbitrationPublished ? "done" as const : "missing" as const, detail: arbitrationPublished ? presentArbitrationDecision(data.arbitration.decision).label : "Non publié" },
+    { label: "Risque", state: riskPublished ? "done" as const : "missing" as const, detail: riskPublished ? presentQueueStatus(data.riskCheck.status).label : "Non publié" },
     { label: "Ordre", state: data.linkedOrders.length ? "done" as const : "missing" as const, detail: data.linkedOrders.length ? `${data.linkedOrders.length} lié(s)` : "Aucun" },
-    { label: "Opérateur", state: data.commandActions.length ? "pending" as const : "missing" as const, detail: data.commandActions.length ? "Action disponible" : "Aucune capability" },
+    { label: "Votre validation", state: data.commandActions.length ? "pending" as const : "missing" as const, detail: data.commandActions.length ? "Action disponible" : "Aucune action possible" },
   ];
 }
 

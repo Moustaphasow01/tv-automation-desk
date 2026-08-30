@@ -16,7 +16,7 @@ const ATTRIBUTION_LABELS: Readonly<Record<string, string>> = {
 export function OperatorOutcomeHistoryPanel({ model }: { model: LiveTradingModel }) {
   const projection = model.theoreticalExecution;
   if (!projection?.rows.length) {
-    return <LivePanel title="Décisions opérateur & résultats" className="lt-panel--operator-outcomes"><p className="lt-empty-copy">Aucun OrderIntent théorique suivi pour cette session.</p></LivePanel>;
+    return <LivePanel title="Décisions opérateur et résultats" className="lt-panel--operator-outcomes"><p className="lt-empty-copy">Aucun ordre proposé théorique suivi pour cette session.</p></LivePanel>;
   }
   return (
     <LivePanel title="Décisions opérateur & résultats" className="lt-panel--operator-outcomes" expandable>
@@ -43,7 +43,7 @@ export function OperatorOutcomeHistoryPanel({ model }: { model: LiveTradingModel
           })}</tbody>
         </table>
       </div>
-      <p className="lt-operator-outcomes__policy">Une confirmation Human Gate n'est jamais assimilée à une exécution. L'attribution « capté » exige une déclaration opérateur enregistrée.</p>
+      <p className="lt-operator-outcomes__policy">Votre validation n'est jamais assimilée à une exécution. L'attribution « capté » exige une déclaration opérateur enregistrée.</p>
     </LivePanel>
   );
 }

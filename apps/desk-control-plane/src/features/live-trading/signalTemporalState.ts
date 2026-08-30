@@ -34,6 +34,7 @@ export function resolveSignalTemporalState(
   const effectiveState = publishedEffectiveState || (expiredByClock ? "EXPIRED" : backendState);
   const mismatch = effectiveState === "EXPIRED" && backendState !== "EXPIRED";
   const presentation = presentSignalState(effectiveState);
+  const backendPresentation = presentSignalState(backendState);
 
   return {
     backendState,
@@ -43,10 +44,10 @@ export function resolveSignalTemporalState(
     expiredByTime: effectiveState === "EXPIRED" && (expiredByClock || publishedEffectiveState === "EXPIRED"),
     mismatch,
     detail: mismatch
-      ? `L’échéance est dépassée ; l’état backend brut reste ${backendState}.`
+      ? `L’échéance est dépassée ; l’état enregistré reste « ${backendPresentation.label} ».`
       : effectiveState === "EXPIRED"
         ? "La fenêtre de validité du signal est terminée."
-        : `État backend ${backendState}.`,
+        : `État enregistré : ${backendPresentation.label}.`,
   };
 }
 

@@ -41,7 +41,7 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("aria-label=\"Unité de temps du cockpit\"");
     expect(markup).toContain("M15");
     expect(markup).toContain("H1");
-    expect(markup).toContain("Expiration Human Gate");
+    expect(markup).toContain("Expiration de votre validation");
     expect(markup).toContain("Semi-manuel");
     expect(markup).toContain("Auto désactivée");
   });
@@ -53,8 +53,8 @@ describe("Live Trading cockpit components", () => {
 
     const markup = render(<LiveCockpitStatusBar model={model} onScopeChange={() => undefined} />);
 
-    expect(markup).toContain("Human Gate expiré");
-    expect(markup).not.toContain("Expiration Human Gate");
+    expect(markup).toContain("Validation expirée");
+    expect(markup).not.toContain("Expiration de votre validation");
   });
 
   it("offers an explicit scope switch when the current signal and chart instruments differ", () => {
@@ -140,14 +140,14 @@ describe("Live Trading cockpit components", () => {
       />,
     );
 
-    expect(markup).toContain("Lecture seule après décision Risk");
+    expect(markup).toContain("Lecture seule après contrôle du risque");
     expect(markup).toContain("Quantité autorisée");
     expect(markup).toContain("507,5");
     expect(markup).toContain("505,75");
     expect(markup).toContain("T1 511");
     expect(markup).not.toContain("[object Object]");
-    expect(markup).toContain("Confirmer l’OrderIntent");
-    expect(markup).toContain("Rejeter");
+    expect(markup).toContain("Valider l’ordre proposé");
+    expect(markup).toContain("Refuser");
     expect(markup).toMatch(/class="lt-gate-confirm" disabled=""/);
     expect(markup).toMatch(/class="lt-gate-reject" disabled=""/);
     expect(markup).not.toContain("<input");

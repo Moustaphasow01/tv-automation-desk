@@ -41,7 +41,7 @@ export function LiveSignalsPage() {
         <KpiCard label="REJETÉS / EXPIRÉS" value={`${rejected}`} delta="Décisions terminales" tone={rejected ? "warning" : "neutral"} />
         <KpiCard label="ORDRES LIÉS" value={`${data.orders.length}`} delta="Ordres visibles" tone="info" />
         <KpiCard label="FILLS" value={`${data.fills.length}`} delta="Exécutions visibles" tone="info" />
-        <KpiCard label="LATENCE BFF" value={`${meta.latencyMs} ms`} delta={`asOf ${formatTime(meta.asOf)}`} />
+        <KpiCard label="Temps de réponse" value={`${meta.latencyMs} ms`} delta={`Arrêté à ${formatTime(meta.asOf)}`} />
       </section>
       <Card title="Signal Bus" eyebrow="ZOOM PAR ID" density="compact">
         <label className="table-search"><span>Rechercher</span><input value={search} onChange={(event) => { const value = event.target.value; setSearchParams(value ? { q: value } : {}, { replace: true }); }} placeholder="Symbole, stratégie, état…" /></label>

@@ -14,7 +14,7 @@ describe("page semantic accessibility regressions", () => {
 
     expect(shell).toContain('<main className="desk-content" id="main-content"');
     expect(commandCenter).not.toContain('<main className="cc-workspace"');
-    expect(commandCenter).toContain('<div className="cc-workspace" role="region" aria-label="Command Center du Trading Desk">');
+    expect(commandCenter).toContain('<div className="cc-workspace" role="region" aria-label="Synthèse du Trading Desk">');
     expect(app).not.toContain('<main className="route-loading"');
     expect(explorers).not.toContain('<main className="route-loading"');
   });
@@ -75,6 +75,6 @@ describe("page semantic accessibility regressions", () => {
 
     expect(orders).not.toContain('expectedVersion: "unavailable"');
     expect(orders).not.toContain('selected.status === "AWAITING_MANUAL_CONFIRMATION" ? (\n                    <>');
-    expect(orders).toContain("seules les actions et révisions publiées par le backend");
+    expect(orders).toContain("seules les actions publiées par le système");
   });
 });

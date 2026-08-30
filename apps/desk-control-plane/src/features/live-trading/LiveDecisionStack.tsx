@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { CommandAccepted, CommandStatus } from "@/domains/realtime/commandRuntime";
 import { presentAvailability, presentGeneric } from "@/design-system/labels";
+import { operatorCode, operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";
 import { StatusBadge } from "@/design-system/primitives";
 import type { HumanGateAction } from "@/features/order-intent/model";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
@@ -41,7 +42,7 @@ export function LiveDecisionStack(props: LiveDecisionStackProps) {
         <div>
           <p className="eyebrow">Chaîne de décision</p>
           <h2 id="lt-decision-stack-title">Du signal à l’autorisation humaine</h2>
-          <p>Chaque étage reprend uniquement les décisions et capacités publiées par le backend.</p>
+          <p>Chaque étape reprend uniquement les décisions et actions publiées par le desk.</p>
         </div>
         <StatusBadge tone={model.operator.tone}>{model.operator.label}</StatusBadge>
       </header>
@@ -61,9 +62,9 @@ export function LiveDecisionStack(props: LiveDecisionStackProps) {
       ) : null}
 
       <div className="lt-decision-stack__dossier" aria-label="Dossier de décision sélectionné">
-        <span><small>Dossier</small><strong>{model.latestSignal ? shortId(model.latestSignal.signalId) : "Aucun signal sélectionné"}</strong></span>
+        <span title={model.latestSignal?.signalId}><small>Dossier</small><strong>{model.latestSignal ? `${model.latestSignal.symbol} · ${presentGeneric(model.latestSignal.direction).label} · ${displayTime(model.latestSignal.createdAt)}` : "Aucun signal sélectionné"}</strong></span>
         <span><small>Instrument</small><strong>{model.latestSignal?.symbol ?? "—"}</strong></span>
-        <span><small>Cutoff source</small><strong>{displayTime(model.latestSignal?.sourceDataCutoffAt ?? model.latestSignal?.createdAt)}</strong></span>
+        <span><small>Données arrêtées à</small><strong>{displayTime(model.latestSignal?.sourceDataCutoffAt ?? model.latestSignal?.createdAt)}</strong></span>
         <span><small>Étape atteinte</small><strong>{stageLabel(mostAdvancedStage)}</strong></span>
       </div>
 
@@ -95,7 +96,7 @@ function SignalStage({ model, defaultExpanded }: { model: LiveTradingModel; defa
   const temporal = signal ? resolveSignalTemporalState(signal, model.meta.asOf) : null;
   const presentation = temporal ?? presentAvailability("CONNECTED_EMPTY");
   return (
-    <StageShell stage="signal" index="01" title="Signal de stratégie" status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />} defaultExpanded={defaultExpanded}>
+    <StageShell stage="signal" index="01" title="Le desk a repéré quelque chose" status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />} defaultExpanded={defaultExpanded}>
       {signal ? (
         <>
           <div className="lt-decision-stack__headline">
@@ -103,7 +104,7 @@ function SignalStage({ model, defaultExpanded }: { model: LiveTradingModel; defa
             <span>{displayTime(signal.createdAt)} · confiance {displayValue(signal.confidence)}%</span>
           </div>
           <dl className="lt-decision-stack__facts">
-            <Fact label="Stratégie" value={shortId(signal.strategyId)} />
+            <Fact label="Stratégie" value={strategyDisplayName(model, signal.strategyId)} title={signal.strategyId} />
             <Fact label="Setup" value={displayValue(recordValue(signal.setup, ["setup", "setupType", "setup_type", "name"]))} />
             <Fact label="R attendu" value={`${displayValue(signal.expectancyR)} R`} />
             <Fact label={temporal?.effectiveState === "EXPIRED" ? "Expiré à" : "Expiration"} value={displayTime(signal.expiresAt)} />
@@ -111,7 +112,7 @@ function SignalStage({ model, defaultExpanded }: { model: LiveTradingModel; defa
           {temporal?.mismatch ? <p className="lt-decision-stack__warning" role="status">{temporal.detail}</p> : null}
           <Link to={`/live/signals/${encodeURIComponent(signal.signalId)}`}>Ouvrir le signal</Link>
         </>
-      ) : <EmptyEvidence text="Aucun StrategySignal courant n’est publié." />}
+      ) : <EmptyEvidence text="Aucun signal de stratégie courant n’est publié." />}
     </StageShell>
   );
 }
@@ -120,18 +121,18 @@ function ContextStage({ model, defaultExpanded }: { model: LiveTradingModel; def
   const context = model.latestContextDecision;
   const presentation = context ? presentGeneric(context.recommendation) : presentAvailability("CONNECTED_EMPTY");
   return (
-    <StageShell stage="context" index="02" title="Avis contexte IA" status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />} advisory defaultExpanded={defaultExpanded}>
+    <StageShell stage="context" index="02" title="Le contexte est-il favorable ?" status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />} advisory defaultExpanded={defaultExpanded}>
       {context ? (
         <>
           <div className="lt-decision-stack__headline">
-            <strong>{presentGeneric(context.mode).label}</strong>
+            <strong>{operatorCode(context.mode)}</strong>
             <span>Décidé {displayTime(context.decidedAt)} · confiance {context.confidence === null ? "—" : `${Math.round(context.confidence)}%`}</span>
           </div>
           <dl className="lt-decision-stack__facts">
             <Fact label="Recommandation" value={presentation.label} />
             <Fact label="Multiplicateur risque" value={context.riskMultiplier === null ? "—" : `${context.riskMultiplier.toFixed(2)}×`} />
           </dl>
-          <ReasonCodes values={context.reasonCodes} empty="Aucun code motif publié." />
+          <ReasonCodes values={context.reasonCodes} empty="Aucun motif publié." />
           <p className="lt-decision-stack__authority">Avis consultatif : l’autorité de risque reste au backend déterministe.</p>
         </>
       ) : <EmptyEvidence text="Aucune décision de contexte consultative n’est publiée." />}
@@ -152,18 +153,18 @@ function PortfolioRiskStage({ model, defaultExpanded }: { model: LiveTradingMode
       <DecisionStatusBadge tone={riskStatus.tone} label={`Risque : ${riskStatus.label}`} compactLabel={`R · ${compactDecisionStatus(riskStatus.label)}`} />
     </div>;
   return (
-    <StageShell stage="portfolio-risk" index="03" title="Portefeuille & risque" status={collapsedStatus} defaultExpanded={defaultExpanded}>
+    <StageShell stage="portfolio-risk" index="03" title="Est-ce compatible avec vos positions ?" status={collapsedStatus} defaultExpanded={defaultExpanded}>
       {arbitration || risk ? (
         <div className="lt-decision-stack__authority-grid">
           <AuthorityEvidence title="Arbitrage portefeuille" status={portfolioStatus.label} facts={[
             ["Quantité cible", displayValue(arbitration?.targetQuantity)],
             ["Conflit", displayValue(arbitration?.conflictStatus)],
-            ["Motif", displayValue(arbitration?.reasonCode)],
+            ["Motif", operatorReason(arbitration?.reasonCode)],
           ]} />
           <AuthorityEvidence title="Risque global" status={riskStatus.label} facts={[
             ["Limite", displayValue(risk?.limitLabel)],
             ["Utilisation", risk?.usedPct === null || risk?.usedPct === undefined ? "Non publié" : `${risk.usedPct.toFixed(1)}%`],
-            ["Motif", displayValue(risk?.reasonCode)],
+            ["Motif", operatorReason(risk?.reasonCode)],
           ]} />
         </div>
       ) : <EmptyEvidence text="Aucune décision portefeuille ou risque n’est publiée pour ce signal." />}
@@ -176,15 +177,15 @@ function OrderIntentStage({ model, defaultExpanded }: { model: LiveTradingModel;
   const presentation = intent ? presentBackendStatus(intent.state) : presentAvailability("CONNECTED_EMPTY");
   const unrelated = Boolean(intent && model.latestSignal && intent.signalId !== model.latestSignal.signalId);
   return (
-    <StageShell stage="order-intent" index="04" title="Position & ordre" status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />} defaultExpanded={defaultExpanded}>
+    <StageShell stage="order-intent" index="04" title="Quel ordre exactement ?" status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />} defaultExpanded={defaultExpanded}>
       {intent ? (
         <>
-          {unrelated ? <p className="lt-decision-stack__warning" role="status">Cette intention est liée au signal {shortId(intent.signalId)}, pas au signal affiché ci-dessus.</p> : null}
-          <div className="lt-decision-stack__readonly">Lecture seule après décision Risk</div>
+          {unrelated ? <p className="lt-decision-stack__warning" role="status" title={intent.signalId}>Cet ordre proposé est lié à un autre signal que celui affiché ci-dessus.</p> : null}
+          <div className="lt-decision-stack__readonly">Lecture seule après contrôle du risque</div>
           {!unrelated && model.selectedSignalPlan ? (
             <div className="lt-plan-comparison" aria-label="Comparaison du plan proposé et du plan autorisé">
               <section><small>Stratégie proposée</small><strong>{model.selectedSignalPlan.entry}</strong><span>Stop {model.selectedSignalPlan.stop} · {model.selectedSignalPlan.targets.join(" · ") || "cible non publiée"}</span></section>
-              <section><small>Plan autorisé post-Risk</small><strong>{formatTradeTerm(recordValue(intent.executionTerms, ["entry", "entryPrice", "entry_price"]) ?? intent.limitPrice)}</strong><span>Stop {formatTradeTerm(recordValue(intent.executionTerms, ["stop", "stopPrice", "stop_price"]) ?? intent.stopPrice)} · cible {formatTradeTerm(recordValue(intent.executionTerms, ["targets", "target", "targetPrice", "target_price"]) ?? intent.targetPrice)}</span></section>
+              <section><small>Plan autorisé après contrôle du risque</small><strong>{formatTradeTerm(recordValue(intent.executionTerms, ["entry", "entryPrice", "entry_price"]) ?? intent.limitPrice)}</strong><span>Stop {formatTradeTerm(recordValue(intent.executionTerms, ["stop", "stopPrice", "stop_price"]) ?? intent.stopPrice)} · objectif {formatTradeTerm(recordValue(intent.executionTerms, ["targets", "target", "targetPrice", "target_price"]) ?? intent.targetPrice)}</span></section>
             </div>
           ) : null}
           <dl className="lt-decision-stack__facts">
@@ -195,9 +196,9 @@ function OrderIntentStage({ model, defaultExpanded }: { model: LiveTradingModel;
             <Fact label="Cible" value={formatTradeTerm(recordValue(intent.executionTerms, ["targets", "target", "targetPrice", "target_price"]) ?? intent.targetPrice)} />
             <Fact label="Révision" value={displayValue(intent.allowedActions.revision || intent.expectedVersion)} />
           </dl>
-          <Link to={intent.route}>Ouvrir le dossier canonique</Link>
+          <Link to={intent.route}>Ouvrir le dossier de l’ordre proposé</Link>
         </>
-      ) : <EmptyEvidence text="Aucun OrderIntent post-Risk n’est publié ; aucun terme de trade n’est supposé." />}
+      ) : <EmptyEvidence text="Aucun ordre proposé après contrôle du risque n’est publié ; aucun terme de trade n’est supposé." />}
     </StageShell>
   );
 }
@@ -211,7 +212,7 @@ function HumanGateStage({ model, defaultExpanded, children }: { model: LiveTradi
     <StageShell
       stage="human-gate"
       index="05"
-      title="Human Gate"
+      title="À vous de valider"
       status={<DecisionStatusBadge tone={presentation.tone} label={presentation.label} />}
       priority={actionable || model.operator.status === "AWAITING_HUMAN_GATE"}
       defaultExpanded={defaultExpanded}
@@ -293,11 +294,11 @@ function mostAdvancedPublishedStage(model: LiveTradingModel): DecisionStageId {
 }
 
 function stageLabel(stage: DecisionStageId): string {
-  if (stage === "human-gate") return "Human Gate";
-  if (stage === "order-intent") return "OrderIntent";
-  if (stage === "portfolio-risk") return "Portfolio & Risk";
-  if (stage === "context") return "Contexte";
-  return "Signal";
+  if (stage === "human-gate") return "À vous de valider";
+  if (stage === "order-intent") return "Ordre proposé";
+  if (stage === "portfolio-risk") return "Compatibilité vérifiée";
+  if (stage === "context") return "Contexte évalué";
+  return "Signal repéré";
 }
 
 function AuthorityEvidence({ title, status, facts }: { title: string; status: string; facts: readonly (readonly [string, string])[] }) {
@@ -305,11 +306,11 @@ function AuthorityEvidence({ title, status, facts }: { title: string; status: st
 }
 
 function ReasonCodes({ values, empty }: { values: readonly string[]; empty: string }) {
-  return values.length ? <ul className="lt-decision-stack__reasons">{values.map((value) => <li key={value}>{presentGeneric(value).label}</li>)}</ul> : <p className="lt-decision-stack__muted">{empty}</p>;
+  return values.length ? <ul className="lt-decision-stack__reasons">{values.map((value) => <li key={value}>{operatorReason(value)}</li>)}</ul> : <p className="lt-decision-stack__muted">{empty}</p>;
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
-  return <div><dt>{label}</dt><dd>{value}</dd></div>;
+function Fact({ label, value, title }: { label: string; value: string; title?: string }) {
+  return <div><dt>{label}</dt><dd title={title}>{value}</dd></div>;
 }
 
 function EmptyEvidence({ text }: { text: string }) {
@@ -318,6 +319,11 @@ function EmptyEvidence({ text }: { text: string }) {
 
 function shortId(value: string): string {
   return value.length > 28 ? `${value.slice(0, 25)}…` : value;
+}
+
+function strategyDisplayName(model: LiveTradingModel, strategyId: string): string {
+  const strategy = model.strategyInstances.find((item) => item.strategyDefinitionId === strategyId || item.strategyInstanceId === strategyId);
+  return strategy?.name ? operatorCopy(strategy.name) : "Stratégie déterministe";
 }
 
 function formatTradeTerm(value: unknown): string {

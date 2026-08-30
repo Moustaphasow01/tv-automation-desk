@@ -62,7 +62,7 @@ export function OperatorSettingsPage() {
   const [focusSoundProfile, setFocusSoundProfile] = useState(readLiveFocusSoundProfile);
   const query = useFrontView("operator-settings");
   const repository = useFrontViewRepository();
-  const [reason, setReason] = useState("Contrôle opérateur : modification de préférence non critique via le flux de commande BFF.");
+  const [reason, setReason] = useState("Modification d’une préférence opérateur non critique.");
   const [stepUpToken, setStepUpToken] = useState("");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export function OperatorSettingsPage() {
       <div className="operator-page operator-settings-page">
         <h1 className="sr-only">Réglages opérateur</h1>
         <Card title="Aucun réglage" eyebrow="EMPTY" state="empty" density="compact">
-          <p>Le BFF ne retourne pas encore la projection `/views/operator-settings`.</p>
+          <p>Les réglages opérateur ne sont pas encore publiés.</p>
         </Card>
       </div>
     );
@@ -176,7 +176,7 @@ export function OperatorSettingsPage() {
 
         <Card title="Notifications & alertes" actions={<InlineAction>Canaux</InlineAction>} density="compact">
           <div className="settings-local-alerts">
-            <div><FaBullseye /><span><strong>Ouverture automatique du mode Focus</strong><small>Préférence locale : ouvre Focus uniquement lorsqu’une capability Human Gate devient réellement autorisée.</small></span></div>
+            <div><FaBullseye /><span><strong>Ouverture automatique du mode Focus</strong><small>Préférence locale : ouvre Focus uniquement lorsqu’une validation opérateur devient réellement possible.</small></span></div>
             <button type="button" aria-pressed={focusPreference.autoOpen} onClick={() => { const next = writeLiveFocusPreference({ autoOpen: !focusPreference.autoOpen }); setFocusPreference(next); }}>{focusPreference.autoOpen ? "Activée" : "Désactivée"}</button>
           </div>
           <div className="settings-local-alerts">
@@ -269,7 +269,7 @@ export function OperatorSettingsPage() {
           </div>
           <ReasonInput label="Motif obligatoire" value={reason} onChange={setReason} />
           <label className="settings-step-up">
-            <span>Step-up phrase pour révocation</span>
+            <span>Phrase de confirmation renforcée pour la révocation</span>
             <input value={stepUpToken} onChange={(event) => setStepUpToken(event.target.value)} placeholder={revokeAction?.actionId ?? "actionId step-up"} />
           </label>
           <div className="settings-guardrail-list">

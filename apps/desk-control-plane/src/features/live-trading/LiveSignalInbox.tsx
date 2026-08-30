@@ -68,7 +68,7 @@ export function LiveSignalInbox({
         <div>
           <p className="eyebrow">Flux global · tous instruments</p>
           <h3 id="lt-signal-inbox-title">Inbox des signaux</h3>
-          <span>{signals.length} signaux backend · asOf {displayTime(model.meta.asOf)}</span>
+          <span>{signals.length} signaux publiés · arrêté à {displayTime(model.meta.asOf)}</span>
         </div>
         <div className="lt-signal-inbox__metrics" aria-label="Résumé du pipeline de signaux">
           <Metric label="À prendre" value={signals.filter((signal) => operatorStateForSignal(model, signal).code === "ACTIONABLE").length} />
@@ -188,8 +188,8 @@ function signalStage(model: LiveTradingModel, signal: SignalRow): { label: strin
   if (theoretical) return { label: `Suivi · ${presentGeneric(theoretical.status).label}`, tone: theoretical.status === "STOP_HIT" ? "danger" : theoretical.status === "TARGET_HIT" ? "success" : "info" };
   const intent = [...model.source.canonicalRuntime.pendingOrderIntents, ...model.source.portfolioOrderIntents]
     .find((item) => item.signalId === signal.signalId);
-  if (intent?.humanGate.gateId) return { label: `Human Gate · ${presentGeneric(intent.humanGate.status).label}`, tone: intent.humanGate.allowedActions.length ? "warning" : "info" };
-  if (intent) return { label: `OrderIntent · ${presentGeneric(intent.state).label}`, tone: "info" };
+  if (intent?.humanGate.gateId) return { label: `Votre validation · ${presentGeneric(intent.humanGate.status).label}`, tone: intent.humanGate.allowedActions.length ? "warning" : "info" };
+  if (intent) return { label: `Ordre proposé · ${presentGeneric(intent.state).label}`, tone: "info" };
   const risk = model.source.riskChecks.find((item) => item.signalId === signal.signalId);
   if (risk) return { label: `Risk · ${presentGeneric(risk.status).label}`, tone: risk.status === "PASS" ? "success" : risk.status === "BLOCK" ? "danger" : "warning" };
   const portfolio = model.source.arbitrations.find((item) => item.signalId === signal.signalId);

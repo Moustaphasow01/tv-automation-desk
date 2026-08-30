@@ -13,6 +13,7 @@ import {
 } from "react-icons/fa";
 import { DeskButton } from "@/design-system/actions";
 import { Card, KpiCard, ProgressBar, StatusBadge } from "@/design-system/primitives";
+import { operatorCode, operatorDuration } from "@/design-system/operatorVocabulary";
 import { InlineAction, MetricBox, OperatorPageHeader } from "@/design-system/workspace";
 import { ViewTruthBanner } from "@/design-system/states";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -50,7 +51,7 @@ export function JarvisWorkspacePage() {
       <div className="operator-page jarvis-page">
         <h1 className="sr-only">Espace Jarvis</h1>
         <Card title="Aucune donnée Jarvis" eyebrow="EMPTY" state="empty" density="compact">
-          <p>Le BFF ne retourne pas encore la projection `/views/jarvis-workspace`.</p>
+          <p>Les données de l’espace Jarvis ne sont pas encore publiées.</p>
         </Card>
       </div>
     );
@@ -119,7 +120,7 @@ export function JarvisWorkspacePage() {
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
         title="Espace Jarvis"
-        description="Assistant opérateur : brief, citations, conversation et actions contrôlées via Command Runtime."
+        description="Assistant opérateur : brief, sources, conversation et actions contrôlées."
         actions={
           <>
             <span title="Création de brief non exposée par le backend">Nouveau brief indisponible</span>
@@ -130,12 +131,12 @@ export function JarvisWorkspacePage() {
       />
 
       <section className="operator-kpi-strip" aria-label="Indicateurs Jarvis">
-        <KpiCard label="BRIEF MATINAL" value={data.summary.morningBriefStatus} delta={`${data.morningBrief.length} sections`} tone="success" />
-        <KpiCard label="SUGGESTIONS" value={`${data.summary.openSuggestions}`} delta="Propositions contextuelles" tone="info" />
-        <KpiCard label="ACTIONS EN ATTENTE" value={`${data.summary.pendingActions}`} delta="Confirmation opérateur requise" tone="warning" />
-        <KpiCard label="AGENTS IA ACTIFS" value={`${data.summary.activeAgents}`} delta={`${data.missions.length} missions visibles`} tone="info" />
-        <KpiCard label="SERVICE VOCAL" value={data.summary.voiceStatus} delta={data.voice.degradationReason ?? "Push-to-talk prêt"} tone={data.summary.voiceStatus === "READY" ? "success" : "warning"} />
-        <KpiCard label="FRAÎCHEUR" value={`${data.summary.freshnessSeconds}s`} delta={`Projection ${meta.latencyMs} ms`} tone="success" />
+        <KpiCard label="Brief matinal" value={operatorCode(data.summary.morningBriefStatus)} delta={`${data.morningBrief.length} sections`} tone="success" />
+        <KpiCard label="Suggestions" value={`${data.summary.openSuggestions}`} delta="Propositions contextuelles" tone="info" />
+        <KpiCard label="Actions en attente" value={`${data.summary.pendingActions}`} delta="Confirmation opérateur requise" tone="warning" />
+        <KpiCard label="Agents IA actifs" value={`${data.summary.activeAgents}`} delta={`${data.missions.length} missions visibles`} tone="info" />
+        <KpiCard label="Service vocal" value={operatorCode(data.summary.voiceStatus)} delta={data.voice.degradationReason ?? "Commande vocale prête"} tone={data.summary.voiceStatus === "READY" ? "success" : "warning"} />
+        <KpiCard label="Fraîcheur" value={operatorDuration(data.summary.freshnessSeconds)} delta={`Réponse en ${meta.latencyMs} ms`} tone={data.summary.freshnessSeconds > 3600 ? "warning" : "success"} />
       </section>
 
       <section className="operator-grid operator-grid--top" aria-label="Brief, conversation et actions Jarvis">
@@ -145,7 +146,7 @@ export function JarvisWorkspacePage() {
               <article key={section.sectionId}>
                 <span>{briefIcon(section.status)}</span>
                 <div><strong>{section.domain} · {section.headline}</strong><small>{section.detail}</small></div>
-                <StatusBadge tone={section.status === "OK" ? "success" : section.status === "HIGH" ? "danger" : "warning"}>{section.status}</StatusBadge>
+                <StatusBadge tone={section.status === "OK" ? "success" : section.status === "HIGH" ? "danger" : "warning"}>{operatorCode(section.status)}</StatusBadge>
               </article>
             ))}
           </div>
@@ -159,7 +160,7 @@ export function JarvisWorkspacePage() {
           </div>
         </Card>
 
-        <Card title="Conversation & réponses citées" actions={<InlineAction>Historique</InlineAction>} density="compact">
+        <Card title="Conversation et réponses sourcées" actions={<InlineAction>Historique</InlineAction>} density="compact">
           <form className="jarvis-question-box" onSubmit={submitAssistantQuestion}>
             <label>
               <span>Assistant</span>
@@ -174,7 +175,7 @@ export function JarvisWorkspacePage() {
               <textarea
                 value={assistantQuestion}
                 onChange={(event) => setAssistantQuestion(event.target.value)}
-                placeholder="Pose une question read-only : état research, signal, risk, provider, data…"
+                placeholder="Posez une question en lecture seule : recherche, signaux, risque, fournisseurs ou données…"
                 rows={3}
               />
             </label>
@@ -197,13 +198,13 @@ export function JarvisWorkspacePage() {
           </div>
         </Card>
 
-        <Card title="Pending actions & voice" actions={<InlineAction>Commandes</InlineAction>} density="compact">
+        <Card title="Actions en attente et voix" actions={<InlineAction>Commandes</InlineAction>} density="compact">
           <div className="jarvis-action-list">
             {data.pendingActions.map((action) => (
               <article key={action.actionId}>
                 <div><strong>{action.title}</strong><small>{action.impact}</small></div>
                 <StatusBadge tone={action.permission === "ALLOWED" ? "success" : action.permission === "STEP_UP_REQUIRED" ? "warning" : "danger"}>
-                  {action.permission}
+                  {operatorCode(action.permission)}
                 </StatusBadge>
                 <DeskButton
                   variant="primary"
@@ -218,70 +219,70 @@ export function JarvisWorkspacePage() {
           <div className="jarvis-voice-card">
             {data.voice.pushToTalkAvailable ? <FaMicrophone /> : <FaVolumeMute />}
             <div>
-              <strong>Voix · {data.voice.serviceStatus}</strong>
+              <strong>Voix · {operatorCode(data.voice.serviceStatus)}</strong>
               <small>{data.voice.degradationReason ?? data.voice.lastTranscript ?? "Push-to-talk accessible"}</small>
             </div>
           </div>
           <div className="jarvis-command-result">
             <small>Résultat commande</small>
-            <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande Jarvis confirmée"}</strong>
+            <strong title={command?.commandId}>{command ? "Commande acceptée" : "Aucune commande Jarvis confirmée"}</strong>
             {commandError ? <span className="text-danger">{commandError}</span> : null}
           </div>
         </Card>
       </section>
 
-      <section className="operator-grid operator-grid--bottom" aria-label="Snapshot, sources et alertes Jarvis">
-        <Card title="Desk Snapshot & missions IA" actions={<InlineAction>Agents IA</InlineAction>} density="compact">
+      <section className="operator-grid operator-grid--bottom" aria-label="État du desk, sources et alertes Jarvis">
+        <Card title="État du desk et missions IA" actions={<InlineAction>Agents IA</InlineAction>} density="compact">
           <div className="jarvis-snapshot-grid">
             <MetricBox label="Risque utilisé" value={`${Math.round(data.deskSnapshot.riskUsedPct)}%`} />
-            <MetricBox label="Signaux live" value={`${data.deskSnapshot.liveSignals}`} />
-            <MetricBox label="Exp. research" value={`${data.deskSnapshot.researchExperiments}`} />
-            <MetricBox label="Providers OK" value={`${data.deskSnapshot.providersOk}/${data.deskSnapshot.providersTotal}`} />
+            <MetricBox label="Signaux en direct" value={`${data.deskSnapshot.liveSignals}`} />
+            <MetricBox label="Expériences de recherche" value={`${data.deskSnapshot.researchExperiments}`} />
+            <MetricBox label="Fournisseurs sains" value={`${data.deskSnapshot.providersOk}/${data.deskSnapshot.providersTotal}`} />
           </div>
           <div className="jarvis-mission-list">
             {data.missions.map((mission) => (
               <article key={mission.missionId}>
                 <span><FaTasks /></span>
-                <div><strong>{mission.title}</strong><small>{mission.ownerAgent} · {mission.missionId}</small></div>
-                <StatusBadge tone={mission.state === "DONE" ? "success" : mission.state === "NEEDS_OPERATOR" ? "warning" : "accent"}>{mission.state}</StatusBadge>
+                <div title={mission.missionId}><strong>{mission.title}</strong><small>{mission.ownerAgent}</small></div>
+                <StatusBadge tone={mission.state === "DONE" ? "success" : mission.state === "NEEDS_OPERATOR" ? "warning" : "accent"}>{operatorCode(mission.state)}</StatusBadge>
               </article>
             ))}
           </div>
         </Card>
 
-        <Card title="Sources, citations & freshness" actions={<InlineAction>Sources</InlineAction>} density="compact">
+        <Card title="Sources, références et fraîcheur" actions={<InlineAction>Sources</InlineAction>} density="compact">
           <div className="jarvis-source-list">
             {data.citations.map((citation) => (
               <Link key={citation.citationId} to={citation.route}>
-                <div><strong>{citation.label}</strong><small>{citation.citationId}</small></div>
-                <StatusBadge tone={citation.freshness === "fresh" ? "success" : citation.freshness === "degraded" ? "warning" : "danger"}>{citation.freshness}</StatusBadge>
+                <div title={citation.citationId}><strong>{citation.label}</strong><small>Ouvrir la source</small></div>
+                <StatusBadge tone={citation.freshness === "fresh" ? "success" : citation.freshness === "degraded" ? "warning" : "danger"}>{operatorCode(citation.freshness)}</StatusBadge>
                 <FaExternalLinkAlt />
               </Link>
             ))}
           </div>
         </Card>
 
-        <Card title="Alertes & commandes en cours" actions={<InlineAction>Observabilité</InlineAction>} density="compact">
+        <Card title="Alertes et commandes en cours" actions={<InlineAction>Observabilité</InlineAction>} density="compact">
           <div className="jarvis-alert-list">
             {data.alerts.map((alert, index) => (
               <Link key={`${alert.alertId}:${alert.route}:${index}`} to={alert.route}>
                 <FaBell />
-                <div><strong>{alert.title}</strong><small>{alert.alertId}</small></div>
-                <StatusBadge tone={alert.severity === "HIGH" ? "danger" : alert.severity === "MEDIUM" ? "warning" : "accent"}>{alert.severity}</StatusBadge>
+                <div title={alert.alertId}><strong>{alert.title}</strong><small>Ouvrir l’alerte</small></div>
+                <StatusBadge tone={alert.severity === "HIGH" ? "danger" : alert.severity === "MEDIUM" ? "warning" : "accent"}>{operatorCode(alert.severity)}</StatusBadge>
               </Link>
             ))}
           </div>
           <div className="jarvis-command-list">
             {data.commands.map((item) => (
               <article key={item.commandId}>
-                <div><strong>{item.title}</strong><small>{item.commandId}</small></div>
-                <StatusBadge tone={item.status === "SUCCEEDED" ? "success" : item.status === "FAILED" || item.status === "REJECTED" ? "danger" : "accent"}>{item.status}</StatusBadge>
+                <div title={item.commandId}><strong>{item.title}</strong><small>Commande auditée</small></div>
+                <StatusBadge tone={item.status === "SUCCEEDED" ? "success" : item.status === "FAILED" || item.status === "REJECTED" ? "danger" : "accent"}>{operatorCode(item.status)}</StatusBadge>
               </article>
             ))}
           </div>
           <div className="jarvis-authority-note">
             <FaShieldAlt />
-            <span>Jarvis propose → Action en attente → confirmation interface → Flux de commande. Aucun contournement Risque/Exécution/PermissionGate.</span>
+            <span>Jarvis propose → action en attente → confirmation dans l’interface → commande auditée. Aucun contournement du risque, de l’exécution ou des permissions.</span>
           </div>
         </Card>
       </section>

@@ -31,14 +31,18 @@ test("session activity routes a signal to decision, chart and canonical dossier"
   await fullscreen.getByRole("button", { name: "Décision" }).first().click();
   await expect(fullscreen).toBeHidden();
   await expect(page.locator(".lt-cockpit__decision")).toBeFocused();
-  await expect(page.locator(".lt-decision-stack__dossier")).toContainText(signalId.slice(0, 12));
+  await expect(page.locator(".lt-decision-stack__dossier span").first()).toHaveAttribute("title", signalId);
+  await expect(page.locator(".lt-decision-stack__dossier")).not.toContainText(signalId.slice(0, 12));
 
   await page.getByRole("button", { name: "Plein écran" }).click();
   await fullscreen.getByRole("link", { name: "Dossier complet" }).first().click();
   await expect(page).toHaveURL(new RegExp(`/live/signals/${signalId}`));
-  await expect(page.getByRole("heading", { name: /Dossier signal/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Dossier signal/ })).toBeVisible({ timeout: 15_000 });
   await expect(page.locator(".signal-hero")).toContainText("Fenêtre terminée");
-  await expect(page.locator(".signal-hero")).toContainText("État backend brut");
+  await expect(page.locator(".signal-hero")).toContainText("État temporel corrigé pour l’affichage");
+  await expect(page.locator(".signal-hero")).toContainText("l’état enregistré reste « Arbitré »");
+  await expect(page.locator(".signal-hero")).not.toContainText("ARBITRATED");
+  await expect(page.locator("body")).not.toContainText(/US_OPEN_TREND|BFF_EVENTS_RECONNECTING|Event Explorer|Risk Center/);
   await expect(page.locator(".signal-lifecycle li")).toHaveCount(6);
   await expect(page.getByText("Aucune position liée")).toHaveCount(0);
   await page.screenshot({ path: "output/playwright/live-signal-experience/signal-dossier.png", fullPage: true });

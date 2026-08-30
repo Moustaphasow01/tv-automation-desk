@@ -5,14 +5,16 @@ import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { OperatorMenu } from "@/shell/OperatorMenu";
 import { useDeskDensity } from "@/shell/DeskDensityViewport";
+import { presentAvailability, presentExecutionMode } from "@/design-system/labels";
+import { operatorCode } from "@/design-system/operatorVocabulary";
 import type { LiveTradingModel } from "./model";
 
 const searchTargets = [
   { label: "Centre des stratégies", keywords: "strategy stratégies instances", route: "/strategies" },
   { label: "Portefeuille", keywords: "portfolio positions exposition", route: "/portfolio" },
   { label: "Risque", keywords: "risk risque limites", route: "/risk" },
-  { label: "OrderIntents", keywords: "orders ordres intentions", route: "/orders" },
-  { label: "Exécution", keywords: "provider execution broker", route: "/execution/providers" },
+  { label: "Ordres proposés", keywords: "orders ordres intentions", route: "/orders" },
+  { label: "Exécution", keywords: "fournisseur execution broker", route: "/execution/providers" },
 ];
 
 export function LiveTradingHeader({ model, onRefresh, refreshing, onEnterFocus }: { model: LiveTradingModel; onRefresh(): void; refreshing: boolean; onEnterFocus(): void }) {
@@ -37,20 +39,20 @@ export function LiveTradingHeader({ model, onRefresh, refreshing, onEnterFocus }
           <input aria-label="Rechercher un espace du desk" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Naviguer vers stratégies, portefeuille, risque…" autoComplete="off" />
           {results.length ? <div role="listbox" aria-label="Résultats de recherche">{results.map((item) => <button key={item.route} type="button" role="option" onClick={() => navigate(item.route)}>{item.label}</button>)}</div> : null}
         </form>
-        <div className="lt-header__environment"><small>Environnement</small><strong>{model.mode.environment}</strong></div>
+        <div className="lt-header__environment"><small>Environnement</small><strong>{operatorCode(model.mode.environment)}</strong></div>
         <time className="lt-header__clock" dateTime={now?.toISOString()}><strong>{now ? formatClock(now) : "—"} ET</strong><small>{now ? formatDate(now) : "Horloge indisponible"}</small></time>
-        <label className="lt-density-control" title="Densité du cockpit"><span className="sr-only">Densité du cockpit</span><select value={density.preference} onChange={(event) => density.setPreference(event.target.value as typeof density.preference)}><option value="auto">Auto</option><option value="native">Confort</option><option value="workstation">Compact</option></select></label>
-        <Link className="lt-icon-button" to="/orders" aria-label={`Ouvrir les décisions Human Gate · ${model.signalFunnel.pendingHumanGates} en attente`}><FaBell /><span>{model.signalFunnel.pendingHumanGates || "Gate"}</span></Link>
+        <label className="lt-density-control" title="Densité d’affichage"><span className="sr-only">Densité d’affichage</span><select value={density.preference} onChange={(event) => density.setPreference(event.target.value as typeof density.preference)}><option value="auto">Auto</option><option value="native">Confort</option><option value="workstation">Compact</option></select></label>
+        <Link className="lt-icon-button" to="/orders" aria-label={`Ouvrir les validations opérateur · ${model.signalFunnel.pendingHumanGates} en attente`}><FaBell /><span>{model.signalFunnel.pendingHumanGates || "Décisions"}</span></Link>
         <button type="button" className="lt-focus-trigger" data-actionable={model.gateActions.some((action) => action.permission === "ALLOWED") ? "true" : "false"} onClick={onEnterFocus} aria-label={`Ouvrir le mode Focus${model.signalFunnel.pendingHumanGates ? ` · ${model.signalFunnel.pendingHumanGates} décision(s)` : ""}`}><FaBullseye aria-hidden="true" /><span>Focus</span>{model.signalFunnel.pendingHumanGates ? <strong className="lt-focus-trigger__count">{model.signalFunnel.pendingHumanGates}</strong> : null}<kbd>F</kbd></button>
         <OperatorMenu variant="live-trading" displayName={session?.principal.displayName ?? "Session indisponible"} roleLabel={session?.principal.roles.join(", ") || "Rôle indisponible"} />
       </header>
       <section className="lt-policy" aria-label="Politique opérationnelle autoritaire">
-        <PolicyChip tone="info">{model.mode.environment}</PolicyChip>
-        <PolicyChip tone="info">{model.mode.executionMode.replace("_", "-")}</PolicyChip>
-        <PolicyChip tone={model.mode.autoExecutionEnabled ? "danger" : "warning"}>EXÉCUTION AUTO {model.mode.autoExecutionEnabled ? "ACTIVÉE" : "DÉSACTIVÉE"}</PolicyChip>
-        <PolicyChip tone={model.mode.physicalExecutionEnabled ? "danger" : "danger"}>BROKER LIVE {model.mode.physicalExecutionEnabled ? "ACTIVÉ" : "DÉSACTIVÉ"}</PolicyChip>
-        <PolicyChip tone={model.mode.humanGateRequired ? "warning" : "danger"}>Human Gate {model.mode.humanGateRequired ? "Requis" : "Non requis"}</PolicyChip>
-        <span className={`lt-policy__freshness lt-tone--${model.truth.tone}`}><FaCircle aria-hidden="true" />Données {model.freshness.marketData.toLowerCase()} · asOf {formatTimestamp(model.meta.asOf)}</span>
+        <PolicyChip tone="info">{operatorCode(model.mode.environment)}</PolicyChip>
+        <PolicyChip tone="info">{presentExecutionMode(model.mode.executionMode).label}</PolicyChip>
+        <PolicyChip tone={model.mode.autoExecutionEnabled ? "danger" : "warning"}>Exécution automatique {model.mode.autoExecutionEnabled ? "activée" : "désactivée"}</PolicyChip>
+        <PolicyChip tone={model.mode.physicalExecutionEnabled ? "danger" : "danger"}>Broker réel {model.mode.physicalExecutionEnabled ? "activé" : "désactivé"}</PolicyChip>
+        <PolicyChip tone={model.mode.humanGateRequired ? "warning" : "danger"}>Validation opérateur {model.mode.humanGateRequired ? "requise" : "non requise"}</PolicyChip>
+        <span className={`lt-policy__freshness lt-tone--${model.truth.tone}`}><FaCircle aria-hidden="true" />Données {presentAvailability(model.freshness.marketData).label.toLowerCase()} · arrêté à {formatTimestamp(model.meta.asOf)}</span>
         <button type="button" className="lt-policy__refresh" onClick={onRefresh} disabled={refreshing} aria-label="Actualiser la projection Live"><FaSyncAlt className={refreshing ? "is-spinning" : ""} /></button>
         <FaShieldAlt className="lt-policy__shield" aria-label="Politique backend active" />
       </section>

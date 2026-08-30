@@ -8,6 +8,7 @@ import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime
 import type { LiveSignalDetailView } from "@/domains/front-api/viewModels";
 import { LiveSignalDetailWorkspace } from "@/features/live-trading/LiveSignalDetailWorkspace";
 import { resolveSignalTemporalState } from "@/features/live-trading/signalTemporalState";
+import { operatorCode } from "@/design-system/operatorVocabulary";
 import "@/features/live-trading/signal-detail.css";
 
 type SignalAction = LiveSignalDetailView["commandActions"][number];
@@ -51,8 +52,8 @@ export function LiveSignalDetailPage() {
     <div className="operator-page live-signal-page signal-dossier-page">
       <ViewTruthBanner meta={meta} />
       <OperatorPageHeader
-        title={`Dossier signal · ${data.signal.symbol} ${data.signal.direction}`}
-        description={`${data.identity.signalId} · source au ${formatDateTime(data.featureSnapshot.cutoffAt)} · projection ${meta.latencyMs} ms.`}
+        title={`Dossier signal · ${data.signal.symbol} ${operatorCode(data.signal.direction)}`}
+        description={`Données arrêtées à ${formatDateTime(data.featureSnapshot.cutoffAt)}. L’identifiant technique reste disponible dans la section Traçabilité.`}
         actions={(
           <>
             <Link to={`/live?signalId=${encodeURIComponent(data.identity.signalId)}`}>Retour au Live</Link>
@@ -60,7 +61,7 @@ export function LiveSignalDetailPage() {
           </>
         )}
       />
-      {idMismatch ? <div className="signal-contract-warning" role="alert"><strong>Incohérence d’identité</strong><span>La route demande {requestedSignalId}, mais le BFF a répondu pour {data.identity.signalId}.</span></div> : null}
+      {idMismatch ? <div className="signal-contract-warning" role="alert" title={`Demandé : ${requestedSignalId} · reçu : ${data.identity.signalId}`}><strong>Incohérence d’identité</strong><span>Le service du desk a retourné un autre signal que celui demandé. Aucune action n’est autorisée.</span></div> : null}
       <LiveSignalDetailWorkspace
         data={data}
         temporal={temporal}
@@ -102,8 +103,8 @@ export function buildLiveSignalCommand(action: SignalAction, data: LiveSignalDet
 }
 
 function LiveSignalLoading() { return <div className="operator-page signal-dossier-page" aria-busy="true" aria-live="polite"><div className="signal-dossier-skeleton" /><div className="signal-dossier-skeleton signal-dossier-skeleton--tall" /></div>; }
-function LiveSignalError({ message }: { message: string }) { return <Card title="Signal indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact"><p>{message}</p></Card>; }
-function LiveSignalEmpty() { return <Card title="Aucun signal" eyebrow="ÉTAT VIDE" state="empty" density="compact"><p>Le BFF ne retourne pas de projection pour cet identifiant.</p></Card>; }
+function LiveSignalError({ message }: { message: string }) { return <Card title="Signal indisponible" eyebrow="Erreur de contrat" tone="danger" density="compact"><p>{message}</p></Card>; }
+function LiveSignalEmpty() { return <Card title="Aucun signal" eyebrow="État vide" state="empty" density="compact"><p>Le service du desk ne retourne pas de projection pour cet identifiant.</p></Card>; }
 
 function useAnchoredClock(anchorIso: string) {
   const anchorMs = Date.parse(anchorIso);

@@ -160,7 +160,7 @@ export function ReplayPage() {
 
           <div className="rp-side-grid">
             <section className="rp-panel" aria-label="Compteur d'événements">
-              <header><h2>Timeline Events</h2><small>{visibleTimeline.length}/{data.timeline.length}</small></header>
+              <header><h2>Chronologie des événements</h2><small>{visibleTimeline.length}/{data.timeline.length}</small></header>
               <div className="rp-counts">
                 {(Object.keys(LAYER_LABELS) as ReplayTimelineLayer[]).map((layer) => (
                   <div key={layer}><small>{LAYER_LABELS[layer]}</small><strong>{data.timelineCounts[layer]}</strong></div>

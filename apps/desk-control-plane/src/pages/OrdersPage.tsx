@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { routeDisplayName } from "@/app/routes";
 import { FaFingerprint } from "react-icons/fa";
 import { ReasonInput } from "@/design-system/actions";
+import { operatorCode, operatorCopy, operatorReason, operatorStatusPresentation } from "@/design-system/operatorVocabulary";
 import { StatusBadge } from "@/design-system/primitives";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
@@ -21,7 +22,7 @@ export function OrdersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const query = useFrontView("orders", selectedId ? { orderIntentId: selectedId } : {}, { preservePreviousData: true });
   const repository = useFrontViewRepository();
-  const [reason, setReason] = useState("Contrôle opérateur : décision Human Gate depuis Orders & Human Gate.");
+  const [reason, setReason] = useState("Décision prise depuis l’écran des ordres proposés.");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
@@ -53,8 +54,8 @@ export function OrdersPage() {
   );
 
   if (query.isLoading) return <OrdersLoading />;
-  if (query.isError) return <div className="oh-page"><h1 className="sr-only">Ordres et Human Gate</h1><div className="oh-workspace" role="region" aria-label="État Orders et Human Gate" tabIndex={0}><p className="oh-empty">La projection des ordres ne répond pas. Aucune action n'est disponible.</p></div></div>;
-  if (!data || !review) return <div className="oh-page"><h1 className="sr-only">Ordres et Human Gate</h1><div className="oh-workspace" role="region" aria-label="État Orders et Human Gate" tabIndex={0}><p className="oh-empty">Aucune projection des ordres n'est publiée.</p></div></div>;
+  if (query.isError) return <div className="oh-page"><h1 className="sr-only">Ordres et validation</h1><div className="oh-workspace" role="region" aria-label="État des ordres et des validations" tabIndex={0}><p className="oh-empty">Les ordres proposés ne répondent pas. Aucune action n'est disponible.</p></div></div>;
+  if (!data || !review) return <div className="oh-page"><h1 className="sr-only">Ordres et validation</h1><div className="oh-workspace" role="region" aria-label="État des ordres et des validations" tabIndex={0}><p className="oh-empty">Aucun ordre proposé n'est publié.</p></div></div>;
 
   const confirmOrderAction = async (action: OrderAction) => {
     setSubmittingActionId(action.actionId);
@@ -74,7 +75,7 @@ export function OrdersPage() {
       <header className="oh-header">
         <div className="oh-header__title">
           <h1>{routeDisplayName("orders")}</h1>
-          <p>Revue des OrderIntents &amp; approbation opérateur</p>
+          <p>Ordres proposés et validation opérateur</p>
         </div>
         <div className="oh-header__clock">
           <strong>{formatClock(realtime?.now)}</strong>
@@ -84,19 +85,19 @@ export function OrdersPage() {
       </header>
 
       <div className="oh-workspace">
-        <section className="oh-kpi-strip" aria-label="Indicateurs Orders & Human Gate">
+        <section className="oh-kpi-strip" aria-label="Indicateurs des ordres et validations">
           <KpiCell label="En attente" value={String(review.summary.pendingCount)} />
           <KpiCell label="Approuvées (jour)" value={String(review.summary.approvedToday)} />
           <KpiCell label="Rejetées (jour)" value={String(review.summary.rejectedToday)} />
           <KpiCell label="Temps moyen" value={formatDuration(review.summary.avgDecisionSeconds)} />
-          <KpiCell label="OrderIntents actifs" value={String(data.summary.orderIntents)} />
+          <KpiCell label="Ordres proposés actifs" value={String(data.summary.orderIntents)} />
           <KpiCell label="Ordres actifs" value={String(data.summary.activeOrders)} />
         </section>
 
         <div className="oh-row1">
-          <section className="oh-panel" aria-label="OrderIntents en revue">
+          <section className="oh-panel" aria-label="Ordres proposés en revue">
             <header>
-              <h2>OrderIntents en revue</h2>
+              <h2>Ordres proposés en revue</h2>
               <small>{filteredItems.length}/{review.items.length}</small>
               <div className="oh-decision-filters" aria-label="Filtres des décisions">
                 <label>
@@ -120,18 +121,18 @@ export function OrdersPage() {
               </div>
             </header>
             <div className="oh-panel__body" style={{ padding: 0 }}>
-              <div className="oh-table-scroll" role="region" aria-label="Liste des OrderIntents en revue" tabIndex={0}>
+              <div className="oh-table-scroll" role="region" aria-label="Liste des ordres proposés en revue" tabIndex={0}>
                 <table className="oh-table">
-                  <thead><tr><th>OrderIntent</th><th>Instrument</th><th>Côté</th><th>Qté (aut.)</th><th>Âge</th><th>Statut</th></tr></thead>
+                  <thead><tr><th>Ordre proposé</th><th>Instrument</th><th>Sens</th><th>Quantité autorisée</th><th>Âge</th><th>État</th></tr></thead>
                   <tbody>
                     {pagedItems.map((item) => (
                       <tr key={item.orderIntentId} aria-selected={selected?.orderIntentId === item.orderIntentId} onClick={() => setSelectedId(item.orderIntentId)}>
-                        <td><strong>{shortId(item.orderIntentId)}</strong></td>
+                        <td><strong title={item.orderIntentId}>{item.instrument} · {operatorCode(item.side)} · {item.quantity}</strong></td>
                         <td>{item.instrument}</td>
-                        <td><StatusBadge tone={item.side === "BUY" ? "success" : "danger"}>{item.side}</StatusBadge></td>
+                        <td><StatusBadge tone={item.side === "BUY" ? "success" : "danger"}>{operatorCode(item.side)}</StatusBadge></td>
                         <td>{item.quantity} ({item.authorizedQuantity})</td>
                         <td>{formatAge(item.ageSeconds)}</td>
-                        <td><StatusBadge tone={gateTone(item.status)}>{item.status}</StatusBadge></td>
+                        <td><StatusBadge tone={gateTone(item.status)}>{operatorStatusPresentation(item.status).label}</StatusBadge></td>
                       </tr>
                     ))}
                     {!pagedItems.length ? <tr><td colSpan={6}><p className="oh-empty">Aucune décision ne correspond aux filtres.</p></td></tr> : null}
@@ -148,23 +149,23 @@ export function OrdersPage() {
             </div>
           </section>
 
-          <section className="oh-panel" aria-label="Détail OrderIntent sélectionné">
+          <section className="oh-panel" aria-label="Détail de l’ordre proposé sélectionné">
             <header><h2>Détail</h2>{selected ? <Link to={selected.route}>Dossier complet</Link> : null}</header>
             <div className="oh-panel__body">
               {selected ? (
                 <div className="oh-detail">
                   {review.selectedDossier ? <PipelineStepper lineage={review.selectedDossier.lineage} /> : null}
                   <div className="oh-detail-grid">
-                    <div><small>OrderIntent</small><strong>{shortId(selected.orderIntentId)}</strong></div>
-                    <div><small>Statut</small><strong>{selected.status}</strong></div>
+                    <div><small>Ordre proposé</small><strong title={selected.orderIntentId}>{selected.instrument} · {operatorCode(selected.side)} · {selected.quantity}</strong></div>
+                    <div><small>État</small><strong>{operatorStatusPresentation(selected.status).label}</strong></div>
                     <div><small>Instrument</small><strong>{selected.instrument}</strong></div>
-                    <div><small>Côté</small><strong>{selected.side}</strong></div>
+                    <div><small>Sens</small><strong>{operatorCode(selected.side)}</strong></div>
                     <div>
                       <small>Échéance</small>
                       <strong className={`text-${expiryTone(selected.expiresAt, realtime?.now)}`}>{formatExpiryCountdown(selected.expiresAt, realtime?.now)}</strong>
                       <span className="oh-detail__timestamp">{formatTime(selected.expiresAt)}</span>
                     </div>
-                    <div><small>Décision risque</small><strong>{review.selectedDossier?.lineage.riskDecision.decision ?? "Non publié"}</strong></div>
+                    <div><small>Décision du risque</small><strong>{review.selectedDossier?.lineage.riskDecision.decision ? operatorStatusPresentation(review.selectedDossier.lineage.riskDecision.decision).label : "Non publié"}</strong></div>
                   </div>
                   {review.selectedDossier ? (
                     <div className="oh-qty-compare">
@@ -175,13 +176,13 @@ export function OrdersPage() {
                   ) : null}
                   {selected.status === "AWAITING_MANUAL_CONFIRMATION" ? (
                     <div className="oh-empty" role="status">
-                      <strong>Décision backend requise</strong>
-                      <span>Ouvrez le dossier canonique : seules les actions et révisions publiées par le backend y sont exécutables.</span>
-                      <Link to={selected.route}>Ouvrir le Human Gate</Link>
+                      <strong>Votre validation est requise</strong>
+                      <span>Ouvrez le dossier complet : seules les actions publiées par le système sont exécutables.</span>
+                      <Link to={selected.route}>Ouvrir la validation</Link>
                     </div>
                   ) : <p className="oh-empty">Cette décision est déjà finalisée.</p>}
                 </div>
-              ) : <p className="oh-empty">Aucun OrderIntent sélectionné.</p>}
+              ) : <p className="oh-empty">Aucun ordre proposé sélectionné.</p>}
             </div>
           </section>
         </div>
@@ -199,7 +200,7 @@ export function OrdersPage() {
             <div className="oh-panel__body">
               <div className="oh-reason-list">
                 {review.reasonCodes.map((item) => (
-                  <div key={item.code} className="oh-reason-row"><span>{item.code}</span><strong>{item.count}</strong></div>
+                  <div key={item.code} className="oh-reason-row"><span title={item.code}>{operatorReason(item.code)}</span><strong>{item.count}</strong></div>
                 ))}
                 {!review.reasonCodes.length ? <p className="oh-empty">Aucun code de raison publié.</p> : null}
               </div>
@@ -212,7 +213,7 @@ export function OrdersPage() {
               <div className="oh-pending-list">
                 {review.pendingByStrategy.map((row) => (
                   <div key={row.strategyInstanceId} className="oh-pending-row">
-                    <span>{shortId(row.strategyInstanceId)}</span>
+                    <span title={row.strategyInstanceId}>Stratégie · {row.pending} en attente</span>
                     <strong>{row.pending}</strong>
                     <small>{formatAge(row.oldestAgeSeconds)}</small>
                   </div>
@@ -232,7 +233,7 @@ export function OrdersPage() {
                     {review.recentDecisions.map((item) => (
                       <tr key={item.orderIntentId}>
                         <td>{item.instrument}</td>
-                        <td><StatusBadge tone={item.decision === "APPROVED" ? "success" : "danger"}>{item.decision}</StatusBadge></td>
+                        <td><StatusBadge tone={item.decision === "APPROVED" ? "success" : "danger"}>{operatorStatusPresentation(item.decision).label}</StatusBadge></td>
                         <td>{formatDuration(item.decisionSeconds)}</td>
                       </tr>
                     ))}
@@ -248,7 +249,7 @@ export function OrdersPage() {
           <section className="oh-panel" aria-label="Journal des refus opérateur">
             <header><h2>Journal des refus</h2><small>{(review.refusalJournal ?? []).length}</small></header>
             <div className="oh-panel__body" style={{ padding: 0 }}>
-              <div className="oh-table-scroll" role="region" aria-label="Refus Human Gate audités" tabIndex={0}>
+              <div className="oh-table-scroll" role="region" aria-label="Refus opérateur audités" tabIndex={0}>
                 <table className="oh-table">
                   <thead><tr><th>Heure</th><th>Instrument</th><th>Motif</th><th>Opérateur</th></tr></thead>
                   <tbody>
@@ -268,7 +269,7 @@ export function OrdersPage() {
           </section>
 
           <section className="oh-panel" aria-label="Analyse des refus et expirations">
-            <header><h2>Boucle de feedback</h2><small>Human Gate</small></header>
+            <header><h2>Analyse des décisions</h2><small>Votre validation</small></header>
             <div className="oh-panel__body oh-feedback-grid">
               <div>
                 <h3>Motifs fréquents</h3>
@@ -292,7 +293,7 @@ export function OrdersPage() {
                 <div><small>Remplissages récents</small><strong>{data.summary.recentFills}</strong></div>
                 <div><small>Ordres partiels</small><strong>{data.summary.partialOrders}</strong></div>
                 <div><small>Ordres rejetés</small><strong>{data.summary.rejectedOrders}</strong></div>
-                <div><small>Protection (%)</small><strong>{data.summary.protectedOrdersPct}%</strong></div>
+                <div><small>Ordres protégés (stop en place)</small><strong>{data.summary.protectedOrdersPct}%</strong></div>
               </div>
             </div>
           </section>
@@ -306,11 +307,11 @@ export function OrdersPage() {
                   <tbody>
                     {data.activeOrders.map((order) => (
                       <tr key={order.orderId}>
-                        <td><Link to={`/execution/orders/${encodeURIComponent(order.orderId)}`}>{shortId(order.orderId)}</Link></td>
+                        <td><Link to={`/execution/orders/${encodeURIComponent(order.orderId)}`} title={order.orderId}>{order.instrument} · {operatorCode(order.side)} · {order.quantity}</Link></td>
                         <td>{order.instrument}</td>
-                        <td><StatusBadge tone={order.side === "BUY" ? "success" : "danger"}>{order.side}</StatusBadge></td>
+                        <td><StatusBadge tone={order.side === "BUY" ? "success" : "danger"}>{operatorCode(order.side)}</StatusBadge></td>
                         <td>{order.quantity}</td>
-                        <td><StatusBadge tone={order.state === "FILLED" ? "success" : order.state === "REJECTED" || order.state === "CANCELLED" ? "danger" : "accent"}>{order.state}</StatusBadge></td>
+                        <td><StatusBadge tone={order.state === "FILLED" ? "success" : order.state === "REJECTED" || order.state === "CANCELLED" ? "danger" : "accent"}>{operatorStatusPresentation(order.state).label}</StatusBadge></td>
                       </tr>
                     ))}
                     {!data.activeOrders.length ? <tr><td colSpan={5}><p className="oh-empty">Aucun ordre actif.</p></td></tr> : null}
@@ -327,8 +328,8 @@ export function OrdersPage() {
             <div className="oh-command-result">
               <FaFingerprint />
               <div>
-                <small>Dernière commande orders</small>
-                <strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong>
+                <small>Dernière commande</small>
+                <strong title={command?.commandId}>{command ? "Commande acceptée" : "Aucune commande confirmée"}</strong>
                 {commandError ? <div style={{ color: "var(--oh-red)" }}>{commandError}</div> : null}
               </div>
             </div>
@@ -336,8 +337,8 @@ export function OrdersPage() {
               {data.commandActions.map((action) => (
                 <article key={action.actionId}>
                   <FaFingerprint />
-                  <div><strong>{action.label}</strong><small>{action.commandType}</small></div>
-                  <StatusBadge tone={action.permission === "ALLOWED" ? "success" : action.permission === "STEP_UP_REQUIRED" ? "warning" : "danger"}>{action.permission}</StatusBadge>
+                  <div><strong>{operatorCopy(action.label)}</strong><small>{operatorCode(action.commandType)}</small></div>
+                  <StatusBadge tone={action.permission === "ALLOWED" ? "success" : action.permission === "STEP_UP_REQUIRED" ? "warning" : "danger"}>{operatorStatusPresentation(action.permission).label}</StatusBadge>
                   <button
                     type="button"
                     disabled={action.permission !== "ALLOWED" || !reason.trim() || submittingActionId === action.actionId}
@@ -384,12 +385,12 @@ type Lineage = NonNullable<OrdersView["humanGateReview"]["selectedDossier"]>["li
 
 const STEPPER_STAGES: readonly { key: keyof Lineage; label: string }[] = [
   { key: "strategySignal", label: "Signal" },
-  { key: "contextDecision", label: "AI Context" },
-  { key: "portfolioDecision", label: "Portfolio" },
-  { key: "riskDecision", label: "Risk Engine" },
-  { key: "targetPosition", label: "Target" },
-  { key: "orderIntent", label: "OrderIntent" },
-  { key: "humanGate", label: "Human Gate" },
+  { key: "contextDecision", label: "Contexte" },
+  { key: "portfolioDecision", label: "Portefeuille" },
+  { key: "riskDecision", label: "Risque" },
+  { key: "targetPosition", label: "Position cible" },
+  { key: "orderIntent", label: "Ordre proposé" },
+  { key: "humanGate", label: "Votre validation" },
 ];
 
 function PipelineStepper({ lineage }: { lineage: Lineage }) {
@@ -410,7 +411,7 @@ function PipelineStepper({ lineage }: { lineage: Lineage }) {
         );
       })}
       <div className="oh-stepper-line" />
-      <div className={`oh-stepper-node${providerReached ? " is-done" : ""}`}><span className="dot" /><small>Provider Cmd</small></div>
+      <div className={`oh-stepper-node${providerReached ? " is-done" : ""}`}><span className="dot" /><small>Commande fournisseur</small></div>
     </div>
   );
 }
@@ -445,7 +446,7 @@ function DecisionDonut({ items }: { items: OrdersView["humanGateReview"]["items"
         {Object.entries(counts).map(([key, value]) => (
           <li key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: colors[key], display: "inline-block" }} />
-            {key} <strong>{value}</strong>
+            {operatorStatusPresentation(key).label} <strong>{value}</strong>
           </li>
         ))}
       </ul>
@@ -465,7 +466,7 @@ function KpiCell({ label, value }: { label: string; value: string }) {
 function OrdersLoading() {
   return (
     <div className="oh-page">
-      <h1 className="sr-only">Ordres et Human Gate</h1>
+      <h1 className="sr-only">Ordres et validation</h1>
       <div className="oh-workspace">
         <section className="oh-kpi-strip">
           {Array.from({ length: 6 }).map((_, index) => <article key={index} className="oh-kpi-card"><div className="skeleton-line" /></article>)}
