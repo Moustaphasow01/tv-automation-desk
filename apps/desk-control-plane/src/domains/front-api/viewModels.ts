@@ -640,7 +640,7 @@ export type LiveTradingView = {
       reviewRequired: number;
       openTrades: number;
       closedTrades: number;
-      totalClosedR: number;
+      totalClosedR: number | null;
       operatorCaptured?: number;
       operatorMissed?: number;
       operatorAvoidedLoss?: number;
@@ -684,8 +684,9 @@ export type LiveTradingView = {
     sourceDataCutoffAt?: string | null;
     featureSnapshotId: string;
     ruleHits: readonly string[];
-    expectancyR: number;
-    rewardRisk: number;
+    expectancyR: number | null;
+    rewardRisk: number | null;
+    signalOutboxId?: string | null;
     regime: string;
     setup?: Record<string, unknown> | null;
     predicates?: readonly unknown[];

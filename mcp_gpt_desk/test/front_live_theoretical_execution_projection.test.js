@@ -54,6 +54,21 @@ test("publishes backend-driven manual execution actions without treating confirm
   assert.equal(row.manualExecution.allowedActions.every((action) => action.environment === "PAPER"), true);
 });
 
+test("does not publish a false flat R before any theoretical trade is closed", () => {
+  const projection = buildLiveTheoreticalExecution({
+    execution: {
+      portfolioOrderIntents: [intent("intent-waiting", "signal-waiting")],
+      humanExecutionGates: [gate("intent-waiting", "AWAITING_MANUAL_CONFIRMATION")],
+      humanExecutionGateEvents: [], theoreticalEvents: [], manualExecutionEvents: [], trades: [], providerCommands: [], providerEvents: [],
+    },
+    nowIso: "2026-08-30T12:00:00.000Z",
+  });
+
+  assert.equal(projection.summary.closedTrades, 0);
+  assert.equal(projection.summary.totalClosedR, null);
+  assert.equal(theoreticalPerformanceR(projection, "2026-08-30T12:00:00.000Z").totalR, null);
+});
+
 test("publishes backend-calculated live R from the scoped market series", () => {
   const execution = {
     portfolioOrderIntents: [intent("intent-open", "signal-open")],

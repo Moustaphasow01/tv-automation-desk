@@ -74,9 +74,17 @@ export function signalRow(item) {
   const source = { ...payload, ...item };
   const lineage = item.lineage || payload.lineage || payload.source?.lineage || {};
   const tradePlan = frontSignalTradePlan(source);
+  const proposedTradePlan = object(tradePlan.proposedTradePlan);
+  const tradePlanEconomics = object(tradePlan.tradePlanEconomics);
+  const firstTarget = rows(proposedTradePlan.targets)[0] || {};
+  const firstTargetEconomics = rows(tradePlanEconomics.targets)[0] || {};
   const rawReasonCodes = stringList(source.reason_codes);
   return {
-    signalId: text(firstValue(source.signal_outbox_id, source.signal_id, rows(lineage.strategy_signal_ids)[0]), ""),
+    // The domain StrategySignal ID is the canonical lineage identity. The outbox
+    // ID remains useful transport evidence, but must never replace it in routes
+    // or joins with Context, Risk and OrderIntent.
+    signalId: text(firstValue(source.signal_id, rows(lineage.strategy_signal_ids)[0], source.signal_outbox_id), ""),
+    signalOutboxId: text(source.signal_outbox_id, "") || null,
     strategyId: text(firstValue(source.strategy_definition_id, source.strategy_id, rows(lineage.strategy_definition_ids)[0]), "unavailable"),
     strategyDefinitionId: text(firstValue(source.strategy_definition_id, source.strategy_id, rows(lineage.strategy_definition_ids)[0]), "unavailable"),
     strategyVersionId: text(firstValue(source.strategy_version_id, rows(lineage.strategy_version_ids)[0]), "unavailable"),
@@ -106,8 +114,20 @@ export function signalRow(item) {
     certificationRunId: source.certification_run_id || null,
     correlationId: text(source.correlation_id, "unavailable"),
     ruleHits: stringList(source.rule_hits),
-    expectancyR: number(firstValue(source.expectancy_R, source.expectancy_r), 0),
-    rewardRisk: number(source.reward_risk, 0),
+    expectancyR: nullableNumber(firstValue(
+      source.expectancy_R,
+      source.expectancy_r,
+      source.expected_r,
+      tradePlanEconomics.expected_r,
+      firstTargetEconomics.expected_r,
+      firstTarget.expected_r,
+    )),
+    rewardRisk: nullableNumber(firstValue(
+      source.reward_risk,
+      tradePlanEconomics.reward_risk,
+      firstTargetEconomics.reward_risk,
+      firstTarget.reward_risk,
+    )),
     regime: text(firstValue(source.regime, source.setup?.context?.market_regime, source.signal_quality?.context_bias), "unavailable"),
     conflicts: rows(firstValue(source.conflicts, source.signal_quality?.conflicts)),
   };

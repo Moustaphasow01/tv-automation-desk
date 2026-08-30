@@ -1824,6 +1824,36 @@ test("live signal detail reads grain prices and R from the canonical proposed tr
   });
 });
 
+test("live signal detail resolves both canonical signal and transport outbox identifiers", async () => {
+  const store = frontControlPlaneStore({
+    strategy: {
+      definitions: [],
+      versions: [],
+      instances: [],
+      signals: [{
+        signal_outbox_id: "outbox-grain-alias-1",
+        signal_id: "signal-grain-alias-1",
+        instrument_code: "ZC",
+        side: "long",
+        created_at_utc: "2026-08-27T17:25:00.000Z",
+        expires_at_utc: "2026-08-27T18:05:00.000Z",
+      }],
+    },
+  });
+
+  const canonical = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-signal-detail",
+    query: { signalId: "signal-grain-alias-1" },
+  });
+  const legacyBookmark = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-signal-detail",
+    query: { signalId: "outbox-grain-alias-1" },
+  });
+
+  assert.equal(canonical.data.identity.signalId, "signal-grain-alias-1");
+  assert.equal(legacyBookmark.data.identity.signalId, "signal-grain-alias-1");
+});
+
 test("live signal detail publishes null instead of a false zero when no trade-plan metric exists", async () => {
   const store = frontControlPlaneStore({
     strategy: {

@@ -226,6 +226,9 @@ function buildSignalFunnel(
   const pendingHumanGates = intents.filter((item) => item.humanGate.allowedActions.length || semanticIncludes(item.humanGate.status, "", ["AWAITING", "PENDING"])).length;
   const theoreticalSummary = data.theoreticalExecution?.summary;
   const theoreticalTracked = theoreticalSummary?.trackedIntents ?? data.theoreticalExecution?.rows.length ?? 0;
+  const totalClosedR = (theoreticalSummary?.closedTrades ?? 0) > 0
+    ? theoreticalSummary?.totalClosedR ?? null
+    : null;
   const rawSignals = signalPool.length;
   return {
     rawSignals,
@@ -244,14 +247,14 @@ function buildSignalFunnel(
     targetHit: theoreticalSummary?.targetHit ?? 0,
     stopHit: theoreticalSummary?.stopHit ?? 0,
     expired: theoreticalSummary?.expired ?? 0,
-    totalClosedR: theoreticalSummary?.totalClosedR ?? null,
+    totalClosedR,
     stages: [
       { key: "signals", label: "Signaux", value: rawSignals, tone: rawSignals ? "info" : "neutral", detail: "Signaux StrategySignal publiés par les moteurs." },
       { key: "context", label: "Contexte OK", value: contextTake, tone: contextTake ? "success" : contextWait || contextReject ? "warning" : "neutral", detail: `${contextWait} attente · ${contextReject} rejet contexte` },
       { key: "portfolio", label: "Portfolio", value: portfolioAccepted, tone: portfolioAccepted ? "success" : portfolioRejected ? "warning" : "neutral", detail: `${portfolioRejected} rejet portfolio` },
       { key: "risk", label: "Risk PASS", value: riskPass, tone: riskPass ? "success" : riskBlock ? "danger" : riskWatch ? "warning" : "neutral", detail: `${riskWatch} watch · ${riskBlock} block` },
       { key: "intent", label: "OrderIntent", value: intents.length, tone: intents.length ? "warning" : "neutral", detail: `${pendingHumanGates} Human Gate en attente` },
-      { key: "tracking", label: "Suivis", value: theoreticalTracked, tone: theoreticalTracked ? "info" : "neutral", detail: `${theoreticalSummary?.closedTrades ?? 0} clos · R ${displayValue(theoreticalSummary?.totalClosedR)}` },
+      { key: "tracking", label: "Suivis", value: theoreticalTracked, tone: theoreticalTracked ? "info" : "neutral", detail: `${theoreticalSummary?.closedTrades ?? 0} clos · R ${displayValue(totalClosedR)}` },
     ],
   };
 }

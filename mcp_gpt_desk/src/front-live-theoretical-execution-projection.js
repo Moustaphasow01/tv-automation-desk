@@ -26,7 +26,11 @@ export function buildLiveTheoreticalExecution({ execution = {}, marketSeries = n
       reviewRequired: count(projectedRows, (item) => item.status === "EXIT_REVIEW_REQUIRED"),
       openTrades: count(projectedRows, (item) => item.tradeStatus && !TERMINAL_TRADE_STATES.has(item.tradeStatus)),
       closedTrades: closed.length,
-      totalClosedR: roundR(closed.reduce((sum, item) => sum + Number(item.resultR || 0), 0)),
+      // A cohort without a closed trade has no observed R yet. Publishing zero
+      // would turn missing evidence into a flat performance result.
+      totalClosedR: closed.length
+        ? roundR(closed.reduce((sum, item) => sum + Number(item.resultR || 0), 0))
+        : null,
       operatorCaptured: count(projectedRows, (item) => item.outcomeAttribution.status === "CAPTURED"),
       operatorMissed: count(projectedRows, (item) => item.outcomeAttribution.status === "MISSED_OPPORTUNITY"),
       operatorAvoidedLoss: count(projectedRows, (item) => item.outcomeAttribution.status === "AVOIDED_LOSS"),

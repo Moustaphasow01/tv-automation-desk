@@ -113,6 +113,7 @@ describe("toLiveTradingModel reconciliation", () => {
     expect(model.selectedTheoreticalExecution?.status).toBe("ENTRY_FILLED");
     expect(model.reconciliation.expected).toEqual(row);
     expect(model.timeline).toEqual([]);
+    expect(model.signalFunnel.totalClosedR).toBeNull();
   });
 
   it("uses only the backend audit timeline and never derives events from runtime objects", () => {

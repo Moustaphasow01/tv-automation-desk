@@ -61,7 +61,7 @@ const columns = [
   { key: "strategy", header: "Stratégie", render: (row: Signal) => row.strategyId },
   { key: "state", header: "État", render: (row: Signal) => <StatusBadge tone={signalTone(row.state)}>{presentSignalState(row.state).label}</StatusBadge> },
   { key: "confidence", header: "Confiance", align: "right" as const, render: (row: Signal) => `${row.confidence}%` },
-  { key: "expectancy", header: "Expectancy", align: "right" as const, render: (row: Signal) => `${row.expectancyR.toFixed(2)} R` },
+  { key: "expectancy", header: "Expectancy", align: "right" as const, render: (row: Signal) => row.expectancyR == null ? "—" : `${row.expectancyR.toFixed(2)} R` },
   { key: "created", header: "Créé", render: (row: Signal) => formatTime(row.createdAt) },
 ] as const;
 

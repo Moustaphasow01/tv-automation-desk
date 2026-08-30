@@ -4,7 +4,12 @@ import { orderRow, positionRow, signalRow, signalTemporalRow } from "./front-con
 import { portfolioIntentSignalId, portfolioOrderIntentSummaryRow } from "./front-control-plane-domain-completeness.js";
 
 export function liveSignalDetail({ strategy, execution, risk, ai, query, nowIso, actor }) {
-  const source = selectById(rows(nested(strategy, ["signals"])), query.signalId, (item) => firstValue(item.signal_outbox_id, item.signal_id), "LIVE_SIGNAL_NOT_FOUND");
+  const source = selectById(
+    rows(nested(strategy, ["signals"])),
+    query.signalId,
+    (item) => [item.signal_id, item.signal_outbox_id],
+    "LIVE_SIGNAL_NOT_FOUND",
+  );
   const signal = signalRow(source);
   const matchingOrders = rows(nested(execution, ["orders"])).filter((item) => signalIdOf(item) === signal.signalId).map(orderRow);
   const matchingIntents = rows(nested(execution, ["portfolioOrderIntents"]))
@@ -156,7 +161,11 @@ function signalIdOf(item) {
 }
 function selectById(items, requestedId, idOf, errorCode) {
   const expected = text(requestedId, "");
-  const match = rows(items).find((item) => text(idOf(item), "") === expected);
+  const match = rows(items).find((item) => {
+    const candidates = idOf(item);
+    return (Array.isArray(candidates) ? candidates : [candidates])
+      .some((candidate) => text(candidate, "") === expected);
+  });
   if (!match) throw codedError(errorCode, `${errorCode}: ${expected}`, 404);
   return match;
 }
