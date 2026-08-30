@@ -41,4 +41,13 @@ $verifyAction = New-ScheduledTaskAction -Execute $powerShell -Argument "-NoProfi
 $verifyTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "04:00"
 Register-ScheduledTask -TaskName "DeskFutures-BackupVerify" -Action $verifyAction -Trigger $verifyTrigger -Principal $principal -Settings $settings -Force | Out-Null
 
-Write-Host "Desk maintenance tasks registered: health, runtime retention, database/object backup, backup verification."
+$grainsRuntimeScript = Join-Path $InstallRoot "current\deploy\windows\Run-UsGrainsShadowRuntime.ps1"
+$grainsRuntimeAction = New-ScheduledTaskAction -Execute $powerShell -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$grainsRuntimeScript`" -InstallRoot `"$InstallRoot`" -DataRoot `"$DataRoot`""
+$grainsRuntimeTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1)
+$grainsRuntimeSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName "DeskFutures-UsGrainsShadowRuntime" -Action $grainsRuntimeAction -Trigger $grainsRuntimeTrigger -Principal $principal -Settings $grainsRuntimeSettings -Force | Out-Null
+if (Get-ScheduledTask -TaskName "DeskFuturesUsGrainsShadowRuntime" -ErrorAction SilentlyContinue) {
+    Unregister-ScheduledTask -TaskName "DeskFuturesUsGrainsShadowRuntime" -Confirm:$false
+}
+
+Write-Host "Desk maintenance tasks registered: health, runtime retention, database/object backup, backup verification, US grains shadow runtime."

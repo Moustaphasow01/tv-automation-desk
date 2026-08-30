@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { canonicalJson } from "@tv-automation/desk-domain";
-import { CanonicalStrategyEvaluationScheduler, latestNewPosition, schedulerContinuityAnchorUtc, scopedSchedulerRunKey, selectLatestNewPosition, strategySignalFromRuntimePosition } from "../src/canonical-strategy-evaluation-scheduler.js";
+import { CanonicalStrategyEvaluationScheduler, latestNewPosition, schedulerContinuityAnchorUtc, scopedSchedulerRunKey, selectLatestNewPosition, strategyInstanceUsesDedicatedRuntime, strategySignalFromRuntimePosition } from "../src/canonical-strategy-evaluation-scheduler.js";
 
 describe("Canonical Strategy Evaluation Scheduler", () => {
   test("wakes a due SHADOW instance and persists a deterministic NO_SIGNAL result", async () => {
@@ -61,6 +61,33 @@ describe("Canonical Strategy Evaluation Scheduler", () => {
     const scheduler = new CanonicalStrategyEvaluationScheduler({ store });
     await scheduler.runCycle({ now_utc: "2026-08-12T14:05:00.000Z", source_class: "LIVE" });
     assert.deepEqual(captured[0].last_scheduled_at_by_instance, { nominal: "2026-08-12T14:00:00.000Z" });
+  });
+
+  test("delegates grain-suite instances instead of compiling them through the generic DSL runtime", async () => {
+    const captured = [];
+    const grain = {
+      ...strategyInstance("grain-version"),
+      strategy_instance_id: "grain-instance",
+      instrument_scope: ["ZC"],
+      metadata: { catalog_version: "us_grains_strategy_catalog_v1" },
+    };
+    const generic = strategyInstance("generic-version");
+    const store = {
+      persistence: { pool: {} },
+      strategyKernel: {
+        async listInstances() { return [grain, generic]; },
+        async planInstanceSchedulerCycle(input) { captured.push(input); return { plan: { summary: {}, due: [] } }; },
+      },
+      strategyEvaluations: { async listRecent() { return []; } },
+    };
+
+    const scheduler = new CanonicalStrategyEvaluationScheduler({ store });
+    const result = await scheduler.runCycle({ now_utc: "2026-08-31T14:00:00.000Z", source_class: "LIVE" });
+
+    assert.deepEqual(captured[0].instances.map((item) => item.strategy_instance_id), [generic.strategy_instance_id]);
+    assert.deepEqual(result.delegatedInstances, [{ strategyInstanceId: "grain-instance", runtimeOwner: "US_GRAINS_DETERMINISTIC_SUITE" }]);
+    assert.equal(strategyInstanceUsesDedicatedRuntime(grain), true);
+    assert.equal(strategyInstanceUsesDedicatedRuntime(generic), false);
   });
 
   test("anchors failed stale evaluations on completion time instead of stale market cutoff", () => {

@@ -158,8 +158,21 @@ function tradePlanSource(input) {
 }
 
 function normalizeEntry(source) {
-  const price = finite(firstDefined(source.entry_price, source.entryPrice, source.entry, source.limit_price, source.limitPrice));
-  const zone = normalizeZone(firstDefined(source.entry_zone, source.entryZone), source);
+  const structuredEntry = record(source.entry);
+  const economics = record(source.economics);
+  const price = finite(firstDefined(
+    source.entry_price,
+    source.entryPrice,
+    structuredEntry?.price,
+    structuredEntry?.calculation_price,
+    structuredEntry?.calculationPrice,
+    economics?.entry_price,
+    economics?.entryPrice,
+    structuredEntry ? null : source.entry,
+    source.limit_price,
+    source.limitPrice,
+  ));
+  const zone = normalizeZone(firstDefined(source.entry_zone, source.entryZone, structuredEntry), source);
   if (price !== null) return { availability: "KNOWN", type: "PRICE", price, low: zone.low, high: zone.high, calculation_price: price };
   if (zone.low !== null && zone.high !== null) return { availability: "KNOWN", type: "ZONE", price: round((zone.low + zone.high) / 2), low: zone.low, high: zone.high, calculation_price: round((zone.low + zone.high) / 2) };
   return unavailableNode("entry", "ENTRY_UNAVAILABLE");
@@ -207,7 +220,9 @@ function normalizeInvalidation(source) {
   const invalidationPrice = finite(firstDefined(source.invalidation_price, source.invalidationPrice, invalidation.price));
   const condition = text(firstDefined(invalidation.condition, source.invalidation_condition, source.invalidationCondition));
   const reasonCode = text(firstDefined(invalidation.reason_code, invalidation.reasonCode, source.invalidation_reason_code, source.invalidationReasonCode));
-  if (invalidationPrice === null && !condition && !reasonCode) return { availability: "UNAVAILABLE", reason_code: "INVALIDATION_UNAVAILABLE" };
+  if (invalidationPrice === null && !condition && (!reasonCode || upper(invalidation.availability) === "UNAVAILABLE")) {
+    return unavailableNode("invalidation", reasonCode || "INVALIDATION_UNAVAILABLE");
+  }
   return {
     availability: "KNOWN",
     price: invalidationPrice,

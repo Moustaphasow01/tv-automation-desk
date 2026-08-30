@@ -116,6 +116,31 @@ describe("trade plan economics V1", () => {
     assert.notEqual(result.proposed_trade_plan.source.kind, "[object Object]");
   });
 
+  it("keeps a normalized grain plan stable when it crosses the signal bus twice", () => {
+    const first = normalizeProposedTradePlanV1({
+      instrument: "CBOT:ZW1!",
+      direction: "LONG",
+      order_type: "LIMIT",
+      entry_price: 754,
+      stop_price: 750.5,
+      targets: [{ label: "TP1", price: 759.25 }],
+      source_data_cutoff_utc: "2026-08-27T14:40:00.000Z",
+    });
+    const second = normalizeProposedTradePlanV1({
+      instrument: "ZW",
+      direction: "LONG",
+      proposed_trade_plan: first.proposed_trade_plan,
+    });
+
+    assert.equal(first.ok, true);
+    assert.equal(second.ok, true);
+    assert.equal(second.proposed_trade_plan.availability, "KNOWN");
+    assert.equal(second.proposed_trade_plan.entry.price, 754);
+    assert.equal(second.economics.entry_price, 754);
+    assert.equal(second.economics.risk_per_contract, 175);
+    assert.ok(!second.proposed_trade_plan.reason_codes.includes("ENTRY_UNAVAILABLE"));
+  });
+
   it("canonicalizes common futures symbols", () => {
     assert.equal(canonicalFuturesInstrumentV1("CME_MINI:MNQ1!__5"), "MNQ");
     assert.equal(canonicalFuturesInstrumentV1("CME_MINI:MES1!"), "MES");

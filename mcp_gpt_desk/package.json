@@ -13,6 +13,7 @@
     "live:paper-tick": "node scripts/run_live_paper_tick.mjs",
     "live:runtime": "node scripts/run_live_runtime_scheduler.mjs",
     "strategy:runtime:once": "node scripts/run_strategy_evaluation_scheduler_once.mjs",
+    "strategy:grains:once": "node scripts/run_us_grains_strategy_suite_once.mjs",
     "strategy:promote-full-history-shadow-live": "node scripts/promote_data_driven_full_history_survivors_to_shadow_live.mjs",
     "strategy:signal-pipeline:once": "node scripts/run_strategy_signal_decision_pipeline_once.mjs",
     "macro:refresh": "node scripts/refresh_macro_calendar.mjs",

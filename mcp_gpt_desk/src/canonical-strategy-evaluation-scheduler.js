@@ -28,7 +28,9 @@ export class CanonicalStrategyEvaluationScheduler {
     const certificationRunId = sourceClass === "CERTIFICATION_REPLAY"
       ? String(input.certification_run_id || input.certificationRunId || `strategy-scheduler:${nowUtc}`)
       : null;
-    const instances = await this.store.strategyKernel.listInstances({ limit: bounded(input.limit, 500) });
+    const discoveredInstances = await this.store.strategyKernel.listInstances({ limit: bounded(input.limit, 500) });
+    const delegatedInstances = discoveredInstances.filter(strategyInstanceUsesDedicatedRuntime);
+    const instances = discoveredInstances.filter((instance) => !strategyInstanceUsesDedicatedRuntime(instance));
     const recent = await this.store.strategyEvaluations.listRecent({ limit: 500 });
     const scopedEvaluations = sourceClass === "CERTIFICATION_REPLAY"
       ? recent.filter((item) => item.certification_run_id === certificationRunId)
@@ -50,6 +52,10 @@ export class CanonicalStrategyEvaluationScheduler {
       status: outcomes.some((item) => item.status === "FAILED") ? "DEGRADED" : outcomes.length ? "EVALUATED" : "HEALTHY_IDLE",
       generatedAt: nowUtc,
       plan: planned.plan,
+      delegatedInstances: delegatedInstances.map((instance) => ({
+        strategyInstanceId: instance.strategy_instance_id,
+        runtimeOwner: dedicatedRuntimeOwner(instance),
+      })),
       outcomes,
     };
   }
@@ -143,6 +149,18 @@ export class CanonicalStrategyEvaluationScheduler {
     if (!value) throw coded("STRATEGY_EVALUATION_CLOCK_REQUIRED", "Strategy evaluation scheduler requires an injected clock.");
     return iso(value.utc || value);
   }
+}
+
+export function strategyInstanceUsesDedicatedRuntime(instance = {}) {
+  return dedicatedRuntimeOwner(instance) !== null;
+}
+
+function dedicatedRuntimeOwner(instance = {}) {
+  const metadata = instance.metadata && typeof instance.metadata === "object" ? instance.metadata : {};
+  const configuredOwner = String(metadata.runtime_owner || metadata.runtimeOwner || "").trim().toUpperCase();
+  if (configuredOwner) return configuredOwner;
+  if (String(metadata.catalog_version || "") === "us_grains_strategy_catalog_v1") return "US_GRAINS_DETERMINISTIC_SUITE";
+  return null;
 }
 
 export function scopedSchedulerRunKey(baseKey, { sourceClass, certificationRunId } = {}) {

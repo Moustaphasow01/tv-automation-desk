@@ -62,6 +62,29 @@ describe("strategy signal bus V1", () => {
     assert.equal(result.signal.trade_plan_economics.tick_value, 12.5);
     assert.equal(result.signal.trade_plan_economics.risk_per_contract, 62.5);
   });
+
+  it("preserves grain entry economics across repeated signal normalization", () => {
+    const first = normalizeStrategySignalV1(signalFixture({
+      instrument: "CBOT:ZC1!",
+      direction: "LONG",
+      execution_mode_origin: "SHADOW",
+      proposed_trade_plan: {
+        order_type: "LIMIT",
+        entry_price: 507.5,
+        stop_price: 506.25,
+        targets: [{ label: "TP1", price: 509.5 }],
+      },
+    }));
+    const second = normalizeStrategySignalV1(first.signal);
+
+    assert.equal(first.ok, true);
+    assert.equal(second.ok, true);
+    assert.equal(second.signal.availability, "KNOWN");
+    assert.equal(second.signal.proposed_trade_plan.entry.price, 507.5);
+    assert.equal(second.signal.trade_plan_economics.entry_price, 507.5);
+    assert.equal(second.signal.trade_plan_economics.risk_per_contract, 62.5);
+    assert.ok(!second.signal.reason_codes.includes("ENTRY_UNAVAILABLE"));
+  });
 });
 
 function signalFixture(overrides = {}) {

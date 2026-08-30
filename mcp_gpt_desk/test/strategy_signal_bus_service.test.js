@@ -101,6 +101,31 @@ describe("Strategy Signal Bus service", () => {
     assert.equal(published.signal.proposed_trade_plan.source.source_data_cutoff_utc, NOW);
     assert.equal(published.outbox.payload.payload.proposed_trade_plan.economics.targets[0].reward_risk, 3);
   });
+
+  test("publishes an already-normalized grain signal without losing its entry", async () => {
+    const repository = new InMemoryStrategySignalBusRepository();
+    const service = serviceFor(repository);
+    const once = await service.publishSignal(signalFixture({
+      instrument: "ZW",
+      proposed_trade_plan: {
+        order_type: "LIMIT",
+        entry_price: 754,
+        stop_price: 750.5,
+        targets: [{ label: "TP1", price: 759.25 }],
+      },
+    }), commandFixture());
+    const twice = await service.publishSignal({
+      ...once.signal,
+      signal_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03",
+      correlation_id: "corr-20260809-0800-zw-normalized",
+    }, commandFixture());
+
+    assert.equal(twice.signal.availability, "KNOWN");
+    assert.equal(twice.signal.proposed_trade_plan.entry.price, 754);
+    assert.equal(twice.signal.trade_plan_economics.entry_price, 754);
+    assert.equal(twice.signal.trade_plan_economics.risk_per_contract, 175);
+    assert.ok(!twice.signal.reason_codes.includes("ENTRY_UNAVAILABLE"));
+  });
 });
 
 function serviceFor(repository) {
