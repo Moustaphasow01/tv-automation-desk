@@ -73,3 +73,18 @@ Toutes sont PAPER-only, idempotentes, auditables, fail-closed et vérifiées à 
 - Axe Focus : 2 viewports, 0 violation serious/critical et 0 défaut de copie opérateur. Deux timeouts `502` du proxy VPS ont été classés comme dépendance runtime externe à l'interface.
 - Recette navigateur : 1366 × 768 et 1440 × 900 à 100 %, aucune erreur console, plein cadre sans overflow, entrée/sortie `F` / `Échap` validées.
 - Captures : `output/playwright/live-focus/live-focus-1366x768-final-v2.png`, `output/playwright/live-focus/live-focus-help-1366x768.png` et `output/playwright/live-focus/live-focus-1440x900.png`.
+
+## Déploiement VPS
+
+- Release installée : `preprod-v2-live-focus-20260830.1`.
+- Commit Front/Back : `2c18a8dbde8ef552cc87bd33f89b5c32b0af7977`.
+- Archive : SHA-256 `16e5bf0d9421ea6fd1ee8fbc71a62d3b079eb8ab288ff89ffab8e80ede021836`, 5 103 fichiers vérifiés.
+- Sauvegarde PostgreSQL préalable : `desk-native-20260830T161541Z.dump`, SHA-256 `9c0c931e54d3ec97315ec3669624eea7a342dcab882c56ae98298a0bb44b1ef5`.
+- Sauvegarde objets préalable : `desk-objects-20260830T162222Z.tar.gz`, SHA-256 `a26256bd33fd9ac76c24cc4d521374a45df149ff9a1d062252af33c5332d1e44`.
+- Migration courante conservée : `059_human_gate_undo_window`; aucune nouvelle migration appliquée.
+- Drain : aucun travail actif, canary loopback et smoke public réussis, puis contrôles de claim/exécution restaurés.
+- Santé publique : `/healthz` et `/readyz` publient la nouvelle release avec `ok=true` et `ready=true`.
+- Services : 11/11 en exécution et démarrage automatique.
+- Recette publique : Focus chargé à 100 % en 1366 × 768, pipeline backend visible, aucune erreur console.
+- Capture publique : `output/playwright/live-focus/vps-live-focus-1366x768.png`.
+- Contexte de recette : marché fermé ; `SEMI-MANUAL`, `AUTO OFF`, aucune commande broker ni confirmation Human Gate envoyée.
