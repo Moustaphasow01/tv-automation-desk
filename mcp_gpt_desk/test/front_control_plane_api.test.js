@@ -56,6 +56,12 @@ test("front control plane publishes only executable catalogued actions", async (
     "desk.status",
     "desk.stop",
     "execution.order_intent.confirm",
+    "execution.order_intent.manual_closed",
+    "execution.order_intent.manual_filled",
+    "execution.order_intent.manual_modified",
+    "execution.order_intent.manual_note",
+    "execution.order_intent.manual_placed",
+    "execution.order_intent.manual_skipped",
     "execution.order_intent.reject",
     "execution.order_intent.undo",
     "research.bootstrap_demo_paper",
@@ -1572,6 +1578,82 @@ test("front control plane Human Gate undo routes through the audited backend tra
     confirmationPhrase: "CONFIRM_UNDO_HUMAN_GATE",
     approvedTerms: undefined,
   });
+});
+
+test("front control plane records a manual placed declaration only after backend Human Gate confirmation", async () => {
+  const calls = [];
+  const store = {
+    ...frontControlPlaneStore(),
+    async commitFrontOperatorCommandMutation(plan) { return { replayed: false, command: plan.commandDoc, result: plan.result }; },
+    async getExecutionOverview() {
+      return {
+        portfolioOrderIntents: [{
+          portfolio_order_intent_id: "portfolio_order_intent_manual_1",
+          revision: 7,
+          quantity: 2,
+          order_intent_payload: {
+            order_intent_id: "order_intent_manual_1",
+            instrument: "ZC",
+            action: "BUY",
+            quantity: 2,
+            entry_price: 471.25,
+            protection: { stop_price: 468.75, target_price: 476.25 },
+          },
+        }],
+        humanExecutionGates: [{ portfolio_order_intent_id: "portfolio_order_intent_manual_1", status: "CONFIRMED", revision: 3 }],
+        manualExecutionEvents: [],
+        theoreticalEvents: [],
+        trades: [],
+      };
+    },
+    async executeBrokerAction({ input, actor }) {
+      calls.push({ input, actor });
+      return { ok: true, status: "RECORDED", event: { event_type: input.eventType } };
+    },
+  };
+  const accepted = await handleFrontControlPlane(store, {
+    pathname: FRONT_CONTROL_PLANE_COMMANDS_PATH,
+    method: "POST",
+    body: {
+      commandType: "execution.order_intent.manual_placed",
+      environment: "PAPER",
+      expectedVersion: "7",
+      payload: { portfolioOrderIntentId: "portfolio_order_intent_manual_1", price: 471.25, quantity: 2 },
+      reason: "Ordre limite saisi chez le broker par l’opérateur.",
+    },
+    headers: { "idempotency-key": "idem-manual-placed-001", "x-correlation-id": "corr-manual-placed-001" },
+    actor: { kind: "operator_session", scopes: ["desk.read", "desk.write"], uid: "operator-1" },
+  });
+  assert.equal(accepted.runtimeMutation, "EXECUTED");
+  assert.equal(accepted.mutationResult.status, "RECORDED");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].input.action, "record_manual_execution_event");
+  assert.equal(calls[0].input.eventType, "placed");
+  assert.equal(calls[0].input.price, 471.25);
+  assert.equal(calls[0].input.quantity, 2);
+  assert.equal(calls[0].input.source, "front-focus");
+});
+
+test("front control plane refuses a manual placed declaration before Human Gate confirmation", async () => {
+  const store = {
+    ...frontControlPlaneStore(),
+    async commitFrontOperatorCommandMutation(plan) { return { replayed: false, command: plan.commandDoc, result: plan.result }; },
+    async getExecutionOverview() {
+      return {
+        portfolioOrderIntents: [{ portfolio_order_intent_id: "portfolio_order_intent_manual_blocked", quantity: 1, order_intent_payload: { instrument: "ZW", action: "SELL", entry_price: 522, protection: { stop_price: 525, target_price: 516 } } }],
+        humanExecutionGates: [{ portfolio_order_intent_id: "portfolio_order_intent_manual_blocked", status: "AWAITING_MANUAL_CONFIRMATION" }],
+        manualExecutionEvents: [], theoreticalEvents: [], trades: [],
+      };
+    },
+    async executeBrokerAction() { throw new Error("must not execute"); },
+  };
+  await assert.rejects(() => handleFrontControlPlane(store, {
+    pathname: FRONT_CONTROL_PLANE_COMMANDS_PATH,
+    method: "POST",
+    body: { commandType: "execution.order_intent.manual_placed", environment: "PAPER", payload: { portfolioOrderIntentId: "portfolio_order_intent_manual_blocked", price: 522, quantity: 1 } },
+    headers: { "idempotency-key": "idem-manual-blocked-001" },
+    actor: { kind: "operator_session", scopes: ["desk.read", "desk.write"] },
+  }), (error) => error.code === "MANUAL_EXECUTION_TRANSITION_DENIED" && error.statusCode === 409);
 });
 
 test("front control plane composes Command Center research truth and resolves detail views by route identifier", async () => {

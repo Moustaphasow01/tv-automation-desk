@@ -397,6 +397,21 @@ export type LiveTheoreticalExecutionRow = {
   operatorActor?: string;
   manualExecutionStatus?: string;
   manualExecutionAt?: string;
+  manualExecution?: {
+    status: string;
+    allowedActions: readonly LiveManualExecutionAction[];
+    denialReasons: readonly string[];
+    stopPlacement?: { placed: boolean; source: string };
+  };
+  liveMark?: {
+    availability: string;
+    currentR: number | null;
+    highWaterR: number | null;
+    lowWaterR: number | null;
+    marketPrice: number | null;
+    asOf: string | null;
+    source: string;
+  };
   outcomeAttribution?: {
     policyVersion: string;
     status: string;
@@ -406,6 +421,23 @@ export type LiveTheoreticalExecutionRow = {
     avoidedLossR: number | null;
     reasonCode: string;
   };
+};
+
+export type LiveManualExecutionAction = {
+  action: "REPORT_PLACED" | "REPORT_FILLED" | "REPORT_CLOSED" | "REPORT_SKIPPED" | "REPORT_MODIFIED" | "REPORT_STOP_PLACED";
+  actionId: string;
+  eventType: "PLACED" | "FILLED" | "CLOSED" | "SKIPPED" | "MODIFIED" | "NOTE";
+  commandType: string;
+  label: string;
+  environment: "PAPER";
+  permission: "ALLOWED" | "DENIED" | "STEP_UP_REQUIRED";
+  requiresConfirmation: boolean;
+  requiresReason: boolean;
+  requiresPrice: boolean;
+  requiresQuantity: boolean;
+  expectedRevision: string;
+  impactPreview: string;
+  payload: Readonly<Record<string, string | number | boolean>>;
 };
 
 export type LiveTradingView = {

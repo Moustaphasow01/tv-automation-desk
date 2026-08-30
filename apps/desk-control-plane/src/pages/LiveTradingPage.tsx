@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCommandStatus, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
+import type { LiveManualExecutionAction } from "@/domains/front-api/viewModels";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
 import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
 import { LiveAttentionCenter } from "@/features/live-trading/LiveAttentionCenter";
 import type { LiveSignalNavigationTarget } from "@/features/live-trading/LiveSignalInbox";
 import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
+import { LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
+import { buildManualExecutionCommand } from "@/features/live-trading/focusModel";
+import { readLiveFocusPreference, writeLiveFocusPreference } from "@/features/live-trading/focusPreferences";
 import { commandForCurrentGate, type GateCommandBinding } from "@/features/live-trading/LiveHumanGate";
 import { LiveMarketLens } from "@/features/live-trading/LiveMarketLens";
 import { LiveTradingHeader } from "@/features/live-trading/LiveTradingHeader";
@@ -25,6 +29,7 @@ export function LiveTradingPage() {
     timeframe: searchParams.get("timeframe") || undefined,
   }), [searchParams]);
   const selectedSignalId = searchParams.get("signalId");
+  const focusMode = searchParams.get("focus") === "1";
   const chartAt = searchParams.get("chartAt");
   const chartSurfaceRef = useRef<HTMLElement>(null);
   const decisionSurfaceRef = useRef<HTMLElement>(null);
@@ -39,12 +44,18 @@ export function LiveTradingPage() {
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
   const initialChartAlignmentDone = useRef(false);
+  const focusRestoreScroll = useRef<number | null>(null);
+  const autoOpenedDecision = useRef<string | null>(null);
   const model = useMemo(() => {
     if (!deskQuery.data) return null;
     const deskModel = toLiveTradingModel(deskQuery.data, { signalId: selectedSignalId });
     if (!chartQuery.data) return deskModel;
-    const chartModel = toLiveTradingModel(chartQuery.data);
-    return { ...deskModel, marketSeries: chartModel.marketSeries };
+    const chartModel = toLiveTradingModel(chartQuery.data, { signalId: selectedSignalId });
+    const chartTheoretical = chartModel.selectedTheoreticalExecution;
+    const selectedTheoreticalExecution = chartTheoretical?.portfolioOrderIntentId === deskModel.selectedTheoreticalExecution?.portfolioOrderIntentId
+      ? chartTheoretical
+      : deskModel.selectedTheoreticalExecution;
+    return { ...deskModel, marketSeries: chartModel.marketSeries, selectedTheoreticalExecution };
   }, [chartQuery.data, deskQuery.data, selectedSignalId]);
   const currentOrderIntentId = model?.orderIntent?.portfolioOrderIntentId ?? null;
   const actionable = Boolean(model && [...model.source.signals, ...model.source.canonicalRuntime.latestSignals]
@@ -68,6 +79,24 @@ export function LiveTradingPage() {
     if (nextScope.timeframe) next.set("timeframe", nextScope.timeframe);
     setSearchParams(next, { replace: true });
   };
+
+  const enterFocus = useCallback(() => {
+    focusRestoreScroll.current = window.scrollY;
+    const next = new URLSearchParams(searchParams);
+    next.set("focus", "1");
+    writeLiveFocusPreference({ enabled: true, instrument: next.get("instrument"), timeframe: next.get("timeframe"), scrollY: window.scrollY });
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const exitFocus = useCallback(() => {
+    const stored = readLiveFocusPreference();
+    const restore = focusRestoreScroll.current ?? stored.scrollY ?? 0;
+    const next = new URLSearchParams(searchParams);
+    next.delete("focus");
+    writeLiveFocusPreference({ enabled: false, instrument: next.get("instrument"), timeframe: next.get("timeframe"), scrollY: restore });
+    setSearchParams(next, { replace: true });
+    window.requestAnimationFrame(() => window.scrollTo({ top: restore, behavior: "auto" }));
+  }, [searchParams, setSearchParams]);
 
   const selectSignal = (target: LiveSignalNavigationTarget) => {
     const next = new URLSearchParams(searchParams);
@@ -120,8 +149,57 @@ export function LiveTradingPage() {
     }
   };
 
+  const submitManualExecutionAction = async (action: LiveManualExecutionAction, input: { price?: number | null; quantity?: number | null; reason?: string }) => {
+    setSubmittingActionId(action.actionId);
+    setCommandError(null);
+    try {
+      await repository.submitCommand(buildManualExecutionCommand(action, input));
+      await deskQuery.refetch();
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : "MANUAL_EXECUTION_COMMAND_FAILED");
+    } finally {
+      setSubmittingActionId(null);
+    }
+  };
+
+  useEffect(() => {
+    const onFocusShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
+      if (!focusMode && event.key.toLowerCase() === "f") { event.preventDefault(); enterFocus(); }
+    };
+    document.addEventListener("keydown", onFocusShortcut);
+    return () => document.removeEventListener("keydown", onFocusShortcut);
+  }, [enterFocus, focusMode]);
+
+  useEffect(() => {
+    if (focusMode || !model || !readLiveFocusPreference().autoOpen) return;
+    const canAct = model.gateActions.some((action) => action.permission === "ALLOWED");
+    const decisionId = model.orderIntent?.portfolioOrderIntentId ?? model.latestSignal?.signalId ?? null;
+    if (!canAct || !decisionId || autoOpenedDecision.current === decisionId) return;
+    autoOpenedDecision.current = decisionId;
+    enterFocus();
+  }, [enterFocus, focusMode, model]);
+
   if (deskQuery.isError) return <LiveTradingFailure message={(deskQuery.error as Error).message} retry={() => deskQuery.refetch()} />;
   if (deskQuery.isLoading || !model) return <LiveTradingLoading />;
+
+  if (focusMode) {
+    return <LiveFocusMode
+      model={model}
+      busy={Boolean(submittingActionId)}
+      error={commandError}
+      onExit={exitFocus}
+      onSelectDecision={(signalId) => {
+        const next = new URLSearchParams(searchParams);
+        next.set("signalId", signalId);
+        next.set("focus", "1");
+        setSearchParams(next, { replace: true });
+      }}
+      onSubmitGate={submitGateAction}
+      onSubmitManual={submitManualExecutionAction}
+    />;
+  }
 
   return (
     <div
@@ -131,7 +209,7 @@ export function LiveTradingPage() {
       data-actionable={actionable ? "true" : "false"}
       data-design-seed="c87167ea"
     >
-      <LiveTradingHeader model={model} onRefresh={() => { void deskQuery.refetch(); void chartQuery.refetch(); }} refreshing={deskQuery.isFetching || chartQuery.isFetching} />
+      <LiveTradingHeader model={model} onRefresh={() => { void deskQuery.refetch(); void chartQuery.refetch(); }} refreshing={deskQuery.isFetching || chartQuery.isFetching} onEnterFocus={enterFocus} />
       <LiveCockpitStatusBar model={model} requestedScope={marketScope} scopeUpdating={chartQuery.isFetching} onScopeChange={updateMarketScope} />
       <LiveAttentionCenter model={model} />
       <div className="lt-cockpit__workspace" aria-label="Cockpit Live Trading semi-manuel">

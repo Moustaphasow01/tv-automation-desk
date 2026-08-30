@@ -1,6 +1,6 @@
 import { useContext, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaBell, FaCircle, FaSearch, FaShieldAlt, FaSyncAlt } from "react-icons/fa";
+import { FaBell, FaBullseye, FaCircle, FaSearch, FaShieldAlt, FaSyncAlt } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { useOperatorSession } from "@/domains/permissions/PermissionGate";
 import { OperatorMenu } from "@/shell/OperatorMenu";
@@ -15,7 +15,7 @@ const searchTargets = [
   { label: "Exécution", keywords: "provider execution broker", route: "/execution/providers" },
 ];
 
-export function LiveTradingHeader({ model, onRefresh, refreshing }: { model: LiveTradingModel; onRefresh(): void; refreshing: boolean }) {
+export function LiveTradingHeader({ model, onRefresh, refreshing, onEnterFocus }: { model: LiveTradingModel; onRefresh(): void; refreshing: boolean; onEnterFocus(): void }) {
   const navigate = useNavigate();
   const realtime = useContext(RealtimeContext);
   const { session } = useOperatorSession();
@@ -41,6 +41,7 @@ export function LiveTradingHeader({ model, onRefresh, refreshing }: { model: Liv
         <time className="lt-header__clock" dateTime={now?.toISOString()}><strong>{now ? formatClock(now) : "—"} ET</strong><small>{now ? formatDate(now) : "Horloge indisponible"}</small></time>
         <label className="lt-density-control" title="Densité du cockpit"><span className="sr-only">Densité du cockpit</span><select value={density.preference} onChange={(event) => density.setPreference(event.target.value as typeof density.preference)}><option value="auto">Auto</option><option value="native">Confort</option><option value="workstation">Compact</option></select></label>
         <Link className="lt-icon-button" to="/orders" aria-label={`Ouvrir les décisions Human Gate · ${model.signalFunnel.pendingHumanGates} en attente`}><FaBell /><span>{model.signalFunnel.pendingHumanGates || "Gate"}</span></Link>
+        <button type="button" className="lt-focus-trigger" data-actionable={model.gateActions.some((action) => action.permission === "ALLOWED") ? "true" : "false"} onClick={onEnterFocus} aria-label={`Ouvrir le mode Focus${model.signalFunnel.pendingHumanGates ? ` · ${model.signalFunnel.pendingHumanGates} décision(s)` : ""}`}><FaBullseye aria-hidden="true" /><span>Focus</span>{model.signalFunnel.pendingHumanGates ? <strong className="lt-focus-trigger__count">{model.signalFunnel.pendingHumanGates}</strong> : null}<kbd>F</kbd></button>
         <OperatorMenu variant="live-trading" displayName={session?.principal.displayName ?? "Session indisponible"} roleLabel={session?.principal.roles.join(", ") || "Rôle indisponible"} />
       </header>
       <section className="lt-policy" aria-label="Politique opérationnelle autoritaire">

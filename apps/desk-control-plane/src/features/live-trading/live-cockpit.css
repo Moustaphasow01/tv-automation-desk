@@ -78,6 +78,14 @@
 .lt-cockpit .lt-header__clock small { font-size: 12px; }
 .lt-cockpit .lt-header__environment strong,
 .lt-cockpit .lt-header__clock strong { font-family: var(--lt-font-data); font-size: 14px; }
+.lt-focus-trigger { position: relative; display: inline-flex; min-height: 34px; gap: 7px; align-items: center; justify-content: center; padding: 0 10px; border: 1px solid var(--lt-flight-line-strong); border-radius: 6px; color: var(--lt-text-soft); background: #0a202b; font-size: 10px; font-weight: 760; letter-spacing: .02em; }
+.lt-focus-trigger svg { color: var(--lt-flight-cyan); }
+.lt-focus-trigger kbd { padding: 1px 4px; border: 1px solid rgba(140, 187, 201, .24); border-radius: 3px; color: var(--lt-muted); background: rgba(0, 0, 0, .18); font-family: var(--lt-font-data); font-size: 10px; }
+.lt-focus-trigger__count { display: grid; min-width: 20px; height: 20px; place-items: center; padding-inline: 5px; border-radius: 999px; color: #08131b; background: #f5b942; font: 800 10px var(--lt-font-data); }
+.lt-focus-trigger[data-actionable="true"] { border-color: rgba(245, 185, 66, .6); color: #ffe2a1; background: rgba(120, 78, 15, .22); box-shadow: 0 0 0 1px rgba(245, 185, 66, .08), 0 0 22px rgba(245, 185, 66, .1); }
+.lt-focus-trigger[data-actionable="true"] svg { color: #f5b942; }
+.lt-focus-trigger:focus-visible { outline: 2px solid var(--lt-flight-cyan); outline-offset: 2px; }
+@keyframes lt-focus-call { 0%, 100% { box-shadow: 0 0 0 1px rgba(245, 185, 66, .08), 0 0 16px rgba(245, 185, 66, .08); } 50% { box-shadow: 0 0 0 2px rgba(245, 185, 66, .18), 0 0 28px rgba(245, 185, 66, .18); } }
 .lt-cockpit .lt-icon-button { width: 36px; height: 36px; }
 
 .lt-cockpit .lt-policy {
@@ -472,6 +480,7 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .lt-focus-trigger[data-actionable="true"] { animation: lt-focus-call 2.4s ease-in-out infinite; }
   .lt-cockpit[data-operator-state="AWAITING_HUMAN_GATE"] .lt-flight-bar__operator > svg {
     animation: lt-flight-pulse 1.8s ease-in-out infinite;
   }

@@ -35,6 +35,59 @@ test("links canonical operator decisions, manual evidence and theoretical outcom
   });
 });
 
+test("publishes backend-driven manual execution actions without treating confirmation as a fill", () => {
+  const execution = {
+    portfolioOrderIntents: [intent("intent-actionable", "signal-actionable")],
+    humanExecutionGates: [gate("intent-actionable", "CONFIRMED")],
+    humanExecutionGateEvents: [], theoreticalEvents: [], manualExecutionEvents: [], trades: [], providerCommands: [], providerEvents: [],
+  };
+  const projection = buildLiveTheoreticalExecution({
+    execution,
+    nowIso: "2026-08-30T12:00:00.000Z",
+    actor: { kind: "operator_session", scopes: ["desk.read", "desk.write"] },
+  });
+  const row = projection.rows[0];
+  assert.equal(row.operatorDecision, "CONFIRMED");
+  assert.equal(row.manualExecution.status, "NOT_REPORTED");
+  assert.deepEqual(row.manualExecution.allowedActions.map((action) => action.action), ["REPORT_PLACED", "REPORT_SKIPPED"]);
+  assert.equal(row.manualExecution.allowedActions.every((action) => action.permission === "ALLOWED"), true);
+  assert.equal(row.manualExecution.allowedActions.every((action) => action.environment === "PAPER"), true);
+});
+
+test("publishes backend-calculated live R from the scoped market series", () => {
+  const execution = {
+    portfolioOrderIntents: [intent("intent-open", "signal-open")],
+    humanExecutionGates: [gate("intent-open", "CONFIRMED")],
+    humanExecutionGateEvents: [],
+    theoreticalEvents: [{ portfolio_order_intent_id: "intent-open", trade_id: "trade-open", event_type: "entry_filled", event_at_utc: "2026-08-30T10:00:00.000Z", price: 400 }],
+    manualExecutionEvents: [],
+    trades: [{ portfolio_order_intent_id: "intent-open", trade_id: "trade-open", status: "open", avg_entry_price: 400, opened_at: "2026-08-30T10:00:00.000Z" }],
+    providerCommands: [], providerEvents: [],
+  };
+  const projection = buildLiveTheoreticalExecution({
+    execution,
+    marketSeries: {
+      instrument: "ZC",
+      source: "market_candles",
+      asOf: "2026-08-30T10:10:00.000Z",
+      points: [
+        { timestamp: "2026-08-30T10:05:00.000Z", high: 403, low: 399, close: 402 },
+        { timestamp: "2026-08-30T10:10:00.000Z", high: 405, low: 401, close: 404 },
+      ],
+    },
+    nowIso: "2026-08-30T10:10:00.000Z",
+  });
+  assert.deepEqual(projection.rows[0].liveMark, {
+    availability: "AVAILABLE",
+    currentR: 2,
+    highWaterR: 2.5,
+    lowWaterR: -0.5,
+    marketPrice: 404,
+    asOf: "2026-08-30T10:10:00.000Z",
+    source: "market_candles",
+  });
+});
+
 function intent(id, signalId) { return { portfolio_order_intent_id: id, target_position_id: `target-${id}`, quantity: 1, status: "READY", created_at_utc: "2026-08-30T09:59:00.000Z", payload: { order_intent_id: id, instrument: "ZC", action: "BUY", order_type: "LIMIT", quantity: 1, source_signal_id: signalId, entry: { price: 400 }, protection: { stop_price: 398, target_price: 404 } } }; }
 function gate(id, status) { return { portfolio_order_intent_id: id, status, operator_id: "operator", confirmed_at_utc: status === "CONFIRMED" ? "2026-08-30T10:00:00.000Z" : null, rejected_at_utc: status === "REJECTED" ? "2026-08-30T10:00:00.000Z" : null }; }
 function event(intentId, tradeId, eventType) { return { portfolio_order_intent_id: intentId, trade_id: tradeId, event_type: eventType, event_at_utc: "2026-08-30T10:05:00.000Z", price: 404 }; }

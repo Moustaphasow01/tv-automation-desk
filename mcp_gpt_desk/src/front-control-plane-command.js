@@ -1,6 +1,7 @@
 import { codedError, currentUtc, hash, safeIdPart, text } from "./front-control-plane-common.js";
 import { executeDeskOperationalControl } from "./desk-operational-control-service.js";
 import { DomainAssistantRuntimeService } from "./domain-assistant-runtime-service.js";
+import { manualExecutionTransition } from "./front-control-plane-permissions.js";
 
 export const FRONT_COMMAND_CATALOG = Object.freeze({
   "control_plane.verify": Object.freeze({
@@ -75,7 +76,17 @@ export const FRONT_COMMAND_CATALOG = Object.freeze({
     mutation: "execution.order_intent.undo",
     brokerExecution: false,
   }),
+  "execution.order_intent.manual_placed": manualExecutionCapability("execution.order_intent.manual_placed"),
+  "execution.order_intent.manual_filled": manualExecutionCapability("execution.order_intent.manual_filled"),
+  "execution.order_intent.manual_closed": manualExecutionCapability("execution.order_intent.manual_closed"),
+  "execution.order_intent.manual_skipped": manualExecutionCapability("execution.order_intent.manual_skipped"),
+  "execution.order_intent.manual_modified": manualExecutionCapability("execution.order_intent.manual_modified"),
+  "execution.order_intent.manual_note": manualExecutionCapability("execution.order_intent.manual_note"),
 });
+
+function manualExecutionCapability(mutation) {
+  return Object.freeze({ capability: "execution.paper", environments: Object.freeze(["PAPER"]), mutation, brokerExecution: false });
+}
 
 export async function acceptControlPlaneCommand(store, { body, headers, actor }) {
   const commandContext = buildCommandContext(store, { body, headers, actor });
@@ -180,6 +191,7 @@ function runtimeMutationPlan(context) {
   if (context.commandType === "execution.order_intent.confirm") return { kind: "execution.order_intent.confirm", broker_execution: false };
   if (context.commandType === "execution.order_intent.reject") return { kind: "execution.order_intent.reject", broker_execution: false };
   if (context.commandType === "execution.order_intent.undo") return { kind: "execution.order_intent.undo", broker_execution: false };
+  if (context.commandType.startsWith("execution.order_intent.manual_")) return { kind: context.commandType, broker_execution: false };
   return null;
 }
 
@@ -200,6 +212,9 @@ async function executeRuntimeMutation(store, context) {
   }
   if (["execution.order_intent.confirm", "execution.order_intent.reject", "execution.order_intent.undo"].includes(context.mutationPlan.kind)) {
     return executeOrderIntentHumanGateMutation(store, context);
+  }
+  if (context.mutationPlan.kind.startsWith("execution.order_intent.manual_")) {
+    return executeManualExecutionMutation(store, context);
   }
   if (context.mutationPlan.kind === "assistant.question.submit") {
     return executeAssistantQuestionMutation(store, context);
@@ -368,6 +383,92 @@ async function executeOrderIntentHumanGateMutation(store, context) {
   });
 }
 
+async function executeManualExecutionMutation(store, context) {
+  if (typeof store?.executeBrokerAction !== "function" || typeof store?.getExecutionOverview !== "function") {
+    throw codedError("MANUAL_EXECUTION_ACTION_UNAVAILABLE", "Manual execution reporting service is unavailable.", 503);
+  }
+  const payload = object(context.body.payload);
+  const portfolioOrderIntentId = payloadText(payload, ["portfolioOrderIntentId", "portfolio_order_intent_id"]);
+  if (!portfolioOrderIntentId) throw codedError("PORTFOLIO_ORDER_INTENT_ID_REQUIRED", "portfolioOrderIntentId is required.", 400);
+  const eventType = context.mutationPlan.kind.replace("execution.order_intent.manual_", "").toUpperCase();
+  const overview = object(await store.getExecutionOverview({}));
+  const intent = rows(overview.portfolioOrderIntents).find((item) => text(item?.portfolio_order_intent_id || item?.order_intent_payload?.order_intent_id || item?.payload?.order_intent_id, "") === portfolioOrderIntentId);
+  if (!intent) throw codedError("PORTFOLIO_ORDER_INTENT_NOT_FOUND", `Portfolio OrderIntent not found: ${portfolioOrderIntentId}`, 404);
+  const gate = rows(overview.humanExecutionGates).find((item) => text(item?.portfolio_order_intent_id, "") === portfolioOrderIntentId);
+  const manualEvents = rows(overview.manualExecutionEvents)
+    .filter((item) => text(item?.portfolio_order_intent_id, "") === portfolioOrderIntentId)
+    .sort((left, right) => Date.parse(right?.occurred_at_utc || right?.created_at_utc || "") - Date.parse(left?.occurred_at_utc || left?.created_at_utc || ""));
+  const trade = rows(overview.trades).find((item) => text(item?.portfolio_order_intent_id, "") === portfolioOrderIntentId);
+  const theoreticalEvents = rows(overview.theoreticalEvents)
+    .filter((item) => text(item?.portfolio_order_intent_id, "") === portfolioOrderIntentId)
+    .sort((left, right) => Date.parse(right?.event_at_utc || right?.created_at_utc || "") - Date.parse(left?.event_at_utc || left?.created_at_utc || ""));
+  const plan = manualIntentPlan(intent);
+  const transition = manualExecutionTransition({
+    operatorDecision: gate?.status || intent?.human_gate_status,
+    manualStatus: manualEvents.find((event) => ["CLOSED", "FILLED", "PLACED", "SKIPPED"].includes(String(event?.event_type || "").toUpperCase()))?.event_type || manualEvents[0]?.event_type || "NOT_REPORTED",
+    tradeStatus: trade?.status || "",
+    theoreticalStatus: theoreticalEvents[0]?.event_type || (trade ? "ENTRY_FILLED" : "AWAITING_ENTRY"),
+    planComplete: plan.complete,
+    actor: context.actor,
+  });
+  if (!transition.allowedEventTypes.includes(eventType)) {
+    throw codedError("MANUAL_EXECUTION_TRANSITION_DENIED", `Manual execution event ${eventType} is not allowed: ${transition.denialReasons.join(", ") || "INVALID_TRANSITION"}.`, 409);
+  }
+  const price = finiteOrNull(payload.price);
+  const quantity = finiteOrNull(payload.quantity ?? payload.expectedQuantity ?? plan.quantity);
+  if (["PLACED", "FILLED", "CLOSED"].includes(eventType) && price === null) {
+    throw codedError("MANUAL_EXECUTION_PRICE_REQUIRED", `A finite price is required for ${eventType}.`, 400);
+  }
+  if (["PLACED", "FILLED"].includes(eventType) && (quantity === null || quantity <= 0)) {
+    throw codedError("MANUAL_EXECUTION_QUANTITY_REQUIRED", `A positive quantity is required for ${eventType}.`, 400);
+  }
+  const reason = text(context.body.reason || payload.reason, "");
+  if (["SKIPPED", "MODIFIED"].includes(eventType) && !reason) {
+    throw codedError("MANUAL_EXECUTION_REASON_REQUIRED", `A reason is required for ${eventType}.`, 400);
+  }
+  return store.executeBrokerAction({
+    input: {
+      action: "record_manual_execution_event",
+      eventType: eventType.toLowerCase(),
+      portfolioOrderIntentId,
+      orderIntentId: text(intent?.order_intent_id || intent?.order_intent_payload?.order_intent_id || intent?.payload?.order_intent_id, "") || null,
+      tradeId: text(payload.tradeId || payload.trade_id || trade?.trade_id, "") || null,
+      instrument: text(payload.instrument || plan.instrument, "") || null,
+      side: text(payload.side || plan.side, "") || null,
+      quantity,
+      price,
+      expectedInstrument: plan.instrument || null,
+      expectedSide: plan.side || null,
+      expectedQuantity: plan.quantity,
+      idempotencyKey: context.idempotencyKey,
+      reason: reason || null,
+      source: "front-focus",
+      payload: {
+        command_id: context.commandId,
+        expected_revision: context.body.expectedVersion || payload.expectedRevision || null,
+        ...(text(payload.noteType || payload.note_type, "") === "STOP_PLACED" ? { manual_note_type: "STOP_PLACED", stop_placed: true } : {}),
+      },
+    },
+    actor: context.actor,
+  });
+}
+
+function manualIntentPlan(intent = {}) {
+  const payload = object(intent.order_intent_payload || intent.payload);
+  const terms = object(intent.execution_terms || payload.execution_terms || payload.approved_trade_plan);
+  const protection = object(payload.protection);
+  const targets = rows(payload.targets).length ? rows(payload.targets) : rows(terms.targets);
+  const entry = finiteOrNull(firstDefined([object(terms.entry).price, object(payload.entry).price, payload.entry_price, payload.limit_price, payload.stop_price]));
+  const stop = finiteOrNull(firstDefined([protection.stop_price, object(terms.stop).price, terms.stop_price]));
+  const target = finiteOrNull(firstDefined([object(targets[0]).price, targets[0], protection.target_price, terms.target_price]));
+  return {
+    instrument: text(payload.instrument || terms.instrument || intent.target_instrument, ""),
+    side: text(payload.action || payload.side || terms.side, ""),
+    quantity: finiteOrNull(intent.quantity ?? payload.quantity ?? terms.quantity),
+    complete: entry !== null && stop !== null && target !== null,
+  };
+}
+
 function commandResult({ commandId, commandType, environment, correlationId, causationId, aggregateId, mutationPlan }) {
   return {
     command_id: commandId,
@@ -437,6 +538,16 @@ function payloadText(payload, keys, fallback = "") {
 function payloadArray(payload, keys) {
   const value = firstDefined(keys.map((key) => payload[key]), []);
   return Array.isArray(value) ? value : [];
+}
+
+function rows(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function finiteOrNull(value) {
+  if (value === null || value === undefined || value === "" || typeof value === "object") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function operatorIdentity(actor = {}) {

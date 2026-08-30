@@ -1098,7 +1098,9 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
   const riskChecks = liveRiskChecks(executionValue, { signalIds: cohort.signalIds, portfolioOrderIntentIds: nominalIntentIds });
   const theoreticalExecution = buildLiveTheoreticalExecution({
     execution: { ...executionValue, portfolioOrderIntents: nominalIntentRows },
+    marketSeries,
     nowIso,
+    actor,
   });
   appendLiveWarnings({
     execution: executionValue,

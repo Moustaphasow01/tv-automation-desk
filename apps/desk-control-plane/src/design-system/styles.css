@@ -7004,6 +7004,9 @@ body {
 .settings-local-alerts small { color: var(--muted); }
 .settings-local-alerts button { min-width: 112px; min-height: 44px; border: 1px solid #244b68; border-radius: 6px; color: var(--text); background: #0a1d2c; cursor: pointer; }
 .settings-local-alerts button[aria-pressed="true"] { border-color: var(--success); color: var(--success); background: rgba(40, 200, 140, .12); }
+.settings-focus-sound-events { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.settings-focus-sound-events button { min-height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); background: var(--surface-raised); font-size: 11px; }
+.settings-focus-sound-events button[aria-pressed="true"] { border-color: var(--info); color: var(--text); background: color-mix(in srgb, var(--info) 12%, var(--surface-raised)); }
 
 .settings-guard-note,
 .settings-jarvis-card,

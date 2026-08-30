@@ -98,6 +98,11 @@
 .desk-global-operator-menu { position: fixed; z-index: 70; top: 8px; right: 12px; width: min(188px, calc(100vw - 24px)); min-height: 40px; padding: 2px 6px; border: 1px solid var(--stroke); border-radius: 7px; background: var(--panel-strong); color: var(--text); box-shadow: var(--shadow); }
 .desk-global-operator-menu .operator-menu { min-height: 36px; }
 .desk-navigation-reveal { position: fixed; z-index: 45; top: 45%; left: 0; min-height: 44px; padding: 8px 6px; border: 1px solid var(--stroke-strong); border-left: 0; border-radius: 0 6px 6px 0; background: var(--panel-strong); color: var(--text); cursor: pointer; writing-mode: vertical-rl; }
+
+.desk-app-shell.desk-app-shell--focus-mode { grid-template-columns: minmax(0, 1fr) !important; }
+.desk-app-shell--focus-mode .desk-main { min-width: 0; min-height: 100dvh; }
+.desk-app-shell--focus-mode .desk-content { width: 100%; max-width: none; min-height: 100dvh; padding: 0 !important; overflow: visible; }
+.desk-app-shell--focus-mode .desk-global-operator-menu { display: none; }
 .desk-update-banner { position: fixed; z-index: 120; right: 16px; bottom: 16px; display: flex; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 7px; background: var(--panel-strong); color: var(--text); box-shadow: var(--shadow); }
 .desk-update-banner button { min-height: 36px; padding-inline: 12px; border: 1px solid var(--accent); border-radius: 5px; background: color-mix(in srgb, var(--accent) 18%, var(--panel)); color: var(--text); cursor: pointer; }
 

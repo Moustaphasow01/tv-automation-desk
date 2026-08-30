@@ -1,11 +1,13 @@
+import { manualExecutionActionProjection } from "./front-control-plane-permissions.js";
+
 const ATTRIBUTION_POLICY_VERSION = "operator_outcome_attribution_v1";
 const TERMINAL_TRADE_STATES = new Set(["CLOSED", "CANCELLED", "REJECTED", "EXPIRED", "ERROR"]);
 const MANUAL_EXECUTION_EVIDENCE = new Set(["PLACED", "FILLED", "CLOSED"]);
 const DEFAULT_PROJECTION_NOW_UTC = "1970-01-01T00:00:00.000Z";
 
-export function buildLiveTheoreticalExecution({ execution = {}, nowIso = DEFAULT_PROJECTION_NOW_UTC } = {}) {
+export function buildLiveTheoreticalExecution({ execution = {}, marketSeries = null, nowIso = DEFAULT_PROJECTION_NOW_UTC, actor = {} } = {}) {
   const intents = rows(execution.portfolioOrderIntents).filter((item) => portfolioIntentId(item));
-  const projectedRows = intents.map((intent) => theoreticalRow({ execution, intent })).sort(byLatestActivity);
+  const projectedRows = intents.map((intent) => withLiveMarketMark(theoreticalRow({ execution, intent, actor }), marketSeries)).sort(byLatestActivity);
   const closed = projectedRows.filter((item) => item.tradeStatus === "CLOSED" && item.resultR !== null);
   return {
     schemaVersion: "live_theoretical_execution_v1",
@@ -31,6 +33,43 @@ export function buildLiveTheoreticalExecution({ execution = {}, nowIso = DEFAULT
       operatorUnverified: count(projectedRows, (item) => item.outcomeAttribution.status === "EXECUTION_UNVERIFIED"),
     },
     rows: projectedRows,
+  };
+}
+
+function withLiveMarketMark(row, marketSeries) {
+  const sourceInstrument = upper(marketSeries?.instrument);
+  if (!row || !sourceInstrument || sourceInstrument !== upper(row.instrument)) {
+    return { ...row, liveMark: { availability: "NOT_AVAILABLE_FOR_SCOPE", currentR: null, highWaterR: null, lowWaterR: null, marketPrice: null, asOf: null, source: text(marketSeries?.source, "market_candles") } };
+  }
+  const entry = firstFinite(row.entryFillPrice, row.entry);
+  const stop = finiteOrNull(row.stop);
+  const riskDistance = entry === null || stop === null ? null : Math.abs(entry - stop);
+  const openedAt = Date.parse(row.entryFilledAt || row.latestEventAt || "");
+  const points = rows(marketSeries?.points)
+    .filter((point) => finiteOrNull(point?.close) !== null)
+    .filter((point) => !Number.isFinite(openedAt) || Date.parse(point?.timestamp || "") >= openedAt)
+    .sort((left, right) => Date.parse(left?.timestamp || "") - Date.parse(right?.timestamp || ""));
+  if (entry === null || riskDistance === null || riskDistance <= 0 || !points.length) {
+    return { ...row, liveMark: { availability: "CONNECTED_EMPTY", currentR: null, highWaterR: null, lowWaterR: null, marketPrice: null, asOf: text(marketSeries?.asOf, "") || null, source: text(marketSeries?.source, "market_candles") } };
+  }
+  const direction = upper(row.side) === "SHORT" ? -1 : 1;
+  const rAt = (price) => price === null ? null : roundR(((price - entry) * direction) / riskDistance);
+  const currentPoint = points.at(-1);
+  const highPrices = points.map((point) => firstFinite(point?.high, point?.close)).filter((value) => value !== null);
+  const lowPrices = points.map((point) => firstFinite(point?.low, point?.close)).filter((value) => value !== null);
+  const favorablePrice = direction === 1 ? Math.max(...highPrices) : Math.min(...lowPrices);
+  const adversePrice = direction === 1 ? Math.min(...lowPrices) : Math.max(...highPrices);
+  return {
+    ...row,
+    liveMark: {
+      availability: "AVAILABLE",
+      currentR: rAt(finiteOrNull(currentPoint?.close)),
+      highWaterR: rAt(favorablePrice),
+      lowWaterR: rAt(adversePrice),
+      marketPrice: finiteOrNull(currentPoint?.close),
+      asOf: iso(currentPoint?.timestamp || marketSeries?.asOf),
+      source: text(marketSeries?.source, "market_candles"),
+    },
   };
 }
 
@@ -75,7 +114,7 @@ export function theoreticalTimelineEvents(projection) {
   }));
 }
 
-function theoreticalRow({ execution, intent }) {
+function theoreticalRow({ execution, intent, actor }) {
   const id = portfolioIntentId(intent);
   const payload = object(intent.order_intent_payload || intent.payload);
   const events = rows(execution.theoreticalEvents).filter((event) => String(event.portfolio_order_intent_id || "") === id).sort(byEventTimeDesc);
@@ -86,15 +125,17 @@ function theoreticalRow({ execution, intent }) {
   const manualEvents = rows(execution.manualExecutionEvents).filter((event) => String(event.portfolio_order_intent_id || "") === id || (trade?.trade_id && String(event.trade_id || "") === String(trade.trade_id))).sort(byOccurredDesc);
   const latestEvent = events[0] || null;
   const latestManual = manualEvents[0] || null;
+  const manualLifecycle = manualLifecycleEvent(manualEvents);
+  const stopPlaced = manualEvents.some((event) => upper(event?.event_type) === "NOTE" && (upper(event?.payload?.manual_note_type) === "STOP_PLACED" || event?.payload?.stop_placed === true));
   const latestDecision = gateEvents.find((event) => ["CONFIRMED", "REJECTED", "REVERTED", "EXPIRED"].includes(upper(event.event_type))) || null;
   const status = theoreticalStatus({ latestEvent, trade, gate, intent });
   const resultR = upper(trade?.status) === "CLOSED" ? finiteOrNull(trade?.result_r) : null;
-  const attribution = operatorOutcomeAttribution({ gate, latestDecision, latestManual, resultR, trade });
+  const attribution = operatorOutcomeAttribution({ gate, latestDecision, latestManual: manualLifecycle, resultR, trade });
   const terms = object(intent.execution_terms || payload.execution_terms || payload.approved_trade_plan);
   const protection = object(payload.protection);
   const targets = targetRows(payload, terms, protection);
   const entry = firstFinite(nested(terms, "entry", "price"), nested(payload, "entry", "price"), payload.entry_price, payload.limit_price, payload.stop_price);
-  return {
+  const row = {
     portfolioOrderIntentId: id,
     targetPositionId: text(intent.target_position_id || payload.target_position_id),
     strategySignalId: signalId(intent, payload),
@@ -125,10 +166,30 @@ function theoreticalRow({ execution, intent }) {
     operatorDecision: upper(gate?.status || latestDecision?.event_type || "NOT_RECORDED"),
     operatorDecisionAt: iso(latestDecision?.occurred_at_utc || gate?.confirmed_at_utc || gate?.rejected_at_utc || gate?.updated_at_utc),
     operatorActor: text(latestDecision?.operator_id || gate?.operator_id),
-    manualExecutionStatus: upper(latestManual?.event_type || "NOT_REPORTED"),
+    manualExecutionStatus: upper(manualLifecycle?.event_type || "NOT_REPORTED"),
     manualExecutionAt: iso(latestManual?.occurred_at_utc),
     outcomeAttribution: attribution,
   };
+  row.manualExecution = manualExecutionActionProjection({
+    portfolioOrderIntentId: id,
+    tradeId: row.tradeId,
+    instrument: row.instrument,
+    side: row.side,
+    quantity: row.quantity,
+    operatorDecision: row.operatorDecision,
+    manualStatus: row.manualExecutionStatus,
+    tradeStatus: row.tradeStatus,
+    theoreticalStatus: row.status,
+    planComplete: row.entry !== null && row.stop !== null && row.targets.some((target) => target.price !== null),
+    revision: text(latestManual?.revision || intent.revision || gate?.revision || "unavailable", "unavailable"),
+    actor,
+    stopPlaced,
+  });
+  return row;
+}
+
+function manualLifecycleEvent(events) {
+  return rows(events).find((event) => ["CLOSED", "FILLED", "PLACED", "SKIPPED"].includes(upper(event?.event_type))) || rows(events)[0] || null;
 }
 
 function operatorOutcomeAttribution({ gate, latestDecision, latestManual, resultR, trade }) {

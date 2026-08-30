@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FaBell,
+  FaBullseye,
   FaDesktop,
   FaFingerprint,
   FaKeyboard,
@@ -33,6 +34,13 @@ import type { OperatorSettingsView } from "@/domains/front-api/viewModels";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import { useDeskDensity } from "@/shell/DeskDensityViewport";
 import {
+  readLiveFocusPreference,
+  readLiveFocusSoundProfile,
+  writeLiveFocusPreference,
+  writeLiveFocusSoundProfile,
+  type LiveFocusSoundEvent,
+} from "@/features/live-trading/focusPreferences";
+import {
   desktopNotificationPermission,
   readRealtimeAlertPreference,
   readRealtimeSoundPreference,
@@ -50,6 +58,8 @@ export function OperatorSettingsPage() {
   const [realtimeAlertsEnabled, setRealtimeAlertsEnabled] = useState(readRealtimeAlertPreference);
   const [realtimeSoundEnabled, setRealtimeSoundEnabled] = useState(readRealtimeSoundPreference);
   const [notificationPermission, setNotificationPermission] = useState(desktopNotificationPermission);
+  const [focusPreference, setFocusPreference] = useState(readLiveFocusPreference);
+  const [focusSoundProfile, setFocusSoundProfile] = useState(readLiveFocusSoundProfile);
   const query = useFrontView("operator-settings");
   const repository = useFrontViewRepository();
   const [reason, setReason] = useState("Contrôle opérateur : modification de préférence non critique via le flux de commande BFF.");
@@ -166,6 +176,25 @@ export function OperatorSettingsPage() {
 
         <Card title="Notifications & alertes" actions={<InlineAction>Canaux</InlineAction>} density="compact">
           <div className="settings-local-alerts">
+            <div><FaBullseye /><span><strong>Ouverture automatique du mode Focus</strong><small>Préférence locale : ouvre Focus uniquement lorsqu’une capability Human Gate devient réellement autorisée.</small></span></div>
+            <button type="button" aria-pressed={focusPreference.autoOpen} onClick={() => { const next = writeLiveFocusPreference({ autoOpen: !focusPreference.autoOpen }); setFocusPreference(next); }}>{focusPreference.autoOpen ? "Activée" : "Désactivée"}</button>
+          </div>
+          <div className="settings-local-alerts">
+            <div><FaVolumeUp /><span><strong>Sons du mode Focus</strong><small>Les sons restent une aide périphérique ; aucune action ni alerte visuelle n’en dépend.</small></span></div>
+            <button type="button" aria-pressed={focusSoundProfile.enabled} onClick={() => { const next = writeLiveFocusSoundProfile({ ...focusSoundProfile, enabled: !focusSoundProfile.enabled }); setFocusSoundProfile(next); }}>{focusSoundProfile.enabled ? "Activés" : "Désactivés"}</button>
+          </div>
+          <div className="settings-local-alerts">
+            <div><FaMoon /><span><strong>Ne pas déranger Focus</strong><small>Coupe décision, fill et clôture normale ; expiration imminente et stop touché restent audibles.</small></span></div>
+            <button type="button" aria-pressed={focusSoundProfile.doNotDisturb} onClick={() => { const next = writeLiveFocusSoundProfile({ ...focusSoundProfile, doNotDisturb: !focusSoundProfile.doNotDisturb }); setFocusSoundProfile(next); }}>{focusSoundProfile.doNotDisturb ? "Actif" : "Inactif"}</button>
+          </div>
+          <div className="settings-focus-sound-events" aria-label="Sons Focus par événement">
+            {(["decision", "expiry", "expired", "fill", "stop"] as LiveFocusSoundEvent[]).map((event) => (
+              <button key={event} type="button" aria-pressed={focusSoundProfile.events[event]} onClick={() => { const next = writeLiveFocusSoundProfile({ ...focusSoundProfile, events: { ...focusSoundProfile.events, [event]: !focusSoundProfile.events[event] } }); setFocusSoundProfile(next); }}>
+                {focusSoundEventLabel(event)} · {focusSoundProfile.events[event] ? "ON" : "OFF"}
+              </button>
+            ))}
+          </div>
+          <div className="settings-local-alerts">
             <div><FaBell /><span><strong>Alertes temps réel sur ce poste</strong><small>Préférence visuelle locale ; elle ne modifie aucune policy backend.</small></span></div>
             <button type="button" aria-pressed={realtimeAlertsEnabled} onClick={() => { const next = !realtimeAlertsEnabled; setRealtimeAlertsEnabled(next); setRealtimeAlertPreference(next); }}>{realtimeAlertsEnabled ? "Activées" : "Désactivées"}</button>
           </div>
@@ -272,6 +301,10 @@ export function OperatorSettingsPage() {
       </section>
     </div>
   );
+}
+
+function focusSoundEventLabel(event: LiveFocusSoundEvent): string {
+  return ({ decision: "Décision", expiry: "Expiration proche", expired: "Expirée", fill: "Fill", stop: "Stop" } as const)[event];
 }
 
 export function buildOperatorSettingsCommand(action: SettingsAction, reason: string, stepUpToken = ""): SubmitDeskCommandInput {

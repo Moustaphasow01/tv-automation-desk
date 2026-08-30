@@ -165,6 +165,7 @@ export function DeskShell() {
     : "—";
   const isGoldenCommandCenter = currentRoute?.path === "command-center";
   const isGoldenLiveTrading = currentRoute?.path === "live";
+  const isLiveFocus = isGoldenLiveTrading && new URLSearchParams(location.search).get("focus") === "1";
   const isGoldenStrategyCenter = currentRoute?.path === "strategies";
   const isGoldenResearchLab = currentRoute?.path === "research";
   const isGoldenRiskCenter = currentRoute?.path === "risk";
@@ -185,9 +186,9 @@ export function DeskShell() {
     .filter((group) => group.items.length > 0);
 
   return (
-    <div className={`desk-app-shell desk-app-shell--nav-${effectiveNavigationMode}${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isGoldenStrategyCenter ? " desk-app-shell--strategy-center" : ""}${isGoldenResearchLab ? " desk-app-shell--research-lab" : ""}${isGoldenRiskCenter ? " desk-app-shell--risk-center" : ""}${isGoldenOrdersHumanGate ? " desk-app-shell--orders-human-gate" : ""}${isGoldenPortfolio ? " desk-app-shell--portfolio" : ""}${isGoldenExecutionProviders ? " desk-app-shell--execution-providers" : ""}${isGoldenIncidentsOperations ? " desk-app-shell--incidents-operations" : ""}${isGoldenPerformance ? " desk-app-shell--performance" : ""}${isGoldenReplay ? " desk-app-shell--replay" : ""}`}>
+    <div className={`desk-app-shell desk-app-shell--nav-${effectiveNavigationMode}${isGoldenCommandCenter ? " desk-app-shell--command-center" : ""}${isGoldenLiveTrading ? " desk-app-shell--live-trading" : ""}${isLiveFocus ? " desk-app-shell--focus-mode" : ""}${isGoldenStrategyCenter ? " desk-app-shell--strategy-center" : ""}${isGoldenResearchLab ? " desk-app-shell--research-lab" : ""}${isGoldenRiskCenter ? " desk-app-shell--risk-center" : ""}${isGoldenOrdersHumanGate ? " desk-app-shell--orders-human-gate" : ""}${isGoldenPortfolio ? " desk-app-shell--portfolio" : ""}${isGoldenExecutionProviders ? " desk-app-shell--execution-providers" : ""}${isGoldenIncidentsOperations ? " desk-app-shell--incidents-operations" : ""}${isGoldenPerformance ? " desk-app-shell--performance" : ""}${isGoldenReplay ? " desk-app-shell--replay" : ""}`}>
       <a className="skip-link" href="#main-content">Aller au contenu principal</a>
-      <aside className="desk-sidebar" aria-label="Barre latérale du desk">
+      {!isLiveFocus ? <aside className="desk-sidebar" aria-label="Barre latérale du desk">
         <div className="brand-block">
           <DeskBrand />
         </div>
@@ -226,8 +227,8 @@ export function DeskShell() {
           </section>
           <small>Desk Control Plane<br />build {DESK_BUILD_ID}</small>
         </div>
-      </aside>
-      {effectiveNavigationMode === "hidden" ? <button className="desk-navigation-reveal" type="button" onClick={() => setNavigationMode("expanded")}>Navigation</button> : null}
+      </aside> : null}
+      {!isLiveFocus && effectiveNavigationMode === "hidden" ? <button className="desk-navigation-reveal" type="button" onClick={() => setNavigationMode("expanded")}>Navigation</button> : null}
 
       <div className="desk-main">
         {!isGoldenSurface ? <header className="desk-topbar">
@@ -306,7 +307,7 @@ export function DeskShell() {
         </div>
       ) : null}
 
-      <nav className="desk-bottom-nav" aria-label="Navigation mobile">
+      {!isLiveFocus ? <nav className="desk-bottom-nav" aria-label="Navigation mobile">
         {deskPrimaryNavigation.filter((route) => route.mobile).slice(0, 4).map((route) => {
           const Icon = navIcons[route.icon];
           return (
@@ -322,7 +323,7 @@ export function DeskShell() {
           </NavLink>
         );})}
         <button ref={mobileMenuTriggerRef} type="button" className="bottom-nav-link" aria-haspopup="dialog" aria-expanded={mobileMenuOpen} aria-controls="mobile-full-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>Plus</button>
-      </nav>
+      </nav> : null}
       {mobileMenuOpen ? (
         <aside ref={mobileMenuDrawerRef} id="mobile-full-navigation" className="desk-mobile-drawer" role="dialog" aria-modal="true" aria-label="Toutes les rubriques">
           <button ref={mobileMenuCloseRef} type="button" onClick={() => setMobileMenuOpen(false)}>Fermer</button>
@@ -331,7 +332,7 @@ export function DeskShell() {
           </nav>
         </aside>
       ) : null}
-      <button className="desk-shortcut-help-trigger" type="button" aria-label="Afficher les raccourcis clavier" onClick={() => setShortcutHelpOpen(true)}><FaQuestionCircle aria-hidden="true" /><span>?</span></button>
+      {!isLiveFocus ? <button className="desk-shortcut-help-trigger" type="button" aria-label="Afficher les raccourcis clavier" onClick={() => setShortcutHelpOpen(true)}><FaQuestionCircle aria-hidden="true" /><span>?</span></button> : null}
       {shortcutHelpOpen ? (
         <div className="desk-shortcut-help-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setShortcutHelpOpen(false); }}>
           <section className="desk-shortcut-help" role="dialog" aria-modal="true" aria-labelledby="desk-shortcuts-title">

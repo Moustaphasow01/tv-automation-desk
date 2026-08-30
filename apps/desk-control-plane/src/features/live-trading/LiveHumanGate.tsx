@@ -45,7 +45,7 @@ export function LiveHumanGate({ model, onSubmit, submittingActionId, command, co
   const request = useCallback((action: HumanGateAction | undefined) => {
     if (!action || action.permission !== "ALLOWED" || actionsLocked) return;
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setReason(action.action === "CONFIRM" ? "Ordre passé manuellement par l’opérateur." : "");
+    setReason(action.action === "CONFIRM" ? "OrderIntent autorisé par l’opérateur en mode semi-manuel." : "");
     setPending(action);
   }, [actionsLocked]);
   const submit = async () => {

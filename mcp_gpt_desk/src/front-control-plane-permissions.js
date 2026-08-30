@@ -87,6 +87,89 @@ export function resourceAllowedActions({ resourceType, status, revision = "unava
   };
 }
 
+export function manualExecutionTransition({
+  operatorDecision = "",
+  manualStatus = "",
+  tradeStatus = "",
+  theoreticalStatus = "",
+  planComplete = false,
+  actor = {},
+} = {}) {
+  const operatorCanWrite = permissions(actor).some((item) => item.capability === "execution.paper" && item.allowed);
+  const decision = upper(operatorDecision);
+  const manual = upper(manualStatus || "NOT_REPORTED");
+  const trade = upper(tradeStatus);
+  const theoretical = upper(theoreticalStatus);
+  const allowedEventTypes = [];
+  const denialReasons = [];
+
+  if (!operatorCanWrite) denialReasons.push("WRITE_REQUIRES_OPERATOR_SESSION");
+  if (decision !== "CONFIRMED") denialReasons.push("HUMAN_GATE_CONFIRMATION_REQUIRED");
+  if (!planComplete) denialReasons.push("ORDER_PLAN_INCOMPLETE");
+  if (["EXPIRED", "ENTRY_EXPIRED", "REJECTED", "INVALIDATED"].includes(theoretical)) denialReasons.push("ORDER_INTENT_NOT_ACTIONABLE");
+  if (["CLOSED", "SKIPPED"].includes(manual)) denialReasons.push("MANUAL_EXECUTION_TERMINAL");
+
+  if (!denialReasons.length) {
+    if (["", "NOT_REPORTED", "NOTE", "MODIFIED"].includes(manual)) allowedEventTypes.push("PLACED", "SKIPPED");
+    if (manual === "PLACED") allowedEventTypes.push("FILLED", "MODIFIED", "SKIPPED", "NOTE");
+    if (manual === "FILLED" || (manual === "MODIFIED" && !["CLOSED", "CANCELLED", "EXPIRED"].includes(trade))) allowedEventTypes.push("CLOSED", "MODIFIED", "NOTE");
+  }
+
+  return { allowedEventTypes, denialReasons, operatorCanWrite };
+}
+
+export function manualExecutionActionProjection({
+  portfolioOrderIntentId,
+  tradeId = "",
+  instrument = "",
+  side = "",
+  quantity = null,
+  operatorDecision = "",
+  manualStatus = "",
+  tradeStatus = "",
+  theoreticalStatus = "",
+  planComplete = false,
+  revision = "unavailable",
+  actor = {},
+  stopPlaced = false,
+} = {}) {
+  const transition = manualExecutionTransition({ operatorDecision, manualStatus, tradeStatus, theoreticalStatus, planComplete, actor });
+  const actionDefinitions = {
+    PLACED: { action: "REPORT_PLACED", commandType: "execution.order_intent.manual_placed", label: "J’ai passé l’ordre", requiresPrice: true, requiresQuantity: true, impactPreview: "Enregistre une déclaration opérateur observationnelle. Aucun fill broker ni fill théorique n’est créé." },
+    FILLED: { action: "REPORT_FILLED", commandType: "execution.order_intent.manual_filled", label: "Déclarer le fill manuel", requiresPrice: true, requiresQuantity: true, impactPreview: "Enregistre le prix et la quantité déclarés par l’opérateur sans modifier le suivi théorique backend." },
+    CLOSED: { action: "REPORT_CLOSED", commandType: "execution.order_intent.manual_closed", label: "J’ai clôturé la position", requiresPrice: true, requiresQuantity: false, impactPreview: "Enregistre une clôture manuelle déclarative. Le résultat théorique reste indépendant." },
+    SKIPPED: { action: "REPORT_SKIPPED", commandType: "execution.order_intent.manual_skipped", label: "Je n’ai pas pris l’ordre", requiresPrice: false, requiresQuantity: false, impactPreview: "Enregistre une opportunité non exécutée manuellement sans annuler son suivi théorique." },
+    MODIFIED: { action: "REPORT_MODIFIED", commandType: "execution.order_intent.manual_modified", label: "Corriger ma déclaration", requiresPrice: false, requiresQuantity: false, impactPreview: "Ajoute une correction auditée ; l’historique précédent reste conservé." },
+    NOTE: { action: "REPORT_STOP_PLACED", commandType: "execution.order_intent.manual_note", label: "Stop de protection placé", requiresPrice: false, requiresQuantity: false, impactPreview: "Consigne que le stop de protection a été placé manuellement. Cette déclaration ne modifie pas le plan Risk." },
+  };
+  const payload = {
+    portfolioOrderIntentId: text(portfolioOrderIntentId, ""),
+    tradeId: text(tradeId, ""),
+    instrument: text(instrument, ""),
+    side: text(side, ""),
+    expectedQuantity: Number.isFinite(Number(quantity)) ? Number(quantity) : 0,
+  };
+  return {
+    status: upper(manualStatus || "NOT_REPORTED"),
+    allowedActions: transition.allowedEventTypes.filter((eventType) => eventType !== "NOTE" || !stopPlaced).map((eventType) => {
+      const definition = actionDefinitions[eventType];
+      return {
+        ...definition,
+        eventType,
+        actionId: `manual-execution.${eventType.toLowerCase()}.${text(portfolioOrderIntentId, "unknown")}.${revision}`,
+        environment: "PAPER",
+        permission: "ALLOWED",
+        requiresConfirmation: true,
+        requiresReason: ["SKIPPED", "MODIFIED"].includes(eventType),
+        expectedRevision: text(revision, "unavailable"),
+        payload: eventType === "NOTE" ? { ...payload, noteType: "STOP_PLACED" } : payload,
+      };
+    }),
+    denialReasons: transition.denialReasons,
+    stopPlacement: { placed: stopPlaced, source: stopPlaced ? "trade_manual_execution_events" : "NOT_REPORTED" },
+  };
+}
+
 function humanGateActions({ gate, portfolioIntent, operatorCanWrite, onlyUndo = false }) {
   const payload = portfolioIntent.order_intent_payload || portfolioIntent.payload || {};
   const portfolioOrderIntentId = text(portfolioIntent.portfolio_order_intent_id || payload.order_intent_id, "");
