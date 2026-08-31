@@ -449,6 +449,7 @@ export type LiveTradingView = {
     providerCommandsCreated?: number;
     providerEventsObserved?: number;
     riskUsedPct: number | null;
+    riskConfiguredPct?: number | null;
     correlatedExposurePct: number | null;
     liveDrawdownR: number | null;
   };
@@ -469,6 +470,11 @@ export type LiveTradingView = {
     checkedAt: string;
     finalCheckCommand: string;
     releaseCheckCommand: string;
+    capabilityStates?: readonly {
+      capability: "SIGNAL_DETECTION" | "THEORETICAL_TRACKING" | "HUMAN_GATE" | "PHYSICAL_EXECUTION";
+      status: "READY" | "BLOCKED" | "DISABLED_BY_POLICY";
+      blockers: readonly string[];
+    }[];
     components: readonly {
       componentId: string;
       label: string;
@@ -555,9 +561,16 @@ export type LiveTradingView = {
       strategyVersionId: string;
       name: string | null;
       executionMode: string;
+      configuredState?: string;
       runtimeState: string;
+      schedulerHealth?: string;
+      instruments?: readonly string[];
+      sessionScopes?: readonly string[];
       lastEvaluationAt: string;
       nextEvaluationAt: string;
+      lastEvaluationResult?: string;
+      lastEvaluationReasonCodes?: readonly string[];
+      lastEvaluationContext?: Record<string, unknown> | null;
       scheduler: unknown;
       confidence: number | null;
       confidenceSourceSignalId: string | null;
@@ -822,6 +835,7 @@ export type LiveTradingView = {
     destinations?: readonly {
       label: string;
       configured: boolean;
+      observed?: boolean;
       lastDeliveryAt: string;
       deliveryStatus: string;
       retryCount: number;

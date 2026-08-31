@@ -39,7 +39,7 @@ function addRuntimeEvaluations(instances, evaluations) {
   return instances.map((instance) => {
     const evaluation = latest.get(String(instance.strategy_instance_id));
     if (!evaluation) return { ...instance, scheduler_health: "NOT_OBSERVED" };
-    return { ...instance, last_evaluation_at_utc: evaluation.completed_at_utc, next_evaluation_at_utc: evaluation.next_evaluation_at_utc, last_evaluation_result: evaluation.status, last_evaluation_reason_codes: evaluation.reason_codes || [], artifact_version: evaluation.artifact_version || instance.artifact_version || null, scheduler_health: "OBSERVED" };
+    return { ...instance, last_evaluation_at_utc: evaluation.completed_at_utc, next_evaluation_at_utc: evaluation.next_evaluation_at_utc, last_evaluation_result: evaluation.status, last_evaluation_reason_codes: evaluation.reason_codes || [], last_evaluation_payload: evaluation.payload || null, artifact_version: evaluation.artifact_version || instance.artifact_version || null, scheduler_health: "OBSERVED" };
   });
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createDeskStoreFromEnv } from "../src/store.js";
-import { grainChicagoDate } from "../src/us-grains-data-quality.js";
+import { grainChicagoDate, grainsRuntimeEvaluationDisposition, grainsTradingSessionState } from "../src/us-grains-data-quality.js";
 import { replayUsGrainsStrategySuiteV1 } from "../src/us-grains-strategy-suite.js";
 import {
   publishActionableGrainSignals,
@@ -18,6 +18,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const asOfUtc = new Date(Date.parse(args["as-of"] || args.asOf || new Date().toISOString())).toISOString();
   const tradingDate = args["trading-date"] || grainChicagoDate(asOfUtc);
+  const tradingSession = grainsTradingSessionState(asOfUtc);
   const instruments = csv(args.instruments || args.instrument || "ZW,ZC");
   const store = createDeskStoreFromEnv();
   try {
@@ -38,17 +39,18 @@ async function main() {
       endDate: tradingDate,
       asOfUtc,
     });
-    const actionable = selectActionableGrainSignals({
+    const actionable = tradingSession.state === "OPEN" ? selectActionableGrainSignals({
       replay,
       asOfUtc,
       includeExpired: args["include-expired"] === true,
-    });
+    }) : [];
     const runtimeEvaluations = await recordGrainRuntimeEvaluations(store, {
       catalogInstances,
       replay,
       actionable,
       asOfUtc,
       tradingDate,
+      tradingSession,
     });
     const dryRunMode = args["dry-run"] === true || args["no-publish"] === true;
     const publish = dryRunMode
@@ -59,7 +61,7 @@ async function main() {
           sourceClass: args["source-class"] || "SHADOW",
           certificationRunId: args["certification-run-id"] || null,
         });
-    console.log(JSON.stringify(summary({ asOfUtc, tradingDate, instruments, replay, actionable, publish, dryRunMode, runtimeHeartbeat, runtimeEvaluations }), null, 2));
+    console.log(JSON.stringify(summary({ asOfUtc, tradingDate, instruments, replay, actionable, publish, dryRunMode, runtimeHeartbeat, runtimeEvaluations, tradingSession }), null, 2));
   } finally {
     await store.persistence.close?.();
   }
@@ -122,7 +124,7 @@ async function markGrainRuntimeRunning(pool, { instruments, asOfUtc, reason }) {
   };
 }
 
-async function recordGrainRuntimeEvaluations(store, { catalogInstances, replay, actionable, asOfUtc, tradingDate }) {
+async function recordGrainRuntimeEvaluations(store, { catalogInstances, replay, actionable, asOfUtc, tradingDate, tradingSession }) {
   if (!store.strategyEvaluations?.record) {
     return {
       schema_version: "us_grains_runtime_evaluations_v1",
@@ -140,8 +142,12 @@ async function recordGrainRuntimeEvaluations(store, { catalogInstances, replay, 
     const rawSignals = rawByInstance.get(instanceId) || [];
     const acceptedSignals = acceptedByInstance.get(instanceId) || [];
     const actionableSignals = actionableByInstance.get(instanceId) || [];
-    const signal = actionableSignals[0] || acceptedSignals[0] || null;
-    const status = signal ? "SIGNAL_CREATED" : "NO_SIGNAL";
+    const signal = tradingSession?.state === "OPEN"
+      ? actionableSignals[0] || acceptedSignals[0] || null
+      : null;
+    const disposition = grainsRuntimeEvaluationDisposition({ timestampUtc: asOfUtc, hasSignal: Boolean(signal) });
+    const waitingForSession = disposition.status === "WAITING_SESSION";
+    const status = disposition.status;
     const instrument = firstInstrument(instance.instrument_scope);
     const evaluation = await store.strategyEvaluations.record({
       strategy_instance_id: instance.strategy_instance_id,
@@ -157,11 +163,9 @@ async function recordGrainRuntimeEvaluations(store, { catalogInstances, replay, 
       source_data_cutoff_utc: asOfUtc,
       started_at_utc: asOfUtc,
       completed_at_utc: asOfUtc,
-      next_evaluation_at_utc: new Date(Date.parse(asOfUtc) + 60_000).toISOString(),
+      next_evaluation_at_utc: disposition.next_evaluation_at_utc,
       signal_id: signal?.signal_id || null,
-      reason_codes: signal
-        ? ["US_GRAINS_RUNTIME_EVALUATED", "SIGNAL_CREATED"]
-        : ["US_GRAINS_RUNTIME_EVALUATED", "NO_ACTIONABLE_SIGNAL"],
+      reason_codes: disposition.reason_codes,
       payload: {
         schema_version: "us_grains_runtime_evaluation_payload_v1",
         strategy_name: instance.name || null,
@@ -170,6 +174,9 @@ async function recordGrainRuntimeEvaluations(store, { catalogInstances, replay, 
         raw_signal_count: rawSignals.length,
         accepted_signal_count: acceptedSignals.length,
         actionable_signal_count: actionableSignals.length,
+        session_state: tradingSession?.state || "UNKNOWN",
+        active_session: tradingSession?.active_session || null,
+        next_eligible_at_utc: waitingForSession ? tradingSession?.next_eligible_at_utc || null : null,
       },
     });
     recorded.push({
@@ -251,12 +258,13 @@ function dryRun(signals, args) {
   };
 }
 
-function summary({ asOfUtc, tradingDate, instruments, replay, actionable, publish, dryRunMode, runtimeHeartbeat, runtimeEvaluations }) {
+function summary({ asOfUtc, tradingDate, instruments, replay, actionable, publish, dryRunMode, runtimeHeartbeat, runtimeEvaluations, tradingSession }) {
   return {
     schema_version: "us_grains_strategy_suite_once_result_v1",
     as_of_utc: asOfUtc,
     trading_date: tradingDate,
     instruments,
+    trading_session: tradingSession || null,
     dry_run: dryRunMode,
     runtime_heartbeat: runtimeHeartbeat || null,
     runtime_evaluations: runtimeEvaluations || null,

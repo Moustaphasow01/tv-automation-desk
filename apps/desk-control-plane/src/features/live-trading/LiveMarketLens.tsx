@@ -6,6 +6,7 @@ import {
   presentGeneric,
   presentRuntimeStatus,
 } from "@/design-system/labels";
+import { operatorCode } from "@/design-system/operatorVocabulary";
 import { displayTime } from "./mapper";
 import type { LiveTradingModel } from "./model";
 import { LivePanel } from "./LivePanel";
@@ -99,7 +100,7 @@ function SessionBrief({ model }: LensProps) {
     <section className="lt-market-lens__section lt-market-lens__session" aria-labelledby="market-lens-session">
       <LensHeading id="market-lens-session" title="Session et fraîcheur" action={<Link to="/live/news">Voir macro &amp; news</Link>} />
       <dl className="lt-definition-list">
-        <LensPair label="Session" value={session.activeSession ?? session.phase} />
+        <LensPair label="Session" value={operatorCode(session.activeSession ?? session.phase)} />
         <LensPair label="État marché" value={presentGeneric(session.marketState ?? session.marketDataStatus).label} />
         <LensPair label="Date de trading" value={session.tradingDate} />
         <LensPair label="Dernière donnée connue" value={displayTime(session.lastKnownAt)} />
@@ -118,7 +119,7 @@ function StrategyBrief({ model }: LensProps) {
       {visible.length ? <ul>{visible.map((instance) => (
         <li key={instance.strategyInstanceId}>
           <span><strong title={instance.strategyInstanceId}>{instance.name ?? compactId(instance.strategyInstanceId)}</strong><small>{compactId(instance.strategyVersionId)}</small></span>
-          <span><StatusBadge tone={presentRuntimeStatus(instance.runtimeState).tone}>{presentRuntimeStatus(instance.runtimeState).label}</StatusBadge><small>{instance.runtimeState === "MARKET_CLOSED" ? "À la réouverture" : `Éval. ${displayTime(instance.nextEvaluationAt)}`}</small></span>
+          <span><StatusBadge tone={presentRuntimeStatus(instance.runtimeState).tone}>{presentRuntimeStatus(instance.runtimeState).label}</StatusBadge><small>{instance.lastEvaluationResult ? operatorCode(instance.lastEvaluationResult) : instance.runtimeState === "MARKET_CLOSED" ? "À la réouverture" : `Éval. ${displayTime(instance.nextEvaluationAt)}`}</small></span>
         </li>
       ))}</ul> : <LensEmpty title="Aucune instance active" detail="Le registre backend ne publie aucune instance pour cette session." />}
     </section>

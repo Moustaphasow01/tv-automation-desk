@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { marketFeedSymbol } from "../src/desk-market-feature-algorithms.js";
-import { liveWatchlist } from "../src/front-live-trading-support.js";
+import { liveSession, liveSummary, liveWatchlist } from "../src/front-live-trading-support.js";
 
 test("grain market aliases resolve to the TradingView continuous contracts", () => {
   assert.equal(marketFeedSymbol("ZC"), "ZC1!");
@@ -21,4 +21,32 @@ test("live watchlist follows active strategy instruments without keeping unrelat
 
   assert.deepEqual(result.map((item) => item.symbol), ["ZC", "ZW"]);
   assert.equal(result.some((item) => item.symbol === "MNQ"), false);
+});
+
+test("live summary distinguishes configured risk from actually consumed risk", () => {
+  const result = liveSummary({
+    signals: [], intents: [], commands: [], events: [],
+    safety: { riskPercent: 0.25 },
+    risk: { summary: { risk_percent: 0.25 } },
+  });
+
+  assert.equal(result.riskConfiguredPct, 0.25);
+  assert.equal(result.riskUsedPct, null);
+});
+
+test("live session translates the authoritative CBOT readiness projection without a local Asia fallback", () => {
+  const result = liveSession({
+    execution: {},
+    liveSession: null,
+    scope: { session: "asia_open", trading_date: "2026-08-31" },
+    launchGate: {},
+    health: { data_readiness: { active_session: "CBOT_GRAINS_PREOPEN", exchange_timezone: "America/Chicago", next_eligible_at_utc: "2026-08-31T13:30:00.000Z" } },
+    marketSeries: null,
+    marketDataStatus: () => "LAST_KNOWN",
+  });
+
+  assert.equal(result.phase, "CBOT_GRAINS_PREOPEN");
+  assert.equal(result.activeSession, "CBOT_GRAINS_PREOPEN");
+  assert.equal(result.exchangeTimezone, "America/Chicago");
+  assert.equal(result.nextMonitorAt, "2026-08-31T13:30:00.000Z");
 });

@@ -164,21 +164,24 @@ export function liveSummary({ signals, intents, commands, events, safety = {}, r
     acceptanceRatePct: signals.length ? Math.round((intents.length / signals.length) * 100) : null,
     orderIntentsPending: intents.filter((item) => ["READY", "AWAITING_MANUAL_CONFIRMATION", "PENDING"].includes(upper(item.state))).length,
     providerCommandsCreated: commands.length, providerEventsObserved: events.length,
-    riskUsedPct: nullableMetric(first(safety.riskPercent, risk?.summary?.risk_percent)),
+    riskUsedPct: nullableMetric(first(risk?.summary?.risk_used_pct, risk?.summary?.open_risk_pct, risk?.summary?.current_risk_pct)),
+    riskConfiguredPct: nullableMetric(first(safety.riskPercent, risk?.summary?.risk_percent)),
     correlatedExposurePct: nullableMetric(first(safety.correlatedExposurePct, risk?.summary?.correlated_exposure_pct)),
     liveDrawdownR: nullableMetric(performance.max_drawdown_R),
   };
 }
 
 export function liveSession({ execution, liveSession: currentLiveSession, scope, launchGate, health, marketSeries, marketDataStatus }) {
+  const readiness = health?.data_readiness || {};
+  const activeSession = text(readiness.active_session, scope.session);
   return {
     sessionId: text(execution.session_id || currentLiveSession?.id, "unavailable"),
     tradingDate: text(currentLiveSession?.date, scope.trading_date),
-    phase: scope.session === "ny_open" ? "New York" : "Asia",
-    nextMonitorAt: text(execution.next_monitor_at || currentLiveSession?.nextMonitorAt || currentLiveSession?.nextCheckpointAt, "unavailable"),
+    phase: activeSession,
+    nextMonitorAt: text(readiness.next_eligible_at_utc || execution.next_monitor_at || currentLiveSession?.nextMonitorAt || currentLiveSession?.nextCheckpointAt, "unavailable"),
     marketDataStatus: marketDataStatus(launchGate), marketState: marketSessionState(health?.data_readiness),
-    activeSession: text(health?.data_readiness?.active_session || scope.session, "UNKNOWN"),
-    exchangeTimezone: text(health?.data_readiness?.exchange_timezone, "America/New_York"), lastKnownAt: text(marketSeries?.asOf, "unavailable"),
+    activeSession,
+    exchangeTimezone: text(readiness.exchange_timezone, "America/New_York"), lastKnownAt: text(marketSeries?.asOf, "unavailable"),
   };
 }
 

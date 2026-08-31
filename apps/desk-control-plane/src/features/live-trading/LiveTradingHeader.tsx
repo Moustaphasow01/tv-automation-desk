@@ -29,6 +29,7 @@ export function LiveTradingHeader({ model, onRefresh, refreshing, onEnterFocus }
     return searchTargets.filter((item) => `${item.label} ${item.keywords}`.toLocaleLowerCase("fr").includes(needle));
   }, [query]);
   const now = realtime?.now ?? null;
+  const capabilities = model.source.launchGate.capabilityStates ?? [];
 
   return (
     <>
@@ -50,8 +51,15 @@ export function LiveTradingHeader({ model, onRefresh, refreshing, onEnterFocus }
         <PolicyChip tone="info">{operatorCode(model.mode.environment)}</PolicyChip>
         <PolicyChip tone="info">{presentExecutionMode(model.mode.executionMode).label}</PolicyChip>
         <PolicyChip tone={model.mode.autoExecutionEnabled ? "danger" : "warning"}>Exécution automatique {model.mode.autoExecutionEnabled ? "activée" : "désactivée"}</PolicyChip>
-        <PolicyChip tone={model.mode.physicalExecutionEnabled ? "danger" : "danger"}>Broker réel {model.mode.physicalExecutionEnabled ? "activé" : "désactivé"}</PolicyChip>
-        <PolicyChip tone={model.mode.humanGateRequired ? "warning" : "danger"}>Validation opérateur {model.mode.humanGateRequired ? "requise" : "non requise"}</PolicyChip>
+        {capabilities.length ? capabilities.map((capability) => (
+          <PolicyChip
+            key={capability.capability}
+            tone={capability.status === "READY" ? "success" : capability.status === "BLOCKED" ? "danger" : "warning"}
+            title={capability.blockers.length ? `Contrôles bloquants : ${capability.blockers.join(", ")}` : undefined}
+          >
+            {capabilityPresentation(capability.capability, capability.status)}
+          </PolicyChip>
+        )) : <PolicyChip tone="warning">Capacités opérationnelles non publiées</PolicyChip>}
         <span className={`lt-policy__freshness lt-tone--${model.truth.tone}`}><FaCircle aria-hidden="true" />Données {presentAvailability(model.freshness.marketData).label.toLowerCase()} · arrêté à {formatTimestamp(model.meta.asOf)}</span>
         <button type="button" className="lt-policy__refresh" onClick={onRefresh} disabled={refreshing} aria-label="Actualiser la projection Live"><FaSyncAlt className={refreshing ? "is-spinning" : ""} /></button>
         <FaShieldAlt className="lt-policy__shield" aria-label="Politique backend active" />
@@ -60,8 +68,18 @@ export function LiveTradingHeader({ model, onRefresh, refreshing, onEnterFocus }
   );
 }
 
-function PolicyChip({ tone, children }: { tone: "info" | "warning" | "danger"; children: React.ReactNode }) {
-  return <span className={`lt-policy-chip lt-policy-chip--${tone}`}>{children}</span>;
+function PolicyChip({ tone, title, children }: { tone: "info" | "success" | "warning" | "danger"; title?: string; children: React.ReactNode }) {
+  return <span className={`lt-policy-chip lt-policy-chip--${tone}`} title={title}>{children}</span>;
+}
+
+function capabilityPresentation(capability: string, status: string): string {
+  const known = ({
+    SIGNAL_DETECTION: { READY: "Détection active", BLOCKED: "Détection bloquée", DISABLED_BY_POLICY: "Détection désactivée" },
+    THEORETICAL_TRACKING: { READY: "Suivi théorique actif", BLOCKED: "Suivi théorique bloqué", DISABLED_BY_POLICY: "Suivi théorique désactivé" },
+    HUMAN_GATE: { READY: "Validation humaine disponible", BLOCKED: "Validation humaine bloquée", DISABLED_BY_POLICY: "Validation humaine désactivée" },
+    PHYSICAL_EXECUTION: { READY: "Exécution physique disponible", BLOCKED: "Exécution physique bloquée", DISABLED_BY_POLICY: "Exécution physique désactivée" },
+  } as Record<string, Record<string, string>>)[capability]?.[status];
+  return known ?? `${operatorCode(capability)} · ${operatorCode(status)}`;
 }
 
 function formatClock(date: Date) { return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date); }

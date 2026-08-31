@@ -278,25 +278,39 @@ export function telegramDrilldownFromHealth(health = {}) {
       secretsExposed: false,
     };
   }
+  const details = service.details || {};
+  const environment = details.environment || {};
+  const deliveries = rows(details.deliveries);
+  const latestDelivery = deliveries[0] || null;
+  const destinations = [
+    telegramDestination("administration", environment.adminConfigured, deliveries, "admin"),
+    telegramDestination("trading", environment.tradingConfigured, deliveries, "trading"),
+  ].filter((item) => item.configured || item.observed);
   return {
     schemaVersion: "telegram_drilldown_front_v1",
     availability: "KNOWN",
-    enabled: service.enabled !== false,
-    healthy: ["OK", "READY", "RUNNING"].includes(upper(service.status || service.health)),
+    enabled: environment.workerEnabled === true || (environment.workerEnabled == null && service.enabled !== false),
+    healthy: service.healthy === true || ["HEALTHY", "OK", "READY", "RUNNING"].includes(upper(service.status || service.health)),
     status: text(service.status || service.health, "UNKNOWN"),
     lastHeartbeatAt: text(service.last_heartbeat_at_utc || service.heartbeat_at_utc, "unavailable"),
-    destinations: rows(service.destinations).map((item, index) => ({
-      label: text(item.label || item.name, `destination-${index + 1}`),
-      configured: Boolean(item.configured ?? item.enabled),
-      lastDeliveryAt: text(item.last_delivery_at_utc, "unavailable"),
-      deliveryStatus: text(item.delivery_status, "UNKNOWN"),
-      retryCount: number(item.retry_count, 0),
-      errorReason: text(item.error_reason || item.last_error, ""),
-    })),
-    lastDeliveryAt: text(service.last_delivery_at_utc, "unavailable"),
-    deliveryStatus: text(service.delivery_status, "UNKNOWN"),
-    errorReason: text(service.error_reason || service.last_error, ""),
+    destinations,
+    lastDeliveryAt: text(firstValue(latestDelivery?.sent_at_utc, latestDelivery?.last_delivery_at_utc), ""),
+    deliveryStatus: text(firstValue(latestDelivery?.status, deliveries.length ? "OBSERVED" : "IDLE"), "IDLE").toUpperCase(),
+    errorReason: text(firstValue(latestDelivery?.error, latestDelivery?.last_error, details.error, service.error_reason, service.last_error), ""),
     secretsExposed: false,
+  };
+}
+
+function telegramDestination(label, configured, deliveries, profile) {
+  const delivery = deliveries.find((item) => text(item.profile, "").toLowerCase() === profile) || null;
+  return {
+    label,
+    configured: configured === true,
+    observed: Boolean(delivery),
+    lastDeliveryAt: text(firstValue(delivery?.sent_at_utc, delivery?.last_delivery_at_utc), ""),
+    deliveryStatus: text(delivery?.status, delivery ? "OBSERVED" : "IDLE").toUpperCase(),
+    retryCount: number(firstValue(delivery?.attempt_count, delivery?.retry_count), 0),
+    errorReason: text(firstValue(delivery?.error, delivery?.last_error), ""),
   };
 }
 
@@ -469,10 +483,13 @@ function activeStrategyInstanceRows(strategy, nowIso, health = {}) {
       runtimeState: effectiveRuntimeState,
       schedulerHealth: intentionallyIdle ? "IDLE_MARKET_CLOSED" : schedulerHealth,
       instruments: stringList(item.instrument_scope),
+      sessionScopes: stringList(item.session_scope),
       lastHeartbeatAt,
       lastEvaluationAt,
       nextEvaluationAt: text(item.next_evaluation_at_utc || item.next_run_at_utc, ""),
       lastEvaluationResult: text(item.last_evaluation_result, "UNKNOWN"),
+      lastEvaluationReasonCodes: stringList(item.last_evaluation_reason_codes),
+      lastEvaluationContext: item.last_evaluation_payload || null,
       lastError: text(item.last_error, ""),
       artifactVersion: text(item.artifact_version, ""),
       scheduler: item.scheduler || null,

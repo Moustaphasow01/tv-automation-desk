@@ -55,6 +55,7 @@ export const presentRuntimeStatus = makePresenter({
   DRAINING: { label: "Vidage en cours", tone: "warning" },
   DRAINED: { label: "Vidée", tone: "warning" },
   WAITING: { label: "En attente", tone: "info" },
+  WAITING_SESSION: { label: "En attente de la séance CBOT", tone: "info" },
   MARKET_CLOSED: { label: "Marché fermé", tone: "neutral" },
   FAILED: { label: "En échec", tone: "danger" },
   QUEUED: { label: "En file", tone: "info" },

@@ -2,26 +2,39 @@ import {
   marketDataFreshnessPolicyForSession,
   parisMarketSessionState,
 } from "../market-session-state.js";
+import { grainsTradingSessionState } from "../us-grains-data-quality.js";
+
+const FALLBACK_INSTRUMENTS = Object.freeze(["MNQ", "MES"]);
+const REQUIRED_TIMEFRAMES = Object.freeze(["1", "5"]);
+const GRAIN_INSTRUMENTS = new Set(["ZC", "ZW"]);
 
 export async function buildPostgresDataHealth(pool, { nowUtc = new Date().toISOString() } = {}) {
+  const activeScopeResult = await pool.query(activeRuntimeInstrumentScopeSql());
+  const activeInstruments = normalizeInstruments(activeScopeResult.rows[0]?.instruments);
+  const requiredInstruments = activeInstruments.length ? activeInstruments : [...FALLBACK_INSTRUMENTS];
   const [marketResult, schedulerResult] = await Promise.all([
-    pool.query(coreFeedHealthSql()),
+    pool.query(coreFeedHealthSql(), [requiredInstruments]),
     pool.query(liveSchedulerHealthSql()),
   ]);
   return projectDataHealth({
     nowUtc,
     feedRows: marketResult.rows,
     scheduler: schedulerResult.rows[0] || null,
+    requiredInstruments,
+    scopeSource: activeInstruments.length ? "active_strategy_instances" : "fallback_default",
   });
 }
 
-function projectDataHealth({ nowUtc, feedRows, scheduler }) {
+function projectDataHealth({ nowUtc, feedRows, scheduler, requiredInstruments, scopeSource }) {
   const timestampMs = Date.parse(nowUtc);
-  const marketSession = parisMarketSessionState(new Date(timestampMs));
+  const grainScope = requiredInstruments.length > 0 && requiredInstruments.every((instrument) => GRAIN_INSTRUMENTS.has(instrument));
+  const marketSession = grainScope ? grainsTradingSessionState(nowUtc) : parisMarketSessionState(new Date(timestampMs));
+  const exchangeTimezone = grainScope ? "America/Chicago" : "America/New_York";
   const freshnessPolicy = marketDataFreshnessPolicyForSession(marketSession);
-  const feeds = feedRows.map(feedFromRow);
+  const feeds = feedRows.map((row) => feedFromRow(row, exchangeTimezone));
   feeds.forEach((feed) => { feed.provenance = marketFeedProvenance(feed); });
-  const freshness = coreFreshness({ feeds, timestampMs, freshnessPolicy, tradingDate: marketSession.trading_date });
+  const expectedFeedCount = requiredInstruments.length * REQUIRED_TIMEFRAMES.length;
+  const freshness = coreFreshness({ feeds, timestampMs, freshnessPolicy, tradingDate: marketSession.trading_date, expectedFeedCount });
   return {
     ok: marketSession.market_closed === true ? freshness.coreFreshEnough : freshness.currentTradingDayReady,
     state: dataHealthState({ marketClosed: marketSession.market_closed === true, ...freshness, marketSession }),
@@ -29,12 +42,29 @@ function projectDataHealth({ nowUtc, feedRows, scheduler }) {
     market_session: marketSession,
     freshness_policy: freshnessPolicy,
     core_age_seconds: freshness.core_age_seconds,
-    source_health: sourceHealthForCoreFeeds(feeds),
+    source_health: sourceHealthForCoreFeeds(feeds, expectedFeedCount),
+    readiness_scope: {
+      source: scopeSource,
+      instruments: requiredInstruments,
+      timeframes: [...REQUIRED_TIMEFRAMES],
+    },
+    active_session: marketSession.active_session || marketSession.state,
+    exchange_timezone: exchangeTimezone,
+    next_eligible_at_utc: marketSession.next_eligible_at_utc || null,
     requested_trading_date: marketSession.trading_date,
     effective_market_date: freshness.effectiveMarketDate,
     core_feeds: feeds,
     scheduler: schedulerProjection(scheduler),
   };
+}
+
+function activeRuntimeInstrumentScopeSql() {
+  return `SELECT COALESCE(array_agg(DISTINCT upper(trim(scope.instrument)))
+                          FILTER (WHERE trim(scope.instrument) <> ''), ARRAY[]::text[]) AS instruments
+            FROM strategy_instances si
+            CROSS JOIN LATERAL unnest(si.instrument_scope) AS scope(instrument)
+           WHERE si.runtime_state = 'running'
+             AND si.execution_mode IN ('shadow', 'paper', 'live')`;
 }
 
 function coreFeedHealthSql() {
@@ -71,7 +101,7 @@ function coreFeedHealthSql() {
          ) event ON true
          WHERE mf.enabled = true
            AND mf.environment = 'prod'
-           AND mf.instrument_code IN ('MNQ', 'MES')
+           AND mf.instrument_code = ANY($1::text[])
            AND mf.timeframe IN ('1', '5')
          ORDER BY mf.instrument_code, mf.timeframe`;
 }
@@ -83,7 +113,7 @@ function liveSchedulerHealthSql() {
          LIMIT 1`;
 }
 
-function feedFromRow(row) {
+function feedFromRow(row, exchangeTimezone) {
   return {
     instrument: row.instrument_code,
     timeframe: row.timeframe,
@@ -91,7 +121,7 @@ function feedFromRow(row) {
     provider: row.provider,
     source_service: row.source_service,
     latest_timestamp_utc: row.latest_timestamp_utc,
-    latest_market_date: row.latest_market_date,
+    latest_market_date: marketDate(row.latest_timestamp_utc, exchangeTimezone),
     latest_imported_at_utc: row.latest_imported_at_utc,
     latest_received_at_utc: row.latest_event_received_at_utc,
     latest_source_collection: row.latest_source_collection,
@@ -100,9 +130,9 @@ function feedFromRow(row) {
   };
 }
 
-function coreFreshness({ feeds, timestampMs, freshnessPolicy, tradingDate }) {
+function coreFreshness({ feeds, timestampMs, freshnessPolicy, tradingDate, expectedFeedCount }) {
   const effectiveMarketDate = feeds.map((feed) => feed.latest_market_date).filter(Boolean).sort().at(-1) || null;
-  const coreReady = feeds.length >= 4 && feeds.every((feed) => Boolean(feed.latest_timestamp_utc));
+  const coreReady = feeds.length >= expectedFeedCount && feeds.every((feed) => Boolean(feed.latest_timestamp_utc));
   const oldestCoreLatestMs = feeds
     .map((feed) => Date.parse(feed.latest_timestamp_utc || ""))
     .filter(Number.isFinite)
@@ -146,12 +176,12 @@ function marketFeedProvenance(feed = {}) {
   };
 }
 
-function sourceHealthForCoreFeeds(feeds = []) {
-  const core = (feeds || []).filter(coreTradingFeed);
+function sourceHealthForCoreFeeds(feeds = [], expectedFeedCount = 0) {
+  const core = (feeds || []).filter((feed) => REQUIRED_TIMEFRAMES.includes(String(feed.timeframe)));
   const nonDurable = core.filter((feed) => feed.provenance?.durable !== true);
   return {
     required: true,
-    durable: core.length >= 4 && nonDurable.length === 0,
+    durable: core.length >= expectedFeedCount && nonDurable.length === 0,
     durable_count: countDurableFeeds(core),
     total_count: core.length,
     non_durable_feeds: nonDurable.map(nonDurableFeedProjection),
@@ -181,12 +211,27 @@ function marketFeedClassification(facts = {}, durable = false) {
   return facts.hasWebhookEvent ? "webhook_unclassified" : "unknown";
 }
 
-function coreTradingFeed(feed = {}) {
-  return ["MNQ", "MES"].includes(feed.instrument) && ["1", "5"].includes(String(feed.timeframe));
-}
-
 function countDurableFeeds(feeds = []) {
   return feeds.filter((feed) => feed.provenance?.durable === true).length;
+}
+
+function normalizeInstruments(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((instrument) => String(instrument || "").trim().toUpperCase())
+    .filter(Boolean)
+    .sort();
+}
+
+function marketDate(value, timeZone) {
+  const parsed = Date.parse(value || "");
+  if (!Number.isFinite(parsed)) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(parsed)).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function nonDurableFeedProjection(feed = {}) {

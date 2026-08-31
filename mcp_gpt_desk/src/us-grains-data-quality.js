@@ -80,7 +80,58 @@ export function grainChicagoDate(timestampUtc) {
 export function isGrainsRth(timestampUtc) {
   const parts = zonedParts(timestampUtc);
   const minute = Number(parts.hour) * 60 + Number(parts.minute);
-  return minute >= RTH_START_MINUTE && minute <= RTH_END_MINUTE;
+  return isWeekday(parts.weekday) && minute >= RTH_START_MINUTE && minute <= RTH_END_MINUTE;
+}
+
+export function grainsTradingSessionState(timestampUtc) {
+  const asOfUtc = iso(timestampUtc);
+  if (!asOfUtc) throw new Error("invalid_grains_session_timestamp");
+  const parts = zonedParts(asOfUtc);
+  const minute = Number(parts.hour) * 60 + Number(parts.minute);
+  const weekday = isWeekday(parts.weekday);
+  const open = weekday && minute >= RTH_START_MINUTE && minute <= RTH_END_MINUTE;
+  const state = open
+    ? "OPEN"
+    : !weekday
+      ? "WEEKEND_CLOSED"
+      : minute < RTH_START_MINUTE
+        ? "PREOPEN"
+        : "POSTCLOSE";
+  const reason = state === "PREOPEN" && parts.weekday === "Mon"
+    ? "cbot_grains_monday_preopen"
+    : `cbot_grains_${state.toLowerCase()}`;
+  return {
+    market_profile: "cbot_us_grains_rth",
+    active_session: open ? "CBOT_GRAINS_RTH" : state === "PREOPEN" ? "CBOT_GRAINS_PREOPEN" : "CBOT_GRAINS_CLOSED",
+    exchange_timezone: CHICAGO_TZ,
+    timestamp_utc: asOfUtc,
+    trading_date: grainChicagoDate(asOfUtc),
+    weekday: parts.weekday,
+    market_closed: !open,
+    state,
+    reason,
+    next_eligible_at_utc: open ? asOfUtc : nextGrainsRthOpen(asOfUtc),
+  };
+}
+
+export function grainsRuntimeEvaluationDisposition({ timestampUtc, hasSignal = false } = {}) {
+  const session = grainsTradingSessionState(timestampUtc);
+  if (session.state !== "OPEN") {
+    return {
+      session,
+      status: "WAITING_SESSION",
+      next_evaluation_at_utc: session.next_eligible_at_utc,
+      reason_codes: ["US_GRAINS_RUNTIME_EVALUATED", "WAITING_FOR_CBOT_RTH"],
+    };
+  }
+  return {
+    session,
+    status: hasSignal ? "SIGNAL_CREATED" : "NO_SIGNAL",
+    next_evaluation_at_utc: new Date(Date.parse(session.timestamp_utc) + 60_000).toISOString(),
+    reason_codes: hasSignal
+      ? ["US_GRAINS_RUNTIME_EVALUATED", "SIGNAL_CREATED"]
+      : ["US_GRAINS_RUNTIME_EVALUATED", "NO_ACTIONABLE_SIGNAL"],
+  };
 }
 
 function qualityForTimeframe(rows, timeframe, policy) {
@@ -134,6 +185,7 @@ function zonedParts(timestampUtc) {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
+      weekday: "short",
       hourCycle: "h23",
     }));
   }
@@ -142,6 +194,22 @@ function zonedParts(timestampUtc) {
     if (item.type !== "literal") parts[item.type] = item.value;
   }
   return parts;
+}
+
+function nextGrainsRthOpen(timestampUtc) {
+  const startMs = Date.parse(timestampUtc);
+  const rounded = startMs - (startMs % 60_000);
+  for (let offset = 60_000; offset <= 8 * 24 * 60 * 60_000; offset += 60_000) {
+    const candidate = new Date(rounded + offset).toISOString();
+    const parts = zonedParts(candidate);
+    if (isWeekday(parts.weekday)
+      && Number(parts.hour) * 60 + Number(parts.minute) === RTH_START_MINUTE) return candidate;
+  }
+  return null;
+}
+
+function isWeekday(value) {
+  return ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(String(value || ""));
 }
 
 function iso(value) {

@@ -49,6 +49,29 @@ test("market closure is not mislabeled as stale when a last known durable close 
   assert.equal(liveMarketDataStatus(gate), "LAST_KNOWN");
 });
 
+test("launch gate keeps shadow capabilities ready when physical execution is disabled by policy", () => {
+  const health = healthFixture();
+  const broker = health.operations.services.find((service) => service.service_kind === "broker_management");
+  broker.details.result.paper_safety.manual_telegram_execution_enabled = false;
+  const gate = demoPaperLaunchGate({ nowIso: "2026-08-31T13:00:00.000Z", health, execution: { safety: {} }, rows });
+
+  assert.equal(gate.status, "BLOCKED");
+  assert.equal(gate.capabilityStates.find((item) => item.capability === "SIGNAL_DETECTION").status, "READY");
+  assert.equal(gate.capabilityStates.find((item) => item.capability === "THEORETICAL_TRACKING").status, "READY");
+  assert.equal(gate.capabilityStates.find((item) => item.capability === "HUMAN_GATE").status, "READY");
+  assert.equal(gate.capabilityStates.find((item) => item.capability === "PHYSICAL_EXECUTION").status, "DISABLED_BY_POLICY");
+});
+
+test("launch gate labels and validates the active grain readiness scope", () => {
+  const health = healthFixture();
+  health.data_readiness.readiness_scope = { source: "active_strategy_instances", instruments: ["ZC", "ZW"], timeframes: ["1", "5"] };
+  health.data_readiness.core_feeds = [coreFeed("ZC", "1"), coreFeed("ZC", "5"), coreFeed("ZW", "1"), coreFeed("ZW", "5")];
+  const gate = demoPaperLaunchGate({ nowIso: "2026-08-31T13:00:00.000Z", health, execution: { safety: {} }, rows });
+
+  assert.match(gate.checksById["data.live_fresh"].label, /ZC\/ZW/);
+  assert.equal(gate.checksById["data.source_durable"].ok, true);
+});
+
 function rows(value) {
   return Array.isArray(value?.items) ? value.items : Array.isArray(value) ? value : [];
 }

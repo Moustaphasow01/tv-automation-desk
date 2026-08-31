@@ -3,7 +3,6 @@ import { safeIdPart, text } from "./front-control-plane-common.js";
 
 const BROKER_PIPELINE_STEPS = new Set(["EXECUTION_GATEWAY", "PROVIDER", "BROKER"]);
 const DEPENDENT_PIPELINE_STEPS = new Set(["FEATURE_ENGINE", "SIGNAL_BUS", "ARBITRATION", "GLOBAL_RISK", "BROKER_NETTING", "ORDER_INTENT", "RECONCILIATION"]);
-const CORE_INSTRUMENTS = new Set(["MNQ", "MES"]);
 const CORE_TIMEFRAMES = new Set(["1", "5"]);
 
 export function buildDemoPaperReadiness({ execution, health, query, nowIso, rows }) {
@@ -49,6 +48,7 @@ export function demoPaperLaunchGate({ health, execution, nowIso, rows }) {
   const { brokerSafety, startup, addonBridge, accountName } = brokerReadinessInputs({ executionValue: execution, health, rows });
   const checkList = launchChecks({ health, dataReadiness, liveRuntime, brokerSafety, startup, addonBridge, accountName, execution, rows });
   const blockers = checkList.filter((check) => !check.ok).map((check) => launchBlocker(check));
+  const capabilityStates = launchCapabilityStates(checkList);
   return {
     status: blockers.length ? "BLOCKED" : "READY",
     ok: blockers.length === 0,
@@ -62,6 +62,7 @@ export function demoPaperLaunchGate({ health, execution, nowIso, rows }) {
     checks: checkList,
     checksById: Object.fromEntries(checkList.map((check) => [check.id, check])),
     blockers,
+    capabilityStates,
     operatorActions: launchOperatorActions({ blockers, dataReadiness, startup, addonBridge, brokerSafety, accountName, rows }),
     finalCheckCommand: "npm run --silent gate:demo-paper -- --json",
   };
@@ -99,7 +100,7 @@ function postgresModeCheck(health) {
 }
 
 function liveFreshCheck(dataReadiness) {
-  return gateCheck("data.live_fresh", dataReadiness.ok === true, "Flux MNQ/MES frais", dataFreshnessDetail(dataReadiness), "market-data");
+  return gateCheck("data.live_fresh", dataReadiness.ok === true, `Flux ${requiredInstrumentLabel(dataReadiness)} frais`, dataFreshnessDetail(dataReadiness), "market-data");
 }
 
 function durableSourceCheck(dataReadiness, rows) {
@@ -135,6 +136,7 @@ export function publicLaunchGate(gate) {
     components: gate.components,
     checks: gate.checks.map(({ id, label, ok, detail, domain }) => ({ id, label, ok, detail, domain })),
     operatorActions: gate.operatorActions.map(({ id, blockerId, title, severity, evidence, action, command, route }) => ({ id, blockerId: blockerId || id, title, severity, evidence, action, command: command || null, route })),
+    capabilityStates: gate.capabilityStates,
     finalCheckCommand: gate.finalCheckCommand,
     releaseCheckCommand: gate.releaseCheckCommand,
   };
@@ -185,8 +187,9 @@ function hasGateBlocker(gate, ids) {
   return ids.some((id) => gate.checksById[id]?.ok === false);
 }
 
-function isCoreTradingViewFeed(feed = {}) {
-  return CORE_INSTRUMENTS.has(String(feed.instrument ?? "").toUpperCase()) && CORE_TIMEFRAMES.has(String(feed.timeframe || ""));
+function isRequiredTradingViewFeed(feed = {}, dataReadiness = {}) {
+  const required = new Set(requiredInstruments(dataReadiness));
+  return required.has(String(feed.instrument ?? "").toUpperCase()) && CORE_TIMEFRAMES.has(String(feed.timeframe || ""));
 }
 
 function isSimAccount(accountName = "") {
@@ -281,8 +284,9 @@ function dataSourceDurable(dataReadiness = {}, rows) {
   if (dataReadiness.market_closed === true) return true;
   const sourceHealth = dataReadiness.source_health || {};
   if (sourceHealth.durable === true) return true;
-  const core = rows(dataReadiness.core_feeds).filter(isCoreTradingViewFeed);
-  return core.length >= 4 && core.every((feed) => feed?.provenance?.durable === true);
+  const expectedCount = requiredInstruments(dataReadiness).length * CORE_TIMEFRAMES.size;
+  const core = rows(dataReadiness.core_feeds).filter((feed) => isRequiredTradingViewFeed(feed, dataReadiness));
+  return core.length >= expectedCount && core.every((feed) => feed?.provenance?.durable === true);
 }
 
 function brokerPaperEnvironmentSafe(safety = {}, brokerSafety = {}) {
@@ -386,7 +390,7 @@ function blockerAction(id) {
   return {
     "api.ready": "Vérifier que l’API locale et PostgreSQL répondent avant tout démarrage agent.",
     "api.postgres_mode": "Relancer la stack préprod en mode PostgreSQL, pas en mémoire ni legacy.",
-    "data.live_fresh": "Réactiver les alertes TradingView MNQ/MES M1/M5 et attendre une nouvelle bougie fermée.",
+    "data.live_fresh": "Réactiver les alertes TradingView des instruments actifs en M1/M5 et attendre une nouvelle bougie fermée.",
     "data.source_durable": "Remplacer le secours TradingView par des alertes durables avec source=tradingview_alert_webhook ou alert_id stable.",
     "live_runtime.no_data_blocker": "Corriger le data blocker live avant de réveiller les agents.",
     "broker.paper_environment_safe": "Passer Sim101 en AUTO, relâcher le kill switch et vérifier max contracts/risk policy.",
@@ -404,9 +408,10 @@ function launchOperatorActions({ blockers = [], dataReadiness = {}, startup = {}
 }
 
 function marketDataOperatorActions(blockerIds, dataReadiness, rows) {
+  const instruments = requiredInstrumentLabel(dataReadiness);
   return [
-    blockerIds.has("data.live_fresh") && operatorAction("tradingview_live_freshness", "data.live_fresh", "Réactiver les alertes TradingView MNQ/MES", "market-data", dataFreshnessDetail(dataReadiness), "Vérifier que les alertes TradingView postent en continu vers le webhook du desk sur MNQ/MES M1 et M5. Le rescue MCP local ne doit servir qu’au diagnostic.", "/research/data", "python3 scripts/tradingview/migrate_local_alert_webhooks.py"),
-    blockerIds.has("data.source_durable") && operatorAction("tradingview_source_durable", "data.source_durable", "Remplacer le secours TradingView par des alertes durables", "market-data", dataSourceDetail(dataReadiness, rows), "Créer ou corriger les alertes TradingView MNQ/MES M1/M5 vers /api/v1/webhooks/tradingview avec source durable ou alert_id stable.", "/research/data", "python3 scripts/tradingview/migrate_local_alert_webhooks.py"),
+    blockerIds.has("data.live_fresh") && operatorAction("tradingview_live_freshness", "data.live_fresh", `Réactiver les alertes TradingView ${instruments}`, "market-data", dataFreshnessDetail(dataReadiness), `Vérifier que les alertes TradingView postent en continu vers le webhook du desk sur ${instruments} en M1 et M5. Le rescue MCP local ne doit servir qu’au diagnostic.`, "/research/data", "python3 scripts/tradingview/migrate_local_alert_webhooks.py"),
+    blockerIds.has("data.source_durable") && operatorAction("tradingview_source_durable", "data.source_durable", "Remplacer le secours TradingView par des alertes durables", "market-data", dataSourceDetail(dataReadiness, rows), `Créer ou corriger les alertes TradingView ${instruments} M1/M5 vers /api/v1/webhooks/tradingview avec source durable ou alert_id stable.`, "/research/data", "python3 scripts/tradingview/migrate_local_alert_webhooks.py"),
   ].filter(Boolean);
 }
 
@@ -503,7 +508,33 @@ function readinessRouteForBlocker(blockerId) {
 }
 
 function dataFreshnessDetail(dataReadiness = {}) {
-  return [`state=${dataReadiness.state || "unknown"}`, `age=${dataReadiness.core_age_seconds ?? "n/a"}s`, `market=${dataReadiness.effective_market_date || dataReadiness.requested_trading_date || "unknown"}`].join(" · ");
+  return [`scope=${requiredInstrumentLabel(dataReadiness)}`, `state=${dataReadiness.state || "unknown"}`, `age=${dataReadiness.core_age_seconds ?? "n/a"}s`, `market=${dataReadiness.effective_market_date || dataReadiness.requested_trading_date || "unknown"}`].join(" · ");
+}
+
+function requiredInstruments(dataReadiness = {}) {
+  const instruments = dataReadiness?.readiness_scope?.instruments;
+  return (Array.isArray(instruments) && instruments.length ? instruments : ["MNQ", "MES"])
+    .map((instrument) => String(instrument || "").trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function requiredInstrumentLabel(dataReadiness = {}) {
+  return requiredInstruments(dataReadiness).join("/");
+}
+
+function launchCapabilityStates(checks = []) {
+  const byId = new Map(checks.map((check) => [check.id, check]));
+  const readinessIds = ["api.ready", "api.postgres_mode", "data.live_fresh", "data.source_durable", "live_runtime.no_data_blocker"];
+  const readinessBlockers = readinessIds.filter((id) => byId.get(id)?.ok === false);
+  const physicalIds = ["broker.paper_environment_safe", "broker.sim101_addon_ready", "execution.manual_telegram_ready"];
+  const physicalBlockers = physicalIds.filter((id) => byId.get(id)?.ok === false);
+  const operational = readinessBlockers.length === 0;
+  return [
+    { capability: "SIGNAL_DETECTION", status: operational ? "READY" : "BLOCKED", blockers: readinessBlockers },
+    { capability: "THEORETICAL_TRACKING", status: operational ? "READY" : "BLOCKED", blockers: readinessBlockers },
+    { capability: "HUMAN_GATE", status: operational ? "READY" : "BLOCKED", blockers: readinessBlockers },
+    { capability: "PHYSICAL_EXECUTION", status: physicalBlockers.length ? "DISABLED_BY_POLICY" : "READY", blockers: physicalBlockers },
+  ];
 }
 
 function isoText(value, fallback = "—") {

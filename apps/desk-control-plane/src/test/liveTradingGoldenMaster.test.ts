@@ -4,7 +4,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { liveTone, toLiveTradingModel } from "@/features/live-trading/mapper";
 import { liveHumanGateStatus } from "@/features/live-trading/LiveHumanGate";
-import { InstrumentChartPanel, StrategyInstancesPanel } from "@/features/live-trading/LiveTradingPanels";
+import { InstrumentChartPanel, RiskAuthorityPanel, StrategyInstancesPanel } from "@/features/live-trading/LiveTradingPanels";
+import { LiveTradingHeader } from "@/features/live-trading/LiveTradingHeader";
+import { DeskDensityViewport } from "@/shell/DeskDensityViewport";
 import type { LiveTradingView } from "@/domains/front-api/viewModels";
 import { liveTradingView } from "@/mocks/canonicalDataset";
 import type { ViewEnvelope } from "@/shared/contracts";
@@ -76,6 +78,44 @@ describe("Live Trading golden master", () => {
 
     expect(model.orderIntent).toBeNull();
     expect(liveHumanGateStatus(model)).toBe("CONNECTED_EMPTY");
+  });
+
+  it("presents backend capability lanes without treating disabled physical execution as a blocked shadow desk", () => {
+    const envelope = structuredClone(liveTradingView) as ViewEnvelope<LiveTradingView>;
+    envelope.data.launchGate.capabilityStates = [
+      { capability: "SIGNAL_DETECTION", status: "READY", blockers: [] },
+      { capability: "THEORETICAL_TRACKING", status: "READY", blockers: [] },
+      { capability: "HUMAN_GATE", status: "READY", blockers: [] },
+      { capability: "PHYSICAL_EXECUTION", status: "DISABLED_BY_POLICY", blockers: ["broker.policy"] },
+    ];
+    const model = toLiveTradingModel(envelope);
+    const markup = renderToStaticMarkup(
+      createElement(MemoryRouter, null,
+        createElement(DeskDensityViewport, null,
+          createElement(LiveTradingHeader, {
+            model,
+            onRefresh() {},
+            refreshing: false,
+            onEnterFocus() {},
+          })
+        )
+      )
+    );
+
+    expect(markup).toContain("Détection active");
+    expect(markup).toContain("Suivi théorique actif");
+    expect(markup).toContain("Validation humaine disponible");
+    expect(markup).toContain("Exécution physique désactivée");
+  });
+
+  it("distinguishes consumed risk from the configured risk limit", () => {
+    const envelope = structuredClone(liveTradingView) as ViewEnvelope<LiveTradingView>;
+    envelope.data.summary.riskUsedPct = null;
+    envelope.data.summary.riskConfiguredPct = 0.25;
+    const markup = renderToStaticMarkup(createElement(RiskAuthorityPanel, { model: toLiveTradingModel(envelope) }));
+
+    expect(markup).toContain("Risque consommé : aucune exposition ouverte publiée");
+    expect(markup).toContain("limite configurée : 0.25 %");
   });
 
   it("keeps the active strategy panel compact while linking to the full deployment list", () => {
