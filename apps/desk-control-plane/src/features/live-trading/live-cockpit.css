@@ -377,6 +377,9 @@
 
 @media (max-width: 1500px) {
   .lt-cockpit .lt-header { grid-template-columns: minmax(165px, .65fr) minmax(270px, 1.2fr) 112px 126px 36px 36px 52px; }
+  .lt-cockpit .lt-policy { gap: 5px; padding-inline: 10px; }
+  .lt-cockpit .lt-policy-chip { min-height: 22px; padding-inline: 6px; font-size: 11px; }
+  .lt-cockpit .lt-policy__freshness { display: none; }
   .lt-flight-bar { grid-template-columns: minmax(330px, 1.1fr) minmax(280px, 1.25fr) 160px minmax(230px, .8fr); }
   .lt-cockpit__workspace { grid-template-columns: minmax(225px, .66fr) minmax(500px, 2.12fr) minmax(360px, 1.18fr); }
   .lt-decision-stack__header { padding-block: 9px; }
