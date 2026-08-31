@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { TelegramClient } from "./telegram-client.js";
 import { loadCanonicalTelegramExecutionRows } from "./telegram-canonical-execution-source.js";
-import { buildTelegramTradingCandidate, isTelegramTradingAlertSourceAllowed } from "./telegram-trading-message.js";
+import { buildTelegramTradingCandidate, isTelegramTradingAlertSourceAllowed, telegramTradingDeliverySuppressionReason } from "./telegram-trading-message.js";
 import { boundedNumber, countBy, formatCounts, inferScope, iso, telegramRetryDelaySeconds, telegramSourceKindsToBaseline } from "./telegram-alert-utilities.js";
 const CONFIG_ID = "desk_telegram";
 const ACTIVE_NOTIFICATION_STATES = new Set(["pending", "active", "watching", "action_required", "open"]);
@@ -284,6 +284,18 @@ export class TelegramAlertService {
         await client.query("COMMIT");
         return { status: "idle" };
       }
+      const suppressionReason = telegramTradingDeliverySuppressionReason(delivery, { now: telegramNowEpochMs(this.clock) });
+      if (suppressionReason) {
+        await client.query(
+          `UPDATE telegram_delivery_outbox
+           SET status = 'suppressed', last_error = $2,
+               lease_token = NULL, lease_expires_at_utc = NULL, updated_at_utc = now()
+           WHERE delivery_id = $1`,
+          [delivery.delivery_id, suppressionReason],
+        );
+        await client.query("COMMIT");
+        return { status: "suppressed", deliveryId: delivery.delivery_id, reason: suppressionReason };
+      }
       const profileEnabled = delivery.profile === "admin" ? config.adminEnabled : config.tradingEnabled;
       const profileConfigured = delivery.profile === "admin" ? envStatus.adminConfigured : envStatus.tradingConfigured;
       if (!profileEnabled || !profileConfigured) {
@@ -423,6 +435,7 @@ export class TelegramAlertService {
   }
 
   async queueDelivery(candidate) {
+    if (telegramTradingDeliverySuppressionReason(candidate, { now: telegramNowEpochMs(this.clock) })) return null;
     const deliveryId = `telegram_delivery_${randomUUID()}`;
     const dedupeKey = `${candidate.sourceKey}:${candidate.fingerprint}`;
     const result = await this.persistence.pool.query(
@@ -655,7 +668,11 @@ export class TelegramAlertService {
     ]);
     const manualTelegramExecution = String(this.env.DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED || "false").toLowerCase() === "true";
     return [...canonicalExecution, ...result.rows, ...events.rows, ...trades.rows, ...management.rows]
-      .map((row) => buildTelegramTradingCandidate(row, { manualTelegramExecution, hash }))
+      .map((row) => buildTelegramTradingCandidate(row, {
+        manualTelegramExecution,
+        hash,
+        now: telegramNowEpochMs(this.clock),
+      }))
       .filter(Boolean);
   }
 
@@ -872,4 +889,11 @@ function assertProfile(value) {
 
 function apiError(code, message, statusCode) {
   return Object.assign(new Error(message), { code, statusCode });
+}
+
+function telegramNowEpochMs(clock) {
+  const tick = clock?.now?.();
+  if (Number.isFinite(Number(tick?.epochMs))) return Number(tick.epochMs);
+  const parsed = Date.parse(String(tick?.utc || ""));
+  return Number.isFinite(parsed) ? parsed : Date.now();
 }

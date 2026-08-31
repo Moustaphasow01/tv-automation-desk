@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildTelegramTradingMessage } from "../src/telegram-trading-message.js";
+import {
+  buildTelegramTradingCandidate,
+  buildTelegramTradingMessage,
+  telegramTradingDeliverySuppressionReason,
+} from "../src/telegram-trading-message.js";
 
 test("manual Telegram entry ticket is directly actionable and broker-safe", () => {
   const message = buildTelegramTradingMessage({
@@ -92,4 +96,54 @@ test("manual execution receipt remains observational", () => {
   });
   assert.match(message, /DÉCLARATION OPÉRATEUR — FILLED/);
   assert.match(message, /ne réécrit pas le suivi théorique/);
+});
+
+test("expired OrderIntent is never projected as a new manual action", () => {
+  const row = {
+    source_kind: "order_intent",
+    source_id: "portfolio_order_intent_expired",
+    source_state: "awaiting_confirmation",
+    occurred_at: "2026-08-31T15:59:00.000Z",
+    payload: {
+      instrument: "ZW",
+      side: "sell",
+      order_type: "limit",
+      quantity: 1,
+      limit_price: 759.25,
+      expires_at: "2026-08-31T16:30:33.423Z",
+    },
+  };
+
+  assert.equal(buildTelegramTradingCandidate(row, {
+    manualTelegramExecution: true,
+    now: "2026-08-31T16:30:33.423Z",
+  }), null);
+  assert.equal(telegramTradingDeliverySuppressionReason({
+    sourceKind: "order_intent",
+    payload: row.payload,
+  }, { now: "2026-08-31T16:30:52.714Z" }), "ORDER_INTENT_EXPIRED_BEFORE_TELEGRAM_DELIVERY");
+});
+
+test("valid OrderIntent remains eligible until its exact expiry", () => {
+  const candidate = buildTelegramTradingCandidate({
+    source_kind: "order_intent",
+    source_id: "portfolio_order_intent_valid",
+    source_state: "awaiting_confirmation",
+    occurred_at: "2026-08-31T16:00:00.000Z",
+    payload: {
+      instrument: "ZW",
+      side: "sell",
+      order_type: "limit",
+      quantity: 1,
+      limit_price: 759.25,
+      expires_at: "2026-08-31T16:30:33.423Z",
+    },
+  }, {
+    manualTelegramExecution: true,
+    now: "2026-08-31T16:30:33.422Z",
+  });
+
+  assert.ok(candidate);
+  assert.equal(candidate.payload.source_state, "awaiting_confirmation");
+  assert.match(candidate.message, /MANUAL ACTION REQUIRED/);
 });

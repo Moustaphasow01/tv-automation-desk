@@ -27,11 +27,12 @@ export function buildTelegramTradingMessage({ kind, state, sourceId, payload = {
   return formatGenericTradingMessage({ kind, state, sourceId, payload });
 }
 
-export function buildTelegramTradingCandidate(row = {}, { manualTelegramExecution = false, hash = stableJsonHash } = {}) {
+export function buildTelegramTradingCandidate(row = {}, { manualTelegramExecution = false, hash = stableJsonHash, now = Date.now() } = {}) {
   const payload = row.payload || {};
   const state = String(row.source_state || "unknown").toLowerCase();
   const kind = String(row.source_kind || "trade_event");
   if (!isTelegramTradingAlertSourceAllowed({ kind, sourceId: row.source_id, payload })) return null;
+  if (telegramTradingDeliverySuppressionReason({ sourceKind: kind, state, payload }, { now })) return null;
   if (kind === "trade_decision" && (state === "draft" || !payload.side)) return null;
   return {
     profile: "trading",
@@ -49,8 +50,30 @@ export function buildTelegramTradingCandidate(row = {}, { manualTelegramExecutio
       occurredAt: row.occurred_at,
       manualTelegramExecution,
     }),
-    payload: { source_id: row.source_id, occurred_at: dateTime(row.occurred_at), ...payload },
+    payload: { source_id: row.source_id, source_state: state, occurred_at: dateTime(row.occurred_at), ...payload },
   };
+}
+
+export function telegramTradingDeliverySuppressionReason(delivery = {}, { now = Date.now() } = {}) {
+  const sourceKind = String(delivery.sourceKind || delivery.source_kind || "").toLowerCase();
+  if (sourceKind !== "order_intent") return null;
+  const payload = delivery.payload && typeof delivery.payload === "object" ? delivery.payload : {};
+  const state = String(delivery.state || delivery.sourceState || payload.source_state || "").toLowerCase();
+  if (state === "expired") return "ORDER_INTENT_EXPIRED_BEFORE_TELEGRAM_DELIVERY";
+  const expiresAt = field(payload, [
+    "expires_at",
+    "expiresAt",
+    "expires_at_utc",
+    "valid_until",
+    "validUntil",
+    "valid_until_utc",
+    "human_gate_expires_at_utc",
+  ]);
+  const expiresAtMs = Date.parse(String(expiresAt || ""));
+  const nowMs = epochMs(now);
+  return Number.isFinite(expiresAtMs) && Number.isFinite(nowMs) && nowMs >= expiresAtMs
+    ? "ORDER_INTENT_EXPIRED_BEFORE_TELEGRAM_DELIVERY"
+    : null;
 }
 
 function formatTheoreticalExecutionTicket({ state, sourceId, payload, occurredAt }) {
@@ -298,4 +321,12 @@ function invalidationReason(value) {
 
 function stableJsonHash(value) {
   return JSON.stringify(value);
+}
+
+function epochMs(value) {
+  const resolved = typeof value === "function" ? value() : value;
+  if (typeof resolved === "number") return resolved;
+  if (resolved instanceof Date) return resolved.getTime();
+  const parsed = Date.parse(String(resolved || ""));
+  return Number.isFinite(parsed) ? parsed : NaN;
 }
