@@ -244,6 +244,13 @@ for (const name of ["DeskApi", "DeskLiveRuntime", "DeskReplayPreparation", "Desk
   if (!xml.includes("<startmode>Automatic</startmode>")) violations.push(`service_not_automatic:${name}`);
   if (!xml.includes('<onfailure action="restart"')) violations.push(`service_restart_missing:${name}`);
 }
+const agentSupervisorTemplate = content.get("deploy/windows/services/DeskAgentRuntimeSupervisor.xml.template");
+if (!agentSupervisorTemplate.includes('<env name="DESK_CODEX_BIN" value="__CODEX_EXE__"/>')) {
+  violations.push("agent_supervisor_codex_executable_missing");
+}
+if (!agentSupervisorTemplate.includes('<env name="CODEX_HOME" value="__CODEX_HOME__"/>')) {
+  violations.push("agent_supervisor_codex_home_missing");
+}
 
 const scheduler = content.get("mcp_gpt_desk/scripts/run_live_runtime_scheduler.mjs");
 if (!scheduler.includes("pg_try_advisory_lock")) violations.push("live_scheduler_lock_missing");

@@ -30,6 +30,8 @@
   <env name="DESK_AGENT_RETRY_JITTER_SECONDS" value="0"/>
   <env name="DESK_AGENT_SCHEDULER_MODE" value="disabled"/>
   <env name="DESK_AGENT_SUPERVISOR_PROJECT_ROOT" value="__INSTALL_ROOT__\current\app\mcp_gpt_desk"/>
+  <env name="DESK_CODEX_BIN" value="__CODEX_EXE__"/>
+  <env name="CODEX_HOME" value="__CODEX_HOME__"/>
   <startmode>Automatic</startmode>
   <delayedAutoStart>true</delayedAutoStart>
   <depend>__POSTGRES_SERVICE__</depend>
