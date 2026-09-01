@@ -181,7 +181,7 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
     <article><small>Points de vigilance</small><p>{vigilance.length ? `${vigilance.join(". ")}.` : "Aucun point de vigilance supplémentaire n’est publié."}</p></article>
     <article><small>Prochain catalyseur</small><p>{focus.whyNoTrade.nextRelevantEventAt ? displayTime(focus.whyNoTrade.nextRelevantEventAt) : "Aucun catalyseur couvert n’est publié."}</p></article>
     <button type="button" className="live-focus__brief-open" onClick={onOpen}><FaInfoCircle aria-hidden="true" />Voir le brief complet</button>
-    <small className="live-focus__brief-source">Brief {operatorCode(brief.status)} · consultatif · données arrêtées à {displayTime(focus.technical.sourceDataCutoff || focus.asOf)} · valide jusqu’à {displayTime(typeof focus.marketContext.validUntil === "string" ? focus.marketContext.validUntil : null)} · analyste {focus.contextWorker.successCount} succès / {focus.contextWorker.failureCount} échec(s)</small>
+    <small className="live-focus__brief-source">Brief {contextStatus.label} · consultatif · données arrêtées à {displayTime(focus.technical.sourceDataCutoff || focus.asOf)} · valide jusqu’à {displayTime(typeof focus.marketContext.validUntil === "string" ? focus.marketContext.validUntil : null)} · analyste {focus.contextWorker.successCount} succès / {focus.contextWorker.failureCount} échec(s)</small>
   </div>;
 }
 
@@ -198,9 +198,10 @@ function presentMarketContextStatus(rawStatus: string) {
 
 function FocusBriefDrawer({ focus, onClose }: { focus: LiveFocusView; onClose(): void }) {
   const brief = focus.marketDeskBrief;
+  const contextStatus = presentMarketContextStatus(brief.status);
   const currentZones = recordRows(brief.opportunityZones ?? focus.marketContext.opportunityZones);
   const noTradeZones = recordRows(brief.noTradeZones ?? focus.marketContext.noTradeZones);
-  return <FocusDrawer title="Market & Desk Brief" subtitle={`${operatorCode(brief.status)} · ${displayTime(focus.technical.sourceDataCutoff)}`} onClose={onClose}>
+  return <FocusDrawer title="Market & Desk Brief" subtitle={`${contextStatus.label} · ${displayTime(focus.technical.sourceDataCutoff)}`} onClose={onClose}>
     <section><h3>Lecture opérateur</h3><p>{brief.operatorSummary}</p><p>{valueText(brief.marketInterpretation, "Interprétation non publiée")}</p></section>
     <section><h3>Intention du Desk</h3><p>{valueText(brief.deskIntent, "Intention non publiée")}</p><TagList values={stringRows(brief.whatDeskWants)} empty="Aucune famille privilégiée" /></section>
     <section><h3>Pourquoi aucun trade ?</h3><TagList values={focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason))} empty="Aucun blocage publié" /></section>
