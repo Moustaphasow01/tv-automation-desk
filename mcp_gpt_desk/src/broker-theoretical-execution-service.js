@@ -23,14 +23,23 @@ export async function processTheoreticalExecution(service, {
     : { expired: 0, items: [] };
   const entries = await processTheoreticalEntries(scopedService, { entryLimit, ...scope });
   const exits = await processTheoreticalExits(scopedService, { exitLimit, ...scope });
+  const backlog = typeof scopedService.repository.theoreticalExecutionBacklog === "function"
+    ? await scopedService.repository.theoreticalExecutionBacklog(scope)
+    : null;
   const materialized = countMaterialized(entries, ["fill_entry", "expire_entry"])
     + countMaterialized(exits, ["fill_exit", "review_exit"]);
+  const cursorAdvanced = exits.filter((item) => item.cursor_progress?.advanced === true).length;
   return {
     ok: true,
-    status: materialized > 0 || Number(expiredHumanGates.expired || 0) > 0 ? "MATERIALIZED" : "NO_THEORETICAL_FILL",
+    status: materialized > 0 || Number(expiredHumanGates.expired || 0) > 0
+      ? "MATERIALIZED"
+      : cursorAdvanced > 0 ? "BACKLOG_PROGRESSING" : "NO_THEORETICAL_FILL",
     expiredHumanGates,
     entries,
     exits,
+    cursorAdvanced,
+    selectedOpenTrades: exits.length,
+    backlog,
     materialized: materialized + Number(expiredHumanGates.expired || 0),
   };
 }
@@ -157,9 +166,21 @@ async function persistTheoreticalExitAction(service, evaluated) {
     return { ...evaluated, persisted: await service.repository.recordTheoreticalExitFill({ result: evaluated, now: service.now() }) };
   }
   if (evaluated.action === "review_exit") {
-    return { ...evaluated, persisted: await service.repository.recordTheoreticalReviewRequired({ result: evaluated, now: service.now() }) };
+    const persisted = await service.repository.recordTheoreticalReviewRequired({ result: evaluated, now: service.now() });
+    const cursorProgress = await advanceExitCursor(service, evaluated);
+    return { ...evaluated, persisted, cursor_progress: cursorProgress };
   }
-  return evaluated;
+  const cursorProgress = await advanceExitCursor(service, evaluated);
+  return cursorProgress ? { ...evaluated, cursor_progress: cursorProgress } : evaluated;
+}
+
+async function advanceExitCursor(service, evaluated) {
+  const candleTimestampUtc = evaluated?.candle?.timestamp_utc || null;
+  if (!evaluated?.trade_id || !candleTimestampUtc || typeof service.repository.advanceTheoreticalTradeCursor !== "function") return null;
+  return service.repository.advanceTheoreticalTradeCursor({
+    tradeId: evaluated.trade_id,
+    candleTimestampUtc,
+  });
 }
 
 function candidateDecision(candidate) {

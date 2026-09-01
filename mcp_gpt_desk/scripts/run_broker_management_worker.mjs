@@ -4,6 +4,8 @@ import { createDeskStoreFromEnv } from "../src/store.js";
 
 const once = process.argv.includes("--once");
 const intervalMs = Math.max(5_000, Math.min(Number(process.env.DESK_BROKER_MANAGEMENT_POLL_MS) || 15_000, 60_000));
+const theoreticalEntryLimit = boundedLimit(process.env.DESK_THEORETICAL_ENTRY_LIMIT, 200);
+const theoreticalExitLimit = boundedLimit(process.env.DESK_THEORETICAL_EXIT_LIMIT, 500);
 const store = createDeskStoreFromEnv();
 const instanceId = String(process.env.DESK_SERVICE_INSTANCE_ID || `broker-management-${process.pid}`);
 const releaseVersion = String(process.env.DESK_RELEASE_VERSION || "unversioned");
@@ -22,7 +24,10 @@ try {
   do {
     try {
       const entries = await store.execution.processEligiblePositions();
-      const theoretical = await store.execution.processTheoreticalExecution({ entryLimit: 200, exitLimit: 200 });
+      const theoretical = await store.execution.processTheoreticalExecution({
+        entryLimit: theoreticalEntryLimit,
+        exitLimit: theoreticalExitLimit,
+      });
       const management = await store.execution.materializeRecentManagement({ limit: 200 });
       const overview = await store.execution.overview({ limit: 50 });
       const result = {
@@ -69,6 +74,10 @@ async function heartbeat(status, details) {
 }
 
 function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+function boundedLimit(value, fallback) {
+  return Math.max(1, Math.min(Number(value) || fallback, 500));
+}
 
 function projectPaperSafety(overview = {}) {
   const safety = overview.safety || {};

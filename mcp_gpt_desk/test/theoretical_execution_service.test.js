@@ -206,12 +206,55 @@ test("service records canonical Portfolio OrderIntent IDs in theoretical entry r
   assert.equal(repository.entryFill.result.portfolio_order_intent_id, "portfolio_order_intent_1");
 });
 
+test("service durably advances an open trade cursor when no exit is touched", async () => {
+  const exitCandle = candle({ low: 99, high: 101, timestamp_utc: "2026-08-12T10:03:00.000Z" });
+  const repository = new TheoreticalFakeRepository({
+    entryCandle: null,
+    openTrades: [openTrade()],
+    exitCandle,
+    backlog: { eligible_open_trades: 1, due_open_trades: 0, oldest_cursor_at_utc: exitCandle.timestamp_utc, newest_cursor_at_utc: exitCandle.timestamp_utc },
+  });
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: manualEnvironment });
+
+  const result = await service.processTheoreticalExecution();
+
+  assert.equal(result.status, "BACKLOG_PROGRESSING");
+  assert.equal(result.materialized, 0);
+  assert.equal(result.cursorAdvanced, 1);
+  assert.equal(result.selectedOpenTrades, 1);
+  assert.deepEqual(repository.cursorAdvances, [{
+    tradeId: "trade_open_1",
+    candleTimestampUtc: "2026-08-12T10:03:00.000Z",
+  }]);
+  assert.equal(result.exits[0].reason, "NO_EXIT_TOUCHED");
+  assert.deepEqual(result.backlog, repository.backlog);
+});
+
+test("service does not invent cursor progress when no closed candle exists", async () => {
+  const repository = new TheoreticalFakeRepository({
+    entryCandle: null,
+    openTrades: [openTrade()],
+    exitCandle: null,
+  });
+  const service = new BrokerExecutionService({ repository, persistence: {}, clock, environment: manualEnvironment });
+
+  const result = await service.processTheoreticalExecution();
+
+  assert.equal(result.status, "NO_THEORETICAL_FILL");
+  assert.equal(result.cursorAdvanced, 0);
+  assert.deepEqual(repository.cursorAdvances, []);
+  assert.equal(result.exits[0].reason, "CANDLE_MISSING");
+});
+
 class TheoreticalFakeRepository {
-  constructor({ entryCandle = null, candidate = entryCandidate(), expiredHumanGates = 0 } = {}) {
+  constructor({ entryCandle = null, candidate = entryCandidate(), expiredHumanGates = 0, openTrades = [], exitCandle = null, backlog = null } = {}) {
     this.available = true;
     this.entryCandle = entryCandle;
     this.candidate = candidate;
     this.expiredHumanGates = expiredHumanGates;
+    this.openTrades = openTrades;
+    this.exitCandle = exitCandle;
+    this.backlog = backlog || { eligible_open_trades: openTrades.length, due_open_trades: openTrades.length, oldest_cursor_at_utc: null, newest_cursor_at_utc: null };
     this.expireSweep = null;
     this.candleLookup = null;
     this.entryFill = null;
@@ -221,6 +264,7 @@ class TheoreticalFakeRepository {
     this.manualEvents = [];
     this.entryScope = null;
     this.exitScope = null;
+    this.cursorAdvances = [];
   }
 
   async listTheoreticalEntryCandidates(input = {}) {
@@ -250,8 +294,17 @@ class TheoreticalFakeRepository {
 
   async listTheoreticalOpenTrades(input = {}) {
     this.exitScope = input;
-    return [];
+    return this.openTrades;
   }
+
+  async latestClosedCandleForTrade() { return this.exitCandle; }
+
+  async advanceTheoreticalTradeCursor(input) {
+    this.cursorAdvances.push(input);
+    return { advanced: true, trade_id: input.tradeId, theoretical_cursor_at_utc: input.candleTimestampUtc };
+  }
+
+  async theoreticalExecutionBacklog() { return this.backlog; }
 
   async recordTheoreticalExitFill(input) {
     this.exitFill = input;
@@ -305,5 +358,20 @@ function candle({ low = 99.75, high = 101, open = 100, close = 100, timestamp_ut
     high,
     low,
     close,
+  };
+}
+
+function openTrade() {
+  return {
+    trade_id: "trade_open_1",
+    side: "long",
+    quantity_open: 1,
+    avg_entry_price: 100,
+    current_stop_price: 95,
+    current_target_price: 110,
+    opened_at: "2026-08-12T10:00:00.000Z",
+    theoretical_cursor_at_utc: "2026-08-12T10:00:00.000Z",
+    instrument_code: "MNQ",
+    raw: {},
   };
 }

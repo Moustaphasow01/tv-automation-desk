@@ -323,21 +323,83 @@ export async function listTheoreticalOpenTrades(repository, { limit = 100, portf
   return rows(repository.pool, `SELECT t.*,
         COALESCE(c.instrument_code, t.raw->>'instrument') AS instrument_code,
         c.broker_symbol,
-        COALESCE(last_event.last_event_at_utc, t.opened_at) AS theoretical_cursor_at_utc
+        COALESCE(t.theoretical_cursor_at_utc, t.opened_at) AS theoretical_cursor_at_utc
       FROM trades t
       LEFT JOIN broker_contracts c ON c.broker_contract_id = t.broker_contract_id
-      LEFT JOIN LATERAL (
-        SELECT max(e.event_at_utc) AS last_event_at_utc
-        FROM trade_theoretical_execution_events e
-        WHERE e.trade_id = t.trade_id
-      ) last_event ON true
       WHERE t.status IN ('open','scaling','protected')
         AND t.quantity_open > 0
         AND t.current_stop_price IS NOT NULL
         AND t.current_target_price IS NOT NULL
         AND ($2::text[] IS NULL OR t.portfolio_order_intent_id = ANY($2::text[]))
-      ORDER BY t.updated_at ASC
+        AND EXISTS (
+          SELECT 1
+          FROM market_candles pending_candle
+          JOIN market_feeds pending_feed ON pending_feed.feed_id = pending_candle.feed_id
+          WHERE pending_feed.instrument_code = COALESCE(c.instrument_code, t.raw->>'instrument')
+            AND pending_candle.timeframe = '1'
+            AND pending_candle.is_closed = true
+            AND pending_candle.timestamp_utc > COALESCE(t.theoretical_cursor_at_utc, t.opened_at)
+        )
+      ORDER BY COALESCE(t.theoretical_cursor_at_utc, t.opened_at) ASC NULLS FIRST,
+        t.opened_at ASC NULLS FIRST,
+        t.trade_id ASC
       LIMIT $1`, [bounded, hasPortfolioScope ? scopedPortfolioIds : null]);
+}
+
+export async function advanceTheoreticalTradeCursor(repository, { tradeId, candleTimestampUtc } = {}) {
+  await repository.ready();
+  const trade = text(tradeId);
+  const cursor = validIso(candleTimestampUtc);
+  if (!trade || !cursor) return { advanced: false, reason: "INVALID_CURSOR_INPUT", trade_id: trade || null };
+  const row = await one(repository.pool, `UPDATE trades
+      SET theoretical_cursor_at_utc = GREATEST(
+            COALESCE(theoretical_cursor_at_utc, opened_at, $2::timestamptz),
+            $2::timestamptz
+          )
+      WHERE trade_id = $1
+        AND status IN ('open','scaling','protected')
+        AND quantity_open > 0
+        AND (
+          theoretical_cursor_at_utc IS NULL
+          OR theoretical_cursor_at_utc < $2::timestamptz
+        )
+      RETURNING trade_id, theoretical_cursor_at_utc`, [trade, cursor]);
+  return row
+    ? { advanced: true, trade_id: row.trade_id, theoretical_cursor_at_utc: validIso(row.theoretical_cursor_at_utc) }
+    : { advanced: false, reason: "CURSOR_ALREADY_ADVANCED_OR_TRADE_CLOSED", trade_id: trade, theoretical_cursor_at_utc: cursor };
+}
+
+export async function theoreticalExecutionBacklog(repository, { portfolioOrderIntentIds = null } = {}) {
+  await repository.ready();
+  const hasPortfolioScope = Array.isArray(portfolioOrderIntentIds);
+  const scopedPortfolioIds = normalizePortfolioOrderIntentIds(portfolioOrderIntentIds);
+  if (hasPortfolioScope && scopedPortfolioIds.length === 0) return emptyTheoreticalBacklog();
+  const row = await one(repository.pool, `SELECT
+        count(*)::integer AS eligible_open_trades,
+        (count(*) FILTER (WHERE EXISTS (
+          SELECT 1
+          FROM market_candles pending_candle
+          JOIN market_feeds pending_feed ON pending_feed.feed_id = pending_candle.feed_id
+          WHERE pending_feed.instrument_code = COALESCE(c.instrument_code, t.raw->>'instrument')
+            AND pending_candle.timeframe = '1'
+            AND pending_candle.is_closed = true
+            AND pending_candle.timestamp_utc > COALESCE(t.theoretical_cursor_at_utc, t.opened_at)
+        )))::integer AS due_open_trades,
+        min(COALESCE(t.theoretical_cursor_at_utc, t.opened_at)) AS oldest_cursor_at_utc,
+        max(COALESCE(t.theoretical_cursor_at_utc, t.opened_at)) AS newest_cursor_at_utc
+      FROM trades t
+      LEFT JOIN broker_contracts c ON c.broker_contract_id = t.broker_contract_id
+      WHERE t.status IN ('open','scaling','protected')
+        AND t.quantity_open > 0
+        AND t.current_stop_price IS NOT NULL
+        AND t.current_target_price IS NOT NULL
+        AND ($1::text[] IS NULL OR t.portfolio_order_intent_id = ANY($1::text[]))`, [hasPortfolioScope ? scopedPortfolioIds : null]);
+  return {
+    eligible_open_trades: Number(row?.eligible_open_trades || 0),
+    due_open_trades: Number(row?.due_open_trades || 0),
+    oldest_cursor_at_utc: validIso(row?.oldest_cursor_at_utc),
+    newest_cursor_at_utc: validIso(row?.newest_cursor_at_utc),
+  };
 }
 
 export async function latestClosedCandleForTrade(repository, trade) {
@@ -632,14 +694,18 @@ async function upsertTheoreticalTrade(client, trade) {
     `INSERT INTO trades (
       trade_id, trade_decision_id, order_intent_id, portfolio_order_intent_id, broker_account_id, broker_contract_id, status, side,
       quantity_planned, quantity_open, avg_entry_price, initial_stop_price, current_stop_price,
-      current_target_price, atm_strategy_id, opened_at, trading_date, session, strategy_id, raw
-    ) VALUES ($1,$2,$3,$4,$5,$6,'open',$7::trade_side,$8,$8,$9,$10,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
+      current_target_price, atm_strategy_id, opened_at, theoretical_cursor_at_utc, trading_date, session, strategy_id, raw
+    ) VALUES ($1,$2,$3,$4,$5,$6,'open',$7::trade_side,$8,$8,$9,$10,$10,$11,$12,$13,$13,$14,$15,$16,$17::jsonb)
     ON CONFLICT (trade_id) DO UPDATE SET status = 'open',
       quantity_open = EXCLUDED.quantity_open,
       avg_entry_price = EXCLUDED.avg_entry_price,
       initial_stop_price = COALESCE(trades.initial_stop_price, EXCLUDED.initial_stop_price),
       current_stop_price = COALESCE(trades.current_stop_price, EXCLUDED.current_stop_price),
       current_target_price = COALESCE(trades.current_target_price, EXCLUDED.current_target_price),
+      theoretical_cursor_at_utc = GREATEST(
+        COALESCE(trades.theoretical_cursor_at_utc, trades.opened_at, EXCLUDED.theoretical_cursor_at_utc),
+        EXCLUDED.theoretical_cursor_at_utc
+      ),
       raw = trades.raw || EXCLUDED.raw,
       updated_at = now()`,
     [trade.tradeId, trade.intent.trade_decision_id || null, legacyOrderIntentId(trade.intent), portfolioOrderIntentId(trade.intent),
@@ -852,6 +918,9 @@ async function commitValue(client, valueToReturn) {
 }
 
 function boundLimit(limit) { return Math.max(1, Math.min(Number(limit) || 100, 500)); }
+function emptyTheoreticalBacklog() {
+  return { eligible_open_trades: 0, due_open_trades: 0, oldest_cursor_at_utc: null, newest_cursor_at_utc: null };
+}
 function normalizePortfolioOrderIntentIds(value) {
   return Array.isArray(value)
     ? [...new Set(value.map((item) => text(item)).filter(Boolean))]

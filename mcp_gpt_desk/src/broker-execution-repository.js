@@ -2,6 +2,7 @@ import { materializeTradeOutcome } from "./broker-trade-outcome-repository.js";
 import { firstNumber, isConnectedAddonSnapshot, positionKey, validTimestamp } from "./broker-execution-normalizers.js";
 import { evaluateBrokerProtectionSnapshot } from "./broker-protection-snapshot.js";
 import {
+  advanceTheoreticalTradeCursor as advanceTheoreticalTradeCursorRepository,
   latestClosedCandleForIntent as latestTheoreticalClosedCandleForIntent,
   latestClosedCandleForTrade as latestTheoreticalClosedCandleForTrade,
   expireStalePortfolioHumanGates as expireStalePortfolioHumanGatesRepository,
@@ -12,6 +13,7 @@ import {
   recordTheoreticalEntryFill as recordTheoreticalEntryFillRepository,
   recordTheoreticalExitFill as recordTheoreticalExitFillRepository,
   recordTheoreticalReviewRequired as recordTheoreticalReviewRequiredRepository,
+  theoreticalExecutionBacklog as theoreticalExecutionBacklogRepository,
 } from "./broker-theoretical-execution-repository.js";
 
 export { evaluateBrokerProtectionSnapshot } from "./broker-protection-snapshot.js";
@@ -360,6 +362,8 @@ export class PostgresBrokerExecutionRepository {
     return listTheoreticalOpenTradesRepository(this, { limit, portfolioOrderIntentIds });
   }
   async latestClosedCandleForTrade(trade) { return latestTheoreticalClosedCandleForTrade(this, trade); }
+  async advanceTheoreticalTradeCursor(input) { return advanceTheoreticalTradeCursorRepository(this, input); }
+  async theoreticalExecutionBacklog(input = {}) { return theoreticalExecutionBacklogRepository(this, input); }
   async recordTheoreticalExitFill({ result, now }) { return recordTheoreticalExitFillRepository(this, { result, now }); }
   async recordTheoreticalReviewRequired({ result, now }) { return recordTheoreticalReviewRequiredRepository(this, { result, now }); }
   async recordManualExecutionEvent({ event }) { return recordManualExecutionEventRepository(this, { event }); }
