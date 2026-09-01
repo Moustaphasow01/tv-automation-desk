@@ -46,20 +46,39 @@ export class DomainEventOutboxRepository {
   async listAfter({ cursor = "", limit = 100 } = {}) {
     await this.ready();
     let checkpoint = null;
-    if (String(cursor || "").trim()) {
+    const requestedCursor = String(cursor || "").trim();
+    if (requestedCursor) {
+      if (requestedCursor === "front_checkpoint_empty") {
+        const checkpointNow = await currentCheckpoint(this.pool);
+        if (!checkpointNow) return { events: [], resyncRequired: false, checkpoint: null };
+        return { events: [], resyncRequired: true, checkpoint: checkpointNow };
+      }
       const found = await this.pool.query(
         "SELECT created_at_utc, domain_event_id FROM domain_event_outbox WHERE domain_event_id = $1",
-        [String(cursor)],
+        [requestedCursor],
       );
       checkpoint = found.rows[0] || null;
-      if (!checkpoint) return { events: [], resyncRequired: true };
+      if (!checkpoint) return { events: [], resyncRequired: true, checkpoint: await currentCheckpoint(this.pool) };
+    } else {
+      return {
+        events: [],
+        resyncRequired: false,
+        initialSnapshotRequired: true,
+        checkpoint: await currentCheckpoint(this.pool),
+      };
     }
     const result = await this.pool.query(`SELECT * FROM domain_event_outbox
       WHERE ($1::timestamptz IS NULL OR (created_at_utc, domain_event_id) > ($1, $2))
       ORDER BY created_at_utc, domain_event_id
       LIMIT $3`, [checkpoint?.created_at_utc || null, checkpoint?.domain_event_id || "", bounded(limit)]);
-    return { events: result.rows.map(mapEvent), resyncRequired: false };
+    return { events: result.rows.map(mapEvent), resyncRequired: false, checkpoint: await currentCheckpoint(this.pool) };
   }
+}
+
+async function currentCheckpoint(pool) {
+  const result = await pool.query(`SELECT domain_event_id, created_at_utc
+    FROM domain_event_outbox ORDER BY created_at_utc DESC, domain_event_id DESC LIMIT 1`);
+  return result.rows[0]?.domain_event_id || null;
 }
 
 function normalizeDomainEvent(input) {

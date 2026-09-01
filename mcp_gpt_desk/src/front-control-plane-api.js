@@ -54,6 +54,7 @@ import {
   theoreticalPerformanceR,
   theoreticalTimelineEvents,
 } from "./front-live-theoretical-execution-projection.js";
+import { buildLiveFocusProjection } from "./front-live-focus-projection.js";
 
 export {
   frontControlPlaneSseFrame,
@@ -81,7 +82,7 @@ const VIEW_NAMES = new Set([
   "auth-session", "operator-settings", "admin-access", "command-center", "demo-paper-readiness", "events-audit",
   "operations-queue", "research-agent-fleet", "research-compute-scheduler", "research-data-catalog",
   "research-experiment-detail", "research-run-detail", "research-lab", "strategy-center",
-  "strategy-detail", "strategy-compare", "live-trading", "live-signal-detail", "orders", "risk",
+  "strategy-detail", "strategy-compare", "live-trading", "live-focus", "live-signal-detail", "orders", "risk",
   "order-detail", "position-detail", "incident-detail",
   "execution-providers", "execution-incidents", "portfolio", "jarvis-workspace",
   "sessions", "live-plan", "live-news", "live-timeline", "execution-reconciliation", "operations-observability",
@@ -94,6 +95,7 @@ const VIEW_BUILDERS = {
   "command-center": buildCommandCenterProjection,
   "demo-paper-readiness": demoPaperReadiness,
   "live-trading": liveTrading,
+  "live-focus": liveFocus,
   portfolio,
   "operations-queue": operationsQueue,
   "events-audit": eventsAudit,
@@ -161,6 +163,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "strategy-detail": ["strategy", "research", "execution", "incidents"],
   "strategy-compare": ["strategy", "research", "simulation-runs"],
   "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "live-market-snapshot", "live-session", "front-macro", "front-news", "assistant-runtime", "performance", "health"],
+  "live-focus": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "live-market-snapshot", "live-session", "front-macro", "front-news", "assistant-runtime", "performance", "health", "market-context"],
   "live-signal-detail": ["execution", "strategy", "portfolio-risk", "ai-context"],
   "order-detail": ["execution", "live-market-snapshot"],
   "position-detail": ["execution"],
@@ -334,6 +337,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     "prompt-registry": () => source("prompt-registry", () => call(store, "getPromptRegistryOverview", {})),
     "observability-policy": () => source("observability-policy", () => call(store, "getOperationsObservabilityPolicy", {})),
     health: () => typeof store?.health === "function" ? source("health", () => store.health()) : Promise.resolve(null),
+    "market-context": () => source("market-context", () => call(store, "getCurrentMarketContext", { universe: "US_GRAINS_CBOT" })),
   };
   const dependencies = VIEW_SOURCE_DEPENDENCIES[viewName] || [];
   const loaded = Object.fromEntries(await Promise.all(dependencies.map(async (name) => [name, await loaders[name]()]))) ;
@@ -368,6 +372,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     promptRegistry: loaded["prompt-registry"] ?? null,
     observabilityPolicy: loaded["observability-policy"] ?? null,
     health: loaded.health ?? null,
+    marketContext: loaded["market-context"] ?? null,
     query, warnings, clock: store?.clock, nowIso: currentTick(store?.clock).utc, actor,
   };
   return envelope({
@@ -1152,6 +1157,15 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
 }
 
 function demoPaperReadiness(context) { return buildDemoPaperReadiness({ ...context, rows }); }
+
+function liveFocus(context) {
+  return buildLiveFocusProjection({
+    live: liveTrading(context),
+    marketContext: context.marketContext,
+    health: context.health,
+    nowIso: context.nowIso,
+  });
+}
 
 function portfolio({ execution, risk, nowIso, warnings }) {
   warnings.push("portfolio-attribution:NOT_IMPLEMENTED", "portfolio-correlation:NOT_IMPLEMENTED", "portfolio-equity-curve:NOT_IMPLEMENTED", "portfolio-reconciliation:PARTIAL", "portfolio-virtual-attribution:NOT_IMPLEMENTED");
@@ -3117,7 +3131,7 @@ function cachedSource(store, label, query, factory, ttlMs = FRONT_SOURCE_CACHE_T
   let cache = sourceCacheByStore.get(store);
   if (!cache) { cache = new Map(); sourceCacheByStore.set(store, cache); }
   const key = `${label}:${JSON.stringify(Object.entries(query || {}).sort(([left], [right]) => left.localeCompare(right)))}`;
-  const now = Date.now();
+  const now = Date.parse(currentUtc());
   const existing = cache.get(key);
   if (existing && existing.expiresAt > now) return existing.promise;
   const promise = Promise.resolve().then(factory).catch((error) => { cache.delete(key); throw error; });

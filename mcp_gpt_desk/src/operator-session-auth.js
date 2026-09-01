@@ -1,11 +1,13 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { SystemClock } from "@tv-automation/desk-time";
 
 const COOKIE_NAME = "desk_operator_session";
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const DEFAULT_BOOTSTRAP_OPERATOR_LOGIN = "MSO";
 const DEFAULT_BOOTSTRAP_OPERATOR_PASSWORD = "2018";
+const OPERATOR_SESSION_CLOCK = new SystemClock();
 
-export function createOperatorSession(credentials, baseUrl, env = process.env, nowMs = Date.now()) {
+export function createOperatorSession(credentials, baseUrl, env = process.env, nowMs = OPERATOR_SESSION_CLOCK.now().epochMs) {
   const principal = validateOperatorCredentials(credentials, env);
   const now = Math.floor(nowMs / 1000);
   const payload = {
@@ -27,7 +29,7 @@ export function createOperatorSession(credentials, baseUrl, env = process.env, n
   };
 }
 
-export function verifyOperatorSession(cookieHeader, baseUrl, env = process.env, nowMs = Date.now()) {
+export function verifyOperatorSession(cookieHeader, baseUrl, env = process.env, nowMs = OPERATOR_SESSION_CLOCK.now().epochMs) {
   const token = parseCookies(cookieHeader)[COOKIE_NAME];
   if (!token) return { ok: false, error: "operator_session_missing" };
   const [encoded, signature, extra] = token.split(".");

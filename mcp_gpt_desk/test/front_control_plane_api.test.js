@@ -18,7 +18,7 @@ const viewNames = [
   "auth-session", "operator-settings", "admin-access", "command-center", "demo-paper-readiness", "events-audit",
   "operations-queue", "research-agent-fleet", "research-compute-scheduler", "research-data-catalog",
   "research-experiment-detail", "research-run-detail", "research-lab", "strategy-center",
-  "strategy-detail", "strategy-compare", "live-trading", "live-signal-detail", "orders", "risk",
+  "strategy-detail", "strategy-compare", "live-trading", "live-focus", "live-signal-detail", "orders", "risk",
   "order-detail", "position-detail", "incident-detail",
   "execution-providers", "execution-incidents", "portfolio", "jarvis-workspace",
   "sessions", "live-plan", "live-news", "live-timeline", "execution-reconciliation", "operations-observability",

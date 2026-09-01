@@ -23,7 +23,7 @@ export function writeFrontControlPlaneEvents(store, req, res, input = {}, corsHe
           lastEventId = event.eventType === "desk.resync_required" ? "" : event.eventId;
         }
       } else {
-        res.write(frontControlPlaneSseFrame(heartbeatEvent({ input, lastEventId })));
+        res.write(`: heartbeat ${currentTick(input.clock).utc}\n\n`);
       }
     } catch (error) {
       res.write(frontControlPlaneSseFrame(errorEvent({ error, input, lastEventId })));
@@ -95,19 +95,6 @@ export function frontControlPlaneSseFrame(event) {
   return `id: ${event.eventId}\nevent: message\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
-function heartbeatEvent({ input, lastEventId }) {
-  const heartbeatTick = currentTick(input.clock);
-  const heartbeatAt = heartbeatTick.utc;
-  return {
-    eventId: `evt_front_control_plane_heartbeat_${hash(`${heartbeatAt}:${lastEventId}`).slice(0, 16)}`,
-    eventType: "desk.snapshot.updated",
-    occurredAt: heartbeatAt,
-    correlationId: lastEventId || `corr_front_control_plane_${hash(heartbeatAt).slice(0, 12)}`,
-    schemaVersion: "1.0.0",
-    payload: { source: "front-control-plane-bff", freshness: "heartbeat", lastEventId },
-  };
-}
-
 function errorEvent({ error, input, lastEventId }) {
   const errorTick = currentTick(input.clock);
   return {
@@ -120,7 +107,7 @@ function errorEvent({ error, input, lastEventId }) {
   };
 }
 
-function resyncRequiredEvent({ cursor }) {
+function resyncRequiredEvent({ cursor, checkpoint = null }) {
   const occurredAt = currentUtc();
   return {
     eventId: `evt_front_control_plane_resync_${hash(`${cursor}:${occurredAt}`).slice(0, 16)}`,
@@ -137,6 +124,7 @@ function resyncRequiredEvent({ cursor }) {
     payload: {
       reason: "CURSOR_NOT_FOUND_OR_EXPIRED",
       requestedCursor: String(cursor || ""),
+      checkpoint,
       action: "REFETCH_SNAPSHOT_THEN_RESUBSCRIBE",
       brokerExecution: false,
       orderSubmissionEnabled: false,
@@ -147,9 +135,13 @@ function resyncRequiredEvent({ cursor }) {
 function normalizeRealtimeResult(result, { cursor }) {
   const events = Array.isArray(result) ? result : Array.isArray(result?.events) ? result.events : [];
   if (!events.length) {
-    return result?.resyncRequired === true || result?.resync_required === true
-      ? [resyncRequiredEvent({ cursor })]
-      : [];
+    if (result?.resyncRequired === true || result?.resync_required === true) {
+      return [resyncRequiredEvent({ cursor, checkpoint: result?.checkpoint || null })];
+    }
+    if (result?.initialSnapshotRequired === true || result?.initial_snapshot_required === true) {
+      return [snapshotCheckpointEvent({ checkpoint: result?.checkpoint || null })];
+    }
+    return [];
   }
   const seen = new Set();
   return events.filter((event) => {
@@ -158,6 +150,31 @@ function normalizeRealtimeResult(result, { cursor }) {
       seen.add(key);
       return true;
     });
+}
+
+function snapshotCheckpointEvent({ checkpoint }) {
+  const occurredAt = currentUtc();
+  const stableCheckpoint = String(checkpoint || "front_checkpoint_empty");
+  return {
+    eventId: stableCheckpoint,
+    aggregateId: "live-focus",
+    aggregateType: "front_snapshot",
+    eventType: "desk.snapshot.updated",
+    occurredAt,
+    receivedAt: occurredAt,
+    source: "front-control-plane-bff",
+    correlationId: `corr_front_snapshot_${hash(stableCheckpoint).slice(0, 12)}`,
+    schemaVersion: "1.0.0",
+    sequence: 0,
+    revision: 1,
+    payload: {
+      freshness: "initial",
+      checkpoint: checkpoint || null,
+      action: "REFETCH_CANONICAL_SNAPSHOT",
+      brokerExecution: false,
+      orderSubmissionEnabled: false,
+    },
+  };
 }
 
 function frontAssistantOutboxRowToEvent(row) {
