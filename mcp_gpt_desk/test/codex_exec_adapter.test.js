@@ -654,6 +654,35 @@ test("Windows private run ACL resolves a WORKGROUP local account through COMPUTE
   }
 });
 
+test("Windows private run ACL resolves a WinSW LocalSystem machine identity to the system SID", async () => {
+  const outer = await mkdtemp(join(tmpdir(), "desk-codex-system-acl-test-"));
+  const calls = [];
+  try {
+    const runRoot = await createSecureCodexRunDirectory({
+      baseRoot: join(outer, "private"),
+      platform: "win32",
+      aclEnv: {
+        USERDOMAIN: "WORKGROUP",
+        COMPUTERNAME: "WIN-DESK",
+        USERNAME: "WIN-DESK$",
+      },
+      systemCommandRunner: async (input) => {
+        calls.push(input);
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
+    });
+    const grants = calls
+      .filter((call) => call.args.includes("/grant:r"))
+      .flatMap((call) => call.args)
+      .filter((value) => value.includes("(OI)(CI)F"));
+    assert.ok(grants.includes("*S-1-5-18:(OI)(CI)F"));
+    assert.equal(grants.some((value) => value.includes("WIN-DESK\\WIN-DESK$")), false);
+    await cleanupSecureCodexRunDirectory(runRoot, { platform: "linux" });
+  } finally {
+    await rm(outer, { recursive: true, force: true });
+  }
+});
+
 test("Codex adapter treats cleanup verification failure as a fail-closed error", async () => {
   const runRoot = await mkdtemp(join(tmpdir(), "desk-codex-cleanup-fail-test-"));
   const adapter = new CodexExecAdapter({

@@ -922,6 +922,17 @@ function windowsCurrentPrincipal(env = process.env) {
       code: "CODEX_TEMP_ACL_IDENTITY_REQUIRED",
     });
   }
+  // WinSW services running as LocalSystem can expose the computer account
+  // (for example WIN-DESK$) instead of the literal SYSTEM username. That
+  // account string is not a valid local principal for icacls. Resolve this
+  // well-known service identity to the LocalSystem SID and keep the ACL
+  // fail-closed for every other ambiguous identity.
+  if (
+    username.endsWith("$")
+    && (!domain || domain.toUpperCase() === "WORKGROUP" || domain.toUpperCase() === computer.toUpperCase())
+  ) {
+    return "*S-1-5-18";
+  }
   const authority = domain && domain.toUpperCase() !== "WORKGROUP"
     ? domain
     : computer;
