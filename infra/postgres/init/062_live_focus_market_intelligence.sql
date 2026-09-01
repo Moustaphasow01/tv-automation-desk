@@ -17,27 +17,42 @@ CREATE TABLE IF NOT EXISTS market_source_coverage_manifests (
   CHECK (coverage_end_utc IS NULL OR coverage_start_utc IS NULL OR coverage_end_utc >= coverage_start_utc)
 );
 
+DO $$ BEGIN
+  CREATE TYPE market_agri_event_kind AS ENUM (
+    'WASDE','CROP_PROGRESS','EXPORT_SALES','GRAIN_STOCKS','ACREAGE',
+    'PROSPECTIVE_PLANTINGS','CFTC_COT','WEATHER_OUTLOOK','DROUGHT_MONITOR','OTHER'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE market_agri_event_importance AS ENUM ('LOW','MEDIUM','HIGH','CRITICAL');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Keep the canonical agriculture-event shape already deployed by the grains
+-- data foundation.  This migration is deliberately additive so a VPS that
+-- received the foundation ahead of the versioned migration remains deployable.
 CREATE TABLE IF NOT EXISTS market_agri_events (
   market_agri_event_id text PRIMARY KEY,
-  external_key text NOT NULL UNIQUE,
   universe_key text NOT NULL DEFAULT 'US_GRAINS_CBOT',
-  event_kind text NOT NULL,
+  event_kind market_agri_event_kind NOT NULL,
   title text NOT NULL,
+  commodity_codes text[] NOT NULL DEFAULT ARRAY[]::text[],
   event_timestamp_utc timestamptz NOT NULL,
-  importance text NOT NULL CHECK (importance IN ('LOW','MEDIUM','HIGH','CRITICAL')),
-  event_status text NOT NULL DEFAULT 'SCHEDULED' CHECK (event_status IN ('SCHEDULED','RELEASED','CANCELLED','REVISED')),
   actual_available_at_utc timestamptz,
-  source_published_at_utc timestamptz NOT NULL,
-  ingested_at_utc timestamptz NOT NULL DEFAULT now(),
-  provider text NOT NULL,
-  dataset_version text NOT NULL,
-  source_url text NOT NULL,
-  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  provenance jsonb NOT NULL DEFAULT '[]'::jsonb,
-  revision integer NOT NULL DEFAULT 1 CHECK (revision >= 1),
-  CHECK (source_published_at_utc <= ingested_at_utc),
-  CHECK (jsonb_typeof(payload) = 'object'),
-  CHECK (jsonb_typeof(provenance) = 'array')
+  source_provider text NOT NULL,
+  source_url text,
+  importance market_agri_event_importance NOT NULL,
+  forecast jsonb NOT NULL DEFAULT '{}'::jsonb,
+  previous jsonb NOT NULL DEFAULT '{}'::jsonb,
+  actual jsonb NOT NULL DEFAULT '{}'::jsonb,
+  point_in_time_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ingestion_batch_id uuid,
+  payload_hash text,
+  created_at_utc timestamptz NOT NULL DEFAULT now(),
+  updated_at_utc timestamptz NOT NULL DEFAULT now(),
+  CHECK (jsonb_typeof(point_in_time_payload) = 'object')
 );
 
 CREATE INDEX IF NOT EXISTS market_agri_events_universe_time_idx
@@ -194,24 +209,25 @@ INSERT INTO agent_missions (
   updated_at_utc = now();
 
 INSERT INTO market_agri_events (
-  market_agri_event_id, external_key, event_kind, title, event_timestamp_utc,
-  importance, source_published_at_utc, provider, dataset_version, source_url, provenance
+  market_agri_event_id, universe_key, event_kind, title, commodity_codes,
+  event_timestamp_utc, source_provider, source_url, importance, point_in_time_payload,
+  created_at_utc, updated_at_utc
 ) VALUES
-  ('agri-2026-03-10-wasde', 'USDA:WASDE:2026-03-10', 'WASDE', 'World Agricultural Supply and Demand Estimates', '2026-03-10T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-03-31-stocks', 'USDA:NASS:GRAIN_STOCKS:2026-03-31', 'GRAIN_STOCKS', 'Prospective Plantings and Grain Stocks', '2026-03-31T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_NASS', 'usda_high_impact_calendar_2026_v1', 'https://www.nass.usda.gov/Publications/Calendar/2026/2026ReleaseCalendar_12Months_11x17_Color.pdf', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-04-09-wasde', 'USDA:WASDE:2026-04-09', 'WASDE', 'WASDE and Crop Production', '2026-04-09T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-05-12-wasde', 'USDA:WASDE:2026-05-12', 'WASDE', 'WASDE and Crop Production', '2026-05-12T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-06-11-wasde', 'USDA:WASDE:2026-06-11', 'WASDE', 'WASDE and Crop Production', '2026-06-11T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-06-30-acreage', 'USDA:NASS:ACREAGE_STOCKS:2026-06-30', 'ACREAGE_GRAIN_STOCKS', 'Acreage and Grain Stocks', '2026-06-30T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_NASS', 'usda_high_impact_calendar_2026_v1', 'https://www.nass.usda.gov/Publications/Calendar/2026/2026ReleaseCalendar_12Months_11x17_Color.pdf', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-07-10-wasde', 'USDA:WASDE:2026-07-10', 'WASDE', 'WASDE and Crop Production', '2026-07-10T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-08-12-wasde', 'USDA:WASDE:2026-08-12', 'WASDE', 'WASDE and Crop Production', '2026-08-12T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-09-01-crushings', 'USDA:NASS:GRAIN_CRUSHINGS:2026-09-01', 'GRAIN_CRUSHINGS', 'Grain Crushings and Annual Summary', '2026-09-01T19:00:00Z', 'HIGH', '2026-03-01T00:00:00Z', 'USDA_NASS', 'usda_high_impact_calendar_2026_v1', 'https://www.nass.usda.gov/Publications/Calendar/reports_by_date.php?month=09&view=l&year=2026', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-09-11-wasde', 'USDA:WASDE:2026-09-11', 'WASDE', 'WASDE and Crop Production', '2026-09-11T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-09-30-stocks', 'USDA:NASS:GRAIN_STOCKS:2026-09-30', 'GRAIN_STOCKS', 'Small Grains Summary and Grain Stocks', '2026-09-30T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_NASS', 'usda_high_impact_calendar_2026_v1', 'https://www.nass.usda.gov/Publications/Calendar/reports_by_date.php?month=09&view=l&year=2026', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-10-09-wasde', 'USDA:WASDE:2026-10-09', 'WASDE', 'WASDE and Crop Production', '2026-10-09T16:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-11-10-wasde', 'USDA:WASDE:2026-11-10', 'WASDE', 'WASDE and Crop Production', '2026-11-10T17:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]'),
-  ('agri-2026-12-10-wasde', 'USDA:WASDE:2026-12-10', 'WASDE', 'WASDE and Crop Production', '2026-12-10T17:00:00Z', 'CRITICAL', '2026-03-01T00:00:00Z', 'USDA_WAOB', 'usda_high_impact_calendar_2026_v1', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', '[{"kind":"OFFICIAL_CALENDAR"}]')
-ON CONFLICT (external_key) DO NOTHING;
+  ('agri-2026-03-10-wasde', 'US_GRAINS_CBOT', 'WASDE', 'World Agricultural Supply and Demand Estimates', ARRAY['ZC','ZW'], '2026-03-10T16:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-03-31-stocks', 'US_GRAINS_CBOT', 'GRAIN_STOCKS', 'Prospective Plantings and Grain Stocks', ARRAY['ZC','ZW'], '2026-03-31T16:00:00Z', 'USDA_NASS', 'https://www.nass.usda.gov/Publications/Calendar/2026/2026ReleaseCalendar_12Months_11x17_Color.pdf', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-04-09-wasde', 'US_GRAINS_CBOT', 'WASDE', 'WASDE and Crop Production', ARRAY['ZC','ZW'], '2026-04-09T16:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-05-12-wasde', 'US_GRAINS_CBOT', 'WASDE', 'WASDE and Crop Production', ARRAY['ZC','ZW'], '2026-05-12T16:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-06-11-wasde', 'US_GRAINS_CBOT', 'WASDE', 'WASDE and Crop Production', ARRAY['ZC','ZW'], '2026-06-11T16:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-06-30-acreage', 'US_GRAINS_CBOT', 'ACREAGE', 'Acreage and Grain Stocks', ARRAY['ZC','ZW'], '2026-06-30T16:00:00Z', 'USDA_NASS', 'https://www.nass.usda.gov/Publications/Calendar/2026/2026ReleaseCalendar_12Months_11x17_Color.pdf', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-07-10-wasde', 'US_GRAINS_CBOT', 'WASDE', 'WASDE and Crop Production', ARRAY['ZC','ZW'], '2026-07-10T16:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-08-12-wasde', 'US_GRAINS_CBOT', 'WASDE', 'WASDE and Crop Production', ARRAY['ZC','ZW'], '2026-08-12T16:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-09-01-crushings', 'US_GRAINS_CBOT', 'OTHER', 'Grain Crushings and Annual Summary', ARRAY['ZC'], '2026-09-01T19:00:00Z', 'USDA_NASS', 'https://www.nass.usda.gov/Publications/Calendar/reports_by_date.php?month=09&view=l&year=2026', 'HIGH', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}],"canonical_kind":"GRAIN_CRUSHINGS"}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-09-11-wasde', 'US_GRAINS_CBOT', 'WASDE', 'WASDE and Crop Production', ARRAY['ZC','ZW'], '2026-09-11T16:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-09-30-stocks', 'US_GRAINS_CBOT', 'GRAIN_STOCKS', 'Small Grains Summary and Grain Stocks', ARRAY['ZC','ZW'], '2026-09-30T16:00:00Z', 'USDA_NASS', 'https://www.nass.usda.gov/Publications/Calendar/reports_by_date.php?month=09&view=l&year=2026', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-10-09-wasde', 'US_GRAINS_CBOT', 'WASDE', 'WASDE and Crop Production', ARRAY['ZC','ZW'], '2026-10-09T16:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-11-10-wasde', 'US_GRAINS_CBOT', 'WASDE', 'WASDE and Crop Production', ARRAY['ZC','ZW'], '2026-11-10T17:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now()),
+  ('agri-2026-12-10-wasde', 'US_GRAINS_CBOT', 'WASDE', 'WASDE and Crop Production', ARRAY['ZC','ZW'], '2026-12-10T17:00:00Z', 'USDA_WAOB', 'https://www.usda.gov/about-usda/general-information/staff-offices/office-chief-economist/commodity-markets/wasde-report', 'CRITICAL', '{"event_status":"SCHEDULED","source_published_at_utc":"2026-03-01T00:00:00Z","dataset_version":"usda_high_impact_calendar_2026_v1","provenance":[{"kind":"OFFICIAL_CALENDAR"}]}', '2026-03-01T00:00:00Z', now())
+ON CONFLICT (market_agri_event_id) DO NOTHING;
 
 INSERT INTO market_source_coverage_manifests (
   source_id, source_type, source_status, required_for, coverage_start_utc, coverage_end_utc,

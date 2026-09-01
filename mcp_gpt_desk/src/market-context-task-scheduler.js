@@ -116,11 +116,16 @@ export class MarketContextTaskScheduler {
       series[`${instrument}:${timeframe}`] = summarizeSeries(result.rows.reverse());
     }
     const agriEvents = await safeRows(this.pool, `SELECT event_kind, title, event_timestamp_utc,
-      importance, event_status, actual_available_at_utc, source_published_at_utc,
-      provider, dataset_version, source_url
+      importance,
+      COALESCE(point_in_time_payload->>'event_status', 'SCHEDULED') AS event_status,
+      actual_available_at_utc,
+      COALESCE(NULLIF(point_in_time_payload->>'source_published_at_utc', '')::timestamptz, created_at_utc) AS source_published_at_utc,
+      source_provider AS provider,
+      COALESCE(point_in_time_payload->>'dataset_version', 'legacy_agri_events') AS dataset_version,
+      source_url
       FROM market_agri_events
       WHERE universe_key='US_GRAINS_CBOT'
-        AND source_published_at_utc <= $1
+        AND COALESCE(NULLIF(point_in_time_payload->>'source_published_at_utc', '')::timestamptz, created_at_utc) <= $1
         AND event_timestamp_utc BETWEEN $1::timestamptz - interval '7 days'
                                    AND $1::timestamptz + interval '14 days'
       ORDER BY event_timestamp_utc LIMIT 80`, [sourceDataCutoff]);
