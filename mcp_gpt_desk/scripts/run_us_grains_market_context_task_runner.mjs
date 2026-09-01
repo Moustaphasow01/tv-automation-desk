@@ -1,0 +1,233 @@
+#!/usr/bin/env node
+import process from "node:process";
+import { resolve } from "node:path";
+import { canonicalSha256 } from "@tv-automation/desk-domain";
+import { CodexExecAdapter } from "../src/codex-exec-adapter.js";
+import { loadCodexRuntimeSettings } from "../src/codex-runtime-settings.js";
+import { createDeskStoreFromEnv } from "../src/store.js";
+
+const input = await readJsonStdin();
+const store = createDeskStoreFromEnv();
+
+try {
+  await store.persistence.initialized;
+  const result = await runTask({ store, input });
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+} catch (error) {
+  process.stdout.write(`${JSON.stringify(failure(error))}\n`);
+} finally {
+  await store.persistence.close?.();
+}
+
+async function runTask({ store, input }) {
+  const task = input?.task || {};
+  if (task.task_type !== "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH") throw coded("US_GRAINS_CONTEXT_TASK_TYPE_UNSUPPORTED", false);
+  const bundle = task.payload?.bundle;
+  assertBundle(bundle);
+  const adapter = new CodexExecAdapter({
+    cwd: resolve(process.env.DESK_AGENT_SUPERVISOR_PROJECT_ROOT || process.cwd()),
+    runtimeSettingsProvider: () => loadCodexRuntimeSettings(store.persistence),
+  });
+  const analysis = await adapter.analyze({
+    prompt: buildPrompt(bundle),
+    outputSchema: OUTPUT_SCHEMA,
+    outputNormalizer: (value) => value,
+    sessionId: input?.conversation?.conversation?.external_conversation_ref || null,
+    reasoningEffort: input?.execution_policy?.reasoning_effort || "high",
+    timeoutMs: input?.execution_policy?.timeout_ms || 780_000,
+  });
+  const persisted = await persistOutput({ store, input, bundle, output: analysis.output });
+  return {
+    ok: true,
+    status: "MARKET_CONTEXT_PUBLISHED",
+    output_ref: `market-context-snapshot://${persisted.snapshot.marketContextSnapshotId}`,
+    result: persisted,
+    conversation: { external_conversation_ref: analysis.telemetry?.thread_id || null },
+    usage: analysis.telemetry,
+    telemetry: { ...analysis.telemetry, runner: "us-grains-market-context-analyst", authority: "ADVISORY_ONLY" },
+  };
+}
+
+async function persistOutput({ store, input, bundle, output }) {
+  assertOutput(output);
+  const task = input.task;
+  const createdAt = store.clock.now().utc;
+  const validityMinutes = bundle.canonicalMarketSession.marketState === "OPEN" ? 30 : 60;
+  const validUntil = new Date(Date.parse(createdAt) + validityMinutes * 60_000).toISOString();
+  const digest = canonicalSha256({ task: task.task_id, cutoff: bundle.cutoff, output });
+  const requiredReady = requiredSourcesReady(bundle.sourceStates, bundle.cutoff);
+  const status = requiredReady ? "AVAILABLE" : "PARTIAL";
+  const snapshotId = `market-context-${digest.slice(0, 24)}`;
+  const snapshot = {
+    marketContextSnapshotId: snapshotId,
+    universe: "US_GRAINS_CBOT",
+    createdAt,
+    validFrom: createdAt,
+    validUntil,
+    sourceDataCutoff: bundle.cutoff,
+    marketState: bundle.canonicalMarketSession.marketState,
+    marketSession: bundle.canonicalMarketSession.marketSession,
+    marketRegime: output.marketRegime,
+    volatilityRegime: output.volatilityRegime,
+    globalBias: output.globalBias,
+    instrumentViews: output.instrumentViews,
+    preferredStrategyFamilies: output.preferredStrategyFamilies,
+    discouragedStrategyFamilies: output.discouragedStrategyFamilies,
+    opportunityZones: output.opportunityZones,
+    noTradeZones: output.noTradeZones,
+    invalidationConditions: output.invalidationConditions,
+    riskMultiplier: Math.min(1, Number(output.riskMultiplier)),
+    sourceStates: bundle.sourceStates,
+    reasonCodes: [...new Set([...output.reasonCodes, ...(requiredReady ? [] : ["REQUIRED_SOURCE_NOT_READY"])])],
+    provenance: [{ source: "agent-runtime", taskId: task.task_id, dataCutoff: bundle.cutoff }],
+    workerId: input.lease?.worker_id || task.assigned_worker_id || null,
+    taskId: task.task_id,
+    modelPolicyVersion: input.execution_policy_snapshot?.policy_hash || input.execution_policy?.model || "runtime-policy",
+    promptVersion: "us_grains_market_context_prompt_v1",
+    supersedesSnapshotId: bundle.previousSnapshot?.marketContextSnapshotId || null,
+    invalidationReason: null,
+    status,
+  };
+  const brief = {
+    marketDeskBriefId: `market-brief-${digest.slice(0, 24)}`,
+    marketContextSnapshotId: snapshotId,
+    universe: "US_GRAINS_CBOT",
+    createdAt,
+    validFrom: createdAt,
+    validUntil,
+    sourceDataCutoff: bundle.cutoff,
+    status,
+    headline: output.headline,
+    operatorSummary: output.operatorSummary,
+    marketInterpretation: output.marketInterpretation,
+    deskIntent: output.deskIntent,
+    whyNoTrade: output.whyNoTrade,
+    whatDeskWants: output.whatDeskWants,
+    whatDeskAvoids: output.whatDeskAvoids,
+    opportunityZones: output.opportunityZones,
+    noTradeZones: output.noTradeZones,
+    invalidationConditions: output.invalidationConditions,
+    currentCatalysts: output.currentCatalysts,
+    nextExpectedEvents: output.nextExpectedEvents,
+    instrumentViews: output.instrumentViews,
+    riskPosture: { multiplier: Math.min(1, Number(output.riskMultiplier)), authority: "ADVISORY_ONLY" },
+    sourceStates: bundle.sourceStates,
+    reasonCodes: snapshot.reasonCodes,
+    provenance: snapshot.provenance,
+    workerId: snapshot.workerId,
+    taskId: task.task_id,
+    modelPolicyVersion: snapshot.modelPolicyVersion,
+    promptVersion: snapshot.promptVersion,
+    supersedesBriefId: bundle.previousBrief?.marketDeskBriefId || null,
+    invalidationReason: null,
+  };
+  return store.marketContext.persistAnalysis({ snapshot, brief });
+}
+
+function buildPrompt(bundle) {
+  return [
+    "You are US_GRAINS_MARKET_CONTEXT_ANALYST. Analyze market context; do not find or execute a trade.",
+    "Authority is advisory only. Never create ProviderCommand, alter Risk, confirm HumanGate, enable AUTO/LIVE, or change post-Risk terms.",
+    "Use only the bounded bundle below. Respect sourceDataCutoff and source availability. Empty agri events only mean no event when the manifest is AVAILABLE and covers the cutoff.",
+    "Produce strict JSON matching the schema. Keep ZC and ZW instrument views distinct. Opportunity zones are context framing, not orders.",
+    "If sources are incomplete, say so in reasonCodes and narrative; never invent availability, news, weather, macro facts or prices.",
+    JSON.stringify(bundle),
+  ].join("\n\n");
+}
+
+function requiredSourcesReady(states, cutoff) {
+  const required = ["ZC_1", "ZC_5", "ZW_1", "ZW_5", "market_agri_events", "canonical_grains_session"];
+  return required.every((id) => {
+    const source = states.find((item) => item.sourceId === id);
+    if (!source || source.status !== "AVAILABLE") return false;
+    if (id === "canonical_grains_session") return true;
+    return source.coverageStart && source.coverageEnd && Date.parse(source.coverageStart) <= Date.parse(cutoff) && Date.parse(source.coverageEnd) >= Date.parse(cutoff);
+  });
+}
+
+function assertBundle(bundle) {
+  if (!bundle || bundle.schemaVersion !== "us_grains_market_context_bundle_v1") throw coded("US_GRAINS_CONTEXT_BUNDLE_INVALID", false);
+  if (bundle.universe !== "US_GRAINS_CBOT" || !bundle.cutoff || !bundle.canonicalMarketSession) throw coded("US_GRAINS_CONTEXT_BUNDLE_SCOPE_INVALID", false);
+  if (!Array.isArray(bundle.sourceStates)) throw coded("US_GRAINS_CONTEXT_SOURCE_STATES_REQUIRED", false);
+}
+
+function assertOutput(output) {
+  if (!output || output.schemaVersion !== "us_grains_market_context_analysis_v1") throw coded("US_GRAINS_CONTEXT_OUTPUT_INVALID", false);
+  if (!Array.isArray(output.instrumentViews) || !["ZC", "ZW"].every((instrument) => output.instrumentViews.some((item) => item.instrument === instrument))) throw coded("US_GRAINS_CONTEXT_INSTRUMENT_VIEWS_REQUIRED", false);
+}
+
+async function readJsonStdin() { const chunks = []; for await (const chunk of process.stdin) chunks.push(chunk); const raw = Buffer.concat(chunks).toString("utf8").trim(); if (!raw) throw coded("US_GRAINS_CONTEXT_RUNNER_INPUT_REQUIRED", false); return JSON.parse(raw); }
+function failure(error) { return { ok: false, status: "FAILED", error_code: error?.code || "US_GRAINS_CONTEXT_RUNNER_FAILED", error_message: String(error?.message || error).slice(0, 2000), retryable: error?.retryable === true }; }
+function coded(code, retryable = false) { return Object.assign(new Error(code), { code, retryable }); }
+
+const CONDITION_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    code: { type: "string" }, state: { type: "string" }, detail: { type: "string" },
+    source: { type: "string" }, asOf: { type: ["string", "null"] },
+  },
+  required: ["code", "state", "detail", "source", "asOf"],
+};
+
+const CATALYST_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    catalystId: { type: "string" }, title: { type: "string" }, eventKind: { type: "string" },
+    importance: { type: "string" }, eventTimestamp: { type: ["string", "null"] },
+    source: { type: "string" }, status: { type: "string" }, reasonCodes: { type: "array", items: { type: "string" } },
+  },
+  required: ["catalystId", "title", "eventKind", "importance", "eventTimestamp", "source", "status", "reasonCodes"],
+};
+
+const INVALIDATION_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    conditionId: { type: "string" }, code: { type: "string" }, state: { type: "string" },
+    instrument: { type: ["string", "null"] }, threshold: { type: ["number", "null"] },
+    operator: { type: ["string", "null"] }, reasonCodes: { type: "array", items: { type: "string" } },
+  },
+  required: ["conditionId", "code", "state", "instrument", "threshold", "operator", "reasonCodes"],
+};
+
+const ZONE_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    zoneId: { type: "string" }, instrument: { type: "string", enum: ["ZC", "ZW"] },
+    minPrice: { type: ["number", "null"] }, maxPrice: { type: ["number", "null"] },
+    direction: { type: ["string", "null"] }, priority: { type: ["string", "null"] },
+    preferredFamilies: { type: "array", items: { type: "string" } },
+    requiredConditions: { type: "array", items: CONDITION_SCHEMA },
+    forbiddenConditions: { type: "array", items: CONDITION_SCHEMA },
+    validFrom: { type: ["string", "null"] }, validUntil: { type: ["string", "null"] },
+    confidence: { type: "number", minimum: 0, maximum: 1 }, reasonCodes: { type: "array", items: { type: "string" } },
+  },
+  required: ["zoneId", "instrument", "minPrice", "maxPrice", "direction", "priority", "preferredFamilies", "requiredConditions", "forbiddenConditions", "validFrom", "validUntil", "confidence", "reasonCodes"],
+};
+
+const INSTRUMENT_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    instrument: { type: "string", enum: ["ZC", "ZW"] }, bias: { type: "string" }, confidence: { type: "number", minimum: 0, maximum: 1 },
+    allowedSides: { type: "array", items: { type: "string", enum: ["LONG", "SHORT"] } },
+    preferredFamilies: { type: "array", items: { type: "string" } }, discouragedFamilies: { type: "array", items: { type: "string" } },
+    ownReturn: { type: ["number", "null"] }, peerReturn: { type: ["number", "null"] }, regime: { type: ["string", "null"] }, volatilityRegime: { type: ["string", "null"] },
+    zones: { type: "array", items: ZONE_SCHEMA }, reasonCodes: { type: "array", items: { type: "string" } },
+  },
+  required: ["instrument", "bias", "confidence", "allowedSides", "preferredFamilies", "discouragedFamilies", "ownReturn", "peerReturn", "regime", "volatilityRegime", "zones", "reasonCodes"],
+};
+
+const OUTPUT_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    schemaVersion: { type: "string", const: "us_grains_market_context_analysis_v1" },
+    marketRegime: { type: "string" }, volatilityRegime: { type: "string" }, globalBias: { type: "string" },
+    instrumentViews: { type: "array", minItems: 2, maxItems: 2, items: INSTRUMENT_SCHEMA },
+    preferredStrategyFamilies: { type: "array", items: { type: "string" } }, discouragedStrategyFamilies: { type: "array", items: { type: "string" } },
+    opportunityZones: { type: "array", items: ZONE_SCHEMA }, noTradeZones: { type: "array", items: ZONE_SCHEMA },
+    invalidationConditions: { type: "array", items: INVALIDATION_SCHEMA }, riskMultiplier: { type: "number", minimum: 0, maximum: 1 },
+    headline: { type: "string" }, operatorSummary: { type: "string" }, marketInterpretation: { type: "string" }, deskIntent: { type: "string" }, whyNoTrade: { type: "string" },
+    whatDeskWants: { type: "array", items: { type: "string" } }, whatDeskAvoids: { type: "array", items: { type: "string" } },
+    currentCatalysts: { type: "array", items: CATALYST_SCHEMA }, nextExpectedEvents: { type: "array", items: CATALYST_SCHEMA }, reasonCodes: { type: "array", items: { type: "string" } },
+  },
+  required: ["schemaVersion", "marketRegime", "volatilityRegime", "globalBias", "instrumentViews", "preferredStrategyFamilies", "discouragedStrategyFamilies", "opportunityZones", "noTradeZones", "invalidationConditions", "riskMultiplier", "headline", "operatorSummary", "marketInterpretation", "deskIntent", "whyNoTrade", "whatDeskWants", "whatDeskAvoids", "currentCatalysts", "nextExpectedEvents", "reasonCodes"],
+};

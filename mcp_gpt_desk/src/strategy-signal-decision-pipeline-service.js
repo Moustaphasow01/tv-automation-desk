@@ -6,11 +6,13 @@ import { createPortfolioOrderIntentExecutionRepository } from "./portfolio-order
 import { PortfolioRiskRuntimeService } from "./portfolio-risk-runtime-service.js";
 import { createPortfolioRiskRuntimeRepository } from "./portfolio-risk-runtime-repository.js";
 import { createStrategySignalBusRepository } from "./strategy-signal-bus-repository.js";
+import { MarketContextPrefilterService } from "./market-context-prefilter-service.js";
 
 export class StrategySignalDecisionPipelineService {
-  constructor({ signalBusRepository, contextGate, riskRuntime, execution, providerCounts = null, clock } = {}) {
+  constructor({ signalBusRepository, contextPrefilter = null, contextGate, riskRuntime, execution, providerCounts = null, clock } = {}) {
     if (!signalBusRepository) throw serviceError("STRATEGY_SIGNAL_DECISION_PIPELINE_SIGNAL_BUS_REQUIRED");
     this.signalBusRepository = signalBusRepository;
+    this.contextPrefilter = contextPrefilter;
     this.contextGate = contextGate;
     this.riskRuntime = riskRuntime;
     this.execution = execution;
@@ -24,14 +26,36 @@ export class StrategySignalDecisionPipelineService {
     const pending = await this.signalBusRepository.pollPending({ limit: input.limit || 100, now_utc: nowUtc });
     const scoped = pending.filter((item) => signalInScope(item, input));
     if (!scoped.length) return idleResult({ nowUtc, pending, before });
-    const contextDecisions = await this.#recordContextDecisions(scoped, nowUtc);
+    const prefilter = this.contextPrefilter
+      ? await this.contextPrefilter.evaluate(scoped, nowUtc)
+      : scoped.map((signal) => ({ signal, decision: "ADMISSIBLE", admissible: true, reasonCodes: ["CONTEXT_PREFILTER_NOT_CONFIGURED"] }));
+    const admissibleItems = prefilter.filter((item) => item.decision === "ADMISSIBLE");
+    const admissible = admissibleItems.map((item) => item.signal);
+    const contextDecisions = await this.#recordContextDecisions(admissibleItems, nowUtc);
+    if (!admissible.length) {
+      const consumed = await this.#consume(scoped, input, nowUtc);
+      return {
+        status: "CONTEXT_FILTERED",
+        as_of_utc: nowUtc,
+        pending_seen: pending.length,
+        scoped_signal_count: scoped.length,
+        context_prefilter: prefilterSummary(prefilter),
+        context_decision_count: 0,
+        risk_decision_count: 0,
+        target_position_count: 0,
+        order_intent_count: 0,
+        human_gate_count: 0,
+        consumed_signal_outbox_ids: consumed,
+        provider_counts: { before, after: before, unchanged: true },
+      };
+    }
     const pipeline = await this.riskRuntime.runPipeline({
       as_of_utc: nowUtc,
       account_id: accountId(input),
       portfolio_scope: input.portfolio_scope || input.scope || accountId(input),
       idempotency_key: idempotencyKey(input, scoped, nowUtc),
       correlation_id: scoped[0]?.correlation_id || `strategy-signal-decision:${nowUtc}`,
-      signals: scoped,
+      signals: admissible,
       risk_budget: riskBudget(input),
       execution_policy: executionPolicy(input),
     });
@@ -50,6 +74,7 @@ export class StrategySignalDecisionPipelineService {
       as_of_utc: nowUtc,
       pending_seen: pending.length,
       scoped_signal_count: scoped.length,
+      context_prefilter: prefilterSummary(prefilter),
       context_decision_count: contextDecisions.length,
       portfolio_arbitration_run_id: pipeline.persistence?.portfolio_arbitration_run_id || null,
       risk_decision_count: pipeline.risk?.allocation_evaluations?.length || 0,
@@ -64,10 +89,11 @@ export class StrategySignalDecisionPipelineService {
     };
   }
 
-  async #recordContextDecisions(signals, nowUtc) {
+  async #recordContextDecisions(items, nowUtc) {
     if (!this.contextGate) return [];
     const decisions = [];
-    for (const signal of signals) {
+    for (const item of items) {
+      const signal = item.signal;
       const result = await this.contextGate.evaluateAndPersist({
         idempotency_key: `ai-context:shadow-live:${signal.signal_id}`,
         signal_id: signal.signal_id,
@@ -77,18 +103,18 @@ export class StrategySignalDecisionPipelineService {
         policy: {
           enabled: true,
           mode: "SHADOW",
-          policy_version: "shadow-live-ai-context-advisory-v1",
-          model_policy_version: "deterministic-runtime-context-placeholder-v1",
+          policy_version: "us-grains-market-context-prefilter-v1",
+          model_policy_version: item.marketContextSnapshotId || "deterministic-context-prefilter-v1",
         },
         advisory: {
           recommendation: "TAKE",
           confidence: 0.5,
           risk_multiplier: 1,
-          reason_codes: ["AI_CONTEXT_GATE_SHADOW_RECORDED", "NO_BINDING_CONTEXT_FILTER_ACTIVE"],
+          reason_codes: [...new Set(["AI_CONTEXT_GATE_SHADOW_RECORDED", ...array(item.reasonCodes)])],
           anomalies: [],
-          rationale: "SHADOW live context advisory records lineage only. Portfolio and Global Risk remain the binding gates.",
-          model_ref: "policy://shadow-live-ai-context-advisory-v1",
-          evidence_refs: [{ ref: `strategy-signal://${signal.signal_id}` }],
+          rationale: "The deterministic Market Context prefilter admitted this signal. Portfolio and Global Risk remain independent binding gates.",
+          model_ref: item.marketContextSnapshotId ? `market-context-snapshot://${item.marketContextSnapshotId}` : "policy://deterministic-context-prefilter-v1",
+          evidence_refs: [{ ref: `strategy-signal://${signal.signal_id}` }, ...(item.marketContextSnapshotId ? [{ ref: `market-context-snapshot://${item.marketContextSnapshotId}` }] : [])],
           issued_at_utc: nowUtc,
         },
         as_of_utc: nowUtc,
@@ -131,6 +157,11 @@ export function createStrategySignalDecisionPipelineService({ store } = {}) {
   const signalBusRepository = createStrategySignalBusRepository(store.persistence);
   return new StrategySignalDecisionPipelineService({
     signalBusRepository,
+    contextPrefilter: new MarketContextPrefilterService({
+      repository: store.marketContext,
+      pool: store.persistence?.pool,
+      eventOutbox: store.domainEvents,
+    }),
     contextGate: new AiContextGateService({ repository: createAiContextGateRepository(store.persistence) }),
     riskRuntime: new PortfolioRiskRuntimeService({
       repository: createPortfolioRiskRuntimeRepository(store.persistence),
@@ -224,6 +255,16 @@ function idleResult({ nowUtc, pending, before }) {
 
 function readyOrderIntents(pipeline) {
   return (pipeline.intents?.order_intents || []).filter((intent) => String(intent.status || "").toUpperCase() === "READY");
+}
+
+function prefilterSummary(items) {
+  return {
+    evaluated: items.length,
+    admissible: items.filter((item) => item.decision === "ADMISSIBLE").length,
+    wait: items.filter((item) => item.decision === "WAIT").length,
+    rejected: items.filter((item) => item.decision === "REJECT").length,
+    decisions: items.map((item) => ({ signal_id: item.signal.signal_id, decision: item.decision, reason_codes: item.reasonCodes })),
+  };
 }
 
 function pipelineStatus(pipeline, humanGates = []) {

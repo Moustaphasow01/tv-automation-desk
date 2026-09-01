@@ -140,6 +140,7 @@ export class CodexExecAdapter {
     sessionId = null,
     reasoningEffort = null,
     timeoutMs = null,
+    outputNormalizer = normalizeCodexAnalysisOutput,
   } = {}) {
     if (!prompt) throw codexError("CODEX_PROMPT_REQUIRED", "Codex analysis prompt is required.");
     if (onContextEvidence !== null && typeof onContextEvidence !== "function") {
@@ -305,7 +306,7 @@ export class CodexExecAdapter {
         );
       }
       return {
-        output: normalizeCodexAnalysisOutput(parsed),
+        output: typeof outputNormalizer === "function" ? outputNormalizer(parsed) : parsed,
         telemetry: {
           ...codexTelemetry,
           thread_id: codexTelemetry.thread_id || (sessionId ? String(sessionId) : null),

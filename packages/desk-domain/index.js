@@ -218,6 +218,7 @@ export {
 } from "./src/strategy-instance-scheduler-v1.js";
 export { STRATEGY_SIGNAL_DIRECTIONS_V1, STRATEGY_SIGNAL_EXECUTION_MODES_V1, STRATEGY_SIGNAL_SCHEMA_VERSION_V1, normalizeStrategySignalV1, strategySignalEnvelopeV1 } from "./src/strategy-signal-bus-v1.js";
 export * from "./src/trade-plan-economics-v1.js";
+export * from "./src/market-context-v1.js";
 export {
   AI_CONTEXT_ADVISORY_EFFECTS_V1,
   AI_CONTEXT_ADVISORY_ISOLATION_PROOF_SCHEMA_VERSION_V1,

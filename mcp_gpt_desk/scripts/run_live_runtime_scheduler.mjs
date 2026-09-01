@@ -4,6 +4,7 @@ import { createDeskStoreFromEnv } from "../src/store.js";
 import { createStrategySignalDecisionPipelineService } from "../src/strategy-signal-decision-pipeline-service.js";
 import { floorParisCheckpoint, liveRunId } from "../src/live-scope.js";
 import { parisMarketSessionState } from "../src/market-session-state.js";
+import { MarketContextTaskScheduler } from "../src/market-context-task-scheduler.js";
 import {
   DETERMINISTIC_ENGINE_CADENCE_MINUTES,
   DETERMINISTIC_ENGINE_CADENCE_SECONDS,
@@ -23,6 +24,9 @@ const newsEnabled = process.env.DESK_NEWS_ENABLED !== "false";
 const store = createDeskStoreFromEnv();
 const strategySignalDecisionPipeline = store.persistence?.pool
   ? createStrategySignalDecisionPipelineService({ store })
+  : null;
+const marketContextTaskScheduler = store.persistence?.pool
+  ? new MarketContextTaskScheduler({ store })
   : null;
 const instanceId = String(process.env.DESK_SERVICE_INSTANCE_ID || `live-runtime-${process.pid}`);
 const releaseVersion = String(process.env.DESK_RELEASE_VERSION || "unversioned");
@@ -75,6 +79,7 @@ try {
         live_prewarm: outcome.live_prewarm || null,
         macro_calendar: outcome.macro_calendar || null,
         news: outcome.news || null,
+        market_context: outcome.market_context || null,
         strategy_runtime: outcome.strategy_runtime || null,
         strategy_signal_decision_pipeline: outcome.strategy_signal_decision_pipeline || null,
         optional_dependency_warnings: [
@@ -104,6 +109,9 @@ async function runDueWork(now) {
     refreshMacroCalendarIfDue(now, marketSession.trading_date),
     refreshNewsIfDue(now),
   ]);
+  const marketContext = marketContextTaskScheduler
+    ? await marketContextTaskScheduler.runCycle({ now_utc: now.toISOString(), trigger: "CADENCE" })
+    : { status: "UNAVAILABLE" };
   if (marketSession.market_closed) {
     return {
       data_state: "market_closed",
@@ -111,6 +119,7 @@ async function runDueWork(now) {
       trading_date: marketSession.trading_date,
       macro_calendar: macroCalendar,
       news,
+      market_context: marketContext,
       strategy_runtime: { status: "MARKET_CLOSED", outcomes: [] },
     };
   }
@@ -266,6 +275,7 @@ async function runDueWork(now) {
     live_prewarm: lastPrewarmOutcome,
     macro_calendar: macroCalendar,
     news,
+    market_context: marketContext,
     strategy_runtime: strategyRuntime,
     strategy_signal_decision_pipeline: strategySignalDecision,
   };

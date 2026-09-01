@@ -9,9 +9,12 @@
   <env name="DESK_AGENT_SUPERVISOR_HOST_PLATFORM" value="windows-service"/>
   <env name="DESK_AGENT_SUPERVISOR_ID" value="agent-runtime-live-01"/>
   <env name="DESK_AGENT_WORKER_POOL" value="live"/>
-  <env name="DESK_AGENT_POOL_POLICY_JSON" value=""/>
+  <env name="DESK_AGENT_POOL_POLICY_JSON" value="{&quot;pools&quot;:{&quot;live&quot;:{&quot;max_concurrent_workers&quot;:1,&quot;task_type_patterns&quot;:[&quot;LIVE_US_GRAINS_MARKET_CONTEXT_*&quot;],&quot;responsibilities&quot;:[&quot;MARKET_CONTEXT_ANALYSIS&quot;]}}}"/>
   <env name="DESK_AGENT_SUPERVISOR_LANE" value="live"/>
   <env name="DESK_AGENT_SUPERVISOR_MODE" value="__AGENT_SUPERVISOR_MODE__"/>
+  <env name="DESK_AGENT_SUPERVISOR_RUNNER_COMMAND" value="__NODE_EXE__"/>
+  <env name="DESK_AGENT_SUPERVISOR_RUNNER_ARGS" value="__INSTALL_ROOT__\current\app\mcp_gpt_desk\scripts\run_us_grains_market_context_task_runner.mjs"/>
+  <env name="DESK_AGENT_SUPERVISOR_RUNNER_TIMEOUT_MS" value="780000"/>
   <env name="DESK_AGENT_SUPERVISOR_POLL_MS" value="15000"/>
   <env name="DESK_AGENT_SUPERVISOR_LEASE_SECONDS" value="900"/>
   <env name="DESK_AGENT_CONVERSATION_PROVIDER" value="codex"/>

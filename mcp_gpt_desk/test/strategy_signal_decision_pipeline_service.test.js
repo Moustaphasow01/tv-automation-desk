@@ -137,6 +137,60 @@ test("strategy signal decision pipeline preserves the complete grain trade plan 
   assert.equal(orderIntent.broker_submission_allowed, false);
 });
 
+test("strategy signal decision pipeline fails closed before Risk when grain context is unavailable", async () => {
+  const signalBusRepository = new InMemoryStrategySignalBusRepository();
+  await signalBusRepository.publish(signalOutbox({
+    signal_id: "signal-zc-context-wait",
+    dedupe_key: "signal-zc-context-wait",
+    instrument: "ZC",
+  }));
+  let riskCalls = 0;
+  let humanGateCalls = 0;
+  const service = new StrategySignalDecisionPipelineService({
+    signalBusRepository,
+    contextPrefilter: {
+      async evaluate(signals) {
+        return signals.map((signal) => ({
+          signal,
+          decision: "WAIT",
+          admissible: false,
+          reasonCodes: ["MARKET_CONTEXT_MISSING"],
+        }));
+      },
+    },
+    contextGate: new AiContextGateService({ repository: new InMemoryAiContextGateRepository() }),
+    riskRuntime: { async runPipeline() { riskCalls += 1; return {}; } },
+    execution: {
+      async ensureHumanGate() { humanGateCalls += 1; return {}; },
+      async materializeReadyCommands() { throw new Error("provider path must remain unreachable"); },
+    },
+    providerCounts: async () => ({ commands: 0, events: 0 }),
+    clock: clock(),
+  });
+
+  const result = await service.runOnce({ now_utc: NOW, account_id: "shadow_live" });
+
+  assert.equal(result.status, "CONTEXT_FILTERED");
+  assert.equal(result.context_prefilter.evaluated, 1);
+  assert.equal(result.context_prefilter.admissible, 0);
+  assert.equal(result.context_prefilter.wait, 1);
+  assert.equal(result.context_prefilter.rejected, 0);
+  assert.deepEqual(result.context_prefilter.decisions[0], {
+    signal_id: "signal-zc-context-wait",
+    decision: "WAIT",
+    reason_codes: ["MARKET_CONTEXT_MISSING"],
+  });
+  assert.equal(riskCalls, 0);
+  assert.equal(humanGateCalls, 0);
+  assert.equal(result.order_intent_count, 0);
+  assert.equal(result.human_gate_count, 0);
+  assert.deepEqual(result.provider_counts, {
+    before: { commands: 0, events: 0 },
+    after: { commands: 0, events: 0 },
+    unchanged: true,
+  });
+});
+
 function signalCore(overrides = {}) {
   const signal = {
     signal_id: "signal-001",

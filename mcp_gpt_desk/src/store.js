@@ -55,6 +55,7 @@ import { attachResearchLabStoreMethods } from "./research-lab-store-extension.js
 import { attachAgentRuntimeStoreMethods } from "./agent-runtime-store-extension.js";
 import { loadFrontMarketSeries } from "./front-market-series-service.js";
 import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
+import { MarketContextRepository } from "./market-context-repository.js";
 import { StrategyEvaluationRuntimeRepository } from "./strategy-evaluation-runtime-repository.js";
 import { CanonicalStrategyEvaluationScheduler } from "./canonical-strategy-evaluation-scheduler.js";
 import { loadStrategyV2Overview } from "./strategy-v2-overview-projection.js";
@@ -371,6 +372,9 @@ export class PersistentDeskStore {
     this.dataFoundation = new DataFoundationService({ repository: createDataFoundationRepository(persistence), clock });
     this.simulationRuns = createSimulationRunRegistryService({ persistence, clock });
     this.domainEvents = persistence.pool ? new DomainEventOutboxRepository(persistence) : null;
+    this.marketContext = persistence.pool
+      ? new MarketContextRepository(persistence, { eventOutbox: this.domainEvents, clock: this.clock })
+      : null;
     this.strategyEvaluations = persistence.pool
       ? new StrategyEvaluationRuntimeRepository(persistence, { eventOutbox: this.domainEvents })
       : null;
@@ -485,6 +489,10 @@ export class PersistentDeskStore {
   async listFrontRealtimeEvents(args = {}) {
     if (!this.domainEvents) return { events: [], resyncRequired: false };
     return this.domainEvents.listAfter(args);
+  }
+  async getCurrentMarketContext(args = {}) {
+    if (!this.marketContext) return { universe: args.universe || "US_GRAINS_CBOT", snapshot: null, brief: null, sourceStates: [], asOf: this.clock.now().utc };
+    return this.marketContext.current(args.universe || "US_GRAINS_CBOT", this.clock.now().utc);
   }
   async compareOperationsReplays({ ids }) { return this.operations.compareReplays(ids); }
   async listOperationsIncidents(args = {}) { return this.operations.listIncidents(args); }
