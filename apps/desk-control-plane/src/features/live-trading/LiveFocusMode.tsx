@@ -173,7 +173,7 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
   const context = brief.operatorSummary;
   const preferred = brief.whatDeskWants?.map((item) => operatorCopy(item)) ?? [];
   const vigilance = [...(brief.whatDeskAvoids ?? []), ...focus.whyNoTrade.topReasons].map((reason) => operatorReason(reason));
-  const contextStatus = presentBackendStatus(brief.status);
+  const contextStatus = presentMarketContextStatus(brief.status);
   return <div className="live-focus__brief-grid" data-status={brief.status}>
     <article className="live-focus__brief-headline"><small>{brief.headline}</small><p>{context}</p><span data-tone={contextStatus.tone}>{contextStatus.label}</span></article>
     <article><small>État du marché</small><p>{operatorCode(focus.marketContext.marketRegime, "Régime non publié")} · {operatorCode(focus.marketContext.volatilityRegime, "Volatilité non publiée")} · {operatorCode(focus.marketContext.globalBias, "Biais non publié")}</p></article>
@@ -183,6 +183,17 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
     <button type="button" className="live-focus__brief-open" onClick={onOpen}><FaInfoCircle aria-hidden="true" />Voir le brief complet</button>
     <small className="live-focus__brief-source">Brief {operatorCode(brief.status)} · consultatif · données arrêtées à {displayTime(focus.technical.sourceDataCutoff || focus.asOf)} · valide jusqu’à {displayTime(typeof focus.marketContext.validUntil === "string" ? focus.marketContext.validUntil : null)} · analyste {focus.contextWorker.successCount} succès / {focus.contextWorker.failureCount} échec(s)</small>
   </div>;
+}
+
+function presentMarketContextStatus(rawStatus: string) {
+  const status = rawStatus.trim().toUpperCase();
+  if (status === "AVAILABLE") return { label: "Disponible", tone: "success" as const };
+  if (status === "PARTIAL") return { label: "Partiel", tone: "warning" as const };
+  if (status === "STALE") return { label: "Périmé", tone: "warning" as const };
+  if (status === "INVALIDATED") return { label: "Invalidé", tone: "warning" as const };
+  if (status === "DISABLED_BY_POLICY") return { label: "Désactivé par politique", tone: "neutral" as const };
+  if (status === "UNAVAILABLE") return { label: "Indisponible", tone: "danger" as const };
+  return presentBackendStatus(rawStatus);
 }
 
 function FocusBriefDrawer({ focus, onClose }: { focus: LiveFocusView; onClose(): void }) {
