@@ -53,6 +53,7 @@ export function evaluateAgriEventCoverageV1({ sourceState, cutoff, familyRequire
 export function normalizeMarketContextSnapshotV1(input = {}) {
   const sourceDataCutoff = requiredIso(input.sourceDataCutoff || input.source_data_cutoff, "MARKET_CONTEXT_CUTOFF_REQUIRED");
   const sourceStates = array(input.sourceStates || input.source_states).map((source) => normalizeMarketSourceStateV1(source, { cutoff: sourceDataCutoff }));
+  const status = canonicalContextStatus(input.status, sourceStates);
   return {
     marketContextSnapshotId: required(input.marketContextSnapshotId || input.market_context_snapshot_id, "MARKET_CONTEXT_ID_REQUIRED"),
     schemaVersion: MARKET_CONTEXT_SCHEMA_VERSION_V1,
@@ -82,11 +83,13 @@ export function normalizeMarketContextSnapshotV1(input = {}) {
     promptVersion: nullable(input.promptVersion || input.prompt_version),
     supersedesSnapshotId: nullable(input.supersedesSnapshotId || input.supersedes_snapshot_id),
     invalidationReason: nullable(input.invalidationReason || input.invalidation_reason),
-    status: member(input.status, MARKET_CONTEXT_STATUSES_V1, "UNAVAILABLE"),
+    status,
   };
 }
 
 export function normalizeMarketDeskBriefV1(input = {}) {
+  const sourceDataCutoff = requiredIso(input.sourceDataCutoff || input.source_data_cutoff, "MARKET_DESK_BRIEF_CUTOFF_REQUIRED");
+  const sourceStates = array(input.sourceStates || input.source_states).map((source) => normalizeMarketSourceStateV1(source, { cutoff: sourceDataCutoff }));
   return {
     marketDeskBriefId: required(input.marketDeskBriefId || input.market_desk_brief_id, "MARKET_DESK_BRIEF_ID_REQUIRED"),
     marketContextSnapshotId: required(input.marketContextSnapshotId || input.market_context_snapshot_id, "MARKET_DESK_BRIEF_CONTEXT_REQUIRED"),
@@ -95,8 +98,8 @@ export function normalizeMarketDeskBriefV1(input = {}) {
     createdAt: requiredIso(input.createdAt || input.created_at, "MARKET_DESK_BRIEF_CREATED_AT_REQUIRED"),
     validFrom: requiredIso(input.validFrom || input.valid_from, "MARKET_DESK_BRIEF_VALID_FROM_REQUIRED"),
     validUntil: requiredIso(input.validUntil || input.valid_until, "MARKET_DESK_BRIEF_VALID_UNTIL_REQUIRED"),
-    sourceDataCutoff: requiredIso(input.sourceDataCutoff || input.source_data_cutoff, "MARKET_DESK_BRIEF_CUTOFF_REQUIRED"),
-    status: member(input.status, MARKET_CONTEXT_STATUSES_V1, "UNAVAILABLE"),
+    sourceDataCutoff,
+    status: canonicalContextStatus(input.status, sourceStates),
     headline: required(input.headline, "MARKET_DESK_BRIEF_HEADLINE_REQUIRED"),
     operatorSummary: required(input.operatorSummary || input.operator_summary, "MARKET_DESK_BRIEF_SUMMARY_REQUIRED"),
     marketInterpretation: nullable(input.marketInterpretation || input.market_interpretation),
@@ -111,7 +114,7 @@ export function normalizeMarketDeskBriefV1(input = {}) {
     nextExpectedEvents: array(input.nextExpectedEvents || input.next_expected_events),
     instrumentViews: array(input.instrumentViews || input.instrument_views).map(normalizeInstrumentView),
     riskPosture: object(input.riskPosture || input.risk_posture),
-    sourceStates: array(input.sourceStates || input.source_states).map((source) => normalizeMarketSourceStateV1(source, { cutoff: input.sourceDataCutoff || input.source_data_cutoff })),
+    sourceStates,
     reasonCodes: strings(input.reasonCodes || input.reason_codes),
     provenance: array(input.provenance),
     workerId: nullable(input.workerId || input.worker_id),
@@ -121,6 +124,15 @@ export function normalizeMarketDeskBriefV1(input = {}) {
     supersedesBriefId: nullable(input.supersedesBriefId || input.supersedes_brief_id),
     invalidationReason: nullable(input.invalidationReason || input.invalidation_reason),
   };
+}
+
+function canonicalContextStatus(requestedStatus, sourceStates) {
+  const requested = member(requestedStatus, MARKET_CONTEXT_STATUSES_V1, "UNAVAILABLE");
+  if (requested !== "AVAILABLE") return requested;
+  const required = sourceStates.filter((source) => source.requiredFor.length > 0);
+  if (required.some((source) => source.status === "UNAVAILABLE" || source.status === "UNKNOWN_COVERAGE")) return "UNAVAILABLE";
+  if (required.some((source) => source.status !== "AVAILABLE" || !source.covered)) return "PARTIAL";
+  return "AVAILABLE";
 }
 
 export function evaluateMarketContextPrefilterV1({ signal = {}, snapshot = null, at = null, familyRequiresAgriEvents = true } = {}) {

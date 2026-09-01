@@ -10,6 +10,13 @@ export type StatusPresentation = {
 };
 
 const REGISTRY: Readonly<Record<string, Omit<StatusPresentation, "code" | "known">>> = {
+  AVAILABLE: { label: "Disponible", helper: "La donnée canonique est disponible et exploitable.", tone: "success", severity: "SUCCESS" },
+  STALE: { label: "Périmé", helper: "La dernière donnée connue a dépassé sa fenêtre de fraîcheur.", tone: "warning", severity: "WARNING" },
+  UNAVAILABLE: { label: "Indisponible", helper: "L'autorité backend ne publie aucune donnée exploitable.", tone: "danger", severity: "DANGER" },
+  DISABLED_BY_POLICY: { label: "Désactivé par politique", helper: "La fonction est volontairement désactivée par le backend.", tone: "neutral", severity: "INFO" },
+  OPTIONAL_UNAVAILABLE: { label: "Optionnel indisponible", helper: "Cette source n'est pas requise pour les familles actives.", tone: "neutral", severity: "INFO" },
+  OBSERVED: { label: "Opportunité observée", helper: "Le signal reste diagnostique et n'est pas une Trade Card.", tone: "info", severity: "INFO" },
+  EXPLAINED: { label: "Expliqué", helper: "Le backend a publié les raisons de l'absence de trade qualifié.", tone: "info", severity: "INFO" },
   AWAITING_MANUAL_CONFIRMATION: { label: "Confirmation requise", helper: "Aucune transmission provider n'est encore autorisée.", tone: "warning", severity: "WARNING" },
   INTENT: { label: "Intention", helper: "L'ordre n'a pas encore été transmis à un provider.", tone: "neutral", severity: "INFO" },
   CANCELLED: { label: "Annulé", helper: "L'ordre a été annulé avant exécution complète.", tone: "neutral", severity: "INFO" },

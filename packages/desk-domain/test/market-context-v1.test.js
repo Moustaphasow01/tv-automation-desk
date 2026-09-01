@@ -4,6 +4,7 @@ import {
   evaluateAgriEventCoverageV1,
   evaluateMarketContextPrefilterV1,
   normalizeMarketContextSnapshotV1,
+  normalizeMarketDeskBriefV1,
   validateContextAdjustmentProposalV1,
 } from "../index.js";
 
@@ -20,6 +21,32 @@ const snapshot = normalizeMarketContextSnapshotV1({
 test("agri event empty can only mean no event when coverage is proven", () => {
   assert.equal(evaluateAgriEventCoverageV1({ sourceState: source, cutoff }).decision, "ADMISSIBLE");
   assert.equal(evaluateAgriEventCoverageV1({ sourceState: { ...source, status: "UNKNOWN_COVERAGE" }, cutoff }).decision, "WAIT");
+});
+
+test("required stale sources cannot publish an AVAILABLE context or brief", () => {
+  const stale = {
+    ...source,
+    sourceId: "ZC_5",
+    sourceType: "OHLCV",
+    status: "STALE",
+    requiredFor: ["MARKET_CONTEXT_SNAPSHOT"],
+  };
+  const partialSnapshot = normalizeMarketContextSnapshotV1({ ...snapshot, sourceStates: [source, stale] });
+  assert.equal(partialSnapshot.status, "PARTIAL");
+  const partialBrief = normalizeMarketDeskBriefV1({
+    marketDeskBriefId: "brief-partial",
+    marketContextSnapshotId: partialSnapshot.marketContextSnapshotId,
+    universe: "US_GRAINS_CBOT",
+    createdAt: cutoff,
+    validFrom: cutoff,
+    validUntil: "2026-08-26T16:00:00.000Z",
+    sourceDataCutoff: cutoff,
+    status: "AVAILABLE",
+    headline: "Contexte partiel",
+    operatorSummary: "Une source requise est périmée.",
+    sourceStates: [source, stale],
+  });
+  assert.equal(partialBrief.status, "PARTIAL");
 });
 
 test("context prefilter is deterministic and fail closed", () => {
