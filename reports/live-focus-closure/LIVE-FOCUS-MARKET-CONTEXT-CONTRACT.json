@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "desk://contracts/market-context-snapshot-v1",
+  "title": "MarketContextSnapshot V1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["marketContextSnapshotId", "schemaVersion", "universe", "createdAt", "validFrom", "validUntil", "sourceDataCutoff", "marketState", "marketSession", "marketRegime", "volatilityRegime", "globalBias", "instrumentViews", "riskMultiplier", "sourceStates", "reasonCodes", "provenance", "status"],
+  "properties": {
+    "marketContextSnapshotId": { "type": "string", "minLength": 1 },
+    "schemaVersion": { "const": "market_context_snapshot_v1" },
+    "universe": { "const": "US_GRAINS_CBOT" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "validFrom": { "type": "string", "format": "date-time" },
+    "validUntil": { "type": "string", "format": "date-time" },
+    "sourceDataCutoff": { "type": "string", "format": "date-time" },
+    "marketState": { "type": "string" },
+    "marketSession": { "type": "string" },
+    "marketRegime": { "type": "string" },
+    "volatilityRegime": { "type": "string" },
+    "globalBias": { "type": "string" },
+    "instrumentViews": { "type": "array", "items": { "$ref": "#/$defs/instrumentView" } },
+    "preferredStrategyFamilies": { "type": "array", "items": { "type": "string" } },
+    "discouragedStrategyFamilies": { "type": "array", "items": { "type": "string" } },
+    "opportunityZones": { "type": "array", "items": { "$ref": "#/$defs/zone" } },
+    "noTradeZones": { "type": "array", "items": { "$ref": "#/$defs/zone" } },
+    "invalidationConditions": { "type": "array", "items": { "type": "object" } },
+    "riskMultiplier": { "type": "number", "minimum": 0, "maximum": 1 },
+    "sourceStates": { "type": "array", "items": { "$ref": "#/$defs/sourceState" } },
+    "reasonCodes": { "type": "array", "items": { "type": "string" } },
+    "provenance": { "type": "array", "items": { "type": "object" } },
+    "workerId": { "type": ["string", "null"] },
+    "taskId": { "type": ["string", "null"] },
+    "modelPolicyVersion": { "type": ["string", "null"] },
+    "promptVersion": { "type": ["string", "null"] },
+    "supersedesSnapshotId": { "type": ["string", "null"] },
+    "invalidationReason": { "type": ["string", "null"] },
+    "status": { "enum": ["AVAILABLE", "STALE", "PARTIAL", "UNAVAILABLE", "INVALIDATED", "DISABLED_BY_POLICY"] }
+  },
+  "$defs": {
+    "sourceState": {
+      "type": "object",
+      "required": ["sourceId", "sourceType", "status", "requiredFor", "coverageStart", "coverageEnd", "asOf", "dataCutoff", "covered", "reasonCodes"],
+      "properties": {
+        "sourceId": { "type": "string" },
+        "sourceType": { "type": "string" },
+        "status": { "enum": ["AVAILABLE", "STALE", "UNAVAILABLE", "UNKNOWN_COVERAGE", "OPTIONAL_UNAVAILABLE"] },
+        "requiredFor": { "type": "array", "items": { "type": "string" } },
+        "coverageStart": { "type": ["string", "null"] },
+        "coverageEnd": { "type": ["string", "null"] },
+        "asOf": { "type": ["string", "null"] },
+        "dataCutoff": { "type": ["string", "null"] },
+        "covered": { "type": "boolean" },
+        "reasonCodes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "zone": {
+      "type": "object",
+      "required": ["zoneId", "instrument", "minPrice", "maxPrice", "confidence", "reasonCodes"],
+      "properties": {
+        "zoneId": { "type": "string" },
+        "instrument": { "type": "string" },
+        "minPrice": { "type": ["number", "null"] },
+        "maxPrice": { "type": ["number", "null"] },
+        "direction": { "type": ["string", "null"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "reasonCodes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "instrumentView": {
+      "type": "object",
+      "required": ["instrument", "bias", "confidence", "allowedSides", "preferredFamilies", "discouragedFamilies", "zones", "reasonCodes"],
+      "properties": {
+        "instrument": { "enum": ["ZC", "ZW"] },
+        "bias": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "allowedSides": { "type": "array", "items": { "enum": ["LONG", "SHORT"] } },
+        "preferredFamilies": { "type": "array", "items": { "type": "string" } },
+        "discouragedFamilies": { "type": "array", "items": { "type": "string" } },
+        "zones": { "type": "array", "items": { "$ref": "#/$defs/zone" } },
+        "reasonCodes": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "x-authority": "Market Context Analyst may frame/filter only; Portfolio, Risk, Human Gate and Provider remain authoritative."
+}

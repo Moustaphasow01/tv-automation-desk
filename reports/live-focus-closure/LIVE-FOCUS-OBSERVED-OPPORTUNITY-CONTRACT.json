@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "desk://contracts/live-focus-observed-opportunity-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["opportunityId", "signalId", "instrument", "side", "strategyName", "status", "reasonCodes", "diagnosticOnly", "source", "availability"],
+  "properties": {
+    "opportunityId": { "type": "string" },
+    "signalId": { "type": "string" },
+    "instrument": { "type": "string" },
+    "side": { "type": "string" },
+    "strategyName": { "type": "string" },
+    "status": { "type": "string" },
+    "reasonCodes": { "type": "array", "items": { "type": "string" } },
+    "createdAt": { "type": ["string", "null"] },
+    "expiresAt": { "type": ["string", "null"] },
+    "diagnosticOnly": { "const": true },
+    "route": { "type": "string" },
+    "source": { "const": "strategy-signal" },
+    "asOf": { "type": ["string", "null"] },
+    "availability": { "type": "string" }
+  },
+  "x-authority": "An observed opportunity is never promoted locally to a Trade Card."
+}

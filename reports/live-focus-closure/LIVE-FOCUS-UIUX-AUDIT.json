@@ -1,0 +1,1137 @@
+{
+  "version": "1.0.0",
+  "summary": {
+    "scannedRoot": "/mnt/c/Users/CES/Desktop/TV_Automation_LIVE_FOCUS_VNEXT/apps/desk-control-plane/src/features/live-trading/live-focus.css",
+    "filesScanned": 1,
+    "findingCount": 125,
+    "errors": 0,
+    "warnings": 125
+  },
+  "findings": [
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 2,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "--focus-cyan: #41d7e5;"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 3,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "--focus-blue: #4d91ff;"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 4,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "--focus-amber: #f1b84b;"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 5,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "--focus-green: #4dd59c;"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 6,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "--focus-red: #ff6c79;"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 7,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "--focus-line: rgba(123, 172, 194, .2);"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 8,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "--focus-panel: rgba(8, 28, 38, .94);"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 11,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "color: #eaf6f8;"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 13,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "radial-gradient(circle at 72% 18%, rgba(41, 132, 151, .13), transparent 30%),"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 14,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "linear-gradient(145deg, #041018 0%, #071923 52%, #05131c 100%);"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 14,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "linear-gradient(145deg, #041018 0%, #071923 52%, #05131c 100%);"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 14,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": "linear-gradient(145deg, #041018 0%, #071923 52%, #05131c 100%);"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 18,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus::before { position: fixed; inset: 0; pointer-events: none; content: \"\"; opacity: .28; background-image: linear-gradient(rgba(70, 132, 151, .06) 1px, transparent 1px), linear-gradient(90deg, rgba(70, 132, 151, .05) 1px, transpare"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 18,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus::before { position: fixed; inset: 0; pointer-events: none; content: \"\"; opacity: .28; background-image: linear-gradient(rgba(70, 132, 151, .06) 1px, transparent 1px), linear-gradient(90deg, rgba(70, 132, 151, .05) 1px, transpare"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 22,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus--f { --focus-state: #8ba7b6; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 25,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__header { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(210px, 1fr) auto auto auto; min-height: 66px; gap: 14px; align-items: center; padding: 8px 18px; border-bottom: 1px solid var(--focus-line); "
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 29,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__identity small, .live-focus__header time small { color: #7f9dab; font-family: var(--lt-font-data, monospace); font-size: 10px; font-weight: 750; letter-spacing: .15em; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 32,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__policy span { padding: 5px 8px; border: 1px solid var(--focus-line); border-radius: 999px; color: #9cb5c1; background: rgba(13, 39, 50, .65); font-family: var(--lt-font-data, monospace); font-size: 10px; font-weight: 750; lette"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 32,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__policy span { padding: 5px 8px; border: 1px solid var(--focus-line); border-radius: 999px; color: #9cb5c1; background: rgba(13, 39, 50, .65); font-family: var(--lt-font-data, monospace); font-size: 10px; font-weight: 750; lette"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 37,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__countdown > span { display: block; height: 3px; overflow: hidden; border-radius: 999px; background: rgba(241, 184, 75, .14); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 40,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__countdown[data-urgency=\"expired\"] { color: #8ba7b6; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 41,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__return { display: inline-flex; min-height: 38px; gap: 8px; align-items: center; justify-content: center; padding: 0 12px; border: 1px solid var(--focus-line); border-radius: 7px; color: #bdd0d7; background: #0a202b; font-weight"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 41,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__return { display: inline-flex; min-height: 38px; gap: 8px; align-items: center; justify-content: center; padding: 0 12px; border: 1px solid var(--focus-line); border-radius: 7px; color: #bdd0d7; background: #0a202b; font-weight"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 42,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus kbd { padding: 2px 5px; border: 1px solid rgba(157, 195, 207, .24); border-radius: 4px; color: #8ea8b4; background: rgba(0, 0, 0, .18); font-family: var(--lt-font-data, monospace); font-size: 10px; font-weight: 600; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 42,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus kbd { padding: 2px 5px; border: 1px solid rgba(157, 195, 207, .24); border-radius: 4px; color: #8ea8b4; background: rgba(0, 0, 0, .18); font-family: var(--lt-font-data, monospace); font-size: 10px; font-weight: 600; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 42,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus kbd { padding: 2px 5px; border: 1px solid rgba(157, 195, 207, .24); border-radius: 4px; color: #8ea8b4; background: rgba(0, 0, 0, .18); font-family: var(--lt-font-data, monospace); font-size: 10px; font-weight: 600; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 49,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__section-copy h1, .live-focus__section-copy h2 { margin: 0; color: #f2fafb; font-family: var(--lt-font-heading, Inter, sans-serif); font-size: clamp(20px, 2vw, 30px); line-height: 1.04; letter-spacing: -.035em; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 50,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__section-copy > p:last-child { max-width: 390px; margin: 7px 0 0; color: #91a9b4; font-size: 11px; line-height: 1.45; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 53,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-grid article { min-width: 0; padding: 11px 13px; border: 1px solid var(--focus-line); border-radius: 7px; background: rgba(10, 35, 46, .62); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 54,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-grid article small, .live-focus__ticket small, .live-focus__instrument small { color: #7795a2; font-family: var(--lt-font-data, monospace); font-size: 10px; font-weight: 800; letter-spacing: .12em; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 55,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-grid article p { display: -webkit-box; margin: 5px 0 0; overflow: hidden; color: #c5d6dc; font-size: 11px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 56,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-grid article span { display: inline-flex; margin-top: 7px; padding: 3px 6px; border: 1px solid var(--focus-line); border-radius: 999px; color: #9db3bc; font-size: 10px; font-weight: 800; letter-spacing: .08em; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 57,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-grid[data-status=\"STALE\"] { padding: 6px; border: 1px solid rgba(255, 108, 121, .52); border-radius: 9px; background: rgba(255, 108, 121, .05); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 57,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-grid[data-status=\"STALE\"] { padding: 6px; border: 1px solid rgba(255, 108, 121, .52); border-radius: 9px; background: rgba(255, 108, 121, .05); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 58,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-grid[data-status=\"STALE\"]::before { position: absolute; z-index: 2; top: -11px; left: 10px; padding: 2px 7px; border-radius: 999px; content: \"BRIEF EXPIRÉ — NE PAS LE TRAITER COMME ACTUEL\"; color: #16060a; background: var"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 59,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-source { position: absolute; right: 0; bottom: -15px; color: #627f8c; font-size: 10px; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 60,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-open { display: inline-flex; min-height: 38px; gap: 7px; align-items: center; justify-content: center; padding: 0 12px; border: 1px solid var(--focus-line); border-radius: 7px; color: #bdd0d7; background: #0a202b; font-si"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 60,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__brief-open { display: inline-flex; min-height: 38px; gap: 7px; align-items: center; justify-content: center; padding: 0 12px; border: 1px solid var(--focus-line); border-radius: 7px; color: #bdd0d7; background: #0a202b; font-si"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 62,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus__market { align-items: start !important; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 67,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus__situation { grid-template-columns: 48px minmax(240px, 1fr) auto minmax(360px, 1.35fr) !important; background: linear-gradient(90deg, color-mix(in srgb, var(--focus-state) 4%, transparent), transparent 42%); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 70,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__state-orbit strong { color: #dcecef; font-size: 10px; letter-spacing: .1em; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 71,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__state-orbit small { max-width: 86px; margin-top: 5px; color: #708d99; font-size: 10px; letter-spacing: .06em; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 72,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__position { display: grid; min-width: 0; grid-template-columns: repeat(5, minmax(92px, 1fr)); margin: 0; overflow: hidden; border: 1px solid var(--focus-line); border-radius: 8px; background: rgba(6, 25, 34, .72); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 75,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__position dt { color: #7894a0; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 76,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__position dd { margin: 7px 0 0; overflow: hidden; color: #d6e6ea; font-family: var(--lt-font-data, monospace); font-size: 11px; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 77,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__pipeline { display: grid; min-width: 0; grid-template-columns: repeat(5, minmax(100px, 1fr)); margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--focus-line); border-radius: 8px; background: rgba(6, 25, 34, .72); l"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 80,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__pipeline li > span { color: #6f8c98; font-size: 15px; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 84,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__pipeline strong { color: #d6e6ea; font-size: 11px; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 85,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__pipeline small { overflow: hidden; color: #7894a0; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 87,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus__action { grid-template-columns: 48px minmax(190px, 255px) minmax(0, 1fr) minmax(210px, 270px) !important; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 88,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__ticket { display: grid; min-width: 0; grid-template-columns: repeat(4, minmax(82px, 1fr)); overflow: hidden; border: 1px solid color-mix(in srgb, var(--focus-state) 28%, var(--focus-line)); border-radius: 8px; background: var(-"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 93,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__ticket strong { overflow: hidden; color: #e5f1f3; font-family: var(--lt-font-data, monospace); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 95,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__instrument span { color: #aec3ca; font-size: 10px; font-weight: 800; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 99,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__ticket--incomplete { border-color: rgba(241, 184, 75, .38); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 101,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__actions button { display: flex; min-height: 34px; gap: 7px; align-items: center; justify-content: space-between; padding: 0 10px; border: 1px solid var(--focus-line); border-radius: 6px; color: #b8ccd3; background: #0a202b; fon"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 101,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__actions button { display: flex; min-height: 34px; gap: 7px; align-items: center; justify-content: space-between; padding: 0 10px; border: 1px solid var(--focus-line); border-radius: 6px; color: #b8ccd3; background: #0a202b; fon"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 102,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__actions button svg { color: #7d9ba8; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 103,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__actions .live-focus__primary-action { min-height: 45px; border-color: color-mix(in srgb, var(--focus-state) 56%, transparent); color: #07161c; background: var(--focus-state); box-shadow: 0 8px 25px color-mix(in srgb, var(--focu"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 105,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__actions .live-focus__primary-action kbd { color: #193038; border-color: rgba(0, 0, 0, .18); background: rgba(255, 255, 255, .24); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 105,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__actions .live-focus__primary-action kbd { color: #193038; border-color: rgba(0, 0, 0, .18); background: rgba(255, 255, 255, .24); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 105,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__actions .live-focus__primary-action kbd { color: #193038; border-color: rgba(0, 0, 0, .18); background: rgba(255, 255, 255, .24); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 110,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue { position: fixed; z-index: 8; top: 76px; right: 8px; display: grid; width: 190px; max-height: calc(100dvh - 120px); gap: 8px; padding: 9px; overflow-y: auto; border: 1px solid var(--focus-line); border-radius: 9px; backg"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 110,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue { position: fixed; z-index: 8; top: 76px; right: 8px; display: grid; width: 190px; max-height: calc(100dvh - 120px); gap: 8px; padding: 9px; overflow-y: auto; border: 1px solid var(--focus-line); border-radius: 9px; backg"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 113,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue > header small, .live-focus__queue > header span { color: #6f8d99; font-family: var(--lt-font-data, monospace); font-size: 10px; letter-spacing: .08em; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 114,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue > header strong { color: #d7e8ec; font-family: var(--lt-font-data, monospace); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 116,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__qualified-stack > p { margin: 0; padding: 9px; border: 1px dashed var(--focus-line); border-radius: 6px; color: #7895a1; font-size: 10px; line-height: 1.4; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 117,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue button { display: grid; min-width: 0; gap: 5px; padding: 8px; border: 1px solid transparent; border-left: 3px solid #6f8390; border-radius: 6px; color: #9eb5be; background: rgba(14, 39, 49, .48); text-align: left; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 117,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue button { display: grid; min-width: 0; gap: 5px; padding: 8px; border: 1px solid transparent; border-left: 3px solid #6f8390; border-radius: 6px; color: #9eb5be; background: rgba(14, 39, 49, .48); text-align: left; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 117,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue button { display: grid; min-width: 0; gap: 5px; padding: 8px; border: 1px solid transparent; border-left: 3px solid #6f8390; border-radius: 6px; color: #9eb5be; background: rgba(14, 39, 49, .48); text-align: left; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 123,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue button em, .live-focus__queue button i { overflow: hidden; color: #748f9a; font-size: 10px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 127,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue dt, .live-focus__queue dd { margin: 0; color: #73909c; font-family: var(--lt-font-data, monospace); font-size: 10px; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 128,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__queue dd { color: #c6d9de; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 130,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__observed summary { padding: 8px 2px; color: #91aab4; cursor: pointer; font-size: 10px; font-weight: 800; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 133,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__footer { position: fixed; z-index: 4; right: 0; bottom: 0; left: 0; display: flex; min-height: 36px; gap: 18px; align-items: center; padding: 0 18px; border-top: 1px solid var(--focus-line); color: #7895a1; background: rgba(3, "
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 133,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__footer { position: fixed; z-index: 4; right: 0; bottom: 0; left: 0; display: flex; min-height: 36px; gap: 18px; align-items: center; padding: 0 18px; border-top: 1px solid var(--focus-line); color: #7895a1; background: rgba(3, "
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 136,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__sound { display: inline-flex; min-height: 26px; gap: 5px; align-items: center; padding: 0 8px; border: 1px solid var(--focus-line); border-radius: 5px; color: #7895a1; background: transparent; font-size: 10px; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 138,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__help-trigger { display: inline-flex; min-height: 26px; gap: 5px; align-items: center; padding: 0 8px; border: 0; color: #7895a1; background: transparent; font-size: 10px; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 139,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus__session { min-width: 0; margin-left: auto; overflow: hidden; color: #8ea8b4; text-overflow: ellipsis; white-space: nowrap; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 141,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog__backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(0, 7, 11, .78); backdrop-filter: blur(8px); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 142,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog { display: grid; width: min(520px, 100%); gap: 14px; padding: 20px; border: 1px solid rgba(78, 171, 187, .35); border-radius: 10px; color: #dcecef; background: #071b25; box-shadow: 0 30px 90px rgba(0, 0, 0, .55); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 142,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog { display: grid; width: min(520px, 100%); gap: 14px; padding: 20px; border: 1px solid rgba(78, 171, 187, .35); border-radius: 10px; color: #dcecef; background: #071b25; box-shadow: 0 30px 90px rgba(0, 0, 0, .55); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 142,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog { display: grid; width: min(520px, 100%); gap: 14px; padding: 20px; border: 1px solid rgba(78, 171, 187, .35); border-radius: 10px; color: #dcecef; background: #071b25; box-shadow: 0 30px 90px rgba(0, 0, 0, .55); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 142,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog { display: grid; width: min(520px, 100%); gap: 14px; padding: 20px; border: 1px solid rgba(78, 171, 187, .35); border-radius: 10px; color: #dcecef; background: #071b25; box-shadow: 0 30px 90px rgba(0, 0, 0, .55); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 146,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog p, .live-focus-dialog > small { margin: 0; color: #91aab4; font-size: 11px; line-height: 1.45; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 149,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog dt { color: #6f8c98; font-size: 10px; text-transform: uppercase; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 151,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog label { display: grid; gap: 5px; color: #94adb6; font-size: 10px; font-weight: 700; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 152,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog input { min-height: 39px; padding: 0 10px; border: 1px solid var(--focus-line); border-radius: 6px; color: #eff9fa; background: #04131b; font: 12px var(--lt-font-data, monospace); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 152,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog input { min-height: 39px; padding: 0 10px; border: 1px solid var(--focus-line); border-radius: 6px; color: #eff9fa; background: #04131b; font: 12px var(--lt-font-data, monospace); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 153,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog button { min-height: 36px; padding: 0 12px; border: 1px solid var(--focus-line); border-radius: 6px; color: #b7ccd3; background: #0b2632; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 153,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog button { min-height: 36px; padding: 0 12px; border: 1px solid var(--focus-line); border-radius: 6px; color: #b7ccd3; background: #0b2632; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 154,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog__confirm { border-color: rgba(65, 215, 229, .48) !important; color: #041319 !important; background: var(--focus-cyan) !important; font-weight: 800; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 154,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-dialog__confirm { border-color: rgba(65, 215, 229, .48) !important; color: #041319 !important; background: var(--focus-cyan) !important; font-weight: 800; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 154,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus-dialog__confirm { border-color: rgba(65, 215, 229, .48) !important; color: #041319 !important; background: var(--focus-cyan) !important; font-weight: 800; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 154,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus-dialog__confirm { border-color: rgba(65, 215, 229, .48) !important; color: #041319 !important; background: var(--focus-cyan) !important; font-weight: 800; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 154,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus-dialog__confirm { border-color: rgba(65, 215, 229, .48) !important; color: #041319 !important; background: var(--focus-cyan) !important; font-weight: 800; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 157,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-help__shortcuts div { display: flex; gap: 8px; align-items: center; color: #a8bec6; font-size: 11px; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 161,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-help__sound button[aria-pressed=\"true\"] { border-color: rgba(65, 215, 229, .42); color: #d8f3f6; background: rgba(65, 215, 229, .08); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 161,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-help__sound button[aria-pressed=\"true\"] { border-color: rgba(65, 215, 229, .42); color: #d8f3f6; background: rgba(65, 215, 229, .08); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 161,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-help__sound button[aria-pressed=\"true\"] { border-color: rgba(65, 215, 229, .42); color: #d8f3f6; background: rgba(65, 215, 229, .08); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 163,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer__backdrop { position: fixed; z-index: 120; inset: 0; display: flex; justify-content: flex-end; background: rgba(0, 7, 11, .72); backdrop-filter: blur(5px); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 164,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer { display: grid; width: min(760px, 94vw); height: 100dvh; grid-template-rows: auto minmax(0, 1fr); color: #dcecef; background: #061923; border-left: 1px solid rgba(78, 171, 187, .32); box-shadow: -24px 0 70px rgba(0, 0, 0"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 164,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer { display: grid; width: min(760px, 94vw); height: 100dvh; grid-template-rows: auto minmax(0, 1fr); color: #dcecef; background: #061923; border-left: 1px solid rgba(78, 171, 187, .32); box-shadow: -24px 0 70px rgba(0, 0, 0"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 164,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer { display: grid; width: min(760px, 94vw); height: 100dvh; grid-template-rows: auto minmax(0, 1fr); color: #dcecef; background: #061923; border-left: 1px solid rgba(78, 171, 187, .32); box-shadow: -24px 0 70px rgba(0, 0, 0"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 164,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer { display: grid; width: min(760px, 94vw); height: 100dvh; grid-template-rows: auto minmax(0, 1fr); color: #dcecef; background: #061923; border-left: 1px solid rgba(78, 171, 187, .32); box-shadow: -24px 0 70px rgba(0, 0, 0"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 166,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer h2, .live-focus-drawer h3 { margin: 0; color: #eff8fa; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 170,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer header button { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--focus-line); border-radius: 7px; color: #bad0d7; background: #0a202b; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 170,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer header button { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--focus-line); border-radius: 7px; color: #bad0d7; background: #0a202b; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 172,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer__body > section { padding: 13px; border: 1px solid var(--focus-line); border-radius: 8px; background: rgba(9, 32, 42, .62); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 173,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer__body p { margin: 8px 0 0; color: #a8bec6; font-size: 11px; line-height: 1.5; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 177,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer__facts div, .live-focus-drawer__explanation div, .live-focus-drawer__ids div { min-width: 0; padding: 8px; border: 1px solid var(--focus-line); border-radius: 6px; background: rgba(3, 18, 25, .5); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 178,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer dt { color: #7896a1; font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 179,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer dd { margin: 5px 0 0; overflow-wrap: anywhere; color: #d6e6ea; font: 10px/1.45 var(--lt-font-data, monospace); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 181,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer__plans article { min-width: 0; padding: 10px; border: 1px solid var(--focus-line); border-radius: 7px; background: rgba(3, 18, 25, .52); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 187,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer__tags li { padding: 5px 7px; border: 1px solid var(--focus-line); border-radius: 999px; color: #a9c0c8; font-size: 10px; }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 188,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer__zones li, .live-focus-drawer__history li { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 8px; border: 1px solid var(--focus-line); border-radius: 6px; color: #a8bec6; font-size: 1"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 191,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer__history li[data-current=\"true\"] { border-color: rgba(65, 215, 229, .38); }"
+    },
+    {
+      "ruleId": "UXR-0185",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 195,
+      "message": "Couleur codée en dur hors fichier de tokens/thème.",
+      "excerpt": ".live-focus-drawer__source-grid strong { font-size: 10px; }.live-focus-drawer__source-grid span, .live-focus-drawer__source-grid small { color: #7e9aa6; font-size: 10px; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 200,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus__situation { grid-template-columns: 38px minmax(190px, .8fr) auto minmax(300px, 1.2fr) !important; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 201,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus__action { grid-template-columns: 38px 170px minmax(0, 1fr) 190px !important; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 214,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus__body > section, .live-focus__situation, .live-focus__action { display: grid; grid-template-columns: 35px 1fr !important; padding: 16px 12px; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 240,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus__body > section, .live-focus__situation, .live-focus__action { grid-template-columns: 28px minmax(0, 1fr) !important; gap: 8px; padding-inline: 9px; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 251,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus *, .live-focus *::before, .live-focus *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 251,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus *, .live-focus *::before, .live-focus *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 251,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus *, .live-focus *::before, .live-focus *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }"
+    },
+    {
+      "ruleId": "UXR-0957",
+      "priority": "P1",
+      "severity": "WARNING",
+      "file": "apps/desk-control-plane/src/features/live-trading/live-focus.css",
+      "line": 251,
+      "message": "Usage de !important susceptible de contourner les tokens et contrats de composant.",
+      "excerpt": ".live-focus *, .live-focus *::before, .live-focus *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }"
+    }
+  ]
+}

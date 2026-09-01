@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "desk://contracts/why-no-trade-summary-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["whyNoTradeSummaryId", "universe", "asOf", "status", "topReasons", "stageCounts", "blockingConditions", "sourceStates", "reasonCodes", "observedOpportunityCount"],
+  "properties": {
+    "whyNoTradeSummaryId": { "type": "string" },
+    "universe": { "const": "US_GRAINS_CBOT" },
+    "asOf": { "type": "string", "format": "date-time" },
+    "sourceDataCutoff": { "type": ["string", "null"] },
+    "status": { "enum": ["EXPLAINED", "ACTIONABLE"] },
+    "topReasons": { "type": "array", "items": { "type": "string" } },
+    "stageCounts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+    "blockingConditions": { "type": "array", "items": { "type": "object", "required": ["code", "source"] } },
+    "nextExpectedEvaluationAt": { "type": ["string", "null"] },
+    "nextContextRefreshAt": { "type": ["string", "null"] },
+    "nextRelevantEventAt": { "type": ["string", "null"] },
+    "sourceStates": { "type": "array", "items": { "type": "object" } },
+    "reasonCodes": { "type": "array", "items": { "type": "string" } },
+    "observedOpportunityCount": { "type": "integer", "minimum": 0 }
+  },
+  "x-authority": "Backend-owned. Front renders and never derives READY or official stage counts."
+}
