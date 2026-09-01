@@ -1,39 +1,45 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { FaArrowLeft, FaCheck, FaClipboard, FaExclamationTriangle, FaLock, FaQuestionCircle, FaRegCircle, FaTimes, FaVolumeMute, FaVolumeUp } from "react-icons/fa";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { FaArrowLeft, FaChartLine, FaCheck, FaClipboard, FaExclamationTriangle, FaInfoCircle, FaLock, FaQuestionCircle, FaRegCircle, FaTimes, FaVolumeMute, FaVolumeUp } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
-import type { LiveManualExecutionAction } from "@/domains/front-api/viewModels";
+import type { LiveFocusView, LiveManualExecutionAction } from "@/domains/front-api/viewModels";
 import { presentExecutionMode, presentGeneric } from "@/design-system/labels";
 import { operatorCode, operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import type { HumanGateAction } from "@/features/order-intent/model";
 import { displayTime, displayValue } from "./mapper";
-import { focusDecisionQueue, resolveLiveFocusState } from "./focusModel";
 import { readLiveFocusSoundProfile, writeLiveFocusSoundProfile, type LiveFocusSoundEvent, type LiveFocusSoundProfile } from "./focusPreferences";
 import { focusTradePlan } from "./focusTradePlan";
 import { gateTiming } from "./LiveHumanGate";
 import type { LiveTradingModel } from "./model";
+import { InstrumentChartPanel } from "./chart/LiveMarketChart";
 import "./live-focus.css";
 
 type PendingAction =
   | { kind: "gate"; action: HumanGateAction }
   | { kind: "manual"; action: LiveManualExecutionAction };
 
-export function LiveFocusMode({ model, busy, error, onExit, onSelectDecision, onSubmitGate, onSubmitManual }: {
+export function LiveFocusMode({ model, focus, busy, error, requestedScope, chartLoading, chartError, onExit, onScopeChange, onSelectDecision, onSubmitGate, onSubmitManual }: {
   model: LiveTradingModel;
+  focus: LiveFocusView;
   busy: boolean;
   error: string | null;
+  requestedScope: { instrument?: string; timeframe?: string };
+  chartLoading: boolean;
+  chartError: string | null;
   onExit(): void;
+  onScopeChange(scope: { instrument?: string; timeframe?: string }): void;
   onSelectDecision(signalId: string): void;
   onSubmitGate(action: HumanGateAction, reason: string): Promise<void>;
   onSubmitManual(action: LiveManualExecutionAction, input: { price?: number | null; quantity?: number | null; reason?: string }): Promise<void>;
 }) {
   const realtime = useContext(RealtimeContext);
-  const state = resolveLiveFocusState(model);
-  const queue = useMemo(() => focusDecisionQueue(model.source.portfolioOrderIntents), [model.source.portfolioOrderIntents]);
+  const state = resolveBackendFocusState(focus, model);
+  const queue = useMemo(() => focus.tradeCards, [focus.tradeCards]);
   const selectedIndex = Math.max(0, queue.findIndex((item) => item.signalId === model.latestSignal?.signalId));
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [drawer, setDrawer] = useState<"brief" | "trade" | null>(null);
   const [soundProfile, setSoundProfile] = useState(readLiveFocusSoundProfile);
   const holdTimer = useRef<number | null>(null);
   const gateConfirm = model.gateActions.find((action) => action.action === "CONFIRM" && action.permission === "ALLOWED");
@@ -44,6 +50,7 @@ export function LiveFocusMode({ model, busy, error, onExit, onSelectDecision, on
   const stopManual = manualActions.find((action) => action.action === "REPORT_STOP_PLACED" && action.permission === "ALLOWED");
   const primary = gateConfirm ? ({ kind: "gate", action: gateConfirm } as const) : primaryManual ? ({ kind: "manual", action: primaryManual } as const) : null;
   const plan = focusTradePlan(model);
+  const selectedCard = queue[selectedIndex] ?? focus.selectedTrade;
   const timing = gateTiming(
     model.orderIntent?.createdAt ?? model.latestSignal?.createdAt ?? null,
     model.orderIntent?.allowedActions.expiresAt ?? model.latestSignal?.expiresAt ?? null,
@@ -81,10 +88,11 @@ export function LiveFocusMode({ model, busy, error, onExit, onSelectDecision, on
         event.preventDefault();
         if (pending) setPending(null);
         else if (showHelp) setShowHelp(false);
+        else if (drawer) setDrawer(null);
         else onExit();
         return;
       }
-      if (pending || showHelp) return;
+      if (pending || showHelp || drawer) return;
       if (event.key === "?") { event.preventDefault(); setShowHelp((value) => !value); }
       if (event.key === "ArrowDown") { event.preventDefault(); selectRelative(1); }
       if (event.key === "ArrowUp") { event.preventDefault(); selectRelative(-1); }
@@ -100,7 +108,7 @@ export function LiveFocusMode({ model, busy, error, onExit, onSelectDecision, on
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("keyup", onKeyUp);
     return () => { clearHold(); document.removeEventListener("keydown", onKeyDown); document.removeEventListener("keyup", onKeyUp); };
-  }, [copyPlan, gateReject, onExit, pending, primary, request, selectRelative, showHelp, stopManual]);
+  }, [copyPlan, drawer, gateReject, onExit, pending, primary, request, selectRelative, showHelp, stopManual]);
 
   return (
     <div className={`live-focus live-focus--${state.code.toLowerCase()} lt-tone--${state.tone}`} data-testid="live-focus-mode" data-focus-state={state.code}>
@@ -116,18 +124,24 @@ export function LiveFocusMode({ model, busy, error, onExit, onSelectDecision, on
         <section className="live-focus__brief" aria-labelledby="live-focus-brief-title">
           <QuestionNumber value="01" />
           <div className="live-focus__section-copy"><p className="eyebrow">QUE SE PASSE-T-IL ?</p><h1 id="live-focus-brief-title">Brief opérationnel</h1></div>
-          <FocusBrief model={model} />
+          <FocusBrief focus={focus} onOpen={() => setDrawer("brief")} />
+        </section>
+
+        <section className="live-focus__market" aria-labelledby="live-focus-market-title">
+          <QuestionNumber value="02" />
+          <div className="live-focus__section-copy"><p className="eyebrow">QUE FAIT LE MARCHÉ ?</p><h2 id="live-focus-market-title">Contexte prix</h2><p>Le graphique reste une observation. Les termes exécutables proviennent uniquement du plan autorisé.</p></div>
+          <div className="live-focus__chart"><InstrumentChartPanel model={model} onScopeChange={onScopeChange} requestedScope={requestedScope} loading={chartLoading} error={chartError} /></div>
         </section>
 
         <section className="live-focus__situation" aria-labelledby="live-focus-situation-title">
-          <QuestionNumber value="02" />
+          <QuestionNumber value="03" />
           <div className="live-focus__section-copy"><p className="eyebrow">OÙ EN SUIS-JE ?</p><h2 id="live-focus-situation-title">{state.headline}</h2><p>{state.instruction}</p></div>
           <div className="live-focus__state-orbit" aria-label={`État Focus ${state.code} ${state.label}`}><span>{state.code}</span><strong>{state.label}</strong><small>{model.latestSignal ? `${model.latestSignal.symbol} · ${model.latestSignal.direction}` : "SURVEILLANCE DESK"}</small></div>
-          {state.code === "B" ? <FocusPipeline model={model} /> : <FocusPosition model={model} />}
+          {state.code === "B" ? <FocusPipeline focus={focus} /> : <FocusPosition model={model} />}
         </section>
 
         <section className="live-focus__action" aria-labelledby="live-focus-action-title">
-          <QuestionNumber value="03" />
+          <QuestionNumber value="04" />
           <div className="live-focus__section-copy"><p className="eyebrow">QUE DOIS-JE FAIRE ?</p><h2 id="live-focus-action-title">Ticket d’action</h2></div>
           <FocusTicket plan={plan} timingLabel={timing.label} />
           <div className="live-focus__actions" aria-label="Actions autorisées par le backend">
@@ -136,33 +150,116 @@ export function LiveFocusMode({ model, busy, error, onExit, onSelectDecision, on
             {skipManual ? <button type="button" disabled={busy} onClick={() => request({ kind: "manual", action: skipManual })}><FaRegCircle aria-hidden="true" />Non exécuté</button> : null}
             {stopManual ? <button type="button" disabled={busy} onClick={() => request({ kind: "manual", action: stopManual })}><FaLock aria-hidden="true" />Stop placé<kbd>S</kbd></button> : null}
             <button type="button" onClick={() => void copyPlan()}><FaClipboard aria-hidden="true" />{copied ? "Copié" : "Copier le plan"}<kbd>C</kbd></button>
+            {selectedCard ? <button type="button" onClick={() => setDrawer("trade")}><FaInfoCircle aria-hidden="true" />Voir le dossier</button> : null}
           </div>
           {!plan.actionable && (model.orderIntent || model.latestSignal) ? <p className="live-focus__integrity-warning" role="alert"><FaExclamationTriangle aria-hidden="true" />Les niveaux proposés sont informatifs. Aucune déclaration d’ordre n’est possible avant publication du plan autorisé et de sa quantité.</p> : null}
           {!primary && !gateReject && !skipManual ? <p className="live-focus__locked"><FaLock aria-hidden="true" />{model.gateBlockedReason}</p> : null}
           {error ? <p className="live-focus__error" role="alert">La commande a échoué. Le Focus a rechargé la vérité backend et n’a créé aucun état local de remplacement.</p> : null}
         </section>
 
-        {queue.length > 1 ? <nav className="live-focus__queue" aria-label="Décisions concurrentes"><span>{selectedIndex + 1}/{queue.length}</span>{queue.map((intent, index) => <button key={intent.portfolioOrderIntentId} type="button" aria-current={index === selectedIndex ? "true" : undefined} onClick={() => intent.signalId && onSelectDecision(intent.signalId)}><strong>{intent.symbol}</strong><small>{presentGeneric(intent.side).label} · {presentBackendStatus(intent.humanGate.status).label}</small></button>)}</nav> : null}
+        {queue.length || focus.observedOpportunities.length ? <FocusQueues focus={focus} selectedIndex={selectedIndex} onSelectDecision={onSelectDecision} /> : null}
       </main>
-      <footer className="live-focus__footer"><span><kbd>↑</kbd><kbd>↓</kbd> décisions</span><span><kbd>C</kbd> copier</span><span><kbd>R</kbd> refuser</span><span><kbd>S</kbd> stop placé</span><button type="button" className="live-focus__sound" aria-pressed={soundProfile.enabled} onClick={() => { const next = writeLiveFocusSoundProfile({ ...soundProfile, enabled: !soundProfile.enabled }); setSoundProfile(next); }}>{soundProfile.enabled ? <FaVolumeUp aria-hidden="true" /> : <FaVolumeMute aria-hidden="true" />}{soundProfile.enabled ? "Sons actifs" : "Sons coupés"}</button><button type="button" className="live-focus__help-trigger" aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><FaQuestionCircle aria-hidden="true" />Raccourcis <kbd>?</kbd></button><span className="live-focus__session">Séance {model.signalFunnel.rawSignals} signaux · {model.signalFunnel.orderIntents} ordres proposés · {model.signalFunnel.pendingHumanGates} à décider · {model.signalFunnel.theoreticalTracked} suivis · {model.signalFunnel.totalClosedR === null ? "R non publié" : `${model.signalFunnel.totalClosedR >= 0 ? "+" : ""}${model.signalFunnel.totalClosedR.toFixed(2)} R`}</span><small>Sources {model.meta.sources?.filter((item) => item.state === "AVAILABLE").length ?? 0} · arrêté à {displayTime(model.meta.asOf)}</small></footer>
+      <footer className="live-focus__footer"><span><kbd>↑</kbd><kbd>↓</kbd> dossiers</span><span><kbd>C</kbd> copier</span><span><kbd>R</kbd> refuser</span><span><kbd>S</kbd> stop placé</span><button type="button" className="live-focus__sound" aria-pressed={soundProfile.enabled} onClick={() => { const next = writeLiveFocusSoundProfile({ ...soundProfile, enabled: !soundProfile.enabled }); setSoundProfile(next); }}>{soundProfile.enabled ? <FaVolumeUp aria-hidden="true" /> : <FaVolumeMute aria-hidden="true" />}{soundProfile.enabled ? "Sons actifs" : "Sons coupés"}</button><button type="button" className="live-focus__help-trigger" aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><FaQuestionCircle aria-hidden="true" />Raccourcis <kbd>?</kbd></button><span className="live-focus__session">Séance {focus.whyNoTrade.stageCounts.signals ?? 0} signaux · {focus.whyNoTrade.stageCounts.orderIntents ?? 0} ordres proposés · {focus.tradeCards.filter((item) => !item.terminal).length} à décider · {model.signalFunnel.theoreticalTracked} suivis</span><small>{focus.session.marketSession} · arrêté à {displayTime(focus.asOf)}</small></footer>
       {pending ? <FocusActionDialog pending={pending} model={model} busy={busy} onCancel={() => setPending(null)} onSubmitGate={async (action, reason) => { await onSubmitGate(action, reason); setPending(null); }} onSubmitManual={async (action, input) => { await onSubmitManual(action, input); setPending(null); }} /> : null}
       {showHelp ? <FocusHelpDialog profile={soundProfile} onChange={(next) => { setSoundProfile(writeLiveFocusSoundProfile(next)); }} onClose={() => setShowHelp(false)} /> : null}
+      {drawer === "brief" ? <FocusBriefDrawer focus={focus} onClose={() => setDrawer(null)} /> : null}
+      {drawer === "trade" && selectedCard ? <FocusTradeDrawer card={selectedCard} onClose={() => setDrawer(null)} /> : null}
     </div>
   );
 }
 
-function FocusBrief({ model }: { model: LiveTradingModel }) {
-  const advisory = model.source.aiAdvisory;
-  const summary = operatorCopy(advisory?.summary, "");
-  const context = summary || `Le marché présente une orientation ${operatorCode(model.marketIntelligence.bias).toLowerCase()} dans un régime ${operatorCode(model.marketIntelligence.regime).toLowerCase()}.`;
-  const preferred = model.marketIntelligence.preferredFamilies.map((family) => operatorCopy(family));
-  const vigilance = model.marketIntelligence.reasonCodes.map((reason) => operatorReason(reason));
-  return <div className="live-focus__brief-grid">
-    <article><small>Contexte</small><p>{context}</p></article>
+function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void }) {
+  const brief = focus.marketDeskBrief;
+  const context = brief.operatorSummary;
+  const preferred = brief.whatDeskWants?.map((item) => operatorCopy(item)) ?? [];
+  const vigilance = [...(brief.whatDeskAvoids ?? []), ...focus.whyNoTrade.topReasons].map((reason) => operatorReason(reason));
+  const contextStatus = presentBackendStatus(brief.status);
+  return <div className="live-focus__brief-grid" data-status={brief.status}>
+    <article className="live-focus__brief-headline"><small>{brief.headline}</small><p>{context}</p><span data-tone={contextStatus.tone}>{contextStatus.label}</span></article>
+    <article><small>État du marché</small><p>{operatorCode(focus.marketContext.marketRegime, "Régime non publié")} · {operatorCode(focus.marketContext.volatilityRegime, "Volatilité non publiée")} · {operatorCode(focus.marketContext.globalBias, "Biais non publié")}</p></article>
     <article><small>Ce que le desk recherche</small><p>{preferred.length ? `Le desk privilégie ${preferred.join(", ").toLowerCase()}.` : "Aucune famille de stratégie n’est privilégiée dans l’état publié."}</p></article>
     <article><small>Points de vigilance</small><p>{vigilance.length ? `${vigilance.join(". ")}.` : "Aucun point de vigilance supplémentaire n’est publié."}</p></article>
-    <small className="live-focus__brief-source">Avis {operatorCode(advisory?.mode ?? "OFF")} · consultatif · arrêté à {displayTime(advisory?.lastContextAt || model.meta.asOf)}</small>
+    <article><small>Prochain catalyseur</small><p>{focus.whyNoTrade.nextRelevantEventAt ? displayTime(focus.whyNoTrade.nextRelevantEventAt) : "Aucun catalyseur couvert n’est publié."}</p></article>
+    <button type="button" className="live-focus__brief-open" onClick={onOpen}><FaInfoCircle aria-hidden="true" />Voir le brief complet</button>
+    <small className="live-focus__brief-source">Brief {operatorCode(brief.status)} · consultatif · données arrêtées à {displayTime(focus.technical.sourceDataCutoff || focus.asOf)} · valide jusqu’à {displayTime(typeof focus.marketContext.validUntil === "string" ? focus.marketContext.validUntil : null)} · analyste {focus.contextWorker.successCount} succès / {focus.contextWorker.failureCount} échec(s)</small>
   </div>;
+}
+
+function FocusBriefDrawer({ focus, onClose }: { focus: LiveFocusView; onClose(): void }) {
+  const brief = focus.marketDeskBrief;
+  const currentZones = recordRows(brief.opportunityZones ?? focus.marketContext.opportunityZones);
+  const noTradeZones = recordRows(brief.noTradeZones ?? focus.marketContext.noTradeZones);
+  return <FocusDrawer title="Market & Desk Brief" subtitle={`${operatorCode(brief.status)} · ${displayTime(focus.technical.sourceDataCutoff)}`} onClose={onClose}>
+    <section><h3>Lecture opérateur</h3><p>{brief.operatorSummary}</p><p>{valueText(brief.marketInterpretation, "Interprétation non publiée")}</p></section>
+    <section><h3>Intention du Desk</h3><p>{valueText(brief.deskIntent, "Intention non publiée")}</p><TagList values={stringRows(brief.whatDeskWants)} empty="Aucune famille privilégiée" /></section>
+    <section><h3>Pourquoi aucun trade ?</h3><TagList values={focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason))} empty="Aucun blocage publié" /></section>
+    <section className="live-focus-drawer__columns"><div><h3>Zones d’opportunité</h3><ZoneList zones={currentZones} /></div><div><h3>Zones à éviter</h3><ZoneList zones={noTradeZones} /></div></section>
+    <section><h3>Sources et fraîcheur</h3><div className="live-focus-drawer__source-grid">{focus.sourceStates.map((source, index) => <article key={valueText(source.sourceId, String(index))}><strong>{valueText(source.sourceId, "Source")}</strong><span>{operatorCode(valueText(source.status, "UNKNOWN"))}</span><small>{displayTime(valueText(source.dataCutoff ?? source.asOf, null))}</small></article>)}</div></section>
+    <section><h3>Analyste contextuel</h3><dl className="live-focus-drawer__facts"><Fact label="Tâches" value={String(focus.contextWorker.taskCount)} /><Fact label="Succès" value={String(focus.contextWorker.successCount)} /><Fact label="Échecs" value={String(focus.contextWorker.failureCount)} /><Fact label="Relances" value={String(focus.contextWorker.retryCount)} /><Fact label="Latence moyenne" value={focus.contextWorker.averageLatencyMs === null ? "Non mesurée" : `${Math.round(focus.contextWorker.averageLatencyMs)} ms`} /><Fact label="Tokens" value={String(focus.contextWorker.totalTokens)} /></dl></section>
+    <section><h3>Historique de séance</h3><ol className="live-focus-drawer__history">{focus.briefHistory.length ? focus.briefHistory.map((item) => <li key={item.marketDeskBriefId} data-current={item.current}><div><strong>{item.current ? "Brief actuel" : "Historique"}</strong><span>{operatorCode(item.status)}</span></div><small>{displayTime(item.createdAt)} → {displayTime(item.validUntil)} · {item.invalidationReason ? operatorReason(item.invalidationReason) : "aucune invalidation publiée"}</small></li>) : <li><small>Aucun brief historique publié.</small></li>}</ol></section>
+  </FocusDrawer>;
+}
+
+function FocusTradeDrawer({ card, onClose }: { card: LiveFocusView["tradeCards"][number]; onClose(): void }) {
+  const why = card.whyThisTrade ?? {};
+  return <FocusDrawer title={`${card.instrument} · ${presentGeneric(card.side).label}`} subtitle={`${card.strategyName} · ${presentBackendStatus(card.operatorState).label}`} onClose={onClose}>
+    <section><h3>Résumé</h3><dl className="live-focus-drawer__facts"><Fact label="Quantité autorisée" value={valueText(card.authorizedQuantity, "Non publiée")} /><Fact label="R attendu" value={card.expectedR === null ? "Non publié" : `${card.expectedR.toFixed(2)} R`} /><Fact label="Échéance" value={displayTime(card.expiresAt)} /><Fact label="Suivi théorique" value={operatorCode(card.theoreticalState)} /></dl></section>
+    <section><h3>Pourquoi ce trade ?</h3><dl className="live-focus-drawer__explanation"><Fact label="Direction" value={operatorReason(valueText(why.whyDirection, "NOT_AVAILABLE"))} /><Fact label="Setup" value={operatorCopy(valueText(why.whySetup, "NOT_AVAILABLE"))} /><Fact label="Pourquoi maintenant" value={operatorReason(valueText(why.whyNow, "NOT_AVAILABLE"))} /><Fact label="Réduction" value={operatorReason(valueText(why.whatWasReduced, "NOT_AVAILABLE"))} /></dl></section>
+    <section><h3>Comparaison des plans</h3><div className="live-focus-drawer__plans"><PlanSnapshot title="Strategy Proposed" plan={card.strategyProposedPlan} /><PlanSnapshot title="Context Adjusted" plan={card.contextAdjustedPlan} /><PlanSnapshot title="Risk Authorized" plan={card.riskAuthorizedPlan} /></div></section>
+    <section className="live-focus-drawer__columns"><div><h3>Context + Portfolio</h3><TagList values={stringRows(why.whyContextAccepted).concat(stringRows(why.whyPortfolioSelected))} empty="Preuves non publiées" /></div><div><h3>Global Risk</h3><TagList values={stringRows(why.whyRiskAuthorized)} empty="Raisons Risk non publiées" /></div></section>
+    <section><h3>Human Gate</h3><p>{presentBackendStatus(card.operatorState).label}. Les actions ci-dessous restent exclusivement pilotées par <code>allowedActions</code>.</p><TagList values={card.allowedActions.map((action) => operatorCopy(action))} empty={card.denialReasons.map((reason) => operatorReason(reason)).join(" · ") || "Aucune action autorisée"} /></section>
+    <section className="live-focus-drawer__columns"><div><h3>Résultat théorique</h3><p>{card.realizedR === null || card.realizedR === undefined ? "Non publié" : `${card.realizedR > 0 ? "+" : ""}${card.realizedR.toFixed(2)} R`}</p><small>{operatorCode(card.closeReason, "Dossier non clôturé")}</small></div><div><h3>Résultat opérateur</h3><p>{card.operatorResult ? operatorCode(valueText(card.operatorResult.status, "Publié")) : "Non déclaré"}</p></div></section>
+    <section><h3>Audit et lineage</h3><dl className="live-focus-drawer__ids"><Fact label="Signal" value={card.signalId ?? "Non publié"} /><Fact label="Context" value={card.contextDecisionId ?? "Non publié"} /><Fact label="Portfolio" value={card.portfolioDecisionId ?? "Non publié"} /><Fact label="Risk" value={card.riskDecisionId ?? "Non publié"} /><Fact label="TargetPosition" value={card.targetPositionId} /><Fact label="OrderIntent" value={card.orderIntentId} /><Fact label="HumanGate" value={card.humanGateId} /></dl></section>
+  </FocusDrawer>;
+}
+
+function FocusDrawer({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose(): void; children: ReactNode }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    return () => previous?.focus?.();
+  }, []);
+  return <div className="live-focus-drawer__backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><aside className="live-focus-drawer" role="dialog" aria-modal="true" aria-labelledby="live-focus-drawer-title"><header><div><small>{subtitle}</small><h2 id="live-focus-drawer-title">{title}</h2></div><button ref={closeRef} type="button" onClick={onClose} aria-label="Fermer le dossier"><FaTimes aria-hidden="true" /></button></header><div className="live-focus-drawer__body">{children}</div></aside></div>;
+}
+
+function PlanSnapshot({ title, plan }: { title: string; plan?: Record<string, unknown> | null }) {
+  const source = plan ?? {};
+  const entry = recordValue(source.entry);
+  const stop = recordValue(source.stop);
+  const targets = recordRows(source.targets).map((item) => valueText(item.price ?? item.value, "—"));
+  return <article data-available={Boolean(plan)}><strong>{title}</strong><dl><Fact label="Entrée" value={valueText(entry.price ?? source.entryPrice ?? source.entry_price, "Non publiée")} /><Fact label="Stop" value={valueText(stop.price ?? source.stopPrice ?? source.stop_price, "Non publié")} /><Fact label="Objectifs" value={targets.length ? targets.join(" · ") : "Non publiés"} /></dl></article>;
+}
+
+function ZoneList({ zones }: { zones: readonly Record<string, unknown>[] }) { return zones.length ? <ul className="live-focus-drawer__zones">{zones.map((zone, index) => <li key={valueText(zone.zoneId, String(index))}><strong>{valueText(zone.instrument, "—")} · {operatorCode(valueText(zone.direction, "TOUS"))}</strong><span>{valueText(zone.minPrice, "—")} → {valueText(zone.maxPrice, "—")}</span></li>)}</ul> : <p>Aucune zone publiée.</p>; }
+function TagList({ values, empty }: { values: readonly string[]; empty: string }) { return values.length ? <ul className="live-focus-drawer__tags">{values.map((value, index) => <li key={`${value}-${index}`}>{value}</li>)}</ul> : <p>{empty}</p>; }
+function Fact({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd>{value}</dd></div>; }
+function recordRows(value: unknown): Record<string, unknown>[] { return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item))) : []; }
+function recordValue(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function stringRows(value: unknown): string[] { return Array.isArray(value) ? value.map((item) => String(item ?? "").trim()).filter(Boolean) : []; }
+function valueText(value: unknown, fallback: string | null = "Non publié"): string { const normalized = value === null || value === undefined ? "" : String(value).trim(); return normalized || (fallback ?? ""); }
+
+function FocusQueues({ focus, selectedIndex, onSelectDecision }: {
+  focus: LiveFocusView;
+  selectedIndex: number;
+  onSelectDecision(signalId: string): void;
+}) {
+  return <aside className="live-focus__queue" aria-label="Pile de dossiers et opportunités observées">
+    <header><div><small>DOSSIERS QUALIFIÉS</small><strong>{focus.tradeCards.length}</strong></div><span>{focus.tradeCards.length ? `${selectedIndex + 1}/${focus.tradeCards.length}` : "0"}</span></header>
+    <div className="live-focus__qualified-stack">
+      {focus.tradeCards.map((card, index) => <button key={card.orderIntentId} type="button" data-priority={card.priority} aria-current={index === selectedIndex ? "true" : undefined} onClick={() => card.signalId && onSelectDecision(card.signalId)}>
+        <span><strong>{card.instrument}</strong><em>{presentGeneric(card.side).label}</em></span>
+        <small>{presentBackendStatus(card.operatorState).label}</small>
+        <dl><div><dt>Qté</dt><dd>{card.authorizedQuantity ?? "—"}</dd></div><div><dt>R attendu</dt><dd>{card.expectedR === null ? "—" : `${card.expectedR.toFixed(2)} R`}</dd></div></dl>
+        <i>{card.attentionReason ? operatorReason(card.attentionReason) : card.strategyName}</i>
+      </button>)}
+      {!focus.tradeCards.length ? <p>Aucun dossier n’a encore franchi TargetPosition, OrderIntent et Human Gate.</p> : null}
+    </div>
+    <details className="live-focus__observed" open={!focus.tradeCards.length && focus.observedOpportunities.length > 0}>
+      <summary>Opportunités observées <span>{focus.observedOpportunities.length}</span></summary>
+      <div>{focus.observedOpportunities.map((item) => <button key={item.signalId} type="button" onClick={() => onSelectDecision(item.signalId)}><strong>{item.instrument} · {presentGeneric(item.side).label}</strong><small>{presentBackendStatus(item.status).label}</small><i>Diagnostic uniquement</i></button>)}</div>
+    </details>
+  </aside>;
 }
 
 function FocusPosition({ model }: { model: LiveTradingModel }) {
@@ -177,13 +274,14 @@ function FocusPosition({ model }: { model: LiveTradingModel }) {
   </dl>;
 }
 
-function FocusPipeline({ model }: { model: LiveTradingModel }) {
+function FocusPipeline({ focus }: { focus: LiveFocusView }) {
+  const counts = focus.whyNoTrade.stageCounts;
   const stages = [
-    { label: "Le desk a repéré quelque chose", published: Boolean(model.latestSignal), result: model.latestSignal ? `${presentGeneric(model.latestSignal.direction).label} · confiance ${model.latestSignal.confidence === null ? "non publiée" : `${Math.round(model.latestSignal.confidence)} %`}` : null },
-    { label: "Le contexte est-il favorable ?", published: Boolean(model.latestContextDecision), result: model.latestContextDecision ? `${operatorCode(model.latestContextDecision.status)} · ${operatorCode(model.latestContextDecision.recommendation)}` : null },
-    { label: "Est-ce compatible avec vos positions ?", published: Boolean(model.riskCheck), result: model.riskCheck ? operatorCode(model.riskCheck.status) : null },
-    { label: "Quel ordre exactement ?", published: Boolean(model.orderIntent), result: model.orderIntent ? `${presentGeneric(model.orderIntent.side).label} · quantité ${model.orderIntent.quantity}` : null },
-    { label: "À vous de valider", published: Boolean(model.orderIntent?.humanGate), result: model.orderIntent?.humanGate ? presentBackendStatus(model.orderIntent.humanGate.status).label : null },
+    { label: "Le desk a repéré quelque chose", published: Number(counts.signals || 0) > 0, result: `${counts.signals || 0} signal(s)` },
+    { label: "Le contexte est-il favorable ?", published: Number(counts.contextAccepted || 0) > 0, result: `${counts.contextAccepted || 0} admis · ${counts.contextWait || 0} en attente · ${counts.contextRejected || 0} refusés` },
+    { label: "Est-ce compatible avec le portefeuille ?", published: Number(counts.portfolioSelected || 0) > 0, result: `${counts.portfolioSelected || 0} sélection(s)` },
+    { label: "Quel ordre exactement ?", published: Number(counts.orderIntents || 0) > 0, result: `${counts.orderIntents || 0} ordre(s) proposé(s)` },
+    { label: "À vous de valider", published: focus.tradeCards.some((item) => !item.terminal), result: `${focus.tradeCards.filter((item) => !item.terminal).length} dossier(s) actif(s)` },
   ];
   const firstUnpublished = stages.findIndex((stage) => !stage.published);
   return <ol className="live-focus__pipeline" aria-label="Progression publiée de la décision">
@@ -192,6 +290,20 @@ function FocusPipeline({ model }: { model: LiveTradingModel }) {
       return <li key={stage.label} data-status={status}><span aria-hidden="true">{stage.published ? "✓" : index === firstUnpublished ? "◐" : "○"}</span><div><strong>{stage.label}</strong><small>{stage.result ?? (index === firstUnpublished ? "Pas encore évalué" : "Bloqué en amont")}</small></div></li>;
     })}
   </ol>;
+}
+
+function resolveBackendFocusState(focus: LiveFocusView, model: LiveTradingModel) {
+  const stage = focus.operatorJourneyState.stage;
+  const code = ["A", "B", "C", "D", "E", "F"].includes(stage) ? stage : "B";
+  const labels: Record<string, { label: string; headline: string; instruction: string; tone: "neutral" | "info" | "warning" | "success" }> = {
+    A: { label: "MARCHÉ HORS SESSION", headline: "Le Desk attend la prochaine fenêtre CBOT", instruction: focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Aucune action requise.", tone: "neutral" },
+    B: { label: "SURVEILLANCE", headline: "Le Desk cherche un setup qualifié", instruction: focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Les moteurs déterministes évaluent le marché.", tone: "info" },
+    C: { label: "OPPORTUNITÉ OBSERVÉE", headline: "Un signal traverse les filtres", instruction: "Cette opportunité reste diagnostique tant qu'elle n'a pas produit TargetPosition, OrderIntent et HumanGate.", tone: "warning" },
+    D: { label: "ARBITRAGE", headline: "Portfolio et Risk évaluent le dossier", instruction: "Aucune action opérateur avant publication du plan autorisé.", tone: "warning" },
+    E: { label: "DOSSIER QUALIFIÉ", headline: "Le dossier canonique est prêt", instruction: "Contrôlez les termes immuables et l'autorité Human Gate.", tone: "success" },
+    F: { label: "ACTION HUMAINE", headline: "Une décision opérateur est attendue", instruction: "Confirmer ne signifie ni ACK ni Fill.", tone: "success" },
+  };
+  return { code, ...labels[code] };
 }
 
 function FocusTicket({ plan, timingLabel }: { plan: ReturnType<typeof focusTradePlan>; timingLabel: string }) {

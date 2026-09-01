@@ -153,7 +153,7 @@ describe("front realtime event runtime", () => {
         eventType: "position.updated",
         payload: {}
       })
-    ).toEqual(["command-center", "live-trading", "live-plan", "live-timeline", "execution-reconciliation", "portfolio", "performance-overview", "performance-calendar", "performance-trades"]);
+    ).toEqual(["command-center", "live-trading", "live-focus", "live-plan", "live-timeline", "execution-reconciliation", "portfolio", "performance-overview", "performance-calendar", "performance-trades"]);
     expect(
       frontViewNamesForRealtimeEvent({
         ...eventBase,

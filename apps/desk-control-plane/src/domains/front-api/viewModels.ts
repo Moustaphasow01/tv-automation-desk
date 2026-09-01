@@ -3378,6 +3378,171 @@ export type ReplayOverviewView = {
   };
 };
 
+export type LiveFocusView = {
+  schemaVersion: "live_focus_view_v1";
+  universe: string;
+  asOf: string;
+  safety: {
+    autoExecutionEnabled: boolean;
+    physicalLiveEnabled: boolean;
+    humanGateRequired: boolean;
+    authority: string;
+  };
+  session: {
+    marketState: string;
+    marketSession: string;
+    exchangeTimezone: string;
+    marketDate: string | null;
+    sessionStart: string | null;
+    sessionEnd: string | null;
+    nextEligibleAt: string | null;
+    asOf: string;
+    source: string;
+  };
+  marketContext: Record<string, unknown> & {
+    status: string;
+    marketContextSnapshotId?: string;
+    sourceDataCutoff?: string;
+    globalBias?: string;
+    marketRegime?: string;
+    volatilityRegime?: string;
+    validUntil?: string;
+    instrumentViews?: readonly Record<string, unknown>[];
+    sourceStates?: readonly Record<string, unknown>[];
+    reasonCodes?: readonly string[];
+  };
+  marketDeskBrief: Record<string, unknown> & {
+    status: string;
+    headline: string;
+    operatorSummary: string;
+    marketInterpretation?: string | null;
+    deskIntent?: string | null;
+    whyNoTrade?: string | null;
+    whatDeskWants?: readonly string[];
+    whatDeskAvoids?: readonly string[];
+    currentCatalysts?: readonly Record<string, unknown>[];
+    nextExpectedEvents?: readonly Record<string, unknown>[];
+  };
+  briefHistory: readonly (Record<string, unknown> & {
+    marketDeskBriefId: string;
+    createdAt: string;
+    validUntil: string;
+    status: string;
+    historical: boolean;
+    current: boolean;
+    invalidationReason?: string | null;
+  })[];
+  whyNoTrade: {
+    whyNoTradeSummaryId: string;
+    status: string;
+    topReasons: readonly string[];
+    stageCounts: Record<string, number>;
+    blockingConditions: readonly { code: string; source: string }[];
+    nextExpectedEvaluationAt: string | null;
+    nextContextRefreshAt: string | null;
+    nextRelevantEventAt: string | null;
+    reasonCodes: readonly string[];
+  };
+  operatorJourneyState: {
+    stage: string;
+    rawStatus: string;
+    sourceObjectType: string;
+    sourceObjectId: string | null;
+    asOf: string;
+    reasonCodes: readonly string[];
+  };
+  tradeCards: readonly {
+    tradeCardId: string;
+    targetPositionId: string;
+    orderIntentId: string;
+    humanGateId: string;
+    strategyDefinitionId?: string | null;
+    strategyVersionId?: string | null;
+    strategyInstanceId?: string | null;
+    signalId: string | null;
+    contextDecisionId?: string | null;
+    portfolioDecisionId?: string | null;
+    riskDecisionId?: string | null;
+    providerCommandId?: string | null;
+    positionId?: string | null;
+    tradeId?: string | null;
+    instrument: string;
+    side: string;
+    strategyName: string;
+    setup: string | null;
+    createdAt: string;
+    expiresAt: string | null;
+    operatorState: string;
+    theoreticalState: string;
+    authorizedQuantity: number | null;
+    riskAmount: number | null;
+    expectedR: number | null;
+    priority: string;
+    attentionReason: string | null;
+    allowedActions: readonly string[];
+    denialReasons: readonly string[];
+    actionPolicy: Record<string, unknown>;
+    strategyProposedPlan?: Record<string, unknown> | null;
+    contextAdjustedPlan?: Record<string, unknown> | null;
+    riskAuthorizedPlan?: Record<string, unknown> | null;
+    theoreticalResult?: Record<string, unknown> | null;
+    operatorResult?: Record<string, unknown> | null;
+    realizedR?: number | null;
+    realizedPnL?: number | null;
+    closeReason?: string | null;
+    revision?: number | null;
+    route: string;
+    correlationId?: string | null;
+    reasonCodes: readonly string[];
+    whyThisTrade: Record<string, unknown>;
+    source: string;
+    asOf: string;
+    availability: string;
+    terminal: boolean;
+  }[];
+  observedOpportunities: readonly {
+    opportunityId: string;
+    signalId: string;
+    instrument: string;
+    side: string;
+    strategyName: string;
+    status: string;
+    reasonCodes: readonly string[];
+    createdAt: string | null;
+    expiresAt: string | null;
+    diagnosticOnly: true;
+    route: string;
+    source: string;
+    asOf: string | null;
+    availability: string;
+  }[];
+  selectedTrade: LiveFocusView["tradeCards"][number] | null;
+  catalysts: readonly Record<string, unknown>[];
+  marketSeries: LiveTradingView["marketSeries"];
+  watchlist: LiveTradingView["watchlist"];
+  sourceStates: readonly Record<string, unknown>[];
+  contextWorker: {
+    taskType: string;
+    lane: string;
+    cadenceMinutes: { marketOpen: number; marketClosed: number };
+    timeoutMs: number;
+    modelPolicy: Record<string, unknown>;
+    taskCount: number;
+    successCount: number;
+    failureCount: number;
+    activeCount: number;
+    lastCompletedAt: string | null;
+    lastSuccessfulBriefAt: string | null;
+    briefAgeSeconds: number | null;
+    retryCount: number;
+    averageLatencyMs: number | null;
+    totalTokens: number;
+    costMicrosUsd: number;
+  };
+  nextActions: readonly unknown[];
+  technical: { source: string; sourceDataCutoff: string | null; revision: number };
+};
+
 export type ControlPlaneViews = {
   "auth-session": AuthSessionView;
   "operator-settings": OperatorSettingsView;
@@ -3396,6 +3561,7 @@ export type ControlPlaneViews = {
   "strategy-detail": StrategyDetailView;
   "strategy-compare": StrategyCompareView;
   "live-trading": LiveTradingView;
+  "live-focus": LiveFocusView;
   "live-signal-detail": LiveSignalDetailView;
   "order-detail": OrderDetailView;
   "position-detail": PositionDetailView;
@@ -3766,6 +3932,81 @@ export function isLiveTradingView(value: unknown): value is LiveTradingView {
       candidate.telegramDrilldown &&
       candidate.aiAdvisory
   );
+}
+
+export function isLiveFocusView(value: unknown): value is LiveFocusView {
+  const candidate = value as Partial<LiveFocusView>;
+  return Boolean(
+    candidate?.schemaVersion === "live_focus_view_v1" &&
+      validFocusSafety(candidate.safety) &&
+      candidate.safety.autoExecutionEnabled === false &&
+      candidate.safety.physicalLiveEnabled === false &&
+      candidate.safety.humanGateRequired === true &&
+      validFocusSession(candidate.session) &&
+      validMarketContext(candidate.marketContext) &&
+      validMarketDeskBrief(candidate.marketDeskBrief) &&
+      Array.isArray(candidate.briefHistory) &&
+      candidate.briefHistory.every(validBriefHistoryItem) &&
+      validWhyNoTrade(candidate.whyNoTrade) &&
+      validOperatorJourney(candidate.operatorJourneyState) &&
+      Array.isArray(candidate.tradeCards) &&
+      candidate.tradeCards.every(validFocusTradeCard) &&
+      (candidate.selectedTrade === null || (candidate.selectedTrade !== undefined && validFocusTradeCard(candidate.selectedTrade))) &&
+      Array.isArray(candidate.observedOpportunities) &&
+      candidate.observedOpportunities.every(validObservedOpportunity) &&
+      Array.isArray(candidate.catalysts) &&
+      Array.isArray(candidate.sourceStates) &&
+      validContextWorker(candidate.contextWorker) &&
+      candidate.technical &&
+      candidate.technical.source === "front-api/live-focus"
+  );
+}
+
+function validContextWorker(value: unknown): value is LiveFocusView["contextWorker"] {
+  const item = value as LiveFocusView["contextWorker"];
+  return Boolean(item && typeof item.taskType === "string" && item.lane === "live" && typeof item.timeoutMs === "number" && typeof item.taskCount === "number" && typeof item.successCount === "number" && typeof item.failureCount === "number" && typeof item.activeCount === "number");
+}
+
+function validFocusSafety(value: unknown): value is LiveFocusView["safety"] {
+  const item = value as LiveFocusView["safety"];
+  return Boolean(item && typeof item.autoExecutionEnabled === "boolean" && typeof item.physicalLiveEnabled === "boolean" && typeof item.humanGateRequired === "boolean" && typeof item.authority === "string");
+}
+
+function validFocusSession(value: unknown): value is LiveFocusView["session"] {
+  const item = value as LiveFocusView["session"];
+  return Boolean(item && typeof item.marketState === "string" && typeof item.marketSession === "string" && typeof item.exchangeTimezone === "string" && typeof item.asOf === "string" && typeof item.source === "string");
+}
+
+function validMarketContext(value: unknown): value is LiveFocusView["marketContext"] {
+  const item = value as LiveFocusView["marketContext"];
+  return Boolean(item && typeof item.status === "string" && (!item.sourceStates || Array.isArray(item.sourceStates)) && (!item.reasonCodes || Array.isArray(item.reasonCodes)));
+}
+
+function validMarketDeskBrief(value: unknown): value is LiveFocusView["marketDeskBrief"] {
+  const item = value as LiveFocusView["marketDeskBrief"];
+  return Boolean(item && typeof item.status === "string" && typeof item.headline === "string" && typeof item.operatorSummary === "string" && (!item.whatDeskWants || Array.isArray(item.whatDeskWants)));
+}
+
+function validBriefHistoryItem(value: LiveFocusView["briefHistory"][number]) {
+  return Boolean(value && typeof value.marketDeskBriefId === "string" && typeof value.createdAt === "string" && typeof value.validUntil === "string" && typeof value.status === "string" && typeof value.historical === "boolean" && typeof value.current === "boolean");
+}
+
+function validWhyNoTrade(value: unknown): value is LiveFocusView["whyNoTrade"] {
+  const item = value as LiveFocusView["whyNoTrade"];
+  return Boolean(item && typeof item.whyNoTradeSummaryId === "string" && typeof item.status === "string" && Array.isArray(item.topReasons) && item.stageCounts && Array.isArray(item.blockingConditions) && Array.isArray(item.reasonCodes));
+}
+
+function validOperatorJourney(value: unknown): value is LiveFocusView["operatorJourneyState"] {
+  const item = value as LiveFocusView["operatorJourneyState"];
+  return Boolean(item && typeof item.stage === "string" && typeof item.rawStatus === "string" && typeof item.sourceObjectType === "string" && typeof item.asOf === "string" && Array.isArray(item.reasonCodes));
+}
+
+function validFocusTradeCard(value: LiveFocusView["tradeCards"][number]) {
+  return Boolean(value && value.targetPositionId && value.orderIntentId && value.humanGateId && value.tradeCardId && Array.isArray(value.allowedActions) && Array.isArray(value.denialReasons) && value.actionPolicy && typeof value.actionPolicy === "object" && !Array.isArray(value.actionPolicy) && Array.isArray(value.reasonCodes) && typeof value.availability === "string" && typeof value.terminal === "boolean");
+}
+
+function validObservedOpportunity(value: LiveFocusView["observedOpportunities"][number]) {
+  return Boolean(value.opportunityId && value.signalId && value.diagnosticOnly === true && Array.isArray(value.reasonCodes) && typeof value.availability === "string");
 }
 
 export function isDemoPaperReadinessView(value: unknown): value is DemoPaperReadinessView {

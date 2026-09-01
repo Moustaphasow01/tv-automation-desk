@@ -95,6 +95,7 @@ export type FrontViewName =
   | "strategy-detail"
   | "strategy-compare"
   | "live-trading"
+  | "live-focus"
   | "live-signal-detail"
   | "order-detail"
   | "position-detail"

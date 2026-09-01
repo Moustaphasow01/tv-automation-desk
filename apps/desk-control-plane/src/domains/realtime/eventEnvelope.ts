@@ -33,6 +33,11 @@ export const FRONT_EVENT_TYPES = [
   ,"research.run.updated"
   ,"assistant.answer.created"
   ,"desk.resync_required"
+  ,"market.context.snapshot.published"
+  ,"market.context.snapshot.invalidated"
+  ,"market.desk.brief.published"
+  ,"market.desk.brief.invalidated"
+  ,"market.context.prefilter.decided"
 ] as const;
 
 export type FrontEventType = (typeof FRONT_EVENT_TYPES)[number] | (string & {});
@@ -181,7 +186,13 @@ export function reduceRealtimeEvent(
 export function frontViewNamesForRealtimeEvent(event: EventEnvelope): readonly FrontViewName[] {
   switch (event.eventType) {
     case "desk.snapshot.updated":
-      return ["command-center", "sessions", "live-plan", "live-news", "live-timeline", "execution-reconciliation", "operations-observability"];
+      return ["command-center", "live-trading", "live-focus", "sessions", "live-plan", "live-news", "live-timeline", "execution-reconciliation", "operations-observability"];
+    case "market.context.snapshot.published":
+    case "market.context.snapshot.invalidated":
+    case "market.desk.brief.published":
+    case "market.desk.brief.invalidated":
+    case "market.context.prefilter.decided":
+      return ["command-center", "live-trading", "live-focus", "live-timeline"];
     case "agent.status.changed":
       return ["command-center", "research-lab", "operations-observability"];
     case "experiment.progress.updated":
@@ -199,7 +210,7 @@ export function frontViewNamesForRealtimeEvent(event: EventEnvelope): readonly F
     case "risk.warning.created":
     case "risk.decision.created":
     case "target_position.created":
-      return ["command-center", "live-trading", "live-plan", "live-timeline", "sessions", "portfolio"];
+      return ["command-center", "live-trading", "live-focus", "live-plan", "live-timeline", "sessions", "portfolio"];
     case "order.status.changed":
     case "order_intent.created":
     case "human_gate.created":
@@ -210,7 +221,7 @@ export function frontViewNamesForRealtimeEvent(event: EventEnvelope): readonly F
     case "position.updated":
     case "reconciliation.completed":
     case "reconciliation.updated":
-      return ["command-center", "live-trading", "live-plan", "live-timeline", "execution-reconciliation", "portfolio", "performance-overview", "performance-calendar", "performance-trades"];
+      return ["command-center", "live-trading", "live-focus", "live-plan", "live-timeline", "execution-reconciliation", "portfolio", "performance-overview", "performance-calendar", "performance-trades"];
     case "provider.health.changed":
     case "incident.created":
       return ["command-center", "execution-reconciliation", "operations-observability", "operations-runbooks", "portfolio"];
@@ -222,7 +233,7 @@ export function frontViewNamesForRealtimeEvent(event: EventEnvelope): readonly F
     case "research.run.updated":
       return ["command-center", "research-lab", "research-experiments", "research-candidates"];
     case "desk.resync_required":
-      return ["command-center", "live-trading", "live-plan", "live-timeline", "sessions", "execution-reconciliation", "portfolio", "operations-observability"];
+      return ["command-center", "live-trading", "live-focus", "live-plan", "live-timeline", "sessions", "execution-reconciliation", "portfolio", "operations-observability"];
     default:
       return ["command-center"];
   }

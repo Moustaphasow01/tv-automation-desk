@@ -40,6 +40,12 @@ export function LiveTradingPage() {
     queryScope: "market-series",
     refetchInterval: 15_000,
   });
+  const focusQuery = useFrontView("live-focus", marketScope, {
+    preservePreviousData: true,
+    queryScope: "live-focus",
+    refetchInterval: 15_000,
+    enabled: focusMode,
+  });
   const repository = useFrontViewRepository();
   const [commandBinding, setCommandBinding] = useState<GateCommandBinding | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -186,11 +192,18 @@ export function LiveTradingPage() {
   if (deskQuery.isLoading || !model) return <LiveTradingLoading />;
 
   if (focusMode) {
+    if (focusQuery.isError) return <LiveTradingFailure message={(focusQuery.error as Error).message} retry={() => focusQuery.refetch()} />;
+    if (focusQuery.isLoading || !focusQuery.data) return <LiveTradingLoading />;
     return <LiveFocusMode
       model={model}
+      focus={focusQuery.data.data}
       busy={Boolean(submittingActionId)}
       error={commandError}
+      requestedScope={marketScope}
+      chartLoading={chartQuery.isFetching}
+      chartError={chartQuery.isError ? (chartQuery.error as Error).message : null}
       onExit={exitFocus}
+      onScopeChange={updateMarketScope}
       onSelectDecision={(signalId) => {
         const next = new URLSearchParams(searchParams);
         next.set("signalId", signalId);

@@ -19,6 +19,7 @@ import {
   isLivePlanView,
   isLiveTimelineView,
   isLiveTradingView,
+  isLiveFocusView,
   isOrderDetailView,
   isPositionDetailView,
   isIncidentDetailView,
@@ -66,6 +67,7 @@ const validators: ViewValidators = {
   "strategy-detail": isStrategyDetailView,
   "strategy-compare": isStrategyCompareView,
   "live-trading": isLiveTradingView,
+  "live-focus": isLiveFocusView,
   "live-plan": isLivePlanView,
   "live-news": isLiveNewsView,
   "live-timeline": isLiveTimelineView,
@@ -150,7 +152,7 @@ export function useFrontViewRepository() {
 export function useFrontView<ViewName extends keyof ControlPlaneViews & FrontViewName>(
   viewName: ViewName,
   params: Readonly<Record<string, string | undefined>> = {},
-  options: { preservePreviousData?: boolean; queryScope?: string; refetchInterval?: number | false } = {},
+  options: { preservePreviousData?: boolean; queryScope?: string; refetchInterval?: number | false; enabled?: boolean } = {},
 ) {
   const repository = useFrontViewRepository();
   const stableParams = Object.entries(params).filter((entry): entry is [string, string] => Boolean(entry[1])).sort(([left], [right]) => left.localeCompare(right));
@@ -160,6 +162,7 @@ export function useFrontView<ViewName extends keyof ControlPlaneViews & FrontVie
     queryFn: ({ signal }) => repository.getView(viewName, Object.fromEntries(stableParams), signal),
     placeholderData: options.preservePreviousData ? keepPreviousData : undefined,
     refetchInterval: options.refetchInterval,
+    enabled: options.enabled ?? true,
   });
 }
 
