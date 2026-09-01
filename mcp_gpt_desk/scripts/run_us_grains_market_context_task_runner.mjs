@@ -6,19 +6,6 @@ import { CodexExecAdapter } from "../src/codex-exec-adapter.js";
 import { loadCodexRuntimeSettings } from "../src/codex-runtime-settings.js";
 import { createDeskStoreFromEnv } from "../src/store.js";
 
-const input = await readJsonStdin();
-const store = createDeskStoreFromEnv();
-
-try {
-  await store.persistence.initialized;
-  const result = await runTask({ store, input });
-  process.stdout.write(`${JSON.stringify(result)}\n`);
-} catch (error) {
-  process.stdout.write(`${JSON.stringify(failure(error))}\n`);
-} finally {
-  await store.persistence.close?.();
-}
-
 async function runTask({ store, input }) {
   const task = input?.task || {};
   if (task.task_type !== "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH") throw coded("US_GRAINS_CONTEXT_TASK_TYPE_UNSUPPORTED", false);
@@ -231,3 +218,16 @@ const OUTPUT_SCHEMA = {
   },
   required: ["schemaVersion", "marketRegime", "volatilityRegime", "globalBias", "instrumentViews", "preferredStrategyFamilies", "discouragedStrategyFamilies", "opportunityZones", "noTradeZones", "invalidationConditions", "riskMultiplier", "headline", "operatorSummary", "marketInterpretation", "deskIntent", "whyNoTrade", "whatDeskWants", "whatDeskAvoids", "currentCatalysts", "nextExpectedEvents", "reasonCodes"],
 };
+
+const input = await readJsonStdin();
+const store = createDeskStoreFromEnv();
+
+try {
+  await store.persistence.initialized;
+  const result = await runTask({ store, input });
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+} catch (error) {
+  process.stdout.write(`${JSON.stringify(failure(error))}\n`);
+} finally {
+  await store.persistence.close?.();
+}
