@@ -103,6 +103,28 @@ test("publishes backend-calculated live R from the scoped market series", () => 
   });
 });
 
+test("publishes the Risk-authorized expected R from canonical trade-plan economics", () => {
+  const approvedIntent = intent("intent-authorized-r", "signal-authorized-r");
+  approvedIntent.payload.approved_trade_plan = {
+    economics: {
+      targets: [
+        { label: "TP1", price: 404, expected_r: 1.5, reward_risk: 1.5 },
+        { label: "TP2", price: 406, expected_r: 2.5, reward_risk: 2.5 },
+      ],
+    },
+  };
+  const projection = buildLiveTheoreticalExecution({
+    execution: {
+      portfolioOrderIntents: [approvedIntent],
+      humanExecutionGates: [], humanExecutionGateEvents: [], theoreticalEvents: [], manualExecutionEvents: [], trades: [], providerCommands: [], providerEvents: [],
+    },
+    nowIso: "2026-08-30T12:00:00.000Z",
+  });
+
+  assert.equal(projection.rows[0].expectedR, 1.5);
+  assert.deepEqual(projection.rows[0].targets.map((target) => target.ratioR), [1.5, 2.5]);
+});
+
 function intent(id, signalId) { return { portfolio_order_intent_id: id, target_position_id: `target-${id}`, quantity: 1, status: "READY", created_at_utc: "2026-08-30T09:59:00.000Z", payload: { order_intent_id: id, instrument: "ZC", action: "BUY", order_type: "LIMIT", quantity: 1, source_signal_id: signalId, entry: { price: 400 }, protection: { stop_price: 398, target_price: 404 } } }; }
 function gate(id, status) { return { portfolio_order_intent_id: id, status, operator_id: "operator", confirmed_at_utc: status === "CONFIRMED" ? "2026-08-30T10:00:00.000Z" : null, rejected_at_utc: status === "REJECTED" ? "2026-08-30T10:00:00.000Z" : null }; }
 function event(intentId, tradeId, eventType) { return { portfolio_order_intent_id: intentId, trade_id: tradeId, event_type: eventType, event_at_utc: "2026-08-30T10:05:00.000Z", price: 404 }; }

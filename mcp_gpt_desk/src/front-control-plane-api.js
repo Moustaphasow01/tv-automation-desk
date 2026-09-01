@@ -17,6 +17,7 @@ import {
   currentLiveLineageCohort,
   frontAuditEvents,
   isNominalLiveSignal,
+  liveTheoreticalLineageCohort,
   liveCanonicalRuntime,
   portfolioIntentSignalId,
   portfolioOrderIntentSummaryRow,
@@ -1079,6 +1080,10 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
   const funnelSignals = cohort.signals.filter(hasSignalId).map(signalRow);
   const signalInbox = rows(strategy?.signals).filter(isNominalLiveSignal).filter(hasSignalId).map((item) => signalTemporalRow(item, nowIso));
   const nominalIntentRows = cohort.portfolioOrderIntents;
+  const theoreticalIntentRows = liveTheoreticalLineageCohort({
+    execution: executionValue,
+    currentPortfolioOrderIntents: nominalIntentRows,
+  });
   const nominalIntentIds = new Set(nominalIntentRows.map((item) => String(item.portfolio_order_intent_id || "")).filter(Boolean));
   const portfolioOrderIntents = nominalIntentRows.map((item) => portfolioOrderIntentSummaryRow({ execution: executionValue, item, actor, nowIso }));
   const provider = canonicalProviderScope(executionValue, nominalIntentIds);
@@ -1097,7 +1102,7 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
   const arbitrations = liveArbitrations(executionValue, { signalIds: cohort.signalIds });
   const riskChecks = liveRiskChecks(executionValue, { signalIds: cohort.signalIds, portfolioOrderIntentIds: nominalIntentIds });
   const theoreticalExecution = buildLiveTheoreticalExecution({
-    execution: { ...executionValue, portfolioOrderIntents: nominalIntentRows },
+    execution: { ...executionValue, portfolioOrderIntents: theoreticalIntentRows },
     marketSeries,
     nowIso,
     actor,

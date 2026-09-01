@@ -117,6 +117,36 @@ export function currentLiveLineageCohort({ execution = {}, strategy = {}, nowIso
   return { signals: currentSignals, portfolioOrderIntents, signalIds: cohortSignalIds };
 }
 
+// The actionable Live cohort deliberately excludes expired and terminal
+// resources. The theoretical performance/history projection must not use that
+// same filter: doing so makes a closed outcome disappear as soon as its signal
+// expires. Keep current intents plus every nominal intent for which the backend
+// has durable theoretical or manual tracking evidence.
+export function liveTheoreticalLineageCohort({ execution = {}, currentPortfolioOrderIntents = [] } = {}) {
+  const currentIds = new Set(rows(currentPortfolioOrderIntents).map(portfolioIntentId).filter(Boolean));
+  const evidenceIds = new Set();
+  for (const collection of [execution?.theoreticalEvents, execution?.manualExecutionEvents, execution?.trades]) {
+    for (const item of rows(collection)) {
+      const id = portfolioIntentId(item);
+      if (id) evidenceIds.add(id);
+    }
+  }
+  const nominal = rows(execution?.portfolioOrderIntents).filter(isNominalPortfolioIntent);
+  const evidenceDates = nominal
+    .filter((item) => evidenceIds.has(portfolioIntentId(item)))
+    .map(portfolioIntentTradingDate)
+    .filter(Boolean)
+    .sort();
+  const latestEvidenceDate = evidenceDates.at(-1) || "";
+  return nominal.filter((item) => {
+    const id = portfolioIntentId(item);
+    if (currentIds.has(id)) return true;
+    if (!evidenceIds.has(id)) return false;
+    const tradingDate = portfolioIntentTradingDate(item);
+    return !latestEvidenceDate || !tradingDate || tradingDate === latestEvidenceDate;
+  });
+}
+
 export function isNominalLiveSignal(item = {}) {
   return String(item.source_class || item.sourceClass || "LIVE").toUpperCase() !== "CERTIFICATION_REPLAY"
     && !item.certification_run_id
@@ -142,6 +172,18 @@ export function portfolioIntentSignalId(item = {}) {
     payload.strategy_signal_id,
     rows(lineage.strategy_signal_ids)[0],
   ), "");
+}
+
+function portfolioIntentId(item = {}) {
+  const payload = payloadOf(item);
+  return text(firstValue(item.portfolio_order_intent_id, payload.portfolio_order_intent_id, payload.order_intent_id), "");
+}
+
+function portfolioIntentTradingDate(item = {}) {
+  const payload = payloadOf(item);
+  const value = firstValue(item.created_at_utc, item.requested_at_utc, payload.requested_at_utc, payload.created_at_utc);
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : "";
 }
 
 export function isNominalPortfolioIntent(item = {}) {

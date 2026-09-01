@@ -152,7 +152,17 @@ function theoreticalRow({ execution, intent, actor }) {
     entry,
     stop: firstFinite(protection.stop_price, nested(terms, "stop", "price"), terms.stop_price),
     targets,
-    expectedR: firstFinite(payload.expected_r, payload.reward_risk, nested(payload, "trade_plan_economics", "reward_risk"), nested(terms, "economics", "reward_risk")),
+    expectedR: firstFinite(
+      payload.expected_r,
+      payload.reward_risk,
+      nested(payload, "trade_plan_economics", "expected_r"),
+      nested(payload, "trade_plan_economics", "reward_risk"),
+      nested(payload, "approved_trade_plan", "economics", "expected_r"),
+      nested(payload, "approved_trade_plan", "economics", "reward_risk"),
+      nested(terms, "economics", "expected_r"),
+      nested(terms, "economics", "reward_risk"),
+      targets[0]?.ratioR,
+    ),
     status,
     latestEventType: upper(latestEvent?.event_type || status),
     latestEventAt: iso(latestEvent?.event_at_utc || trade?.updated_at || intent.updated_at_utc || intent.created_at_utc),
@@ -225,8 +235,24 @@ function theoreticalStatus({ latestEvent, trade, gate, intent }) {
 }
 
 function targetRows(payload, terms, protection) {
-  const rawTargets = rows(payload.targets).length ? rows(payload.targets) : rows(terms.targets);
-  if (rawTargets.length) return rawTargets.map((target, index) => ({ label: text(target?.label, `T${index + 1}`), price: firstFinite(target?.price, target?.value, target), ratioR: firstFinite(target?.ratio_r, target?.ratioR) }));
+  const approvedEconomicsTargets = rows(nested(payload, "approved_trade_plan", "economics", "targets"));
+  const rawTargets = rows(payload.targets).length
+    ? rows(payload.targets)
+    : rows(terms.targets).length
+      ? rows(terms.targets)
+      : approvedEconomicsTargets;
+  if (rawTargets.length) return rawTargets.map((target, index) => ({
+    label: text(target?.label, `T${index + 1}`),
+    price: firstFinite(target?.price, target?.value, target),
+    ratioR: firstFinite(
+      target?.ratio_r,
+      target?.ratioR,
+      target?.expected_r,
+      target?.reward_risk,
+      approvedEconomicsTargets[index]?.expected_r,
+      approvedEconomicsTargets[index]?.reward_risk,
+    ),
+  }));
   const single = firstFinite(protection.target_price, terms.target_price);
   return single === null ? [] : [{ label: "T1", price: single, ratioR: null }];
 }
