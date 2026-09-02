@@ -134,12 +134,12 @@ function marketSeriesResponse(scope, result) {
 }
 
 function maximumRanges(timeframes) {
-  const limits = { "1": "P7D", "5": "P31D", "15": "P90D", "30": "P180D", "60": "P365D", "240": "P730D", D: "P10Y", "1D": "P10Y" };
+  const limits = { "1": "P7D", "5": "P31D", "15": "P90D", "30": "P180D", "1H": "P365D", "4H": "P730D", D: "P10Y", "1D": "P10Y" };
   return Object.fromEntries(timeframes.map((item) => [item, limits[item] || "P31D"]));
 }
 
 function identifyGaps(points, timeframe) {
-  const minutes = Number(timeframe);
+  const minutes = timeframeMinutes(timeframe);
   if (!Number.isFinite(minutes) || minutes <= 0) return [];
   const expectedMs = minutes * 60_000;
   const gaps = [];
@@ -218,9 +218,16 @@ function deskInstrumentFromStorage(value) {
 }
 
 function normalizeTimeframe(value) {
-  const normalized = String(value || "").trim().toUpperCase().replace(/^M/, "");
-  if (!/^(1|5|15|30|60|240|D|1D)$/.test(normalized)) throw inputError("MARKET_SERIES_TIMEFRAME_INVALID", "Unsupported market timeframe.");
+  const text = String(value || "").trim().toUpperCase();
+  const stripped = text.replace(/^M(?=\d+$)/, "");
+  const normalized = ({ H1: "1H", "60": "1H", H4: "4H", "240": "4H", D: "1D" })[stripped] || stripped;
+  if (!/^(1|5|15|30|1H|4H|1D)$/.test(normalized)) throw inputError("MARKET_SERIES_TIMEFRAME_INVALID", "Unsupported market timeframe.");
   return normalized;
+}
+
+function timeframeMinutes(value) {
+  const timeframe = normalizeTimeframe(value);
+  return ({ "1": 1, "5": 5, "15": 15, "30": 30, "1H": 60, "4H": 240, "1D": 24 * 60 })[timeframe] || Number(timeframe);
 }
 
 function bounded(value) {

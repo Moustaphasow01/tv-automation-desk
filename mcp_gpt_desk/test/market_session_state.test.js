@@ -41,3 +41,14 @@ test("Market data freshness policy is relaxed only for expected CME closures", (
   assert.equal(marketDataFreshnessPolicyForSession(maintenance).max_age_seconds, 2 * 60 * 60);
   assert.equal(marketDataFreshnessPolicyForSession(weekend).max_age_seconds, 74 * 60 * 60);
 });
+
+test("Market data freshness policy accounts for delayed CBOT grains TradingView bars during RTH", () => {
+  assert.equal(
+    marketDataFreshnessPolicyForSession({ reason: "cbot_grains_open" }).max_age_seconds,
+    20 * 60,
+  );
+  assert.equal(
+    marketDataFreshnessPolicyForSession({ reason: "inside_cme_globex_session" }).max_age_seconds,
+    15 * 60,
+  );
+});

@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -28,8 +29,10 @@ DEFAULT_WEBHOOK_URL = "http://127.0.0.1:8787/api/v1/webhooks/tradingview"
 SYMBOLS = {
     "MNQ1!": "CME_MINI:MNQ1!",
     "MES1!": "CME_MINI:MES1!",
+    "ZC1!": "CBOT:ZC1!",
+    "ZW1!": "CBOT:ZW1!",
 }
-TIMEFRAMES = ("1", "5")
+TIMEFRAMES = ("1", "5", "15", "60", "240", "1H", "4H")
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,6 +46,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-age-seconds", type=int, default=15 * 60)
     parser.add_argument("--chunk-size", type=int, default=100)
     parser.add_argument("--env-file", default=".env.preprod")
+    parser.add_argument(
+        "--force-ipv4",
+        action="store_true",
+        help="POST through curl -4 to avoid local IPv6 routing failures.",
+    )
     parser.add_argument("--execute", action="store_true", help="Actually POST to the webhook.")
     return parser.parse_args()
 
@@ -130,7 +138,15 @@ def select_settled_recent_bars(
     closed_grace_seconds: int,
     max_age_seconds: int,
 ) -> list[dict[str, Any]]:
-    timeframe_seconds = {"1": 60, "5": 5 * 60, "15": 15 * 60, "60": 60 * 60}.get(timeframe, 60)
+    timeframe_seconds = {
+        "1": 60,
+        "5": 5 * 60,
+        "15": 15 * 60,
+        "60": 60 * 60,
+        "1H": 60 * 60,
+        "240": 4 * 60 * 60,
+        "4H": 4 * 60 * 60,
+    }.get(timeframe, 60)
     selected = []
     seen: set[str] = set()
     for bar in sorted(bars, key=lambda item: item["timestamp_utc"]):
@@ -167,8 +183,50 @@ def read_secret(env_file: str) -> str:
     return ""
 
 
-def post_webhook(url: str, secret: str, candles: list[dict[str, Any]]) -> dict[str, Any]:
+def post_webhook(
+    url: str,
+    secret: str,
+    candles: list[dict[str, Any]],
+    *,
+    force_ipv4: bool = False,
+) -> dict[str, Any]:
     payload = json.dumps({"token": secret, "candles": candles}, separators=(",", ":")).encode("utf-8")
+    if force_ipv4:
+        completed = subprocess.run(
+            [
+                "curl",
+                "-4",
+                "-k",
+                "-sS",
+                "--max-time",
+                "30",
+                "-H",
+                "content-type: application/json",
+                "-H",
+                "accept: application/json",
+                "--data-binary",
+                "@-",
+                "-w",
+                "\n%{http_code}",
+                url,
+            ],
+            input=payload,
+            capture_output=True,
+            check=False,
+        )
+        output = completed.stdout.decode("utf-8", errors="replace")
+        body_text, _, status_text = output.rpartition("\n")
+        status = int(status_text) if status_text.isdigit() else 0
+        if completed.returncode != 0 and not status:
+            return {
+                "http_status": 0,
+                "body": {"error": completed.stderr.decode("utf-8", errors="replace").strip() or "curl_failed"},
+            }
+        return {
+            "http_status": status,
+            "body": json.loads(body_text) if body_text.startswith("{") else {"raw": body_text},
+        }
+
     request = urllib.request.Request(
         url,
         data=payload,
@@ -195,10 +253,17 @@ def chunks(items: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]
     return [items[index:index + size] for index in range(0, len(items), size)]
 
 
-def post_webhook_chunks(url: str, secret: str, candles: list[dict[str, Any]], chunk_size: int) -> list[dict[str, Any]]:
+def post_webhook_chunks(
+    url: str,
+    secret: str,
+    candles: list[dict[str, Any]],
+    chunk_size: int,
+    *,
+    force_ipv4: bool = False,
+) -> list[dict[str, Any]]:
     responses = []
     for index, chunk in enumerate(chunks(candles, chunk_size), start=1):
-        response = post_webhook(url, secret, chunk)
+        response = post_webhook(url, secret, chunk, force_ipv4=force_ipv4)
         responses.append({
             "chunk": index,
             "count": len(chunk),
@@ -242,7 +307,7 @@ async def main() -> int:
     if unknown:
         raise SystemExit(f"unsupported_symbol:{','.join(unknown)}")
     if any(timeframe not in TIMEFRAMES for timeframe in requested_timeframes):
-        raise SystemExit("unsupported_timeframe: only 1 and 5 are supported")
+        raise SystemExit(f"unsupported_timeframe: allowed={','.join(TIMEFRAMES)}")
 
     adapter = MCPTradingViewAdapter(load_config())
     now = datetime.now(UTC)
@@ -304,7 +369,13 @@ async def main() -> int:
       secret = read_secret(args.env_file)
       if not secret:
           raise SystemExit("TRADINGVIEW_WEBHOOK_SECRET missing from env or env-file")
-      responses = post_webhook_chunks(args.webhook_url, secret, fetched, args.chunk_size)
+      responses = post_webhook_chunks(
+          args.webhook_url,
+          secret,
+          fetched,
+          args.chunk_size,
+          force_ipv4=args.force_ipv4,
+      )
       result["webhook_responses"] = responses
       result["accepted_count"] = accepted_count(responses)
       result["rejected_count"] = rejected_count(responses)

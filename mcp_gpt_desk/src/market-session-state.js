@@ -5,6 +5,7 @@ const CME_DAILY_MAINTENANCE_END_MINUTES = 18 * 60;
 const CME_WEEKLY_OPEN_MINUTES = 18 * 60;
 const CME_WEEKLY_CLOSE_MINUTES = 17 * 60;
 const DEFAULT_OPEN_MARKET_FRESHNESS_SECONDS = 15 * 60;
+const CBOT_GRAINS_OPEN_FRESHNESS_SECONDS = 20 * 60;
 const CME_DAILY_MAINTENANCE_FRESHNESS_SECONDS = 2 * 60 * 60;
 const CME_WEEKEND_FRESHNESS_SECONDS = 74 * 60 * 60;
 const CBOT_GRAINS_DAILY_CLOSED_FRESHNESS_SECONDS = 24 * 60 * 60;
@@ -77,6 +78,12 @@ export function marketDataFreshnessPolicyForSession(session = {}) {
   if (["cbot_grains_preopen", "cbot_grains_postclose"].includes(reason)) {
     return {
       max_age_seconds: CBOT_GRAINS_DAILY_CLOSED_FRESHNESS_SECONDS,
+      reason,
+    };
+  }
+  if (reason === "cbot_grains_open") {
+    return {
+      max_age_seconds: CBOT_GRAINS_OPEN_FRESHNESS_SECONDS,
       reason,
     };
   }

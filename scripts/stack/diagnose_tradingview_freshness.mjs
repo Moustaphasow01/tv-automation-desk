@@ -27,7 +27,8 @@ export function parseTradingViewFreshnessArgs(argv = process.argv.slice(2)) {
 export function buildTradingViewFreshnessDiagnosis(dataReadiness = {}, { checkedAtUtc } = {}) {
   const checkedAt = resolveCheckedAt(dataReadiness, checkedAtUtc);
   const maxAgeSeconds = freshnessMaxAgeSeconds(dataReadiness);
-  const feedStatuses = CORE_FEEDS.map((expected) => statusForCoreFeed({
+  const expectedFeeds = expectedCoreFeeds(dataReadiness);
+  const feedStatuses = expectedFeeds.map((expected) => statusForCoreFeed({
     expected,
     feeds: dataReadiness.core_feeds,
     checkedAt,
@@ -174,16 +175,55 @@ function actionsForDiagnosis({ status, blockers, dataReadiness, maxAgeSeconds })
     {
       id: "tradingview_alerts_durable",
       title: "Vérifier les alertes TradingView durables MNQ/MES",
-      detail: `Feeds concernés: ${missingOrStale.join(", ") || "backend readiness"}. Les alertes doivent poster MNQ/MES M1/M5 vers /api/v1/webhooks/tradingview avec une fraîcheur < ${maxAgeSeconds}s.`,
+      detail: `Feeds concernés: ${missingOrStale.join(", ") || "backend readiness"}. Les alertes doivent poster ${expectedFeedLabel(dataReadiness)} vers /api/v1/webhooks/tradingview avec une fraîcheur < ${maxAgeSeconds}s.`,
       command: "python3 scripts/tradingview/migrate_local_alert_webhooks.py",
     },
     {
       id: "tradingview_mcp_rescue",
       title: "Utiliser le backfill MCP local seulement comme secours diagnostic",
       detail: `État backend=${dataReadiness.state || "unknown"} ; ce secours écrit uniquement des bougies TradingView réelles via le webhook, jamais directement en base.`,
-      command: "python3 scripts/tradingview/import_recent_ohlcv_to_webhook.py --execute --env-file .env.example",
+      command: `python3 scripts/tradingview/import_recent_ohlcv_to_webhook.py --symbols=${expectedSymbolArgs(dataReadiness)} --timeframes=${expectedTimeframeArgs(dataReadiness)} --execute --env-file .env.example`,
     },
   ];
+}
+
+function expectedCoreFeeds(dataReadiness = {}) {
+  const scope = dataReadiness.readiness_scope || {};
+  const instruments = normalizeStringArray(scope.instruments);
+  const timeframes = normalizeStringArray(scope.timeframes);
+  if (!instruments.length || !timeframes.length) return CORE_FEEDS;
+  return instruments.flatMap((instrument) => timeframes.map((timeframe) => ({
+    instrument,
+    timeframe,
+    label: `${instrument} ${timeframeLabel(timeframe)}`,
+  })));
+}
+
+function expectedFeedLabel(dataReadiness = {}) {
+  const feeds = expectedCoreFeeds(dataReadiness);
+  const instruments = [...new Set(feeds.map((feed) => feed.instrument))].join("/");
+  const timeframes = [...new Set(feeds.map((feed) => timeframeLabel(feed.timeframe)))].join("/");
+  return `${instruments} ${timeframes}`;
+}
+
+function expectedSymbolArgs(dataReadiness = {}) {
+  const symbolByInstrument = { MNQ: "MNQ1!", MES: "MES1!", ZC: "ZC1!", ZW: "ZW1!" };
+  return [...new Set(expectedCoreFeeds(dataReadiness).map((feed) => symbolByInstrument[feed.instrument] || feed.instrument))]
+    .join(",");
+}
+
+function expectedTimeframeArgs(dataReadiness = {}) {
+  return [...new Set(expectedCoreFeeds(dataReadiness).map((feed) => feed.timeframe))].join(",");
+}
+
+function normalizeStringArray(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => String(item || "").trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function timeframeLabel(timeframe) {
+  return ({ "1": "M1", "5": "M5", "15": "M15", "60": "H1", "1H": "H1", "240": "H4", "4H": "H4" })[String(timeframe)] || String(timeframe);
 }
 
 function diagnosisStatus({ dataReadiness, blockers }) {

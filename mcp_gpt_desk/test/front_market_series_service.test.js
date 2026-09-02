@@ -71,6 +71,34 @@ describe("Front canonical market series", () => {
     assert.deepEqual(result.supportedInstruments, ["ZC", "ZW"]);
   });
 
+  test("normalizes higher-timeframe aliases to the canonical BFF/storage contract", async () => {
+    const queriedTimeframes = [];
+    const persistence = {
+      initialized: Promise.resolve(),
+      pool: {
+        async query(sql, values = []) {
+          if (values.length >= 2) queriedTimeframes.push(values[1]);
+          if (sql.includes("DISTINCT timeframe")) return { rows: [{ timeframe: "1" }, { timeframe: "5" }, { timeframe: "1H" }, { timeframe: "4H" }] };
+          if (sql.includes("DISTINCT symbol_code")) return { rows: [{ symbol_code: "ZC1!" }, { symbol_code: "ZW1!" }] };
+          return { rows: [
+            { feed_id: "feed-h1-1", timestamp_utc: "2026-09-02T15:00:00.000Z", trading_date: "2026-09-02", open: 540, high: 544, low: 539, close: 543, volume: 1000, source_collection: "market_candles" },
+            { feed_id: "feed-h1-2", timestamp_utc: "2026-09-02T14:00:00.000Z", trading_date: "2026-09-02", open: 538, high: 541, low: 537, close: 540, volume: 1000, source_collection: "market_candles" },
+          ] };
+        },
+      },
+    };
+
+    const result = await loadFrontMarketSeries(persistence, { instrument: "ZC", timeframe: "H1", as_of: "2026-09-02T16:00:00.000Z" });
+
+    assert.equal(result.availability, "KNOWN");
+    assert.equal(result.seriesId, "market:ZC:1H");
+    assert.equal(result.timeframe, "1H");
+    assert.deepEqual(queriedTimeframes, ["1H"]);
+    assert.deepEqual(result.supportedGranularities, ["1", "5", "1H", "4H"]);
+    assert.equal(result.maximumRangeByGranularity["1H"], "P365D");
+    assert.equal(result.gaps.length, 0);
+  });
+
   test("rejects unsupported timeframes and malformed cursors", async () => {
     const persistence = fixturePersistence();
     await assert.rejects(() => loadFrontMarketSeries(persistence, { instrument: "MNQ", timeframe: "2" }), (error) => error.code === "MARKET_SERIES_TIMEFRAME_INVALID");
