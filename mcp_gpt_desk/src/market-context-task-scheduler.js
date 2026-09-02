@@ -2,12 +2,58 @@ import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { SystemClock } from "@tv-automation/desk-time";
 
 const MISSION_ID = "f23b52e4-1955-4c8a-b8c7-216dd65e2c40";
+const MARKET_CONTEXT_UNIVERSE = "US_GRAINS_CBOT";
+const MARKET_CONTEXT_TASK_TYPE = "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH";
+const MARKET_CONTEXT_SUPERSEDED_CODE = "SUPERSEDED_BY_NEWER_MARKET_CONTEXT_TASK";
 const REQUIRED_FEEDS = Object.freeze([
   ["ZC", "1", "prod__tradingview__ZC1!__1"],
   ["ZC", "5", "prod__tradingview__ZC1!__5"],
   ["ZW", "1", "prod__tradingview__ZW1!__1"],
   ["ZW", "5", "prod__tradingview__ZW1!__5"],
 ]);
+
+export const MARKET_CONTEXT_SUPERSEDE_READY_SQL = `
+WITH stale_dispatches AS (
+  SELECT d.dispatch_id, d.agent_task_id, d.source_data_cutoff_utc
+  FROM market_context_task_dispatches d
+  JOIN agent_tasks t ON t.agent_task_id = d.agent_task_id
+  WHERE d.universe = $4
+    AND t.task_type = $5
+    AND t.lane = 'live'
+    AND t.status = 'READY'
+    AND d.agent_task_id IS NOT NULL
+    AND d.source_data_cutoff_utc <= $1::timestamptz
+    AND ($2::uuid IS NULL OR t.agent_task_id <> $2::uuid)
+),
+cancelled_tasks AS (
+  UPDATE agent_tasks t
+     SET status = 'CANCELLED',
+         last_error = jsonb_build_object(
+           'code', $3::text,
+           'superseded_by_task_id', $2::text,
+           'superseded_cutoff_utc', $1::text,
+           'cancelled_at_utc', now()
+         ),
+         lease_token = NULL,
+         lease_expires_at_utc = NULL,
+         updated_at_utc = now(),
+         revision = revision + 1
+    FROM stale_dispatches s
+   WHERE t.agent_task_id = s.agent_task_id
+   RETURNING t.agent_task_id, s.dispatch_id, s.source_data_cutoff_utc
+)
+UPDATE market_context_task_dispatches d
+   SET status = 'SKIPPED',
+       updated_at_utc = now(),
+       metadata = d.metadata || jsonb_build_object(
+         'superseded_reason', $3::text,
+         'superseded_by_task_id', $2::text,
+         'superseded_at_utc', now()
+       )
+  FROM cancelled_tasks c
+ WHERE d.dispatch_id = c.dispatch_id
+ RETURNING c.agent_task_id, d.dispatch_id, c.source_data_cutoff_utc;
+`;
 
 export class MarketContextTaskScheduler {
   constructor({ store, clock = store?.clock || new SystemClock() } = {}) {
@@ -29,8 +75,11 @@ export class MarketContextTaskScheduler {
     const triggerType = eventReasons.length ? "EVENT" : trigger;
     const reasonHash = canonicalSha256({ triggerType, eventReasons, cutoffBucket, session: session.marketSession, sourceStates: sourceStates.map(sourceSignature) }).slice(0, 24);
     const existing = await this.pool.query(`SELECT * FROM market_context_task_dispatches
-      WHERE universe='US_GRAINS_CBOT' AND source_data_cutoff_utc=$1 AND reason_hash=$2`, [cutoffBucket, reasonHash]);
-    if (existing.rows[0]) return { status: "DEDUPED", dispatch_id: existing.rows[0].dispatch_id, task_id: existing.rows[0].agent_task_id };
+      WHERE universe=$1 AND source_data_cutoff_utc=$2 AND reason_hash=$3`, [MARKET_CONTEXT_UNIVERSE, cutoffBucket, reasonHash]);
+    if (existing.rows[0]) {
+      const superseded = await this.#supersedeReadyContextTasks({ currentCutoffUtc: cutoffBucket, keepTaskId: existing.rows[0].agent_task_id });
+      return { status: "DEDUPED", dispatch_id: existing.rows[0].dispatch_id, task_id: existing.rows[0].agent_task_id, superseded_task_count: superseded.length };
+    }
     const ids = stableIds({ cutoffBucket, reasonHash });
     const client = await this.pool.connect();
     try {
@@ -38,27 +87,41 @@ export class MarketContextTaskScheduler {
       await client.query(`INSERT INTO agent_tasks (
         agent_task_id, agent_mission_id, task_key, task_type, lane, status, priority,
         payload, idempotency_key, max_attempts, not_before_utc, correlation_id, metadata
-      ) VALUES ($1,$2,$3,'LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH','live','READY',30,$4::jsonb,$5,3,$6,$7,$8::jsonb)
+      ) VALUES ($1,$2,$3,$9,'live','READY',30,$4::jsonb,$5,3,$6,$7,$8::jsonb)
       ON CONFLICT (agent_task_id) DO NOTHING`, [
         ids.taskId, MISSION_ID, ids.taskKey, JSON.stringify({ schema_version: "us_grains_market_context_task_v1", trigger: triggerType, trigger_reasons: eventReasons, reason_hash: reasonHash, bundle }),
         `idem-${ids.taskId}`, nowUtc, ids.correlationId, JSON.stringify({ universe: "US_GRAINS_CBOT", authority: "ADVISORY_ONLY", trigger_reasons: eventReasons }),
+        MARKET_CONTEXT_TASK_TYPE,
       ]);
       await client.query(`INSERT INTO market_context_task_dispatches (
         dispatch_id, universe, source_data_cutoff_utc, reason_hash, trigger_type,
         status, agent_task_id, not_before_utc, metadata
-      ) VALUES ($1,'US_GRAINS_CBOT',$2,$3,$4,'ENQUEUED',$5,$6,$7::jsonb)`, [
+      ) VALUES ($1,$8,$2,$3,$4,'ENQUEUED',$5,$6,$7::jsonb)`, [
         ids.dispatchId, cutoffBucket, reasonHash, triggerType, ids.taskId, nowUtc,
         JSON.stringify({ cadence_minutes: cadenceMinutes, market_session: session.marketSession, trigger_reasons: eventReasons }),
+        MARKET_CONTEXT_UNIVERSE,
       ]);
+      const superseded = await this.#supersedeReadyContextTasks({ client, currentCutoffUtc: cutoffBucket, keepTaskId: ids.taskId });
       await client.query("SELECT pg_notify('desk_agent_runtime_ready', $1)", [JSON.stringify({ schema: "desk_agent_runtime_ready_v1", lane: "live", status: "READY" })]);
       await client.query("COMMIT");
+      return { status: "ENQUEUED", ...ids, trigger: triggerType, trigger_reasons: eventReasons, source_data_cutoff_utc: bundle.cutoff, source_states: sourceStates, superseded_task_count: superseded.length };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
     } finally {
       client.release();
     }
-    return { status: "ENQUEUED", ...ids, trigger: triggerType, trigger_reasons: eventReasons, source_data_cutoff_utc: bundle.cutoff, source_states: sourceStates };
+  }
+
+  async #supersedeReadyContextTasks({ client = this.pool, currentCutoffUtc, keepTaskId }) {
+    const result = await client.query(MARKET_CONTEXT_SUPERSEDE_READY_SQL, [
+      currentCutoffUtc,
+      keepTaskId,
+      MARKET_CONTEXT_SUPERSEDED_CODE,
+      MARKET_CONTEXT_UNIVERSE,
+      MARKET_CONTEXT_TASK_TYPE,
+    ]);
+    return result.rows;
   }
 
   async #refreshFeedCoverage(nowUtc, session) {
@@ -70,7 +133,7 @@ export class MarketContextTaskScheduler {
       const row = result.rows[0] || {};
       const available = Boolean(row.coverage_start && row.coverage_end);
       const ageMs = available ? Math.max(0, Date.parse(nowUtc) - Date.parse(row.coverage_end)) : Number.POSITIVE_INFINITY;
-      const freshnessMs = timeframe === "1" ? 150_000 : 420_000;
+      const freshnessMs = marketContextFreshnessThresholdMs({ timeframe, readinessPolicy: session.freshnessPolicy });
       const stale = session.marketState === "OPEN" && ageMs > freshnessMs;
       const state = await this.store.marketContext.upsertSourceCoverage({
         sourceId: `${instrument}_${timeframe}`, sourceType: "OHLCV", status: !available ? "UNAVAILABLE" : stale ? "STALE" : "AVAILABLE",
@@ -170,6 +233,7 @@ function canonicalSession(health, nowUtc) {
     sessionEnd: source.session_end_utc || null,
     nextEligibleAt: source.next_eligible_at_utc || null,
     asOf: source.as_of_utc || nowUtc,
+    freshnessPolicy: health?.data_readiness?.freshness_policy || null,
     source: "data_readiness.market_session",
   };
 }
@@ -189,7 +253,13 @@ function summarizeSeries(rows) {
 
 async function safeRows(pool, sql, params) { try { return (await pool.query(sql, params)).rows; } catch { return []; } }
 function floorUtc(value, minutes) { const date = new Date(value); date.setUTCSeconds(0, 0); date.setUTCMinutes(Math.floor(date.getUTCMinutes() / minutes) * minutes); return date.toISOString(); }
-function sourceSignature(source) { return { sourceId: source.sourceId, status: source.status, coverageEnd: source.coverageEnd, datasetVersion: source.datasetVersion }; }
+function sourceSignature(source) { return marketContextSourceReasonSignature(source); }
+export function marketContextSourceReasonSignature(source) { return { sourceId: source.sourceId, status: source.status, datasetVersion: source.datasetVersion }; }
+export function marketContextFreshnessThresholdMs({ timeframe, readinessPolicy = null } = {}) {
+  const fallbackMs = String(timeframe) === "1" ? 150_000 : 420_000;
+  const readinessMs = Number(readinessPolicy?.max_age_seconds) * 1000;
+  return Number.isFinite(readinessMs) && readinessMs > 0 ? Math.max(fallbackMs, readinessMs) : fallbackMs;
+}
 export function detectMarketContextEventReasons(bundle) {
   const reasons = [];
   const previous = bundle.previousSnapshot;

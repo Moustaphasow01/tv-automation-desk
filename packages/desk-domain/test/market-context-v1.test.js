@@ -55,6 +55,18 @@ test("context prefilter is deterministic and fail closed", () => {
   assert.equal(evaluateMarketContextPrefilterV1({ signal: { instrument: "ZC", side: "LONG", createdAt: cutoff }, snapshot: null }).decision, "WAIT");
 });
 
+test("context prefilter waits when no side is currently authorized", () => {
+  const noActiveSide = normalizeMarketContextSnapshotV1({
+    ...snapshot,
+    instrumentViews: [{ instrument: "ZC", bias: "NEUTRAL", allowedSides: [], confidence: 0.4, reasonCodes: ["NO_ACTIVE_ALLOWED_SIDE"] }],
+  });
+
+  const result = evaluateMarketContextPrefilterV1({ signal: { instrument: "ZC", side: "LONG", createdAt: cutoff }, snapshot: noActiveSide });
+
+  assert.equal(result.decision, "WAIT");
+  assert.deepEqual(result.reasonCodes, ["CONTEXT_NO_ACTIVE_ALLOWED_SIDE"]);
+});
+
 test("context prefilter enforces opportunity, no-trade and invalidation framing", () => {
   const framed = {
     ...snapshot,

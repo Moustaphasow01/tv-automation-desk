@@ -46,6 +46,17 @@ export class PostgresStrategySignalBusRepository {
       .then((items) => items.map(normalizeSignalOutboxRow));
   }
 
+  async expirePending({ now_utc = nowUtc(), consumer_id = "strategy-signal-decision-pipeline" } = {}) {
+    await this.ready();
+    return rows(this.pool, `UPDATE strategy_signal_outbox
+      SET status = 'cancelled',
+          consumer_id = $2,
+          last_error = COALESCE(last_error, 'SIGNAL_EXPIRED_BEFORE_DECISION_PIPELINE'),
+          updated_at_utc = now()
+      WHERE status IN ('pending', 'published') AND expires_at_utc <= $1
+      RETURNING *`, [now_utc, consumer_id]).then((items) => items.map(normalizeSignalOutboxRow));
+  }
+
   async listRecent({ limit = 100 } = {}) {
     await this.ready();
     return rows(this.pool, `SELECT * FROM strategy_signal_outbox
@@ -121,6 +132,23 @@ export class InMemoryStrategySignalBusRepository {
       .sort((left, right) => Date.parse(left.generated_at_utc) - Date.parse(right.generated_at_utc))
       .slice(0, bounded(limit))
       .map(clone);
+  }
+
+  async expirePending({ now_utc = nowUtc(), consumer_id = "strategy-signal-decision-pipeline" } = {}) {
+    const expired = [];
+    for (const current of this.outbox.values()) {
+      if (!["PENDING", "PUBLISHED"].includes(current.status) || Date.parse(current.expires_at_utc) > Date.parse(now_utc)) continue;
+      const next = {
+        ...current,
+        status: "CANCELLED",
+        consumer_id,
+        last_error: current.last_error || "SIGNAL_EXPIRED_BEFORE_DECISION_PIPELINE",
+        updated_at_utc: now_utc,
+      };
+      this.outbox.set(current.signal_outbox_id, next);
+      expired.push(clone(next));
+    }
+    return expired;
   }
 
   async listRecent({ limit = 100 } = {}) {

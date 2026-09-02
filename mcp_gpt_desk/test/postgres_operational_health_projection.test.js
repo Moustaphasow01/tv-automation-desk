@@ -31,3 +31,15 @@ test("an optional worker stuck in stopping remains degraded until retired", () =
 
   assert.equal(result.ok, false);
 });
+
+test("the operational health stale window can be widened for slower supervisor heartbeats", () => {
+  const result = projectOperationalServices([
+    { service_id: "agent_runtime_supervisor_live", status: "healthy", age_seconds: 119 },
+  ], {
+    expectedServices: [],
+    staleAfterSeconds: 180,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.services[0].healthy, true);
+});

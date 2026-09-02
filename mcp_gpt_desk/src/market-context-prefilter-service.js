@@ -16,21 +16,28 @@ export class MarketContextPrefilterService {
     }));
     if (!grains.length) return passthrough;
     const current = await this.repository?.current("US_GRAINS_CBOT", nowUtc);
-    const evaluated = grains.map((signal) => ({
-      signal,
-      ...evaluateMarketContextPrefilterV1({
-        signal: {
-          instrument: signal.instrument,
-          side: signal.direction,
-          strategyFamily: signal.payload?.strategy_family || signal.setup?.family || signal.setup?.setup_type,
-          createdAt: signal.generated_at_utc,
-        },
-        snapshot: current?.snapshot || null,
-        at: signal.generated_at_utc,
-        familyRequiresAgriEvents: signal.payload?.family_requires_agri_events !== false,
-      }),
-      marketContextSnapshotId: current?.snapshot?.marketContextSnapshotId || null,
-    }));
+    const evaluated = grains.map((signal) => {
+      const snapshot = current?.snapshot || null;
+      const lookaheadReason = contextLookaheadReason(snapshot, nowUtc);
+      const decision = lookaheadReason
+        ? { decision: "WAIT", admissible: false, reasonCodes: [lookaheadReason] }
+        : evaluateMarketContextPrefilterV1({
+          signal: {
+            instrument: signal.instrument,
+            side: signal.direction,
+            strategyFamily: signal.payload?.strategy_family || signal.setup?.family || signal.setup?.setup_type || signal.setup?.setup_kind,
+            createdAt: signal.generated_at_utc,
+          },
+          snapshot,
+          at: nowUtc,
+          familyRequiresAgriEvents: signal.payload?.family_requires_agri_events !== false,
+        });
+      return {
+        signal,
+        ...decision,
+        marketContextSnapshotId: snapshot?.marketContextSnapshotId || snapshot?.market_context_snapshot_id || null,
+      };
+    });
     await this.#persist(evaluated, nowUtc);
     return [...passthrough, ...evaluated];
   }
@@ -47,7 +54,11 @@ export class MarketContextPrefilterService {
           universe, decision, reason_codes, source_data_cutoff_utc, decided_at_utc,
           payload, correlation_id, causation_id
         ) VALUES ($1,$2,$3,'US_GRAINS_CBOT',$4,$5,$6,$7,$8::jsonb,$9,$10)
-        ON CONFLICT (signal_id, market_context_snapshot_id) DO NOTHING`, [
+        ON CONFLICT (signal_id, market_context_snapshot_id) DO UPDATE SET
+          decision = EXCLUDED.decision,
+          reason_codes = EXCLUDED.reason_codes,
+          decided_at_utc = EXCLUDED.decided_at_utc,
+          payload = EXCLUDED.payload`, [
           id, item.marketContextSnapshotId, item.signal.signal_id, item.decision, item.reasonCodes,
           item.signal.source_data_cutoff_utc || item.signal.generated_at_utc, nowUtc,
           JSON.stringify({ signalId: item.signal.signal_id, decision: item.decision, reasonCodes: item.reasonCodes }),
@@ -76,4 +87,13 @@ function stableId(item) {
     signalId: item.signal.signal_id,
     snapshotId: item.marketContextSnapshotId || "missing",
   }).slice(0, 24)}`;
+}
+
+function contextLookaheadReason(snapshot, nowUtc) {
+  const decisionAt = Date.parse(nowUtc);
+  const contextCutoff = Date.parse(snapshot?.sourceDataCutoff || snapshot?.source_data_cutoff || snapshot?.source_data_cutoff_utc);
+  if (Number.isFinite(decisionAt) && Number.isFinite(contextCutoff) && contextCutoff > decisionAt) {
+    return "MARKET_CONTEXT_CUTOFF_AFTER_DECISION_TIME";
+  }
+  return null;
 }

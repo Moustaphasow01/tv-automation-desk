@@ -154,6 +154,7 @@ export function evaluateMarketContextPrefilterV1({ signal = {}, snapshot = null,
   const contextReasons = [...context.reasonCodes, ...view.reasonCodes].map((value) => value.toUpperCase());
   if (contextReasons.some((code) => code.includes("BLACKOUT"))) return decision("WAIT", ["CONTEXT_BLACKOUT_ACTIVE"]);
   if (context.invalidationConditions.some(conditionActive)) return decision("REJECT", ["CONTEXT_INVALIDATION_ACTIVE"]);
+  if (!view.allowedSides.length) return decision("WAIT", ["CONTEXT_NO_ACTIVE_ALLOWED_SIDE"]);
   if (view.allowedSides.length && !view.allowedSides.includes(side)) return decision("REJECT", ["CONTEXT_SIDE_NOT_ALLOWED"]);
   if (context.discouragedStrategyFamilies.includes(family) || view.discouragedFamilies.includes(family)) {
     return decision("REJECT", ["CONTEXT_FAMILY_DISCOURAGED"]);

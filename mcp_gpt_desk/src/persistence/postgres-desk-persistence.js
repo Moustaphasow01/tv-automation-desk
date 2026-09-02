@@ -60,7 +60,7 @@ export class PostgresDeskPersistence {
   }
 
   async operationalHealth({
-    staleAfterSeconds = 90,
+    staleAfterSeconds = positiveInteger(process.env.DESK_OPERATIONAL_HEALTH_STALE_SECONDS, 90),
     expectedServices = String(process.env.DESK_EXPECTED_SERVICE_IDS
       || "live_runtime_scheduler,replay_preparation_worker,broker_management,telegram_alert_worker")
       .split(",")
@@ -1084,6 +1084,11 @@ export class PostgresDeskPersistence {
       client.release();
     }
   }
+}
+
+function positiveInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
 }
 
 

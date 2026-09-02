@@ -23,19 +23,25 @@ export class StrategySignalDecisionPipelineService {
   async runOnce(input = {}) {
     const nowUtc = asOf(input, this.clock);
     const before = await optionalProviderCounts(this.providerCounts);
+    const expired = await this.signalBusRepository.expirePending?.({
+      now_utc: nowUtc,
+      consumer_id: input.consumer_id || "strategy-signal-decision-pipeline",
+    }) || [];
     const pending = await this.signalBusRepository.pollPending({ limit: input.limit || 100, now_utc: nowUtc });
     const scoped = pending.filter((item) => signalInScope(item, input));
-    if (!scoped.length) return idleResult({ nowUtc, pending, before });
+    if (!scoped.length) return idleResult({ nowUtc, pending, before, expired });
     const prefilter = this.contextPrefilter
       ? await this.contextPrefilter.evaluate(scoped, nowUtc)
       : scoped.map((signal) => ({ signal, decision: "ADMISSIBLE", admissible: true, reasonCodes: ["CONTEXT_PREFILTER_NOT_CONFIGURED"] }));
     const admissibleItems = prefilter.filter((item) => item.decision === "ADMISSIBLE");
+    const rejectedItems = prefilter.filter((item) => item.decision === "REJECT");
+    const waitItems = prefilter.filter((item) => item.decision === "WAIT");
     const admissible = admissibleItems.map((item) => item.signal);
     const contextDecisions = await this.#recordContextDecisions(admissibleItems, nowUtc);
     if (!admissible.length) {
-      const consumed = await this.#consume(scoped, input, nowUtc);
+      const consumed = await this.#consume(rejectedItems.map((item) => item.signal), input, nowUtc);
       return {
-        status: "CONTEXT_FILTERED",
+        status: contextFilteredStatus({ rejectedItems, waitItems }),
         as_of_utc: nowUtc,
         pending_seen: pending.length,
         scoped_signal_count: scoped.length,
@@ -45,7 +51,9 @@ export class StrategySignalDecisionPipelineService {
         target_position_count: 0,
         order_intent_count: 0,
         human_gate_count: 0,
+        expired_signal_outbox_ids: signalOutboxIds(expired),
         consumed_signal_outbox_ids: consumed,
+        deferred_signal_outbox_ids: waitItems.map((item) => item.signal.signal_outbox_id).filter(Boolean),
         provider_counts: { before, after: before, unchanged: true },
       };
     }
@@ -53,13 +61,14 @@ export class StrategySignalDecisionPipelineService {
       as_of_utc: nowUtc,
       account_id: accountId(input),
       portfolio_scope: input.portfolio_scope || input.scope || accountId(input),
-      idempotency_key: idempotencyKey(input, scoped, nowUtc),
-      correlation_id: scoped[0]?.correlation_id || `strategy-signal-decision:${nowUtc}`,
+      idempotency_key: idempotencyKey(input, admissible, nowUtc),
+      correlation_id: admissible[0]?.correlation_id || `strategy-signal-decision:${nowUtc}`,
       signals: admissible,
       risk_budget: riskBudget(input),
       execution_policy: executionPolicy(input),
     });
-    const consumed = await this.#consume(scoped, input, nowUtc);
+    const terminalSignals = [...admissible, ...rejectedItems.map((item) => item.signal)];
+    const consumed = await this.#consume(terminalSignals, input, nowUtc);
     const humanGates = await this.#ensureHumanGates(pipeline, nowUtc);
     const shadowDispatch = await this.execution.materializeReadyCommands({
       execution_mode: "SHADOW",
@@ -83,7 +92,9 @@ export class StrategySignalDecisionPipelineService {
       order_intent_ids: (pipeline.intents?.order_intents || []).map((intent) => intent.order_intent_id).filter(Boolean),
       human_gate_count: humanGates.length,
       human_gate_ids: humanGates.map((gate) => gate?.human_execution_gate_id).filter(Boolean),
+      expired_signal_outbox_ids: signalOutboxIds(expired),
       consumed_signal_outbox_ids: consumed,
+      deferred_signal_outbox_ids: waitItems.map((item) => item.signal.signal_outbox_id).filter(Boolean),
       shadow_dispatch: shadowDispatch,
       provider_counts: { before, after, unchanged: true },
     };
@@ -237,7 +248,7 @@ function assertProviderSideEffectsUnchanged(before, after) {
   }
 }
 
-function idleResult({ nowUtc, pending, before }) {
+function idleResult({ nowUtc, pending, before, expired = [] }) {
   return {
     status: pending.length ? "NO_SCOPED_PENDING_SIGNALS" : "NO_PENDING_SIGNALS",
     as_of_utc: nowUtc,
@@ -248,6 +259,7 @@ function idleResult({ nowUtc, pending, before }) {
     target_position_count: 0,
     order_intent_count: 0,
     human_gate_count: 0,
+    expired_signal_outbox_ids: signalOutboxIds(expired),
     consumed_signal_outbox_ids: [],
     provider_counts: { before, after: before, unchanged: true },
   };
@@ -267,6 +279,12 @@ function prefilterSummary(items) {
   };
 }
 
+function contextFilteredStatus({ rejectedItems = [], waitItems = [] } = {}) {
+  if (waitItems.length && rejectedItems.length) return "CONTEXT_PARTIAL_WAIT";
+  if (waitItems.length) return "CONTEXT_WAITING";
+  return "CONTEXT_FILTERED";
+}
+
 function pipelineStatus(pipeline, humanGates = []) {
   if (humanGates.length) return "HUMAN_GATE_READY";
   if (pipeline.intents?.order_intents?.length) return "ORDER_INTENT_NOT_READY";
@@ -278,6 +296,7 @@ function idempotencyKey(input, signals, nowUtc) {
 }
 
 function accountId(input) { return String(input.account_id || input.accountId || process.env.DESK_SHADOW_RUNTIME_ACCOUNT_ID || "shadow_live"); }
+function signalOutboxIds(signals) { return signals.map((signal) => signal?.signal_outbox_id).filter(Boolean); }
 function asOf(input, clock) {
   const value = input.as_of_utc || input.asOfUtc || input.now_utc || input.nowUtc || clock.now();
   if (typeof value === "string") return new Date(value).toISOString();
