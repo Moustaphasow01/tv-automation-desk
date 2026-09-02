@@ -417,7 +417,8 @@ function executionModeState(value) {
 
 function signalState(value) {
   const state = upper(value);
-  return ["NEW", "ARBITRATED", "REJECTED", "ORDERED", "FILLED", "EXPIRED", "CLOSED"].includes(state) ? state : "NEW";
+  if (state === "PENDING" || state === "PUBLISHED") return "NEW";
+  return ["NEW", "ARBITRATED", "REJECTED", "ORDERED", "FILLED", "EXPIRED", "CLOSED", "CONSUMED", "CANCELLED"].includes(state) ? state : "NEW";
 }
 
 function providerState(item) {

@@ -268,6 +268,8 @@ export const presentSignalState = makePresenter({
   FILLED: { label: "Exécuté", tone: "success" },
   REJECTED: { label: "Rejeté", tone: "danger" },
   EXPIRED: { label: "Expiré", tone: "warning" },
+  CONSUMED: { label: "Traité", tone: "neutral" },
+  CANCELLED: { label: "Annulé", tone: "warning" },
 });
 
 /** Résultat d'une gate de validation (backtest, robustesse, risque, etc.). */

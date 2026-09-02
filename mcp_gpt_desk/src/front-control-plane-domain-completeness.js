@@ -155,7 +155,7 @@ export function isNominalLiveSignal(item = {}) {
 
 export function isCurrentLiveSignal(item = {}, nowIso = currentUtc()) {
   const status = upper(firstValue(item.status, item.state, ""));
-  if (["EXPIRED", "CANCELLED", "CANCELED", "REJECTED", "FAILED", "SUPERSEDED", "CLOSED", "DONE"].includes(status)) return false;
+  if (["EXPIRED", "CANCELLED", "CANCELED", "REJECTED", "FAILED", "SUPERSEDED", "CLOSED", "DONE", "CONSUMED"].includes(status)) return false;
   const expiresAt = firstValue(item.expires_at_utc, item.expiresAt);
   const nowMs = Date.parse(nowIso || currentUtc());
   const expiresMs = Date.parse(expiresAt || "");

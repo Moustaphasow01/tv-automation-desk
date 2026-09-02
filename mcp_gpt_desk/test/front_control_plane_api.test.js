@@ -484,6 +484,8 @@ test("live trading keeps signal, portfolio and risk stages on the same current l
         { signal_id: "signal-historical", strategy_instance_id: "instance-historical", instrument_code: "MNQ", side: "short", status: "EXPIRED", expires_at_utc: "2026-08-11T07:00:00.000Z" },
         { signal_id: "signal-rejected", strategy_instance_id: "instance-rejected", instrument_code: "MES", side: "long", status: "REJECTED" },
         { signal_id: "signal-closed", strategy_instance_id: "instance-closed", instrument_code: "ZW", side: "short", status: "CLOSED" },
+        { signal_id: "signal-consumed", strategy_instance_id: "instance-consumed", instrument_code: "ZC", side: "long", status: "consumed", expires_at_utc: "2026-08-11T09:00:00.000Z" },
+        { signal_id: "signal-cancelled", strategy_instance_id: "instance-cancelled", instrument_code: "ZW", side: "long", status: "cancelled", expires_at_utc: "2026-08-11T09:00:00.000Z" },
       ],
     },
   });
@@ -496,8 +498,8 @@ test("live trading keeps signal, portfolio and risk stages on the same current l
 
   const envelope = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/live-trading", query: {} });
 
-  assert.deepEqual(envelope.data.signals.map((item) => item.signalId), ["signal-current", "signal-historical", "signal-rejected", "signal-closed"]);
-  assert.deepEqual(envelope.data.signals.map((item) => item.state), ["NEW", "EXPIRED", "REJECTED", "CLOSED"]);
+  assert.deepEqual(envelope.data.signals.map((item) => item.signalId), ["signal-current", "signal-historical", "signal-rejected", "signal-closed", "signal-consumed", "signal-cancelled"]);
+  assert.deepEqual(envelope.data.signals.map((item) => item.state), ["NEW", "EXPIRED", "REJECTED", "CLOSED", "CONSUMED", "CANCELLED"]);
   assert.deepEqual(envelope.data.canonicalRuntime.latestSignals.map((item) => item.signalId), ["signal-current"]);
   assert.deepEqual(envelope.data.portfolioOrderIntents.map((item) => item.portfolioOrderIntentId), ["portfolio_order_intent_current"]);
   assert.deepEqual(envelope.data.arbitrations.map((item) => item.arbitrationId), ["arb-current"]);
