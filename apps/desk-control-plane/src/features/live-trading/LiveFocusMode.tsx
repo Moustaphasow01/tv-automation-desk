@@ -6,7 +6,7 @@ import { presentExecutionMode, presentGeneric } from "@/design-system/labels";
 import { operatorCode, operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import type { HumanGateAction } from "@/features/order-intent/model";
-import { displayTime } from "./mapper";
+import { displayTime, displayValue } from "./mapper";
 import { readLiveFocusSoundProfile, writeLiveFocusSoundProfile, type LiveFocusSoundEvent, type LiveFocusSoundProfile } from "./focusPreferences";
 import { focusTradePlan } from "./focusTradePlan";
 import { gateTiming } from "./LiveHumanGate";
@@ -40,6 +40,7 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [drawer, setDrawer] = useState<"brief" | "trade" | null>(null);
+  const [showMarketChart, setShowMarketChart] = useState(false);
   const [soundProfile, setSoundProfile] = useState(readLiveFocusSoundProfile);
   const holdTimer = useRef<number | null>(null);
   const gateConfirm = useMemo(() => model.gateActions.find((action) => action.action === "CONFIRM" && action.permission === "ALLOWED"), [model.gateActions]);
@@ -94,6 +95,7 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
       }
       if (pending || showHelp || drawer) return;
       if (event.key === "?") { event.preventDefault(); setShowHelp((value) => !value); }
+      if (event.key.toLowerCase() === "g") { event.preventDefault(); setShowMarketChart((value) => !value); }
       if (event.key === "ArrowDown") { event.preventDefault(); selectRelative(1); }
       if (event.key === "ArrowUp") { event.preventDefault(); selectRelative(-1); }
       if (event.key.toLowerCase() === "c") { event.preventDefault(); void copyPlan(); }
@@ -113,11 +115,11 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
   return (
     <div className={`live-focus live-focus--${state.code.toLowerCase()} lt-tone--${state.tone}`} data-testid="live-focus-mode" data-focus-state={state.code}>
       <header className="live-focus__header">
-        <div className="live-focus__identity"><span className="live-focus__mark" aria-hidden="true">◆</span><div><small>DESK LIVE · FOCUS OPÉRATEUR</small><strong>{state.label}</strong></div></div>
+        <div className="live-focus__identity"><span className="live-focus__mark" aria-hidden="true">◆</span><div><small>DIRECT DESK · FOCUS OPÉRATEUR</small><strong>{state.label}</strong></div></div>
         <div className="live-focus__policy"><span>{operatorCode(model.mode.environment)}</span><span>{presentExecutionMode(model.mode.executionMode).label}</span><span>Exécution automatique {model.mode.autoExecutionEnabled ? "active" : "désactivée"}</span></div>
         {state.code === "C" ? <div className="live-focus__countdown" data-urgency={timing.urgency} aria-label={`Temps restant ${timing.label}`}><strong>⏱ {timing.label}</strong><span aria-hidden="true"><i style={{ width: `${timing.remainingPct}%` }} /></span></div> : null}
         <time dateTime={realtime?.now?.toISOString()}><strong>{realtime?.now ? formatEtClock(realtime.now) : "—"}</strong><small>NEW YORK</small></time>
-        <button type="button" className="live-focus__return" onClick={onExit}><FaArrowLeft aria-hidden="true" />Retour Live <kbd>Esc</kbd></button>
+        <button type="button" className="live-focus__return" onClick={onExit}><FaArrowLeft aria-hidden="true" />Retour au direct <kbd>Esc</kbd></button>
       </header>
 
       <FocusMissionRibbon model={model} focus={focus} state={state} timingLabel={timing.label} />
@@ -129,10 +131,17 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
           <FocusBrief focus={focus} onOpen={() => setDrawer("brief")} />
         </section>
 
-        <section className="live-focus__market" aria-labelledby="live-focus-market-title">
+        <section className={`live-focus__market${showMarketChart ? " live-focus__market--chart-open" : ""}`} aria-labelledby="live-focus-market-title">
           <QuestionNumber value="02" />
-          <div className="live-focus__section-copy"><p className="eyebrow">QUE FAIT LE MARCHÉ ?</p><h2 id="live-focus-market-title">Contexte prix</h2><p>Le graphique reste une observation. Les termes exécutables proviennent uniquement du plan autorisé.</p></div>
-          <div className="live-focus__chart"><InstrumentChartPanel model={model} onScopeChange={onScopeChange} requestedScope={requestedScope} loading={chartLoading} error={chartError} /></div>
+          <div className="live-focus__section-copy"><p className="eyebrow">QUE FAIT LE MARCHÉ ?</p><h2 id="live-focus-market-title">Prix opérationnels</h2><p>Lecture compacte des prix publiés. Le graphique complet reste disponible à la demande.</p></div>
+          <FocusMarketSummary
+            model={model}
+            focus={focus}
+            requestedScope={requestedScope}
+            chartVisible={showMarketChart}
+            onToggleChart={() => setShowMarketChart((value) => !value)}
+          />
+          {showMarketChart ? <div className="live-focus__chart"><InstrumentChartPanel model={model} onScopeChange={onScopeChange} requestedScope={requestedScope} loading={chartLoading} error={chartError} /></div> : null}
         </section>
 
         <section className="live-focus__situation" aria-labelledby="live-focus-situation-title">
@@ -161,7 +170,7 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
 
         {queue.length || focus.observedOpportunities.length ? <FocusQueues focus={focus} selectedIndex={selectedIndex} onSelectDecision={onSelectDecision} /> : null}
       </main>
-      <footer className="live-focus__footer"><span><kbd>↑</kbd><kbd>↓</kbd> dossiers</span><span><kbd>C</kbd> copier</span><span><kbd>R</kbd> refuser</span><span><kbd>S</kbd> stop placé</span><button type="button" className="live-focus__sound" aria-pressed={soundProfile.enabled} onClick={() => { const next = writeLiveFocusSoundProfile({ ...soundProfile, enabled: !soundProfile.enabled }); setSoundProfile(next); }}>{soundProfile.enabled ? <FaVolumeUp aria-hidden="true" /> : <FaVolumeMute aria-hidden="true" />}{soundProfile.enabled ? "Sons actifs" : "Sons coupés"}</button><button type="button" className="live-focus__help-trigger" aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><FaQuestionCircle aria-hidden="true" />Raccourcis <kbd>?</kbd></button><span className="live-focus__session">Séance {focus.whyNoTrade.stageCounts.signals ?? 0} signaux · {focus.whyNoTrade.stageCounts.orderIntents ?? 0} ordres proposés · {focus.tradeCards.filter((item) => !item.terminal).length} à décider · {model.signalFunnel.theoreticalTracked} suivis</span><small>{focus.session.marketSession} · arrêté à {displayTime(focus.asOf)}</small></footer>
+      <footer className="live-focus__footer"><span><kbd>↑</kbd><kbd>↓</kbd> dossiers</span><span><kbd>G</kbd> graphique</span><span><kbd>C</kbd> copier</span><span><kbd>R</kbd> refuser</span><span><kbd>S</kbd> stop placé</span><button type="button" className="live-focus__sound" aria-pressed={soundProfile.enabled} onClick={() => { const next = writeLiveFocusSoundProfile({ ...soundProfile, enabled: !soundProfile.enabled }); setSoundProfile(next); }}>{soundProfile.enabled ? <FaVolumeUp aria-hidden="true" /> : <FaVolumeMute aria-hidden="true" />}{soundProfile.enabled ? "Sons actifs" : "Sons coupés"}</button><button type="button" className="live-focus__help-trigger" aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><FaQuestionCircle aria-hidden="true" />Raccourcis <kbd>?</kbd></button><span className="live-focus__session">Séance {focus.whyNoTrade.stageCounts.signals ?? 0} signaux · {focus.whyNoTrade.stageCounts.orderIntents ?? 0} ordres proposés · {focus.tradeCards.filter((item) => !item.terminal).length} à décider · {model.signalFunnel.theoreticalTracked} suivis</span><small>{focus.session.marketSession} · arrêté à {displayTime(focus.asOf)}</small></footer>
       {pending ? <FocusActionDialog pending={pending} model={model} busy={busy} onCancel={() => setPending(null)} onSubmitGate={async (action, reason) => { await onSubmitGate(action, reason); setPending(null); }} onSubmitManual={async (action, input) => { await onSubmitManual(action, input); setPending(null); }} /> : null}
       {showHelp ? <FocusHelpDialog profile={soundProfile} onChange={(next) => { setSoundProfile(writeLiveFocusSoundProfile(next)); }} onClose={() => setShowHelp(false)} /> : null}
       {drawer === "brief" ? <FocusBriefDrawer focus={focus} onClose={() => setDrawer(null)} /> : null}
@@ -205,6 +214,55 @@ function FocusMissionRibbon({ model, focus, state, timingLabel }: { model: LiveT
       <div><dt>Données arrêtées à</dt><dd>{freshness}</dd></div>
     </dl>
   </section>;
+}
+
+function FocusMarketSummary({ model, focus, requestedScope, chartVisible, onToggleChart }: {
+  model: LiveTradingModel;
+  focus: LiveFocusView;
+  requestedScope: { instrument?: string; timeframe?: string };
+  chartVisible: boolean;
+  onToggleChart(): void;
+}) {
+  const lastCandle = model.marketSeries.points.at(-1);
+  const watched = model.watchlist.slice(0, 8);
+  const activeInstrument = model.marketSeries.instrument ?? requestedScope.instrument ?? "Instrument non publié";
+  const activeTimeframe = focusTimeframeLabel(model.marketSeries.timeframe ?? requestedScope.timeframe);
+  const marketState = operatorCode(focus.session.marketState, "État de séance non publié");
+  const availability = presentMarketContextStatus(model.marketSeries.availability);
+  return <div className="live-focus__market-summary" aria-label="Prix opérationnels publiés par le backend">
+    <div className="live-focus__market-head">
+      <div>
+        <small>PRIX OPÉRATIONNELS</small>
+        <strong>{activeInstrument} · {activeTimeframe}</strong>
+        <span>{availability.label} · {marketState} · source {operatorCode(model.marketSeries.source, "non publiée")}</span>
+      </div>
+      <button type="button" className="live-focus__chart-toggle" aria-expanded={chartVisible} onClick={onToggleChart}>
+        <FaChartLine aria-hidden="true" />
+        {chartVisible ? "Masquer le graphique" : "Afficher le graphique"}
+        <kbd>G</kbd>
+      </button>
+    </div>
+    {lastCandle ? (
+      <dl className="live-focus__market-strip">
+        <Fact label="Dernier" value={displayValue(lastCandle.close)} />
+        <Fact label="Ouverture" value={displayValue(lastCandle.open)} />
+        <Fact label="Plus haut" value={displayValue(lastCandle.high)} />
+        <Fact label="Plus bas" value={displayValue(lastCandle.low)} />
+        <Fact label="Volume" value={displayValue(lastCandle.volume)} />
+        <Fact label="Bougie" value={displayTime(lastCandle.timestamp)} />
+      </dl>
+    ) : <p className="live-focus__market-empty">Aucune bougie exploitable n’est publiée pour ce périmètre.</p>}
+    <div className="live-focus__watchlist" aria-label="Marchés surveillés">
+      {watched.length ? watched.map((item) => (
+        <article key={item.symbol} data-availability={item.availability}>
+          <strong>{item.symbol}</strong>
+          <span>{displayValue(item.last)}</span>
+          <small>{formatPct(item.changePct)} · {displayTime(item.asOf)}</small>
+        </article>
+      )) : <p>Aucune watchlist publiée.</p>}
+    </div>
+    <small className="live-focus__market-footnote">Le Focus privilégie le dossier opérateur. Les tracés et l’inspection détaillée restent dans le graphique lorsque vous l’ouvrez.</small>
+  </div>;
 }
 
 function presentMarketContextStatus(rawStatus: string) {
@@ -334,8 +392,8 @@ function resolveBackendFocusState(focus: LiveFocusView, model: LiveTradingModel)
     B: { label: "SURVEILLANCE", headline: "Le Desk cherche un setup qualifié", instruction: focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Les moteurs déterministes évaluent le marché.", tone: "info" },
     C: { label: "OPPORTUNITÉ OBSERVÉE", headline: "Un signal traverse les filtres", instruction: "Cette opportunité reste diagnostique tant qu'elle n'a pas produit TargetPosition, OrderIntent et HumanGate.", tone: "warning" },
     D: { label: "ARBITRAGE", headline: "Portfolio et Risk évaluent le dossier", instruction: "Aucune action opérateur avant publication du plan autorisé.", tone: "warning" },
-    E: { label: "DOSSIER QUALIFIÉ", headline: "Le dossier canonique est prêt", instruction: "Contrôlez les termes immuables et l'autorité Human Gate.", tone: "success" },
-    F: { label: "ACTION HUMAINE", headline: "Une décision opérateur est attendue", instruction: "Confirmer ne signifie ni ACK ni Fill.", tone: "success" },
+    E: { label: "DOSSIER QUALIFIÉ", headline: "Le dossier canonique est prêt", instruction: "Contrôlez les termes immuables et l’autorité de validation humaine.", tone: "success" },
+    F: { label: "ACTION HUMAINE", headline: "Une décision opérateur est attendue", instruction: "Confirmer ne signifie ni accusé broker ni exécution.", tone: "success" },
   };
   return { code, ...labels[code] };
 }
@@ -381,9 +439,9 @@ function FocusActionDialog({ pending, model, busy, onCancel, onSubmitGate, onSub
 }
 
 function FocusHelpDialog({ profile, onChange, onClose }: { profile: LiveFocusSoundProfile; onChange(profile: LiveFocusSoundProfile): void; onClose(): void }) {
-  const shortcuts = [["F", "ouvrir Focus"], ["Échap", "retour cockpit"], ["maintenir Entrée", "action principale"], ["R", "refuser"], ["C", "copier le ticket"], ["↑ / ↓", "changer de décision"], ["S", "stop placé"], ["?", "aide"]];
-  const events: { key: LiveFocusSoundEvent; label: string }[] = [{ key: "decision", label: "Décision prenable" }, { key: "expiry", label: "Expiration imminente" }, { key: "expired", label: "Décision expirée" }, { key: "fill", label: "Fill confirmé" }, { key: "stop", label: "Stop touché" }];
-  return <div className="live-focus-dialog__backdrop" role="presentation"><section className="live-focus-dialog live-focus-help" role="dialog" aria-modal="true" aria-labelledby="focus-help-title"><header><div><small>MODE FOCUS</small><h2 id="focus-help-title">Raccourcis et perception</h2></div><button type="button" onClick={onClose} autoFocus>Fermer</button></header><div className="live-focus-help__shortcuts">{shortcuts.map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}</div><div className="live-focus-help__sound"><button type="button" aria-pressed={profile.enabled} onClick={() => onChange({ ...profile, enabled: !profile.enabled })}>Sons globaux · {profile.enabled ? "ON" : "OFF"}</button><button type="button" aria-pressed={profile.doNotDisturb} onClick={() => onChange({ ...profile, doNotDisturb: !profile.doNotDisturb })}>Ne pas déranger · {profile.doNotDisturb ? "ON" : "OFF"}</button>{events.map((event) => <button key={event.key} type="button" aria-pressed={profile.events[event.key]} onClick={() => onChange({ ...profile, events: { ...profile.events, [event.key]: !profile.events[event.key] } })}>{event.label} · {profile.events[event.key] ? "ON" : "OFF"}</button>)}</div><small>Le mode « ne pas déranger » laisse toujours passer l’expiration imminente et le stop touché.</small></section></div>;
+  const shortcuts = [["F", "ouvrir Focus"], ["Échap", "retour cockpit"], ["G", "afficher le graphique"], ["maintenir Entrée", "action principale"], ["R", "refuser"], ["C", "copier le ticket"], ["↑ / ↓", "changer de décision"], ["S", "stop placé"], ["?", "aide"]];
+  const events: { key: LiveFocusSoundEvent; label: string }[] = [{ key: "decision", label: "Décision prenable" }, { key: "expiry", label: "Expiration imminente" }, { key: "expired", label: "Décision expirée" }, { key: "fill", label: "Exécution confirmée" }, { key: "stop", label: "Stop touché" }];
+  return <div className="live-focus-dialog__backdrop" role="presentation"><section className="live-focus-dialog live-focus-help" role="dialog" aria-modal="true" aria-labelledby="focus-help-title"><header><div><small>MODE FOCUS</small><h2 id="focus-help-title">Raccourcis et perception</h2></div><button type="button" onClick={onClose} autoFocus>Fermer</button></header><div className="live-focus-help__shortcuts">{shortcuts.map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}</div><div className="live-focus-help__sound"><button type="button" aria-pressed={profile.enabled} onClick={() => onChange({ ...profile, enabled: !profile.enabled })}>Sons globaux · {profile.enabled ? "Activés" : "Désactivés"}</button><button type="button" aria-pressed={profile.doNotDisturb} onClick={() => onChange({ ...profile, doNotDisturb: !profile.doNotDisturb })}>Ne pas déranger · {profile.doNotDisturb ? "Activé" : "Désactivé"}</button>{events.map((event) => <button key={event.key} type="button" aria-pressed={profile.events[event.key]} onClick={() => onChange({ ...profile, events: { ...profile.events, [event.key]: !profile.events[event.key] } })}>{event.label} · {profile.events[event.key] ? "Activé" : "Désactivé"}</button>)}</div><small>Le mode « ne pas déranger » laisse toujours passer l’expiration imminente et le stop touché.</small></section></div>;
 }
 
 function QuestionNumber({ value }: { value: string }) { return <span className="live-focus__question" aria-hidden="true">{value}</span>; }
@@ -412,7 +470,7 @@ function useFocusPerception({ model, stateCode, stateLabel, timingLabel, timingU
       : stateCode === "E" ? `◆ ${instrument}${liveR === null || liveR === undefined ? "" : ` ${signedR(liveR)}`}`
         : stateCode === "F" ? `⊘ ${instrument}${resultR === null || resultR === undefined ? "" : ` ${signedR(resultR)}`}`
           : `${stateLabel} · ${instrument}`;
-    document.title = `${value} · Desk Focus`;
+    document.title = `${value} · Focus Desk`;
     setFocusFavicon(stateCode);
   }, [direction, instrument, liveR, resultR, stateCode, stateLabel, timingLabel]);
   useEffect(() => {
@@ -444,6 +502,17 @@ function focusSoundAllowed(profile: LiveFocusSoundProfile, event: LiveFocusSound
   return !profile.doNotDisturb || event === "expiry" || event === "stop";
 }
 function signedR(value: number) { return `${value > 0 ? "+" : ""}${value.toFixed(2)} R`; }
+function formatPct(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? `${value > 0 ? "+" : ""}${value.toFixed(2)} %` : "Variation non publiée";
+}
+function focusTimeframeLabel(value: unknown) {
+  const normalized = String(value ?? "").trim().toUpperCase().replace(/^M/, "");
+  if (!normalized) return "unité non publiée";
+  if (["H1", "1H", "60"].includes(normalized)) return "H1";
+  if (["H4", "4H", "240"].includes(normalized)) return "H4";
+  if (["D", "D1", "1D", "1440"].includes(normalized)) return "D1";
+  return `M${normalized}`;
+}
 function setFocusFavicon(stateCode: string) {
   const color = stateCode === "C" || stateCode === "D" ? "#f1b84b" : stateCode === "E" ? "#4dd59c" : stateCode === "F" ? "#ff6c79" : "#41d7e5";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#05131c"/><circle cx="32" cy="32" r="18" fill="none" stroke="${color}" stroke-width="6"/><circle cx="32" cy="32" r="6" fill="${color}"/></svg>`;

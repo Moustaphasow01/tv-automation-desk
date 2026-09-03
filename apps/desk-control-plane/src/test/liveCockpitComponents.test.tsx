@@ -11,9 +11,11 @@ import { describe, expect, it, vi } from "vitest";
 import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
 import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
+import { LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
 import { commandForCurrentGate, commandLocksGateActions } from "@/features/live-trading/LiveHumanGate";
 import { toLiveTradingModel } from "@/features/live-trading/mapper";
 import type { LiveTradingModel } from "@/features/live-trading/model";
+import type { LiveFocusView } from "@/domains/front-api/viewModels";
 import { liveTradingView } from "@/mocks/canonicalDataset";
 
 const noopSubmit = async () => undefined;
@@ -246,6 +248,35 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("Événements");
     expect(markup).toContain("Flux &amp; qualité");
   });
+
+  it("keeps Live Focus centered on operational prices and makes the chart explicit", () => {
+    const model = cockpitModel();
+    const markup = render(
+      <LiveFocusMode
+        model={model}
+        focus={focusView()}
+        busy={false}
+        error={null}
+        requestedScope={{ instrument: "ZC", timeframe: "15" }}
+        chartLoading={false}
+        chartError={null}
+        onExit={() => undefined}
+        onScopeChange={() => undefined}
+        onSelectDecision={() => undefined}
+        onSubmitGate={noopSubmit}
+        onSubmitManual={noopSubmit}
+      />,
+    );
+
+    expect(markup).toContain("Prix opérationnels");
+    expect(markup).toContain("Afficher le graphique");
+    expect(markup).toContain("aria-expanded=\"false\"");
+    expect(markup).not.toContain("lt-panel--chart");
+    expect(markup).not.toMatch(/>\s*ON\s*</);
+    expect(markup).not.toMatch(/>\s*OFF\s*</);
+    expect(markup).not.toContain("No setup");
+    expect(markup).not.toContain("Macro blackout");
+  });
 });
 
 function cockpitModel(): LiveTradingModel {
@@ -309,6 +340,31 @@ function withOrderIntent(
     orderIntent,
     gateActions: [],
     gateBlockedReason: "Le backend n’a publié aucune capability Human Gate.",
+  };
+}
+
+function focusView(): LiveFocusView {
+  return {
+    schemaVersion: "live_focus_view_v1",
+    universe: "US_GRAINS_CBOT",
+    asOf: "2026-09-01T14:30:00.000Z",
+    safety: { autoExecutionEnabled: false, physicalLiveEnabled: false, humanGateRequired: true, authority: "BACKEND" },
+    session: { marketState: "OPEN", marketSession: "CBOT_GRAINS_RTH", exchangeTimezone: "America/Chicago", marketDate: "2026-09-01", sessionStart: null, sessionEnd: null, nextEligibleAt: null, asOf: "2026-09-01T14:30:00.000Z", source: "data_readiness.market_session" },
+    marketContext: { status: "AVAILABLE", sourceStates: [], reasonCodes: ["GRAINS_CONTEXT_READY"], globalBias: "NEUTRAL", marketRegime: "RANGE", volatilityRegime: "NORMAL" },
+    marketDeskBrief: { status: "AVAILABLE", headline: "Marché surveillé", operatorSummary: "Le Desk observe les grains et attend une opportunité qualifiée.", whatDeskWants: ["PULLBACK"], whatDeskAvoids: ["MACRO_BLACKOUT"] },
+    briefHistory: [],
+    whyNoTrade: { whyNoTradeSummaryId: "why-1", status: "EXPLAINED", topReasons: ["NO_SETUP"], stageCounts: { signals: 2, orderIntents: 0 }, blockingConditions: [], nextExpectedEvaluationAt: null, nextContextRefreshAt: null, nextRelevantEventAt: null, reasonCodes: ["NO_SETUP"] },
+    operatorJourneyState: { stage: "B", rawStatus: "WATCHING", sourceObjectType: "MarketContextSnapshot", sourceObjectId: null, asOf: "2026-09-01T14:30:00.000Z", reasonCodes: ["NO_SETUP"] },
+    tradeCards: [],
+    observedOpportunities: [],
+    selectedTrade: null,
+    catalysts: [],
+    marketSeries: undefined,
+    watchlist: undefined,
+    sourceStates: [],
+    contextWorker: { taskType: "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH", lane: "live", cadenceMinutes: { marketOpen: 30, marketClosed: 60 }, timeoutMs: 780000, modelPolicy: {}, taskCount: 1, successCount: 1, failureCount: 0, activeCount: 0, lastCompletedAt: "2026-09-01T14:20:00.000Z", lastSuccessfulBriefAt: "2026-09-01T14:20:00.000Z", briefAgeSeconds: 600, retryCount: 0, averageLatencyMs: 1200, totalTokens: 0, costMicrosUsd: 0 },
+    nextActions: [],
+    technical: { source: "front-api/live-focus", sourceDataCutoff: "2026-09-01T14:30:00.000Z", revision: 1 },
   };
 }
 
