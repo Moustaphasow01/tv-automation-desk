@@ -6,7 +6,7 @@ describe("readDeskAppConfig", () => {
     expect(readDeskAppConfig({} as ImportMetaEnv)).toMatchObject({
       dataMode: "bff",
       frontApiBaseUrl: "/front-api/v1",
-      frontApiTimeoutMs: 12_000,
+      frontApiTimeoutMs: 60_000,
       features: {
         jarvisWorkspace: true
       }

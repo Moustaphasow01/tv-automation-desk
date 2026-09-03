@@ -10,7 +10,7 @@ export type DeskAppConfig = {
   };
 };
 
-const DEFAULT_FRONT_API_TIMEOUT_MS = 12_000;
+const DEFAULT_FRONT_API_TIMEOUT_MS = 60_000;
 
 export function readDeskAppConfig(env: ImportMetaEnv): DeskAppConfig {
   const dataMode: DeskDataMode = "bff";

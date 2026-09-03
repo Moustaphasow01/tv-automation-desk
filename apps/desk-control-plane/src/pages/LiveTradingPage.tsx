@@ -38,12 +38,12 @@ export function LiveTradingPage() {
   const chartQuery = useFrontView("live-trading", marketScope, {
     preservePreviousData: true,
     queryScope: "market-series",
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
   const focusQuery = useFrontView("live-focus", marketScope, {
     preservePreviousData: true,
     queryScope: "live-focus",
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
     enabled: focusMode,
   });
   const repository = useFrontViewRepository();
@@ -75,61 +75,76 @@ export function LiveTradingPage() {
     const signalInstrument = model.latestSignal?.symbol;
     if (!signalInstrument || !model.marketSeries.supportedInstruments.some((item) => item.toUpperCase() === signalInstrument.toUpperCase())) return;
     initialChartAlignmentDone.current = true;
-    const next = new URLSearchParams(searchParams);
-    next.set("instrument", signalInstrument);
-    setSearchParams(next, { replace: true });
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (next.has("instrument")) return next;
+      next.set("instrument", signalInstrument);
+      return next;
+    }, { replace: true });
   }, [model, searchParams, setSearchParams]);
 
   const updateMarketScope = (nextScope: { instrument?: string; timeframe?: string }) => {
-    const next = new URLSearchParams(searchParams);
-    if (nextScope.instrument) next.set("instrument", nextScope.instrument);
-    if (nextScope.timeframe) next.set("timeframe", nextScope.timeframe);
-    setSearchParams(next, { replace: true });
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (nextScope.instrument) next.set("instrument", nextScope.instrument);
+      if (nextScope.timeframe) next.set("timeframe", nextScope.timeframe);
+      return next;
+    }, { replace: true });
   };
 
   const enterFocus = useCallback(() => {
     focusRestoreScroll.current = window.scrollY;
-    const next = new URLSearchParams(searchParams);
-    next.set("focus", "1");
-    writeLiveFocusPreference({ enabled: true, instrument: next.get("instrument"), timeframe: next.get("timeframe"), scrollY: window.scrollY });
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("focus", "1");
+      writeLiveFocusPreference({ enabled: true, instrument: next.get("instrument"), timeframe: next.get("timeframe"), scrollY: window.scrollY });
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const exitFocus = useCallback(() => {
     const stored = readLiveFocusPreference();
     const restore = focusRestoreScroll.current ?? stored.scrollY ?? 0;
-    const next = new URLSearchParams(searchParams);
-    next.delete("focus");
-    writeLiveFocusPreference({ enabled: false, instrument: next.get("instrument"), timeframe: next.get("timeframe"), scrollY: restore });
-    setSearchParams(next, { replace: true });
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("focus");
+      writeLiveFocusPreference({ enabled: false, instrument: next.get("instrument"), timeframe: next.get("timeframe"), scrollY: restore });
+      return next;
+    }, { replace: true });
     window.requestAnimationFrame(() => window.scrollTo({ top: restore, behavior: "auto" }));
-  }, [searchParams, setSearchParams]);
+  }, [setSearchParams]);
 
   const selectSignal = (target: LiveSignalNavigationTarget) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("signalId", target.signalId);
-    next.delete("chartAt");
-    setSearchParams(next, { replace: true });
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("signalId", target.signalId);
+      next.delete("chartAt");
+      return next;
+    }, { replace: true });
     focusSurface(decisionSurfaceRef.current);
   };
 
   const showSignalOnChart = (target: LiveSignalNavigationTarget) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("signalId", target.signalId);
-    next.set("instrument", target.instrument);
-    next.set("chartAt", target.at);
-    const normalizedTimeframe = normalizeSignalTimeframe(target.timeframe);
-    if (normalizedTimeframe && model?.marketSeries.supportedTimeframes.some((value) => normalizeSignalTimeframe(value) === normalizedTimeframe)) {
-      next.set("timeframe", normalizedTimeframe);
-    }
-    setSearchParams(next, { replace: true });
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("signalId", target.signalId);
+      next.set("instrument", target.instrument);
+      next.set("chartAt", target.at);
+      const normalizedTimeframe = normalizeSignalTimeframe(target.timeframe);
+      if (normalizedTimeframe && model?.marketSeries.supportedTimeframes.some((value) => normalizeSignalTimeframe(value) === normalizedTimeframe)) {
+        next.set("timeframe", normalizedTimeframe);
+      }
+      return next;
+    }, { replace: true });
     focusSurface(chartSurfaceRef.current);
   };
 
   const clearSignal = () => {
-    const next = new URLSearchParams(searchParams);
-    next.delete("signalId");
-    setSearchParams(next, { replace: true });
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("signalId");
+      return next;
+    }, { replace: true });
   };
 
   const submitGateAction = async (action: HumanGateAction, reason: string) => {
@@ -188,11 +203,11 @@ export function LiveTradingPage() {
     enterFocus();
   }, [enterFocus, focusMode, model]);
 
-  if (deskQuery.isError) return <LiveTradingFailure message={(deskQuery.error as Error).message} retry={() => deskQuery.refetch()} />;
+  if (deskQuery.isError && !deskQuery.data) return <LiveTradingFailure message={(deskQuery.error as Error).message} retry={() => deskQuery.refetch()} />;
   if (deskQuery.isLoading || !model) return <LiveTradingLoading />;
 
   if (focusMode) {
-    if (focusQuery.isError) return <LiveTradingFailure message={(focusQuery.error as Error).message} retry={() => focusQuery.refetch()} />;
+    if (focusQuery.isError && !focusQuery.data) return <LiveTradingFailure message={(focusQuery.error as Error).message} retry={() => focusQuery.refetch()} />;
     if (focusQuery.isLoading || !focusQuery.data) return <LiveTradingLoading />;
     return <LiveFocusMode
       model={model}
@@ -205,10 +220,12 @@ export function LiveTradingPage() {
       onExit={exitFocus}
       onScopeChange={updateMarketScope}
       onSelectDecision={(signalId) => {
-        const next = new URLSearchParams(searchParams);
-        next.set("signalId", signalId);
-        next.set("focus", "1");
-        setSearchParams(next, { replace: true });
+        setSearchParams((current) => {
+          const next = new URLSearchParams(current);
+          next.set("signalId", signalId);
+          next.set("focus", "1");
+          return next;
+        }, { replace: true });
       }}
       onSubmitGate={submitGateAction}
       onSubmitManual={submitManualExecutionAction}
