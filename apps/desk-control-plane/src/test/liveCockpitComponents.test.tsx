@@ -5,6 +5,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -276,6 +277,56 @@ describe("Live Trading cockpit components", () => {
     expect(markup).not.toMatch(/>\s*OFF\s*</);
     expect(markup).not.toContain("No setup");
     expect(markup).not.toContain("Macro blackout");
+  });
+
+  it("locks the Live Focus audit layout contract in CSS", () => {
+    const css = readFileSync(new URL("../features/live-trading/live-focus.css", import.meta.url), "utf8");
+
+    expect(css).not.toContain("line-clamp");
+    expect(css).not.toContain("-webkit-box");
+    expect(css).not.toContain("--focus-type-micro");
+    expect(css).toContain("--focus-type-label: 12px");
+    expect(css).toContain("--focus-type-figure: 32px");
+    expect(css).toContain("--focus-tap-min: 44px");
+    expect(css).toContain("grid-template-areas:");
+    expect(css).toContain("\"brief action\"");
+    expect(css).toContain("\"queue queue\"");
+    expect(css).toContain(".live-focus__brief");
+    expect(css).toContain("overflow-y: auto");
+    expect(css).toContain(".live-focus__queue-track");
+    expect(css).toContain("overflow-x: auto");
+    expect(css).toContain(".live-focus__ticket .is-market-level strong");
+    expect(css).toContain("font-size: var(--focus-type-figure)");
+  });
+
+  it("renders Live Focus labels and ticket values as separated decision cells", () => {
+    const model = withOrderIntent(cockpitModel());
+    const markup = render(
+      <LiveFocusMode
+        model={model}
+        focus={{
+          ...focusView(),
+          operatorJourneyState: { ...focusView().operatorJourneyState, stage: "E" },
+        }}
+        busy={false}
+        error={null}
+        requestedScope={{ instrument: "ZC", timeframe: "15" }}
+        chartLoading={false}
+        chartError={null}
+        onExit={() => undefined}
+        onScopeChange={() => undefined}
+        onSelectDecision={() => undefined}
+        onSubmitGate={noopSubmit}
+        onSubmitManual={noopSubmit}
+      />,
+    );
+
+    expect(markup).toContain("class=\"is-market-level\"><small>Entrée</small><strong>");
+    expect(markup).toContain("class=\"is-market-level is-danger\"><small>Stop</small><strong>");
+    expect(markup).toContain("class=\"is-market-level is-success");
+    expect(markup).toContain("Résumé du brief");
+    expect(markup).not.toContain("ENTRÉE");
+    expect(markup).not.toContain("OBJECTIF 1");
   });
 });
 
