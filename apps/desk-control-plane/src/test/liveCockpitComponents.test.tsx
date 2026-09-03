@@ -306,7 +306,10 @@ describe("Live Trading cockpit components", () => {
     expect(css).toContain(".live-focus__ticket .is-market-level strong");
     expect(css).toContain("font-size: var(--focus-type-figure)");
     expect(css).toContain("--focus-chrome-top: 64px");
-    expect(css).toContain("grid-template-rows: auto 48px");
+    expect(css).toContain("body.desk-live-focus-document .desk-density-viewport");
+    expect(css).toContain("overflow-y: auto !important");
+    expect(css).toContain("grid-template-rows: auto auto");
+    expect(css).not.toContain(".live-focus__decision-support {\n    display: none;");
     expect(css).toContain("flex-wrap: nowrap");
     expect(css).toContain(".live-focus__actions .live-focus__copy-action");
   });

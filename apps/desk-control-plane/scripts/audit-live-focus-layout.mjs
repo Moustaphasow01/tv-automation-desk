@@ -96,8 +96,51 @@ function auditLiveFocusLayout(viewport) {
     const focusStyle = getComputedStyle(focus);
     if (focusStyle.height === "100dvh") failures.push("conteneur Focus expose encore une hauteur dynamique figée");
     if (focus.scrollHeight + 2 < window.innerHeight) failures.push(`document Focus plus court que la fenêtre: ${Math.round(focus.scrollHeight)}px / ${window.innerHeight}px`);
+    const focusRect = focus.getBoundingClientRect();
+    const documentNeedsScroll = document.documentElement.scrollHeight > window.innerHeight + 2;
+    const focusNeedsScroll = focusRect.bottom > window.innerHeight + 2 || focus.scrollHeight > window.innerHeight + 2;
+    if (documentNeedsScroll || focusNeedsScroll) {
+      const before = window.scrollY;
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      const after = window.scrollY;
+      window.scrollTo(0, before);
+      if (after <= before && document.documentElement.scrollHeight > window.innerHeight + 2) {
+        failures.push(`page Focus non scrollable alors que ${Math.round(document.documentElement.scrollHeight - window.innerHeight)}px dépassent la fenêtre`);
+      }
+    }
   }
   if (footer && getComputedStyle(footer).position === "fixed") failures.push("footer Focus rendu en fixed");
+
+  [
+    [document.documentElement, "html"],
+    [document.body, "body"],
+    [document.getElementById("root"), "#root"],
+    [document.querySelector(".desk-density-viewport"), ".desk-density-viewport"],
+    [document.querySelector(".desk-app-shell"), ".desk-app-shell"],
+    [document.querySelector(".desk-main"), ".desk-main"],
+    [document.querySelector(".desk-content"), ".desk-content"],
+  ].forEach(([element, name]) => {
+    if (!element) return;
+    const style = getComputedStyle(element);
+    const clipsVerticalFlow = ["hidden", "clip"].includes(style.overflowY);
+    if (clipsVerticalFlow && document.documentElement.scrollHeight > window.innerHeight + 2) {
+      failures.push(`${name} bloque le scroll vertical du Focus avec overflow-y:${style.overflowY}`);
+    }
+  });
+
+  [
+    [".live-focus__decision-support", "bloc Où en suis-je / marché"],
+    [".live-focus__support-card", "cartes support décision"],
+    [".live-focus__market-summary", "carte Que fait le marché"],
+  ].forEach(([selector, label]) => {
+    const matches = Array.from(document.querySelectorAll(selector));
+    if (!matches.length) failures.push(`${label} absent du DOM (${selector})`);
+    if (matches.length && !matches.some(visible)) failures.push(`${label} caché à ${viewport.width}×${viewport.height}`);
+  });
+
+  const hasSituation = Array.from(document.querySelectorAll(".live-focus__position, .live-focus__pipeline"))
+    .some(visible);
+  if (!hasSituation) failures.push("bloc Où en suis-je sans position ni pipeline visible");
 
   document.querySelectorAll(".live-focus *, .live-focus-drawer *").forEach((element) => {
     if (!visible(element) || !ownText(element)) return;

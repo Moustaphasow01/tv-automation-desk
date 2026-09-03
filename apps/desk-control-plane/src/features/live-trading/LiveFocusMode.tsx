@@ -58,6 +58,20 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
   );
   useFocusPerception({ model, stateCode: state.code, stateLabel: state.label, timingLabel: timing.label, timingUrgency: timing.urgency, soundProfile });
 
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const root = document.getElementById("root");
+    html.classList.add("desk-live-focus-document");
+    body.classList.add("desk-live-focus-document");
+    root?.classList.add("desk-live-focus-root");
+    return () => {
+      html.classList.remove("desk-live-focus-document");
+      body.classList.remove("desk-live-focus-document");
+      root?.classList.remove("desk-live-focus-root");
+    };
+  }, []);
+
   const request = useCallback((action: PendingAction | null) => {
     if (!action || busy) return;
     setPending(action);
