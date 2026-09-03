@@ -39,6 +39,7 @@ dist/
 build/
 .playwright-cli/
 output/playwright/
+**/output/playwright/
 
 # GPT desk MCP local runtime writes
 mcp_gpt_desk/local_data/desk_decisions/
