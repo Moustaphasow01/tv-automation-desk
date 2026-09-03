@@ -87,6 +87,17 @@ function auditLiveFocusLayout(viewport) {
   }).filter((rule) => rule.includes(".live-focus")).join("\n");
 
   if (/line-clamp|-webkit-box/.test(styles)) failures.push("troncature dure interdite détectée dans les styles Focus");
+  if (/\.live-focus\s*\{[^}]*height:\s*100dvh/s.test(styles)) failures.push("conteneur Focus verrouillé sur height:100dvh");
+  if (/\.live-focus__footer\s*\{[^}]*position:\s*fixed/s.test(styles)) failures.push("footer Focus fixé à la fenêtre au lieu du flux réel");
+
+  const focus = document.querySelector(".live-focus");
+  const footer = document.querySelector(".live-focus__footer");
+  if (focus) {
+    const focusStyle = getComputedStyle(focus);
+    if (focusStyle.height === "100dvh") failures.push("conteneur Focus expose encore une hauteur dynamique figée");
+    if (focus.scrollHeight + 2 < window.innerHeight) failures.push(`document Focus plus court que la fenêtre: ${Math.round(focus.scrollHeight)}px / ${window.innerHeight}px`);
+  }
+  if (footer && getComputedStyle(footer).position === "fixed") failures.push("footer Focus rendu en fixed");
 
   document.querySelectorAll(".live-focus *, .live-focus-drawer *").forEach((element) => {
     if (!visible(element) || !ownText(element)) return;

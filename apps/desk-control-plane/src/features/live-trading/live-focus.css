@@ -26,10 +26,10 @@
   position: relative;
   isolation: isolate;
   display: grid;
-  height: 100dvh;
-  min-height: 100dvh;
-  grid-template-rows: var(--focus-chrome-top) minmax(42px, auto) minmax(0, 1fr) auto;
-  overflow: hidden;
+  min-height: 100vh;
+  grid-template-rows: auto auto auto auto;
+  overflow-x: hidden;
+  overflow-y: visible;
   color: var(--focus-text);
   background:
     radial-gradient(circle at 12% 8%, rgba(65, 215, 229, 0.18), transparent 28%),
@@ -365,15 +365,14 @@
 
 .live-focus__body {
   display: grid;
-  min-height: 0;
   grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
   grid-template-areas:
     "brief action"
     "queue queue";
-  grid-template-rows: minmax(0, 1fr) 48px;
+  grid-template-rows: auto 48px;
   gap: 8px;
-  padding: 8px clamp(10px, 1.2vw, 16px) calc(var(--focus-footer-height) + 8px);
-  overflow: hidden;
+  padding: 8px clamp(10px, 1.2vw, 16px);
+  overflow: visible;
 }
 
 .live-focus__body > section,
@@ -403,11 +402,11 @@
 .live-focus__decision {
   grid-area: action;
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto;
   gap: 8px;
   align-content: start;
   padding: 12px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .live-focus__decision-head {
@@ -1052,11 +1051,9 @@
 }
 
 .live-focus__footer {
-  position: fixed;
+  position: sticky;
   z-index: 18;
-  right: 0;
   bottom: 0;
-  left: 0;
   display: flex;
   min-height: var(--focus-footer-height);
   gap: 14px;
@@ -1624,8 +1621,7 @@
   }
 
   .live-focus__body {
-    grid-template-rows: minmax(0, 1fr) 44px;
-    padding-bottom: calc(var(--focus-footer-height) + 6px);
+    grid-template-rows: auto 44px;
   }
 
   .live-focus__queue {
@@ -1655,7 +1651,7 @@
 @media (max-width: 980px) {
   .live-focus {
     height: auto;
-    min-height: 100dvh;
+    min-height: 100vh;
     overflow-y: auto;
   }
 

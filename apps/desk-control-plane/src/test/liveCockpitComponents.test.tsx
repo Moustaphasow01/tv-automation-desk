@@ -281,10 +281,18 @@ describe("Live Trading cockpit components", () => {
 
   it("locks the Live Focus audit layout contract in CSS", () => {
     const css = readFileSync(new URL("../features/live-trading/live-focus.css", import.meta.url), "utf8");
+    const rootBlock = css.match(/\.live-focus\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+    const footerBlock = css.match(/\.live-focus__footer\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
 
     expect(css).not.toContain("line-clamp");
     expect(css).not.toContain("-webkit-box");
     expect(css).not.toContain("--focus-type-micro");
+    expect(rootBlock).toContain("min-height: 100vh");
+    expect(rootBlock).not.toContain("height: 100dvh");
+    expect(rootBlock).toContain("grid-template-rows: auto auto auto auto");
+    expect(rootBlock).toContain("overflow-y: visible");
+    expect(footerBlock).toContain("position: sticky");
+    expect(footerBlock).not.toContain("position: fixed");
     expect(css).toContain("--focus-type-label: 12px");
     expect(css).toContain("--focus-type-figure: 32px");
     expect(css).toContain("--focus-tap-min: 44px");
@@ -298,8 +306,7 @@ describe("Live Trading cockpit components", () => {
     expect(css).toContain(".live-focus__ticket .is-market-level strong");
     expect(css).toContain("font-size: var(--focus-type-figure)");
     expect(css).toContain("--focus-chrome-top: 64px");
-    expect(css).toContain("grid-template-rows: var(--focus-chrome-top) minmax(42px, auto) minmax(0, 1fr) auto");
-    expect(css).toContain("grid-template-rows: minmax(0, 1fr) 48px");
+    expect(css).toContain("grid-template-rows: auto 48px");
     expect(css).toContain("flex-wrap: nowrap");
     expect(css).toContain(".live-focus__actions .live-focus__copy-action");
   });
