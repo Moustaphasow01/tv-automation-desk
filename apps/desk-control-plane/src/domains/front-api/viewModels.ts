@@ -3481,6 +3481,11 @@ export type LiveFocusView = {
     attentionReason: string | null;
     allowedActions: readonly string[];
     denialReasons: readonly string[];
+    actionable?: boolean;
+    temporalState?: string;
+    expiredByTime?: boolean;
+    lifecycleLabel?: string;
+    terminalReason?: string | null;
     actionPolicy: Record<string, unknown>;
     strategyProposedPlan?: Record<string, unknown> | null;
     contextAdjustedPlan?: Record<string, unknown> | null;
@@ -3507,6 +3512,8 @@ export type LiveFocusView = {
     side: string;
     strategyName: string;
     status: string;
+    statusLabel?: string;
+    terminal?: boolean;
     reasonCodes: readonly string[];
     createdAt: string | null;
     expiresAt: string | null;

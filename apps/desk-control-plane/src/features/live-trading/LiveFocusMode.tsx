@@ -18,6 +18,19 @@ type PendingAction =
   | { kind: "gate"; action: HumanGateAction }
   | { kind: "manual"; action: LiveManualExecutionAction };
 
+type FocusTicketPresentation = {
+  mode: "actionable" | "historical" | "observed" | "empty";
+  eyebrow: string;
+  title: string;
+  description: string;
+  orbitLabel: string;
+  statusLabel: string;
+  statusDetail: string;
+  tone: "neutral" | "info" | "warning" | "success" | "danger";
+  operatorActionable: boolean;
+  warning: string | null;
+};
+
 export function LiveFocusMode({ model, focus, busy, error, requestedScope, chartLoading, chartError, onExit, onScopeChange, onSelectDecision, onSubmitGate, onSubmitManual }: {
   model: LiveTradingModel;
   focus: LiveFocusView;
@@ -56,6 +69,7 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
     model.orderIntent?.allowedActions.expiresAt ?? model.latestSignal?.expiresAt ?? null,
     realtime?.now ?? new Date(model.meta.asOf),
   );
+  const ticket = resolveFocusTicketPresentation(model, focus, plan, timing, primary);
   useFocusPerception({ model, stateCode: state.code, stateLabel: state.label, timingLabel: timing.label, timingUrgency: timing.urgency, soundProfile });
 
   useEffect(() => {
@@ -144,22 +158,22 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
           <FocusBrief focus={focus} onOpen={() => setDrawer("brief")} />
         </section>
 
-        <section className="live-focus__decision" aria-labelledby="live-focus-action-title">
+        <section className="live-focus__decision" data-ticket-mode={ticket.mode} aria-labelledby="live-focus-action-title">
           <div className="live-focus__decision-head">
             <QuestionNumber value="02" />
-            <div className="live-focus__section-copy"><p className="eyebrow">À DÉCIDER</p><h2 id="live-focus-action-title">Ticket d’action</h2><p>{formatOperatorParagraph(state.instruction)}</p></div>
-            <div className="live-focus__state-orbit" aria-label={`État Focus ${state.code} ${state.label}`}><span>{state.code}</span><strong>{state.label}</strong><small>{model.latestSignal ? `${model.latestSignal.symbol} · ${operatorCode(model.latestSignal.direction)}` : "SURVEILLANCE DESK"}</small></div>
+            <div className="live-focus__section-copy"><p className="eyebrow">{ticket.eyebrow}</p><h2 id="live-focus-action-title">{ticket.title}</h2><p>{formatOperatorParagraph(ticket.description)}</p></div>
+            <div className="live-focus__state-orbit" aria-label={`État Focus ${state.code} ${state.label}`}><span>{state.code}</span><strong>{state.label}</strong><small>{ticket.orbitLabel}</small></div>
           </div>
-          <FocusTicket plan={plan} timingLabel={timing.label} />
+          <FocusTicket plan={plan} timingLabel={timing.label} ticket={ticket} />
           <div className="live-focus__actions" aria-label="Actions autorisées par le backend">
-            {primary && plan.actionable ? <button type="button" className="live-focus__primary-action" disabled={busy} onClick={() => request(primary)}><FaCheck aria-hidden="true" />{operatorCopy(primary.action.label)}<kbd>maintenir Entrée</kbd></button> : null}
+            {primary && ticket.operatorActionable ? <button type="button" className="live-focus__primary-action" disabled={busy} onClick={() => request(primary)}><FaCheck aria-hidden="true" />{operatorCopy(primary.action.label)}<kbd>maintenir Entrée</kbd></button> : null}
             {gateReject ? <button type="button" disabled={busy} onClick={() => request({ kind: "gate", action: gateReject })}><FaTimes aria-hidden="true" />Refuser<kbd>R</kbd></button> : null}
             {skipManual ? <button type="button" disabled={busy} onClick={() => request({ kind: "manual", action: skipManual })}><FaRegCircle aria-hidden="true" />Non exécuté</button> : null}
             {stopManual ? <button type="button" disabled={busy} onClick={() => request({ kind: "manual", action: stopManual })}><FaLock aria-hidden="true" />Stop placé<kbd>S</kbd></button> : null}
             <button type="button" className="live-focus__copy-action live-focus__primary-action" onClick={() => void copyPlan()}><FaClipboard aria-hidden="true" />{copied ? "Copié" : "Copier le plan"}<kbd>C</kbd></button>
             {selectedCard ? <button type="button" onClick={() => setDrawer("trade")}><FaInfoCircle aria-hidden="true" />Voir le dossier</button> : null}
           </div>
-          {!plan.actionable && (model.orderIntent || model.latestSignal) ? <p className="live-focus__integrity-warning" role="alert"><FaExclamationTriangle aria-hidden="true" />Les niveaux proposés sont informatifs. Aucune déclaration d’ordre n’est possible avant publication du plan autorisé et de sa quantité.</p> : null}
+          {ticket.warning ? <p className="live-focus__integrity-warning" role="alert"><FaExclamationTriangle aria-hidden="true" />{ticket.warning}</p> : null}
           {!primary && !gateReject && !skipManual ? <p className="live-focus__locked"><FaLock aria-hidden="true" />{model.gateBlockedReason}</p> : null}
           {error ? <p className="live-focus__error" role="alert">La commande a échoué. Le Focus a rechargé la vérité backend et n’a créé aucun état local de remplacement.</p> : null}
           <div className="live-focus__decision-support">
@@ -182,7 +196,7 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
 
         {queue.length || focus.observedOpportunities.length ? <FocusQueues focus={focus} selectedIndex={selectedIndex} onSelectDecision={onSelectDecision} /> : null}
       </main>
-      <footer className="live-focus__footer"><span><kbd>↑</kbd><kbd>↓</kbd> dossiers</span><span><kbd>G</kbd> graphique</span><span><kbd>C</kbd> copier</span><span><kbd>R</kbd> refuser</span><span><kbd>S</kbd> stop placé</span><button type="button" className="live-focus__sound" aria-pressed={soundProfile.enabled} onClick={() => { const next = writeLiveFocusSoundProfile({ ...soundProfile, enabled: !soundProfile.enabled }); setSoundProfile(next); }}>{soundProfile.enabled ? <FaVolumeUp aria-hidden="true" /> : <FaVolumeMute aria-hidden="true" />}{soundProfile.enabled ? "Sons actifs" : "Sons coupés"}</button><button type="button" className="live-focus__help-trigger" aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><FaQuestionCircle aria-hidden="true" />Raccourcis <kbd>?</kbd></button><span className="live-focus__session">Séance {focus.whyNoTrade.stageCounts.signals ?? 0} signaux · {focus.whyNoTrade.stageCounts.orderIntents ?? 0} ordres proposés · {focus.tradeCards.filter((item) => !item.terminal).length} à décider · {model.signalFunnel.theoreticalTracked} suivis</span><small>{focus.session.marketSession} · arrêté à {displayTime(focus.asOf)}</small></footer>
+      <footer className="live-focus__footer"><span><kbd>↑</kbd><kbd>↓</kbd> dossiers</span><span><kbd>G</kbd> graphique</span><span><kbd>C</kbd> copier</span><span><kbd>R</kbd> refuser</span><span><kbd>S</kbd> stop placé</span><button type="button" className="live-focus__sound" aria-pressed={soundProfile.enabled} onClick={() => { const next = writeLiveFocusSoundProfile({ ...soundProfile, enabled: !soundProfile.enabled }); setSoundProfile(next); }}>{soundProfile.enabled ? <FaVolumeUp aria-hidden="true" /> : <FaVolumeMute aria-hidden="true" />}{soundProfile.enabled ? "Sons actifs" : "Sons coupés"}</button><button type="button" className="live-focus__help-trigger" aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><FaQuestionCircle aria-hidden="true" />Raccourcis <kbd>?</kbd></button><span className="live-focus__session">Séance {focus.whyNoTrade.stageCounts.signals ?? 0} signaux · {focus.whyNoTrade.stageCounts.orderIntents ?? 0} ordres proposés · {focus.tradeCards.filter(focusCardActionable).length} à décider · {model.signalFunnel.theoreticalTracked} suivis</span><small>{focus.session.marketSession} · arrêté à {displayTime(focus.asOf)}</small></footer>
       {pending ? <FocusActionDialog pending={pending} model={model} busy={busy} onCancel={() => setPending(null)} onSubmitGate={async (action, reason) => { await onSubmitGate(action, reason); setPending(null); }} onSubmitManual={async (action, input) => { await onSubmitManual(action, input); setPending(null); }} /> : null}
       {showHelp ? <FocusHelpDialog profile={soundProfile} onChange={(next) => { setSoundProfile(writeLiveFocusSoundProfile(next)); }} onClose={() => setShowHelp(false)} /> : null}
       {drawer === "brief" ? <FocusBriefDrawer focus={focus} onClose={() => setDrawer(null)} /> : null}
@@ -210,7 +224,7 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
 }
 
 function FocusMissionRibbon({ model, focus, state, timingLabel }: { model: LiveTradingModel; focus: LiveFocusView; state: ReturnType<typeof resolveBackendFocusState>; timingLabel: string }) {
-  const activeTradeCount = focus.tradeCards.filter((item) => !item.terminal).length;
+  const activeTradeCount = focus.tradeCards.filter(focusCardActionable).length;
   const signalLabel = model.latestSignal ? `${model.latestSignal.symbol} · ${operatorCode(model.latestSignal.direction)}` : "Aucun signal sélectionné";
   const freshness = displayTime(focus.technical.sourceDataCutoff || focus.asOf);
   const nextAction = activeTradeCount > 0 ? "Décision opérateur à vérifier" : focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Surveillance active";
@@ -349,19 +363,86 @@ function recordValue(value: unknown): Record<string, unknown> { return value && 
 function stringRows(value: unknown): string[] { return Array.isArray(value) ? value.map((item) => String(item ?? "").trim()).filter(Boolean) : []; }
 function valueText(value: unknown, fallback: string | null = "Non publié"): string { const normalized = value === null || value === undefined ? "" : String(value).trim(); return normalized || (fallback ?? ""); }
 
+function focusCardActionable(card: LiveFocusView["tradeCards"][number]): boolean {
+  const allowed = card.allowedActions.map((action) => String(action).trim().toUpperCase());
+  return Boolean((card.actionable ?? allowed.includes("CONFIRM")) && !focusCardTerminal(card));
+}
+
+function focusCardTerminal(card: LiveFocusView["tradeCards"][number]): boolean {
+  const statuses = [card.operatorState, card.theoreticalState, card.temporalState, card.terminalReason].map((value) => String(value ?? "").toUpperCase());
+  return Boolean(card.terminal || card.expiredByTime || statuses.some((status) => (
+    status.includes("EXPIRED")
+    || status.includes("CANCEL")
+    || status.includes("REJECT")
+    || status.includes("STOP_HIT")
+    || status.includes("TARGET_HIT")
+    || status === "CLOSED"
+    || status.includes("VOIDED")
+  )));
+}
+
+function focusCardStatus(card: LiveFocusView["tradeCards"][number]): string {
+  if (card.lifecycleLabel) return card.lifecycleLabel;
+  if (focusCardActionable(card)) return "À décider";
+  if (focusCardTerminal(card)) return "Historique";
+  return presentBackendStatus(card.operatorState).label;
+}
+
+function focusOpportunityTerminal(opportunity: LiveFocusView["observedOpportunities"][number]): boolean {
+  const status = String(opportunity.status ?? "").toUpperCase();
+  return Boolean(opportunity.terminal || status.includes("EXPIRED") || status.includes("CANCEL") || status.includes("REJECT"));
+}
+
+function focusOpportunityStatus(opportunity: LiveFocusView["observedOpportunities"][number]): string {
+  if (opportunity.statusLabel) return opportunity.statusLabel;
+  if (focusOpportunityTerminal(opportunity)) return "Signal non actif";
+  return presentBackendStatus(opportunity.status).label;
+}
+
+function tradeCardLevelSummary(card: LiveFocusView["tradeCards"][number]): string {
+  const plan = recordValue(card.riskAuthorizedPlan ?? card.contextAdjustedPlan ?? card.strategyProposedPlan);
+  const entry = priceText(plan.entry ?? plan.entryPrice ?? plan.entry_price);
+  const stop = priceText(plan.stop ?? plan.stopPrice ?? plan.stop_price);
+  const targets = recordRows(plan.targets)
+    .map((target) => priceText(target.price ?? target.value ?? target.targetPrice ?? target.target_price))
+    .filter((value) => value !== "—")
+    .slice(0, 2);
+  const quantity = card.authorizedQuantity === null || card.authorizedQuantity === undefined ? "qty non publiée" : `qty ${displayValue(card.authorizedQuantity)}`;
+  return [
+    quantity,
+    `entrée ${entry}`,
+    `stop ${stop}`,
+    targets.length ? `objectif ${targets.join(" / ")}` : "objectif non publié",
+  ].join(" · ");
+}
+
+function priceText(value: unknown): string {
+  const price = recordValue(value).price ?? recordValue(value).value ?? recordValue(value).mid ?? value;
+  return displayValue(price, "—");
+}
+
 function FocusQueues({ focus, selectedIndex, onSelectDecision }: {
   focus: LiveFocusView;
   selectedIndex: number;
   onSelectDecision(signalId: string): void;
 }) {
+  const actionable = focus.tradeCards.filter(focusCardActionable).length;
+  const historical = Math.max(0, focus.tradeCards.length - actionable);
   return <aside className="live-focus__queue" aria-label="Pile de dossiers et opportunités observées">
-    <header><div><small>PILE DE DÉCISION</small><strong>{focus.tradeCards.length} qualifié(s)</strong></div><span>{focus.observedOpportunities.length} observé(s)</span></header>
+    <header><div><small>JOURNAL QUALIFIÉ</small><strong>{actionable} à décider · {historical} historique(s)</strong></div><span>{focus.observedOpportunities.length} observé(s)</span></header>
     <div className="live-focus__queue-track">
-      {focus.tradeCards.map((card, index) => <button key={card.orderIntentId} type="button" data-priority={card.priority} aria-current={index === selectedIndex ? "true" : undefined} onClick={() => card.signalId && onSelectDecision(card.signalId)}>
-        <span><strong>{card.instrument}</strong><em>{operatorCode(card.side)}</em><small>{presentBackendStatus(card.operatorState).label}</small></span>
-        <i>{card.expectedR === null ? "R non publié" : `${card.expectedR.toFixed(2)} R`} · {card.attentionReason ? operatorReason(card.attentionReason) : operatorCopy(card.strategyName)}</i>
+      {focus.tradeCards.map((card, index) => <button key={card.orderIntentId} type="button" data-priority={card.priority} data-terminal={focusCardTerminal(card) ? "true" : "false"} data-actionable={focusCardActionable(card) ? "true" : "false"} aria-current={index === selectedIndex ? "true" : undefined} onClick={() => card.signalId && onSelectDecision(card.signalId)}>
+        <span><strong>{card.instrument}</strong><em>{operatorCode(card.side)}</em><small>{focusCardStatus(card)}</small></span>
+        <i>{tradeCardLevelSummary(card)}</i>
+        <small>Signal {displayTime(card.createdAt)} · Expiration {displayTime(card.expiresAt)}</small>
+        <small>{card.expectedR === null ? "R non publié" : `${card.expectedR.toFixed(2)} R`} · {card.attentionReason ? operatorReason(card.attentionReason) : operatorCopy(card.strategyName)}</small>
       </button>)}
-      {!focus.tradeCards.length ? <p>Aucun dossier actionnable n’a encore franchi position cible, ordre proposé et validation opérateur. Les opportunités observées restent dans le Live complet.</p> : null}
+      {!focus.tradeCards.length ? <p>Aucun dossier n’a franchi Position cible → Ordre proposé → Validation opérateur sur cette fenêtre. Les signaux observés restent consultables sans être présentés comme “à poser”.</p> : null}
+      {focus.observedOpportunities.slice(0, 12).map((opportunity) => <button key={opportunity.opportunityId} type="button" className="live-focus__queue-observed" data-priority="OBSERVED" data-terminal={focusOpportunityTerminal(opportunity) ? "true" : "false"} onClick={() => onSelectDecision(opportunity.signalId)}>
+        <span><strong>{opportunity.instrument}</strong><em>{operatorCode(opportunity.side)}</em><small>{focusOpportunityStatus(opportunity)}</small></span>
+        <i>{operatorCopy(opportunity.strategyName)}</i>
+        <small>Signal {displayTime(opportunity.createdAt)} · Expiration {displayTime(opportunity.expiresAt)}</small>
+      </button>)}
     </div>
   </aside>;
 }
@@ -385,7 +466,7 @@ function FocusPipeline({ focus }: { focus: LiveFocusView }) {
     { label: "Le contexte est-il favorable ?", published: Number(counts.contextAccepted || 0) > 0, result: `${counts.contextAccepted || 0} admis · ${counts.contextWait || 0} en attente · ${counts.contextRejected || 0} refusés` },
     { label: "Est-ce compatible avec le portefeuille ?", published: Number(counts.portfolioSelected || 0) > 0, result: `${counts.portfolioSelected || 0} sélection(s)` },
     { label: "Quel ordre exactement ?", published: Number(counts.orderIntents || 0) > 0, result: `${counts.orderIntents || 0} ordre(s) proposé(s)` },
-    { label: "À vous de valider", published: focus.tradeCards.some((item) => !item.terminal), result: `${focus.tradeCards.filter((item) => !item.terminal).length} dossier(s) actif(s)` },
+    { label: "À vous de valider", published: focus.tradeCards.some(focusCardActionable), result: `${focus.tradeCards.filter(focusCardActionable).length} dossier(s) à décider` },
   ];
   const firstUnpublished = stages.findIndex((stage) => !stage.published);
   return <ol className="live-focus__pipeline" aria-label="Progression publiée de la décision">
@@ -410,8 +491,94 @@ function resolveBackendFocusState(focus: LiveFocusView, model: LiveTradingModel)
   return { code, ...labels[code] };
 }
 
-function FocusTicket({ plan, timingLabel }: { plan: ReturnType<typeof focusTradePlan>; timingLabel: string }) {
-  return <div className={`live-focus__ticket${plan.actionable ? "" : " live-focus__ticket--incomplete"}`} data-plan-authority={plan.authority}>
+function resolveFocusTicketPresentation(
+  model: LiveTradingModel,
+  focus: LiveFocusView,
+  plan: ReturnType<typeof focusTradePlan>,
+  timing: ReturnType<typeof gateTiming>,
+  primary: PendingAction | null,
+): FocusTicketPresentation {
+  const selectedCard = focus.tradeCards.find((card) => card.signalId === model.latestSignal?.signalId)
+    ?? focus.selectedTrade
+    ?? focus.tradeCards[0]
+    ?? null;
+  const terminal = Boolean(selectedCard && focusCardTerminal(selectedCard)) || timing.expired;
+  const operatorActionable = Boolean(primary && plan.actionable && !terminal);
+  const signalLabel = model.latestSignal ? `${model.latestSignal.symbol} · ${operatorCode(model.latestSignal.direction)}` : "Surveillance Desk";
+  const statusLabel = selectedCard ? focusCardStatus(selectedCard) : model.operator.label;
+  const statusDetail = selectedCard
+    ? `${operatorCopy(selectedCard.strategyName)} · signal ${displayTime(selectedCard.createdAt)} · expiration ${displayTime(selectedCard.expiresAt)}`
+    : model.orderIntent
+      ? `${operatorCode(model.orderIntent.side)} · quantité ${model.orderIntent.quantity} · expiration ${displayTime(model.orderIntent.allowedActions.expiresAt)}`
+      : model.latestSignal
+        ? `${model.latestSignal.symbol} ${operatorCode(model.latestSignal.direction)} · expiration ${displayTime(model.latestSignal.expiresAt)}`
+        : "Aucun dossier qualifié publié.";
+
+  if (operatorActionable) {
+    return {
+      mode: "actionable",
+      eyebrow: "À DÉCIDER",
+      title: "Ticket d’action",
+      description: "Le backend publie un dossier post-risque et une action opérateur ouverte. Confirmer ne signifie jamais fill broker.",
+      orbitLabel: signalLabel,
+      statusLabel: "Prêt à décider",
+      statusDetail,
+      tone: "success",
+      operatorActionable: true,
+      warning: null,
+    };
+  }
+
+  if (selectedCard || model.orderIntent) {
+    return {
+      mode: "historical",
+      eyebrow: "À CONSULTER",
+      title: "Dossier non actionnable",
+      description: "Ce dossier reste utile pour l’audit, mais il ne doit pas être posé depuis le Focus car sa fenêtre est fermée ou aucune capability n’est publiée.",
+      orbitLabel: signalLabel,
+      statusLabel: terminal ? "Historique — ne pas poser" : statusLabel,
+      statusDetail,
+      tone: terminal ? "warning" : "info",
+      operatorActionable: false,
+      warning: terminal
+        ? "Dossier expiré, annulé, rejeté ou déjà clôturé : ne pas poser. Ouvrir le dossier uniquement pour audit."
+        : "Dossier qualifié publié, mais aucune action opérateur n’est autorisée par le backend à cet instant.",
+    };
+  }
+
+  if (model.latestSignal || focus.observedOpportunities.length) {
+    const observed = focus.observedOpportunities[0];
+    return {
+      mode: "observed",
+      eyebrow: "SIGNAL OBSERVÉ",
+      title: "Signal non qualifié",
+      description: "Le moteur a publié un signal, mais il n’existe pas encore de dossier complet Position cible → Ordre proposé → Validation opérateur.",
+      orbitLabel: signalLabel,
+      statusLabel: observed ? focusOpportunityStatus(observed) : model.operator.label,
+      statusDetail: observed ? `Signal ${displayTime(observed.createdAt)} · expiration ${displayTime(observed.expiresAt)}` : model.operator.detail,
+      tone: "info",
+      operatorActionable: false,
+      warning: "Signal diagnostique uniquement : il n’a pas franchi tous les gates et ne doit pas être traité comme un ordre à poser.",
+    };
+  }
+
+  return {
+    mode: "empty",
+    eyebrow: "SURVEILLANCE",
+    title: "Aucun ticket à traiter",
+    description: "Le Desk surveille le marché ; aucun signal n’a franchi tous les filtres jusqu’au Human Gate.",
+    orbitLabel: "Surveillance Desk",
+    statusLabel: "Aucune action",
+    statusDetail: "Aucun dossier qualifié publié.",
+    tone: "neutral",
+    operatorActionable: false,
+    warning: null,
+  };
+}
+
+function FocusTicket({ plan, timingLabel, ticket }: { plan: ReturnType<typeof focusTradePlan>; timingLabel: string; ticket: FocusTicketPresentation }) {
+  return <div className={`live-focus__ticket${ticket.operatorActionable ? "" : " live-focus__ticket--incomplete"}`} data-plan-authority={plan.authority} data-ticket-mode={ticket.mode}>
+    <div className="live-focus__ticket-status" data-tone={ticket.tone}><small>État opérateur</small><strong>{ticket.statusLabel}</strong><span>{ticket.statusDetail}</span></div>
     <div className="live-focus__plan-authority"><small>Provenance</small><strong>{plan.authorityLabel}</strong></div>
     <div className="live-focus__instrument"><small>Instrument</small><strong>{plan.instrument}</strong><span>{operatorCode(plan.side)}</span></div>
     <TicketValue label="Type" value={operatorCode(plan.orderType)} />

@@ -81,6 +81,46 @@ test("Live Focus pins actionable cards above active and terminal cards", () => {
   assert.deepEqual(projection.tradeCards.map((item) => item.orderIntentId), ["intent-actionable", "intent-pending", "intent-terminal"]);
 });
 
+test("Live Focus does not keep cancelled or expired observed signals in an active opportunity stage", () => {
+  const live = liveFixture();
+  live.signals[0] = {
+    ...live.signals[0],
+    state: "CANCELLED",
+    effectiveState: "CANCELLED",
+    expiresAt: "2026-09-01T14:00:00.000Z",
+  };
+  const health = healthFixture();
+  health.data_readiness.market_session.state = "CLOSED";
+
+  const projection = buildLiveFocusProjection({ live, marketContext: null, health, nowIso: NOW });
+
+  assert.equal(projection.observedOpportunities[0].status, "CANCELLED");
+  assert.equal(projection.observedOpportunities[0].terminal, true);
+  assert.equal(projection.operatorJourneyState.stage, "A");
+  assert.equal(projection.operatorJourneyState.rawStatus, "CLOSED");
+});
+
+test("Live Focus keeps terminal qualified dossiers in history without selecting them as the current trade", () => {
+  const live = liveFixture();
+  live.portfolioOrderIntents = [
+    intentFixture("expired", {
+      signalId: "signal-1",
+      expiresAt: "2026-09-01T14:00:00.000Z",
+      humanGate: { gateId: "gate-expired", status: "AWAITING_CONFIRMATION" },
+      allowedActions: { allowedActions: ["CONFIRM"], expiresAt: "2026-09-01T14:00:00.000Z", revision: 4 },
+    }),
+  ];
+
+  const projection = buildLiveFocusProjection({ live, marketContext: null, health: healthFixture(), nowIso: NOW });
+
+  assert.equal(projection.tradeCards.length, 1);
+  assert.equal(projection.tradeCards[0].operatorState, "EXPIRED");
+  assert.equal(projection.tradeCards[0].terminal, true);
+  assert.equal(projection.tradeCards[0].actionable, false);
+  assert.equal(projection.selectedTrade, null);
+  assert.notEqual(projection.operatorJourneyState.stage, "F");
+});
+
 function liveFixture() {
   return {
     signals: [{

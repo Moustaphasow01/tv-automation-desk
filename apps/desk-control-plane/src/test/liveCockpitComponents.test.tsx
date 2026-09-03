@@ -344,6 +344,43 @@ describe("Live Trading cockpit components", () => {
     expect(markup).not.toContain("ENTRÉE");
     expect(markup).not.toContain("OBJECTIF 1");
   });
+
+  it("keeps expired qualified dossiers in the Focus history without presenting them as a ticket to place", () => {
+    const model = withOrderIntent(cockpitModel(), { expiresAt: "2026-09-01T14:00:00.000Z" });
+    model.meta = { ...model.meta, asOf: "2026-09-01T14:30:00.000Z" };
+    model.gateActions = [];
+    model.selectedTheoreticalExecution = null;
+    const markup = render(
+      <LiveFocusMode
+        model={model}
+        focus={{
+          ...focusView(),
+          operatorJourneyState: { ...focusView().operatorJourneyState, stage: "B" },
+          whyNoTrade: { ...focusView().whyNoTrade, stageCounts: { signals: 1, orderIntents: 1 } },
+          tradeCards: [focusTradeCard()],
+          selectedTrade: null,
+        }}
+        busy={false}
+        error={null}
+        requestedScope={{ instrument: "ZW", timeframe: "15" }}
+        chartLoading={false}
+        chartError={null}
+        onExit={() => undefined}
+        onScopeChange={() => undefined}
+        onSelectDecision={() => undefined}
+        onSubmitGate={noopSubmit}
+        onSubmitManual={noopSubmit}
+      />,
+    );
+
+    expect(markup).toContain("Dossier non actionnable");
+    expect(markup).toContain("Historique — ne pas poser");
+    expect(markup).toContain("JOURNAL QUALIFIÉ");
+    expect(markup).toContain("Signal ");
+    expect(markup).toContain("Expiration ");
+    expect(markup).toContain("Dossier expiré, annulé, rejeté ou déjà clôturé");
+    expect(markup).not.toContain("maintenir Entrée");
+  });
 });
 
 function cockpitModel(): LiveTradingModel {
@@ -432,6 +469,63 @@ function focusView(): LiveFocusView {
     contextWorker: { taskType: "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH", lane: "live", cadenceMinutes: { marketOpen: 30, marketClosed: 60 }, timeoutMs: 780000, modelPolicy: {}, taskCount: 1, successCount: 1, failureCount: 0, activeCount: 0, lastCompletedAt: "2026-09-01T14:20:00.000Z", lastSuccessfulBriefAt: "2026-09-01T14:20:00.000Z", briefAgeSeconds: 600, retryCount: 0, averageLatencyMs: 1200, totalTokens: 0, costMicrosUsd: 0 },
     nextActions: [],
     technical: { source: "front-api/live-focus", sourceDataCutoff: "2026-09-01T14:30:00.000Z", revision: 1 },
+  };
+}
+
+function focusTradeCard(): LiveFocusView["tradeCards"][number] {
+  return {
+    tradeCardId: "focus-trade-expired",
+    targetPositionId: "target-expired",
+    orderIntentId: "intent-expired",
+    humanGateId: "gate-expired",
+    strategyDefinitionId: "strategy-def-expired",
+    strategyVersionId: "strategy-version-expired",
+    strategyInstanceId: "strategy-instance-expired",
+    signalId: "signal-expired",
+    contextDecisionId: "context-expired",
+    portfolioDecisionId: "portfolio-expired",
+    riskDecisionId: "risk-expired",
+    providerCommandId: null,
+    positionId: null,
+    tradeId: null,
+    instrument: "ZW",
+    side: "LONG",
+    strategyName: "ZW pullback",
+    setup: "PULLBACK",
+    createdAt: "2026-09-01T13:45:00.000Z",
+    expiresAt: "2026-09-01T14:00:00.000Z",
+    operatorState: "EXPIRED",
+    theoreticalState: "PENDING_ENTRY",
+    authorizedQuantity: 1,
+    riskAmount: 125,
+    expectedR: 1.4,
+    priority: "TERMINAL",
+    attentionReason: null,
+    allowedActions: [],
+    denialReasons: ["HUMAN_GATE_EXPIRED"],
+    actionable: false,
+    temporalState: "EXPIRED",
+    expiredByTime: true,
+    lifecycleLabel: "Fenêtre expirée",
+    terminalReason: "HUMAN_GATE_EXPIRED",
+    actionPolicy: {},
+    strategyProposedPlan: { entry: { price: 754 }, stop: { price: 752.25 }, targets: [{ price: 756.75 }] },
+    contextAdjustedPlan: null,
+    riskAuthorizedPlan: { entry: { price: 754 }, stop: { price: 752.25 }, targets: [{ price: 756.75 }] },
+    theoreticalResult: null,
+    operatorResult: null,
+    realizedR: null,
+    realizedPnL: null,
+    closeReason: null,
+    revision: 4,
+    route: "/execution/orders/intent-expired",
+    correlationId: "corr-expired",
+    reasonCodes: ["RISK_PASS"],
+    whyThisTrade: {},
+    source: "portfolio-order-intent",
+    asOf: "2026-09-01T14:30:00.000Z",
+    availability: "AVAILABLE",
+    terminal: true,
   };
 }
 

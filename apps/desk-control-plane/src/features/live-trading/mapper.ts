@@ -3,6 +3,8 @@ import type { HumanGateAction } from "@/features/order-intent/model";
 import type { LiveTone, LiveTradingEnvelope, LiveTradingModel } from "./model";
 import { resolveSignalTemporalState } from "./signalTemporalState";
 
+const THEORETICAL_TERMINAL_STATES = new Set(["STOP_HIT", "TARGET_HIT", "EXPIRED", "CLOSED", "CANCELLED", "CANCELED", "VOIDED"]);
+
 export type LiveTradingSelection = {
   signalId?: string | null;
 };
@@ -192,11 +194,19 @@ function buildOperatorState(
   }
   if (latestSignal) {
     const temporal = resolveSignalTemporalState(latestSignal, asOf);
+    const terminal = String(temporal.effectiveState ?? "").toUpperCase();
+    const terminalLabel = terminal.includes("CANCEL")
+      ? "Signal annulé"
+      : terminal.includes("REJECT")
+        ? "Signal rejeté"
+        : terminal === "EXPIRED"
+          ? "Signal expiré"
+          : "Signal surveillé";
     return {
       status: "SIGNAL_DETECTED",
-      label: temporal.effectiveState === "EXPIRED" ? "Signal expiré" : "Signal surveillé",
-      detail: `${latestSignal.symbol} ${latestSignal.direction} · ${temporal.label} · ${temporal.effectiveState === "EXPIRED" ? "expiré" : "expire"} ${displayTime(latestSignal.expiresAt)}`,
-      tone: temporal.effectiveState === "REJECTED" || temporal.effectiveState === "EXPIRED" ? "warning" : "info",
+      label: terminalLabel,
+      detail: `${latestSignal.symbol} ${latestSignal.direction} · ${temporal.label} · ${["EXPIRED", "CANCELLED", "CANCELED", "REJECTED"].includes(terminal) ? "fenêtre passée" : "expire"} ${displayTime(latestSignal.expiresAt)}`,
+      tone: terminal.includes("REJECT") || terminal.includes("CANCEL") || terminal === "EXPIRED" ? "warning" : "info",
     };
   }
   return {
@@ -469,14 +479,26 @@ function selectTheoreticalExecution(
   }
   if (selectedSignalId) {
     const bySignal = rows.find((item) => normalizeText(item.strategySignalId) === selectedSignalId);
-    if (bySignal) return bySignal;
+    if (bySignal && (strictSignalSelection || isActiveTheoreticalRow(bySignal))) return bySignal;
     if (strictSignalSelection) return null;
   }
   if (selectedInstrument) {
-    const byInstrument = rows.find((item) => normalizeInstrument(item.instrument) === selectedInstrument);
-    if (byInstrument) return byInstrument;
+    const activeByInstrument = rows.find((item) => normalizeInstrument(item.instrument) === selectedInstrument && isActiveTheoreticalRow(item));
+    if (activeByInstrument) return activeByInstrument;
+    if (strictSignalSelection) return null;
   }
-  return rows[0] ?? null;
+  return rows.find(isActiveTheoreticalRow) ?? null;
+}
+
+function isActiveTheoreticalRow(row: NonNullable<LiveTradingModel["theoreticalExecution"]>["rows"][number]): boolean {
+  const status = normalizeText(row.status).toUpperCase();
+  const tradeStatus = normalizeText(row.tradeStatus).toUpperCase();
+  const latestEventType = normalizeText(row.latestEventType).toUpperCase();
+  const state = tradeStatus || status || latestEventType;
+  if (!state) return false;
+  if (THEORETICAL_TERMINAL_STATES.has(state)) return false;
+  if (THEORETICAL_TERMINAL_STATES.has(status) || THEORETICAL_TERMINAL_STATES.has(tradeStatus) || THEORETICAL_TERMINAL_STATES.has(latestEventType)) return false;
+  return ["READY", "PENDING", "PENDING_ENTRY", "OPEN", "FILLED", "TRACKING", "AWAITING_ENTRY"].some((token) => state.includes(token));
 }
 
 function intentInstrument(intent: LiveTradingModel["orderIntent"]): unknown {

@@ -1,11 +1,13 @@
-const TERMINAL_GATE_STATES = new Set(["CONFIRMED", "REJECTED", "EXPIRED", "CANCELLED"]);
+const TERMINAL_GATE_STATES = new Set(["CONFIRMED", "REJECTED", "EXPIRED", "CANCELLED", "CANCELED"]);
+const TERMINAL_SIGNAL_STATES = new Set(["REJECTED", "EXPIRED", "CANCELLED", "CANCELED"]);
+const TERMINAL_THEORETICAL_STATES = new Set(["STOP_HIT", "TARGET_HIT", "EXPIRED", "CLOSED", "CANCELLED", "CANCELED", "VOIDED"]);
 
 export function buildLiveFocusProjection({ live, marketContext, health, nowIso }) {
   const snapshot = marketContext?.snapshot || null;
   const brief = marketContext?.brief || null;
   const session = canonicalGrainsSession(health, nowIso);
   const tradeCards = buildTradeCards(live, nowIso);
-  const observedOpportunities = buildObservedOpportunities(live, tradeCards);
+  const observedOpportunities = buildObservedOpportunities(live, tradeCards, nowIso);
   const whyNoTrade = buildWhyNoTrade({ live, marketContext, snapshot, brief, tradeCards, observedOpportunities, session, nowIso });
   return {
     schemaVersion: "live_focus_view_v1",
@@ -19,7 +21,7 @@ export function buildLiveFocusProjection({ live, marketContext, health, nowIso }
     whyNoTrade,
     operatorJourneyState: journeyState({ tradeCards, observedOpportunities, snapshot, session, whyNoTrade, nowIso }),
     tradeCards,
-    selectedTrade: tradeCards[0] || null,
+    selectedTrade: tradeCards.find((card) => !card.terminal) || null,
     observedOpportunities,
     catalysts: rows(brief?.currentCatalysts),
     marketSeries: live.marketSeries,
@@ -41,7 +43,15 @@ function buildTradeCards(live, nowIso) {
   )).map((intent) => {
     const signal = findSignal(live, intent.signalId);
     const theoretical = findTheoretical(live, intent.portfolioOrderIntentId);
-    const gateStatus = upper(intent.humanGate?.status || "UNKNOWN");
+    const publishedGateStatus = upper(intent.humanGate?.status || "UNKNOWN");
+    const expiresAt = intent.expiresAt || intent.allowedActions?.expiresAt || signal?.expiresAt || null;
+    const expiredByTime = isExpiredByTime(expiresAt, nowIso);
+    const gateStatus = expiredByTime && !TERMINAL_GATE_STATES.has(publishedGateStatus) ? "EXPIRED" : publishedGateStatus;
+    const theoreticalStatus = upper(theoretical?.status || theoretical?.tradeStatus || "PENDING_ENTRY");
+    const theoreticalTerminal = TERMINAL_THEORETICAL_STATES.has(theoreticalStatus);
+    const allowedActions = rows(intent.allowedActions?.allowedActions);
+    const terminal = TERMINAL_GATE_STATES.has(gateStatus) || theoreticalTerminal;
+    const actionable = allowedActions.includes("CONFIRM") && !terminal;
     return {
       tradeCardId: `focus-trade-${intent.portfolioOrderIntentId}`,
       targetPositionId: intent.targetPositionId,
@@ -62,7 +72,7 @@ function buildTradeCards(live, nowIso) {
       strategyName: signal?.strategyName || signal?.strategy || "Strategy",
       setup: signal?.setup || signal?.setupType || null,
       createdAt: intent.createdAt || signal?.createdAt || nowIso,
-      expiresAt: intent.expiresAt || null,
+      expiresAt,
       lastUpdatedAt: theoretical?.lastUpdatedAt || intent.updatedAt || nowIso,
       operatorState: gateStatus,
       theoreticalState: theoretical?.status || "PENDING_ENTRY",
@@ -73,10 +83,15 @@ function buildTradeCards(live, nowIso) {
       authorizedRisk: intent.riskSnapshot?.authorizedRisk ?? null,
       riskAmount: intent.riskSnapshot?.riskAmount ?? null,
       expectedR: intent.expectedR ?? signal?.expectedR ?? null,
-      priority: priorityCode(intent, theoretical),
-      attentionReason: attentionReason(intent, theoretical),
-      allowedActions: rows(intent.allowedActions?.allowedActions),
+      priority: priorityCode(intent, theoretical, { actionable, terminal }),
+      attentionReason: attentionReason(intent, theoretical, { actionable, terminal }),
+      allowedActions,
       denialReasons: rows(intent.allowedActions?.denialReasons),
+      actionable,
+      temporalState: expiredByTime ? "EXPIRED" : terminal ? "TERMINAL" : actionable ? "AWAITING_OPERATOR" : "QUALIFIED",
+      expiredByTime,
+      lifecycleLabel: lifecycleLabel(gateStatus, theoreticalStatus),
+      terminalReason: terminal ? terminalReason(gateStatus, theoreticalStatus) : null,
       actionPolicy: intent.allowedActions,
       humanGate: intent.humanGate,
       reconciliation: findReconciliation(live, intent.portfolioOrderIntentId),
@@ -98,29 +113,34 @@ function buildTradeCards(live, nowIso) {
       asOf: nowIso,
       availability: "AVAILABLE",
       whyThisTrade: whyThisTrade(intent, signal),
-      terminal: TERMINAL_GATE_STATES.has(gateStatus),
+      terminal,
     };
   }).sort((left, right) => priority(right) - priority(left) || Date.parse(right.createdAt) - Date.parse(left.createdAt));
 }
 
-function buildObservedOpportunities(live, tradeCards) {
+function buildObservedOpportunities(live, tradeCards, nowIso) {
   const cardSignalIds = new Set(tradeCards.map((card) => card.signalId).filter(Boolean));
-  return rows(live?.signals).filter((signal) => signal.signalId && !cardSignalIds.has(signal.signalId)).map((signal) => ({
-    opportunityId: `observed-${signal.signalId}`,
-    signalId: signal.signalId,
-    instrument: signal.symbol || signal.instrument,
-    side: signal.direction || signal.side,
-    strategyName: signal.strategyName || signal.strategy || "Strategy",
-    status: observedStatus(signal),
-    reasonCodes: rows(signal.reasonCodes || signal.reason_codes),
-    createdAt: signal.createdAt || signal.generatedAt || null,
-    expiresAt: signal.expiresAt || null,
-    diagnosticOnly: true,
-    route: signal.route || `/live/signals/${encodeURIComponent(signal.signalId)}`,
-    source: "strategy-signal",
-    asOf: signal.createdAt || signal.generatedAt || null,
-    availability: signal.availability || "AVAILABLE",
-  })).sort((left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || ""));
+  return rows(live?.signals).filter((signal) => signal.signalId && !cardSignalIds.has(signal.signalId)).map((signal) => {
+    const status = observedStatus(signal, nowIso);
+    return {
+      opportunityId: `observed-${signal.signalId}`,
+      signalId: signal.signalId,
+      instrument: signal.symbol || signal.instrument,
+      side: signal.direction || signal.side,
+      strategyName: signal.strategyName || signal.strategy || "Strategy",
+      status,
+      statusLabel: lifecycleLabel(status, null),
+      terminal: TERMINAL_SIGNAL_STATES.has(status),
+      reasonCodes: rows(signal.reasonCodes || signal.reason_codes),
+      createdAt: signal.createdAt || signal.generatedAt || null,
+      expiresAt: signal.expiresAt || null,
+      diagnosticOnly: true,
+      route: signal.route || `/live/signals/${encodeURIComponent(signal.signalId)}`,
+      source: "strategy-signal",
+      asOf: signal.createdAt || signal.generatedAt || null,
+      availability: signal.availability || "AVAILABLE",
+    };
+  }).sort((left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || ""));
 }
 
 function buildWhyNoTrade({ live, marketContext, snapshot, brief, tradeCards, observedOpportunities, session, nowIso }) {
@@ -169,14 +189,15 @@ function buildWhyNoTrade({ live, marketContext, snapshot, brief, tradeCards, obs
 }
 
 function journeyState({ tradeCards, observedOpportunities, snapshot, session, whyNoTrade, nowIso }) {
-  const actionable = tradeCards.find((card) => rows(card.allowedActions).includes("CONFIRM"));
+  const actionable = tradeCards.find((card) => card.actionable);
   if (actionable) return journey("F", "AWAITING_HUMAN_CONFIRMATION", "OrderIntent", actionable.orderIntentId, nowIso, ["HUMAN_GATE_ACTION_AVAILABLE"]);
   const pending = tradeCards.find((card) => !card.terminal);
   if (pending) return journey("E", pending.operatorState, "OrderIntent", pending.orderIntentId, nowIso, ["QUALIFIED_DOSSIER_PENDING"]);
   const counts = whyNoTrade?.stageCounts || {};
   const underArbitration = Number(counts.portfolioSelected || 0) + Number(counts.riskApproved || 0) + Number(counts.riskReduced || 0);
   if (underArbitration > 0) return journey("D", "UNDER_ARBITRATION", "PortfolioDecision", null, nowIso, ["PORTFOLIO_OR_RISK_DECISION_PUBLISHED"]);
-  if (observedOpportunities.length) return journey("C", observedOpportunities[0].status, "StrategySignal", observedOpportunities[0].signalId, nowIso, ["OPPORTUNITY_UNDER_FILTERS"]);
+  const activeObserved = observedOpportunities.find((item) => !item.terminal);
+  if (activeObserved) return journey("C", activeObserved.status, "StrategySignal", activeObserved.signalId, nowIso, ["OPPORTUNITY_UNDER_FILTERS"]);
   if (session.marketState !== "OPEN") return journey("A", session.marketState, "MarketSession", session.marketSession, nowIso, ["MARKET_CLOSED"]);
   return journey("B", snapshot?.status || "UNAVAILABLE", "MarketContextSnapshot", snapshot?.marketContextSnapshotId || null, nowIso, [snapshot ? "WAITING_FOR_SETUP" : "MARKET_CONTEXT_UNAVAILABLE"]);
 }
@@ -225,11 +246,18 @@ function whyThisTrade(intent, signal) {
 function findSignal(live, id) { return [...rows(live?.signals), ...rows(live?.canonicalRuntime?.latestSignals)].find((item) => item.signalId === id) || null; }
 function findTheoretical(live, id) { return rows(live?.theoreticalExecution?.items || live?.theoreticalExecution).find((item) => item.portfolioOrderIntentId === id) || null; }
 function findReconciliation(live, id) { return rows(live?.reconciliation?.items || live?.reconciliation).find((item) => item.portfolioOrderIntentId === id) || null; }
-function observedStatus(signal) { const raw = upper(signal.contextStatus || signal.status || "OBSERVED"); return ["WAIT", "REJECT", "EXPIRED"].some((value) => raw.includes(value)) ? raw : "OBSERVED"; }
-function priority(card) { if (rows(card.allowedActions).includes("CONFIRM")) return 4; if (!card.terminal) return 3; return card.theoreticalState === "OPEN" ? 2 : 1; }
-function priorityCode(intent, theoretical) { if (rows(intent.allowedActions?.allowedActions).includes("CONFIRM")) return "ACTIONABLE"; if (theoretical?.status === "OPEN") return "ACTIVE"; return TERMINAL_GATE_STATES.has(upper(intent.humanGate?.status)) ? "TERMINAL" : "PENDING"; }
-function attentionReason(intent, theoretical) { if (rows(intent.allowedActions?.allowedActions).includes("CONFIRM")) return "HUMAN_CONFIRMATION_REQUIRED"; if (theoretical?.status === "OPEN") return "THEORETICAL_POSITION_OPEN"; return null; }
-function operatorNextActions({ tradeCards, whyNoTrade }) { const card = tradeCards.find((item) => rows(item.allowedActions).length); return card ? card.allowedActions : [{ action: "WAIT", reasonCodes: whyNoTrade.reasonCodes }]; }
+function observedStatus(signal, nowIso) {
+  const raw = upper(signal.effectiveState || signal.contextStatus || signal.status || signal.state || "OBSERVED");
+  if (raw.includes("CANCEL")) return "CANCELLED";
+  if (raw.includes("REJECT")) return "REJECTED";
+  if (raw.includes("EXPIRED") || isExpiredByTime(signal.expiresAt, nowIso)) return "EXPIRED";
+  if (raw.includes("WAIT")) return "WAIT";
+  return "OBSERVED";
+}
+function priority(card) { if (card.actionable) return 4; if (!card.terminal) return 3; return upper(card.theoreticalState) === "OPEN" ? 2 : 1; }
+function priorityCode(intent, theoretical, state = {}) { if (state.actionable) return "ACTIONABLE"; if (theoretical?.status === "OPEN") return "ACTIVE"; return state.terminal || TERMINAL_GATE_STATES.has(upper(intent.humanGate?.status)) ? "TERMINAL" : "PENDING"; }
+function attentionReason(intent, theoretical, state = {}) { if (state.actionable) return "HUMAN_CONFIRMATION_REQUIRED"; if (!state.terminal && theoretical?.status === "OPEN") return "THEORETICAL_POSITION_OPEN"; return null; }
+function operatorNextActions({ tradeCards, whyNoTrade }) { const card = tradeCards.find((item) => item.actionable); return card ? card.allowedActions : [{ action: "WAIT", reasonCodes: whyNoTrade.reasonCodes }]; }
 function nextRelevantEvent(brief) { return rows(brief?.nextExpectedEvents).map((item) => item.eventTimestamp || item.event_timestamp_utc || item.at).filter(Boolean).sort()[0] || null; }
 function journey(stage, rawStatus, sourceObjectType, sourceObjectId, asOf, reasonCodes) { return { stage, rawStatus, sourceObjectType, sourceObjectId, asOf, reasonCodes }; }
 function reasonSource(code) { return code.startsWith("MARKET_") ? "market-context" : code.includes("HUMAN") ? "human-gate" : "strategy-runtime"; }
@@ -237,3 +265,33 @@ function rows(value) { return Array.isArray(value) ? value : []; }
 function upper(value) { return String(value || "UNKNOWN").toUpperCase(); }
 function meaningful(value) { return Boolean(value && !["unavailable", "unknown", "null"].includes(String(value).toLowerCase())); }
 function number(value, fallback = 0) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
+function isExpiredByTime(value, nowIso) {
+  const expiry = Date.parse(value || "");
+  const now = Date.parse(nowIso || "");
+  return Number.isFinite(expiry) && Number.isFinite(now) && expiry <= now;
+}
+function lifecycleLabel(gateStatus, theoreticalStatus) {
+  const gate = upper(gateStatus);
+  const theoretical = upper(theoreticalStatus);
+  if (theoretical === "TARGET_HIT") return "Objectif touché";
+  if (theoretical === "STOP_HIT") return "Stop touché";
+  if (theoretical === "OPEN") return "Suivi théorique ouvert";
+  if (gate.includes("EXPIRED")) return "Fenêtre expirée";
+  if (gate.includes("CANCEL")) return "Signal annulé";
+  if (gate.includes("REJECT")) return "Dossier rejeté";
+  if (gate.includes("CONFIRM")) return "Dossier confirmé";
+  if (gate.includes("AWAIT")) return "Validation opérateur attendue";
+  if (gate.includes("WAIT")) return "Signal en attente";
+  if (gate.includes("OBSERVED")) return "Signal observé";
+  return gate || theoretical || "État non publié";
+}
+function terminalReason(gateStatus, theoreticalStatus) {
+  const gate = upper(gateStatus);
+  const theoretical = upper(theoreticalStatus);
+  if (theoretical === "TARGET_HIT" || theoretical === "STOP_HIT" || theoretical === "CLOSED") return `THEORETICAL_${theoretical}`;
+  if (gate.includes("EXPIRED")) return "HUMAN_GATE_EXPIRED";
+  if (gate.includes("CANCEL")) return "HUMAN_GATE_CANCELLED";
+  if (gate.includes("REJECT")) return "HUMAN_GATE_REJECTED";
+  if (gate.includes("CONFIRM")) return "HUMAN_GATE_CONFIRMED";
+  return "TERMINAL";
+}

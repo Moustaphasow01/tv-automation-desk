@@ -22,6 +22,12 @@ export function focusTradePlan(model: LiveTradingModel): FocusTradePlan {
   const authorizedTargets = authorized?.targets
     .filter((target) => target.price !== null)
     .map((target) => displayValue(target.price)) ?? [];
+  const referenceTime = Date.parse(model.meta.asOf);
+  const expiresAt = model.orderIntent?.allowedActions.expiresAt ?? model.latestSignal?.expiresAt ?? null;
+  const expiryTime = Date.parse(expiresAt ?? "");
+  const expired = Number.isFinite(referenceTime) && Number.isFinite(expiryTime) && expiryTime <= referenceTime;
+  const confirmAllowed = model.gateActions.some((action) => action.action === "CONFIRM" && action.permission === "ALLOWED");
+  const manualAllowed = authorized?.manualExecution?.allowedActions.some((action) => action.permission === "ALLOWED") ?? false;
   const authorizedComplete = Boolean(
     authorized?.entry !== null
     && authorized?.entry !== undefined
@@ -36,7 +42,7 @@ export function focusTradePlan(model: LiveTradingModel): FocusTradePlan {
     return {
       authority: "AUTHORIZED",
       authorityLabel: "Plan autorisé après contrôle du risque",
-      actionable: true,
+      actionable: !expired && (confirmAllowed || manualAllowed),
       instrument: authorized?.instrument ?? model.latestSignal?.symbol ?? "—",
       side: authorized?.side ?? model.latestSignal?.direction ?? "—",
       orderType: authorized?.orderType ?? "Non publié",
