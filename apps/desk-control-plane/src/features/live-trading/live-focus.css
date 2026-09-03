@@ -599,7 +599,7 @@
 .live-focus__ticket {
   display: grid;
   min-width: 0;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--focus-line);
@@ -621,6 +621,7 @@
 }
 
 .live-focus__ticket strong {
+  overflow: hidden;
   overflow-wrap: anywhere;
   color: var(--focus-text);
   font-family: var(--lt-font-data, monospace);
@@ -628,6 +629,8 @@
   font-variant-numeric: tabular-nums;
   font-weight: 820;
   line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .live-focus__plan-authority {
@@ -1544,7 +1547,7 @@
   }
 
   .live-focus__ticket {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .live-focus__ticket > div {
