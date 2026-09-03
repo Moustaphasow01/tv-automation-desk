@@ -381,6 +381,60 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("Dossier expiré, annulé, rejeté ou déjà clôturé");
     expect(markup).not.toContain("maintenir Entrée");
   });
+
+  it("turns the Live Focus queue into a filterable operator journal with traceable tickets", () => {
+    const model = withOrderIntent(cockpitModel(), { expiresAt: "2026-09-01T14:00:00.000Z" });
+    model.meta = { ...model.meta, asOf: "2026-09-01T14:30:00.000Z" };
+    model.gateActions = [];
+    const markup = render(
+      <LiveFocusMode
+        model={model}
+        focus={{
+          ...focusView(),
+          tradeCards: [focusTradeCard()],
+          observedOpportunities: [{
+            opportunityId: "observed-zw-1",
+            signalId: "signal-observed-zw-1",
+            instrument: "ZW",
+            side: "SHORT",
+            strategyName: "ZW breakdown watch",
+            status: "OBSERVED",
+            statusLabel: "Observé",
+            terminal: false,
+            reasonCodes: ["CONTEXT_WAIT"],
+            createdAt: "2026-09-01T14:12:00.000Z",
+            expiresAt: "2026-09-01T14:45:00.000Z",
+            diagnosticOnly: true,
+            route: "/live/signals/signal-observed-zw-1",
+            source: "strategy-signal-outbox",
+            asOf: "2026-09-01T14:30:00.000Z",
+            availability: "AVAILABLE",
+          }],
+        }}
+        busy={false}
+        error={null}
+        requestedScope={{ instrument: "ZW", timeframe: "15" }}
+        chartLoading={false}
+        chartError={null}
+        onExit={() => undefined}
+        onScopeChange={() => undefined}
+        onSelectDecision={() => undefined}
+        onSubmitGate={noopSubmit}
+        onSubmitManual={noopSubmit}
+      />,
+    );
+
+    expect(markup).toContain("Rechercher dans le journal");
+    expect(markup).toContain("Filtrer par état");
+    expect(markup).toContain("Filtrer par instrument");
+    expect(markup).toContain("Exporter");
+    expect(markup).toContain("Résumé du journal");
+    expect(markup).toContain("Progression du ticket");
+    expect(markup).toContain("Historique — ne pas poser");
+    expect(markup).toContain("Signal observé · pas de dossier Risk/Human Gate publié");
+    expect(markup).toContain("Graphique");
+    expect(markup).toContain("Dossier");
+  });
 });
 
 function cockpitModel(): LiveTradingModel {
