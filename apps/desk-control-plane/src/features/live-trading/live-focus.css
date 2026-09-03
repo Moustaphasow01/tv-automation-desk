@@ -1067,7 +1067,7 @@ body.desk-live-focus-document .desk-content {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
+  min-height: var(--focus-tap-min);
   gap: 6px;
   padding: 0 10px;
   border: 1px solid rgba(133, 167, 180, 0.18);
@@ -1109,7 +1109,7 @@ body.desk-live-focus-document .desk-content {
 .live-focus__queue-search input {
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: var(--focus-tap-min);
   border: 0;
   color: var(--focus-text);
   background: transparent;
@@ -1163,7 +1163,7 @@ body.desk-live-focus-document .desk-content {
   border-radius: 999px;
   color: var(--focus-text);
   background: rgba(255, 255, 255, 0.08);
-  font-size: 10px;
+  font-size: var(--focus-type-label);
 }
 
 .live-focus__queue-kpis {
@@ -1195,7 +1195,7 @@ body.desk-live-focus-document .desk-content {
 
 .live-focus__queue-kpis dt {
   color: var(--focus-muted);
-  font: 800 10px / 1 var(--lt-font-data, monospace);
+  font: 800 var(--focus-type-label) / 1 var(--lt-font-data, monospace);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1347,7 +1347,7 @@ body.desk-live-focus-document .desk-content {
 
 .live-focus__queue-card-meta dt {
   color: rgba(168, 190, 199, 0.76);
-  font: 800 9px / 1 var(--lt-font-data, monospace);
+  font: 800 var(--focus-type-label) / 1 var(--lt-font-data, monospace);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1356,7 +1356,7 @@ body.desk-live-focus-document .desk-content {
   overflow: hidden;
   margin: 4px 0 0;
   color: var(--focus-text);
-  font: 830 10px / 1 var(--lt-font-data, monospace);
+  font: 830 var(--focus-type-label) / 1 var(--lt-font-data, monospace);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1405,13 +1405,13 @@ body.desk-live-focus-document .desk-content {
 .live-focus__queue-timeline li[data-tone="muted"] > span { background: rgba(133, 167, 180, 0.38); }
 
 .live-focus__queue-timeline strong {
-  font-size: 10px;
+  font-size: var(--focus-type-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .live-focus__queue-timeline small {
-  font-size: 10px;
+  font-size: var(--focus-type-label);
 }
 
 .live-focus__queue-card footer {
@@ -1425,15 +1425,15 @@ body.desk-live-focus-document .desk-content {
 .live-focus__queue-card footer > span {
   overflow: hidden;
   color: var(--focus-muted);
-  font: 760 10px / 1.2 var(--lt-font-data, monospace);
+  font: 760 var(--focus-type-label) / 1.2 var(--lt-font-data, monospace);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .live-focus__queue-card footer button {
   flex: 0 0 auto;
-  min-height: 28px;
-  padding-inline: 8px;
+  min-height: var(--focus-tap-min);
+  padding-inline: 10px;
 }
 
 .live-focus__queue-card footer button:disabled {
