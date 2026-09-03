@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { FaArrowLeft, FaChartLine, FaCheck, FaClipboard, FaExclamationTriangle, FaInfoCircle, FaLock, FaQuestionCircle, FaRegCircle, FaTimes, FaVolumeMute, FaVolumeUp } from "react-icons/fa";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import type { LiveFocusView, LiveManualExecutionAction } from "@/domains/front-api/viewModels";
-import { presentExecutionMode, presentGeneric } from "@/design-system/labels";
+import { presentExecutionMode } from "@/design-system/labels";
 import { operatorCode, operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import type { HumanGateAction } from "@/features/order-intent/model";
@@ -133,8 +133,8 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
         <section className="live-focus__decision" aria-labelledby="live-focus-action-title">
           <div className="live-focus__decision-head">
             <QuestionNumber value="02" />
-            <div className="live-focus__section-copy"><p className="eyebrow">À DÉCIDER</p><h2 id="live-focus-action-title">Ticket d’action</h2><p>{state.instruction}</p></div>
-            <div className="live-focus__state-orbit" aria-label={`État Focus ${state.code} ${state.label}`}><span>{state.code}</span><strong>{state.label}</strong><small>{model.latestSignal ? `${model.latestSignal.symbol} · ${presentGeneric(model.latestSignal.direction).label}` : "SURVEILLANCE DESK"}</small></div>
+            <div className="live-focus__section-copy"><p className="eyebrow">À DÉCIDER</p><h2 id="live-focus-action-title">Ticket d’action</h2><p>{formatOperatorParagraph(state.instruction)}</p></div>
+            <div className="live-focus__state-orbit" aria-label={`État Focus ${state.code} ${state.label}`}><span>{state.code}</span><strong>{state.label}</strong><small>{model.latestSignal ? `${model.latestSignal.symbol} · ${operatorCode(model.latestSignal.direction)}` : "SURVEILLANCE DESK"}</small></div>
           </div>
           <FocusTicket plan={plan} timingLabel={timing.label} />
           <div className="live-focus__actions" aria-label="Actions autorisées par le backend">
@@ -186,7 +186,7 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
   const contextStatus = presentMarketContextStatus(brief.status);
   return <div className="live-focus__brief-grid" data-status={brief.status}>
     <article className="live-focus__brief-headline"><small>Résumé du brief</small><strong title={brief.headline}>{formatOperatorParagraph(brief.headline)}</strong><p>{formatOperatorParagraph(context)}</p><span data-tone={contextStatus.tone}>{contextStatus.label}</span></article>
-    <article><small>État du marché</small><p>{operatorCode(focus.marketContext.marketRegime, "Régime non publié")} · {operatorCode(focus.marketContext.volatilityRegime, "Volatilité non publiée")} · {operatorCode(focus.marketContext.globalBias, "Biais non publié")}</p></article>
+    <article><small>État du marché</small><p>{formatOperatorParagraph(focus.marketContext.marketRegime || "Régime non publié")} · {formatOperatorParagraph(focus.marketContext.volatilityRegime || "Volatilité non publiée")} · {formatOperatorParagraph(focus.marketContext.globalBias || "Biais non publié")}</p></article>
     <article><small>Ce que le desk recherche</small><p>{preferred.length ? `Le desk privilégie ${preferred.join(", ").toLowerCase()}.` : "Aucune famille de stratégie n’est privilégiée dans l’état publié."}</p></article>
     <article><small>Points de vigilance</small><p>{vigilance.length ? formatOperatorParagraph(`${vigilance.join(". ")}.`) : "Aucun point de vigilance supplémentaire n’est publié."}</p></article>
     <article><small>Prochain catalyseur</small><p>{focus.whyNoTrade.nextRelevantEventAt ? displayTime(focus.whyNoTrade.nextRelevantEventAt) : "Aucun catalyseur couvert n’est publié."}</p></article>
@@ -197,7 +197,7 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
 
 function FocusMissionRibbon({ model, focus, state, timingLabel }: { model: LiveTradingModel; focus: LiveFocusView; state: ReturnType<typeof resolveBackendFocusState>; timingLabel: string }) {
   const activeTradeCount = focus.tradeCards.filter((item) => !item.terminal).length;
-  const signalLabel = model.latestSignal ? `${model.latestSignal.symbol} · ${presentGeneric(model.latestSignal.direction).label}` : "Aucun signal sélectionné";
+  const signalLabel = model.latestSignal ? `${model.latestSignal.symbol} · ${operatorCode(model.latestSignal.direction)}` : "Aucun signal sélectionné";
   const freshness = displayTime(focus.technical.sourceDataCutoff || focus.asOf);
   const nextAction = activeTradeCount > 0 ? "Décision opérateur à vérifier" : focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Surveillance active";
   return <section className="live-focus__mission-ribbon" aria-label="Résumé instantané du mode Focus">
@@ -283,7 +283,7 @@ function FocusBriefDrawer({ focus, onClose }: { focus: LiveFocusView; onClose():
 
 function FocusTradeDrawer({ card, onClose }: { card: LiveFocusView["tradeCards"][number]; onClose(): void }) {
   const why = card.whyThisTrade ?? {};
-  return <FocusDrawer title={`${card.instrument} · ${presentGeneric(card.side).label}`} subtitle={`${card.strategyName} · ${presentBackendStatus(card.operatorState).label}`} onClose={onClose}>
+  return <FocusDrawer title={`${card.instrument} · ${operatorCode(card.side)}`} subtitle={`${operatorCopy(card.strategyName)} · ${presentBackendStatus(card.operatorState).label}`} onClose={onClose}>
     <section><h3>Résumé</h3><dl className="live-focus-drawer__facts"><Fact label="Quantité autorisée" value={valueText(card.authorizedQuantity, "Non publiée")} /><Fact label="R attendu" value={card.expectedR === null ? "Non publié" : `${card.expectedR.toFixed(2)} R`} /><Fact label="Échéance" value={displayTime(card.expiresAt)} /><Fact label="Suivi théorique" value={operatorCode(card.theoreticalState)} /></dl></section>
     <section><h3>Pourquoi ce trade ?</h3><dl className="live-focus-drawer__explanation"><Fact label="Direction" value={operatorReason(valueText(why.whyDirection, "NOT_AVAILABLE"))} /><Fact label="Setup" value={operatorCopy(valueText(why.whySetup, "NOT_AVAILABLE"))} /><Fact label="Pourquoi maintenant" value={operatorReason(valueText(why.whyNow, "NOT_AVAILABLE"))} /><Fact label="Réduction" value={operatorReason(valueText(why.whatWasReduced, "NOT_AVAILABLE"))} /></dl></section>
     <section><h3>Comparaison des plans</h3><div className="live-focus-drawer__plans"><PlanSnapshot title="Plan proposé par la stratégie" plan={card.strategyProposedPlan} /><PlanSnapshot title="Plan ajusté par le contexte" plan={card.contextAdjustedPlan} /><PlanSnapshot title="Plan autorisé par le risque" plan={card.riskAuthorizedPlan} /></div></section>
@@ -344,12 +344,12 @@ function FocusQueues({ focus, selectedIndex, onSelectDecision }: {
     <header><div><small>PILE DE DÉCISION</small><strong>{focus.tradeCards.length} qualifié(s)</strong></div><span>{focus.observedOpportunities.length} observé(s)</span></header>
     <div className="live-focus__queue-track">
       {focus.tradeCards.map((card, index) => <button key={card.orderIntentId} type="button" data-priority={card.priority} aria-current={index === selectedIndex ? "true" : undefined} onClick={() => card.signalId && onSelectDecision(card.signalId)}>
-        <span><strong>{card.instrument}</strong><em>{presentGeneric(card.side).label}</em><small>{presentBackendStatus(card.operatorState).label}</small></span>
-        <i>{card.expectedR === null ? "R non publié" : `${card.expectedR.toFixed(2)} R`} · {card.attentionReason ? operatorReason(card.attentionReason) : card.strategyName}</i>
+        <span><strong>{card.instrument}</strong><em>{operatorCode(card.side)}</em><small>{presentBackendStatus(card.operatorState).label}</small></span>
+        <i>{card.expectedR === null ? "R non publié" : `${card.expectedR.toFixed(2)} R`} · {card.attentionReason ? operatorReason(card.attentionReason) : operatorCopy(card.strategyName)}</i>
       </button>)}
       {!focus.tradeCards.length ? <p>Aucun dossier n’a encore franchi position cible, intention d’ordre et gate opérateur.</p> : null}
       {focus.observedOpportunities.map((item) => <button key={item.signalId} type="button" data-priority="OBSERVED" onClick={() => onSelectDecision(item.signalId)}>
-        <span><strong>{item.instrument}</strong><em>{presentGeneric(item.side).label}</em><small>{presentBackendStatus(item.status).label}</small></span>
+        <span><strong>{item.instrument}</strong><em>{operatorCode(item.side)}</em><small>{presentBackendStatus(item.status).label}</small></span>
         <i>Diagnostic uniquement</i>
       </button>)}
     </div>
@@ -392,7 +392,7 @@ function resolveBackendFocusState(focus: LiveFocusView, model: LiveTradingModel)
   const labels: Record<string, { label: string; headline: string; instruction: string; tone: "neutral" | "info" | "warning" | "success" }> = {
     A: { label: "MARCHÉ HORS SESSION", headline: "Le Desk attend la prochaine fenêtre CBOT", instruction: focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Aucune action requise.", tone: "neutral" },
     B: { label: "SURVEILLANCE", headline: "Le Desk cherche un setup qualifié", instruction: focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Les moteurs déterministes évaluent le marché.", tone: "info" },
-    C: { label: "OPPORTUNITÉ OBSERVÉE", headline: "Un signal traverse les filtres", instruction: "Cette opportunité reste diagnostique tant qu'elle n'a pas produit TargetPosition, OrderIntent et HumanGate.", tone: "warning" },
+    C: { label: "OPPORTUNITÉ OBSERVÉE", headline: "Un signal traverse les filtres", instruction: "Cette opportunité reste diagnostique tant qu’elle n’a pas produit une position cible, un ordre proposé et une validation humaine.", tone: "warning" },
     D: { label: "ARBITRAGE", headline: "Portfolio et Risk évaluent le dossier", instruction: "Aucune action opérateur avant publication du plan autorisé.", tone: "warning" },
     E: { label: "DOSSIER QUALIFIÉ", headline: "Le dossier canonique est prêt", instruction: "Contrôlez les termes immuables et l’autorité de validation humaine.", tone: "success" },
     F: { label: "ACTION HUMAINE", headline: "Une décision opérateur est attendue", instruction: "Confirmer ne signifie ni accusé broker ni exécution.", tone: "success" },
@@ -403,8 +403,8 @@ function resolveBackendFocusState(focus: LiveFocusView, model: LiveTradingModel)
 function FocusTicket({ plan, timingLabel }: { plan: ReturnType<typeof focusTradePlan>; timingLabel: string }) {
   return <div className={`live-focus__ticket${plan.actionable ? "" : " live-focus__ticket--incomplete"}`} data-plan-authority={plan.authority}>
     <div className="live-focus__plan-authority"><small>Provenance</small><strong>{plan.authorityLabel}</strong></div>
-    <div className="live-focus__instrument"><small>Instrument</small><strong>{plan.instrument}</strong><span>{presentGeneric(plan.side).label}</span></div>
-    <TicketValue label="Type" value={plan.orderType} />
+    <div className="live-focus__instrument"><small>Instrument</small><strong>{plan.instrument}</strong><span>{operatorCode(plan.side)}</span></div>
+    <TicketValue label="Type" value={operatorCode(plan.orderType)} />
     <TicketValue label="Quantité" value={plan.quantity} missing={plan.quantity === "Non publiée"} />
     <TicketValue label="Entrée" value={plan.entry} missing={plan.entry === "Non publiée"} />
     <TicketValue label="Stop" value={plan.stop} missing={plan.stop === "Non publié"} tone="danger" />
@@ -445,7 +445,7 @@ function FocusActionDialog({ pending, model, busy, onCancel, onSubmitGate, onSub
     && (!action.requiresReason || reason.trim().length > 0)
     && (!requiresPrice || Number.isFinite(Number(price)))
     && (!requiresQuantity || Number(quantity) > 0);
-  return <div className="live-focus-dialog__backdrop" role="presentation"><section className="live-focus-dialog" role="alertdialog" aria-modal="true" aria-labelledby="focus-dialog-title"><header><div><small>Action auditée</small><h2 id="focus-dialog-title">{operatorCopy(action.label)}</h2></div><button type="button" onClick={onCancel}>Fermer</button></header><p>{operatorCopy(action.impactPreview)}</p><dl><div><dt>Ordre proposé</dt><dd title={model.orderIntent?.portfolioOrderIntentId ?? row?.portfolioOrderIntentId ?? undefined}>{row ? `${row.instrument} · ${presentGeneric(row.side).label}` : "Non publié"}</dd></div><div><dt>Instrument</dt><dd>{row?.instrument ?? model.latestSignal?.symbol ?? "—"}</dd></div><div><dt>Révision</dt><dd>{action.expectedRevision}</dd></div></dl>{requiresPrice ? <label>Prix réellement obtenu<input inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} autoFocus /></label> : null}{requiresQuantity ? <label>Quantité réellement exécutée<input inputMode="numeric" value={quantity} onChange={(event) => setQuantity(event.target.value)} autoFocus={!requiresPrice} /></label> : null}<label>Motif / note<input value={reason} onChange={(event) => setReason(event.target.value)} autoFocus={!requiresPrice && !requiresQuantity} /></label><small>Cette action ne modifie jamais le plan après contrôle du risque ni le suivi théorique.</small><footer><button type="button" onClick={onCancel}>Annuler</button><button type="button" className="live-focus-dialog__confirm" disabled={!canSubmit} onClick={() => void (pending.kind === "gate" ? onSubmitGate(pending.action, reason) : onSubmitManual(pending.action, { price: price ? Number(price) : null, quantity: quantity ? Number(quantity) : null, reason }))}>{busy ? "Transmission…" : "Confirmer la déclaration"}</button></footer></section></div>;
+  return <div className="live-focus-dialog__backdrop" role="presentation"><section className="live-focus-dialog" role="alertdialog" aria-modal="true" aria-labelledby="focus-dialog-title"><header><div><small>Action auditée</small><h2 id="focus-dialog-title">{operatorCopy(action.label)}</h2></div><button type="button" onClick={onCancel}>Fermer</button></header><p>{operatorCopy(action.impactPreview)}</p><dl><div><dt>Ordre proposé</dt><dd title={model.orderIntent?.portfolioOrderIntentId ?? row?.portfolioOrderIntentId ?? undefined}>{row ? `${row.instrument} · ${operatorCode(row.side)}` : "Non publié"}</dd></div><div><dt>Instrument</dt><dd>{row?.instrument ?? model.latestSignal?.symbol ?? "—"}</dd></div><div><dt>Révision</dt><dd>{action.expectedRevision}</dd></div></dl>{requiresPrice ? <label>Prix réellement obtenu<input inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} autoFocus /></label> : null}{requiresQuantity ? <label>Quantité réellement exécutée<input inputMode="numeric" value={quantity} onChange={(event) => setQuantity(event.target.value)} autoFocus={!requiresPrice} /></label> : null}<label>Motif / note<input value={reason} onChange={(event) => setReason(event.target.value)} autoFocus={!requiresPrice && !requiresQuantity} /></label><small>Cette action ne modifie jamais le plan après contrôle du risque ni le suivi théorique.</small><footer><button type="button" onClick={onCancel}>Annuler</button><button type="button" className="live-focus-dialog__confirm" disabled={!canSubmit} onClick={() => void (pending.kind === "gate" ? onSubmitGate(pending.action, reason) : onSubmitManual(pending.action, { price: price ? Number(price) : null, quantity: quantity ? Number(quantity) : null, reason }))}>{busy ? "Transmission…" : "Confirmer la déclaration"}</button></footer></section></div>;
 }
 
 function FocusHelpDialog({ profile, onChange, onClose }: { profile: LiveFocusSoundProfile; onChange(profile: LiveFocusSoundProfile): void; onClose(): void }) {
@@ -463,6 +463,7 @@ function useFocusPerception({ model, stateCode, stateLabel, timingLabel, timingU
   const remindedExpiry = useRef<string | null>(null);
   const instrument = model.selectedTheoreticalExecution?.instrument ?? model.latestSignal?.symbol ?? "Desk";
   const direction = model.selectedTheoreticalExecution?.side ?? model.latestSignal?.direction ?? "";
+  const directionLabel = operatorCode(direction, "");
   const liveR = model.selectedTheoreticalExecution?.liveMark?.currentR;
   const resultR = model.selectedTheoreticalExecution?.resultR;
 
@@ -476,13 +477,13 @@ function useFocusPerception({ model, stateCode, stateLabel, timingLabel, timingU
     };
   }, []);
   useEffect(() => {
-    const value = stateCode === "C" ? `● ${instrument} ${direction} — ${timingLabel}`
+    const value = stateCode === "C" ? `● ${instrument} ${directionLabel} — ${timingLabel}`
       : stateCode === "E" ? `◆ ${instrument}${liveR === null || liveR === undefined ? "" : ` ${signedR(liveR)}`}`
         : stateCode === "F" ? `⊘ ${instrument}${resultR === null || resultR === undefined ? "" : ` ${signedR(resultR)}`}`
           : `${stateLabel} · ${instrument}`;
     document.title = `${value} · Focus Desk`;
     setFocusFavicon(stateCode);
-  }, [direction, instrument, liveR, resultR, stateCode, stateLabel, timingLabel]);
+  }, [directionLabel, instrument, liveR, resultR, stateCode, stateLabel, timingLabel]);
   useEffect(() => {
     if (previousState.current !== stateCode) {
       const event = focusSoundEvent(stateCode, model.selectedTheoreticalExecution?.status ?? null);
@@ -513,7 +514,7 @@ function focusSoundAllowed(profile: LiveFocusSoundProfile, event: LiveFocusSound
 }
 function signedR(value: number) { return `${value > 0 ? "+" : ""}${value.toFixed(2)} R`; }
 function formatOperatorParagraph(value: unknown) {
-  return valueText(value, "").replace(/-?0?\.\d{5,}/g, (rawValue) => {
+  return operatorCopy(valueText(value, ""), "").replace(/-?0?\.\d{5,}/g, (rawValue) => {
     const numericValue = Number(rawValue);
     if (!Number.isFinite(numericValue) || Math.abs(numericValue) >= 1) return rawValue;
     return `${(numericValue * 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
@@ -559,9 +560,9 @@ function sendFocusNotification(title: string, body: string) {
 function focusClipboardText(model: LiveTradingModel): string {
   const plan = focusTradePlan(model);
   return [
-    `${plan.instrument} ${presentGeneric(plan.side).label}`,
+    `${plan.instrument} ${operatorCode(plan.side)}`,
     `Provenance : ${plan.authorityLabel}`,
-    `Type : ${plan.orderType}`,
+    `Type : ${operatorCode(plan.orderType)}`,
     `Quantité : ${plan.quantity}`,
     `Entrée : ${plan.entry}`,
     `Stop : ${plan.stop}`,

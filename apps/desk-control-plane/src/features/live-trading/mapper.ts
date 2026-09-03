@@ -107,8 +107,8 @@ export function toLiveTradingModel(
         : orderIntent?.humanGate.allowedActions.length
           ? meta.availability !== "AVAILABLE"
             ? `Projection ${meta.availability ?? "partielle"} : actions autorisées seulement si elles sont publiées explicitement par le backend.`
-            : "Le backend ne publie pas simultanément la capability ressource et l'action Human Gate."
-          : "Aucun OrderIntent en attente de confirmation.",
+            : "Le backend ne publie pas simultanément l’action possible sur la ressource et l’action de validation humaine."
+          : "Aucun ordre proposé en attente de confirmation.",
     provider: data.providers[0] ?? null,
     reconciliation: {
       status: reconciliationNotApplicable ? "EXÉCUTION PHYSIQUE DÉSACTIVÉE" : data.reconciliation?.status ?? "UNAVAILABLE",
@@ -253,7 +253,7 @@ function buildSignalFunnel(
       { key: "context", label: "Contexte OK", value: contextTake, tone: contextTake ? "success" : contextWait || contextReject ? "warning" : "neutral", detail: `${contextWait} attente · ${contextReject} rejet contexte` },
       { key: "portfolio", label: "Portfolio", value: portfolioAccepted, tone: portfolioAccepted ? "success" : portfolioRejected ? "warning" : "neutral", detail: `${portfolioRejected} rejet portfolio` },
       { key: "risk", label: "Risk PASS", value: riskPass, tone: riskPass ? "success" : riskBlock ? "danger" : riskWatch ? "warning" : "neutral", detail: `${riskWatch} watch · ${riskBlock} block` },
-      { key: "intent", label: "OrderIntent", value: intents.length, tone: intents.length ? "warning" : "neutral", detail: `${pendingHumanGates} Human Gate en attente` },
+      { key: "intent", label: "Ordres proposés", value: intents.length, tone: intents.length ? "warning" : "neutral", detail: `${pendingHumanGates} validation(s) humaine(s) en attente` },
       { key: "tracking", label: "Suivis", value: theoreticalTracked, tone: theoreticalTracked ? "info" : "neutral", detail: `${theoreticalSummary?.closedTrades ?? 0} clos · R ${displayValue(totalClosedR)}` },
     ],
   };

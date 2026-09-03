@@ -1,4 +1,5 @@
 import { StatusBadge } from "@/design-system/primitives";
+import { operatorCode } from "@/design-system/operatorVocabulary";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import { LivePanel } from "./LiveTradingPanels";
 import type { LiveTradingModel } from "./model";
@@ -34,7 +35,7 @@ export function OperatorOutcomeHistoryPanel({ model }: { model: LiveTradingModel
             const attributionStatus = attribution?.status ?? "NOT_PUBLISHED";
             const presentation = presentBackendStatus(attributionStatus);
             return <tr key={row.portfolioOrderIntentId}>
-              <td><strong>{row.instrument}</strong><small>{row.side} · {row.orderType}</small></td>
+              <td><strong>{row.instrument}</strong><small>{operatorCode(row.side)} · {operatorCode(row.orderType)}</small></td>
               <td>{row.operatorDecision ?? "NON PUBLIÉE"}<small>{displayIso(row.operatorDecisionAt)}</small></td>
               <td>{row.manualExecutionStatus ?? "NON PUBLIÉE"}<small>{displayIso(row.manualExecutionAt)}</small></td>
               <td>{formatR(attribution?.theoreticalResultR ?? row.resultR)}<small>{row.latestEventType}</small></td>

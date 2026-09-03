@@ -113,7 +113,7 @@ export function LatestSignalPanel({ model }: { model: LiveTradingModel }) {
         <>
           <div className="lt-signal-hero">
             <span><small>Instrument</small><strong>{signal.symbol}</strong></span>
-            <span><small>Direction</small><strong className={`lt-tone--${signal.direction === "LONG" ? "success" : "danger"}`}>{signal.direction}</strong></span>
+            <span><small>Direction</small><strong className={`lt-tone--${signal.direction === "LONG" ? "success" : "danger"}`}>{operatorCode(signal.direction)}</strong></span>
             <span><small>Confiance</small><strong>{signal.confidence}%</strong></span>
           </div>
           <dl className="lt-definition-list">
@@ -128,7 +128,7 @@ export function LatestSignalPanel({ model }: { model: LiveTradingModel }) {
             <section className="lt-signal-plan" aria-label="Plan proposé par le signal">
               <header><strong>Plan proposé</strong><span>{plan.source}</span></header>
               <dl>
-                <Pair label="Type" value={plan.orderType} />
+                <Pair label="Type" value={operatorCode(plan.orderType)} />
                 <Pair label="Entrée" value={plan.entry} />
                 <Pair label="Stop" value={plan.stop} />
                 <Pair label="Objectifs" value={plan.targets.length ? plan.targets.map((value, index) => `Objectif ${index + 1} ${value}`).join(" · ") : "Non publiés"} />
