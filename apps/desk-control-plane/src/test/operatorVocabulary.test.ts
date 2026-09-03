@@ -14,6 +14,8 @@ describe("operator vocabulary", () => {
     expect(operatorCopy("Market context stale · No signal reached human gate")).toBe("Contexte de marché périmé · Aucun signal n’a atteint la validation humaine");
     expect(operatorCopy("Both grains suffered late selling and rebounded in the cutoff-valid 18:15 one-minute bars, but the latest five-minute bars remain unreconciled, leaving no active side."))
       .toBe("Les deux grains ont subi une pression vendeuse tardive puis ont rebondi sur les bougies une minute valides au point de coupure 18:15, mais les dernières bougies cinq minutes restent non réconciliées : aucun biais actif.");
+    expect(operatorCopy("LATE_SYNCHRONIZED_SELLING_WITH_INITIAL_ONE_MINUTE_REBOUND_AND_UNRECONCILED_LATEST_FIVE_MINUTE_BARS"))
+      .toBe("Pression vendeuse synchronisée tardive, rebond initial M1 et dernières M5 non réconciliées");
   });
 
   it("never exposes missing sentinel values", () => {

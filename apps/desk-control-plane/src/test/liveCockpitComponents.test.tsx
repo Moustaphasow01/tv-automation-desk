@@ -297,6 +297,11 @@ describe("Live Trading cockpit components", () => {
     expect(css).toContain("overflow-x: auto");
     expect(css).toContain(".live-focus__ticket .is-market-level strong");
     expect(css).toContain("font-size: var(--focus-type-figure)");
+    expect(css).toContain("--focus-chrome-top: 64px");
+    expect(css).toContain("grid-template-rows: var(--focus-chrome-top) minmax(42px, auto) minmax(0, 1fr) auto");
+    expect(css).toContain("grid-template-rows: minmax(0, 1fr) 48px");
+    expect(css).toContain("flex-wrap: nowrap");
+    expect(css).toContain(".live-focus__actions .live-focus__copy-action");
   });
 
   it("renders Live Focus labels and ticket values as separated decision cells", () => {
@@ -324,6 +329,7 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("class=\"is-market-level\"><small>Entrée</small><strong>");
     expect(markup).toContain("class=\"is-market-level is-danger\"><small>Stop</small><strong>");
     expect(markup).toContain("class=\"is-market-level is-success");
+    expect(markup).toContain("class=\"live-focus__copy-action live-focus__primary-action\"");
     expect(markup).toContain("Résumé du brief");
     expect(markup).not.toContain("ENTRÉE");
     expect(markup).not.toContain("OBJECTIF 1");

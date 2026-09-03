@@ -142,7 +142,7 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
             {gateReject ? <button type="button" disabled={busy} onClick={() => request({ kind: "gate", action: gateReject })}><FaTimes aria-hidden="true" />Refuser<kbd>R</kbd></button> : null}
             {skipManual ? <button type="button" disabled={busy} onClick={() => request({ kind: "manual", action: skipManual })}><FaRegCircle aria-hidden="true" />Non exécuté</button> : null}
             {stopManual ? <button type="button" disabled={busy} onClick={() => request({ kind: "manual", action: stopManual })}><FaLock aria-hidden="true" />Stop placé<kbd>S</kbd></button> : null}
-            <button type="button" className={primary ? undefined : "live-focus__primary-action"} onClick={() => void copyPlan()}><FaClipboard aria-hidden="true" />{copied ? "Copié" : "Copier le plan"}<kbd>C</kbd></button>
+            <button type="button" className="live-focus__copy-action live-focus__primary-action" onClick={() => void copyPlan()}><FaClipboard aria-hidden="true" />{copied ? "Copié" : "Copier le plan"}<kbd>C</kbd></button>
             {selectedCard ? <button type="button" onClick={() => setDrawer("trade")}><FaInfoCircle aria-hidden="true" />Voir le dossier</button> : null}
           </div>
           {!plan.actionable && (model.orderIntent || model.latestSignal) ? <p className="live-focus__integrity-warning" role="alert"><FaExclamationTriangle aria-hidden="true" />Les niveaux proposés sont informatifs. Aucune déclaration d’ordre n’est possible avant publication du plan autorisé et de sa quantité.</p> : null}
@@ -187,7 +187,7 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
   return <div className="live-focus__brief-grid" data-status={brief.status}>
     <article className="live-focus__brief-headline"><small>Résumé du brief</small><strong title={brief.headline}>{formatOperatorParagraph(brief.headline)}</strong><p>{formatOperatorParagraph(context)}</p><span data-tone={contextStatus.tone}>{contextStatus.label}</span></article>
     <article><small>État du marché</small><p>{formatOperatorParagraph(focus.marketContext.marketRegime || "Régime non publié")} · {formatOperatorParagraph(focus.marketContext.volatilityRegime || "Volatilité non publiée")} · {formatOperatorParagraph(focus.marketContext.globalBias || "Biais non publié")}</p></article>
-    <article><small>Ce que le desk recherche</small><p>{preferred.length ? `Le desk privilégie ${preferred.join(", ").toLowerCase()}.` : "Aucune famille de stratégie n’est privilégiée dans l’état publié."}</p></article>
+    <article><small>Ce que le desk recherche</small><p>{preferred.length ? `Le desk privilégie ${preferred.join(", ")}.` : "Aucune famille de stratégie n’est privilégiée dans l’état publié."}</p></article>
     <article><small>Points de vigilance</small><p>{vigilance.length ? formatOperatorParagraph(`${vigilance.join(". ")}.`) : "Aucun point de vigilance supplémentaire n’est publié."}</p></article>
     <article><small>Prochain catalyseur</small><p>{focus.whyNoTrade.nextRelevantEventAt ? displayTime(focus.whyNoTrade.nextRelevantEventAt) : "Aucun catalyseur couvert n’est publié."}</p></article>
     <button type="button" className="live-focus__brief-open" onClick={onOpen}><FaInfoCircle aria-hidden="true" />Voir le brief complet</button>
@@ -347,11 +347,7 @@ function FocusQueues({ focus, selectedIndex, onSelectDecision }: {
         <span><strong>{card.instrument}</strong><em>{operatorCode(card.side)}</em><small>{presentBackendStatus(card.operatorState).label}</small></span>
         <i>{card.expectedR === null ? "R non publié" : `${card.expectedR.toFixed(2)} R`} · {card.attentionReason ? operatorReason(card.attentionReason) : operatorCopy(card.strategyName)}</i>
       </button>)}
-      {!focus.tradeCards.length ? <p>Aucun dossier n’a encore franchi position cible, intention d’ordre et gate opérateur.</p> : null}
-      {focus.observedOpportunities.map((item) => <button key={item.signalId} type="button" data-priority="OBSERVED" onClick={() => onSelectDecision(item.signalId)}>
-        <span><strong>{item.instrument}</strong><em>{operatorCode(item.side)}</em><small>{presentBackendStatus(item.status).label}</small></span>
-        <i>Diagnostic uniquement</i>
-      </button>)}
+      {!focus.tradeCards.length ? <p>Aucun dossier actionnable n’a encore franchi position cible, ordre proposé et validation opérateur. Les opportunités observées restent dans le Live complet.</p> : null}
     </div>
   </aside>;
 }

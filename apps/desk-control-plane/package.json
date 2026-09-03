@@ -13,6 +13,7 @@
     "audit:visual": "node scripts/capture-visual-qa.mjs",
     "audit:command-center": "node scripts/audit-command-center-visual.mjs",
     "audit:live-trading": "node scripts/audit-live-trading-visual.mjs",
+    "audit:live-focus-layout": "node scripts/audit-live-focus-layout.mjs",
     "audit:performance": "node scripts/measure-bff-performance.mjs",
     "audit:vocabulary": "node scripts/audit-operator-vocabulary.mjs"
   },
