@@ -136,7 +136,7 @@
 .live-focus__observed>div{display:grid;gap:6px}
 .live-focus__footer{position:fixed;z-index:18;right:0;bottom:0;left:0;display:flex;min-height:40px;gap:16px;align-items:center;padding:0 18px;border-top:1px solid var(--focus-line);color:var(--focus-muted);background:rgba(4,14,21,.82);backdrop-filter:blur(14px);font-size:var(--focus-type-micro)}
 .live-focus__footer span,.live-focus__session{display:flex;min-width:0;gap:5px;align-items:center}
-.live-focus__footer small{white-space:nowrap}
+.live-focus__footer small{font-size:var(--focus-type-micro);white-space:nowrap}
 .live-focus__sound,.live-focus__help-trigger{min-height:27px;font-size:var(--focus-type-micro)}
 .live-focus__sound[aria-pressed="true"] svg{color:var(--focus-cyan)}
 .live-focus__session{margin-left:auto;overflow:hidden;color:#94adb7;text-overflow:ellipsis;white-space:nowrap}
