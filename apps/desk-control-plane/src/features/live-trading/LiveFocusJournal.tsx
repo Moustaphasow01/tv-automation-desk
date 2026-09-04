@@ -4,8 +4,13 @@ import { FaChartLine, FaDownload, FaFolderOpen, FaSearch } from "react-icons/fa"
 import type { LiveFocusView } from "@/domains/front-api/viewModels";
 import { operatorCode } from "@/design-system/operatorVocabulary";
 import {
-  buildFocusQueueItems, filterFocusQueueItems,
-  type FocusQueueFilter, type FocusQueueItem, type FocusQueueTimelineStep,
+  buildFocusQueueItems,
+  buildFocusSignalFlowItems,
+  filterFocusQueueItems,
+  type FocusQueueFilter,
+  type FocusQueueItem,
+  type FocusQueueTimelineStep,
+  type FocusSignalFlowItem,
 } from "./focusJournalModel";
 
 type JournalProps = {
@@ -22,22 +27,22 @@ export function LiveFocusJournal(props: JournalProps) {
   const [instrument, setInstrument] = useState("ALL");
   const [query, setQuery] = useState("");
   const items = useMemo(() => buildFocusQueueItems(focus), [focus]);
+  const signalFlowItems = useMemo(() => buildFocusSignalFlowItems(focus), [focus]);
   const visibleItems = useMemo(() => filterFocusQueueItems(items, filter, instrument, query), [filter, instrument, items, query]);
   const instruments = useMemo(() => [...new Set(items.map((item) => item.instrument).filter(Boolean))].sort(), [items]);
   const actionable = items.filter((item) => item.actionable).length;
   const filters: { id: FocusQueueFilter; label: string; count: number }[] = [
-    { id: "ALL", label: "Tous les tickets", count: items.length },
-    { id: "ACTIONABLE", label: "À décider", count: actionable },
-    { id: "QUALIFIED", label: "Dossiers", count: items.filter((item) => item.kind === "trade" && !item.actionable && !item.terminal).length },
-    { id: "OBSERVED", label: "Observés", count: items.filter((item) => item.kind === "observed").length },
+    { id: "ALL", label: "Tous les dossiers", count: items.length },
+    { id: "ACTIONABLE", label: "Prêts à poser", count: actionable },
+    { id: "QUALIFIED", label: "Qualifiés", count: items.filter((item) => item.kind === "trade" && !item.actionable && !item.terminal).length },
     { id: "EXPIRED", label: "Expirés / terminés", count: items.filter((item) => item.terminal).length },
   ];
   return <aside className="live-focus__queue" aria-labelledby="live-focus-journal-title">
     <header>
-      <div><small>JOURNAL QUALIFIÉ</small><h2 id="live-focus-journal-title">Tickets & historique</h2><span>{actionable} à décider · {items.length} au total</span></div>
+      <div><small>TICKETS OPÉRATEUR</small><h2 id="live-focus-journal-title">Prêts à poser & historique</h2><span>{actionable} prêt(s) à poser · {items.length} dossier(s) qualifié(s)</span></div>
       <button type="button" className="live-focus__queue-export" onClick={() => exportFocusQueueSnapshot(visibleItems, focus.asOf)} aria-label="Exporter les tickets affichés"><FaDownload aria-hidden="true" /></button>
     </header>
-    <div className="live-focus__queue-tools" aria-label="Filtres du journal qualifié">
+    <div className="live-focus__queue-tools" aria-label="Filtres des tickets opérateur">
       <label className="live-focus__queue-search"><FaSearch aria-hidden="true" /><span className="sr-only">Rechercher dans le journal</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Instrument, stratégie, identifiant…" /></label>
       <div className="live-focus__queue-filter-row">
         <label className="live-focus__queue-state"><span className="sr-only">Filtrer par état</span><select aria-label="Filtrer par état" value={filter} onChange={(event) => setFilter(event.target.value as FocusQueueFilter)}>{filters.map((item) => <option key={item.id} value={item.id}>{item.label} ({item.count})</option>)}</select></label>
@@ -46,11 +51,12 @@ export function LiveFocusJournal(props: JournalProps) {
     </div>
     <div className="live-focus__queue-track" tabIndex={0} role="region" aria-label="Liste verticale des tickets" data-focus-scroll>
       <details className="live-focus__queue-summary">
-      <summary>Résumé du journal · {visibleItems.length} affiché(s)</summary>
-      <dl className="live-focus__queue-kpis"><JournalFact label="À décider" value={String(actionable)} /><JournalFact label="Ne pas poser" value={String(items.filter((item) => item.terminal).length)} /><JournalFact label="Dossiers" value={String(focus.tradeCards.length)} /><JournalFact label="Suivi théorique" value={String(focus.tradeCards.filter((card) => card.theoreticalState && card.theoreticalState !== "NOT_APPLICABLE").length)} /></dl>
+      <summary>Résumé des tickets · {visibleItems.length} affiché(s)</summary>
+      <dl className="live-focus__queue-kpis"><JournalFact label="Prêts à poser" value={String(actionable)} /><JournalFact label="Ne pas poser" value={String(items.filter((item) => item.terminal).length)} /><JournalFact label="Dossiers qualifiés" value={String(focus.tradeCards.length)} /><JournalFact label="Signaux filtrés" value={String(signalFlowItems.length)} /></dl>
       </details>
       {visibleItems.map((item) => <JournalTicket key={item.key} item={item} selected={item.signalId === selectedSignalId && Boolean(selectedSignalId)} onSelectDecision={props.onSelectDecision} onOpenTrade={props.onOpenTrade} onOpenChart={props.onOpenChart} />)}
-      {!visibleItems.length ? <p>{items.length ? "Aucun ticket ne correspond aux filtres." : "Aucun ticket publié pour cette séance."}</p> : null}
+      {!visibleItems.length ? <p>{items.length ? "Aucun ticket ne correspond aux filtres." : "Aucun ordre prêt à poser : aucun signal n’a encore produit de dossier Position cible → Ordre proposé → Human Gate."}</p> : null}
+      <SignalFlowPanel items={signalFlowItems} />
     </div>
   </aside>;
 }
@@ -94,6 +100,37 @@ function OrderPlanPreview({ item }: { item: FocusQueueItem }) {
     <JournalFact label="Obj. 1" value={item.orderPlan.target1} />
     <JournalFact label="Obj. 2" value={item.orderPlan.target2} />
   </dl>;
+}
+
+function SignalFlowPanel({ items }: { items: readonly FocusSignalFlowItem[] }) {
+  return <section className="live-focus__signal-flow" aria-labelledby="live-focus-signal-flow-title">
+    <header>
+      <div><small>FLUX SIGNAUX</small><h3 id="live-focus-signal-flow-title">Signaux filtrés avant ticket</h3></div>
+      <span>{items.length} signal(s)</span>
+    </header>
+    {items.length ? (
+      <ol>
+        {items.map((item) => <li key={item.key} data-tone={item.statusTone} data-terminal={String(item.terminal)}>
+          <div className="live-focus__signal-flow-head">
+            <strong>{item.instrument}</strong>
+            <em>{operatorCode(item.side)}</em>
+            <small>{item.status}</small>
+          </div>
+          <p><span>Bloqué à</span> {item.gateLabel}</p>
+          <small>{item.blockerLine}</small>
+          <dl>
+            <JournalFact label="Signal" value={journalTimestamp(item.createdAt)} />
+            <JournalFact label="Fenêtre" value={item.expirationLine} />
+            <JournalFact label="Source" value={item.source} />
+          </dl>
+          <footer>
+            <span>{item.reasonLine}</span>
+            <Link to={item.route}>Dossier signal</Link>
+          </footer>
+        </li>)}
+      </ol>
+    ) : <p>Aucun signal moteur filtré n’est publié sur cette fenêtre.</p>}
+  </section>;
 }
 
 export function FocusQueueTimeline({ steps }: { steps: readonly FocusQueueTimelineStep[] }) {

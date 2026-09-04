@@ -3,9 +3,10 @@ import { operatorCode, operatorCopy, operatorReason } from "@/design-system/oper
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import { displayTime, displayValue } from "./mapper";
 
-export type FocusQueueFilter = "ALL" | "ACTIONABLE" | "QUALIFIED" | "OBSERVED" | "EXPIRED";
-type FocusQueueItemKind = "trade" | "observed";
+export type FocusQueueFilter = "ALL" | "ACTIONABLE" | "QUALIFIED" | "EXPIRED";
+type FocusQueueItemKind = "trade";
 type FocusQueueStepTone = "done" | "active" | "blocked" | "muted";
+type FocusSignalFlowTone = "neutral" | "info" | "warning" | "danger";
 
 export type FocusQueueTimelineStep = {
   label: string;
@@ -47,6 +48,28 @@ export type FocusQueueItem = {
   lifecycleLine: string;
   timeline: FocusQueueTimelineStep[];
   card?: LiveFocusView["tradeCards"][number];
+  searchText: string;
+};
+
+export type FocusSignalFlowItem = {
+  key: string;
+  instrument: string;
+  side: string;
+  title: string;
+  status: string;
+  statusTone: FocusSignalFlowTone;
+  gateLabel: string;
+  blockerLine: string;
+  reasonLine: string;
+  createdAt: string | null;
+  expiresAt: string | null;
+  signalId: string;
+  route: string;
+  source: string;
+  asOf: string | null;
+  terminal: boolean;
+  expirationLine: string;
+  freshnessLine: string;
   searchText: string;
 };
 
@@ -129,8 +152,13 @@ function priceText(value: unknown): string {
 
 export function buildFocusQueueItems(focus: LiveFocusView): FocusQueueItem[] {
   const trades = focus.tradeCards.map((card) => tradeJournalItem(card, focus.asOf));
-  const observed = focus.observedOpportunities.map((opportunity) => observedJournalItem(opportunity, focus.asOf));
-  return [...trades, ...observed].sort(sortFocusQueueItems);
+  return trades.sort(sortFocusQueueItems);
+}
+
+export function buildFocusSignalFlowItems(focus: LiveFocusView): FocusSignalFlowItem[] {
+  return focus.observedOpportunities
+    .map((opportunity) => observedSignalFlowItem(opportunity, focus.asOf))
+    .sort((a, b) => (timeValue(b.createdAt) ?? 0) - (timeValue(a.createdAt) ?? 0));
 }
 
 function tradeJournalItem(card: LiveFocusView["tradeCards"][number], asOf: string): FocusQueueItem {
@@ -182,21 +210,23 @@ function tradeJournalItem(card: LiveFocusView["tradeCards"][number], asOf: strin
   };
 }
 
-function observedJournalItem(opportunity: LiveFocusView["observedOpportunities"][number], asOf: string): FocusQueueItem {
+function observedSignalFlowItem(opportunity: LiveFocusView["observedOpportunities"][number], asOf: string): FocusSignalFlowItem {
   const terminal = focusOpportunityTerminal(opportunity);
   const expirationLine = focusExpirationLabel(opportunity.expiresAt, asOf, terminal);
   const orderPlan = observedOpportunityOrderPlan(opportunity);
+  const gate = observedOpportunityGate(opportunity, terminal);
   const reasonLine = opportunity.reasonCodes.length
     ? opportunity.reasonCodes.slice(0, 2).map((reason) => operatorReason(reason)).join(" · ")
     : "Signal diagnostique uniquement";
   return {
-    kind: "observed",
     key: `observed:${opportunity.opportunityId}`,
     instrument: opportunity.instrument,
     side: opportunity.side,
     title: operatorCopy(opportunity.strategyName),
-    status: terminal ? "Signal historique" : focusOpportunityStatus(opportunity),
-    statusTone: terminal ? "warning" : "neutral",
+    status: terminal ? "Signal archivé" : focusOpportunityStatus(opportunity),
+    statusTone: gate.tone,
+    gateLabel: gate.label,
+    blockerLine: gate.blockerLine,
     createdAt: opportunity.createdAt,
     expiresAt: opportunity.expiresAt,
     signalId: opportunity.signalId,
@@ -204,16 +234,9 @@ function observedJournalItem(opportunity: LiveFocusView["observedOpportunities"]
     source: opportunity.source,
     asOf: opportunity.asOf,
     terminal,
-    actionable: false,
-    priority: terminal ? "TERMINAL" : "OBSERVED",
-    levelLine: "Signal observé · pas de dossier Risk/Human Gate publié",
-    orderPlan,
-    rLine: "R non applicable",
     reasonLine,
     expirationLine,
     freshnessLine: focusFreshnessLabel(opportunity.asOf, asOf),
-    lifecycleLine: terminal ? "Historique observé · ne pas poser" : "Observation uniquement · non tradable",
-    timeline: buildFocusObservedTimeline(opportunity, asOf),
     searchText: [
       opportunity.instrument,
       opportunity.side,
@@ -221,11 +244,9 @@ function observedJournalItem(opportunity: LiveFocusView["observedOpportunities"]
       opportunity.status,
       opportunity.signalId,
       opportunity.opportunityId,
+      gate.label,
+      gate.blockerLine,
       orderPlan?.orderType,
-      orderPlan?.entry,
-      orderPlan?.stop,
-      orderPlan?.target1,
-      orderPlan?.target2,
       opportunity.reasonCodes.join(" "),
     ].join(" ").toLowerCase(),
   };
@@ -238,7 +259,6 @@ export function filterFocusQueueItems(items: FocusQueueItem[], filter: FocusQueu
       filter === "ALL"
       || (filter === "ACTIONABLE" && item.actionable)
       || (filter === "QUALIFIED" && item.kind === "trade" && !item.actionable && !item.terminal)
-      || (filter === "OBSERVED" && item.kind === "observed")
       || (filter === "EXPIRED" && item.terminal);
     const instrumentMatch = instrument === "ALL" || item.instrument === instrument;
     const queryMatch = !needle || item.searchText.includes(needle);
@@ -247,7 +267,7 @@ export function filterFocusQueueItems(items: FocusQueueItem[], filter: FocusQueu
 }
 
 function sortFocusQueueItems(a: FocusQueueItem, b: FocusQueueItem): number {
-  const rank = (item: FocusQueueItem) => item.actionable ? 0 : item.kind === "trade" && !item.terminal ? 1 : item.kind === "observed" && !item.terminal ? 2 : 3;
+  const rank = (item: FocusQueueItem) => item.actionable ? 0 : item.kind === "trade" && !item.terminal ? 1 : 3;
   const rankDiff = rank(a) - rank(b);
   if (rankDiff !== 0) return rankDiff;
   return (timeValue(b.createdAt) ?? 0) - (timeValue(a.createdAt) ?? 0);
@@ -263,14 +283,32 @@ export function buildFocusTradeTimeline(card: LiveFocusView["tradeCards"][number
   ];
 }
 
-function buildFocusObservedTimeline(opportunity: LiveFocusView["observedOpportunities"][number], asOf: string): FocusQueueTimelineStep[] {
-  const terminal = focusOpportunityTerminal(opportunity);
-  return [
-    { label: "Signal", value: opportunity.createdAt ? displayTime(opportunity.createdAt) : "Non publié", tone: "done" },
-    { label: "Gates", value: "Non franchis", tone: "muted" },
-    { label: "Human Gate", value: "Aucun dossier", tone: "muted" },
-    { label: "Fenêtre", value: focusExpirationLabel(opportunity.expiresAt, asOf, terminal), tone: terminal ? "blocked" : "muted" },
-  ];
+function observedOpportunityGate(opportunity: LiveFocusView["observedOpportunities"][number], terminal: boolean): { label: string; blockerLine: string; tone: FocusSignalFlowTone } {
+  const status = String(opportunity.status ?? "").toUpperCase();
+  const reasons = opportunity.reasonCodes.map((reason) => String(reason).toUpperCase());
+  if (status.includes("EXPIRED") || reasons.some((reason) => reason.includes("EXPIRED"))) {
+    return { label: "Fenêtre expirée", blockerLine: "Le signal est archivé : sa fenêtre est fermée et aucun ticket opérateur ne doit être posé.", tone: "warning" };
+  }
+  if (status.includes("CANCEL")) {
+    return { label: "Signal annulé", blockerLine: "Le backend a annulé ce signal avant publication d’un ticket opérateur.", tone: "warning" };
+  }
+  if (status.includes("REJECT") || reasons.some((reason) => reason.includes("REJECT"))) {
+    return { label: "Gate de rejet", blockerLine: "Le signal est rejeté avant le Human Gate. Il reste consultable pour audit.", tone: "warning" };
+  }
+  if (reasons.some((reason) => reason.includes("CONTEXT"))) {
+    const waiting = reasons.some((reason) => reason.includes("WAIT"));
+    return { label: "Context Gate", blockerLine: waiting ? "Le contexte marché demande d’attendre avant toute qualification." : "Le contexte marché ne valide pas ce signal.", tone: waiting ? "info" : "warning" };
+  }
+  if (reasons.some((reason) => reason.includes("PORTFOLIO"))) {
+    return { label: "Portfolio", blockerLine: "Le signal n’a pas été sélectionné par l’arbitrage portefeuille.", tone: "warning" };
+  }
+  if (reasons.some((reason) => reason.includes("RISK"))) {
+    return { label: "Global Risk", blockerLine: "Le contrôle du risque n’a pas publié de position cible exploitable.", tone: "danger" };
+  }
+  if (terminal) {
+    return { label: "Signal terminé", blockerLine: "Signal conservé pour audit uniquement, sans action opérateur.", tone: "warning" };
+  }
+  return { label: "Pré-qualification", blockerLine: "Pas de dossier Position cible → Ordre proposé → Human Gate publié.", tone: "neutral" };
 }
 
 export function focusExpirationLabel(expiresAt: string | null, asOf: string, terminal: boolean): string {
