@@ -1363,8 +1363,8 @@ body.desk-live-focus-document .desk-content {
 
 .live-focus__queue-timeline {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1374,26 +1374,21 @@ body.desk-live-focus-document .desk-content {
   position: relative;
   display: grid;
   min-width: 0;
-  gap: 4px;
-  padding-top: 10px;
+  gap: 3px;
+  overflow: hidden;
+  padding-left: 14px;
 }
 
 .live-focus__queue-timeline li::before {
-  position: absolute;
-  top: 4px;
-  right: 8px;
-  left: 8px;
-  height: 1px;
-  content: "";
-  background: rgba(133, 167, 180, 0.18);
+  display: none;
 }
 
 .live-focus__queue-timeline li > span {
   position: absolute;
-  top: 1px;
-  left: 8px;
-  width: 7px;
-  height: 7px;
+  top: 4px;
+  left: 1px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   background: var(--focus-muted);
   box-shadow: 0 0 0 3px rgba(133, 167, 180, 0.1);
@@ -1405,13 +1400,19 @@ body.desk-live-focus-document .desk-content {
 .live-focus__queue-timeline li[data-tone="muted"] > span { background: rgba(133, 167, 180, 0.38); }
 
 .live-focus__queue-timeline strong {
+  overflow: hidden;
   font-size: var(--focus-type-label);
   letter-spacing: 0.08em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .live-focus__queue-timeline small {
+  overflow: hidden;
   font-size: var(--focus-type-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .live-focus__queue-card footer {
