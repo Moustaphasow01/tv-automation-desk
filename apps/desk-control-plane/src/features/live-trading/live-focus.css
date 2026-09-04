@@ -1300,6 +1300,50 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
   background: rgba(255, 255, 255, .025);
 }
 
+.live-focus__queue-order-plan {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(133, 167, 180, 0.13);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(77, 213, 156, 0.08), transparent 42%),
+    rgba(5, 13, 20, 0.54);
+}
+
+.live-focus__queue-order-plan div {
+  min-width: 0;
+  padding: 6px;
+  border-right: 1px solid rgba(133, 167, 180, 0.11);
+}
+
+.live-focus__queue-order-plan div:last-child {
+  border-right: 0;
+}
+
+.live-focus__queue-order-plan dt {
+  color: rgba(168, 190, 199, 0.72);
+  font: 750 var(--focus-type-label) / 1.1 var(--lt-font-data, monospace);
+}
+
+.live-focus__queue-order-plan dd {
+  margin: 4px 0 0;
+  color: var(--focus-text);
+  font: 800 var(--focus-type-small) / 1.25 var(--lt-font-data, monospace);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.live-focus__queue-order-plan div:nth-child(3) dd {
+  color: var(--focus-red);
+}
+
+.live-focus__queue-order-plan div:nth-child(n + 4) dd {
+  color: var(--focus-green);
+}
+
 .live-focus__queue-card-meta div {
   min-width: 0;
   padding: 6px;

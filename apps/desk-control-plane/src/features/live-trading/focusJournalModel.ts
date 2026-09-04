@@ -1,5 +1,5 @@
 import type { LiveFocusView } from "@/domains/front-api/viewModels";
-import { operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";
+import { operatorCode, operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import { displayTime, displayValue } from "./mapper";
 
@@ -11,6 +11,14 @@ export type FocusQueueTimelineStep = {
   label: string;
   value: string;
   tone: FocusQueueStepTone;
+};
+
+export type FocusQueueOrderPlan = {
+  orderType: string;
+  entry: string;
+  stop: string;
+  target1: string;
+  target2: string;
 };
 
 export type FocusQueueItem = {
@@ -31,6 +39,7 @@ export type FocusQueueItem = {
   actionable: boolean;
   priority: string;
   levelLine: string;
+  orderPlan: FocusQueueOrderPlan | null;
   rLine: string;
   reasonLine: string;
   expirationLine: string;
@@ -78,20 +87,29 @@ export function focusOpportunityStatus(opportunity: LiveFocusView["observedOppor
 }
 
 function tradeCardLevelSummary(card: LiveFocusView["tradeCards"][number]): string {
-  const plan = recordValue(card.riskAuthorizedPlan ?? card.contextAdjustedPlan ?? card.strategyProposedPlan);
-  const entry = priceText(plan.entry ?? plan.entryPrice ?? plan.entry_price);
-  const stop = priceText(plan.stop ?? plan.stopPrice ?? plan.stop_price);
-  const targets = recordRows(plan.targets)
-    .map((target) => priceText(target.price ?? target.value ?? target.targetPrice ?? target.target_price))
-    .filter((value) => value !== "—")
-    .slice(0, 2);
+  const orderPlan = tradeCardOrderPlan(card);
   const quantity = card.authorizedQuantity === null || card.authorizedQuantity === undefined ? "qty non publiée" : `qty ${displayValue(card.authorizedQuantity)}`;
   return [
     quantity,
-    `entrée ${entry}`,
-    `stop ${stop}`,
-    targets.length ? `objectif ${targets.join(" / ")}` : "objectif non publié",
+    `entrée ${orderPlan.entry}`,
+    `stop ${orderPlan.stop}`,
+    orderPlan.target1 !== "—" ? `objectif ${[orderPlan.target1, orderPlan.target2].filter((value) => value !== "—").join(" / ")}` : "objectif non publié",
   ].join(" · ");
+}
+
+function tradeCardOrderPlan(card: LiveFocusView["tradeCards"][number]): FocusQueueOrderPlan {
+  const plan = recordValue(card.riskAuthorizedPlan ?? card.contextAdjustedPlan ?? card.strategyProposedPlan);
+  const targets = recordRows(plan.targets)
+    .map((target) => priceText(target.price ?? target.value ?? target.targetPrice ?? target.target_price))
+    .filter((value) => value !== "—");
+  const orderType = displayValue(plan.orderType ?? plan.order_type, "Non publié");
+  return {
+    orderType: operatorCode(orderType),
+    entry: priceText(plan.entry ?? plan.entryPrice ?? plan.entry_price),
+    stop: priceText(plan.stop ?? plan.stopPrice ?? plan.stop_price),
+    target1: targets[0] ?? "—",
+    target2: targets[1] ?? "—",
+  };
 }
 
 function priceText(value: unknown): string {
@@ -137,6 +155,7 @@ function tradeJournalItem(card: LiveFocusView["tradeCards"][number], asOf: strin
     actionable,
     priority: actionable ? "ACTIONABLE" : terminal ? "TERMINAL" : card.priority || "ACTIVE",
     levelLine: tradeCardLevelSummary(card),
+    orderPlan: tradeCardOrderPlan(card),
     rLine,
     reasonLine,
     expirationLine,
@@ -177,6 +196,7 @@ function observedJournalItem(opportunity: LiveFocusView["observedOpportunities"]
     actionable: false,
     priority: terminal ? "TERMINAL" : "OBSERVED",
     levelLine: "Signal observé · pas de dossier Risk/Human Gate publié",
+    orderPlan: null,
     rLine: "R non applicable",
     reasonLine,
     expirationLine,

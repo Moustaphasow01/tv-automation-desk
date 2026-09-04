@@ -330,6 +330,12 @@ describe("Live Trading cockpit components", () => {
     expect(selectedTicket).toContain("01/09 15:45");
     expect(selectedTicket).not.toContain("01/09 15:55");
     expect(markup).toContain("<dt>Échéance</dt><dd>01/09 16:00</dd>");
+    expect(markup).toContain("aria-label=\"Plan d’ordre ZW\"");
+    expect(markup).toContain("<dt>Type</dt><dd>Ordre limite</dd>");
+    expect(markup).toContain("<dt>Entrée</dt><dd>754</dd>");
+    expect(markup).toContain("<dt>Stop</dt><dd>752,25</dd>");
+    expect(markup).toContain("<dt>Obj. 1</dt><dd>756,75</dd>");
+    expect(markup).toContain("<dt>Obj. 2</dt><dd>758,5</dd>");
     expect(markup).not.toContain("<main");
   });
 
@@ -376,6 +382,8 @@ describe("Live Trading cockpit components", () => {
 
     expect(markup).toContain("Dossier non actionnable");
     expect(markup).toContain("Historique — ne pas poser");
+    expect(markup).toContain("Plan d’ordre ZW");
+    expect(markup).toContain("Obj. 2");
     expect(markup).toContain("JOURNAL QUALIFIÉ");
     expect(markup).toContain("Signal ");
     expect(markup).toContain("<dt>Échéance</dt>");
@@ -564,9 +572,9 @@ function focusTradeCard(): LiveFocusView["tradeCards"][number] {
     lifecycleLabel: "Fenêtre expirée",
     terminalReason: "HUMAN_GATE_EXPIRED",
     actionPolicy: {},
-    strategyProposedPlan: { entry: { price: 754 }, stop: { price: 752.25 }, targets: [{ price: 756.75 }] },
+    strategyProposedPlan: { orderType: "LIMIT", entry: { price: 754 }, stop: { price: 752.25 }, targets: [{ price: 756.75 }, { price: 758.5 }] },
     contextAdjustedPlan: null,
-    riskAuthorizedPlan: { entry: { price: 754 }, stop: { price: 752.25 }, targets: [{ price: 756.75 }] },
+    riskAuthorizedPlan: { orderType: "LIMIT", entry: { price: 754 }, stop: { price: 752.25 }, targets: [{ price: 756.75 }, { price: 758.5 }] },
     theoreticalResult: null,
     operatorResult: null,
     realizedR: null,

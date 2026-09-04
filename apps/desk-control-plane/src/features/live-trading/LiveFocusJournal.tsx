@@ -65,6 +65,7 @@ function JournalTicket({ item, selected, onSelectDecision, onOpenTrade, onOpenCh
       <span className="live-focus__queue-strategy">{item.title}</span>
       <span className="live-focus__queue-levels">{item.levelLine}</span>
     </button>
+    {item.orderPlan ? <OrderPlanPreview item={item} /> : null}
     <dl className="live-focus__queue-card-meta">
       <JournalFact label="Signal" value={journalTimestamp(item.createdAt)} />
       <JournalFact label="Échéance" value={journalTimestamp(item.expiresAt)} />
@@ -82,6 +83,17 @@ function JournalTicket({ item, selected, onSelectDecision, onOpenTrade, onOpenCh
       <button type="button" disabled={!item.signalId} onClick={() => { if (item.signalId) onSelectDecision(item.signalId); onOpenChart(); }}><FaChartLine aria-hidden="true" />Graphique</button>
     </footer>
   </article>;
+}
+
+function OrderPlanPreview({ item }: { item: FocusQueueItem }) {
+  if (!item.orderPlan) return null;
+  return <dl className="live-focus__queue-order-plan" aria-label={`Plan d’ordre ${item.instrument}`}>
+    <JournalFact label="Type" value={item.orderPlan.orderType} />
+    <JournalFact label="Entrée" value={item.orderPlan.entry} />
+    <JournalFact label="Stop" value={item.orderPlan.stop} />
+    <JournalFact label="Obj. 1" value={item.orderPlan.target1} />
+    <JournalFact label="Obj. 2" value={item.orderPlan.target2} />
+  </dl>;
 }
 
 export function FocusQueueTimeline({ steps }: { steps: readonly FocusQueueTimelineStep[] }) {
@@ -115,6 +127,7 @@ function exportFocusQueueSnapshot(items: readonly FocusQueueItem[], asOf: string
       terminal: item.terminal,
       source: item.source,
       asOf: item.asOf,
+      orderPlan: item.orderPlan,
     })),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
