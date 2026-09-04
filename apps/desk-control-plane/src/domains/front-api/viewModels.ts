@@ -3517,6 +3517,9 @@ export type LiveFocusView = {
     reasonCodes: readonly string[];
     createdAt: string | null;
     expiresAt: string | null;
+    strategyProposedPlan?: Record<string, unknown> | null;
+    tradePlanEconomics?: Record<string, unknown> | null;
+    expectedR?: number | null;
     diagnosticOnly: true;
     route: string;
     source: string;

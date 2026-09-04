@@ -15,6 +15,14 @@ test("Live Focus keeps a raw signal diagnostic and never promotes it to a trade 
   assert.equal(projection.tradeCards.length, 0);
   assert.equal(projection.observedOpportunities.length, 1);
   assert.equal(projection.observedOpportunities[0].diagnosticOnly, true);
+  assert.deepEqual(projection.observedOpportunities[0].strategyProposedPlan, {
+    order_type: "LIMIT",
+    entry: { price: 544 },
+    stop: { price: 540 },
+    targets: [{ label: "TP1", price: 552 }, { label: "TP2", price: 556 }],
+  });
+  assert.deepEqual(projection.observedOpportunities[0].tradePlanEconomics, { risk_per_contract: 200 });
+  assert.equal(projection.observedOpportunities[0].expectedR, 1.5);
   assert.equal(projection.operatorJourneyState.stage, "C");
   assert.deepEqual(projection.safety, {
     autoExecutionEnabled: false,
@@ -130,6 +138,14 @@ function liveFixture() {
       strategyName: "ZW pullback",
       createdAt: NOW,
       reasonCodes: ["SETUP_MATCHED"],
+      proposedTradePlan: {
+        order_type: "LIMIT",
+        entry: { price: 544 },
+        stop: { price: 540 },
+        targets: [{ label: "TP1", price: 552 }, { label: "TP2", price: 556 }],
+      },
+      tradePlanEconomics: { risk_per_contract: 200 },
+      expectancyR: 1.5,
     }],
     portfolioOrderIntents: [],
     riskChecks: [],

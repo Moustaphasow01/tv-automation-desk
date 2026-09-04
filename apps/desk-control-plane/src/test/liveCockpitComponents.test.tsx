@@ -413,6 +413,12 @@ describe("Live Trading cockpit components", () => {
             reasonCodes: ["CONTEXT_WAIT"],
             createdAt: "2026-09-01T14:12:00.000Z",
             expiresAt: "2026-09-01T14:45:00.000Z",
+            strategyProposedPlan: {
+              order_type: "LIMIT",
+              entry: { price: 548.25 },
+              stop: { price: 550.5 },
+              targets: [{ price: 545.5 }, { price: 543.75 }],
+            },
             diagnosticOnly: true,
             route: "/live/signals/signal-observed-zw-1",
             source: "strategy-signal-outbox",
@@ -441,6 +447,12 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("Progression du ticket");
     expect(markup).toContain("Historique — ne pas poser");
     expect(markup).toContain("Signal observé · pas de dossier Risk/Human Gate publié");
+    expect(markup).toContain("aria-label=\"Plan d’ordre ZW\"");
+    expect(markup).toContain("<dt>Type</dt><dd>Ordre limite</dd>");
+    expect(markup).toContain("<dt>Entrée</dt><dd>548,25</dd>");
+    expect(markup).toContain("<dt>Stop</dt><dd>550,5</dd>");
+    expect(markup).toContain("<dt>Obj. 1</dt><dd>545,5</dd>");
+    expect(markup).toContain("<dt>Obj. 2</dt><dd>543,75</dd>");
     expect(markup).toContain("Graphique");
     expect(markup).toContain("Dossier");
   });

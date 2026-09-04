@@ -99,6 +99,16 @@ function tradeCardLevelSummary(card: LiveFocusView["tradeCards"][number]): strin
 
 function tradeCardOrderPlan(card: LiveFocusView["tradeCards"][number]): FocusQueueOrderPlan {
   const plan = recordValue(card.riskAuthorizedPlan ?? card.contextAdjustedPlan ?? card.strategyProposedPlan);
+  return orderPlanFromTradePlan(plan);
+}
+
+function observedOpportunityOrderPlan(opportunity: LiveFocusView["observedOpportunities"][number]): FocusQueueOrderPlan | null {
+  const plan = recordValue(opportunity.strategyProposedPlan);
+  if (!Object.keys(plan).length) return null;
+  return orderPlanFromTradePlan(plan);
+}
+
+function orderPlanFromTradePlan(plan: Record<string, unknown>): FocusQueueOrderPlan {
   const targets = recordRows(plan.targets)
     .map((target) => priceText(target.price ?? target.value ?? target.targetPrice ?? target.target_price))
     .filter((value) => value !== "—");
@@ -175,6 +185,7 @@ function tradeJournalItem(card: LiveFocusView["tradeCards"][number], asOf: strin
 function observedJournalItem(opportunity: LiveFocusView["observedOpportunities"][number], asOf: string): FocusQueueItem {
   const terminal = focusOpportunityTerminal(opportunity);
   const expirationLine = focusExpirationLabel(opportunity.expiresAt, asOf, terminal);
+  const orderPlan = observedOpportunityOrderPlan(opportunity);
   const reasonLine = opportunity.reasonCodes.length
     ? opportunity.reasonCodes.slice(0, 2).map((reason) => operatorReason(reason)).join(" · ")
     : "Signal diagnostique uniquement";
@@ -196,7 +207,7 @@ function observedJournalItem(opportunity: LiveFocusView["observedOpportunities"]
     actionable: false,
     priority: terminal ? "TERMINAL" : "OBSERVED",
     levelLine: "Signal observé · pas de dossier Risk/Human Gate publié",
-    orderPlan: null,
+    orderPlan,
     rLine: "R non applicable",
     reasonLine,
     expirationLine,
@@ -210,6 +221,11 @@ function observedJournalItem(opportunity: LiveFocusView["observedOpportunities"]
       opportunity.status,
       opportunity.signalId,
       opportunity.opportunityId,
+      orderPlan?.orderType,
+      orderPlan?.entry,
+      orderPlan?.stop,
+      orderPlan?.target1,
+      orderPlan?.target2,
       opportunity.reasonCodes.join(" "),
     ].join(" ").toLowerCase(),
   };
