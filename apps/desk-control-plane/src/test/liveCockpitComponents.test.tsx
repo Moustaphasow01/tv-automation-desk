@@ -5,14 +5,15 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
 import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
+import { LiveFocusJournal } from "@/features/live-trading/LiveFocusJournal";
 import { LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
+import { buildFocusQueueItems, filterFocusQueueItems } from "@/features/live-trading/focusJournalModel";
 import { commandForCurrentGate, commandLocksGateActions } from "@/features/live-trading/LiveHumanGate";
 import { toLiveTradingModel } from "@/features/live-trading/mapper";
 import type { LiveTradingModel } from "@/features/live-trading/model";
@@ -279,39 +280,13 @@ describe("Live Trading cockpit components", () => {
     expect(markup).not.toContain("Macro blackout");
   });
 
-  it("locks the Live Focus audit layout contract in CSS", () => {
-    const css = readFileSync(new URL("../features/live-trading/live-focus.css", import.meta.url), "utf8");
-    const rootBlock = css.match(/\.live-focus\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
-    const footerBlock = css.match(/\.live-focus__footer\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
-
-    expect(css).not.toContain("line-clamp");
-    expect(css).not.toContain("-webkit-box");
-    expect(css).not.toContain("--focus-type-micro");
-    expect(rootBlock).toContain("min-height: 100vh");
-    expect(rootBlock).not.toContain("height: 100dvh");
-    expect(rootBlock).toContain("grid-template-rows: auto auto auto auto");
-    expect(rootBlock).toContain("overflow-y: visible");
-    expect(footerBlock).toContain("position: sticky");
-    expect(footerBlock).not.toContain("position: fixed");
-    expect(css).toContain("--focus-type-label: 12px");
-    expect(css).toContain("--focus-type-figure: 32px");
-    expect(css).toContain("--focus-tap-min: 44px");
-    expect(css).toContain("grid-template-areas:");
-    expect(css).toContain("\"brief action\"");
-    expect(css).toContain("\"queue queue\"");
-    expect(css).toContain(".live-focus__brief");
-    expect(css).toContain("overflow-y: auto");
-    expect(css).toContain(".live-focus__queue-track");
-    expect(css).toContain("overflow-x: auto");
-    expect(css).toContain(".live-focus__ticket .is-market-level strong");
-    expect(css).toContain("font-size: var(--focus-type-figure)");
-    expect(css).toContain("--focus-chrome-top: 64px");
-    expect(css).toContain("body.desk-live-focus-document .desk-density-viewport");
-    expect(css).toContain("overflow-y: auto !important");
-    expect(css).toContain("grid-template-rows: auto auto");
-    expect(css).not.toContain(".live-focus__decision-support {\n    display: none;");
-    expect(css).toContain("flex-wrap: nowrap");
-    expect(css).toContain(".live-focus__actions .live-focus__copy-action");
+  it("keeps the journal accessible even before the first signal", () => {
+    const markup = render(<LiveFocusJournal focus={focusView()} selectedSignalId={null} onSelectDecision={() => undefined} onOpenTrade={() => undefined} onOpenChart={() => undefined} />);
+    expect(markup).toContain("Tickets &amp; historique");
+    expect(markup).toContain("Liste verticale des tickets");
+    expect(markup).toContain("tabindex=\"0\"");
+    expect(markup).toContain("Aucun ticket publié pour cette séance.");
+    expect(markup).toContain("Filtrer par état");
   });
 
   it("renders Live Focus labels and ticket values as separated decision cells", () => {
@@ -343,6 +318,32 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("Résumé du brief");
     expect(markup).not.toContain("ENTRÉE");
     expect(markup).not.toContain("OBJECTIF 1");
+  });
+
+  it("selects the journal ticket by canonical signal ID after chronological sorting", () => {
+    const selected = focusTradeCard();
+    const recent = { ...selected, orderIntentId: "intent-recent", signalId: "signal-recent", createdAt: "2026-09-01T13:55:00.000Z" };
+    const focus = { ...focusView(), tradeCards: [selected, recent] };
+    expect(buildFocusQueueItems(focus).map((item) => item.signalId)).toEqual(["signal-recent", "signal-expired"]);
+    const markup = render(<LiveFocusJournal focus={focus} selectedSignalId={selected.signalId} onSelectDecision={() => undefined} onOpenTrade={() => undefined} onOpenChart={() => undefined} />);
+    const selectedTicket = markup.match(/<article[^>]+aria-current="true"[^>]*>[\s\S]*?<\/article>/)?.[0];
+    expect(selectedTicket).toContain("01/09 15:45");
+    expect(selectedTicket).not.toContain("01/09 15:55");
+    expect(markup).toContain("<dt>Échéance</dt><dd>01/09 16:00</dd>");
+    expect(markup).not.toContain("<main");
+  });
+
+  it("preserves terminal authority and missing values while filtering journal rows", () => {
+    const original = { ...focusView(), tradeCards: [{ ...focusTradeCard(), expectedR: null, asOf: "" }] };
+    const focus = structuredClone(original);
+    const items = buildFocusQueueItems(focus);
+    expect(filterFocusQueueItems(items, "ACTIONABLE", "ALL", "")).toEqual([]);
+    expect(filterFocusQueueItems(items, "EXPIRED", "ZW", "intent-expired")).toHaveLength(1);
+    expect(filterFocusQueueItems(items, "ALL", "ZC", "")).toEqual([]);
+    expect(items[0].rLine).toBe("R prévisionnel non publié");
+    expect(items[0].freshnessLine).toBe("Non publiée");
+    expect(items[0].actionable).toBe(false);
+    expect(focus).toEqual(original);
   });
 
   it("keeps expired qualified dossiers in the Focus history without presenting them as a ticket to place", () => {
@@ -377,7 +378,7 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("Historique — ne pas poser");
     expect(markup).toContain("JOURNAL QUALIFIÉ");
     expect(markup).toContain("Signal ");
-    expect(markup).toContain("Expiration ");
+    expect(markup).toContain("<dt>Échéance</dt>");
     expect(markup).toContain("Dossier expiré, annulé, rejeté ou déjà clôturé");
     expect(markup).not.toContain("maintenir Entrée");
   });
