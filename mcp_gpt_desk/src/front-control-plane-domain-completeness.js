@@ -147,6 +147,22 @@ export function liveTheoreticalLineageCohort({ execution = {}, currentPortfolioO
   });
 }
 
+export function liveFocusLineageCohort({ execution = {}, currentPortfolioOrderIntents = [], limit = 48 } = {}) {
+  const currentIds = new Set(rows(currentPortfolioOrderIntents).map(portfolioIntentId).filter(Boolean));
+  const durableIds = new Set(currentIds);
+  for (const collection of [execution?.humanExecutionGates, execution?.theoreticalEvents, execution?.manualExecutionEvents, execution?.trades]) {
+    for (const item of rows(collection)) {
+      const id = portfolioIntentId(item);
+      if (id) durableIds.add(id);
+    }
+  }
+  return rows(execution?.portfolioOrderIntents)
+    .filter(isNominalPortfolioIntent)
+    .filter((item) => durableIds.has(portfolioIntentId(item)))
+    .sort((left, right) => Date.parse(intentActivityAt(right) || "") - Date.parse(intentActivityAt(left) || ""))
+    .slice(0, positiveLimit(limit, 48, 200));
+}
+
 export function isNominalLiveSignal(item = {}) {
   return String(item.source_class || item.sourceClass || "LIVE").toUpperCase() !== "CERTIFICATION_REPLAY"
     && !item.certification_run_id
@@ -176,7 +192,24 @@ export function portfolioIntentSignalId(item = {}) {
 
 function portfolioIntentId(item = {}) {
   const payload = payloadOf(item);
-  return text(firstValue(item.portfolio_order_intent_id, payload.portfolio_order_intent_id, payload.order_intent_id), "");
+  return text(firstValue(
+    item.portfolio_order_intent_id,
+    item.portfolioOrderIntentId,
+    item.order_intent_id,
+    item.orderIntentId,
+    payload.portfolio_order_intent_id,
+    payload.order_intent_id,
+  ), "");
+}
+
+function intentActivityAt(item = {}) {
+  const payload = payloadOf(item);
+  return firstValue(item.updated_at_utc, item.created_at_utc, item.requested_at_utc, payload.updated_at_utc, payload.created_at_utc, payload.requested_at_utc);
+}
+
+function positiveLimit(value, fallback, max) {
+  const parsed = Number(value);
+  return Math.max(1, Math.min(Number.isFinite(parsed) ? Math.trunc(parsed) : fallback, max));
 }
 
 function portfolioIntentTradingDate(item = {}) {

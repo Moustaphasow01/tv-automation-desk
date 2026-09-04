@@ -194,6 +194,76 @@ test("strategy signal decision pipeline fails closed before Risk when grain cont
   });
 });
 
+test("strategy signal decision pipeline honors embedded grain context when requested", async () => {
+  const signalBusRepository = new InMemoryStrategySignalBusRepository();
+  await signalBusRepository.publish(signalOutbox({
+    signal_id: "signal-zc-embedded-context",
+    dedupe_key: "signal-zc-embedded-context",
+    instrument: "ZC",
+    proposed_size: 1,
+    signal_quality: {
+      strategy_suite_version: "us_grains_strategy_suite_v1",
+      context_gate: {
+        recommendation: "TAKE",
+        confidence: 0.72,
+        risk_multiplier: 0.85,
+        reason_codes: ["US_GRAINS_RTH_ONLY", "VWAP_PULLBACK"],
+        policy_version: "us_grains_context_gate_decision_v1",
+      },
+    },
+    payload: { strategy_family: "VWAP_PULLBACK", market_universe: "US_GRAINS_CBOT" },
+    proposed_trade_plan: {
+      order_type: "LIMIT",
+      instrument: "ZC",
+      direction: "LONG",
+      entry_price: 520,
+      stop_price: 518,
+      targets: [524],
+      source_data_cutoff_utc: "2026-08-17T09:10:00.000Z",
+    },
+    trade_plan_economics: {
+      risk_points: 2,
+      reward_points: 4,
+      rr: 2,
+    },
+  }));
+  const riskRepository = new InMemoryPortfolioRiskRuntimeRepository();
+  const service = new StrategySignalDecisionPipelineService({
+    signalBusRepository,
+    contextPrefilter: {
+      async evaluate(signals, nowUtc, options) {
+        assert.equal(options.preferEmbeddedContextGateDecision, true);
+        return signals.map((signal) => ({
+          signal,
+          decision: "ADMISSIBLE",
+          admissible: true,
+          reasonCodes: ["US_GRAINS_EMBEDDED_CONTEXT_GATE_TRUTH"],
+        }));
+      },
+    },
+    contextGate: new AiContextGateService({ repository: new InMemoryAiContextGateRepository() }),
+    riskRuntime: new PortfolioRiskRuntimeService({ repository: riskRepository, clock: clock() }),
+    execution: new PortfolioOrderIntentExecutionService({ repository: new InMemoryPortfolioOrderIntentExecutionRepository(), clock: clock() }),
+    providerCounts: async () => ({ commands: 0, events: 0 }),
+    clock: clock(),
+  });
+
+  const result = await service.runOnce({
+    now_utc: NOW,
+    account_id: "shadow_live",
+    prefer_embedded_context_gate_decision: true,
+  });
+
+  assert.equal(result.status, "HUMAN_GATE_READY");
+  assert.equal(result.context_prefilter.admissible, 1);
+  assert.equal(result.context_decision_count, 1);
+  assert.equal(result.order_intent_count, 1);
+  assert.equal(result.human_gate_count, 1);
+  const orderIntent = [...riskRepository.orderIntents.values()][0];
+  assert.equal(orderIntent.instrument, "ZC");
+  assert.equal(orderIntent.execution_terms.entry.price, 520);
+});
+
 test("strategy signal decision pipeline consumes rejected signals without sending them to Risk", async () => {
   const signalBusRepository = new InMemoryStrategySignalBusRepository();
   const published = await signalBusRepository.publish(signalOutbox({

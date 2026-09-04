@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { liveCanonicalRuntime, liveTheoreticalLineageCohort, telegramDrilldownFromHealth } from "../src/front-control-plane-domain-completeness.js";
+import {
+  liveCanonicalRuntime,
+  liveFocusLineageCohort,
+  liveTheoreticalLineageCohort,
+  telegramDrilldownFromHealth,
+} from "../src/front-control-plane-domain-completeness.js";
 
 test("live canonical context decisions preserve their StrategySignal lineage", () => {
   const runtime = liveCanonicalRuntime({
@@ -73,4 +78,40 @@ test("theoretical lineage retains terminal outcomes after the actionable signal 
   });
 
   assert.deepEqual(result.map((item) => item.portfolio_order_intent_id), ["intent-current", "intent-closed"]);
+});
+
+test("Live Focus lineage keeps expired Human Gate dossiers even without theoretical fill evidence", () => {
+  const current = {
+    portfolio_order_intent_id: "intent-current",
+    created_at_utc: "2026-09-01T14:00:00.000Z",
+    expires_at_utc: "2026-09-01T14:45:00.000Z",
+    payload: { strategy_signal_id: "signal-current", strategy_instance_id: "instance-current" },
+  };
+  const expiredWithHumanGate = {
+    portfolio_order_intent_id: "intent-expired-human-gate",
+    created_at_utc: "2026-08-31T18:00:00.000Z",
+    expires_at_utc: "2026-08-31T18:45:00.000Z",
+    payload: { strategy_signal_id: "signal-expired", strategy_instance_id: "instance-expired" },
+  };
+  const unrelated = {
+    portfolio_order_intent_id: "intent-untracked",
+    created_at_utc: "2026-08-31T17:00:00.000Z",
+    payload: { strategy_signal_id: "signal-untracked", strategy_instance_id: "instance-untracked" },
+  };
+
+  const result = liveFocusLineageCohort({
+    execution: {
+      portfolioOrderIntents: [unrelated, expiredWithHumanGate, current],
+      humanExecutionGates: [{ portfolio_order_intent_id: "intent-expired-human-gate", status: "EXPIRED" }],
+      theoreticalEvents: [],
+      manualExecutionEvents: [],
+      trades: [],
+    },
+    currentPortfolioOrderIntents: [current],
+  });
+
+  assert.deepEqual(result.map((item) => item.portfolio_order_intent_id), [
+    "intent-current",
+    "intent-expired-human-gate",
+  ]);
 });

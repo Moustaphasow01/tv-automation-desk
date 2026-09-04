@@ -34,6 +34,30 @@ test("grain context prefilter waits when the snapshot cutoff is after the decisi
   assert.deepEqual(decision.reasonCodes, ["MARKET_CONTEXT_CUTOFF_AFTER_DECISION_TIME"]);
 });
 
+test("grain context prefilter can honor the embedded deterministic context gate as live truth", async () => {
+  const service = prefilterService(snapshot({
+    sourceDataCutoff: "2026-09-02T17:55:00.000Z",
+  }));
+
+  const [decision] = await service.evaluate([signal({
+    signal_quality: {
+      context_gate: {
+        recommendation: "TAKE_REDUCED",
+        reason_codes: ["US_GRAINS_RTH_ONLY", "VWAP_PULLBACK"],
+      },
+    },
+  })], "2026-09-02T17:50:00.000Z", { preferEmbeddedContextGateDecision: true });
+
+  assert.equal(decision.decision, "ADMISSIBLE");
+  assert.equal(decision.admissible, true);
+  assert.equal(decision.marketContextSnapshotId, "ctx-live");
+  assert.deepEqual(decision.reasonCodes, [
+    "US_GRAINS_EMBEDDED_CONTEXT_GATE_TRUTH",
+    "US_GRAINS_RTH_ONLY",
+    "VWAP_PULLBACK",
+  ]);
+});
+
 function prefilterService(currentSnapshot) {
   return new MarketContextPrefilterService({
     repository: { async current() { return { snapshot: currentSnapshot }; } },

@@ -31,7 +31,9 @@ export class StrategySignalDecisionPipelineService {
     const scoped = pending.filter((item) => signalInScope(item, input));
     if (!scoped.length) return idleResult({ nowUtc, pending, before, expired });
     const prefilter = this.contextPrefilter
-      ? await this.contextPrefilter.evaluate(scoped, nowUtc)
+      ? await this.contextPrefilter.evaluate(scoped, nowUtc, {
+          preferEmbeddedContextGateDecision: preferEmbeddedContextGateDecision(input),
+        })
       : scoped.map((signal) => ({ signal, decision: "ADMISSIBLE", admissible: true, reasonCodes: ["CONTEXT_PREFILTER_NOT_CONFIGURED"] }));
     const admissibleItems = prefilter.filter((item) => item.decision === "ADMISSIBLE");
     const rejectedItems = prefilter.filter((item) => item.decision === "REJECT");
@@ -297,6 +299,9 @@ function idempotencyKey(input, signals, nowUtc) {
 
 function accountId(input) { return String(input.account_id || input.accountId || process.env.DESK_SHADOW_RUNTIME_ACCOUNT_ID || "shadow_live"); }
 function signalOutboxIds(signals) { return signals.map((signal) => signal?.signal_outbox_id).filter(Boolean); }
+function preferEmbeddedContextGateDecision(input = {}) {
+  return input.prefer_embedded_context_gate_decision === true || input.preferEmbeddedContextGateDecision === true;
+}
 function asOf(input, clock) {
   const value = input.as_of_utc || input.asOfUtc || input.now_utc || input.nowUtc || clock.now();
   if (typeof value === "string") return new Date(value).toISOString();

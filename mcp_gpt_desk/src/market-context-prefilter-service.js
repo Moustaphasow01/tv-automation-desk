@@ -9,15 +9,25 @@ export class MarketContextPrefilterService {
     this.eventOutbox = eventOutbox;
   }
 
-  async evaluate(signals, nowUtc) {
+  async evaluate(signals, nowUtc, options = {}) {
     const grains = signals.filter((signal) => GRAIN_INSTRUMENTS.has(String(signal.instrument || "").toUpperCase()));
     const passthrough = signals.filter((signal) => !grains.includes(signal)).map((signal) => ({
       signal, decision: "ADMISSIBLE", admissible: true, reasonCodes: ["CONTEXT_PREFILTER_NOT_APPLICABLE_CURRENT_UNIVERSE"],
     }));
     if (!grains.length) return passthrough;
+    const preferEmbedded = options.preferEmbeddedContextGateDecision === true
+      || options.prefer_embedded_context_gate_decision === true;
     const current = await this.repository?.current("US_GRAINS_CBOT", nowUtc);
     const evaluated = grains.map((signal) => {
       const snapshot = current?.snapshot || null;
+      const embedded = preferEmbedded ? embeddedGrainContextDecision(signal) : null;
+      if (embedded) {
+        return {
+          signal,
+          ...embedded,
+          marketContextSnapshotId: snapshot?.marketContextSnapshotId || snapshot?.market_context_snapshot_id || null,
+        };
+      }
       const lookaheadReason = contextLookaheadReason(snapshot, nowUtc);
       const decision = lookaheadReason
         ? { decision: "WAIT", admissible: false, reasonCodes: [lookaheadReason] }
@@ -54,7 +64,7 @@ export class MarketContextPrefilterService {
           universe, decision, reason_codes, source_data_cutoff_utc, decided_at_utc,
           payload, correlation_id, causation_id
         ) VALUES ($1,$2,$3,'US_GRAINS_CBOT',$4,$5,$6,$7,$8::jsonb,$9,$10)
-        ON CONFLICT (signal_id, market_context_snapshot_id) DO UPDATE SET
+        ON CONFLICT (market_context_prefilter_decision_id) DO UPDATE SET
           decision = EXCLUDED.decision,
           reason_codes = EXCLUDED.reason_codes,
           decided_at_utc = EXCLUDED.decided_at_utc,
@@ -82,6 +92,30 @@ export class MarketContextPrefilterService {
   }
 }
 
+function embeddedGrainContextDecision(signal = {}) {
+  const gate = signal.signal_quality?.context_gate || signal.payload?.context_gate || null;
+  const recommendation = String(gate?.recommendation || gate?.decision || "").toUpperCase();
+  if (!recommendation) return null;
+  const decision = embeddedRecommendationToPrefilterDecision(recommendation);
+  if (!decision) return null;
+  const reasonCodes = [
+    "US_GRAINS_EMBEDDED_CONTEXT_GATE_TRUTH",
+    ...array(gate.reason_codes || gate.reasonCodes),
+  ];
+  return {
+    decision,
+    admissible: decision === "ADMISSIBLE",
+    reasonCodes: [...new Set(reasonCodes)],
+  };
+}
+
+function embeddedRecommendationToPrefilterDecision(value) {
+  if (["TAKE", "ACCEPT", "TAKE_REDUCED", "ACCEPT_REDUCED", "ACCEPT_WITH_ADJUSTMENT"].includes(value)) return "ADMISSIBLE";
+  if (value === "WAIT") return "WAIT";
+  if (value === "REJECT") return "REJECT";
+  return null;
+}
+
 function stableId(item) {
   return `context-prefilter-${canonicalSha256({
     signalId: item.signal.signal_id,
@@ -97,3 +131,5 @@ function contextLookaheadReason(snapshot, nowUtc) {
   }
   return null;
 }
+
+function array(value) { return Array.isArray(value) ? value : []; }

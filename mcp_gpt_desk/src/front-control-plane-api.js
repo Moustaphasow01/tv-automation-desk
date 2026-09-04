@@ -17,6 +17,7 @@ import {
   currentLiveLineageCohort,
   frontAuditEvents,
   isNominalLiveSignal,
+  liveFocusLineageCohort,
   liveTheoreticalLineageCohort,
   liveCanonicalRuntime,
   portfolioIntentSignalId,
@@ -1159,8 +1160,35 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
 function demoPaperReadiness(context) { return buildDemoPaperReadiness({ ...context, rows }); }
 
 function liveFocus(context) {
+  const live = liveTrading(context);
+  const executionValue = context.execution || {};
+  const currentCohort = currentLiveLineageCohort({
+    execution: executionValue,
+    strategy: context.strategy,
+    nowIso: context.nowIso,
+  });
+  const focusIntentRows = liveFocusLineageCohort({
+    execution: executionValue,
+    currentPortfolioOrderIntents: currentCohort.portfolioOrderIntents,
+  });
+  const focusPortfolioOrderIntents = focusIntentRows.map((item) => portfolioOrderIntentSummaryRow({
+    execution: executionValue,
+    item,
+    actor: context.actor,
+    nowIso: context.nowIso,
+  }));
+  const focusTheoreticalExecution = buildLiveTheoreticalExecution({
+    execution: { ...executionValue, portfolioOrderIntents: focusIntentRows },
+    marketSeries: context.marketSeries,
+    nowIso: context.nowIso,
+    actor: context.actor,
+  });
   return buildLiveFocusProjection({
-    live: liveTrading(context),
+    live: {
+      ...live,
+      portfolioOrderIntents: focusPortfolioOrderIntents,
+      theoreticalExecution: focusTheoreticalExecution,
+    },
     marketContext: context.marketContext,
     health: context.health,
     nowIso: context.nowIso,
