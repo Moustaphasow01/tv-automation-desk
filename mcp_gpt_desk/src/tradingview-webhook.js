@@ -175,7 +175,9 @@ function stringOrNull(value) {
 function validateFreshness(candle, now, options) {
   const candleMs = Date.parse(candle.timestamp_utc);
   const futureSkewSeconds = finitePositive(options.maxFutureSkewSeconds, 300);
-  const ageSeconds = (now.getTime() - candleMs) / 1000;
+  const closeMs = candleCloseMs(candle);
+  const ageSeconds = (now.getTime() - closeMs) / 1000;
+  if ((now.getTime() - candleMs) / 1000 < -futureSkewSeconds) return "future_candle_timestamp";
   if (ageSeconds < -futureSkewSeconds) return "future_candle_timestamp";
   const maximumAgeSeconds = finitePositive(
     options.maxAgeSeconds,
@@ -185,15 +187,24 @@ function validateFreshness(candle, now, options) {
   return null;
 }
 
-function defaultMaxAgeSeconds(timeframe) {
-  const seconds = ({
+function candleCloseMs(candle) {
+  const candleMs = Date.parse(candle.timestamp_utc);
+  return candleMs + (timeframeSeconds(candle.timeframe) * 1000);
+}
+
+function timeframeSeconds(timeframe) {
+  return ({
     "1": 60,
     "5": 5 * 60,
     "15": 15 * 60,
     "30": 30 * 60,
     "1H": 60 * 60,
     "4H": 4 * 60 * 60,
-  })[timeframe] || 15 * 60;
+  })[timeframe] || 60;
+}
+
+function defaultMaxAgeSeconds(timeframe) {
+  const seconds = timeframeSeconds(timeframe);
   return Math.max(10 * 60, Math.min(seconds * 6, 24 * 60 * 60));
 }
 

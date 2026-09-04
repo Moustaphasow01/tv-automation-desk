@@ -47,7 +47,7 @@ test("local TradingView webhook targets the canonical prod feed environment by d
   const result = await ingestTradingViewWebhook({
     persistence,
     secret: "test-secret",
-    now: new Date("2026-07-15T10:01:00.000Z"),
+    now: new Date("2026-07-15T10:16:00.000Z"),
     body: {
       token: "test-secret",
       symbol: "CME_MINI:MNQ1!",
@@ -107,6 +107,34 @@ test("local TradingView webhook rejects stale and future candles", async () => {
   assert.equal(future.statusCode, 422);
   assert.equal(future.body.results[0].error, "future_candle_timestamp");
   assert.equal(persistence.writes.length, 0);
+});
+
+test("local TradingView webhook evaluates higher-timeframe freshness from candle close", async () => {
+  const persistence = new RecordingPersistence();
+  const result = await ingestTradingViewWebhook({
+    persistence,
+    secret: "test-secret",
+    now: new Date("2026-09-04T13:52:00.000Z"),
+    maxAgeSeconds: 20 * 60,
+    body: {
+      token: "test-secret",
+      symbol: "CBOT:ZC1!",
+      timeframe: "15",
+      timestamp_utc: "2026-09-04T13:30:00.000Z",
+      bar_status: "closed",
+      open: 500,
+      high: 502,
+      low: 499,
+      close: 501,
+      volume: 120,
+    },
+  });
+
+  assert.equal(result.statusCode, 202);
+  assert.equal(result.body.accepted, 1);
+  const candle = persistence.writes.find((write) => write.collection.endsWith("/candles"));
+  assert.equal(candle.data.feed_id, "prod__tradingview__ZC1!__15");
+  assert.equal(candle.documentId, "20260904T133000Z");
 });
 
 class RecordingPersistence {
