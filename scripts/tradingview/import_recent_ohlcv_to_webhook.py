@@ -157,7 +157,7 @@ def select_settled_recent_bars(
         closed_age_seconds = age_seconds - timeframe_seconds
         if closed_age_seconds < closed_grace_seconds:
             continue
-        if age_seconds > max_age_seconds:
+        if closed_age_seconds > max_age_seconds:
             continue
         key = f"{bar['symbol']}:{bar['timeframe']}:{bar['timestamp_utc']}"
         if key in seen:
