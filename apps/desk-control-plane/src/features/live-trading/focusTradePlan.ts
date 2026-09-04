@@ -1,3 +1,4 @@
+import type { LiveFocusView } from "@/domains/front-api/viewModels";
 import { displayValue } from "./mapper";
 import type { LiveTradingModel } from "./model";
 
@@ -87,6 +88,39 @@ export function focusTradePlan(model: LiveTradingModel): FocusTradePlan {
   };
 }
 
+export function focusTradePlanFromCard(card: LiveFocusView["tradeCards"][number]): FocusTradePlan {
+  const plan = recordValue(card.riskAuthorizedPlan ?? card.contextAdjustedPlan ?? card.strategyProposedPlan);
+  const entry = recordValue(plan.entry);
+  const stop = recordValue(plan.stop);
+  const targets = recordRows(plan.targets)
+    .map((target) => displayValue(target.price ?? target.value ?? target.targetPrice ?? target.target_price, ""))
+    .filter(Boolean);
+  const allowed = card.allowedActions.map((action) => String(action).trim().toUpperCase());
+  return {
+    authority: card.riskAuthorizedPlan ? "AUTHORIZED" : card.contextAdjustedPlan || card.strategyProposedPlan ? "PROPOSED" : "UNAVAILABLE",
+    authorityLabel: card.riskAuthorizedPlan ? "Plan autorisé après contrôle du risque" : card.contextAdjustedPlan ? "Plan ajusté par le contexte — non final" : card.strategyProposedPlan ? "Plan proposé par la stratégie — non final" : "Niveaux non publiés",
+    actionable: Boolean((card.actionable ?? allowed.includes("CONFIRM")) && !card.terminal && !card.expiredByTime),
+    instrument: card.instrument,
+    side: card.side,
+    orderType: String(plan.orderType ?? plan.order_type ?? "Non publié"),
+    quantity: displayValue(card.authorizedQuantity, "Non publiée"),
+    entry: displayValue(entry.price ?? entry.value ?? entry.mid ?? plan.entryPrice ?? plan.entry_price, "Non publiée"),
+    stop: displayValue(stop.price ?? stop.value ?? stop.mid ?? plan.stopPrice ?? plan.stop_price, "Non publié"),
+    targets,
+    expectedR: card.expectedR === null || card.expectedR === undefined ? "Non publié" : `${displayValue(card.expectedR)} R`,
+  };
+}
+
 function stripTargetPrefix(value: string): string {
   return value.replace(/^(?:TP|T|TARGET|OBJECTIF)\s*\d+\s*[:·-]?\s*/i, "").trim() || value;
+}
+
+function recordRows(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+    : [];
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

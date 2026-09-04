@@ -13,7 +13,7 @@ import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusB
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
 import { LiveFocusJournal } from "@/features/live-trading/LiveFocusJournal";
 import { LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
-import { buildFocusQueueItems, filterFocusQueueItems } from "@/features/live-trading/focusJournalModel";
+import { buildFocusQueueItems, buildFocusSignalFlowItems, filterFocusQueueItems } from "@/features/live-trading/focusJournalModel";
 import { commandForCurrentGate, commandLocksGateActions } from "@/features/live-trading/LiveHumanGate";
 import { toLiveTradingModel } from "@/features/live-trading/mapper";
 import type { LiveTradingModel } from "@/features/live-trading/model";
@@ -282,11 +282,12 @@ describe("Live Trading cockpit components", () => {
 
   it("keeps the journal accessible even before the first signal", () => {
     const markup = render(<LiveFocusJournal focus={focusView()} selectedSignalId={null} onSelectDecision={() => undefined} onOpenTrade={() => undefined} onOpenChart={() => undefined} />);
-    expect(markup).toContain("Tickets &amp; historique");
+    expect(markup).toContain("Prêts à poser &amp; historique");
     expect(markup).toContain("Liste verticale des tickets");
     expect(markup).toContain("tabindex=\"0\"");
-    expect(markup).toContain("Aucun ticket publié pour cette séance.");
+    expect(markup).toContain("Aucun ordre prêt à poser");
     expect(markup).toContain("Filtrer par état");
+    expect(markup).toContain("Signaux filtrés avant ticket");
   });
 
   it("renders Live Focus labels and ticket values as separated decision cells", () => {
@@ -384,8 +385,9 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("Historique — ne pas poser");
     expect(markup).toContain("Plan d’ordre ZW");
     expect(markup).toContain("Obj. 2");
-    expect(markup).toContain("JOURNAL QUALIFIÉ");
-    expect(markup).toContain("Signal ");
+    expect(markup).toContain("TICKETS OPÉRATEUR");
+    expect(markup).toContain("signal 15:45:00");
+    expect(markup).toContain("<div class=\"live-focus__instrument\"><small>Instrument</small><strong>ZW</strong><span>Achat</span></div>");
     expect(markup).toContain("<dt>Échéance</dt>");
     expect(markup).toContain("Dossier expiré, annulé, rejeté ou déjà clôturé");
     expect(markup).not.toContain("maintenir Entrée");
@@ -395,37 +397,40 @@ describe("Live Trading cockpit components", () => {
     const model = withOrderIntent(cockpitModel(), { expiresAt: "2026-09-01T14:00:00.000Z" });
     model.meta = { ...model.meta, asOf: "2026-09-01T14:30:00.000Z" };
     model.gateActions = [];
+    const focus = {
+      ...focusView(),
+      tradeCards: [focusTradeCard()],
+      observedOpportunities: [{
+        opportunityId: "observed-zw-1",
+        signalId: "signal-observed-zw-1",
+        instrument: "ZW",
+        side: "SHORT",
+        strategyName: "ZW breakdown watch",
+        status: "OBSERVED",
+        statusLabel: "Observé",
+        terminal: false,
+        reasonCodes: ["CONTEXT_WAIT"],
+        createdAt: "2026-09-01T14:12:00.000Z",
+        expiresAt: "2026-09-01T14:45:00.000Z",
+        strategyProposedPlan: {
+          order_type: "LIMIT",
+          entry: { price: 548.25 },
+          stop: { price: 550.5 },
+          targets: [{ price: 545.5 }, { price: 543.75 }],
+        },
+        diagnosticOnly: true,
+        route: "/live/signals/signal-observed-zw-1",
+        source: "strategy-signal-outbox",
+        asOf: "2026-09-01T14:30:00.000Z",
+        availability: "AVAILABLE",
+      }],
+    } satisfies LiveFocusView;
+    expect(buildFocusQueueItems(focus)).toHaveLength(1);
+    expect(buildFocusSignalFlowItems(focus)).toHaveLength(1);
     const markup = render(
       <LiveFocusMode
         model={model}
-        focus={{
-          ...focusView(),
-          tradeCards: [focusTradeCard()],
-          observedOpportunities: [{
-            opportunityId: "observed-zw-1",
-            signalId: "signal-observed-zw-1",
-            instrument: "ZW",
-            side: "SHORT",
-            strategyName: "ZW breakdown watch",
-            status: "OBSERVED",
-            statusLabel: "Observé",
-            terminal: false,
-            reasonCodes: ["CONTEXT_WAIT"],
-            createdAt: "2026-09-01T14:12:00.000Z",
-            expiresAt: "2026-09-01T14:45:00.000Z",
-            strategyProposedPlan: {
-              order_type: "LIMIT",
-              entry: { price: 548.25 },
-              stop: { price: 550.5 },
-              targets: [{ price: 545.5 }, { price: 543.75 }],
-            },
-            diagnosticOnly: true,
-            route: "/live/signals/signal-observed-zw-1",
-            source: "strategy-signal-outbox",
-            asOf: "2026-09-01T14:30:00.000Z",
-            availability: "AVAILABLE",
-          }],
-        }}
+        focus={focus}
         busy={false}
         error={null}
         requestedScope={{ instrument: "ZW", timeframe: "15" }}
@@ -443,16 +448,22 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("Filtrer par état");
     expect(markup).toContain("Filtrer par instrument");
     expect(markup).toContain("Exporter");
-    expect(markup).toContain("Résumé du journal");
+    expect(markup).toContain("Résumé des tickets");
     expect(markup).toContain("Progression du ticket");
     expect(markup).toContain("Historique — ne pas poser");
-    expect(markup).toContain("Signal observé · pas de dossier Risk/Human Gate publié");
+    expect(markup).toContain("Signaux filtrés avant ticket");
+    expect(markup).toContain("Bloqué à</span> Context Gate");
+    expect(markup).toContain("Le contexte marché demande d’attendre avant toute qualification.");
     expect(markup).toContain("aria-label=\"Plan d’ordre ZW\"");
     expect(markup).toContain("<dt>Type</dt><dd>Ordre limite</dd>");
-    expect(markup).toContain("<dt>Entrée</dt><dd>548,25</dd>");
-    expect(markup).toContain("<dt>Stop</dt><dd>550,5</dd>");
-    expect(markup).toContain("<dt>Obj. 1</dt><dd>545,5</dd>");
-    expect(markup).toContain("<dt>Obj. 2</dt><dd>543,75</dd>");
+    expect(markup).toContain("<dt>Entrée</dt><dd>754</dd>");
+    expect(markup).toContain("<dt>Stop</dt><dd>752,25</dd>");
+    expect(markup).toContain("<dt>Obj. 1</dt><dd>756,75</dd>");
+    expect(markup).toContain("<dt>Obj. 2</dt><dd>758,5</dd>");
+    expect(markup).not.toContain("<dt>Entrée</dt><dd>548,25</dd>");
+    expect(markup).not.toContain("<dt>Stop</dt><dd>550,5</dd>");
+    expect(markup).not.toContain("<dt>Obj. 1</dt><dd>545,5</dd>");
+    expect(markup).not.toContain("<dt>Obj. 2</dt><dd>543,75</dd>");
     expect(markup).toContain("Graphique");
     expect(markup).toContain("Dossier");
   });

@@ -8,12 +8,12 @@ import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import type { HumanGateAction } from "@/features/order-intent/model";
 import { displayTime, displayValue } from "./mapper";
 import { readLiveFocusSoundProfile, writeLiveFocusSoundProfile, type LiveFocusSoundEvent, type LiveFocusSoundProfile } from "./focusPreferences";
-import { focusTradePlan } from "./focusTradePlan";
+import { focusTradePlan, focusTradePlanFromCard } from "./focusTradePlan";
 import { gateTiming } from "./LiveHumanGate";
 import type { LiveTradingModel } from "./model";
 import { InstrumentChartPanel } from "./chart/LiveMarketChart";
 import { LiveFocusJournal, FocusQueueTimeline } from "./LiveFocusJournal";
-import { buildFocusTradeTimeline, focusCardActionable, focusCardStatus, focusCardTerminal, focusExpirationLabel, focusOpportunityStatus } from "./focusJournalModel";
+import { buildFocusTradeTimeline, focusCardActionable, focusCardStatus, focusCardTerminal, focusExpirationLabel } from "./focusJournalModel";
 import "./live-focus.css";
 
 type PendingAction =
@@ -65,14 +65,14 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
   const skipManual = useMemo(() => manualActions.find((action) => action.action === "REPORT_SKIPPED" && action.permission === "ALLOWED"), [manualActions]);
   const stopManual = useMemo(() => manualActions.find((action) => action.action === "REPORT_STOP_PLACED" && action.permission === "ALLOWED"), [manualActions]);
   const primary = useMemo(() => gateConfirm ? ({ kind: "gate", action: gateConfirm } as const) : primaryManual ? ({ kind: "manual", action: primaryManual } as const) : null, [gateConfirm, primaryManual]);
-  const plan = focusTradePlan(model);
   const selectedCard = queue[selectedIndex] ?? focus.selectedTrade;
+  const plan = selectedCard ? focusTradePlanFromCard(selectedCard) : focusTradePlan(model);
   const drawerCard = drawerCardId
     ? queue.find((card) => card.orderIntentId === drawerCardId || card.tradeCardId === drawerCardId || card.signalId === drawerCardId) ?? selectedCard
     : selectedCard;
   const timing = gateTiming(
-    model.orderIntent?.createdAt ?? model.latestSignal?.createdAt ?? null,
-    model.orderIntent?.allowedActions.expiresAt ?? model.latestSignal?.expiresAt ?? null,
+    selectedCard?.createdAt ?? model.orderIntent?.createdAt ?? model.latestSignal?.createdAt ?? null,
+    selectedCard?.expiresAt ?? model.orderIntent?.allowedActions.expiresAt ?? model.latestSignal?.expiresAt ?? null,
     realtime?.now ?? new Date(model.meta.asOf),
   );
   const ticket = resolveFocusTicketPresentation(model, focus, plan, timing, primary);
@@ -242,7 +242,11 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
 
 function FocusMissionRibbon({ model, focus, state, timingLabel }: { model: LiveTradingModel; focus: LiveFocusView; state: ReturnType<typeof resolveBackendFocusState>; timingLabel: string }) {
   const activeTradeCount = focus.tradeCards.filter(focusCardActionable).length;
-  const signalLabel = model.latestSignal ? `${model.latestSignal.symbol} · ${operatorCode(model.latestSignal.direction)}` : "Aucun signal sélectionné";
+  const selectedTicket = focus.tradeCards.find((card) => card.signalId === model.latestSignal?.signalId)
+    ?? focus.selectedTrade
+    ?? focus.tradeCards.find(focusCardActionable)
+    ?? null;
+  const ticketLabel = selectedTicket ? `${selectedTicket.instrument} · ${operatorCode(selectedTicket.side)}` : "Aucun ticket prêt";
   const freshness = displayTime(focus.technical.sourceDataCutoff || focus.asOf);
   const nextAction = activeTradeCount > 0 ? "Décision opérateur à vérifier" : focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Surveillance active";
   return <section className="live-focus__mission-ribbon" aria-label="Résumé instantané du mode Focus">
@@ -252,7 +256,7 @@ function FocusMissionRibbon({ model, focus, state, timingLabel }: { model: LiveT
       <span>{nextAction}</span>
     </div>
     <dl>
-      <div><dt>Signal suivi</dt><dd>{signalLabel}</dd></div>
+      <div><dt>Ticket suivi</dt><dd>{ticketLabel}</dd></div>
       <div><dt>Dossiers à décider</dt><dd>{String(activeTradeCount)}</dd></div>
       <div><dt>Fenêtre</dt><dd>{timingLabel}</dd></div>
       <div><dt>Données arrêtées à</dt><dd>{freshness}</dd></div>
@@ -441,7 +445,7 @@ function resolveFocusTicketPresentation(
     ?? null;
   const terminal = Boolean(selectedCard && focusCardTerminal(selectedCard)) || timing.expired;
   const operatorActionable = Boolean(primary && plan.actionable && !terminal);
-  const signalLabel = model.latestSignal ? `${model.latestSignal.symbol} · ${operatorCode(model.latestSignal.direction)}` : "Surveillance Desk";
+  const signalLabel = selectedCard ? `${selectedCard.instrument} · ${operatorCode(selectedCard.side)}` : model.latestSignal ? `${model.latestSignal.symbol} · ${operatorCode(model.latestSignal.direction)}` : "Surveillance Desk";
   const statusLabel = selectedCard ? focusCardStatus(selectedCard) : model.operator.label;
   const statusDetail = selectedCard
     ? `${operatorCopy(selectedCard.strategyName)} · signal ${displayTime(selectedCard.createdAt)} · expiration ${displayTime(selectedCard.expiresAt)}`
@@ -484,18 +488,18 @@ function resolveFocusTicketPresentation(
   }
 
   if (model.latestSignal || focus.observedOpportunities.length) {
-    const observed = focus.observedOpportunities[0];
+    const observedCount = Math.max(focus.observedOpportunities.length, model.latestSignal ? 1 : 0);
     return {
       mode: "observed",
-      eyebrow: "SIGNAL OBSERVÉ",
-      title: "Signal non qualifié",
-      description: "Le moteur a publié un signal, mais il n’existe pas encore de dossier complet Position cible → Ordre proposé → Validation opérateur.",
-      orbitLabel: signalLabel,
-      statusLabel: observed ? focusOpportunityStatus(observed) : model.operator.label,
-      statusDetail: observed ? `Signal ${displayTime(observed.createdAt)} · expiration ${displayTime(observed.expiresAt)}` : model.operator.detail,
+      eyebrow: "SURVEILLANCE",
+      title: "Aucun ordre prêt à poser",
+      description: "Des signaux moteur existent, mais ils restent dans le flux filtré tant qu’ils n’ont pas produit Position cible, OrderIntent et Human Gate.",
+      orbitLabel: "Flux signaux",
+      statusLabel: "Aucune action opérateur",
+      statusDetail: `${observedCount} signal(s) non qualifié(s) visibles dans le flux d’audit.`,
       tone: "info",
       operatorActionable: false,
-      warning: "Signal diagnostique uniquement : il n’a pas franchi tous les gates et ne doit pas être traité comme un ordre à poser.",
+      warning: "Ne pas poser ces signaux : seuls les tickets publiés par le backend dans la file opérateur sont actionnables.",
     };
   }
 
@@ -514,6 +518,13 @@ function resolveFocusTicketPresentation(
 }
 
 function FocusTicket({ plan, timingLabel, ticket }: { plan: ReturnType<typeof focusTradePlan>; timingLabel: string; ticket: FocusTicketPresentation }) {
+  if (ticket.mode === "observed" || ticket.mode === "empty") {
+    return <div className="live-focus__ticket live-focus__ticket--incomplete" data-plan-authority="UNAVAILABLE" data-ticket-mode={ticket.mode}>
+      <div className="live-focus__ticket-status" data-tone={ticket.tone}><small>État opérateur</small><strong>{ticket.statusLabel}</strong><span>{ticket.statusDetail}</span></div>
+      <div className="live-focus__ticket-empty"><strong>Aucun plan d’ordre opérateur.</strong><span>Les niveaux Entrée / Stop / Objectifs apparaissent ici uniquement après publication backend d’un dossier Risk → OrderIntent → Human Gate.</span></div>
+      <TicketValue label="Fenêtre" value={timingLabel} />
+    </div>;
+  }
   return <div className={`live-focus__ticket${ticket.operatorActionable ? "" : " live-focus__ticket--incomplete"}`} data-plan-authority={plan.authority} data-ticket-mode={ticket.mode}>
     <div className="live-focus__ticket-status" data-tone={ticket.tone}><small>État opérateur</small><strong>{ticket.statusLabel}</strong><span>{ticket.statusDetail}</span></div>
     <div className="live-focus__plan-authority"><small>Provenance</small><strong>{plan.authorityLabel}</strong></div>
