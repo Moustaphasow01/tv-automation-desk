@@ -71,6 +71,47 @@ describe("OrderIntent dossier semi-manual contract", () => {
     expect(dossier.reconciliation.broker[0].value).toMatchObject({ state: "KNOWN", value: 0 });
   });
 
+  it("keeps the operator dossier usable when optional backend arrays are published as null", () => {
+    const envelope = orderDetailEnvelope();
+    envelope.data.humanGate = {
+      gateId: "gate-1",
+      status: "AWAITING_MANUAL_CONFIRMATION",
+      revision: 1,
+      expiresAt: "2026-08-14T00:05:00Z",
+      confirmedAt: "",
+      rejectedAt: "",
+      unavailableReason: "",
+      actions: [{
+        action: "CONFIRM",
+        actionId: "gate-confirm-1",
+        label: "Confirm OrderIntent",
+        commandType: "execution.order_intent.confirm",
+        environment: "PAPER",
+        permission: "ALLOWED",
+        requiresConfirmation: true,
+        requiresReason: true,
+        expectedRevision: "rev-1",
+        impactPreview: "Human Gate only.",
+        payload: { orderIntentId: "intent-1" },
+      }],
+    };
+    envelope.data.reconciliation = {
+      status: "AWAITING_MANUAL_CONFIRMATION",
+      checkedAt: "2026-08-14T00:00:00Z",
+      expected: null,
+      broker: null,
+      mismatches: null,
+    } as unknown as OrderDetailView["reconciliation"];
+
+    const dossier = buildOrderIntentDossier(envelope);
+
+    expect(dossier.humanGate.actions).toHaveLength(1);
+    expect(dossier.reconciliation.expected).toEqual([]);
+    expect(dossier.reconciliation.broker).toEqual([]);
+    expect(dossier.reconciliation.mismatches).toEqual([]);
+    expect(renderToStaticMarkup(<ReconciliationPanel reconciliation={dossier.reconciliation} />)).toContain("ne sont pas encore publiés");
+  });
+
   it("renders post-Risk trade terms as definitions without editable controls", () => {
     const html = renderToStaticMarkup(<ReadonlyTradeTerms dossier={buildOrderIntentDossier(orderDetailEnvelope())} />);
 

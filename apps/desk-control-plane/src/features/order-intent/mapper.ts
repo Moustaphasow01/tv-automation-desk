@@ -13,7 +13,7 @@ export function buildOrderIntentDossier(envelope: ViewEnvelope<OrderDetailView>)
   const backendHumanGate = data.humanGate ?? null;
   const backendReconciliation = data.reconciliation ?? null;
   const backendMarket = data.marketContext ?? null;
-  const lifecycle = data.lifecycle.map((event): ProviderTimelineEvent => ({
+  const lifecycle = arrayItems(data.lifecycle).map((event): ProviderTimelineEvent => ({
     eventId: event.eventId,
     occurredAt: event.at,
     status: event.state,
@@ -79,18 +79,18 @@ export function buildOrderIntentDossier(envelope: ViewEnvelope<OrderDetailView>)
     executionMode: textValue(data.executionMode ?? undefined, meta, source, "Mode d'exécution autoritaire absent de cette projection") as OrderIntentDossier["executionMode"],
     humanGate: {
       status: textValue(backendHumanGate?.status, meta, source, "Human Gate et allowedActions ne sont pas encore publiés par le BFF"),
-      actions: backendHumanGate?.actions ?? [],
+      actions: arrayItems(backendHumanGate?.actions),
       unavailableReason: backendHumanGate?.unavailableReason || "Confirmation indisponible : le backend ne publie aucun allowedAction pour cette ressource.",
     },
     providerLifecycle: lifecycle,
-    fills: data.fills.map((fill) => ({ fillId: fill.fillId, quantity: fill.quantity, price: fill.price, filledAt: fill.filledAt })),
+    fills: arrayItems(data.fills).map((fill) => ({ fillId: fill.fillId, quantity: fill.quantity, price: fill.price, filledAt: fill.filledAt })),
     reconciliation: backendReconciliation
       ? {
           status: textValue(backendReconciliation.status, meta, source, "Réconciliation OrderIntent ↔ broker non publiée"),
           checkedAt: textValue(backendReconciliation.checkedAt, meta, source, "Dernier contrôle non publié"),
-          expected: backendReconciliation.expected.map((item) => ({ label: item.label, value: known(item.value, { asOf: meta.asOf, source }) })),
-          broker: backendReconciliation.broker.map((item) => ({ label: item.label, value: known(item.value, { asOf: meta.asOf, source }) })),
-          mismatches: backendReconciliation.mismatches,
+          expected: arrayItems(backendReconciliation.expected).map((item) => ({ label: item.label, value: known(item.value, { asOf: meta.asOf, source }) })),
+          broker: arrayItems(backendReconciliation.broker).map((item) => ({ label: item.label, value: known(item.value, { asOf: meta.asOf, source }) })),
+          mismatches: arrayItems(backendReconciliation.mismatches),
         }
       : {
           status: unavailable("Réconciliation OrderIntent ↔ broker non publiée", { source }),
@@ -99,7 +99,7 @@ export function buildOrderIntentDossier(envelope: ViewEnvelope<OrderDetailView>)
           broker: [],
           mismatches: [],
         },
-    relations: data.relations.filter((relation) => !isPlaceholder(relation.id)),
+    relations: arrayItems(data.relations).filter((relation) => !isPlaceholder(relation.id)),
     technical: [
       { label: "schemaVersion", value: meta.schemaVersion },
       { label: "source", value: source },
@@ -133,7 +133,7 @@ function backendStage(
   return {
     label,
     decision: textValue(stage.decision, meta, "front-api/v1/views/order-detail", reason),
-    reasonCodes: stage.reasonCodes,
+    reasonCodes: arrayItems(stage.reasonCodes),
     authorityId: textValue(stage.authorityId, meta, "front-api/v1/views/order-detail", `${label} ID non publié`),
     version: textValue(stage.version, meta, "front-api/v1/views/order-detail", `${label} version non publiée`),
   };
@@ -163,4 +163,8 @@ function marketNumberValue(value: number | null | undefined, availability: strin
 
 function isPlaceholder(value: string | undefined): boolean {
   return value == null || PLACEHOLDERS.has(value.trim().toLowerCase());
+}
+
+function arrayItems<T>(value: readonly T[] | null | undefined): readonly T[] {
+  return Array.isArray(value) ? value : [];
 }

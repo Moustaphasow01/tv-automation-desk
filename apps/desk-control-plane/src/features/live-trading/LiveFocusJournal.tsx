@@ -85,7 +85,8 @@ function JournalTicket({ item, selected, onSelectDecision, onOpenTrade, onOpenCh
       <dl><JournalFact label="Source" value={item.source ?? "Non publiée"} /><JournalFact label="Données arrêtées à" value={journalTimestamp(item.asOf)} /><JournalFact label="Fenêtre" value={item.expirationLine} /></dl>
     </details>
     <footer>
-      {item.card ? <button type="button" onClick={() => onOpenTrade(item.card!)}><FaFolderOpen aria-hidden="true" />Dossier</button> : item.route ? <Link to={item.route}><FaFolderOpen aria-hidden="true" />Détail du signal</Link> : null}
+      {item.card ? <button type="button" onClick={() => onOpenTrade(item.card!)}><FaFolderOpen aria-hidden="true" />Aperçu</button> : null}
+      {item.route ? <Link to={item.route}><FaFolderOpen aria-hidden="true" />{item.card ? "Valider / refuser" : "Détail du signal"}</Link> : null}
       <button type="button" disabled={!item.signalId} onClick={() => { if (item.signalId) onSelectDecision(item.signalId); onOpenChart(); }}><FaChartLine aria-hidden="true" />Graphique</button>
     </footer>
   </article>;
