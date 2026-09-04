@@ -2,6 +2,7 @@ import type { LiveFocusView } from "@/domains/front-api/viewModels";
 import { operatorCode, operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
 import { displayTime, displayValue } from "./mapper";
+import { formatTradePlanPrice } from "./tradePlanFormat";
 
 export type FocusQueueFilter = "ALL" | "ACTIONABLE" | "QUALIFIED" | "EXPIRED";
 type FocusQueueItemKind = "trade";
@@ -133,7 +134,7 @@ function observedOpportunityOrderPlan(opportunity: LiveFocusView["observedOpport
 
 function orderPlanFromTradePlan(plan: Record<string, unknown>): FocusQueueOrderPlan {
   const targets = recordRows(plan.targets)
-    .map((target) => priceText(target.price ?? target.value ?? target.targetPrice ?? target.target_price))
+    .map((target) => priceText(target.price ?? target.value ?? target.targetPrice ?? target.target_price ?? target))
     .filter((value) => value !== "—");
   const orderType = displayValue(plan.orderType ?? plan.order_type, "Non publié");
   return {
@@ -146,8 +147,7 @@ function orderPlanFromTradePlan(plan: Record<string, unknown>): FocusQueueOrderP
 }
 
 function priceText(value: unknown): string {
-  const price = recordValue(value).price ?? recordValue(value).value ?? recordValue(value).mid ?? value;
-  return displayValue(price, "—");
+  return formatTradePlanPrice(value, "—");
 }
 
 export function buildFocusQueueItems(focus: LiveFocusView): FocusQueueItem[] {

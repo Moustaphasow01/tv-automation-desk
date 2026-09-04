@@ -13,7 +13,9 @@ import { gateTiming } from "./LiveHumanGate";
 import type { LiveTradingModel } from "./model";
 import { InstrumentChartPanel } from "./chart/LiveMarketChart";
 import { LiveFocusJournal, FocusQueueTimeline } from "./LiveFocusJournal";
+import { buildFocusDashboard, focusDashboardPeriodOptions, type LiveFocusDashboard, type LiveFocusDashboardPeriod } from "./focusDashboardModel";
 import { buildFocusTradeTimeline, focusCardActionable, focusCardStatus, focusCardTerminal, focusExpirationLabel } from "./focusJournalModel";
+import { formatTradePlanPrice } from "./tradePlanFormat";
 import "./live-focus.css";
 
 type PendingAction =
@@ -33,16 +35,18 @@ type FocusTicketPresentation = {
   warning: string | null;
 };
 
-export function LiveFocusMode({ model, focus, busy, error, requestedScope, chartLoading, chartError, onExit, onScopeChange, onSelectDecision, onSubmitGate, onSubmitManual }: {
+export function LiveFocusMode({ model, focus, busy, error, requestedScope, dashboardPeriod, chartLoading, chartError, onExit, onScopeChange, onDashboardPeriodChange, onSelectDecision, onSubmitGate, onSubmitManual }: {
   model: LiveTradingModel;
   focus: LiveFocusView;
   busy: boolean;
   error: string | null;
   requestedScope: { instrument?: string; timeframe?: string };
+  dashboardPeriod: LiveFocusDashboardPeriod;
   chartLoading: boolean;
   chartError: string | null;
   onExit(): void;
   onScopeChange(scope: { instrument?: string; timeframe?: string }): void;
+  onDashboardPeriodChange(period: LiveFocusDashboardPeriod): void;
   onSelectDecision(signalId: string): void;
   onSubmitGate(action: HumanGateAction, reason: string): Promise<void>;
   onSubmitManual(action: LiveManualExecutionAction, input: { price?: number | null; quantity?: number | null; reason?: string }): Promise<void>;
@@ -75,6 +79,7 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
     selectedCard?.expiresAt ?? model.orderIntent?.allowedActions.expiresAt ?? model.latestSignal?.expiresAt ?? null,
     realtime?.now ?? new Date(model.meta.asOf),
   );
+  const dashboard = useMemo(() => buildFocusDashboard(focus, dashboardPeriod), [dashboardPeriod, focus]);
   const ticket = resolveFocusTicketPresentation(model, focus, plan, timing, primary);
   useFocusPerception({ model, stateCode: state.code, stateLabel: state.label, timingLabel: timing.label, timingUrgency: timing.urgency, soundProfile });
 
@@ -158,6 +163,8 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
 
       <FocusMissionRibbon model={model} focus={focus} state={state} timingLabel={timing.label} />
 
+      <FocusDashboard dashboard={dashboard} period={dashboardPeriod} onPeriodChange={onDashboardPeriodChange} />
+
       <div className="live-focus__body">
         <section className="live-focus__brief" aria-labelledby="live-focus-brief-title" tabIndex={0} data-focus-scroll>
           <QuestionNumber value="01" />
@@ -221,6 +228,42 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, chart
       {drawer === "chart" ? <FocusChartDrawer model={model} requestedScope={requestedScope} chartLoading={chartLoading} chartError={chartError} onScopeChange={onScopeChange} onClose={() => setDrawer(null)} /> : null}
     </div>
   );
+}
+
+function FocusDashboard({ dashboard, period, onPeriodChange }: { dashboard: LiveFocusDashboard; period: LiveFocusDashboardPeriod; onPeriodChange(period: LiveFocusDashboardPeriod): void }) {
+  return <section className="live-focus__dashboard" aria-labelledby="live-focus-dashboard-title">
+    <header className="live-focus__dashboard-head">
+      <div>
+        <small>TABLEAU DE BORD</small>
+        <h2 id="live-focus-dashboard-title">Chiffres clés du Desk</h2>
+        <span>{dashboard.windowLabel} · {dashboard.sourceLabel} · {dashboard.freshnessLabel}</span>
+      </div>
+      <div className="live-focus__dashboard-periods" role="group" aria-label="Filtrer les chiffres clés par période">
+        {focusDashboardPeriodOptions.map((option) => (
+          <button key={option.id} type="button" aria-pressed={period === option.id} onClick={() => onPeriodChange(option.id)}>
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </header>
+    <dl className="live-focus__dashboard-metrics">
+      {dashboard.metrics.map((metric) => (
+        <div key={metric.id} data-tone={metric.tone}>
+          <dt>{metric.label}</dt>
+          <dd>{metric.value}</dd>
+          <small>{metric.helper}</small>
+        </div>
+      ))}
+    </dl>
+    <div className="live-focus__dashboard-suggestions" aria-label="Suggestions de lecture du Desk">
+      {dashboard.suggestions.map((suggestion) => (
+        <article key={suggestion.id} data-tone={suggestion.tone}>
+          <strong>{suggestion.title}</strong>
+          <span>{suggestion.detail}</span>
+        </article>
+      ))}
+    </div>
+  </section>;
 }
 
 function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void }) {
@@ -374,10 +417,8 @@ function FocusDrawer({ title, subtitle, onClose, children }: { title: string; su
 
 function PlanSnapshot({ title, plan }: { title: string; plan?: Record<string, unknown> | null }) {
   const source = plan ?? {};
-  const entry = recordValue(source.entry);
-  const stop = recordValue(source.stop);
-  const targets = recordRows(source.targets).map((item) => valueText(item.price ?? item.value, "—"));
-  return <article data-available={Boolean(plan)}><strong>{title}</strong><dl><Fact label="Entrée" value={valueText(entry.price ?? source.entryPrice ?? source.entry_price, "Non publiée")} /><Fact label="Stop" value={valueText(stop.price ?? source.stopPrice ?? source.stop_price, "Non publié")} /><Fact label="Objectifs" value={targets.length ? targets.join(" · ") : "Non publiés"} /></dl></article>;
+  const targets = recordRows(source.targets).map((item) => formatTradePlanPrice(item.price ?? item.value ?? item.targetPrice ?? item.target_price ?? item, "—"));
+  return <article data-available={Boolean(plan)}><strong>{title}</strong><dl><Fact label="Entrée" value={formatTradePlanPrice(source.entry ?? source.entryPrice ?? source.entry_price, "Non publiée")} /><Fact label="Stop" value={formatTradePlanPrice(source.stop ?? source.stopPrice ?? source.stop_price, "Non publié")} /><Fact label="Objectifs" value={targets.length ? targets.join(" · ") : "Non publiés"} /></dl></article>;
 }
 
 function ZoneList({ zones }: { zones: readonly Record<string, unknown>[] }) { return zones.length ? <ul className="live-focus-drawer__zones">{zones.map((zone, index) => <li key={valueText(zone.zoneId, String(index))}><strong>{valueText(zone.instrument, "—")} · {operatorCode(valueText(zone.direction, "TOUS"))}</strong><span>{valueText(zone.minPrice, "—")} → {valueText(zone.maxPrice, "—")}</span></li>)}</ul> : <p>Aucune zone publiée.</p>; }

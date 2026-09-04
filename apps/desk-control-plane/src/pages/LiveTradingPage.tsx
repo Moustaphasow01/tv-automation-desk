@@ -10,6 +10,7 @@ import type { LiveSignalNavigationTarget } from "@/features/live-trading/LiveSig
 import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
 import { LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
+import { normalizeFocusDashboardPeriod, type LiveFocusDashboardPeriod } from "@/features/live-trading/focusDashboardModel";
 import { buildManualExecutionCommand } from "@/features/live-trading/focusModel";
 import { readLiveFocusPreference, writeLiveFocusPreference } from "@/features/live-trading/focusPreferences";
 import { commandForCurrentGate, type GateCommandBinding } from "@/features/live-trading/LiveHumanGate";
@@ -31,6 +32,7 @@ export function LiveTradingPage() {
   }), [searchParams]);
   const selectedSignalId = searchParams.get("signalId");
   const focusMode = searchParams.get("focus") === "1";
+  const focusDashboardPeriod = normalizeFocusDashboardPeriod(searchParams.get("focusPeriod"));
   const chartAt = searchParams.get("chartAt");
   const chartSurfaceRef = useRef<HTMLElement>(null);
   const decisionSurfaceRef = useRef<HTMLElement>(null);
@@ -88,6 +90,15 @@ export function LiveTradingPage() {
       const next = new URLSearchParams(current);
       if (nextScope.instrument) next.set("instrument", nextScope.instrument);
       if (nextScope.timeframe) next.set("timeframe", nextScope.timeframe);
+      return next;
+    }, { replace: true });
+  };
+
+  const updateFocusDashboardPeriod = (period: LiveFocusDashboardPeriod) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (period === "TODAY") next.delete("focusPeriod");
+      else next.set("focusPeriod", period.toLowerCase());
       return next;
     }, { replace: true });
   };
@@ -215,10 +226,12 @@ export function LiveTradingPage() {
       busy={Boolean(submittingActionId)}
       error={commandError}
       requestedScope={marketScope}
+      dashboardPeriod={focusDashboardPeriod}
       chartLoading={chartQuery.isFetching}
       chartError={chartQuery.isError ? (chartQuery.error as Error).message : null}
       onExit={exitFocus}
       onScopeChange={updateMarketScope}
+      onDashboardPeriodChange={updateFocusDashboardPeriod}
       onSelectDecision={(signalId) => {
         setSearchParams((current) => {
           const next = new URLSearchParams(current);

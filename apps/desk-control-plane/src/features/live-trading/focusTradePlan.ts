@@ -1,6 +1,7 @@
 import type { LiveFocusView } from "@/domains/front-api/viewModels";
 import { displayValue } from "./mapper";
 import type { LiveTradingModel } from "./model";
+import { formatTradePlanPrice } from "./tradePlanFormat";
 
 export type FocusTradePlan = {
   authority: "AUTHORIZED" | "PROPOSED" | "UNAVAILABLE";
@@ -90,10 +91,8 @@ export function focusTradePlan(model: LiveTradingModel): FocusTradePlan {
 
 export function focusTradePlanFromCard(card: LiveFocusView["tradeCards"][number]): FocusTradePlan {
   const plan = recordValue(card.riskAuthorizedPlan ?? card.contextAdjustedPlan ?? card.strategyProposedPlan);
-  const entry = recordValue(plan.entry);
-  const stop = recordValue(plan.stop);
   const targets = recordRows(plan.targets)
-    .map((target) => displayValue(target.price ?? target.value ?? target.targetPrice ?? target.target_price, ""))
+    .map((target) => formatTradePlanPrice(target.price ?? target.value ?? target.targetPrice ?? target.target_price ?? target, ""))
     .filter(Boolean);
   const allowed = card.allowedActions.map((action) => String(action).trim().toUpperCase());
   return {
@@ -104,8 +103,8 @@ export function focusTradePlanFromCard(card: LiveFocusView["tradeCards"][number]
     side: card.side,
     orderType: String(plan.orderType ?? plan.order_type ?? "Non publié"),
     quantity: displayValue(card.authorizedQuantity, "Non publiée"),
-    entry: displayValue(entry.price ?? entry.value ?? entry.mid ?? plan.entryPrice ?? plan.entry_price, "Non publiée"),
-    stop: displayValue(stop.price ?? stop.value ?? stop.mid ?? plan.stopPrice ?? plan.stop_price, "Non publié"),
+    entry: formatTradePlanPrice(plan.entry ?? plan.entryPrice ?? plan.entry_price, "Non publiée"),
+    stop: formatTradePlanPrice(plan.stop ?? plan.stopPrice ?? plan.stop_price, "Non publié"),
     targets,
     expectedR: card.expectedR === null || card.expectedR === undefined ? "Non publié" : `${displayValue(card.expectedR)} R`,
   };

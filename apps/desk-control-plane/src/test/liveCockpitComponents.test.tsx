@@ -14,6 +14,7 @@ import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
 import { LiveFocusJournal } from "@/features/live-trading/LiveFocusJournal";
 import { LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
 import { buildFocusQueueItems, buildFocusSignalFlowItems, filterFocusQueueItems } from "@/features/live-trading/focusJournalModel";
+import { focusTradePlanFromCard } from "@/features/live-trading/focusTradePlan";
 import { commandForCurrentGate, commandLocksGateActions } from "@/features/live-trading/LiveHumanGate";
 import { toLiveTradingModel } from "@/features/live-trading/mapper";
 import type { LiveTradingModel } from "@/features/live-trading/model";
@@ -260,10 +261,12 @@ describe("Live Trading cockpit components", () => {
         busy={false}
         error={null}
         requestedScope={{ instrument: "ZC", timeframe: "15" }}
+        dashboardPeriod="TODAY"
         chartLoading={false}
         chartError={null}
         onExit={() => undefined}
         onScopeChange={() => undefined}
+        onDashboardPeriodChange={() => undefined}
         onSelectDecision={() => undefined}
         onSubmitGate={noopSubmit}
         onSubmitManual={noopSubmit}
@@ -302,10 +305,12 @@ describe("Live Trading cockpit components", () => {
         busy={false}
         error={null}
         requestedScope={{ instrument: "ZC", timeframe: "15" }}
+        dashboardPeriod="TODAY"
         chartLoading={false}
         chartError={null}
         onExit={() => undefined}
         onScopeChange={() => undefined}
+        onDashboardPeriodChange={() => undefined}
         onSelectDecision={() => undefined}
         onSubmitGate={noopSubmit}
         onSubmitManual={noopSubmit}
@@ -353,6 +358,30 @@ describe("Live Trading cockpit components", () => {
     expect(focus).toEqual(original);
   });
 
+  it("formats backend price-zone objects in ticket previews and details", () => {
+    const rangeCard: LiveFocusView["tradeCards"][number] = {
+      ...focusTradeCard(),
+      riskAuthorizedPlan: {
+        orderType: "LIMIT",
+        entry: { low: 753.5, high: 754, price: 753.75, availability: "KNOWN" },
+        stop: { limitPrice: 752.25 },
+        targets: [{ min_price: 756.5, max_price: 757 }, { targetPrice: 758.5 }],
+      },
+    };
+    const [item] = buildFocusQueueItems({ ...focusView(), tradeCards: [rangeCard] });
+    const plan = focusTradePlanFromCard(rangeCard);
+
+    expect(item.levelLine).toContain("entrée 753,75");
+    expect(item.orderPlan?.entry).toBe("753,75");
+    expect(item.orderPlan?.stop).toBe("752,25");
+    expect(item.orderPlan?.target1).toBe("756,5–757");
+    expect(item.orderPlan?.target2).toBe("758,5");
+    expect(plan.entry).toBe("753,75");
+    expect(plan.stop).toBe("752,25");
+    expect(plan.targets).toEqual(["756,5–757", "758,5"]);
+    expect(`${item.levelLine} ${JSON.stringify(item.orderPlan)} ${JSON.stringify(plan)}`).not.toContain("[object Object]");
+  });
+
   it("keeps expired qualified dossiers in the Focus history without presenting them as a ticket to place", () => {
     const model = withOrderIntent(cockpitModel(), { expiresAt: "2026-09-01T14:00:00.000Z" });
     model.meta = { ...model.meta, asOf: "2026-09-01T14:30:00.000Z" };
@@ -371,10 +400,12 @@ describe("Live Trading cockpit components", () => {
         busy={false}
         error={null}
         requestedScope={{ instrument: "ZW", timeframe: "15" }}
+        dashboardPeriod="TODAY"
         chartLoading={false}
         chartError={null}
         onExit={() => undefined}
         onScopeChange={() => undefined}
+        onDashboardPeriodChange={() => undefined}
         onSelectDecision={() => undefined}
         onSubmitGate={noopSubmit}
         onSubmitManual={noopSubmit}
@@ -434,10 +465,12 @@ describe("Live Trading cockpit components", () => {
         busy={false}
         error={null}
         requestedScope={{ instrument: "ZW", timeframe: "15" }}
+        dashboardPeriod="TODAY"
         chartLoading={false}
         chartError={null}
         onExit={() => undefined}
         onScopeChange={() => undefined}
+        onDashboardPeriodChange={() => undefined}
         onSelectDecision={() => undefined}
         onSubmitGate={noopSubmit}
         onSubmitManual={noopSubmit}
