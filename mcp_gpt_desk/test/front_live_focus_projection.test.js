@@ -89,6 +89,69 @@ test("Live Focus pins actionable cards above active and terminal cards", () => {
   assert.deepEqual(projection.tradeCards.map((item) => item.orderIntentId), ["intent-actionable", "intent-pending", "intent-terminal"]);
 });
 
+test("Live Focus links trade cards to theoretical execution rows", () => {
+  const live = liveFixture();
+  live.portfolioOrderIntents = [
+    intentFixture("tracked", {
+      signalId: "signal-1",
+      humanGate: { gateId: "gate-tracked", status: "AWAITING_MANUAL_CONFIRMATION" },
+      allowedActions: { allowedActions: [], revision: 5 },
+    }),
+  ];
+  live.theoreticalExecution = {
+    rows: [{
+      portfolioOrderIntentId: "intent-tracked",
+      tradeId: "trade-tracked",
+      positionId: "position-tracked",
+      status: "AWAITING_ENTRY",
+      tradeStatus: "",
+      latestEventAt: NOW,
+      resultR: null,
+      liveMark: { currentR: null },
+      manualExecution: { status: "NOT_REPORTED", allowedActions: [] },
+      outcomeAttribution: { status: "PENDING_OUTCOME" },
+    }],
+  };
+
+  const projection = buildLiveFocusProjection({ live, marketContext: null, health: healthFixture(), nowIso: NOW });
+
+  assert.equal(projection.tradeCards[0].theoreticalState, "AWAITING_ENTRY");
+  assert.equal(projection.tradeCards[0].tradeId, "trade-tracked");
+  assert.equal(projection.tradeCards[0].positionId, "position-tracked");
+  assert.equal(projection.tradeCards[0].lifecycleLabel, "Entrée théorique surveillée");
+});
+
+test("Live Focus keeps confirmed dossiers active while theoretical entry is still waiting", () => {
+  const live = liveFixture();
+  live.portfolioOrderIntents = [
+    intentFixture("confirmed", {
+      signalId: "signal-1",
+      humanGate: { gateId: "gate-confirmed", status: "CONFIRMED" },
+      allowedActions: { allowedActions: [], revision: 6 },
+    }),
+  ];
+  live.theoreticalExecution = {
+    rows: [{
+      portfolioOrderIntentId: "intent-confirmed",
+      status: "AWAITING_ENTRY",
+      tradeStatus: "",
+      latestEventAt: NOW,
+      resultR: null,
+      liveMark: { currentR: null },
+      manualExecution: { status: "NOT_REPORTED", allowedActions: [] },
+      outcomeAttribution: { status: "PENDING_OUTCOME" },
+    }],
+  };
+
+  const projection = buildLiveFocusProjection({ live, marketContext: null, health: healthFixture(), nowIso: NOW });
+
+  assert.equal(projection.tradeCards[0].operatorState, "CONFIRMED");
+  assert.equal(projection.tradeCards[0].theoreticalState, "AWAITING_ENTRY");
+  assert.equal(projection.tradeCards[0].terminal, false);
+  assert.equal(projection.selectedTrade?.orderIntentId, "intent-confirmed");
+  assert.equal(projection.operatorJourneyState.stage, "E");
+});
+
 test("Live Focus does not keep cancelled or expired observed signals in an active opportunity stage", () => {
   const live = liveFixture();
   live.signals[0] = {

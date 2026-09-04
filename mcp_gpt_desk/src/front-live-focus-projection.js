@@ -1,4 +1,6 @@
-const TERMINAL_GATE_STATES = new Set(["CONFIRMED", "REJECTED", "EXPIRED", "CANCELLED", "CANCELED"]);
+// Human confirmation is not an execution outcome. After CONFIRMED, the dossier
+// remains active so the operator can see the theoretical entry/fill/exit follow-up.
+const TERMINAL_GATE_STATES = new Set(["REJECTED", "EXPIRED", "CANCELLED", "CANCELED"]);
 const TERMINAL_SIGNAL_STATES = new Set(["REJECTED", "EXPIRED", "CANCELLED", "CANCELED"]);
 const TERMINAL_THEORETICAL_STATES = new Set(["STOP_HIT", "TARGET_HIT", "EXPIRED", "CLOSED", "CANCELLED", "CANCELED", "VOIDED"]);
 
@@ -47,7 +49,7 @@ function buildTradeCards(live, nowIso) {
     const expiresAt = intent.expiresAt || intent.allowedActions?.expiresAt || signal?.expiresAt || null;
     const expiredByTime = isExpiredByTime(expiresAt, nowIso);
     const gateStatus = expiredByTime && !TERMINAL_GATE_STATES.has(publishedGateStatus) ? "EXPIRED" : publishedGateStatus;
-    const theoreticalStatus = upper(theoretical?.status || theoretical?.tradeStatus || "PENDING_ENTRY");
+    const theoreticalStatus = upper(theoretical?.status || theoretical?.tradeStatus || "AWAITING_ENTRY");
     const theoreticalTerminal = TERMINAL_THEORETICAL_STATES.has(theoreticalStatus);
     const allowedActions = rows(intent.allowedActions?.allowedActions);
     const terminal = TERMINAL_GATE_STATES.has(gateStatus) || theoreticalTerminal;
@@ -75,7 +77,7 @@ function buildTradeCards(live, nowIso) {
       expiresAt,
       lastUpdatedAt: theoretical?.lastUpdatedAt || intent.updatedAt || nowIso,
       operatorState: gateStatus,
-      theoreticalState: theoretical?.status || "PENDING_ENTRY",
+      theoreticalState: theoretical?.status || "AWAITING_ENTRY",
       strategyProposedPlan: signal?.proposedTradePlan || null,
       contextAdjustedPlan: signal?.contextAdjustedTradePlan || null,
       riskAuthorizedPlan: intent.executionTerms || null,
@@ -247,7 +249,10 @@ function whyThisTrade(intent, signal) {
   };
 }
 function findSignal(live, id) { return [...rows(live?.signals), ...rows(live?.canonicalRuntime?.latestSignals)].find((item) => item.signalId === id) || null; }
-function findTheoretical(live, id) { return rows(live?.theoreticalExecution?.items || live?.theoreticalExecution).find((item) => item.portfolioOrderIntentId === id) || null; }
+function findTheoretical(live, id) {
+  return rows(live?.theoreticalExecution?.rows || live?.theoreticalExecution?.items || live?.theoreticalExecution)
+    .find((item) => item.portfolioOrderIntentId === id) || null;
+}
 function findReconciliation(live, id) { return rows(live?.reconciliation?.items || live?.reconciliation).find((item) => item.portfolioOrderIntentId === id) || null; }
 function observedStatus(signal, nowIso) {
   const raw = upper(signal.effectiveState || signal.contextStatus || signal.status || signal.state || "OBSERVED");
@@ -279,10 +284,11 @@ function lifecycleLabel(gateStatus, theoreticalStatus) {
   if (theoretical === "TARGET_HIT") return "Objectif touché";
   if (theoretical === "STOP_HIT") return "Stop touché";
   if (theoretical === "OPEN") return "Suivi théorique ouvert";
+  if (["AWAITING_ENTRY", "PENDING_ENTRY", "WORKING"].includes(theoretical)) return "Entrée théorique surveillée";
   if (gate.includes("EXPIRED")) return "Fenêtre expirée";
   if (gate.includes("CANCEL")) return "Signal annulé";
   if (gate.includes("REJECT")) return "Dossier rejeté";
-  if (gate.includes("CONFIRM")) return "Dossier confirmé";
+  if (gate.includes("CONFIRM")) return "Dossier confirmé · suivi en cours";
   if (gate.includes("AWAIT")) return "Validation opérateur attendue";
   if (gate.includes("WAIT")) return "Signal en attente";
   if (gate.includes("OBSERVED")) return "Signal observé";
