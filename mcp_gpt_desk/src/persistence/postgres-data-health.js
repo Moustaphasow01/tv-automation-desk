@@ -134,7 +134,7 @@ function coreFreshness({ feeds, timestampMs, freshnessPolicy, tradingDate, expec
   const effectiveMarketDate = feeds.map((feed) => feed.latest_market_date).filter(Boolean).sort().at(-1) || null;
   const coreReady = feeds.length >= expectedFeedCount && feeds.every((feed) => Boolean(feed.latest_timestamp_utc));
   const oldestCoreLatestMs = feeds
-    .map((feed) => Date.parse(feed.latest_timestamp_utc || ""))
+    .map((feed) => feedLatestCloseMs(feed))
     .filter(Number.isFinite)
     .sort((left, right) => left - right)
     .at(0);
@@ -143,6 +143,25 @@ function coreFreshness({ feeds, timestampMs, freshnessPolicy, tradingDate, expec
     : null;
   const coreFreshEnough = coreReady && core_age_seconds !== null && core_age_seconds <= freshnessPolicy.max_age_seconds;
   return { effectiveMarketDate, coreReady, coreFreshEnough, core_age_seconds, currentTradingDayReady: coreReady && effectiveMarketDate === tradingDate && coreFreshEnough };
+}
+
+function feedLatestCloseMs(feed = {}) {
+  const latestMs = Date.parse(feed.latest_timestamp_utc || "");
+  if (!Number.isFinite(latestMs)) return NaN;
+  return latestMs + (timeframeSeconds(feed.timeframe) * 1000);
+}
+
+function timeframeSeconds(timeframe) {
+  return ({
+    "1": 60,
+    "5": 5 * 60,
+    "15": 15 * 60,
+    "30": 30 * 60,
+    "1H": 60 * 60,
+    "60": 60 * 60,
+    "4H": 4 * 60 * 60,
+    "240": 4 * 60 * 60,
+  })[String(timeframe || "")] || 60;
 }
 
 function dataHealthState({ marketClosed, coreFreshEnough, coreReady, currentTradingDayReady, marketSession }) {
