@@ -10,6 +10,20 @@ export function firstRow(value) {
   return rows(value)[0] || null;
 }
 
+export function firstValue(...values) {
+  for (const value of values) if (value !== null && value !== undefined && value !== "") return value;
+  return undefined;
+}
+
+export function nested(source, path) {
+  let value = source;
+  for (const key of path) {
+    if (!value || typeof value !== "object") return undefined;
+    value = value[key];
+  }
+  return value;
+}
+
 export function countBy(value, predicate) {
   return rows(value).filter(predicate).length;
 }

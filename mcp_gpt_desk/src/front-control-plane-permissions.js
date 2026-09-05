@@ -13,7 +13,7 @@ export function permissions(actor = {}) {
 
 export function orderHumanGateProjection({ execution, portfolioIntent, actor, nowIso = currentUtc() }) {
   const gate = findHumanGate(execution, portfolioIntent);
-  const status = gateStatus(gate, portfolioIntent);
+  const status = gateStatus(gate, nowIso);
   const operatorCanWrite = permissions(actor).some((item) => item.capability === "front.command" && item.allowed);
   return {
     gateId: text(gate?.human_execution_gate_id || portfolioIntent?.human_execution_gate_id, ""),
@@ -33,11 +33,29 @@ function findHumanGate(execution, portfolioIntent) {
   const portfolioOrderIntentId = text(portfolioIntent?.portfolio_order_intent_id, "");
   return rows(execution?.humanExecutionGates)
     .find((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId)
-    || (portfolioIntent?.human_execution_gate_id ? portfolioIntent : null);
+    || joinedHumanGate(portfolioIntent);
 }
 
-function gateStatus(gate, portfolioIntent) {
-  return gate ? upper(gate.status || portfolioIntent?.human_gate_status || "UNKNOWN") : "NOT_CREATED";
+function joinedHumanGate(intent) {
+  if (!intent?.human_execution_gate_id) return null;
+  return {
+    human_execution_gate_id: intent.human_execution_gate_id,
+    status: intent.human_gate_status,
+    revision: intent.human_gate_revision,
+    expires_at_utc: intent.human_gate_expires_at_utc,
+    confirmed_at_utc: intent.human_gate_confirmed_at_utc,
+    rejected_at_utc: intent.human_gate_rejected_at_utc,
+    undo_expires_at_utc: intent.human_gate_undo_expires_at_utc,
+    undone_at_utc: intent.human_gate_undone_at_utc,
+  };
+}
+
+function gateStatus(gate, nowIso) {
+  if (!gate) return "NOT_CREATED";
+  const status = upper(gate.status || "UNKNOWN");
+  const expiry = Date.parse(gate.expires_at_utc || "");
+  return status === "AWAITING_MANUAL_CONFIRMATION" && expiry <= Date.parse(nowIso)
+    ? "EXPIRED" : status;
 }
 
 function gateActions({ execution, gate, status, portfolioIntent, operatorCanWrite, nowIso }) {
@@ -69,7 +87,11 @@ export function resourceAllowedActions({ resourceType, status, revision = "unava
   const actions = operatorCanRead ? ["VIEW"] : [];
   const denialReasons = [];
   const awaitingGate = normalizedStatus === "AWAITING_MANUAL_CONFIRMATION" || normalizedStatus === "READY";
-  if (["OrderIntent", "HumanGate"].includes(resourceType) && operatorCanWrite && awaitingGate) actions.push("CONFIRM", "REJECT");
+  const publishedActions = rows(additionalAllowedActions).map(upper);
+  if (["OrderIntent", "HumanGate"].includes(resourceType) && operatorCanWrite && awaitingGate) {
+    actions.push(...publishedActions.filter((action) => ["CONFIRM", "REJECT"].includes(action)));
+    if (!actions.includes("CONFIRM")) denialReasons.push("HUMAN_GATE_ACTION_UNAVAILABLE");
+  }
   else if (["OrderIntent", "HumanGate"].includes(resourceType) && awaitingGate) denialReasons.push("WRITE_REQUIRES_OPERATOR_SESSION");
   if (["OrderIntent", "HumanGate"].includes(resourceType) && normalizedStatus === "HUMAN_GATE_NOT_CREATED") denialReasons.push("HUMAN_GATE_NOT_CREATED");
   if (["OrderIntent", "HumanGate"].includes(resourceType) && operatorCanWrite) {

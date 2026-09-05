@@ -49,9 +49,9 @@ function buildTradeCards(live, nowIso) {
     const signal = findSignal(live, intent.signalId);
     const theoretical = findTheoretical(live, intent.portfolioOrderIntentId);
     const publishedGateStatus = upper(intent.humanGate?.status || "UNKNOWN");
-    const expiresAt = intent.expiresAt || intent.allowedActions?.expiresAt || signal?.expiresAt || null;
-    const expiredByTime = isExpiredByTime(expiresAt, nowIso);
-    const gateStatus = expiredByTime && !TERMINAL_GATE_STATES.has(publishedGateStatus) ? "EXPIRED" : publishedGateStatus;
+    const expiresAt = intent.humanGate?.expiresAt || intent.expiresAt || intent.allowedActions?.expiresAt || signal?.expiresAt || null;
+    const expiredByTime = publishedGateStatus.startsWith("AWAITING_") && isExpiredByTime(expiresAt, nowIso);
+    const gateStatus = expiredByTime && publishedGateStatus.startsWith("AWAITING_") ? "EXPIRED" : publishedGateStatus;
     const theoreticalStatus = upper(theoretical?.status || theoretical?.tradeStatus || "AWAITING_ENTRY");
     const theoreticalTerminal = TERMINAL_THEORETICAL_STATES.has(theoreticalStatus);
     const allowedActions = rows(intent.allowedActions?.allowedActions);

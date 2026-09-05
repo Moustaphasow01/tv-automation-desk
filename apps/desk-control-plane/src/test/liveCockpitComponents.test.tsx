@@ -320,10 +320,74 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("class=\"is-market-level\"><small>Entrée</small><strong>");
     expect(markup).toContain("class=\"is-market-level is-danger\"><small>Stop</small><strong>");
     expect(markup).toContain("class=\"is-market-level is-success");
-    expect(markup).toContain("class=\"live-focus__copy-action live-focus__primary-action\"");
+    expect(markup).toContain("class=\"live-focus__copy-action\"");
     expect(markup).toContain("Résumé du brief");
     expect(markup).not.toContain("ENTRÉE");
     expect(markup).not.toContain("OBJECTIF 1");
+  });
+
+  it("localizes backend market-context fallback copy in the operator presentation", () => {
+    const focus = focusView();
+    const markup = render(
+      <LiveFocusMode
+        model={cockpitModel()}
+        focus={{ ...focus, marketDeskBrief: { ...focus.marketDeskBrief, headline: "Market context unavailable" } }}
+        busy={false}
+        error={null}
+        requestedScope={{ instrument: "ZC", timeframe: "15" }}
+        dashboardPeriod="TODAY"
+        chartLoading={false}
+        chartError={null}
+        onExit={() => undefined}
+        onScopeChange={() => undefined}
+        onDashboardPeriodChange={() => undefined}
+        onSelectDecision={() => undefined}
+        onSubmitGate={noopSubmit}
+        onSubmitManual={noopSubmit}
+      />,
+    );
+
+    expect(markup).toContain("Contexte de marché indisponible");
+    expect(markup).not.toContain("Market context unavailable");
+  });
+
+  it.each(["intent-cockpit", "intent-other", ""])("binds the gate action to selected ticket %s", (selectedId) => {
+    const model = withOrderIntent(cockpitModel());
+    model.gateActions = [{
+      action: "CONFIRM",
+      actionId: "confirm-other",
+      label: "Valider ce dossier uniquement",
+      commandType: "execution.order_intent.confirm",
+      environment: "PAPER",
+      permission: "ALLOWED",
+      requiresConfirmation: true,
+      requiresReason: true,
+      expectedRevision: "other-revision",
+      impactPreview: "test",
+      payload: { portfolioOrderIntentId: "intent-cockpit" },
+    }];
+    const activeCard = { ...focusTradeCard(), orderIntentId: selectedId, operatorState: "AWAITING_MANUAL_CONFIRMATION", terminal: false, terminalReason: null, actionable: true, expiredByTime: false, temporalState: "NEW", lifecycleLabel: "À décider", priority: "ACTIONABLE" as const, denialReasons: [], expiresAt: "2099-09-01T16:00:00.000Z" };
+    const markup = render(
+      <LiveFocusMode
+        model={model}
+        focus={{ ...focusView(), tradeCards: [activeCard] }}
+        busy={false}
+        error={null}
+        requestedScope={{ instrument: "ZW", timeframe: "15" }}
+        dashboardPeriod="TODAY"
+        chartLoading={false}
+        chartError={null}
+        onExit={() => undefined}
+        onScopeChange={() => undefined}
+        onDashboardPeriodChange={() => undefined}
+        onSelectDecision={() => undefined}
+        onSubmitGate={noopSubmit}
+        onSubmitManual={noopSubmit}
+      />,
+    );
+
+    if (selectedId === "intent-cockpit") expect(markup).toContain("Valider ce dossier uniquement");
+    else expect(markup).not.toContain("Valider ce dossier uniquement");
   });
 
   it("selects the journal ticket by canonical signal ID after chronological sorting", () => {

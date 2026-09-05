@@ -1,3 +1,12 @@
+import { eventsAudit } from "./front-control-plane-audit-view.js";
+import { portfolio } from "./front-control-plane-portfolio-view.js";
+import { finiteOrNull, riskCenter } from "./front-control-plane-risk-view.js";
+import { executionProviders } from "./front-control-plane-provider-view.js";
+import { liveNews, liveTimeline, sessionsView } from "./front-control-plane-history-view.js";
+import { researchCandidatesExplorer, researchDatasetDetailExplorer, researchExperimentsExplorer } from "./front-control-plane-research-explorer-view.js";
+import { orderDetail, positionDetail } from "./front-control-plane-order-view.js";
+import { average, countBy, firstValue, nested, nullableNumber, number, objectFacts, rows, stringList, upper } from "./front-control-plane-projection-helpers.js";
+import { explorerItem, explorerView, hasIncidentId, hasTradeId, isSameUtcDay, metric, requiredQuery, safeArrayFirst, selectById, side } from "./front-control-plane-view-values.js";
 import { buildAiContextOverviewFromStore } from "./front-ai-context-projection.js";
 import { buildPortfolioRiskOverviewFromStore } from "./front-portfolio-risk-projection.js";
 import { loadFrontDeskSession, normalizeFrontApiScope, sessionSummary } from "./front-session-projection.js";
@@ -389,7 +398,11 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
 }
 
 function viewData(viewName, context) {
-  return (VIEW_BUILDERS[viewName] || commandCenter)(context);
+  const builder = VIEW_BUILDERS[viewName];
+  if (typeof builder !== "function") {
+    throw codedError("FRONT_VIEW_BUILDER_UNAVAILABLE", "View projection is unavailable.", 503);
+  }
+  return builder(context);
 }
 
 async function loadFrontReplayDetail(store, query = {}) {
@@ -462,120 +475,8 @@ function isEventLookupMiss(error) {
   return ["TIMELINE_EVENT_NOT_FOUND", "EVENT_NOT_FOUND", "SCOPE_REQUIRED", "STRATEGY_SESSION_MISMATCH"].includes(String(error?.code || ""));
 }
 
-function sessionsView({ sessions, query }) {
-  const scope = normalizeFrontApiScope(query);
-  const items = rows(sessions).filter((item) => item?.id).map((item) => ({
-    sessionId: String(item.id),
-    label: text(item.label, String(item.id)),
-    shortLabel: text(item.shortLabel, String(item.id).toUpperCase()),
-    status: text(item.status, "UNKNOWN"),
-    severity: text(item.severity, "info"),
-    decision: text(item.decision, "NO_ACTION"),
-    healthPct: number(item.health, 0),
-    lastMonitorAt: text(item.lastMonitorAt, "—"),
-    tradingDate: scope.trading_date,
-    route: `/live?session=${encodeURIComponent(String(item.id))}`,
-  }));
-  return {
-    summary: {
-      total: items.length,
-      nominal: items.filter((item) => ["ok", "success", "info"].includes(item.severity.toLowerCase())).length,
-      attention: items.filter((item) => ["warning", "error", "critical", "danger"].includes(item.severity.toLowerCase())).length,
-      activeTheses: items.filter((item) => !["NO_ACTIVE_THESIS", "NO_THESIS", "UNKNOWN"].includes(upper(item.status))).length,
-      tradingDate: scope.trading_date,
-    },
-    sessions: items,
-  };
-}
 
-function liveNews({ liveSession, macro, news, query }) {
-  const scope = normalizeFrontApiScope(query);
-  const macroEvents = rows(macro?.macro).map((item, index) => ({
-    eventId: text(item.id || item.event_id, `macro-${item.scheduledAt || item.date || index}`),
-    scheduledAt: text(item.scheduledAt, "—"),
-    time: text(item.time, "—"),
-    title: text(item.title, "Événement macro"),
-    currency: text(item.currency, "—"),
-    importance: text(item.importance, "UNKNOWN"),
-    previous: text(item.previous, "—"),
-    forecast: text(item.forecast, "—"),
-    actual: text(item.actual, "—"),
-    isNext: item.isNext === true,
-  }));
-  const headlines = rows(news?.headlines).map((item, index) => ({
-    headlineId: text(item.id || item.headline_id, `headline-${item.publishedAt || item.scheduledAt || index}`),
-    publishedAt: text(item.publishedAt || item.scheduledAt, "—"),
-    title: text(item.title, "Actualité sans titre"),
-    source: text(item.source, "Source non publiée"),
-    provider: text(item.provider, "Provider non publié"),
-    importance: text(item.importance, "UNKNOWN"),
-    impact: text(item.impact, "Impact non publié."),
-    url: text(item.url, ""),
-    assets: stringList(item.assets),
-    topics: stringList(item.topics),
-  }));
-  const providerCount = new Set(headlines.map((item) => item.provider).filter((item) => item !== "Provider non publié")).size;
-  return {
-    summary: {
-      macroEvents: macroEvents.length,
-      highImpactEvents: macroEvents.filter((item) => upper(item.importance) === "HIGH").length,
-      headlines: headlines.length,
-      providers: providerCount,
-      nearEvent: macro?.nearEvent === true,
-      nextMacroAt: text(macro?.nextMacro || liveSession?.nextMacro, "—"),
-    },
-    scope: {
-      sessionId: text(liveSession?.id, scope.session),
-      tradingDate: text(liveSession?.date, scope.trading_date),
-      mode: text(liveSession?.mode, scope.mode).toUpperCase(),
-    },
-    macroEvents,
-    headlines,
-  };
-}
 
-function liveTimeline({ liveSession, query }) {
-  const scope = normalizeFrontApiScope(query);
-  const operational = rows(liveSession?.operationalTimeline).map((item, index) => ({
-    eventId: text(item.id, `operational-${index + 1}`),
-    category: text(item.type, "OPERATION"),
-    title: text(item.label, "Événement opérationnel"),
-    plannedAt: text(item.plannedAt, "—"),
-    actualAt: item.actualAt ? String(item.actualAt) : null,
-    status: text(item.status, "UNKNOWN"),
-    latencySeconds: nullableNumber(item.latencySeconds),
-    summary: text(item.summary, "Résumé non publié."),
-    detail: text(item.detail, "Détail non publié."),
-  }));
-  const analytical = rows(liveSession?.timeline).map((item, index) => ({
-    eventId: text(item.id || item.eventId, `timeline-${index + 1}`),
-    category: text(item.type || item.category, "ANALYSIS"),
-    title: text(item.title || item.label, "Événement d'analyse"),
-    plannedAt: text(item.plannedAt || item.at || item.occurredAt, "—"),
-    actualAt: item.actualAt || item.at || item.occurredAt ? String(item.actualAt || item.at || item.occurredAt) : null,
-    status: text(item.status, "COMPLETED"),
-    latencySeconds: nullableNumber(item.latencySeconds),
-    summary: text(item.summary || item.description, "Résumé non publié."),
-    detail: text(item.detail, "Détail non publié."),
-  }));
-  const events = [...operational, ...analytical].sort((left, right) => String(left.plannedAt).localeCompare(String(right.plannedAt)));
-  return {
-    summary: {
-      total: events.length,
-      completed: events.filter((item) => ["DONE", "COMPLETED", "EXECUTED"].includes(upper(item.status))).length,
-      waiting: events.filter((item) => ["WAITING", "SCHEDULED", "READY"].includes(upper(item.status))).length,
-      delayed: events.filter((item) => ["LATE", "DELAYED", "FAILED", "BLOCKED"].includes(upper(item.status))).length,
-      nextCheckpointAt: text(liveSession?.nextCheckpointAt, "—"),
-      lastCompletedAt: text(liveSession?.lastCompletedCheckpointAt, "—"),
-    },
-    scope: {
-      sessionId: text(liveSession?.id, scope.session),
-      tradingDate: text(liveSession?.date, scope.trading_date),
-      mode: text(liveSession?.mode, scope.mode).toUpperCase(),
-    },
-    events,
-  };
-}
 
 function executionReconciliation({ execution }) {
   const reconciliations = rows(execution?.reconciliations).map((item, index) => ({
@@ -687,62 +588,8 @@ function operationsObservability({ observability }) {
   };
 }
 
-function researchExperimentsExplorer({ research }) {
-  const items = rows(research?.experiments).filter((item) => item?.research_experiment_id).map((item) => explorerItem({
-    id: item.research_experiment_id,
-    title: item.name,
-    subtitle: item.objective,
-    status: item.status,
-    primary: `${number(item.counts?.evaluation_reports, 0)} rapports`,
-    secondary: text(item.comparison_metric, "métrique non publiée"),
-    route: `/research/experiments/${encodeURIComponent(String(item.research_experiment_id))}`,
-    tags: [item.owner, item.metadata?.mission_id],
-  }));
-  return explorerView("Expériences", "Hypothèses, évaluations et progression des expériences de recherche.", items, [
-    metric("Actives", items.filter((item) => ["ACTIVE", "RUNNING"].includes(upper(item.status))).length),
-    metric("Terminées", items.filter((item) => upper(item.status) === "COMPLETED").length),
-    metric("Rapports", rows(research?.evaluation_reports).length),
-  ]);
-}
 
-function researchCandidatesExplorer({ research }) {
-  const reports = new Map(rows(research?.evaluation_reports).map((item) => [item.research_candidate_id, item]));
-  const items = rows(research?.candidates).filter((item) => item?.research_candidate_id).map((item) => {
-    const report = reports.get(item.research_candidate_id) || {};
-    return explorerItem({
-      id: item.research_candidate_id,
-      title: item.primary_change_summary || item.name || "Candidat stratégie",
-      subtitle: `Expérience ${text(item.research_experiment_id, "—")}`,
-      status: item.status,
-      primary: text(item.last_evaluation_verdict || report.verdict, "Verdict indisponible"),
-      secondary: report.score == null ? "Score indisponible" : `Score ${number(report.score, 0).toFixed(2)}`,
-      route: item.research_experiment_id ? `/research/experiments/${encodeURIComponent(String(item.research_experiment_id))}` : undefined,
-      tags: [report.report_kind],
-    });
-  });
-  return explorerView("Candidats stratégie", "Verdicts, preuves et statut de promotion sans décision reconstruite côté UI.", items, [
-    metric("À revoir", items.filter((item) => upper(item.status).includes("REVIEW")).length),
-    metric("Promotion ready", items.filter((item) => upper(item.status) === "PROMOTION_READY").length),
-    metric("Rejetés", items.filter((item) => upper(item.status) === "REJECTED").length),
-  ]);
-}
 
-function researchDatasetDetailExplorer({ dataFoundation, query }) {
-  const datasetId = requiredQuery(query, "datasetId", "DATASET_ID_REQUIRED");
-  const source = rows(dataFoundation).find((item) => String(item.dataset_id) === datasetId);
-  if (!source) throw codedError("DATASET_NOT_FOUND", `Unknown dataset: ${datasetId}`, 404);
-  const metadata = source.metadata || {};
-  return explorerView("Détail dataset", text(source.name || source.dataset_key, datasetId), [explorerItem({
-    id: datasetId,
-    title: text(source.name || source.dataset_key, datasetId),
-    subtitle: `${text(source.time_range_start_utc, "—")} → ${text(source.time_range_end_utc, "—")}`,
-    status: source.status,
-    primary: text(source.provenance_hash, "Provenance indisponible"),
-    secondary: source.cutoff_utc ? `Cutoff ${source.cutoff_utc}` : "Cutoff indisponible",
-    tags: [metadata.instrument, metadata.timeframe, metadata.timezone],
-    facts: objectFacts(source, ["dataset_id", "dataset_key", "status", "cutoff_utc", "provenance_hash", "schema_version"]),
-  })], [metric("Point-in-time", source.cutoff_utc ? "Oui" : "Non"), metric("Instrument", text(metadata.instrument, "—")), metric("Granularité", text(metadata.timeframe, "—"))]);
-}
 
 function strategyDeploymentsExplorer({ strategy }) {
   const versions = new Map(rows(strategy?.versions).map((item) => [item.strategy_version_id, item]));
@@ -1195,196 +1042,17 @@ function liveFocus(context) {
   });
 }
 
-function portfolio({ execution, risk, nowIso, warnings }) {
-  warnings.push("portfolio-attribution:NOT_IMPLEMENTED", "portfolio-correlation:NOT_IMPLEMENTED", "portfolio-equity-curve:NOT_IMPLEMENTED", "portfolio-reconciliation:PARTIAL", "portfolio-virtual-attribution:NOT_IMPLEMENTED");
-  const sourceExposureRows = rows(nested(risk, ["exposures"])).filter(hasExposureIdentity);
-  const exposureRows = sourceExposureRows.filter(hasExposureValue);
-  if (sourceExposureRows.length && !exposureRows.length) warnings.push("portfolio-exposure-values:UNAVAILABLE");
-  const trades = rows(nested(execution, ["trades"])).filter(hasTradeId).filter(isOpenPortfolioTrade);
-  const summary = portfolioSummary(execution, risk, nowIso);
-  if (summary.accountSnapshotStale) warnings.push("portfolio-account-snapshot:STALE");
-  const positionsLong = countBy(trades, (item) => side(item.side) === "LONG");
-  const positionsShort = countBy(trades, (item) => side(item.side) === "SHORT");
-  const strategyIdsWithPositions = new Set(trades.map((item) => text(item.strategy_instance_id, "")).filter(Boolean));
-  const humanGates = rows(nested(execution, ["humanExecutionGates"]));
-  const humanGatePending = countBy(humanGates, (item) => !["CONFIRMED", "REJECTED", "EXPIRED", "CANCELLED"].includes(upper(item.status)));
-  const portfolioIntents = rows(nested(execution, ["portfolioOrderIntents"]));
-  const pendingOrders = countBy(portfolioIntents, (item) => ["READY", "WORKING", "PENDING", "AWAITING_MANUAL_CONFIRMATION"].includes(upper(item.status)));
-  return {
-    summary: { ...summary.values, positionsLong, positionsShort, strategiesWithPositions: strategyIdsWithPositions.size, humanGatePending, pendingOrders },
-    summaryTruth: summary.truth,
-    authoritativeState: firstValue(nested(risk, ["portfolio_state"]), null),
-    accountsSummary: portfolioAccountsSummary(execution),
-    equityCurve: [],
-    positions: trades.map(portfolioPositionRow),
-    exposureTree: exposureRows.map(portfolioExposureTreeRow),
-    brokerPositions: trades.map(portfolioBrokerPositionRow),
-    correlationMatrix: { instruments: exposureRows.map((item) => text(item.instrument_code, "—")).slice(0, 4), cells: [], topPair: "—", portfolioCorrelation: 0, diversificationScore: 0 },
-    virtualAllocations: [],
-    reconciliation: portfolioReconciliationSummary({ execution, risk, nowIso }),
-    attribution: { bestContributor: "—", top3RiskPct: 0, diversificationScore: 0, items: [] },
-    timeline: [],
-    timeSeriesContracts: frontTimeSeriesContracts({ view: "portfolio", execution, risk, nowIso }),
-  };
-}
 
-function portfolioSummary(execution = {}, risk = {}, nowIso) {
-  const snapshot = latestAccountSnapshot(nested(execution, ["accountSnapshots"]));
-  const equity = finiteNumber(firstValue(nested(snapshot, ["payload", "net_liquidation_value"]), nested(snapshot, ["cash_value"])));
-  const unrealizedPnl = finiteNumber(firstValue(nested(snapshot, ["unrealized_pnl"]), nested(snapshot, ["payload", "unrealized_pnl"])));
-  const riskPct = finiteNumber(firstValue(nested(risk, ["summary", "risk_percent"]), nested(execution, ["safety", "riskPercent"])));
-  const correlatedExposurePct = finiteNumber(nested(risk, ["summary", "correlated_exposure_pct"]));
-  // risk_center.{grossExposure,netExposure,dailyLoss,trailingDrawdown} are the real
-  // (schema-correct) locations for these figures, but the projection that builds
-  // risk_center (front-portfolio-risk-projection.js) hardcodes all four to
-  // availability:"UNAVAILABLE" today - the underlying computation was never written.
-  // Read the real path (so this starts working the day that gap is closed) rather
-  // than a field that never existed; today it still resolves to null/unavailable.
-  const grossExposureUsd = finiteNumber(nested(risk, ["risk_center", "grossExposure", "value"]));
-  const netExposureUsd = finiteNumber(nested(risk, ["risk_center", "netExposure", "value"]));
-  const dailyLossR = finiteNumber(nested(risk, ["risk_center", "dailyLoss", "value"]));
-  const maxDrawdownR = finiteNumber(nested(risk, ["risk_center", "trailingDrawdown", "value"]));
-  const openRiskUsd = finiteNumber(nested(risk, ["risk_center", "openRisk", "value"]));
-  const sourceAt = isoTimestamp(nested(snapshot, ["captured_at"]), nowIso);
-  const accountSnapshotStale = Boolean(snapshot) && isOlderThanSeconds(sourceAt, nowIso, number(nested(execution, ["safety", "accountSnapshotMaxAgeSeconds"]), 60));
-  const values = {
-    equity: equity ?? 0,
-    grossExposureUsd: grossExposureUsd ?? 0,
-    netExposureUsd: netExposureUsd ?? 0,
-    unrealizedPnl: unrealizedPnl ?? 0,
-    riskUsedPct: riskPct ?? 0,
-    correlatedExposurePct: correlatedExposurePct ?? 0,
-    netLiquidation: equity ?? 0,
-    dailyR: dailyLossR ?? 0,
-    exposureUsd: openRiskUsd ?? grossExposureUsd ?? 0,
-    maxDrawdownR: maxDrawdownR ?? 0,
-    openPositions: number(nested(execution, ["summary", "openTrades"]), 0),
-    riskUsagePct: riskPct ?? 0,
-  };
-  return {
-    values,
-    truth: {
-      equity: equity == null ? unavailableValue("Aucun snapshot de capital exploitable", "execution.accountSnapshots") : metricValue(equity, sourceAt, "execution.accountSnapshots", accountSnapshotStale),
-      grossExposureUsd: grossExposureUsd == null ? unavailableValue("Exposition brute absente de l’état du risk engine", "portfolio-risk") : knownValue(grossExposureUsd, nowIso, "portfolio-risk"),
-      netExposureUsd: netExposureUsd == null ? unavailableValue("Exposition nette absente de l’état du risk engine", "portfolio-risk") : knownValue(netExposureUsd, nowIso, "portfolio-risk"),
-      unrealizedPnl: unrealizedPnl == null ? unavailableValue("PnL latent absent du dernier snapshot", "execution.accountSnapshots") : metricValue(unrealizedPnl, sourceAt, "execution.accountSnapshots", accountSnapshotStale),
-      riskUsedPct: riskPct == null ? unavailableValue("Pourcentage de risque absent", "portfolio-risk") : knownValue(riskPct, nowIso, "portfolio-risk"),
-      correlatedExposurePct: correlatedExposurePct == null ? notImplementedValue("Exposition corrélée non publiée", "portfolio.correlation") : knownValue(correlatedExposurePct, nowIso, "portfolio-risk"),
-    },
-    accountSnapshotStale,
-  };
-}
 
-function hasExposureIdentity(item) { return Boolean(item?.exposure_id || item?.instrument_code); }
-function hasExposureValue(item) { return finiteNumber(nested(item, ["value_usd"])) !== null; }
-function portfolioExposureTreeRow(item) {
-  return {
-    id: text(firstValue(item.exposure_id, item.instrument_code), ""),
-    label: text(item.instrument_code, "Instrument"),
-    group: "Index",
-    side: "NET",
-    valueUsd: number(item.value_usd, 0),
-    weightPct: number(item.weight_pct, 0),
-  };
-}
-function portfolioAccountsSummary(execution = {}) {
-  const accounts = rows(nested(execution, ["accounts"]));
-  const snapshotsByAccount = new Map();
-  for (const snapshot of rows(nested(execution, ["accountSnapshots"]))) {
-    const accountId = text(snapshot.broker_account_id, "");
-    if (!accountId) continue;
-    const existing = snapshotsByAccount.get(accountId);
-    if (!existing || Date.parse(snapshot.captured_at || 0) > Date.parse(existing.captured_at || 0)) snapshotsByAccount.set(accountId, snapshot);
-  }
-  const trades = rows(nested(execution, ["trades"])).filter(hasTradeId).filter(isOpenPortfolioTrade);
-  return accounts.filter((account) => account?.broker_account_id).map((account) => {
-    const accountId = text(account.broker_account_id, "");
-    const snapshot = snapshotsByAccount.get(accountId) || null;
-    const equity = finiteNumber(firstValue(nested(snapshot, ["payload", "net_liquidation_value"]), nested(snapshot, ["cash_value"])));
-    const openPnl = finiteNumber(firstValue(nested(snapshot, ["unrealized_pnl"]), nested(snapshot, ["payload", "unrealized_pnl"])));
-    return {
-      accountId,
-      label: text(account.account_label, accountId),
-      mode: text(account.mode, "unavailable").toUpperCase(),
-      equity,
-      openPnl,
-      openPositions: countBy(trades, (item) => text(item.broker_account_id, "") === accountId),
-      asOf: snapshot ? isoTimestamp(snapshot.captured_at, null) : null,
-    };
-  });
-}
-function portfolioReconciliationSummary({ execution, risk, nowIso }) {
-  return {
-    status: nested(risk, ["summary", "reconciliationDivergences"]) ? "MISMATCH" : "PENDING",
-    targetDeskQuantity: 0,
-    brokerRealQuantity: 0,
-    deltaQuantity: 0,
-    asOf: nowIso,
-    ordersInFlight: number(nested(execution, ["summary", "activeOrders"]), 0),
-  };
-}
 
-function isOpenPortfolioTrade(item = {}) {
-  return upper(item.status) === "OPEN" || number(item.quantity_open, 0) > 0;
-}
 
-function latestAccountSnapshot(value) {
-  return rows(value).slice().sort((left, right) => Date.parse(right?.captured_at || 0) - Date.parse(left?.captured_at || 0))[0] || null;
-}
 
-function finiteNumber(value) {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 
-function isoTimestamp(value, fallback) {
-  const parsed = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString();
-}
 
-function isOlderThanSeconds(value, reference, seconds) {
-  const timestamp = Date.parse(value);
-  const now = Date.parse(reference);
-  return Number.isFinite(timestamp) && Number.isFinite(now) && now - timestamp > seconds * 1000;
-}
 
-function metricValue(value, asOf, source, stale) {
-  return stale ? { state: "STALE", value, asOf, source, reason: "Dernier snapshot compte au-delà de la fenêtre de fraîcheur" } : knownValue(value, asOf, source);
-}
 
-function knownValue(value, asOf, source) { return { state: "KNOWN", value, asOf, source }; }
-function unavailableValue(reason, source) { return { state: "UNAVAILABLE", reason, source }; }
-function notImplementedValue(reason, capability) { return { state: "NOT_IMPLEMENTED", reason, capability }; }
 
-function portfolioPositionRow(item = {}) {
-  return {
-    positionId: text(item.trade_id || item.position_id, ""),
-    strategyInstanceId: text(item.strategy_instance_id, "unknown"),
-    symbol: text(firstValue(item.instrument_code, item.broker_symbol, item.instrument, item.symbol), "—"),
-    side: side(item.side),
-    quantity: number(item.quantity_open, 0),
-    virtualR: 0,
-    brokerQuantity: number(item.quantity_open, 0),
-    reconciliation: "PENDING",
-  };
-}
 
-function portfolioBrokerPositionRow(item = {}) {
-  return {
-    positionId: text(item.trade_id || item.position_id, ""),
-    account: text(firstValue(item.broker_account_id, item.account_id), "—"),
-    instrument: text(firstValue(item.instrument_code, item.broker_symbol, item.instrument, item.symbol), "—"),
-    side: side(item.side),
-    quantity: number(item.quantity_open, 0),
-    averagePrice: number(firstValue(item.avg_entry_price, item.entry_price), 0),
-    markPrice: number(firstValue(item.mark_price, item.current_price, item.last_price), 0),
-    unrealizedPnl: number(firstValue(item.unrealized_pnl, item.unrealizedPnl), 0),
-    riskR: number(firstValue(item.risk_R, item.risk_r), 0),
-    protectionStatus: item.current_stop_price || item.initial_stop_price ? "PROTECTED" : "PENDING",
-    reconciliationStatus: "PENDING",
-  };
-}
 
 function operationsQueue({ runtime, incidents, warnings }) {
   warnings.push("operations-event-flow:NOT_IMPLEMENTED", "operations-policy-gates:NOT_IMPLEMENTED");
@@ -1400,52 +1068,7 @@ function operationsQueue({ runtime, incidents, warnings }) {
   };
 }
 
-function eventsAudit({ execution, strategy, incidents, runtime, warnings, nowIso }) {
-  const events = frontAuditEvents({ execution, strategy, incidents, runtime, nowIso });
-  if (!events.length) warnings.push("events-audit-source:UNAVAILABLE");
-  const correlationIds = [...new Set(events.map((item) => item.correlationId).filter((item) => item && item !== "none"))];
-  const selectedCorrelationId = correlationIds[0] || "none";
-  const selectedEvents = events.filter((item) => item.correlationId === selectedCorrelationId);
-  return {
-    summary: {
-      totalEvents: events.length,
-      correlations: correlationIds.length,
-      authoritativeSteps: countBy(events, (item) => item.authority === "AUTHORITATIVE"),
-      advisoryBranches: countBy(events, (item) => item.authority === "ADVISORY"),
-      avgLatencyMs: average(events.map((item) => number(item.latencyMs, NaN))),
-      exportablePayloads: countBy(events, (item) => item.payloadPreview.length > 0),
-    },
-    filters: {
-      activeCorrelationId: selectedCorrelationId,
-      domains: [...new Set(events.map((item) => item.domain))],
-      statuses: [...new Set(events.map((item) => item.status))],
-      windowLabel: "BFF current",
-    },
-    events,
-    selectedCorrelation: {
-      correlationId: selectedCorrelationId,
-      rootEventId: selectedEvents[0]?.eventId || "none",
-      authoritativePath: selectedEvents.filter((item) => item.authority === "AUTHORITATIVE").map((item) => item.eventId),
-      advisoryPath: selectedEvents.filter((item) => item.authority === "ADVISORY").map((item) => item.eventId),
-      totalLatencyMs: selectedEvents.reduce((sum, item) => sum + number(item.latencyMs, 0), 0),
-      payloadPreview: selectedEvents.flatMap((item) => item.payloadPreview).slice(0, 20),
-      logs: selectedEvents.map((item) => ({
-        logId: item.eventId,
-        level: auditLogLevel(item.status),
-        message: `${item.title}${item.detail ? ` · ${item.detail}` : ""}`,
-      })),
-    },
-    relations: auditRelations(events),
-    commandActions: [],
-  };
-}
 
-function auditLogLevel(status) {
-  const normalized = upper(status);
-  if (["FAILED", "ERROR", "CRITICAL", "REJECTED", "BLOCKED"].includes(normalized)) return "ERROR";
-  if (["WARN", "WARNING", "WATCH", "STALE", "DEGRADED"].includes(normalized)) return "WARN";
-  return "INFO";
-}
 
 function orders({ execution, warnings, actor, nowIso, query }) {
   warnings.push("orders-state-machine:NOT_IMPLEMENTED", "orders-history:NOT_IMPLEMENTED");
@@ -1584,17 +1207,10 @@ function humanGateReviewOverview({ execution, actor, nowIso, query }) {
       }),
   };
 }
-function safeArrayFirst(value) { return rows(value)[0] || null; }
 function ageSecondsSafe(value, nowIso) {
   const created = Date.parse(value || "");
   const now = Date.parse(nowIso || "");
   return Number.isFinite(created) && Number.isFinite(now) ? Math.max(0, Math.round((now - created) / 1000)) : 0;
-}
-function isSameUtcDay(value, nowIso) {
-  const date = new Date(value);
-  const reference = new Date(nowIso);
-  return !Number.isNaN(date.getTime()) && !Number.isNaN(reference.getTime())
-    && date.getUTCFullYear() === reference.getUTCFullYear() && date.getUTCMonth() === reference.getUTCMonth() && date.getUTCDate() === reference.getUTCDate();
 }
 function portfolioOrderIntentSummaryRowSafe(intent = {}) {
   const payload = intent.order_intent_payload || intent.payload || {};
@@ -1606,276 +1222,19 @@ function portfolioOrderIntentSummaryRowSafe(intent = {}) {
   };
 }
 
-function orderDetail({ execution, liveMarketSnapshot, query, warnings, actor, nowIso }) {
-  const requestedOrderId = text(query.orderId, "");
-  const source = rows(execution?.orders).find((item) => String(item.broker_order_id || item.order_id || "").trim() === requestedOrderId)
-    || (!requestedOrderId ? rows(execution?.orders)[0] : null);
-  const portfolioIntentSource = findPortfolioOrderIntent({ execution, queryOrderId: requestedOrderId, order: source });
-  if (!source && !portfolioIntentSource) throw codedError("ORDER_NOT_FOUND", `Unknown order: ${requestedOrderId}`, 404);
-  const canonicalSource = source || syntheticOrderFromPortfolioIntent(portfolioIntentSource);
-  const effectiveOrder = activeOrderRow(canonicalSource);
-  const fills = rows(execution?.fills).filter((item) => source && (String(item.order_id || item.broker_order_id) === effectiveOrder.orderId || String(item.order_id) === String(source.order_id))).map(orderFillRow);
-  const intentSource = portfolioIntentSource || rows(execution?.intents).find((item) => String(item.intent_id || item.order_intent_id) === effectiveOrder.orderIntentId) || null;
-  const protections = rows(execution?.protections).filter((item) => String(item.order_id) === effectiveOrder.orderId).map((item) => ({ protectionId: text(item.protection_id, "unavailable"), orderId: effectiveOrder.orderId, stopOrderId: text(item.stop_order_id, undefined), targetOrderId: text(item.target_order_id, undefined), state: ["ATTACHED", "FAILED"].includes(upper(item.state || item.status)) ? upper(item.state || item.status) : "PENDING", stopPrice: number(item.stop_price, undefined), targetPrice: number(item.target_price, undefined), trailingModel: text(item.trailing_model, "unavailable"), reasonCode: text(item.reason_code, "unavailable") }));
-  if (!rows(execution?.history).length) warnings.push("order-lifecycle:UNAVAILABLE");
-  const lifecycle = [
-    ...rows(execution?.history).filter((item) => String(item.order_id || item.broker_order_id) === effectiveOrder.orderId).map((item) => ({ eventId: text(item.event_id, "unavailable"), at: text(item.occurred_at_utc || item.created_at_utc, "unavailable"), state: text(item.state || item.event_type, "unavailable"), detail: text(item.detail || item.message, "Détail indisponible") })),
-    ...providerLifecycleRows({ execution, portfolioIntent: portfolioIntentSource, order: effectiveOrder }),
-  ];
-  const reconciliation = portfolioIntentSource ? orderIntentReconciliation({ execution, portfolioIntent: portfolioIntentSource, fills }) : null;
-  const filledQuantity = reconciliation?.broker?.find((item) => item.label === "filledQuantity")?.value ?? fills.reduce((sum, item) => sum + item.quantity, 0);
-  const marketContext = orderMarketContext({ order: effectiveOrder, snapshot: liveMarketSnapshot });
-  return {
-    summary: { state: effectiveOrder.state, orderedQuantity: effectiveOrder.quantity, filledQuantity, remainingQuantity: Math.max(0, effectiveOrder.quantity - filledQuantity), fillCount: fills.length, protectionStatus: effectiveOrder.protectionStatus },
-    identity: { orderId: effectiveOrder.orderId, orderIntentId: effectiveOrder.orderIntentId, signalId: effectiveOrder.signalId, providerId: effectiveOrder.providerId, brokerOrderId: effectiveOrder.brokerOrderId, correlationId: effectiveOrder.correlationId, strategyInstanceId: effectiveOrder.strategyInstanceId },
-    order: effectiveOrder,
-    intent: intentSource ? intentRow(intentSource) : null,
-    authority: portfolioIntentSource ? orderAuthorityProjection(portfolioIntentSource) : null,
-    canonicalDossier: portfolioIntentSource ? canonicalOrderIntentDossier({ execution, portfolioIntent: portfolioIntentSource, order: effectiveOrder, actor, nowIso, health: null }) : null,
-    resourceActions: portfolioIntentSource ? resourceAllowedActions({
-      resourceType: "OrderIntent",
-      status: text(portfolioIntentSource.status || portfolioIntentSource.payload?.status, "READY"),
-      revision: text(portfolioIntentSource.immutable_terms_hash || portfolioIntentSource.order_intent_hash || effectiveOrder.expectedVersion, "unavailable"),
-      actor,
-      expiresAt: text(portfolioIntentSource.expires_at_utc || portfolioIntentSource.payload?.expires_at_utc, ""),
-    }) : resourceAllowedActions({ resourceType: "BrokerOrder", status: effectiveOrder.state, actor }),
-    executionMode: portfolioIntentSource
-      ? executionAuthorityMode(execution?.safety)
-      : null,
-    humanGate: portfolioIntentSource ? orderHumanGateProjection({ execution, portfolioIntent: portfolioIntentSource, actor }) : null,
-    reconciliation,
-    marketContext,
-    fills,
-    protections,
-    lifecycle,
-    relations: [{ label: "Signal", id: effectiveOrder.signalId, route: `/live/signals/${encodeURIComponent(effectiveOrder.signalId)}` }, { label: "Stratégie", id: effectiveOrder.strategyInstanceId, route: `/strategies/${encodeURIComponent(effectiveOrder.strategyInstanceId)}` }],
-  };
-}
 
-function orderMarketContext({ order = {}, snapshot = null }) {
-  const instrument = normalizeDeskInstrument(order.instrument);
-  const instruments = snapshot?.instruments || {};
-  const quote = Object.values(instruments).find((item) => normalizeDeskInstrument(item?.symbol) === instrument) || null;
-  const lastPrice = positiveNumber(quote?.latest_close);
-  const entryPrice = positiveNumber(order.limitPrice);
-  const stopPrice = positiveNumber(order.stopPrice);
-  const targetPrice = positiveNumber(order.targetPrice);
-  const sideMultiplier = upper(order.side) === "SELL" ? -1 : 1;
-  const riskDistance = entryPrice !== null && stopPrice !== null ? Math.abs(entryPrice - stopPrice) : null;
-  const distanceToEntryPoints = lastPrice !== null && entryPrice !== null ? (lastPrice - entryPrice) * sideMultiplier : null;
-  const distanceToEntryR = distanceToEntryPoints !== null && riskDistance && riskDistance > 0 ? distanceToEntryPoints / riskDistance : null;
-  const expectedR = entryPrice !== null && stopPrice !== null && targetPrice !== null && riskDistance && riskDistance > 0
-    ? ((targetPrice - entryPrice) * sideMultiplier) / riskDistance
-    : null;
-  const bounds = [entryPrice, stopPrice, targetPrice].filter((value) => value !== null);
-  const outsideTradeZone = lastPrice !== null && bounds.length >= 2
-    ? lastPrice < Math.min(...bounds) || lastPrice > Math.max(...bounds)
-    : null;
-  return {
-    instrument,
-    lastPrice,
-    asOf: text(quote?.latest_timestamp_paris, ""),
-    availability: quote ? text(quote.availability, "KNOWN").toUpperCase() : "UNAVAILABLE",
-    source: text(quote?.source || snapshot?.source, "market_candles"),
-    distanceToEntryPoints,
-    distanceToEntryR,
-    expectedR,
-    outsideTradeZone,
-  };
-}
 
-function normalizeDeskInstrument(value) {
-  return upper(value).replace(/^CBOT:/, "").replace(/^CME_MINI:/, "").replace(/1!$/, "");
-}
 
-function positiveNumber(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
 
-function findPortfolioOrderIntent({ execution, queryOrderId, order }) {
-  const expected = new Set(portfolioOrderIntentIds(order, [queryOrderId]));
-  return rows(nested(execution, ["portfolioOrderIntents"]))
-    .find((item) => portfolioOrderIntentIds(item).some((value) => expected.has(value)))
-    || null;
-}
 
-function portfolioOrderIntentIds(item = {}, seeds = []) {
-  item = item || {};
-  const payload = firstValue(item.order_intent_payload, item.payload, {});
-  return [
-    ...seeds,
-    item.portfolio_order_intent_id,
-    item.order_intent_id,
-    payload.portfolio_order_intent_id,
-    payload.order_intent_id,
-  ].map((value) => text(value, "")).filter(Boolean);
-}
 
-function syntheticOrderFromPortfolioIntent(lineage = {}) {
-  const payload = lineage?.order_intent_payload || lineage?.payload || {};
-  const protection = payload.protection || {};
-  const terms = lineage?.execution_terms || payload.execution_terms || {};
-  const entryPrice = priceFromTerm(terms.entry) ?? terms.entry_price ?? terms.entryPrice;
-  const stopPrice = priceFromTerm(terms.stop) ?? terms.stop_price ?? terms.stopPrice;
-  const targetPrice = firstTargetPrice(terms.targets) ?? terms.target_price ?? terms.targetPrice;
-  return {
-    order_id: text(lineage.portfolio_order_intent_id || payload.order_intent_id, ""),
-    broker_order_id: text(lineage.portfolio_order_intent_id || payload.order_intent_id, ""),
-    portfolio_order_intent_id: text(lineage.portfolio_order_intent_id || payload.order_intent_id, ""),
-    order_intent_id: text(lineage.portfolio_order_intent_id || payload.order_intent_id, ""),
-    signal_id: text(portfolioIntentSignalId(lineage), "unavailable"),
-    provider_id: text(payload.provider_id, "provider-neutral"),
-    strategy_instance_id: text(payload.strategy_instance_id, "unavailable"),
-    broker_account_id: text(payload.broker_account_id || payload.account_id || lineage.target_account_id, "unavailable"),
-    instrument_code: text(payload.instrument || lineage.target_instrument || terms.instrument, "unavailable"),
-    side: upper(payload.action || terms.side || terms.action) === "SELL" ? "sell" : "buy",
-    quantity: number(payload.quantity ?? lineage.risk_approved_net_size ?? lineage.quantity ?? terms.quantity, 0),
-    remaining_quantity: number(payload.quantity || lineage.quantity, 0),
-    order_type: payload.order_type || terms.order_type || terms.orderType,
-    tif: payload.time_in_force || terms.time_in_force || terms.timeInForce,
-    limit_price: payload.limit_price ?? payload.entry_price ?? entryPrice,
-    stop_price: protection.stop_price ?? stopPrice,
-    target_price: protection.target_price ?? targetPrice,
-    idempotency_key: payload.idempotency_key || lineage.idempotency_key,
-    correlation_id: payload.correlation_id || lineage.correlation_id,
-    updated_at_utc: lineage.updated_at_utc || lineage.created_at_utc || payload.requested_at_utc,
-    revision: lineage.order_intent_hash || payload.order_intent_hash,
-    status: text(lineage.status || payload.status, "READY"),
-    protection_status: protection.ready ? "ATTACHED" : "PENDING",
-  };
-}
 
-function priceFromTerm(value) {
-  if (value === null || value === undefined) return undefined;
-  if (typeof value !== "object" || Array.isArray(value)) return value;
-  return value.price ?? value.value ?? value.level ?? value.mid ?? value.center;
-}
 
-function firstTargetPrice(value) {
-  const target = Array.isArray(value) ? value[0] : value;
-  return priceFromTerm(target);
-}
 
-function orderAuthorityProjection(lineage = {}) {
-  const payload = lineage.order_intent_payload || lineage.payload || {};
-  const source = payload.source || {};
-  const canonicalLineage = lineage.lineage || payload.lineage || source.lineage || {};
-  const riskDecision = firstRow(lineage.risk_decisions);
-  const riskIds = rows(lineage.risk_decision_ids || source.risk_decision_ids).map(String);
-  return {
-    strategy: {
-      strategyId: text(firstValue(payload.strategy_definition_id, payload.strategy_id, rows(canonicalLineage.strategy_definition_ids)[0]), "unavailable"),
-      strategyInstanceId: text(firstValue(payload.strategy_instance_id, rows(canonicalLineage.strategy_instance_ids)[0]), "unavailable"),
-      strategyVersion: text(firstValue(payload.strategy_version_id, payload.strategy_version, rows(canonicalLineage.strategy_version_ids)[0]), "unavailable"),
-    },
-    signal: {
-      signalId: text(portfolioIntentSignalId(lineage), "unavailable"),
-      instrument: text(payload.instrument || lineage.target_instrument, "unavailable"),
-      side: payload.action === "SELL" ? "SELL" : "BUY",
-    },
-    contextGate: authorityStage("Context Gate", {
-      decision: text(payload.context_gate_decision || payload.ai_context_decision, ""),
-      authorityId: text(payload.context_gate_decision_id || payload.ai_context_gate_decision_id, ""),
-      version: text(payload.context_gate_version || payload.ai_context_gate_version, ""),
-      reasonCodes: rows(payload.context_gate_reason_codes || payload.ai_context_reason_codes).map(String),
-    }),
-    portfolioArbitration: authorityStage("Portfolio Arbitration", {
-      decision: text(payload.portfolio_arbitration_decision || source.portfolio_arbitration_decision, ""),
-      authorityId: text(lineage.portfolio_arbitration_run_id || payload.portfolio_arbitration_run_id || source.portfolio_arbitration_run_id, ""),
-      version: text(payload.portfolio_arbitration_version, ""),
-      reasonCodes: rows(payload.portfolio_arbitration_reason_codes || source.portfolio_arbitration_reason_codes).map(String),
-    }),
-    globalRisk: authorityStage("Global Risk", {
-      decision: text(riskDecision?.decision, ""),
-      authorityId: text(riskDecision?.risk_decision_id || riskIds[0], ""),
-      version: text(riskDecision?.risk_rule_set_version || payload.risk_rule_set_version, ""),
-      reasonCodes: rows(riskDecision?.reason_codes || payload.risk_reason_codes).map(String),
-    }),
-    targetPosition: {
-      targetPositionId: text(lineage.target_position_id || payload.target_position_id, "unavailable"),
-      account: text(lineage.target_account_id || payload.account_id || payload.broker_account_id, "unavailable"),
-      authorizedQuantity: nullableNumber(lineage.risk_approved_net_size ?? riskDecision?.approved_size ?? payload.target_net_size ?? payload.quantity),
-    },
-  };
-}
 
-function authorityStage(label, { decision, authorityId, version, reasonCodes }) {
-  return {
-    label,
-    decision: text(decision, ""),
-    authorityId: text(authorityId, ""),
-    version: text(version, ""),
-    reasonCodes: rows(reasonCodes).map(String),
-  };
-}
 
-function providerLifecycleRows({ execution, portfolioIntent, order }) {
-  const portfolioOrderIntentId = text(portfolioIntent?.portfolio_order_intent_id, "");
-  const commandIds = new Set(rows(execution?.providerCommands)
-    .filter((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId)
-    .map((item) => text(item.execution_provider_command_id, ""))
-    .filter(Boolean));
-  return rows(execution?.providerEvents)
-    .filter((item) => text(item.portfolio_order_intent_id, "") === portfolioOrderIntentId || commandIds.has(text(item.execution_provider_command_id, "")))
-    .map((item) => ({
-      eventId: text(item.broker_provider_event_id || item.provider_event_id || item.event_id, "unavailable"),
-      at: text(item.occurred_at_utc || item.created_at_utc, "unavailable"),
-      state: text(item.event_type || item.state, "unavailable"),
-      detail: text(item.message || item.provider_status || item.status, `Provider event for ${order.orderId}`),
-    }));
-}
 
-function positionDetail({ execution, query, warnings }) {
-  const source = selectById(rows(nested(execution, ["trades"])), query.positionId, (item) => firstValue(item.trade_id, item.position_id), "POSITION_NOT_FOUND");
-  const base = positionRow(source);
-  const relatedOrders = positionRelatedOrders({ execution, source, base });
-  if (!rows(nested(execution, ["trade_events"])).length) warnings.push("position-lifecycle:UNAVAILABLE");
-  const lifecycle = positionLifecycleRows({ execution, base });
-  const signalId = text(source.signal_id, "unavailable");
-  return { summary: positionDetailSummary(source, base), identity: positionDetailIdentity(source, base, signalId), position: positionDetailBody(source, base), orders: relatedOrders, lifecycle, relations: positionDetailRelations(base, signalId) };
-}
 
-function positionRelatedOrders({ execution, source, base }) {
-  return rows(nested(execution, ["orders"]))
-    .filter((item) => String(item.strategy_instance_id) === base.strategyInstanceId || matchingSignalId(item, source))
-    .map(activeOrderRow);
-}
-function matchingSignalId(item, source) {
-  return Boolean(source.signal_id) && String(item.signal_id) === String(source.signal_id);
-}
-function positionLifecycleRows({ execution, base }) {
-  return rows(nested(execution, ["trade_events"]))
-    .filter((item) => String(firstValue(item.trade_id, item.position_id)) === base.positionId)
-    .map(positionLifecycleRow);
-}
-function positionLifecycleRow(item) {
-  return {
-    eventId: text(item.event_id, "unavailable"),
-    at: text(firstValue(item.occurred_at_utc, item.created_at_utc), "unavailable"),
-    state: text(firstValue(item.state, item.event_type), "unavailable"),
-    detail: text(firstValue(item.detail, item.message), "Détail indisponible"),
-  };
-}
-function positionDetailSummary(source, base) {
-  return { state: text(firstValue(source.status, source.state), base.quantity > 0 ? "OPEN" : "CLOSED"), quantity: base.quantity, pnlR: base.pnlR, riskR: base.riskR, protectionStatus: base.protectionStatus };
-}
-function positionDetailIdentity(source, base, signalId) {
-  return { positionId: base.positionId, strategyInstanceId: base.strategyInstanceId, signalId, correlationId: text(source.correlation_id, "unavailable") };
-}
-function positionDetailBody(source, base) {
-  return {
-    ...base,
-    state: text(firstValue(source.status, source.state), base.quantity > 0 ? "OPEN" : "CLOSED"),
-    stopPrice: number(source.stop_price, undefined),
-    targetPrice: number(source.target_price, undefined),
-    openedAt: text(firstValue(source.opened_at_utc, source.entry_at_utc), "unavailable"),
-    closedAt: text(firstValue(source.closed_at_utc, source.exit_at_utc), undefined),
-  };
-}
-function positionDetailRelations(base, signalId) {
-  return [{ label: "Signal", id: signalId, route: `/live/signals/${encodeURIComponent(signalId)}` }, { label: "Stratégie", id: base.strategyInstanceId, route: `/strategies/${encodeURIComponent(base.strategyInstanceId)}` }];
-}
 
 function incidentDetail({ incidents, query, warnings }) {
   const source = selectById(rows(incidents), query.incidentId, (item) => item.incident_id, "INCIDENT_NOT_FOUND");
@@ -1885,335 +1244,13 @@ function incidentDetail({ incidents, query, warnings }) {
   return { summary: { severity: incident.severity, status: incident.status, retryCount: number(source.retry_count, 0), operatorGate: text(source.operator_gate, "NONE") }, incident: { ...incident, retryCount: number(source.retry_count, 0), operatorGate: text(source.operator_gate, "NONE"), impactR: number(source.impact_R ?? source.impact_r, 0), impactSummary: text(source.impact_summary, incident.detail), machineRecommendation: text(source.machine_recommendation, "Indisponible"), openedAt: text(source.opened_at_utc || source.created_at_utc, "unavailable"), updatedAt: text(source.updated_at_utc || source.created_at_utc, "unavailable") }, payloadPreview: incident.payloadPreview, meta: incident.meta, chronology: incident.chronology, reconciliationResults: incident.reconciliationResults, postMortem: incident.postMortem, retries: rows(source.retries), relations: [{ label: "Ordre", id: text(source.order_id, "unavailable"), route: `/execution/orders/${encodeURIComponent(text(source.order_id, "unavailable"))}` }, { label: "Position", id: text(source.position_id, "unavailable"), route: `/execution/portfolio/positions/${encodeURIComponent(text(source.position_id, "unavailable"))}` }] };
 }
 
-function riskCenter({ risk, execution, strategy, health, nowIso, warnings }) {
-  if (!nested(risk, ["limits"])) warnings.push("risk-limits:UNAVAILABLE");
-  const authoritative = nested(risk, ["risk_center"]) || null;
-  const intents = rows(nested(execution, ["portfolioOrderIntents"]));
-  const decisions = intents.map((intent) => riskDecisionRow(intent, nowIso)).filter(Boolean);
-  return {
-    summary: riskCenterSummary(risk, authoritative),
-    authoritativeState: authoritative,
-    limits: riskCenterLimits(authoritative, risk),
-    exposures: riskCenterExposures(risk),
-    correlations: rows(nested(risk, ["correlations"])),
-    propConstraints: rows(nested(risk, ["prop_constraints"])),
-    stressTests: rows(nested(risk, ["stress_tests"])),
-    breaches: riskCenterPreferredRows(authoritative, risk, "breaches"),
-    timeSeriesContracts: frontTimeSeriesContracts({ view: "risk", execution, risk, nowIso }),
-    riskByAccount: riskByAccountRows(risk, decisions),
-    riskByStrategy: riskByStrategyRows(decisions, strategy),
-    riskByInstrument: riskByInstrumentRows(decisions),
-    riskDecisions: {
-      summary: riskDecisionsSummary(decisions, nowIso),
-      items: [...decisions].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 20),
-    },
-    circuitBreakers: circuitBreakerRows(execution, health),
-    commandActions: [],
-  };
-}
-function riskDecisionRow(intent, nowIso) {
-  const payload = intent.order_intent_payload || intent.payload || {};
-  const decision = safeArrayFirst(intent.risk_decisions);
-  const requestedQty = finiteOrNull(firstValue(intent.quantity, payload.quantity));
-  const authorizedQty = finiteOrNull(firstValue(decision?.authorized?.quantity, decision?.approved_size));
-  if (requestedQty === null && authorizedQty === null) return null;
-  return {
-    at: text(intent.created_at_utc, "unavailable"),
-    orderIntentId: text(intent.portfolio_order_intent_id, ""),
-    signalId: text(payload.signal_id, "unavailable"),
-    strategyInstanceId: text(payload.strategy_instance_id, "unavailable"),
-    accountId: text(firstValue(intent.target_account_id, payload.account_id, payload.broker_account_id), ""),
-    instrument: text(firstValue(intent.target_instrument, payload.instrument), "unavailable"),
-    requestedQty: requestedQty ?? 0,
-    authorizedQty: authorizedQty ?? 0,
-    riskAmount: number(decision?.authorized?.risk_amount, 0),
-    verdict: riskDecisionVerdict(requestedQty, authorizedQty),
-    reason: text(firstValue(rows(decision?.reason_codes)[0], decision?.nearest_limit?.type), "unavailable"),
-  };
-}
-function riskDecisionVerdict(requested, authorized) {
-  if (authorized === null || authorized === 0) return "REJECTED";
-  if (requested !== null && authorized < requested) return "REDUCED";
-  return "APPROVED";
-}
-function riskDecisionsSummary(decisions, nowIso) {
-  return {
-    total: decisions.length,
-    approved: countBy(decisions, (item) => item.verdict === "APPROVED"),
-    reduced: countBy(decisions, (item) => item.verdict === "REDUCED"),
-    rejected: countBy(decisions, (item) => item.verdict === "REJECTED"),
-    today: countBy(decisions, (item) => isSameUtcDay(item.at, nowIso)),
-  };
-}
-function riskByAccountRows(risk, decisions) {
-  const accounts = rows(nested(risk, ["accounts"]));
-  return accounts.map((account) => {
-    const accountId = text(account.account_id, "");
-    const accountDecisions = decisions.filter((item) => item.accountId === accountId);
-    return {
-      accountId,
-      label: text(account.label, accountId),
-      equityUsd: finiteOrNull(account.capital),
-      openRiskUsd: number(aggregateSum(accountDecisions.map((item) => item.riskAmount)), 0),
-      status: text(account.status, "UNKNOWN"),
-    };
-  });
-}
-function riskByStrategyRows(decisions, strategy) {
-  const instances = rows(nested(strategy, ["instances"]));
-  const nameById = new Map(instances.map((item) => [text(item.strategy_instance_id, ""), text(item.strategy_definition_id || item.name, item.strategy_instance_id)]));
-  const groups = new Map();
-  for (const item of decisions) {
-    const key = item.strategyInstanceId;
-    if (!key || key === "unavailable") continue;
-    const current = groups.get(key) || { strategyInstanceId: key, label: nameById.get(key) || key, riskAmount: 0, decisions: 0 };
-    current.riskAmount += item.riskAmount;
-    current.decisions += 1;
-    groups.set(key, current);
-  }
-  return [...groups.values()].sort((a, b) => b.riskAmount - a.riskAmount).slice(0, 10);
-}
-function riskByInstrumentRows(decisions) {
-  const groups = new Map();
-  for (const item of decisions) {
-    const key = item.instrument;
-    if (!key || key === "unavailable") continue;
-    const current = groups.get(key) || { instrument: key, riskAmount: 0, decisions: 0 };
-    current.riskAmount += item.riskAmount;
-    current.decisions += 1;
-    groups.set(key, current);
-  }
-  return [...groups.values()].sort((a, b) => b.riskAmount - a.riskAmount);
-}
-function aggregateSum(values) { return values.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0); }
-function circuitBreakerRows(execution, health) {
-  const locks = rows(nested(execution, ["locks"]));
-  const globalLock = locks.find((item) => item.scope_type === "global");
-  const accountLocks = locks.filter((item) => item.scope_type === "account");
-  const marketDataOk = nested(health, ["data_readiness", "market_closed"]) !== true && health != null;
-  const infraOk = health?.ok !== false;
-  return [
-    { breakerId: "global_kill_switch", label: "Global Kill Switch", armed: Boolean(globalLock), detail: globalLock ? text(globalLock.reason, "Verrou actif") : "Aucun verrou global actif" },
-    ...accountLocks.map((lock) => ({ breakerId: text(lock.execution_lock_id, lock.scope_value), label: `Protection compte · ${text(lock.scope_value, "")}`, armed: true, detail: text(lock.reason, "Verrou de protection actif") })),
-    { breakerId: "market_data", label: "Flux de données marché", armed: !marketDataOk, detail: health ? (marketDataOk ? "Aucun problème détecté" : "Marché fermé ou données indisponibles") : "État santé non publié" },
-    { breakerId: "infrastructure", label: "Infrastructure d'exécution", armed: !infraOk, detail: health ? (infraOk ? "Infrastructure saine" : "Dégradation détectée") : "État santé non publié" },
-  ];
-}
 
-function executionProviders({ execution, incidents, health, warnings }) {
-  if (!nested(execution, ["performance"])) warnings.push("execution-provider-performance:UNAVAILABLE");
-  const providers = providerRows(execution);
-  const accounts = rows(execution?.accounts).filter((item) => item?.broker_account_id).map(accountRow);
-  const commands = rows(execution?.providerCommands).map(providerCommandRow);
-  const providerEvents = rows(execution?.providerEvents).map(providerEventRow);
-  return {
-    summary: executionProviderSummary({ execution, providers, accounts, incidents }),
-    providers: providers.map((item, index) => executionProviderRow(item, index, execution)),
-    accounts,
-    adapters: [],
-    healthChecks: providers.map(executionProviderHealthRow),
-    switchWorkflow: [],
-    events: [],
-    incidents: rows(incidents).filter(hasIncidentId).map(incidentSummary),
-    commandActions: [],
-    executionModes: executionModesSummary(execution),
-    circuitBreakers: circuitBreakerRows(execution, health),
-    providerCommands: {
-      counts: {
-        all: commands.length,
-        working: countBy(commands, (item) => ["pending", "leased", "sent"].includes(item.status)),
-        pending: countBy(commands, (item) => item.status === "pending"),
-        filled: countBy(commands, (item) => item.status === "filled"),
-        partial: countBy(commands, (item) => item.status === "partially_filled"),
-        rejected: countBy(commands, (item) => item.status === "rejected"),
-        cancelled: countBy(commands, (item) => item.status === "cancelled"),
-      },
-      items: commands.slice(0, 100),
-    },
-    fills: providerEvents.filter((item) => item.classification === "FILL").slice(0, 30),
-    partialFills: providerEvents.filter((item) => item.classification === "PARTIAL_FILL").slice(0, 30),
-    rejectsAndCancels: providerEvents.filter((item) => item.classification === "REJECT_CANCEL").slice(0, 30),
-  };
-}
-function providerCommandRow(item) {
-  const envelope = item.payload || {};
-  const payload = envelope.order_intent_payload || {};
-  return {
-    commandId: text(item.execution_provider_command_id, ""),
-    orderIntentId: text(firstValue(item.portfolio_order_intent_id, item.order_intent_id), ""),
-    providerId: text(item.broker_provider_code, "unavailable"),
-    instrument: text(payload.instrument, "unavailable"),
-    side: upper(text(firstValue(payload.action, payload.side), "unavailable")),
-    quantity: number(payload.quantity, 0),
-    commandType: text(item.command_type, "unavailable"),
-    status: text(item.status, "unknown"),
-    at: text(firstValue(item.available_at, item.created_at), "unavailable"),
-  };
-}
-function providerEventRow(item) {
-  const type = text(firstValue(item.event_type, item.event_status), "unavailable");
-  return {
-    eventId: text(firstValue(item.broker_provider_event_id, item.provider_event_id), ""),
-    commandId: text(item.execution_provider_command_id, ""),
-    orderIntentId: text(item.portfolio_order_intent_id, ""),
-    eventType: type,
-    status: text(item.event_status, "unavailable"),
-    side: item.side ? upper(item.side) : null,
-    quantity: item.quantity == null ? null : number(item.quantity, 0),
-    fillQuantity: item.fill_quantity == null ? null : number(item.fill_quantity, 0),
-    fillPrice: item.fill_price == null ? null : number(item.fill_price, 0),
-    at: text(firstValue(item.occurred_at_utc, item.created_at), "unavailable"),
-    classification: providerEventClassification(type),
-  };
-}
-function providerEventClassification(type) {
-  const normalized = upper(type);
-  if (normalized.includes("PARTIAL")) return "PARTIAL_FILL";
-  if (normalized.includes("FILL")) return "FILL";
-  if (normalized.includes("REJECT") || normalized.includes("CANCEL")) return "REJECT_CANCEL";
-  return "OTHER";
-}
-function executionModesSummary(execution) {
-  const safety = execution?.safety || {};
-  return {
-    current: upper(text(safety.executionAuthorityMode, "unavailable")),
-    executionEnabled: Boolean(safety.executionEnabled),
-    manualTelegramExecutionEnabled: Boolean(safety.manualTelegramExecutionEnabled),
-    entryOperatorApprovalRequired: Boolean(safety.entryOperatorApprovalRequired),
-    liveAccountAllowed: Boolean(safety.liveAccountAllowed),
-  };
-}
 
-function riskCenterSummary(risk, authoritative) {
-  const summary = nested(risk, ["summary"]) || {};
-  // grossExposure/netExposure/dailyLoss/trailingDrawdown live on the risk_center
-  // ("authoritative") snapshot as { availability, value, reasonCode } nodes, not as
-  // flat risk.summary.* fields (those never existed - reading them always resolved
-  // to 0). front-portfolio-risk-projection.js's riskCenterState() still hardcodes
-  // all four to availability:"UNAVAILABLE" today, so these correctly read through
-  // as unavailable/0 until that computation is implemented; openRisk *is* real
-  // (aggregated from risk_decisions), so use it in place of a fabricated leverage figure.
-  const openRisk = finiteOrNull(nested(authoritative, ["openRisk", "value"]));
-  return {
-    globalStatus: firstValue(nested(authoritative, ["globalStatus"]), summary.status, "DATA_UNAVAILABLE"),
-    riskUsedPct: number(summary.risk_percent, 0),
-    grossExposureUsd: number(nested(authoritative, ["grossExposure", "value"]), 0),
-    netExposureUsd: number(nested(authoritative, ["netExposure", "value"]), 0),
-    leverage: number(summary.leverage, 0),
-    dailyLossR: number(nested(authoritative, ["dailyLoss", "value"]), 0),
-    dailyLossLimitR: number(summary.daily_loss_limit_r, 0),
-    trailingDrawdownR: number(nested(authoritative, ["trailingDrawdown", "value"]), 0),
-    maxDrawdownR: number(nested(authoritative, ["trailingDrawdown", "value"]), 0),
-    activeBreaches: firstValue(rows(nested(authoritative, ["breaches"])).length || undefined, rows(nested(risk, ["breaches"])).length),
-    stressTestsToday: rows(nested(risk, ["stress_tests"])).length,
-    openRiskUsd: openRisk ?? 0,
-  };
-}
-function finiteOrNull(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
-function riskCenterPreferredRows(authoritative, risk, key) {
-  const authoritativeRows = rows(nested(authoritative, [key]));
-  return authoritativeRows.length ? authoritativeRows : rows(nested(risk, [key]));
-}
 
 // The risk_center authoritative snapshot exposes limits in the risk engine's own
 // internal shape (limit_id/current_utilization/... in snake_case), not the
 // RiskView.limits front contract (limitId/usedPct/label/...). Map explicitly
 // instead of passing the raw engine rows straight through to the front.
-const RISK_LIMIT_TYPE_LABELS = {
-  PORTFOLIO_ABS_SIZE: "Taille absolue du portefeuille",
-  ACCOUNT_ABS_SIZE: "Taille absolue du compte",
-  INSTRUMENT_ABS_SIZE: "Taille absolue instrument",
-  CORRELATION_GROUP_ABS_SIZE: "Taille absolue groupe de corrélation",
-};
-function riskCenterLimits(authoritative, risk) {
-  const authoritativeRows = rows(nested(authoritative, ["limits"]));
-  if (authoritativeRows.length) return authoritativeRows.map((item) => mapAuthoritativeRiskLimit(item, authoritative));
-  return rows(nested(risk, ["limits"]));
-}
-function riskLimitScope(type) {
-  const normalized = upper(type);
-  if (normalized.startsWith("ACCOUNT")) return "ACCOUNT";
-  if (normalized.startsWith("INSTRUMENT")) return "INSTRUMENT";
-  if (normalized.startsWith("CORRELATION_GROUP")) return "ASSET_CLASS";
-  return "GLOBAL";
-}
-function riskLimitStatus(item) {
-  if (item?.breached) return "BREACH";
-  const severity = upper(item?.severity);
-  if (severity === "EMERGENCY" || severity === "CRITICAL") return "BLOCKED";
-  const utilization = number(item?.current_utilization, 0);
-  if (utilization >= 0.8 || severity === "HIGH" || severity === "WARN" || severity === "WARNING") return "WATCH";
-  return "PASS";
-}
-function riskLimitLabel(type, scopeValue) {
-  const base = RISK_LIMIT_TYPE_LABELS[upper(type)] || text(type, "Limite").replaceAll("_", " ").toLowerCase();
-  return scopeValue ? `${base} · ${scopeValue}` : base;
-}
-function mapAuthoritativeRiskLimit(item, authoritative) {
-  const value = number(item.value, 0);
-  const utilization = number(item.current_utilization, 0);
-  const scopeValue = text(item.scope, "");
-  return {
-    limitId: text(item.limit_id, `${text(item.type, "LIMIT")}:${scopeValue}`),
-    scope: riskLimitScope(item.type),
-    label: riskLimitLabel(item.type, scopeValue),
-    targetId: scopeValue,
-    limitValue: value,
-    usedValue: value * utilization,
-    unit: upper(item.unit) === "CONTRACTS" ? "CONTRACTS" : text(item.unit, "PCT"),
-    usedPct: utilization * 100,
-    headroomValue: number(item.remaining, value - value * utilization),
-    status: riskLimitStatus(item),
-    reasonCodes: [],
-    lastChangedAt: text(authoritative?.asOf, "unavailable"),
-    changedBy: "risk_engine",
-    officialSource: text(authoritative?.source, "risk_center"),
-    contributors: [],
-  };
-}
-function riskCenterExposures(risk) {
-  return rows(nested(risk, ["exposures"]))
-    .filter((item) => item?.exposure_id || item?.instrument_code)
-    .map((item) => ({
-      exposureId: text(firstValue(item.exposure_id, item.instrument_code), ""),
-      label: text(item.instrument_code, "Exposure"),
-      valueUsd: number(item.value_usd, 0),
-      riskPct: number(item.risk_pct, 0),
-      status: riskExposureStatus(item.status),
-    }));
-}
-function riskExposureStatus(status) {
-  const normalized = upper(status);
-  if (normalized === "BLOCK") return "BLOCK";
-  return normalized === "PASS" ? "PASS" : "WATCH";
-}
-function executionProviderSummary({ execution, providers, accounts, incidents }) {
-  return {
-    primaryProviderId: firstValue(nested(providers, [0, "providerId"]), "unavailable"),
-    standbyProviderId: firstValue(nested(providers, [1, "providerId"]), "unavailable"),
-    activeProviders: providers.length,
-    degradedProviders: countBy(providers, (item) => item.status !== "OK"),
-    avgLatencyMs: average(providers.map((item) => item.latencyMs)),
-    fillRatePct: number(nested(execution, ["performance", "fill_rate_pct"]), 0),
-    slippageR: number(nested(execution, ["performance", "slippage_r"]), 0),
-    openIncidents: rows(incidents).filter(hasIncidentId).length,
-    accounts: accounts.length,
-  };
-}
-function executionProviderRow(item, index, execution) {
-  return {
-    ...item,
-    adapter: item.providerId,
-    state: item.status === "OK" ? primaryOrStandby(index) : "DEGRADED",
-    role: primaryOrStandby(index),
-    fillRatePct: number(nested(execution, ["performance", "fill_rate_pct"]), 0),
-    browserExposure: "NONE",
-  };
-}
-function executionProviderHealthRow(item) {
-  return { checkId: `health_${item.providerId}`, label: item.label, detail: item.status, latencyMs: item.latencyMs, status: item.status === "OK" ? "PASS" : "WATCH" };
-}
-function primaryOrStandby(index) { return index === 0 ? "PRIMARY" : "STANDBY"; }
 
 function researchLab({ runtime, agentEvents, research, dataFoundation, simulationRuns, incidents, actor }) {
   const experiments = rows(research?.experiments).filter((item) => item?.research_experiment_id).map(researchExperimentRow);
@@ -2781,10 +1818,6 @@ function shortId(value) {
   return text(value, "none").slice(0, 8);
 }
 
-function stringList(value) {
-  if (Array.isArray(value)) return value.map(String).filter(Boolean);
-  return typeof value === "string" && value.trim() ? [value.trim()] : [];
-}
 
 function runtimeState(value) {
   const state = upper(value);
@@ -2915,13 +1948,11 @@ function performanceBucket(scope, metrics = {}) {
 function hasSignalId(item) {
   return Boolean(item?.signal_outbox_id || item?.signal_id) && ["LONG", "SHORT"].includes(upper(item?.direction || item?.side));
 }
-function hasTradeId(item) { return Boolean(item?.trade_id || item?.position_id); }
 function hasOrderId(item) {
   return Boolean(item?.broker_order_id || item?.order_id) && ["BUY", "SELL"].includes(upper(item?.side));
 }
 function hasIntentId(item) { return Boolean(item?.intent_id || item?.order_intent_id); }
 function hasFillId(item) { return Boolean(item?.fill_id); }
-function hasIncidentId(item) { return Boolean(item?.incident_id); }
 
 function runtimeMissionState(value) {
   const state = upper(value);
@@ -3134,12 +2165,6 @@ function researchRunTradeRow(item) {
   };
 }
 function identity() { return { signalId: "none", strategyId: "none", strategyDefinitionId: "none", strategyVersionId: "none", strategyInstanceId: "none", runtimeBundleId: "none", sessionId: "none", correlationId: "none", featureSnapshotId: "none", expectedVersion: "0" }; }
-function selectById(items, requestedId, idOf, errorCode) {
-  if (!requestedId) throw codedError(`${errorCode}_ID_REQUIRED`, "Resource identifier is required.", 400);
-  const candidate = items.find((item) => String(idOf(item)) === String(requestedId));
-  if (!candidate) throw codedError(errorCode, `Unknown resource: ${requestedId}`, 404);
-  return candidate;
-}
 async function safeSource(label, promise, warnings, timeoutMs = FRONT_SOURCE_TIMEOUT_MS) {
   let timer;
   try {
@@ -3179,20 +2204,12 @@ function withoutMarketSeriesScope(query) {
   return deskQuery;
 }
 async function call(store, method, args) { if (typeof store?.[method] !== "function") throw codedError("FRONT_CONTROL_PLANE_SOURCE_UNAVAILABLE", `${method} unavailable`, 503); return store[method](args); }
-function rows(value) { return Array.isArray(value?.items) ? value.items : Array.isArray(value) ? value : []; }
-function firstRow(value) { return rows(value)[0] || null; }
 function viewAvailability(warnings, sources) {
   if (!warnings.length) return "AVAILABLE";
   const unavailableSources = sources.filter((source) => warnings.some((warning) => warning.startsWith(`${source}:`)));
   return sources.length > 0 && unavailableSources.length === sources.length ? "UNAVAILABLE" : "PARTIAL";
 }
-function countBy(value, predicate) { return rows(value).filter(predicate).length; }
 function firstNumber(value, key) { const found = rows(value).map((item) => number(item?.[key], null)).find((item) => item !== null); return found || 0; }
-function firstValue(...values) { for (const value of values) if (value !== null && value !== undefined && value !== "") return value; return undefined; }
-function nested(source, path) { let value = source; for (const key of path) { if (!value || typeof value !== "object") return undefined; value = value[key]; } return value; }
-function average(values) { const finite = values.filter((item) => Number.isFinite(item)); return finite.length ? Math.round(finite.reduce((a, b) => a + b, 0) / finite.length) : 0; }
-function number(value, fallback = 0) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
-function nullableNumber(value) { if (value === null || value === undefined || value === "") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function latestTimestamp(items, keys) {
   return rows(items)
     .flatMap((item) => keys.map((key) => item?.[key]).filter(Boolean))
@@ -3200,14 +2217,9 @@ function latestTimestamp(items, keys) {
     .sort()
     .at(-1) || null;
 }
-function requiredQuery(query, key, code) { const value = text(query?.[key] ?? query?.[key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)], ""); if (!value) throw codedError(code, `${key} is required`, 400); return value; }
 function queryList(value) { return Array.isArray(value) ? value.map(String).filter(Boolean) : String(value || "").split(",").map((item) => item.trim()).filter(Boolean); }
 function signedNumber(value) { const parsed = number(value, 0); return `${parsed >= 0 ? "+" : ""}${parsed.toFixed(2)}`; }
-function metric(label, value) { return { label, value: String(value) }; }
 function fact(label, value) { return { label, value: value === null || value === undefined || value === "" ? "—" : String(value) }; }
-function objectFacts(source, keys) { return keys.filter((key) => source?.[key] !== undefined && typeof source[key] !== "object").map((key) => fact(key.replaceAll("_", " "), source[key])); }
-function explorerItem({ id, title, subtitle, status, primary, secondary, route, tags = [], facts = [] }) { return { id: text(id, "unavailable"), title: text(title, "Objet sans titre"), subtitle: text(subtitle, "Détail non publié"), status: text(status, "UNKNOWN"), primary: text(primary, "—"), secondary: text(secondary, "—"), route: route || null, tags: tags.filter(Boolean).map(String), facts }; }
-function explorerView(title, description, items, metrics = []) { return { summary: { title, description, total: items.length, metrics }, items }; }
 function replayExplorerItem(item) { return explorerItem({ id: item.sourceId || item.id, title: item.name || `Replay ${item.tradingDate || ""}`, subtitle: `${text(item.tradingDate, "—")} · ${text(item.session, "—")} · ${number(item.progress, 0)}%`, status: item.status, primary: `${signedNumber(item.metrics?.totalR)} R`, secondary: item.resultEligible ? "Résultat éligible" : "Résultat non éligible", route: `/replay/runs/${encodeURIComponent(String(item.sourceId || item.id))}`, tags: [item.engineVersion, item.variantId, item.replayClassification] }); }
 function performanceDayItem(item) { return explorerItem({ id: item.date, title: text(item.date, "Journée"), subtitle: `${number(item.trades, 0)} trades · ${number(item.winRate, 0).toFixed(1)}% win`, status: number(item.totalR, 0) > 0 ? "POSITIVE" : number(item.totalR, 0) < 0 ? "NEGATIVE" : "FLAT", primary: `${signedNumber(item.totalR)} R`, secondary: `${signedNumber(item.drawdownR)} R drawdown`, route: `/performance/days/${encodeURIComponent(String(item.date))}`, tags: [...rows(item.sessions), ...rows(item.strategyIds)] }); }
 function performanceTradeItem(item, index = 0) {
@@ -3229,7 +2241,6 @@ function tradeResultStatus(resultR) {
   if (value > 0) return "WIN";
   return value < 0 ? "LOSS" : "FLAT";
 }
-function upper(value) { return String(value ?? "").toUpperCase(); }
 function stageFromResearch(item) { const status = upper(item.status); if (status === "COMPLETED") return "PAPER_READY"; if (number(item.counts?.evaluation_reports, 0) > 0) return "OOS"; return "BASELINE"; }
 function statusFromResearch(item) { const status = upper(item.status); if (status === "COMPLETED") return "PASSED"; if (status === "CANCELLED" || status === "ARCHIVED") return "REJECTED"; if (status === "DRAFT") return "WAITING"; return "RUNNING"; }
 function pipelineState(stage, { experiments, reports, candidates }) { if (stage === "IDEA") return experiments.length ? "DONE" : "WAITING"; if (stage === "BASELINE") return reports.length ? "DONE" : (experiments.length ? "RUNNING" : "WAITING"); if (stage === "PAPER_READY") return countBy(candidates, (item) => upper(item.status) === "PROMOTION_READY") ? "DONE" : "WAITING"; return reports.length ? "WAITING" : "WAITING"; }
@@ -3239,7 +2250,6 @@ function isActiveExecutionMode(item) { return ["LIVE", "PAPER", "SHADOW"].includ
 function isCriticalSeverity(item) { return ["CRITICAL", "HIGH"].includes(upper(item.severity)); }
 function isPendingCommandStatus(item) { return ["pending_approval", "approved", "queued"].includes(String(item.status)); }
 function riskCapitalStatus(risk) { if (!risk?.summary) return "STOP"; return risk.summary.status === "CONTROLLED" ? "NORMAL" : "WATCH"; }
-function side(value) { const normalized = upper(value); if (normalized.includes("SHORT") || normalized === "SELL") return "SHORT"; if (normalized.includes("LONG") || normalized === "BUY") return "LONG"; return "FLAT"; }
 function severity(value) { const normalized = upper(value); if (normalized === "CRITICAL") return "HIGH"; return ["LOW", "MEDIUM", "HIGH"].includes(normalized) ? normalized : "LOW"; }
 function strategyFamily(value) { const normalized = String(value || "").toLowerCase(); if (normalized.includes("mean")) return "Mean Reversion"; if (normalized.includes("macro")) return "Macro"; if (normalized.includes("momentum")) return "Momentum"; if (normalized.includes("arbitrage")) return "Arbitrage"; return "Breakout"; }
 function timeLabel(value) { return String(value || currentUtc()).slice(11, 16); }

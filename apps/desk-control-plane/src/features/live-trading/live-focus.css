@@ -75,8 +75,6 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
   overflow-y: visible;
   color: var(--focus-text);
   background:
-    radial-gradient(circle at 12% 8%, rgba(65, 215, 229, 0.18), transparent 28%),
-    radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--focus-state, #41d7e5) 18%, transparent), transparent 27%),
     linear-gradient(135deg, var(--focus-bg-deep) 0%, var(--focus-bg-soft) 48%, #050c13 100%);
   font-family: var(--lt-font-ui, Inter, "Segoe UI", sans-serif);
   font-size: var(--focus-type-body);
@@ -86,20 +84,6 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
 .live-focus *::before,
 .live-focus *::after {
   box-sizing: border-box;
-}
-
-.live-focus::before {
-  position: fixed;
-  z-index: -1;
-  inset: 0;
-  pointer-events: none;
-  content: "";
-  opacity: 0.34;
-  background-image:
-    linear-gradient(rgba(92, 154, 176, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(92, 154, 176, 0.06) 1px, transparent 1px);
-  background-size: 38px 38px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.92), transparent 88%);
 }
 
 .live-focus--a { --focus-state: var(--focus-cyan); }
@@ -336,9 +320,9 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
 .live-focus__mission-ribbon dl {
   margin: 0;
   border: 1px solid var(--focus-line);
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--focus-surface-muted);
-  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.22);
+  box-shadow: none;
 }
 
 .live-focus__mission-status {
@@ -397,10 +381,10 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
   display: grid;
   min-height: 0;
   min-width: 0;
-  grid-template-columns: minmax(240px, .85fr) minmax(400px, 1.8fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(220px, .68fr) minmax(480px, 2.18fr) minmax(320px, 1.05fr);
   grid-template-areas: "brief action queue";
   grid-template-rows: minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
   padding: 10px clamp(10px, 1.2vw, 16px);
   overflow: visible;
 }
@@ -411,11 +395,14 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
   min-width: 0;
   min-height: 0;
   border: 1px solid var(--focus-line);
-  border-radius: 20px;
-  background:
-    linear-gradient(180deg, rgba(13, 34, 48, 0.86), rgba(6, 18, 28, 0.9)),
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--focus-state) 10%, transparent), transparent 30%);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.23);
+  border-radius: 12px;
+  background: var(--focus-surface-muted);
+  box-shadow: none;
+}
+
+.live-focus__decision {
+  border-color: color-mix(in srgb, var(--focus-state) 42%, var(--focus-line));
+  background: var(--focus-surface);
 }
 
 .live-focus__brief {
@@ -763,6 +750,15 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
 
 .live-focus__actions .live-focus__copy-action {
   min-height: 56px;
+  color: var(--focus-secondary);
+  border-color: var(--focus-line);
+  background: transparent;
+}
+
+.live-focus__actions .live-focus__copy-action:hover {
+  color: var(--focus-text);
+  border-color: var(--focus-cyan);
+  background: color-mix(in srgb, var(--focus-cyan) 8%, transparent);
 }
 
 .live-focus__actions .live-focus__primary-action kbd {
@@ -1207,7 +1203,7 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
   gap: 8px;
   padding: 10px;
   border: 1px solid var(--focus-line);
-  border-left: 3px solid #6f8390;
+  border-left: 1px solid #6f8390;
   border-radius: 10px;
   color: var(--focus-secondary);
   background: rgba(4, 16, 25, .62);
@@ -1510,7 +1506,7 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
   gap: 6px;
   padding: 9px;
   border: 1px dashed rgba(133, 167, 180, 0.18);
-  border-left: 3px solid rgba(133, 167, 180, 0.44);
+  border-left: 1px solid rgba(133, 167, 180, 0.44);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.018);
 }

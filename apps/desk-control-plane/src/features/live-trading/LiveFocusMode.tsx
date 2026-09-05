@@ -56,6 +56,8 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, dashb
   const state = resolveBackendFocusState(focus, model);
   const queue = useMemo(() => focus.tradeCards, [focus.tradeCards]);
   const selectedIndex = Math.max(0, queue.findIndex((item) => item.signalId === model.latestSignal?.signalId));
+  const selectedCard = queue[selectedIndex] ?? focus.selectedTrade;
+  const selectedIntentId = selectedCard ? selectedCard.orderIntentId || null : model.orderIntent?.portfolioOrderIntentId ?? null;
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -63,14 +65,13 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, dashb
   const [drawerCardId, setDrawerCardId] = useState<string | null>(null);
   const [soundProfile, setSoundProfile] = useState(readLiveFocusSoundProfile);
   const holdTimer = useRef<number | null>(null);
-  const gateConfirm = useMemo(() => model.gateActions.find((action) => action.action === "CONFIRM" && action.permission === "ALLOWED"), [model.gateActions]);
-  const gateReject = useMemo(() => model.gateActions.find((action) => action.action === "REJECT" && action.permission === "ALLOWED"), [model.gateActions]);
-  const manualActions = useMemo(() => model.selectedTheoreticalExecution?.manualExecution?.allowedActions ?? [], [model.selectedTheoreticalExecution?.manualExecution?.allowedActions]);
+  const gateConfirm = useMemo(() => model.gateActions.find((action) => action.action === "CONFIRM" && action.permission === "ALLOWED" && actionBelongsToIntent(action, selectedIntentId)), [model.gateActions, selectedIntentId]);
+  const gateReject = useMemo(() => model.gateActions.find((action) => action.action === "REJECT" && action.permission === "ALLOWED" && actionBelongsToIntent(action, selectedIntentId)), [model.gateActions, selectedIntentId]);
+  const manualActions = useMemo(() => (model.selectedTheoreticalExecution?.manualExecution?.allowedActions ?? []).filter((action) => actionBelongsToIntent(action, selectedIntentId)), [model.selectedTheoreticalExecution?.manualExecution?.allowedActions, selectedIntentId]);
   const primaryManual = useMemo(() => manualActions.find((action) => ["REPORT_PLACED", "REPORT_FILLED", "REPORT_CLOSED"].includes(action.action) && action.permission === "ALLOWED"), [manualActions]);
   const skipManual = useMemo(() => manualActions.find((action) => action.action === "REPORT_SKIPPED" && action.permission === "ALLOWED"), [manualActions]);
   const stopManual = useMemo(() => manualActions.find((action) => action.action === "REPORT_STOP_PLACED" && action.permission === "ALLOWED"), [manualActions]);
   const primary = useMemo(() => gateConfirm ? ({ kind: "gate", action: gateConfirm } as const) : primaryManual ? ({ kind: "manual", action: primaryManual } as const) : null, [gateConfirm, primaryManual]);
-  const selectedCard = queue[selectedIndex] ?? focus.selectedTrade;
   const plan = selectedCard ? focusTradePlanFromCard(selectedCard) : focusTradePlan(model);
   const drawerCard = drawerCardId
     ? queue.find((card) => card.orderIntentId === drawerCardId || card.tradeCardId === drawerCardId || card.signalId === drawerCardId) ?? selectedCard
@@ -110,11 +111,11 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, dashb
   }, [onSelectDecision, queue, selectedIndex]);
 
   const copyPlan = useCallback(async () => {
-    const value = focusClipboardText(model);
+    const value = focusClipboardText(plan);
     await navigator.clipboard.writeText(value);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
-  }, [model]);
+  }, [plan]);
 
   useEffect(() => {
     const clearHold = () => {
@@ -185,7 +186,7 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, dashb
             {gateReject ? <button type="button" disabled={busy} onClick={() => request({ kind: "gate", action: gateReject })}><FaTimes aria-hidden="true" />Refuser<kbd>R</kbd></button> : null}
             {skipManual ? <button type="button" disabled={busy} onClick={() => request({ kind: "manual", action: skipManual })}><FaRegCircle aria-hidden="true" />Non exécuté</button> : null}
             {stopManual ? <button type="button" disabled={busy} onClick={() => request({ kind: "manual", action: stopManual })}><FaLock aria-hidden="true" />Stop placé<kbd>S</kbd></button> : null}
-            <button type="button" className="live-focus__copy-action live-focus__primary-action" onClick={() => void copyPlan()}><FaClipboard aria-hidden="true" />{copied ? "Copié" : "Copier le plan"}<kbd>C</kbd></button>
+            <button type="button" className="live-focus__copy-action" onClick={() => void copyPlan()}><FaClipboard aria-hidden="true" />{copied ? "Copié" : "Copier le plan"}<kbd>C</kbd></button>
             {selectedCard ? <button type="button" onClick={() => { setDrawerCardId(selectedCard.orderIntentId); setDrawer("trade"); }}><FaInfoCircle aria-hidden="true" />Voir le dossier</button> : null}
           </div>
           {ticket.warning ? <p className="live-focus__integrity-warning" role="alert"><FaExclamationTriangle aria-hidden="true" />{ticket.warning}</p> : null}
@@ -239,7 +240,7 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
   const contextStatus = presentMarketContextStatus(brief.status);
   return <div className="live-focus__brief-grid" data-status={brief.status}>
     <article className="live-focus__calendar"><small>Calendrier · prochain catalyseur</small><p>{focus.whyNoTrade.nextRelevantEventAt ? displayTime(focus.whyNoTrade.nextRelevantEventAt) : "Aucun catalyseur couvert n’est publié."}</p></article>
-    <article className="live-focus__brief-headline"><small>Résumé du brief</small><strong title={brief.headline}>{formatOperatorParagraph(brief.headline)}</strong><p>{formatOperatorParagraph(context)}</p><span data-tone={contextStatus.tone}>{contextStatus.label}</span></article>
+    <article className="live-focus__brief-headline"><small>Résumé du brief</small><strong title={formatOperatorParagraph(brief.headline)}>{formatOperatorParagraph(brief.headline)}</strong><p>{formatOperatorParagraph(context)}</p><span data-tone={contextStatus.tone}>{contextStatus.label}</span></article>
     <article><small>État du marché</small><p>{formatOperatorParagraph(focus.marketContext.marketRegime || "Régime non publié")} · {formatOperatorParagraph(focus.marketContext.volatilityRegime || "Volatilité non publiée")} · {formatOperatorParagraph(focus.marketContext.globalBias || "Biais non publié")}</p></article>
     <article><small>Ce que le desk recherche</small><p>{preferred.length ? `Le desk privilégie ${preferred.join(", ")}.` : "Aucune famille de stratégie n’est privilégiée dans l’état publié."}</p></article>
     <article><small>Points de vigilance</small><p>{vigilance.length ? formatOperatorParagraph(`${vigilance.join(". ")}.`) : "Aucun point de vigilance supplémentaire n’est publié."}</p></article>
@@ -649,7 +650,7 @@ function formatOperatorParagraph(value: unknown) {
     const numericValue = Number(rawValue);
     if (!Number.isFinite(numericValue) || Math.abs(numericValue) >= 1) return rawValue;
     return `${(numericValue * 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
-  });
+  }).replace(/\bMarket context unavailable\b/gi, "Contexte de marché indisponible");
 }
 function focusTimeframeLabel(value: unknown) {
   const normalized = String(value ?? "").trim().toUpperCase().replace(/^M/, "");
@@ -688,8 +689,10 @@ function sendFocusNotification(title: string, body: string) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
   new Notification(title, { body, tag: "desk-live-focus" });
 }
-function focusClipboardText(model: LiveTradingModel): string {
-  const plan = focusTradePlan(model);
+function actionBelongsToIntent(action: { payload?: Readonly<Record<string, string | number | boolean>> }, intentId: string | null) {
+  return Boolean(intentId && String(action.payload?.portfolioOrderIntentId ?? "") === intentId);
+}
+function focusClipboardText(plan: ReturnType<typeof focusTradePlan>): string {
   return [
     `${plan.instrument} ${operatorCode(plan.side)}`,
     `Provenance : ${plan.authorityLabel}`,
