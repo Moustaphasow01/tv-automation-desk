@@ -1,4 +1,5 @@
 import { canonicalSha256, evaluateMarketContextPrefilterV1 } from "@tv-automation/desk-domain";
+import { evaluateCausalGrainContextAtBus } from "./grains-causal-context-prefilter.js";
 
 const GRAIN_INSTRUMENTS = new Set(["ZC", "ZW", "ZC1!", "ZW1!"]);
 
@@ -18,36 +19,7 @@ export class MarketContextPrefilterService {
     const preferEmbedded = options.preferEmbeddedContextGateDecision === true
       || options.prefer_embedded_context_gate_decision === true;
     const current = await this.repository?.current("US_GRAINS_CBOT", nowUtc);
-    const evaluated = grains.map((signal) => {
-      const snapshot = current?.snapshot || null;
-      const embedded = preferEmbedded ? embeddedGrainContextDecision(signal) : null;
-      if (embedded) {
-        return {
-          signal,
-          ...embedded,
-          marketContextSnapshotId: snapshot?.marketContextSnapshotId || snapshot?.market_context_snapshot_id || null,
-        };
-      }
-      const lookaheadReason = contextLookaheadReason(snapshot, nowUtc);
-      const decision = lookaheadReason
-        ? { decision: "WAIT", admissible: false, reasonCodes: [lookaheadReason] }
-        : evaluateMarketContextPrefilterV1({
-          signal: {
-            instrument: signal.instrument,
-            side: signal.direction,
-            strategyFamily: signal.payload?.strategy_family || signal.setup?.family || signal.setup?.setup_type || signal.setup?.setup_kind,
-            createdAt: signal.generated_at_utc,
-          },
-          snapshot,
-          at: nowUtc,
-          familyRequiresAgriEvents: signal.payload?.family_requires_agri_events !== false,
-        });
-      return {
-        signal,
-        ...decision,
-        marketContextSnapshotId: snapshot?.marketContextSnapshotId || snapshot?.market_context_snapshot_id || null,
-      };
-    });
+    const evaluated = grains.map((signal) => evaluateGrainContext({ signal, nowUtc, preferEmbedded, snapshot: current?.snapshot || null }));
     await this.#persist(evaluated, nowUtc);
     return [...passthrough, ...evaluated];
   }
@@ -71,7 +43,8 @@ export class MarketContextPrefilterService {
           payload = EXCLUDED.payload`, [
           id, item.marketContextSnapshotId, item.signal.signal_id, item.decision, item.reasonCodes,
           item.signal.source_data_cutoff_utc || item.signal.generated_at_utc, nowUtc,
-          JSON.stringify({ signalId: item.signal.signal_id, decision: item.decision, reasonCodes: item.reasonCodes }),
+          JSON.stringify({ signalId: item.signal.signal_id, decision: item.decision, reasonCodes: item.reasonCodes,
+            contextGate: item.contextGate || null, contextSource: item.contextSource || "SNAPSHOT_OR_LEGACY_EMBEDDED" }),
           item.signal.correlation_id || id, item.signal.signal_id,
         ]);
         if (this.eventOutbox) await this.eventOutbox.append({
@@ -79,7 +52,8 @@ export class MarketContextPrefilterService {
           eventType: "market.context.prefilter.decided", occurredAt: nowUtc,
           source: "market-context-prefilter", correlationId: item.signal.correlation_id || id,
           causationId: item.signal.signal_id,
-          payload: { signalId: item.signal.signal_id, snapshotId: item.marketContextSnapshotId, decision: item.decision, reasonCodes: item.reasonCodes },
+          payload: { signalId: item.signal.signal_id, snapshotId: item.marketContextSnapshotId, decision: item.decision, reasonCodes: item.reasonCodes,
+            contextGate: item.contextGate || null, contextSource: item.contextSource || "SNAPSHOT_OR_LEGACY_EMBEDDED" },
         }, client);
       }
       await client.query("COMMIT");
@@ -90,6 +64,31 @@ export class MarketContextPrefilterService {
       client.release();
     }
   }
+}
+
+function evaluateGrainContext({ signal, nowUtc, preferEmbedded, snapshot }) {
+  const causal = preferEmbedded ? evaluateCausalGrainContextAtBus({ signal, nowUtc }) : null;
+  if (causal) return causal;
+  const embedded = preferEmbedded ? embeddedGrainContextDecision(signal) : null;
+  if (embedded) return { signal, ...embedded, marketContextSnapshotId: null, contextSource: "LEGACY_SIGNAL_EMBEDDED" };
+  const lookaheadReason = contextLookaheadReason(snapshot, nowUtc);
+  const decision = lookaheadReason
+    ? { decision: "WAIT", admissible: false, reasonCodes: [lookaheadReason] }
+    : evaluateMarketContextPrefilterV1({
+      signal: contextSignalIdentity(signal), snapshot, at: nowUtc,
+      familyRequiresAgriEvents: signal.payload?.family_requires_agri_events !== false,
+    });
+  return { signal, ...decision, contextSource: "MARKET_CONTEXT_SNAPSHOT",
+    marketContextSnapshotId: snapshot?.marketContextSnapshotId || snapshot?.market_context_snapshot_id || null };
+}
+
+function contextSignalIdentity(signal) {
+  return {
+    instrument: signal.instrument,
+    side: signal.direction,
+    strategyFamily: signal.payload?.strategy_family || signal.setup?.family || signal.setup?.setup_type || signal.setup?.setup_kind,
+    createdAt: signal.generated_at_utc,
+  };
 }
 
 function embeddedGrainContextDecision(signal = {}) {

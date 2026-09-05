@@ -1,10 +1,9 @@
 import { grainChicagoDate, grainsRuntimeEvaluationDisposition, grainsTradingSessionState } from "./us-grains-data-quality.js";
-import { replayUsGrainsStrategySuiteV1 } from "./us-grains-strategy-suite.js";
+import { detectUsGrainsStrategySignals, US_GRAINS_STRATEGY_SUITE_VERSION } from "./us-grains-strategy-suite.js";
 import { publishActionableGrainSignals, selectActionableGrainSignals } from "./us-grains-live-signal-publisher.js";
+import { loadGrainRuntimeMarketInputs } from "./persistence/postgres-grains-runtime-inputs.js";
 
-const DEFAULT_SYMBOLS = Object.freeze(["ZW1!", "ZC1!"]);
-
-export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, replaySuite = replayUsGrainsStrategySuiteV1 } = {}) {
+export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, detectSignals = detectUsGrainsStrategySignals } = {}) {
   if (!store?.persistence?.pool) throw new Error("US_GRAINS_RUNTIME_STORE_REQUIRED");
   const normalizedArgs = normalizeGrainRunArgs(args);
   const dryRunMode = isReadOnlyGrainRun(normalizedArgs);
@@ -16,9 +15,8 @@ export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, r
 
   const catalogInstances = await loadGrainCatalogInstances(store, instruments);
   const runningCatalogInstances = selectRunningGrainCatalogInstances(catalogInstances);
-  const rowsBySymbol = await loadRowsBySymbol(store.persistence.pool, { tradingDate, asOfUtc });
-  const agriEvents = await loadAgriEvents(store.persistence.pool, { tradingDate, asOfUtc });
-  const replay = replaySuite({ rowsBySymbol, agriEvents, instruments, startDate: tradingDate, endDate: tradingDate, asOfUtc });
+  const { rowsBySymbol, agriEvents } = await loadGrainRuntimeMarketInputs(store.persistence.pool, { tradingDate, asOfUtc });
+  const replay = detectSignals({ rowsBySymbol, agriEvents, instruments, startDate: tradingDate, endDate: tradingDate, asOfUtc });
   const selectedActionable = tradingSession.state === "OPEN" ? selectActionableGrainSignals({
     replay, asOfUtc, includeExpired: normalizedArgs["include-expired"] === true,
   }) : [];
@@ -41,7 +39,7 @@ export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, r
   const heartbeatedInstances = selectCatalogInstances(catalogInstances, runtimeHeartbeat.updated_instance_ids);
   const actionable = filterSignalsForRunningGrainInstances(selectedActionable, heartbeatedInstances);
   const runtimeEvaluations = await recordGrainRuntimeEvaluations(store, {
-    catalogInstances: heartbeatedInstances, replay, actionable, asOfUtc, tradingDate, tradingSession,
+    catalogInstances: heartbeatedInstances, replay, actionable, asOfUtc, tradingDate, tradingSession, rowsBySymbol,
   });
   const publish = await publishActionableGrainSignals({
     store, signals: actionable, sourceClass: normalizedArgs["source-class"] || "SHADOW",
@@ -91,7 +89,8 @@ async function loadGrainCatalogInstances(store, instruments) {
       ORDER BY sd.name, si.strategy_instance_id`,
     [instruments],
   );
-  if (result.rows.length < instruments.length) {
+  const covered = new Set(result.rows.flatMap((row) => row.instrument_scope || []));
+  if (instruments.some((instrument) => !covered.has(instrument))) {
     throw new Error("US grains strategy catalog missing. Run `npm run grains:register-suite` first.");
   }
   return result.rows;
@@ -128,7 +127,7 @@ function heartbeatReport(instanceIds, asOfUtc) {
   };
 }
 
-async function recordGrainRuntimeEvaluations(store, { catalogInstances, replay, actionable, asOfUtc, tradingDate, tradingSession }) {
+async function recordGrainRuntimeEvaluations(store, { catalogInstances, replay, actionable, asOfUtc, tradingDate, tradingSession, rowsBySymbol }) {
   if (!store.strategyEvaluations?.record) {
     return { schema_version: "us_grains_runtime_evaluations_v1", status: "UNAVAILABLE", recorded_count: 0, reason: "strategy_evaluations_repository_unavailable" };
   }
@@ -138,15 +137,21 @@ async function recordGrainRuntimeEvaluations(store, { catalogInstances, replay, 
     raw: groupSignalsByInstance(replay.raw_signals || []),
   };
   const recorded = [];
+  const skipped = [];
   for (const instance of catalogInstances) {
-    const input = grainRuntimeEvaluationInput({ instance, signalsByInstance, asOfUtc, tradingDate, tradingSession });
+    const sourceCutoff = latestClosedM5Cutoff(rowsBySymbol, firstInstrument(instance.instrument_scope));
+    const input = grainRuntimeEvaluationInput({ instance, signalsByInstance, asOfUtc, tradingDate, tradingSession, sourceCutoff });
+    if (!input.source_data_cutoff_utc) {
+      skipped.push({ strategy_instance_id: instance.strategy_instance_id, reason: "SOURCE_DATA_CUTOFF_UNAVAILABLE" });
+      continue;
+    }
     const evaluation = await store.strategyEvaluations.record(input);
     recorded.push(grainRuntimeEvaluationResult(input.strategy_instance_id, evaluation));
   }
-  return { schema_version: "us_grains_runtime_evaluations_v1", status: "RECORDED", recorded_count: recorded.length, recorded };
+  return { schema_version: "us_grains_runtime_evaluations_v1", status: skipped.length ? "PARTIAL" : "RECORDED", recorded_count: recorded.length, recorded, skipped };
 }
 
-function grainRuntimeEvaluationInput({ instance, signalsByInstance, asOfUtc, tradingDate, tradingSession }) {
+function grainRuntimeEvaluationInput({ instance, signalsByInstance, asOfUtc, tradingDate, tradingSession, sourceCutoff }) {
   const signals = instanceSignals(signalsByInstance, instance.strategy_instance_id);
   const signal = evaluationSignal(signals, tradingSession);
   const disposition = grainsRuntimeEvaluationDisposition({ timestampUtc: asOfUtc, hasSignal: Boolean(signal) });
@@ -156,12 +161,17 @@ function grainRuntimeEvaluationInput({ instance, signalsByInstance, asOfUtc, tra
     source_class: "SHADOW", status: disposition.status,
     scheduler_run_key: `us-grains-shadow:${instance.strategy_instance_id}:${asOfUtc}`,
     correlation_id: `corr_us_grains_runtime_${tradingDate}_${instance.strategy_instance_id}_${asOfUtc}`,
-    causation_id: signal?.signal_id || null, artifact_version: "us_grains_strategy_suite_v1", instrument, timeframe: "5",
-    source_data_cutoff_utc: asOfUtc, started_at_utc: asOfUtc, completed_at_utc: asOfUtc,
+    causation_id: signal?.signal_id || null, artifact_version: US_GRAINS_STRATEGY_SUITE_VERSION, instrument, timeframe: "5",
+    source_data_cutoff_utc: signal?.source_data_cutoff_utc || sourceCutoff, started_at_utc: asOfUtc, completed_at_utc: asOfUtc,
     next_evaluation_at_utc: disposition.next_evaluation_at_utc, signal_id: signal?.signal_id || null,
     reason_codes: disposition.reason_codes,
     payload: grainRuntimeEvaluationPayload({ instance, signals, instrument, tradingDate, tradingSession, disposition }),
   };
+}
+
+function latestClosedM5Cutoff(rowsBySymbol, instrument) {
+  const latest = rowsBySymbol[`${instrument}1!:5`]?.at(-1);
+  return latest ? new Date(Date.parse(latest.timestamp_utc) + 300_000).toISOString() : null;
 }
 
 function instanceSignals(signalsByInstance, strategyInstanceId) {
@@ -174,7 +184,7 @@ function instanceSignals(signalsByInstance, strategyInstanceId) {
 }
 
 function evaluationSignal(signals, tradingSession) {
-  return tradingSession?.state === "OPEN" ? signals.actionable[0] || signals.accepted[0] || null : null;
+  return tradingSession?.state === "OPEN" ? signals.actionable.at(-1) || null : null;
 }
 
 function grainRuntimeEvaluationPayload({ instance, signals, instrument, tradingDate, tradingSession, disposition }) {
@@ -194,43 +204,6 @@ function grainRuntimeEvaluationResult(strategyInstanceId, evaluation) {
   };
 }
 
-async function loadRowsBySymbol(pool, { tradingDate, asOfUtc }) {
-  const startUtc = addDaysIso(`${tradingDate}T00:00:00.000Z`, -8);
-  const entries = [];
-  for (const symbol of DEFAULT_SYMBOLS) {
-    for (const timeframe of ["1", "5"]) entries.push([`${symbol}:${timeframe}`, await loadCandles(pool, feedId(symbol, timeframe), startUtc, asOfUtc)]);
-  }
-  return Object.fromEntries(entries);
-}
-
-async function loadCandles(pool, feedIdValue, startUtc, endUtc) {
-  const result = await pool.query(
-    `SELECT timestamp_utc, open, high, low, close, volume
-       FROM market_candles
-      WHERE feed_id = $1 AND timestamp_utc >= $2::timestamptz AND timestamp_utc <= $3::timestamptz AND is_closed = true
-      ORDER BY timestamp_utc ASC`, [feedIdValue, startUtc, endUtc],
-  );
-  return result.rows.map((row) => ({
-    timestamp_utc: new Date(row.timestamp_utc).toISOString(), open: Number(row.open), high: Number(row.high),
-    low: Number(row.low), close: Number(row.close), volume: row.volume === null ? null : Number(row.volume),
-  }));
-}
-
-async function loadAgriEvents(pool, { tradingDate, asOfUtc }) {
-  const startUtc = addDaysIso(`${tradingDate}T00:00:00.000Z`, -8);
-  const result = await pool.query(
-    `SELECT event_kind, title, event_timestamp_utc, importance, actual_available_at_utc
-       FROM market_agri_events
-      WHERE universe_key = 'US_GRAINS_CBOT' AND event_timestamp_utc >= $1::timestamptz AND event_timestamp_utc <= $2::timestamptz
-        AND (actual_available_at_utc IS NULL OR actual_available_at_utc <= $2::timestamptz)
-      ORDER BY event_timestamp_utc ASC`, [startUtc, asOfUtc],
-  );
-  return result.rows.map((row) => ({
-    event_kind: row.event_kind, title: row.title, event_timestamp_utc: new Date(row.event_timestamp_utc).toISOString(),
-    actual_available_at_utc: row.actual_available_at_utc ? new Date(row.actual_available_at_utc).toISOString() : null, importance: row.importance,
-  }));
-}
-
 function readOnlyHeartbeat(instances, asOfUtc) {
   return { ...heartbeatReport([], asOfUtc), status: "READ_ONLY", eligible_instance_count: instances.length };
 }
@@ -248,7 +221,9 @@ function summary({ asOfUtc, tradingDate, instruments, replay, actionable, publis
     schema_version: "us_grains_strategy_suite_once_result_v1", as_of_utc: asOfUtc, trading_date: tradingDate, instruments,
     trading_session: tradingSession || null, dry_run: dryRunMode, runtime_heartbeat: runtimeHeartbeat || null,
     runtime_evaluations: runtimeEvaluations || null, raw_signal_count: replay.raw_signal_count,
-    context_accepted_count: replay.context_accepted_count, selected_signal_count: replay.selected_signal_count,
+    context_accepted_count: null, selected_signal_count: null,
+    detection_version: replay.suite_version || US_GRAINS_STRATEGY_SUITE_VERSION,
+    qualification_stage: "RAW_SIGNAL_BUS_PENDING", execution_simulated: false,
     actionable_signal_count: actionable.length, publish,
   };
 }
@@ -264,8 +239,6 @@ function booleanFlag(value, name) {
   if (value === true || value === "true") return true;
   throw new Error(`US_GRAINS_RUN_FLAG_INVALID:${name}`);
 }
-function feedId(symbol, timeframe) { return `prod__tradingview__${String(symbol).toUpperCase()}__${String(timeframe).toUpperCase()}`; }
-function addDaysIso(iso, days) { return new Date(Date.parse(iso) + days * 24 * 60 * 60 * 1000).toISOString(); }
 function firstInstrument(value) { return Array.isArray(value) && value.length ? String(value[0]).toUpperCase() : String(value || "ZC").toUpperCase(); }
 function isoOrThrow(value) { const parsed = Date.parse(String(value || "")); if (!Number.isFinite(parsed)) throw new Error("Valid as-of timestamp is required."); return new Date(parsed).toISOString(); }
 function groupSignalsByInstance(signals = []) {

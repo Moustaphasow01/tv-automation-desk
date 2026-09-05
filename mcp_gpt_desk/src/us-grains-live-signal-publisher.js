@@ -1,12 +1,12 @@
-export const US_GRAINS_LIVE_SIGNAL_PUBLISHER_VERSION = "us_grains_live_signal_publisher_v1";
+export const US_GRAINS_LIVE_SIGNAL_PUBLISHER_VERSION = "us_grains_live_signal_publisher_v2";
 
 export function selectActionableGrainSignals(input = {}) {
   const asOfUtc = isoOrThrow(input.asOfUtc || input.as_of_utc || input.now_utc);
   const includeExpired = input.includeExpired === true || input.include_expired === true;
   const signals = Array.isArray(input.signals)
     ? input.signals
-    : Array.isArray(input.replay?.accepted_signals)
-      ? input.replay.accepted_signals
+    : Array.isArray(input.replay?.raw_signals)
+      ? input.replay.raw_signals
       : [];
   return signals
     .filter((signal) => signalActionableAt(signal, asOfUtc, { includeExpired }))

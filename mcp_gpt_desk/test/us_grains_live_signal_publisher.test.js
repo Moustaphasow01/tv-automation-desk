@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { publishActionableGrainSignals } from "../src/us-grains-live-signal-publisher.js";
+import { publishActionableGrainSignals, selectActionableGrainSignals } from "../src/us-grains-live-signal-publisher.js";
+
+test("TD2-429 publication input is raw signals, not the simulator's selected subset", () => {
+  const raw = signal();
+  const result = selectActionableGrainSignals({
+    asOfUtc: "2026-08-10T15:00:00Z", replay: { raw_signals: [raw], accepted_signals: [] },
+  });
+  assert.deepEqual(result, [raw]);
+  assert.deepEqual(selectActionableGrainSignals({
+    asOfUtc: "2026-08-10T15:00:00Z", replay: { accepted_signals: [raw] },
+  }), []);
+});
+
+test("TD2-429 signal publication rejects pre-close and expired windows", () => {
+  const raw = signal();
+  assert.deepEqual(selectActionableGrainSignals({ asOfUtc: "2026-08-10T14:44:59Z", signals: [raw] }), []);
+  assert.deepEqual(selectActionableGrainSignals({ asOfUtc: raw.expires_at_utc, signals: [raw] }), []);
+});
 
 test("TD2-429 uses the internal running-instance publisher for grains", async () => {
   const calls = [];

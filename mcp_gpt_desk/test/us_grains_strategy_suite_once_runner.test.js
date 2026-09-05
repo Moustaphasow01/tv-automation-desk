@@ -12,7 +12,7 @@ const AS_OF = "2026-08-10T15:00:00.000Z";
 
 test("TD2-429 keeps paused and stopped grains instances out of runtime writes and publication", async () => {
   const fixture = runnerFixture();
-  const result = await runUsGrainsStrategySuiteOnce({ store: fixture.store, nowUtc: AS_OF, replaySuite: replayWithSignals });
+  const result = await runUsGrainsStrategySuiteOnce({ store: fixture.store, args: { instruments: "ZW" }, nowUtc: AS_OF, detectSignals: replayWithSignals });
 
   assert.equal(result.runtime_heartbeat.updated_instance_count, 1);
   assert.deepEqual(fixture.heartbeatIds, ["11111111-1111-4111-8111-111111111111"]);
@@ -24,7 +24,7 @@ test("TD2-429 keeps paused and stopped grains instances out of runtime writes an
 test("TD2-429 dry-run and no-publish are read-only after schema validation", async () => {
   for (const flag of ["dry-run", "no-publish"]) {
     const fixture = runnerFixture({ failOnWrite: true });
-    const result = await runUsGrainsStrategySuiteOnce({ store: fixture.store, args: { [flag]: "true" }, nowUtc: AS_OF, replaySuite: replayWithSignals });
+    const result = await runUsGrainsStrategySuiteOnce({ store: fixture.store, args: { instruments: "ZW", [flag]: "true" }, nowUtc: AS_OF, detectSignals: replayWithSignals });
 
     assert.equal(result.dry_run, true);
     assert.equal(result.runtime_heartbeat.status, "READ_ONLY");
@@ -34,6 +34,26 @@ test("TD2-429 dry-run and no-publish are read-only after schema validation", asy
     assert.equal(fixture.publishedIds.length, 0);
     assert.equal(fixture.queries.some((statement) => /\b(UPDATE|INSERT|DELETE|CREATE)\b/i.test(statement)), false);
   }
+});
+
+test("TD2-429 sends raw candidates to the bus, never simulator-selected winners", async () => {
+  const fixture = runnerFixture();
+  const result = await runUsGrainsStrategySuiteOnce({
+    store: fixture.store, args: { instruments: "ZW" }, nowUtc: AS_OF,
+    detectSignals: () => ({ ...replayWithSignals(), accepted_signals: [], context_accepted_count: 0 }),
+  });
+  assert.equal(result.publish.published_count, 1);
+  assert.equal(result.execution_simulated, false);
+  assert.equal(result.context_accepted_count, null);
+  assert.equal(result.qualification_stage, "RAW_SIGNAL_BUS_PENDING");
+});
+
+test("TD2-429 validates catalog coverage per requested instrument", async () => {
+  const fixture = runnerFixture();
+  await assert.rejects(() => runUsGrainsStrategySuiteOnce({
+    store: fixture.store, args: { instruments: "ZW,ZC", "dry-run": true }, nowUtc: AS_OF,
+    detectSignals: replayWithSignals,
+  }), /catalog missing/);
 });
 
 test("TD2-429 policy runs only RUNNING instances, not scheduler STARTING", () => {
@@ -122,6 +142,7 @@ function signal(strategyInstanceId) {
     instrument: "ZW",
     direction: "LONG",
     generated_at_utc: "2026-08-10T14:45:00.000Z",
+    source_data_cutoff_utc: "2026-08-10T14:45:00.000Z",
     expires_at_utc: "2026-08-10T16:00:00.000Z",
   };
 }

@@ -50,7 +50,8 @@ test("grain context prefilter can honor the embedded deterministic context gate 
 
   assert.equal(decision.decision, "ADMISSIBLE");
   assert.equal(decision.admissible, true);
-  assert.equal(decision.marketContextSnapshotId, "ctx-live");
+  assert.equal(decision.marketContextSnapshotId, null);
+  assert.equal(decision.contextSource, "LEGACY_SIGNAL_EMBEDDED");
   assert.deepEqual(decision.reasonCodes, [
     "US_GRAINS_EMBEDDED_CONTEXT_GATE_TRUTH",
     "US_GRAINS_RTH_ONLY",
