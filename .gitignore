@@ -25,6 +25,8 @@ status.json
 command_queue.json
 
 # Generated datasets and exports
+# Private, frozen PostgreSQL evidence for the grains audit (report is versioned).
+/output/research/grains-week-20260905/
 tmp/
 screenshots/
 signals/
