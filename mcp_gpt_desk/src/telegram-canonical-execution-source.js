@@ -1,14 +1,19 @@
 export async function loadCanonicalTelegramExecutionRows(pool) {
   const [intents, theoreticalEvents, manualEvents] = await Promise.all([
-    safeQuery(pool, CANONICAL_INTENTS_SQL),
-    safeQuery(pool, THEORETICAL_EVENTS_SQL),
-    safeQuery(pool, MANUAL_EVENTS_SQL),
+    queryRows(pool, CANONICAL_INTENTS_SQL, [null]),
+    queryRows(pool, THEORETICAL_EVENTS_SQL),
+    queryRows(pool, MANUAL_EVENTS_SQL),
   ]);
   return [...intents, ...theoreticalEvents, ...manualEvents];
 }
 
-async function safeQuery(pool, sql) {
-  const result = await pool.query(sql).catch(() => ({ rows: [] }));
+export async function loadCanonicalTelegramOrder(pool, orderIntentId) {
+  return (await queryRows(pool, CANONICAL_INTENTS_SQL, [orderIntentId]))[0] || null;
+}
+
+async function queryRows(pool, sql, values = []) {
+  // A failed canonical query is not an empty trading queue.
+  const result = await pool.query(sql, values);
   return result.rows;
 }
 
@@ -18,8 +23,10 @@ const CANONICAL_INTENTS_SQL = `
          COALESCE(g.status, l.status)::text AS source_state,
          COALESCE(g.updated_at_utc, l.created_at_utc) AS occurred_at,
          COALESCE(l.payload, '{}'::jsonb) || jsonb_build_object(
+           'telegram_qualification_source', 'portfolio_risk_human_gate',
            'order_intent_id', l.portfolio_order_intent_id,
            'target_position_id', l.target_position_id,
+           'human_execution_gate_id', g.human_execution_gate_id,
            'instrument', COALESCE(l.payload->>'instrument', t.instrument),
            'side', COALESCE(l.payload->>'side', l.payload->>'action'),
            'order_type', COALESCE(l.payload->>'order_type', l.payload#>>'{execution_terms,order_type}'),
@@ -40,12 +47,13 @@ const CANONICAL_INTENTS_SQL = `
     JOIN portfolio_target_positions t ON t.target_position_id = l.target_position_id
     LEFT JOIN human_execution_gates g ON g.portfolio_order_intent_id = l.portfolio_order_intent_id
     LEFT JOIN LATERAL (
-      SELECT rd.*
+      SELECT rd.decision, rd.authorized
         FROM portfolio_target_position_risk_decisions tr
         JOIN portfolio_risk_decisions rd ON rd.risk_decision_id = tr.risk_decision_id
        WHERE tr.target_position_id = l.target_position_id
        ORDER BY tr.created_at_utc DESC LIMIT 1
     ) rd ON true
+   WHERE ($1::text IS NULL OR l.portfolio_order_intent_id = $1)
    ORDER BY COALESCE(g.updated_at_utc, l.created_at_utc) DESC LIMIT 200`;
 
 const THEORETICAL_EVENTS_SQL = `
@@ -61,10 +69,12 @@ const THEORETICAL_EVENTS_SQL = `
            'price', e.price,
            'instrument', COALESCE(l.payload->>'instrument', t.instrument),
            'side', COALESCE(l.payload->>'side', l.payload->>'action'),
-           'entry_price', tr.avg_entry_price,
-           'exit_price', tr.avg_exit_price,
-           'result_r', CASE WHEN tr.status::text = 'closed' THEN tr.result_r ELSE NULL END,
-           'trade_status', tr.status
+           'entry_price', CASE WHEN e.event_type::text = 'entry_filled' THEN to_jsonb(e.price)
+                             ELSE COALESCE(l.payload#>'{entry,price}', l.payload#>'{execution_terms,entry,price}') END,
+           'exit_price', CASE WHEN e.event_type::text IN ('target_hit','stop_hit') THEN e.price ELSE NULL END,
+           'result_r', CASE WHEN e.event_type::text IN ('target_hit','stop_hit')
+                              AND tr.status::text = 'closed' AND tr.closed_at <= e.event_at_utc
+                           THEN tr.result_r ELSE NULL END
          ) AS payload
     FROM trade_theoretical_execution_events e
     LEFT JOIN portfolio_order_intent_lineage l ON l.portfolio_order_intent_id = e.portfolio_order_intent_id

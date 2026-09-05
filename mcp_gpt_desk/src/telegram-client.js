@@ -62,6 +62,7 @@ export class TelegramClient {
           `Telegram ${this.profile} request failed (${code}): ${String(data?.description || response.statusText || "unknown error").slice(0, 300)}`,
           {
             retryable: code === 429 || code >= 500,
+            deliveryUncertain: method === "sendMessage" && (code >= 500 || data?.ok !== false),
             statusCode: code,
             retryAfterSeconds: positiveInteger(data?.parameters?.retry_after),
           },
@@ -70,7 +71,15 @@ export class TelegramClient {
       return data.result;
     } catch (error) {
       if (error?.name === "AbortError") {
-        throw telegramError("TELEGRAM_TIMEOUT", `Telegram ${this.profile} request timed out.`, { retryable: true });
+        throw telegramError("TELEGRAM_TIMEOUT", `Telegram ${this.profile} request timed out.`, {
+          retryable: method !== "sendMessage",
+          deliveryUncertain: method === "sendMessage",
+        });
+      }
+      // A lost response is not proof of non-delivery. Telegram has no send idempotency key.
+      if (method === "sendMessage" && error.deliveryUncertain !== false) {
+        error.deliveryUncertain = true;
+        error.retryable = false;
       }
       throw error;
     } finally {

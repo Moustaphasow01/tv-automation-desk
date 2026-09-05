@@ -1,8 +1,10 @@
+import { telegramOrderQualificationReason } from "./telegram-order-qualification.js";
+
 const ORDER_TYPE_LABELS = Object.freeze({
-  market: "MARKET",
-  limit: "LIMIT",
-  stop_market: "STOP MARKET",
-  stop_limit: "STOP LIMIT",
+  market: "AU MARCHÉ",
+  limit: "LIMITE",
+  stop_market: "STOP AU MARCHÉ",
+  stop_limit: "STOP LIMITE",
 });
 
 const MANAGEMENT_ACTION_LABELS = Object.freeze({
@@ -33,7 +35,8 @@ export function buildTelegramTradingCandidate(row = {}, { manualTelegramExecutio
   const kind = String(row.source_kind || "trade_event");
   if (!isTelegramTradingAlertSourceAllowed({ kind, sourceId: row.source_id, payload })) return null;
   if (telegramTradingDeliverySuppressionReason({ sourceKind: kind, state, payload }, { now })) return null;
-  if (kind === "trade_decision" && (state === "draft" || !payload.side)) return null;
+  // Raw detections belong in the desk journal, never in the qualified-order channel.
+  if (kind === "trade_decision") return null;
   return {
     profile: "trading",
     sourceKey: `${kind}:${row.source_id}`,
@@ -50,7 +53,7 @@ export function buildTelegramTradingCandidate(row = {}, { manualTelegramExecutio
       occurredAt: row.occurred_at,
       manualTelegramExecution,
     }),
-    payload: { source_id: row.source_id, source_state: state, occurred_at: dateTime(row.occurred_at), ...payload },
+    payload: { ...payload, source_id: row.source_id, source_state: state, occurred_at: dateTime(row.occurred_at) },
   };
 }
 
@@ -71,9 +74,11 @@ export function telegramTradingDeliverySuppressionReason(delivery = {}, { now = 
   ]);
   const expiresAtMs = Date.parse(String(expiresAt || ""));
   const nowMs = epochMs(now);
-  return Number.isFinite(expiresAtMs) && Number.isFinite(nowMs) && nowMs >= expiresAtMs
-    ? "ORDER_INTENT_EXPIRED_BEFORE_TELEGRAM_DELIVERY"
-    : null;
+  if (Number.isFinite(expiresAtMs) && Number.isFinite(nowMs) && nowMs >= expiresAtMs) {
+    return "ORDER_INTENT_EXPIRED_BEFORE_TELEGRAM_DELIVERY";
+  }
+  if (!Number.isFinite(nowMs)) return "ORDER_INTENT_CLOCK_UNVERIFIED";
+  return telegramOrderQualificationReason(payload);
 }
 
 function formatTheoreticalExecutionTicket({ state, sourceId, payload, occurredAt }) {
@@ -138,7 +143,7 @@ function formatManualEntryTicket({ state, sourceId, payload, occurredAt }) {
   const instrument = text(payload.instrument || payload.broker_symbol || payload.symbol, "Instrument N/D");
   const orderType = orderTypeLabel(payload.order_type);
   const entry = entryInstruction(payload);
-  const gateStatus = field(payload, ["human_gate_status", "humanGateStatus", "human_execution_gate_status"], "AWAITING_MANUAL_CONFIRMATION");
+  const gateStatus = field(payload, ["human_gate_status", "humanGateStatus", "human_execution_gate_status"], "NON PUBLIÉ");
   const strategyId = field(payload, ["strategy_id", "strategyId"]);
   const strategyInstanceId = field(payload, ["strategy_instance_id", "strategyInstanceId"]);
   const stop = pickPrice(payload, [["protective_stop"], ["bracket", "stop_price"], ["stop_loss"]]);
@@ -150,11 +155,11 @@ function formatManualEntryTicket({ state, sourceId, payload, occurredAt }) {
   const validity = dateTime(payload.expires_at || payload.valid_until);
   const orderIntentId = text(payload.order_intent_id || sourceId, "N/D");
   const lines = [
-    `🚨 MANUAL ACTION REQUIRED — ${side.icon} ${side.label} ${instrument}`,
+    `${telegramOrderQualificationReason(payload) ? "ℹ️ DOSSIER À VÉRIFIER" : "🔔 ORDRE QUALIFIÉ — À CONFIRMER"} — ${side.icon} ${side.label} ${instrument}`,
     "━━━━━━━━━━━━━━━━━━━━",
     `🎯 Action: ${side.label} · ${orderType}`,
     `🧾 OrderIntent: ${orderIntentId}`,
-    `🧠 Strategy: ${text(strategyId, "N/D")}`,
+    `🧠 Stratégie: ${text(strategyId, "N/D")}`,
     `🧩 Instance: ${text(strategyInstanceId, "N/D")}`,
     "",
     "📍 Prix à poser",
@@ -165,13 +170,13 @@ function formatManualEntryTicket({ state, sourceId, payload, occurredAt }) {
     "",
     "🛡️ Contrôles desk",
     `• Desk: ${upper(state)}`,
-    `• Human Gate: ${upper(gateStatus)}`,
-    `• Risk: ${text(riskDecision, "N/D")}`,
-    `• Context: ${text(contextDecision, "N/D")}`,
+    `• Validation humaine: ${upper(gateStatus)}`,
+    `• Décision risque: ${text(riskDecision, "N/D")}`,
+    `• Contexte: ${text(contextDecision, "N/D")}`,
     `• Risque: ${riskAmount === null || riskAmount === undefined ? "N/D" : text(riskAmount)}${expectedR === null || expectedR === undefined ? "" : ` · RR/R attendu: ${text(expectedR)}`}`,
     "",
     `⏱️ Validité: ${validity}`,
-    "⚠️ Aucun ordre Ninja/broker n’a été envoyé. Action manuelle opérateur requise.",
+    "⚠️ Notification ≠ exécution. Vérifier le dossier et les actions autorisées dans le Desk avant toute intervention.",
   ];
   if (payload.invalidation) lines.push(`Invalidation: ${oneLine(invalidationReason(payload.invalidation))}`);
   if (payload.rationale) lines.push(`📝 Lecture: ${oneLine(payload.rationale)}`);
@@ -233,7 +238,8 @@ const NON_OPERATIONAL_TRADING_ALERT_PATTERNS = Object.freeze([
 function sideLabel(value) {
   const normalized = String(value || "").toLowerCase();
   if (["sell", "short"].includes(normalized)) return { label: "VENTE", icon: "🔴" };
-  return { label: "ACHAT", icon: "🟢" };
+  if (["buy", "long"].includes(normalized)) return { label: "ACHAT", icon: "🟢" };
+  return { label: "SENS NON PUBLIÉ", icon: "⚪" };
 }
 
 function orderTypeLabel(value) {
@@ -242,8 +248,8 @@ function orderTypeLabel(value) {
 
 function entryInstruction(payload) {
   const type = String(payload.order_type || "").toLowerCase();
-  if (type === "market") return "MARKET maintenant";
-  if (type === "limit") return `LIMIT ${price(payload.limit_price ?? payload.entry_price)}`;
+  if (type === "market") return "AU MARCHÉ — après validation opérateur";
+  if (type === "limit") return `LIMITE ${price(payload.limit_price ?? payload.entry_price)}`;
   if (type === "stop_market") return `STOP ${price(payload.stop_price ?? payload.entry_price)}`;
   if (type === "stop_limit") return `STOP ${price(payload.stop_price)} / LIMIT ${price(payload.limit_price)}`;
   return price(payload.entry_price ?? payload.limit_price ?? payload.stop_price);
@@ -255,8 +261,8 @@ function quantity(value) {
 }
 
 function price(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? formatNumber(parsed) : "N/D";
+  const parsed = finite(value);
+  return parsed === null ? "N/D" : formatNumber(parsed);
 }
 
 function finite(value) {

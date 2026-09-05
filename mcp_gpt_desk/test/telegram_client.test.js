@@ -66,3 +66,24 @@ test("Telegram client can delete a bot-owned deployment message", async () => {
   assert.equal(await client.deleteMessage({ chatId: "100", messageId: 42 }), true);
   assert.deepEqual(payload, { chat_id: "100", message_id: 42 });
 });
+
+for (const kind of ["network", "abort", "server", "malformed"]) {
+  test(`Telegram send ${kind} failure is ambiguous and must not be automatically retried`, async () => {
+    const client = new TelegramClient({ token: "test-token", profile: "trading", fetchImpl: async () => {
+      if (kind === "network") throw new TypeError("fetch failed");
+      if (kind === "abort") throw Object.assign(new Error("timeout"), { name: "AbortError" });
+      return { ok: kind === "malformed", status: kind === "server" ? 503 : 200,
+        async json() { return kind === "server" ? { ok: false, error_code: 503 } : {}; } };
+    } });
+    await assert.rejects(client.sendMessage({ chatId: "test-only", text: "Test — no order" }),
+      error => error.deliveryUncertain === true && error.retryable === false);
+  });
+}
+
+test("explicit Telegram 429 send rejection is known not delivered and can be retried", async () => {
+  const client = new TelegramClient({ token: "test-token", fetchImpl: async () => ({
+    ok: false, status: 429, async json() { return { ok: false, error_code: 429 }; },
+  }) });
+  await assert.rejects(client.sendMessage({ chatId: "test-only", text: "Test — no order" }),
+    error => error.deliveryUncertain === false && error.retryable === true);
+});

@@ -26,12 +26,15 @@ test("LOT-012 SEMI_MANUAL path notifies operator and blocks broker dispatch unti
   const lineage = lineageFromPipeline(pipeline);
   const executionRepository = new InMemoryPortfolioOrderIntentExecutionRepository({ lineages: [lineage] });
   const execution = new PortfolioOrderIntentExecutionService({ repository: executionRepository, clock: CLOCK });
+  const gate = await execution.ensureHumanGate({
+    portfolioOrderIntentId: lineage.portfolio_order_intent_id, expiresAtUtc: "2026-08-14T09:45:00Z",
+  });
 
   const blocked = await execution.materializeReadyCommands({
     provider_profile: providerProfile(),
     execution_mode: "SEMI_MANUAL",
   });
-  const notification = buildManualNotification({ context, lineage });
+  const notification = buildManualNotification({ context, lineage, gate, pipeline });
 
   assert.equal(context.status, "SHADOW_RECORDED");
   assert.equal(pipeline.status, "ORDER_INTENTS_READY");
@@ -39,13 +42,13 @@ test("LOT-012 SEMI_MANUAL path notifies operator and blocks broker dispatch unti
   assert.equal(blocked.count, 0);
   assert.equal(blocked.items[0].reason, "HUMAN_CONFIRMATION_REQUIRED");
   assert.equal(executionRepository.providerCommands.size, 0);
-  assert.match(notification, /MANUAL ACTION REQUIRED/);
-  assert.match(notification, /Human Gate: AWAITING_MANUAL_CONFIRMATION/);
-  assert.match(notification, /Strategy: TD2-P0-MNQ-IB-REVERSAL/);
-  assert.match(notification, /Risk: APPROVED/);
-  assert.match(notification, /Context: TAKE/);
+  assert.match(notification, /ORDRE QUALIFIÉ — À CONFIRMER/);
+  assert.match(notification, /Validation humaine: AWAITING_MANUAL_CONFIRMATION/);
+  assert.match(notification, /Stratégie: TD2-P0-MNQ-IB-REVERSAL/);
+  assert.match(notification, /Décision risque: APPROVED/);
+  assert.match(notification, /Contexte: TAKE/);
   assert.match(notification, /Invalidation:/);
-  assert.match(notification, /Aucun ordre Ninja\/broker n’a été envoyé/);
+  assert.match(notification, /Notification ≠ exécution/);
 });
 
 test("LOT-012 operator confirm is idempotent and immutable before PAPER provider command", async () => {
@@ -204,7 +207,7 @@ async function runPortfolioRiskPipeline(overrides = {}) {
   return service.runPipeline(commandFixture(overrides));
 }
 
-function buildManualNotification({ context, lineage }) {
+function buildManualNotification({ context, lineage, gate, pipeline }) {
   const intent = lineage.order_intent_payload;
   return buildTelegramTradingMessage({
     kind: "order_intent",
@@ -214,14 +217,17 @@ function buildManualNotification({ context, lineage }) {
     manualTelegramExecution: true,
     payload: {
       ...intent,
+      telegram_qualification_source: "portfolio_risk_human_gate",
+      human_execution_gate_id: gate.human_execution_gate_id,
+      expires_at: gate.expires_at_utc,
       side: intent.action,
-      limit_price: 28000,
+      entry_price: intent.entry.price,
       protective_stop: intent.protection.stop_price,
       profit_target: intent.protection.target_price,
       strategy_id: "TD2-P0-MNQ-IB-REVERSAL",
       strategy_instance_id: "strategy-instance-lot-012",
-      human_gate_status: "AWAITING_MANUAL_CONFIRMATION",
-      risk_decision: "APPROVED",
+      human_gate_status: gate.status,
+      risk_decision: pipeline.risk.allocation_evaluations[0].decision,
       context_gate_decision: context.result.decision.recommendation,
       invalidation: context.result.decision.invalidation,
       rationale: "Signal déterministe validé par contexte; ordre à poser uniquement par opérateur.",
@@ -267,6 +273,8 @@ function commandFixture(overrides = {}) {
       generated_at_utc: "2026-08-14T09:18:00.000Z",
       expires_at_utc: overrides.signal_expires_at_utc || "2026-08-14T09:45:00.000Z",
       status: "ACTIVE",
+      proposed_trade_plan: { instrument: "MNQ", direction: "LONG", order_type: "LIMIT",
+        entry: { price: 28000 }, stop: { price: 27950 }, targets: [{ price: 28100 }] },
     }],
     risk_budget: {
       budget_id: "risk-budget-lot-012",

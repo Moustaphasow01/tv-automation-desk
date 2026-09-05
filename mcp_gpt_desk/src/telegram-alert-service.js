@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { TelegramClient } from "./telegram-client.js";
-import { loadCanonicalTelegramExecutionRows } from "./telegram-canonical-execution-source.js";
+import { SystemClock } from "@tv-automation/desk-time";
+import { deliverTelegramCandidate } from "./telegram-delivery-runtime.js";
+import { loadTelegramTradingRows } from "./telegram-trading-source.js";
 import { buildTelegramTradingCandidate, isTelegramTradingAlertSourceAllowed, telegramTradingDeliverySuppressionReason } from "./telegram-trading-message.js";
-import { boundedNumber, countBy, formatCounts, inferScope, iso, telegramRetryDelaySeconds, telegramSourceKindsToBaseline } from "./telegram-alert-utilities.js";
+import { boundedNumber, countBy, formatCounts, inferScope, iso, telegramSourceKindsToBaseline } from "./telegram-alert-utilities.js";
 const CONFIG_ID = "desk_telegram";
 const ACTIVE_NOTIFICATION_STATES = new Set(["pending", "active", "watching", "action_required", "open"]);
 export { isTelegramTradingAlertSourceAllowed };
@@ -11,7 +13,7 @@ export class TelegramAlertService {
   constructor({ persistence, clock, env = process.env, fetchImpl = globalThis.fetch } = {}) {
     if (!persistence?.pool) throw new Error("telegram_postgres_persistence_required");
     this.persistence = persistence;
-    this.clock = clock;
+    this.clock = clock || new SystemClock();
     this.env = env;
     this.pollMs = boundedNumber(env.DESK_TELEGRAM_POLL_MS, 5000, 1000, 60000);
     this.deliveryMinIntervalMs = boundedNumber(env.DESK_TELEGRAM_DELIVERY_MIN_INTERVAL_MS, 1200, 1000, 60000);
@@ -61,12 +63,13 @@ export class TelegramAlertService {
     const counts = Object.fromEntries(countsResult.rows.map((row) => [row.status, row.count]));
     const identities = Object.fromEntries(identityResult.rows.map((row) => [row.state_key.split(":")[1], row.state_value]));
     const envStatus = this.envStatus();
-    const muted = Boolean(config.mutedUntil && Date.parse(config.mutedUntil) > Date.now());
+    const nowMs = telegramNowEpochMs(this.clock);
+    const muted = Boolean(config.mutedUntil && Date.parse(config.mutedUntil) > nowMs);
     return {
       ok: true,
       contract: "DeskTelegramStatus",
       schemaVersion: "1.0.0",
-      generatedAt: new Date().toISOString(),
+      generatedAt: new Date(nowMs).toISOString(),
       config,
       effective: {
         enabled: envStatus.workerEnabled && config.enabled && !muted,
@@ -137,7 +140,7 @@ export class TelegramAlertService {
           adminEnabled: current.admin_enabled,
           tradingEnabled: current.trading_enabled,
           commandsEnabled: current.commands_enabled,
-          mutedUntil: new Date(Date.now() + minutes * 60000).toISOString(),
+          mutedUntil: new Date(telegramNowEpochMs(this.clock) + minutes * 60000).toISOString(),
         };
       } else if (action === "resume") {
         patch = {
@@ -184,7 +187,7 @@ export class TelegramAlertService {
         id: identity.id,
         username: identity.username || null,
         displayName: [identity.first_name, identity.last_name].filter(Boolean).join(" ") || null,
-        verifiedAt: new Date().toISOString(),
+        verifiedAt: new Date(telegramNowEpochMs(this.clock)).toISOString(),
       });
     }
   }
@@ -249,162 +252,15 @@ export class TelegramAlertService {
 
   async deliverNext() {
     await this.persistence.initialized;
-    const envStatus = this.envStatus();
-    if (!envStatus.workerEnabled) return { status: "disabled_by_environment" };
     const configResult = await this.persistence.pool.query(
-      "SELECT * FROM telegram_runtime_config WHERE config_id = $1",
-      [CONFIG_ID],
+      "SELECT * FROM telegram_runtime_config WHERE config_id = $1", [CONFIG_ID],
     );
-    const config = normalizeConfig(configResult.rows[0]);
-    if (!config.enabled) return { status: "disabled" };
-    if (config.mutedUntil && Date.parse(config.mutedUntil) > Date.now()) return { status: "muted" };
-
-    const client = await this.persistence.pool.connect();
-    let delivery;
-    try {
-      await client.query("BEGIN");
-      const selected = await client.query(
-        `SELECT *
-         FROM telegram_delivery_outbox
-         WHERE status = 'pending' AND available_at_utc <= now()
-           AND NOT EXISTS (
-             SELECT 1
-             FROM telegram_delivery_outbox recent
-             WHERE recent.profile = telegram_delivery_outbox.profile
-               AND recent.status = 'sent'
-               AND recent.sent_at_utc > now() - ($1 * interval '1 millisecond')
-           )
-         ORDER BY priority DESC, created_at_utc
-         FOR UPDATE SKIP LOCKED
-         LIMIT 1`,
-        [this.deliveryMinIntervalMs],
-      );
-      delivery = selected.rows[0];
-      if (!delivery) {
-        await client.query("COMMIT");
-        return { status: "idle" };
-      }
-      const suppressionReason = telegramTradingDeliverySuppressionReason(delivery, { now: telegramNowEpochMs(this.clock) });
-      if (suppressionReason) {
-        await client.query(
-          `UPDATE telegram_delivery_outbox
-           SET status = 'suppressed', last_error = $2,
-               lease_token = NULL, lease_expires_at_utc = NULL, updated_at_utc = now()
-           WHERE delivery_id = $1`,
-          [delivery.delivery_id, suppressionReason],
-        );
-        await client.query("COMMIT");
-        return { status: "suppressed", deliveryId: delivery.delivery_id, reason: suppressionReason };
-      }
-      const profileEnabled = delivery.profile === "admin" ? config.adminEnabled : config.tradingEnabled;
-      const profileConfigured = delivery.profile === "admin" ? envStatus.adminConfigured : envStatus.tradingConfigured;
-      if (!profileEnabled || !profileConfigured) {
-        await client.query(
-          `UPDATE telegram_delivery_outbox
-           SET status = 'suppressed', last_error = $2, updated_at_utc = now()
-           WHERE delivery_id = $1`,
-          [delivery.delivery_id, !profileEnabled ? "profile_disabled" : "profile_not_configured"],
-        );
-        await client.query("COMMIT");
-        return { status: "suppressed", deliveryId: delivery.delivery_id };
-      }
-      const leaseToken = randomUUID();
-      const attempt = Number(delivery.attempt_count || 0) + 1;
-      await client.query(
-        `UPDATE telegram_delivery_outbox
-         SET status = 'sending', attempt_count = $2, lease_token = $3,
-             lease_expires_at_utc = now() + interval '30 seconds', updated_at_utc = now()
-         WHERE delivery_id = $1`,
-        [delivery.delivery_id, attempt, leaseToken],
-      );
-      await client.query(
-        `INSERT INTO telegram_delivery_attempts (
-           attempt_id, delivery_id, attempt_number, status, metadata
-         ) VALUES ($1, $2, $3, 'sending', $4::jsonb)`,
-        [`telegram_attempt_${randomUUID()}`, delivery.delivery_id, attempt, JSON.stringify({ lease_token: leaseToken })],
-      );
-      await client.query("COMMIT");
-      delivery.attempt_count = attempt;
-      delivery.lease_token = leaseToken;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
-
-    const profile = delivery.profile;
-    const chatId = profile === "admin" ? this.adminChatId : this.tradingChatId;
-    try {
-      const response = await this.clients[profile].sendMessage({
-        chatId,
-        text: delivery.message,
-        silent: delivery.silent,
-      });
-      const completed = await this.persistence.pool.connect();
-      try {
-        await completed.query("BEGIN");
-        await completed.query(
-          `UPDATE telegram_delivery_outbox
-           SET status = 'sent', telegram_message_id = $2, sent_at_utc = now(),
-               lease_token = NULL, lease_expires_at_utc = NULL, last_error = NULL, updated_at_utc = now()
-           WHERE delivery_id = $1 AND lease_token = $3`,
-          [delivery.delivery_id, response.message_id, delivery.lease_token],
-        );
-        await completed.query(
-          `UPDATE telegram_delivery_attempts
-           SET status = 'sent', telegram_message_id = $2, completed_at_utc = now()
-           WHERE delivery_id = $1 AND attempt_number = $3`,
-          [delivery.delivery_id, response.message_id, delivery.attempt_count],
-        );
-        await completed.query(
-          "UPDATE telegram_source_state SET last_sent_at_utc = now() WHERE source_key = $1",
-          [delivery.source_key],
-        );
-        await completed.query("COMMIT");
-      } catch (error) {
-        await completed.query("ROLLBACK").catch(() => undefined);
-        throw error;
-      } finally {
-        completed.release();
-      }
-      return { status: "sent", deliveryId: delivery.delivery_id, profile };
-    } catch (error) {
-      const retryable = error?.retryable !== false && Number(delivery.attempt_count) < 3;
-      const nextStatus = retryable ? "pending" : "failed";
-      const retryDelaySeconds = telegramRetryDelaySeconds(error, delivery.attempt_count);
-      const failed = await this.persistence.pool.connect();
-      try {
-        await failed.query("BEGIN");
-        await failed.query(
-          `UPDATE telegram_delivery_outbox
-           SET status = $2::telegram_delivery_status,
-               available_at_utc = CASE WHEN $2 = 'pending' THEN now() + ($3 * interval '1 second') ELSE available_at_utc END,
-               lease_token = NULL, lease_expires_at_utc = NULL, last_error = $4, updated_at_utc = now()
-           WHERE delivery_id = $1 AND lease_token = $5`,
-          [delivery.delivery_id, nextStatus, retryDelaySeconds, safeError(error), delivery.lease_token],
-        );
-        await failed.query(
-          `UPDATE telegram_delivery_attempts
-           SET status = $2::telegram_delivery_status, error_code = $3, error_message = $4, completed_at_utc = now()
-           WHERE delivery_id = $1 AND attempt_number = $5`,
-          [
-            delivery.delivery_id,
-            nextStatus === "pending" ? "failed" : nextStatus,
-            error?.code || "TELEGRAM_SEND_FAILED",
-            safeError(error),
-            delivery.attempt_count,
-          ],
-        );
-        await failed.query("COMMIT");
-      } catch (persistenceError) {
-        await failed.query("ROLLBACK").catch(() => undefined);
-        throw persistenceError;
-      } finally {
-        failed.release();
-      }
-      return { status: nextStatus, deliveryId: delivery.delivery_id, profile, error: error?.code || "TELEGRAM_SEND_FAILED" };
-    }
+    return deliverTelegramCandidate({
+      pool: this.persistence.pool, config: normalizeConfig(configResult.rows[0]),
+      environment: this.envStatus(), clients: this.clients,
+      chatIds: { admin: this.adminChatId, trading: this.tradingChatId },
+      nowMs: telegramNowEpochMs(this.clock), minIntervalMs: this.deliveryMinIntervalMs,
+    });
   }
 
   async pollAdminCommands() {
@@ -483,7 +339,7 @@ export class TelegramAlertService {
     );
     if (!changed || baseline) return 0;
     const enabled = config.enabled
-      && (!config.mutedUntil || Date.parse(config.mutedUntil) <= Date.now())
+      && (!config.mutedUntil || Date.parse(config.mutedUntil) <= telegramNowEpochMs(this.clock))
       && (candidate.profile === "admin" ? config.adminEnabled : config.tradingEnabled);
     if (!enabled) return 0;
     const delivery = await this.queueDelivery(candidate);
@@ -588,92 +444,11 @@ export class TelegramAlertService {
   }
 
   async #tradingCandidates() {
-    const result = await this.persistence.pool.query(
-      `SELECT source_kind, source_id, source_state, occurred_at, payload
-       FROM (
-         SELECT 'trade_decision'::text AS source_kind,
-                td.trade_decision_id AS source_id,
-                td.status::text AS source_state,
-                COALESCE(td.decided_at, td.updated_at) AS occurred_at,
-                jsonb_build_object(
-                  'instrument', td.instrument_code, 'side', td.side, 'strategy', td.strategy_id,
-                  'trading_date', td.trading_date, 'session', td.session, 'confidence', td.confidence,
-                  'rationale', td.rationale
-                ) AS payload
-         FROM trade_decisions td
-         WHERE td.mode::text = 'paper'
-         ORDER BY COALESCE(td.decided_at, td.updated_at) DESC LIMIT 100
-       ) decisions
-       UNION ALL
-       SELECT 'order_intent', toi.order_intent_id, toi.status::text, toi.updated_at,
-              jsonb_build_object(
-                'decision_id', toi.trade_decision_id,
-                'instrument', COALESCE(toi.payload->>'instrument', bc.instrument_code),
-                'broker_symbol', COALESCE(toi.payload->>'broker_symbol', bc.broker_symbol),
-                'side', toi.side, 'order_type', toi.order_type,
-                'quantity', toi.quantity, 'limit_price', toi.limit_price, 'stop_price', toi.stop_price,
-                'protective_stop', COALESCE(toi.payload->'protective_stop', toi.bracket->'stop_price'),
-                'profit_target', COALESCE(toi.payload->'profit_target', toi.bracket->'target_price'),
-                'time_in_force', toi.time_in_force,
-                'expires_at', toi.expires_at,
-                'approval_status', toi.approval_status
-              )
-       FROM trade_order_intents toi LEFT JOIN broker_contracts bc ON bc.broker_contract_id = toi.broker_contract_id
-       WHERE NOT EXISTS (SELECT 1 FROM portfolio_order_intent_lineage lineage WHERE lineage.trade_order_intent_id = toi.order_intent_id)
-       ORDER BY occurred_at DESC LIMIT 200`,
-    );
-    const [events, trades, management, canonicalExecution] = await Promise.all([
-      this.persistence.pool.query(
-        `SELECT 'broker_order_event'::text AS source_kind,
-                boe.broker_order_event_id AS source_id,
-                COALESCE(boe.status::text, boe.event_type::text, 'event') AS source_state,
-                boe.occurred_at,
-                jsonb_build_object(
-                  'broker_order_id', boe.broker_order_id, 'event_type', boe.event_type,
-                  'status', boe.status, 'payload', boe.payload
-                ) AS payload
-         FROM broker_order_events boe
-         ORDER BY boe.occurred_at DESC LIMIT 200`,
-      ),
-      this.persistence.pool.query(
-        `SELECT 'trade'::text AS source_kind, t.trade_id AS source_id, t.status::text AS source_state,
-                t.updated_at AS occurred_at,
-                jsonb_build_object(
-                  'instrument', bc.instrument_code, 'side', t.side, 'quantity_open', t.quantity_open,
-                  'quantity_closed', t.quantity_closed, 'entry', t.avg_entry_price, 'exit', t.avg_exit_price,
-                  'realized_pnl', t.realized_pnl, 'unrealized_pnl', t.unrealized_pnl,
-                  'stop', t.current_stop_price, 'target', t.current_target_price
-                ) AS payload
-         FROM trades t LEFT JOIN broker_contracts bc ON bc.broker_contract_id = t.broker_contract_id
-         WHERE t.portfolio_order_intent_id IS NULL
-         ORDER BY t.updated_at DESC LIMIT 100`,
-      ),
-      this.persistence.pool.query(
-        `SELECT 'management_intent'::text AS source_kind,
-                tmi.management_intent_id AS source_id,
-                tmi.status::text AS source_state,
-                tmi.updated_at AS occurred_at,
-                jsonb_build_object(
-                  'trade_id', tmi.trade_id, 'instrument', bc.instrument_code, 'broker_symbol', bc.broker_symbol,
-                  'action', tmi.action, 'quantity', tmi.requested_quantity,
-                  'stop_price', tmi.requested_stop_price, 'reason', tmi.reason,
-                  'approval_status', tmi.approval_status
-                ) AS payload
-         FROM trade_management_intents tmi
-         LEFT JOIN trades t ON t.trade_id = tmi.trade_id
-         LEFT JOIN broker_contracts bc ON bc.broker_contract_id = t.broker_contract_id
-         ORDER BY tmi.updated_at DESC LIMIT 100`,
-      ),
-      loadCanonicalTelegramExecutionRows(this.persistence.pool),
-    ]);
+    const rows = await loadTelegramTradingRows(this.persistence.pool);
     const manualTelegramExecution = String(this.env.DESK_MANUAL_TELEGRAM_EXECUTION_ENABLED || "false").toLowerCase() === "true";
-    return [...canonicalExecution, ...result.rows, ...events.rows, ...trades.rows, ...management.rows]
-      .map((row) => buildTelegramTradingCandidate(row, {
-        manualTelegramExecution,
-        hash,
-        now: telegramNowEpochMs(this.clock),
-      }))
-      .filter(Boolean);
+    return rows.map((row) => buildTelegramTradingCandidate(row, {
+      manualTelegramExecution, hash, now: telegramNowEpochMs(this.clock),
+    })).filter(Boolean);
   }
 
   async #handleAdminCommand(update) {
@@ -893,7 +668,8 @@ function apiError(code, message, statusCode) {
 
 function telegramNowEpochMs(clock) {
   const tick = clock?.now?.();
-  if (Number.isFinite(Number(tick?.epochMs))) return Number(tick.epochMs);
+  if (typeof tick?.epochMs === "number" && Number.isFinite(tick.epochMs)) return tick.epochMs;
   const parsed = Date.parse(String(tick?.utc || ""));
-  return Number.isFinite(parsed) ? parsed : Date.now();
+  if (!Number.isFinite(parsed)) throw new Error("TELEGRAM_CLOCK_INVALID");
+  return parsed;
 }
