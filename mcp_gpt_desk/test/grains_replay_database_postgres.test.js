@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PostgresStrategySignalBusRepository } from "../src/strategy-signal-bus-repository.js";
-import { createGrainsReplayDatabase, seedGrainsReplayInputs } from "../src/adapters/grains-causal-postgres-replay.js";
+import { createGrainsReplayDatabase, seedGrainsReplayCalendar, seedGrainsReplayInputs } from "../src/adapters/grains-causal-postgres-replay.js";
+import { loadGrainsCalendarVersionAt } from "../src/persistence/postgres-grains-calendar-ledger.js";
 
 const AS_OF = "2026-09-04T14:03:00.000Z";
 
@@ -17,6 +18,8 @@ test("frozen grains replay seeds a real isolated PostgreSQL runtime and publishe
   const input = frozenInput();
   const seeded = await seedGrainsReplayInputs(database.pool, input);
 
+  assert.equal(seeded.calendar_version_input_count, 0);
+  assert.deepEqual(seeded.calendar_versions, []);
   assert.equal(typeof database.persistence.getDocument, "function");
   assert.equal(await count(database.pool, "market_candles"), 3);
   assert.equal(seeded.imported_candle_count, 4);
@@ -72,6 +75,29 @@ test("replay database creation rejects non-loopback hosts before connecting", as
   await assert.rejects(
     () => createGrainsReplayDatabase({ host: "postgres.internal.example" }),
     (error) => error.code === "REPLAY_DATABASE_HOST_FORBIDDEN",
+  );
+});
+
+test("replay calendar seed accepts only versioned knowledge already available at the replay cutoff", {
+  skip: process.env.RUN_POSTGRES_TESTS !== "1",
+}, async (t) => {
+  const database = await createGrainsReplayDatabase();
+  t.after(() => database.close());
+  const seeded = await seedGrainsReplayCalendar(database.pool, {
+    asOfUtc: AS_OF, calendarVersions: [calendarVersion("2026-09-04T14:00:00Z")],
+  });
+  assert.equal(seeded.calendar_version_input_count, 1);
+  assert.equal(seeded.calendar_versions[0].inserted, true);
+  const runtime = await loadGrainsCalendarVersionAt(database.pool, {
+    startUtc: "2026-09-01T00:00:00Z", asOfUtc: AS_OF,
+  });
+  assert.equal(runtime.agriEvents[0].title, "Immutable replay calendar fixture");
+  assert.equal(runtime.agriCalendarCoverage[0].status, "UNKNOWN_COVERAGE");
+  await assert.rejects(
+    () => seedGrainsReplayCalendar(database.pool, {
+      asOfUtc: AS_OF, calendarVersions: [calendarVersion("2026-09-04T14:04:00Z")],
+    }),
+    (error) => error.code === "REPLAY_CALENDAR_VERSION_AFTER_CUTOFF",
   );
 });
 
@@ -177,4 +203,18 @@ function stored(feed_id, timestamp_utc, open, high, low, close, volume, is_close
     receipt_provenance: source.imported_at
       ? { source_imported_at: source.imported_at, historical_receipt: "SOURCE_PROVIDED" }
       : { source_imported_at: null, historical_receipt: "UNKNOWN" } };
+}
+
+function calendarVersion(knownAtUtc) {
+  const hash = `sha256:${"a".repeat(64)}`;
+  return {
+    knownAtUtc, status: "UNKNOWN_COVERAGE", datasetVersion: hash, sourceVersionHash: hash,
+    provider: "fixture", reasonCodes: ["EXTERNAL_HISTORICAL_GAP"],
+    sources: [{ sourceId: "usda_nass_release_calendar", sourceUrl: "https://example.test/nass",
+      sourceDocumentSha256: hash, retrievedAtUtc: knownAtUtc, knowledgeStatus: "PROVEN_CURRENT",
+      historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP", metadata: { calendar_evidence_status: "CALENDAR_SCHEDULE" } }],
+    events: [{ market_agri_event_id: "replay-calendar-fixture", event_kind: "WASDE",
+      title: "Immutable replay calendar fixture", event_timestamp_utc: "2026-09-04T15:00:00Z",
+      importance: "HIGH", provider: "fixture", source_published_at_utc: knownAtUtc }],
+  };
 }

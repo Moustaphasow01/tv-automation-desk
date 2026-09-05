@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { PostgresDeskPersistence } from "../persistence/postgres-desk-persistence.js";
+import { appendGrainsCalendarVersion } from "../persistence/postgres-grains-calendar-ledger.js";
 
 const { Client, Pool } = pg;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
@@ -60,13 +61,50 @@ export async function createGrainsReplayDatabase(options = {}) {
 
 export async function seedGrainsReplayInputs(pool, input = {}) {
   const asOfUtc = requiredUtc(input.asOfUtc, "asOfUtc");
+  const calendar = await seedGrainsReplayCalendar(pool, {
+    calendarVersions: input.calendarVersions,
+    asOfUtc,
+  });
   const market = await seedMarket(pool, input.candles || []);
   const kernel = await seedKernel(pool, input.signals || [], {
     asOfUtc,
     seedConfig: input.seedConfig || {},
     provenance: input.provenance || {},
   });
-  return { schema_version: REPLAY_SCHEMA, as_of_utc: asOfUtc, ...market, ...kernel };
+  return {
+    schema_version: REPLAY_SCHEMA,
+    as_of_utc: asOfUtc,
+    ...calendar,
+    ...market,
+    ...kernel,
+  };
+}
+
+export async function seedGrainsReplayCalendar(pool, input = {}) {
+  const asOfUtc = requiredUtc(input.asOfUtc, "asOfUtc");
+  const calendarVersions = Array.isArray(input.calendarVersions)
+    ? input.calendarVersions
+    : [];
+  const versions = [];
+  for (const calendarVersion of calendarVersions) {
+    const knownAtUtc = requiredUtc(
+      calendarVersion?.knownAtUtc,
+      "calendarVersion.knownAtUtc",
+    );
+    if (Date.parse(knownAtUtc) > Date.parse(asOfUtc)) {
+      throw replayError("REPLAY_CALENDAR_VERSION_AFTER_CUTOFF", {
+        known_at_utc: knownAtUtc,
+        as_of_utc: asOfUtc,
+      });
+    }
+    versions.push(
+      await appendGrainsCalendarVersion(pool, { ...calendarVersion, knownAtUtc }),
+    );
+  }
+  return {
+    calendar_version_input_count: calendarVersions.length,
+    calendar_versions: versions,
+  };
 }
 
 function localReplayConfig(options) {

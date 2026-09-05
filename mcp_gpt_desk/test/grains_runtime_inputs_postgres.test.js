@@ -5,6 +5,7 @@ import { createTheoreticalTestDatabase } from "./support/theoretical-postgres-fi
 import { PostgresDeskPersistence } from "../src/persistence/postgres-desk-persistence.js";
 import { ingestTradingViewWebhook } from "../src/tradingview-webhook.js";
 import { evaluateGrainsCalendarCoverage } from "../src/grains-calendar-coverage.js";
+import { appendGrainsCalendarVersion } from "../src/persistence/postgres-grains-calendar-ledger.js";
 
 const AS_OF = "2026-09-04T15:00:00.000Z";
 
@@ -67,7 +68,7 @@ test(
 );
 
 test(
-  "TD2-426 real coverage projection refuses future knowledge and unversioned legacy seeds",
+  "TD2-426 real coverage projection uses only an immutable source version known at the cutoff",
   {
     skip: process.env.RUN_POSTGRES_TESTS !== "1",
   },
@@ -84,26 +85,19 @@ test(
       }).admissible,
       false,
     );
-    await database.pool.query(
-      `INSERT INTO market_source_coverage_manifests
-    (source_id,source_type,source_status,coverage_start_utc,coverage_end_utc,as_of_utc,dataset_version,metadata)
-    VALUES ('market_agri_events','AGRI_EVENT_CALENDAR','AVAILABLE','2026-09-01','2026-09-30',$1,'test-v1',$2)
-    ON CONFLICT (source_id) DO UPDATE SET as_of_utc=EXCLUDED.as_of_utc,metadata=EXCLUDED.metadata,
-      dataset_version=EXCLUDED.dataset_version,source_status=EXCLUDED.source_status,
-      coverage_start_utc=EXCLUDED.coverage_start_utc,coverage_end_utc=EXCLUDED.coverage_end_utc`,
-      [
-        "2026-09-04T15:01:00Z",
-        { source_version_hash: `sha256:${"a".repeat(64)}` },
-      ],
+    await appendGrainsCalendarVersion(
+      database.pool,
+      calendarVersion({ knownAtUtc: "2026-09-04T15:01:00Z", hash: "a" }),
     );
     assert.deepEqual((await load()).agriCalendarCoverage, []);
-    await database.pool
-      .query(`UPDATE market_source_coverage_manifests SET as_of_utc='2026-09-01T00:00:00Z'
-    WHERE source_id='market_agri_events'`);
+    await appendGrainsCalendarVersion(
+      database.pool,
+      calendarVersion({ knownAtUtc: "2026-09-04T14:59:00Z", hash: "b" }),
+    );
     const known = await load();
     assert.equal(
       known.agriCalendarCoverage[0].sourceVersionHash,
-      `sha256:${"a".repeat(64)}`,
+      `sha256:${"b".repeat(64)}`,
     );
     assert.equal(
       evaluateGrainsCalendarCoverage({
@@ -145,22 +139,64 @@ async function seedCandles(persistence) {
 }
 
 async function seedCalendar(pool) {
-  for (const [id, publishedAt, createdAt] of [
-    ["td429-known-future", "2026-09-01T12:00:00Z", AS_OF],
-    ["td429-learned-later", "2026-09-04T15:01:00Z", AS_OF],
-    ["td429-legacy-later", null, "2026-09-04T15:01:00Z"],
-  ]) {
-    await pool.query(
-      `INSERT INTO market_agri_events (
-      market_agri_event_id,event_kind,title,event_timestamp_utc,importance,source_provider,
-      actual_available_at_utc,actual,point_in_time_payload,created_at_utc
-    ) VALUES ($1,'WASDE','Local causal fixture','2026-09-04T15:15Z','HIGH','test',
-      '2026-09-04T15:16Z','{"futureResult":12345}',$2,$3)`,
-      [
-        id,
-        publishedAt ? { source_published_at_utc: publishedAt } : {},
-        createdAt,
-      ],
-    );
-  }
+  await appendGrainsCalendarVersion(
+    pool,
+    calendarVersion({
+      knownAtUtc: "2026-09-01T12:00:00Z",
+      hash: "c",
+      events: [calendarEvent("td429-known-future", "2026-09-04T15:15Z")],
+    }),
+  );
+  await appendGrainsCalendarVersion(
+    pool,
+    calendarVersion({
+      knownAtUtc: "2026-09-04T15:01:00Z",
+      hash: "d",
+      events: [calendarEvent("td429-learned-later", "2026-09-04T15:15Z")],
+    }),
+  );
+  await pool.query(
+    `INSERT INTO market_agri_events (
+      market_agri_event_id,event_kind,title,event_timestamp_utc,importance,source_provider
+    ) VALUES ('td429-known-future','WASDE','MUTABLE CURRENT PROJECTION','2026-09-04T15:15Z','HIGH','test')`,
+  );
+}
+
+function calendarVersion({ knownAtUtc, hash, events = [] }) {
+  const sha256 = `sha256:${hash.repeat(64)}`;
+  return {
+    knownAtUtc,
+    status: "AVAILABLE",
+    coverageStart: "2026-09-01T00:00:00Z",
+    coverageEnd: "2026-09-30T00:00:00Z",
+    datasetVersion: sha256,
+    sourceVersionHash: sha256,
+    provider: "test",
+    sources: [
+      "usda_nass_release_calendar",
+      "usda_wasde_release_schedule",
+      "usda_fas_export_sales_schedule",
+    ].map((sourceId) => ({
+      sourceId,
+      sourceUrl: `https://example.test/${sourceId}`,
+      sourceDocumentSha256: sha256,
+      retrievedAtUtc: knownAtUtc,
+      knowledgeStatus: "PROVEN_CURRENT",
+      historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP",
+      metadata: { calendar_evidence_status: "CALENDAR_SCHEDULE" },
+    })),
+    events,
+  };
+}
+
+function calendarEvent(market_agri_event_id, event_timestamp_utc) {
+  return {
+    market_agri_event_id,
+    event_kind: "WASDE",
+    title: "Immutable causal fixture",
+    event_timestamp_utc,
+    importance: "HIGH",
+    provider: "test",
+    source_published_at_utc: "2026-09-01T12:00:00Z",
+  };
 }

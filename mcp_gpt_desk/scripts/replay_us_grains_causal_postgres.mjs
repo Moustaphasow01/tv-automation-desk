@@ -4,8 +4,13 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { candlesToRowsBySymbol } from "../src/grains-causal-detection-audit.js";
 import { detectUsGrainsStrategySignals } from "../src/us-grains-strategy-suite.js";
-import { createGrainsReplayDatabase, seedGrainsReplayInputs } from "../src/adapters/grains-causal-postgres-replay.js";
+import {
+  createGrainsReplayDatabase,
+  seedGrainsReplayCalendar,
+  seedGrainsReplayInputs,
+} from "../src/adapters/grains-causal-postgres-replay.js";
 import { runGrainsCausalPostgresReplay } from "../src/us-grains-causal-postgres-replay.js";
+import { loadGrainsCalendarVersionAt } from "../src/persistence/postgres-grains-calendar-ledger.js";
 import { captureGrainsCanonicalReplaySourceManifest } from "./lib/grains-source-manifest.mjs";
 
 export async function runCausalPostgresReplayCli(argv = process.argv.slice(2)) {
@@ -24,20 +29,37 @@ export async function runCausalPostgresReplayCli(argv = process.argv.slice(2)) {
   if (!Array.isArray(frozen.candles)) throw new Error("FROZEN_CANDLES_REQUIRED");
   const candles = frozen.candles;
   const rowsBySymbol = candlesToRowsBySymbol(candles);
-  const signals = detectUsGrainsStrategySignals({
-    rowsBySymbol,
-    agriEvents: frozen.agriEvents || frozen.agri_events || [],
-    agriCalendarCoverage: frozen.agriCalendarCoverage || frozen.agri_calendar_coverage || [],
-    instruments: (args.instruments || "ZW,ZC").split(",").map((item) => item.trim().toUpperCase()),
-    startDate,
-    endDate,
-    asOfUtc,
-  }).raw_signals;
+  const calendarVersions = frozenCalendarVersions(frozen);
   const db = await createGrainsReplayDatabase({ host: args.pgHost, port: args.pgPort, user: args.pgUser, password: args.pgPassword, adminDatabase: args.pgAdminDatabase });
   try {
+    const calendarSeed = await seedGrainsReplayCalendar(db.pool, {
+      calendarVersions,
+      asOfUtc,
+    });
+    const calendarRuntime = await loadGrainsCalendarVersionAt(db.pool, {
+      startUtc: calendarStartUtc(startDate),
+      asOfUtc,
+    });
+    const signals = detectUsGrainsStrategySignals({
+      rowsBySymbol,
+      agriEvents: calendarRuntime.agriEvents,
+      agriCalendarCoverage: calendarRuntime.agriCalendarCoverage,
+      instruments: (args.instruments || "ZW,ZC").split(",").map((item) => item.trim().toUpperCase()),
+      startDate,
+      endDate,
+      asOfUtc,
+    }).raw_signals;
     const seeded = await seedGrainsReplayInputs(db.pool, { candles, signals, asOfUtc,
       provenance: { input_sha256: sha256(inputText), code_manifest_sha256: sha256(JSON.stringify(codeHashes)) } });
-    const report = await runGrainsCausalPostgresReplay({ database: db.database, pool: db.pool, persistence: db.persistence, candles, signals: seeded.runtime_signals, asOfUtc });
+    const report = await runGrainsCausalPostgresReplay({
+      database: db.database,
+      pool: db.pool,
+      persistence: db.persistence,
+      candles,
+      signals: seeded.runtime_signals,
+      asOfUtc,
+      calendarRuntime,
+    });
     if (report.provider_commands !== 0) throw new Error("PROVIDER_COMMANDS_CREATED");
     if (JSON.stringify(await captureGrainsCanonicalReplaySourceManifest()) !== JSON.stringify(codeHashes)) {
       throw new Error("REPLAY_CODE_CHANGED_DURING_RUN");
@@ -45,12 +67,18 @@ export async function runCausalPostgresReplayCli(argv = process.argv.slice(2)) {
     const artifact = {
       schema_version: "us_grains_causal_postgres_replay_cli_v1",
       input: { path: resolve(inputPath), sha256: sha256(inputText), candle_count: candles.length },
-      source_provenance: { legacy_receipt_times: "UNVERIFIED", agri_calendar_coverage: (frozen.agriCalendarCoverage || frozen.agri_calendar_coverage)?.length ? "PROVIDED_NOT_AUTOMATICALLY_TRUSTED" : "MISSING_WAIT_EXPECTED",
+      source_provenance: { legacy_receipt_times: "UNVERIFIED", agri_calendar_coverage: calendarVersions.length ? "LEDGER_VERSIONED" : "MISSING_WAIT_EXPECTED",
         runtime_policy: "LOCAL_PIPELINE_DEFAULTS_NOT_VPS_POLICY_CERTIFIED",
         shadow_risk_max_abs_size_override: process.env.DESK_SHADOW_RISK_MAX_ABS_SIZE || null },
       constraints: { physical_execution: false, telegram: false, provider_commands: report.provider_commands, profit_claim: false },
       code_hashes: codeHashes,
       replay_bootstrap: { market_feed_mapping: seeded.market_feed_mapping,
+        calendar: {
+          seed: calendarSeed,
+          runtime: calendarRuntime,
+          ignored_unversioned_event_count: array(frozen.agriEvents || frozen.agri_events).length,
+          ignored_unversioned_coverage_count: array(frozen.agriCalendarCoverage || frozen.agri_calendar_coverage).length,
+        },
         identities: seeded.runtime_signals.map((row) => ({ signal_id: row.signal_id, source_signal_id: row.source_signal_id, seed_identity: row.seed_identity })) },
       report,
     };
@@ -72,6 +100,18 @@ function required(value, name) { if (!value || String(value).startsWith("--")) t
 function date(value, name) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) throw new Error(`VALID_DATE_REQUIRED:${name}`); return value; }
 function timestamp(value, name) { const parsed = Date.parse(value || ""); if (!Number.isFinite(parsed)) throw new Error(`VALID_TIMESTAMP_REQUIRED:${name}`); return new Date(parsed).toISOString(); }
 function sha256(value) { return `sha256:${createHash("sha256").update(value).digest("hex")}`; }
+function array(value) { return Array.isArray(value) ? value : []; }
+function frozenCalendarVersions(frozen) {
+  const plural = frozen.agriCalendarVersions || frozen.agri_calendar_versions ||
+    frozen.calendarVersions || frozen.calendar_versions;
+  if (Array.isArray(plural)) return plural;
+  const singular = frozen.agriCalendarVersion || frozen.agri_calendar_version ||
+    frozen.calendarVersion || frozen.calendar_version;
+  return singular && typeof singular === "object" ? [singular] : [];
+}
+function calendarStartUtc(startDate) {
+  return new Date(Date.parse(`${startDate}T00:00:00.000Z`) - 8 * 86_400_000).toISOString();
+}
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const artifact = await runCausalPostgresReplayCli();

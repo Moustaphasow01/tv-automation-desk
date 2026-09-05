@@ -26,9 +26,11 @@ test("isolated PostgreSQL replay has no provider commands", { skip: process.env.
   try {
     await seedGrainsReplayInputs(db.pool, { candles, signals: [], asOfUtc: "2026-09-04T14:02:00Z" });
     const result = await runGrainsCausalPostgresReplay({ database: db.database, pool: db.pool, persistence: db.persistence, candles, signals: [], asOfUtc: "2026-09-04T14:02:00Z" });
-    assert.equal(result.replay_mode, "MODE_CAUSAL_PRECOMPUTED");
-    assert.equal(result.physical_execution, false);
-    assert.equal(result.provider_commands, 0);
+      assert.equal(result.replay_mode, "MODE_CAUSAL_PRECOMPUTED");
+      assert.equal(result.physical_execution, false);
+      assert.equal(result.provider_commands, 0);
+      assert.equal(result.calendar.unproven, true);
+      assert.deepEqual(result.calendar.coverage, []);
   } finally {
     await db.close();
   }

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   collectUsdaGrainsCalendar,
   fetchUsdaCalendarText,
+  fetchUsdaSourceText,
 } from "../src/adapters/usda-grains-calendar-collector.js";
 
 test("collector keeps retrieval knowledge current and historical coverage unknown", async () => {
@@ -26,6 +27,11 @@ test("collector keeps retrieval knowledge current and historical coverage unknow
   );
   assert.equal(result.agriCalendarCoverage[0].status, "UNKNOWN_COVERAGE");
   assert.ok(result.manifests[0].sha256.startsWith("sha256:"));
+  assert.equal(result.calendarVersion.knownAtUtc, "2026-09-05T12:00:00.000Z");
+  assert.equal(
+    result.calendarVersion.sources[0].historicalKnowledgeStatus,
+    "EXTERNAL_HISTORICAL_GAP",
+  );
 });
 
 test("NASS floating noon is Eastern per source, honoring winter and summer", async () => {
@@ -137,6 +143,64 @@ test("calendar metadata never backdates knowledge and source bytes can be reveri
     /^sha256:[a-f0-9]{64}$/,
   );
   assert.ok(result.manifests[0].source_document.startsWith("BEGIN:VCALENDAR"));
+});
+
+test("dated FAS and WASDE evidence is hashed but cannot certify historical calendar coverage", async () => {
+  const result = await collectUsdaGrainsCalendar({
+    sources: [
+      source(),
+      {
+        sourceId: "usda_wasde_release_schedule",
+        sourceKind: "SCHEDULE_EVIDENCE",
+        calendarEvidenceStatus: "INSUFFICIENT",
+        url: "https://example.test/wasde",
+      },
+      {
+        sourceId: "usda_fas_export_sales_schedule",
+        sourceKind: "SCHEDULE_EVIDENCE",
+        calendarEvidenceStatus: "INSUFFICIENT",
+        url: "https://example.test/fas",
+      },
+    ],
+    retrievedAtUtc: "2026-09-05T12:00:00.000Z",
+    fetchText: async (url) =>
+      url.endsWith("wasde") || url.endsWith("fas")
+        ? "official dated source evidence"
+        : "BEGIN:VCALENDAR\nEND:VCALENDAR",
+  });
+  assert.equal(result.manifests.length, 3);
+  assert.equal(result.calendarVersion.sources.length, 3);
+  assert.equal(result.manifests[1].source_document, null);
+  assert.equal(result.agriCalendarCoverage[0].status, "UNKNOWN_COVERAGE");
+  assert.ok(
+    result.agriCalendarCoverage[0].reasonCodes.includes(
+      "EXTERNAL_HISTORICAL_GAP",
+    ),
+  );
+  assert.ok(
+    result.agriCalendarCoverage[0].reasonCodes.includes(
+      "CALENDAR_SOURCE_SET_INCOMPLETE",
+    ),
+  );
+});
+
+test("generic official source reader is bounded and rejects empty and HTTP responses", async () => {
+  await assert.rejects(
+    () =>
+      fetchUsdaSourceText(
+        "https://example.test",
+        async () => new Response("", { status: 200 }),
+      ),
+    /DOCUMENT_EMPTY/,
+  );
+  await assert.rejects(
+    () =>
+      fetchUsdaSourceText(
+        "https://example.test",
+        async () => new Response("no", { status: 502 }),
+      ),
+    /HTTP_502/,
+  );
 });
 
 function event(start, title = "Grain Stocks", uid = null) {

@@ -9,7 +9,7 @@ import { loadGrainsReplayLedger } from "./persistence/postgres-grains-replay-led
 
 // Application orchestration only: no second Risk, fill engine or provider client.
 export async function runGrainsCausalPostgresReplay(input) {
-  const { database, pool, persistence, candles, signals, asOfUtc } = input;
+  const { database, pool, persistence, candles, signals, asOfUtc, calendarRuntime } = input;
   if (!/^desk_grains_replay_[a-f0-9]+$/.test(database || "")) throw new Error("ISOLATED_REPLAY_DATABASE_REQUIRED");
   const ledgerBefore = await loadGrainsReplayLedger(pool);
   if (ledgerBefore.signals.length || ledgerBefore.intents.length) throw new Error("EMPTY_REPLAY_LEDGER_REQUIRED");
@@ -40,6 +40,20 @@ export async function runGrainsCausalPostgresReplay(input) {
     authority: "CANONICAL_LOCAL_SHADOW_THEORY_NOT_BROKER_PNL",
     physical_execution: false, provider_commands: ledger.provider_commands,
     signal_count: signals.length, minute_cutoff_count: ticks.length, batches, ledger,
+    calendar: replayCalendarSummary(calendarRuntime),
+  };
+}
+
+function replayCalendarSummary(runtime) {
+  const coverage = Array.isArray(runtime?.agriCalendarCoverage)
+    ? runtime.agriCalendarCoverage
+    : [];
+  return {
+    versioned_event_count: Array.isArray(runtime?.agriEvents)
+      ? runtime.agriEvents.length
+      : 0,
+    coverage,
+    unproven: !coverage.length || coverage.some((item) => item.status !== "AVAILABLE"),
   };
 }
 

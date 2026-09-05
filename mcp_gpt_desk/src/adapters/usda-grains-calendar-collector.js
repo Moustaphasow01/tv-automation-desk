@@ -14,18 +14,61 @@ export async function collectUsdaGrainsCalendar({
   );
   const manifests = results.map((result) => result.manifest);
   const agriEvents = uniqueEvents(results.flatMap((result) => result.events));
+  const agriCalendarCoverage = coverage({ manifests, retrievedAtUtc });
   return {
     manifests,
     agriEvents,
-    agriCalendarCoverage: coverage({ manifests, retrievedAtUtc }),
+    agriCalendarCoverage,
+    calendarVersion: calendarVersionInput({
+      manifests,
+      agriEvents,
+      coverage: agriCalendarCoverage[0],
+      retrievedAtUtc,
+    }),
+  };
+}
+
+function calendarVersionInput({
+  manifests,
+  agriEvents,
+  coverage,
+  retrievedAtUtc,
+}) {
+  return {
+    sourceId: "market_agri_events",
+    status: coverage.status,
+    coverageStart: coverage.coverageStart,
+    coverageEnd: coverage.coverageEnd,
+    knownAtUtc: retrievedAtUtc,
+    datasetVersion: coverage.datasetVersion,
+    sourceVersionHash: coverage.sourceVersionHash,
+    provider: coverage.provider,
+    reasonCodes: coverage.reasonCodes,
+    sources: manifests.map((manifest) => ({
+      sourceId: manifest.sourceId,
+      sourceUrl: manifest.sourceUrl,
+      sourceDocumentSha256: manifest.sha256,
+      retrievedAtUtc: manifest.retrieved_at_utc,
+      knowledgeStatus: manifest.knowledge_status,
+      historicalKnowledgeStatus: manifest.historical_knowledge_status,
+      metadata: {
+        source_kind: manifest.sourceKind,
+        calendar_created_at_utc: manifest.calendar_created_at_utc,
+        calendar_dtstamp_utc: manifest.calendar_dtstamp_utc,
+        calendar_evidence_status: manifest.calendar_evidence_status,
+      },
+    })),
+    events: agriEvents,
   };
 }
 
 async function collectSource({ source, retrievedAtUtc, fetchText }) {
-  const text = await fetchText(source.url);
-  if (!/^BEGIN:VCALENDAR\s/m.test(text) || !/END:VCALENDAR\s*$/.test(text)) {
+  const text = await fetchText(source.url, source);
+  if (source.sourceKind === "ICS" && !isIcalendar(text)) {
     throw new Error("USDA_ICALENDAR_DOCUMENT_INVALID");
   }
+  if (source.sourceKind !== "ICS" && !hasDocumentText(text))
+    throw new Error("USDA_SOURCE_DOCUMENT_INVALID");
   const hash = createHash("sha256").update(text).digest("hex");
   const manifest = {
     sourceId: source.sourceId,
@@ -37,12 +80,30 @@ async function collectSource({ source, retrievedAtUtc, fetchText }) {
     historical_knowledge_status: "EXTERNAL_HISTORICAL_GAP",
     calendar_created_at_utc: icsMetadata(text, "CREATED"),
     calendar_dtstamp_utc: icsMetadata(text, "DTSTAMP"),
-    source_document: text,
+    calendar_evidence_status:
+      source.calendarEvidenceStatus || defaultEvidenceStatus(source),
+    source_document: source.sourceKind === "ICS" ? text : null,
+    document_size_bytes: Buffer.byteLength(text),
   };
   return {
     manifest,
-    events: parseNassIcs({ text, source, retrievedAtUtc, hash }),
+    events:
+      source.sourceKind === "ICS"
+        ? parseNassIcs({ text, source, retrievedAtUtc, hash })
+        : [],
   };
+}
+
+function isIcalendar(text) {
+  return /^BEGIN:VCALENDAR\s/m.test(text) && /END:VCALENDAR\s*$/.test(text);
+}
+
+function hasDocumentText(text) {
+  return typeof text === "string" && text.trim().length > 0;
+}
+
+function defaultEvidenceStatus(source) {
+  return source.sourceKind === "ICS" ? "CALENDAR_SCHEDULE" : "INSUFFICIENT";
 }
 
 function parseNassIcs({ text, source, retrievedAtUtc, hash }) {
@@ -123,12 +184,19 @@ function coverage({ manifests, retrievedAtUtc }) {
       asOf: retrievedAtUtc,
       datasetVersion: sourceVersionHash,
       sourceVersionHash,
-      provider: "USDA_NASS",
-      reasonCodes: [
-        "CALENDAR_SOURCE_SET_INCOMPLETE",
-        "EXTERNAL_HISTORICAL_GAP",
-      ],
+      provider: "USDA",
+      reasonCodes: coverageReasonCodes(manifests),
     },
+  ];
+}
+
+function coverageReasonCodes(manifests) {
+  const incomplete = manifests.some(
+    (manifest) => manifest.calendar_evidence_status !== "CALENDAR_SCHEDULE",
+  );
+  return [
+    ...(incomplete ? ["CALENDAR_SOURCE_SET_INCOMPLETE"] : []),
+    "EXTERNAL_HISTORICAL_GAP",
   ];
 }
 
@@ -210,10 +278,22 @@ function uniqueEvents(events) {
 }
 
 export async function fetchUsdaCalendarText(url, fetchImpl = fetch) {
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(15000) });
+  const response = await fetchResponse(url, fetchImpl);
   if (!response.ok) throw new Error(`USDA_CALENDAR_HTTP_${response.status}`);
   const mime = response.headers.get("content-type") || "";
   if (/html|json/i.test(mime))
     throw new Error("USDA_CALENDAR_CONTENT_TYPE_INVALID");
   return response.text();
+}
+
+export async function fetchUsdaSourceText(url, fetchImpl = fetch) {
+  const response = await fetchResponse(url, fetchImpl);
+  if (!response.ok) throw new Error(`USDA_SOURCE_HTTP_${response.status}`);
+  const text = await response.text();
+  if (!hasDocumentText(text)) throw new Error("USDA_SOURCE_DOCUMENT_EMPTY");
+  return text;
+}
+
+function fetchResponse(url, fetchImpl) {
+  return fetchImpl(url, { signal: AbortSignal.timeout(15000) });
 }
