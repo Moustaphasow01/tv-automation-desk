@@ -88,3 +88,16 @@ Pilotage architecture/revue conservé par l'agent principal ; exécution délég
 - VPS lu seulement : release `live-focus-dashboard-20260905.2`, huit instances grains running/shadow. Retard M1/M5 d'environ dix minutes retrouvé à la réception les 3–4 septembre ; cause amont et erreurs HTTP encore à attribuer.
 
 La prochaine tranche traite la causalité et la chaîne canonique complète. Elle devra aussi distinguer date de création outbox et timestamp explicite de publication (null dans le ledger observé), sans renommer l'une comme preuve de l'autre. Aucune promesse de performance ni de readiness lundi n'est déduite de ces tests hors marché.
+
+### Détection causale et simulation commune — TD2-429
+
+Implémentation locale : `a38ed8b`, garde du diagnostic legacy : `40bac0d`. Rapport détaillé et limites : `reports/research/GRAINS_CAUSAL_RUNTIME_SLICE_20260905.md`.
+
+- Les quatre familles publient leurs détections brutes à clôture M5 ; le contexte est calculé sur préfixes propres/peer, filtré seulement après le bus. Aucun résultat futur de simulation ne supprime une détection.
+- Expiration issue de la clôture, borne RTH Chicago/DST ; métadonnées source/révision conservées, SQL hors lanceur, catalogue vérifié par instrument.
+- Rejeu contextuel consommant le moteur théorique live existant, mais explicitement non assimilé à un résultat Portfolio/Risk/Human Gate. Trous et ambiguïtés restent indéterminés.
+- Le contexte bus vérifie dates, qualité, identité, contrat et calendrier ; sa provenance est persistée et émise sans emprunter un snapshot non utilisé.
+- Tests backend : 1 353 pass / 1 360, 0 fail, 7 conditionnels ; PostgreSQL réel : 21/21 pass. Garde d'architecture vert ; dettes globales statique/runtime non masquées.
+- Comparaison figée 31 août–4 septembre : 100 détections brutes ; les 28 signaux live sont retrouvés par famille/sens/bougie source, sans prétendre que leur plan/cycle est inchangé. Les données historiques ne prouvent pas la connaissance préalable de leurs 42 événements agricoles.
+
+TD2-429 reste **en cours** : exposition entre lots, application effective des réductions dans Risk, manifeste complet et requalification des artefacts sont les prochaines conditions de sortie. La restauration de provenance/coverage macro relève également de TD2-426. Aucun merge main ou déploiement VPS dans cette tranche.
