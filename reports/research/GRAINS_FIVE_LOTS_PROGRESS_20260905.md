@@ -1,5 +1,7 @@
 # Desk grains — cinq lots et revue Live Focus
 
+> État courant : voir [GRAINS_FINALIZATION_20260905.md](GRAINS_FINALIZATION_20260905.md). Le contenu ci-dessous est l'historique de la tranche 56b0b4a, avant migration 063, intégration visuelle et nouveaux tests. Il ne constitue plus le dernier état de livraison.
+
 Date : 5 septembre 2026. Branche de travail : `codex/grains-week-integrity`.
 Baseline du présent lot : `16f6c16a44a8e5f489776270f54193a67f910809`.
 Correctifs et outils locaux versionnés : `56b0b4a` (pas de merge main ni de déploiement).

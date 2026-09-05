@@ -3,6 +3,19 @@
 Date : 5 septembre 2026. Epic Jira : TD2-424. Branche : `codex/grains-week-integrity`.
 Baseline : `dbbf57c50c715b9eaf53dfab7d23253729e53d06` ; main observé : `3ed9f242c640e6b0885f5523ba2349c3203ca94a`.
 
+## Dernier état — finalisation locale du 5 septembre
+
+Rapport courant : [GRAINS_FINALIZATION_20260905.md](../../reports/research/GRAINS_FINALIZATION_20260905.md). Les preuves des tranches antérieures ci-dessous restent historiques, pas cumulativement assimilées à une certification VPS.
+
+- TD2-425/429 : suivi théorique, exposition, pertes jour/semaine et hard BLOCK prioritaire implémentés/testés localement ; compatibilité des policies VPS à qualifier.
+- TD2-426 : migration 063 de calendrier immutable et contrôles de connaissance livrés localement ; complétude macro historique et retard TradingView non résolus.
+- TD2-427 : replay PostgreSQL figé exécuté ; 100 signaux bruts, 100 WAIT macro, zéro ordre qualifié. Pas de validation de rentabilité/robustesse.
+- TD2-430 : correction des états/actions Human Gate et de Telegram ; Focus plus sobre, recette navigateur local sur 10 résolutions. Livraison Telegram réelle VPS à certifier.
+- TD2-431, nouveau blocage de TD2-428 : neuf dépassements de taille corrigés ; dette globale fonctions/complexité/doublons encore bloquante, budgets inchangés.
+- TD2-428 : en cours de préparation, aucun merge main/déploiement de cette tranche. Canary et observation en marché ouvert restent à faire.
+
+Les lots ne sont pas passés artificiellement à Done : dépendances et preuves ont été commentées dans Jira ; toute clôture exige encore ses preuves manquantes. MNQ/MES/crypto restent différés, AUTO/LIVE physiques OFF.
+
 ## Objectif et limites
 
 Rendre la chaîne données → détection → contexte → Portfolio → Risk → OrderIntent → Human Gate → suivi théorique explicable, causale et reproductible. Requalifier ensuite les stratégies ZC/ZW sur des preuves honnêtes. Une performance positive n'est pas une condition permettant de modifier rétroactivement les règles.
