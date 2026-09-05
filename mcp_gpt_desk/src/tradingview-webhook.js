@@ -3,6 +3,30 @@ import { DESK_COLLECTIONS } from "@tv-automation/desk-contracts/collections";
 
 const MAX_PAYLOAD_BYTES = 64_000;
 const SECRET_FIELDS = new Set(["secret", "sec", "token", "webhook_secret"]);
+const UNTRUSTED_PROVENANCE_FIELDS = new Set([
+  "event_id",
+  "eventid",
+  "now",
+  "persisted_at",
+  "persisted_at_utc",
+  "persistedat",
+  "persistedatutc",
+  "received_at",
+  "received_at_utc",
+  "receivedat",
+  "receivedatutc",
+  "event_first_persisted_at_utc",
+  "eventfirstpersistedatutc",
+  "imported_at",
+  "importedatutc",
+  "imported_at_utc",
+  "source_bar_close_utc",
+  "source_bar_open_utc",
+  "sourcebarcloseutc",
+  "sourcebaropenutc",
+  "timing_provenance_version",
+  "timingprovenanceversion",
+]);
 const DEFAULT_ENVIRONMENT = "prod";
 const ALLOWED_ENVIRONMENTS = new Set(["prod", "preprod", "development", "test"]);
 
@@ -12,7 +36,7 @@ export async function ingestTradingViewWebhook({
   secret,
   environment = DEFAULT_ENVIRONMENT,
   requestIp = null,
-  now = new Date(),
+  now,
   maxAgeSeconds = process.env.TRADINGVIEW_WEBHOOK_MAX_AGE_SECONDS,
   maxFutureSkewSeconds = process.env.TRADINGVIEW_WEBHOOK_MAX_FUTURE_SKEW_SECONDS,
 }) {
@@ -24,6 +48,7 @@ export async function ingestTradingViewWebhook({
   const provided = String(body.token ?? body.secret ?? body.sec ?? body.webhook_secret ?? "").trim();
   if (!provided) return response(401, "webhook_secret_required");
   if (!safeEqual(provided, secret)) return response(401, "webhook_secret_invalid");
+  if (!isValidDate(now)) return response(500, "webhook_clock_required");
 
   const items = Array.isArray(body.candles) ? body.candles : [body];
   if (!items.length) return response(422, "candles_required");
@@ -104,6 +129,8 @@ function canonicalCandle(candle, { now, requestIp, environment }) {
   const candleId = candle.timestamp_utc.replace(/\.\d{3}Z$/, "Z").replace(/[-:]/g, "");
   const eventId = `event_${createHash("sha256").update(stableStringify(candle.payload)).digest("hex")}`;
   const timestamp = new Date(candle.timestamp_utc);
+  const receivedAtUtc = now.toISOString();
+  const sourceBarCloseUtc = new Date(candleCloseMs(candle)).toISOString();
   const base = {
     schema_version: "market-candle-v2",
     source: candle.source,
@@ -115,6 +142,11 @@ function canonicalCandle(candle, { now, requestIp, environment }) {
     timeframe: candle.timeframe,
     timeframe_group: candle.timeframe.endsWith("H") ? "higher_timeframe" : "intraday",
     timestamp_utc: candle.timestamp_utc,
+    source_bar_open_utc: candle.timestamp_utc,
+    source_bar_close_utc: sourceBarCloseUtc,
+    received_at_utc: receivedAtUtc,
+    event_id: eventId,
+    timing_provenance_version: "tradingview_webhook_timing_v1",
     trading_date_paris: parisDate(timestamp),
     open: candle.open,
     high: candle.high,
@@ -124,39 +156,10 @@ function canonicalCandle(candle, { now, requestIp, environment }) {
     studies: candle.studies,
     is_closed: true,
     alert_id: candle.alert_id,
-    updated_at_utc: now.toISOString(),
+    updated_at_utc: receivedAtUtc,
   };
-  const feed = {
-    schema_version: "market-feed-v2",
-    source: candle.source,
-    environment,
-    provider: "tradingview",
-    source_service: "local_tradingview_webhook",
-    feed_id: feedId,
-    symbol: candle.symbol,
-    timeframe: candle.timeframe,
-    timeframe_group: base.timeframe_group,
-    timezone: "Europe/Paris",
-    enabled: true,
-    latest_timestamp_utc: candle.timestamp_utc,
-    latest_candle_path: `${DESK_COLLECTIONS.marketFeeds}/${feedId}/${DESK_COLLECTIONS.marketFeedCandles}/${candleId}`,
-    updated_at_utc: now.toISOString(),
-  };
-  const event = {
-    event_id: eventId,
-    source: candle.source,
-    received_at_utc: now.toISOString(),
-    endpoint: "/api/v1/webhooks/tradingview",
-    client_ip: requestIp,
-    alert_id: candle.alert_id,
-    symbol: candle.symbol,
-    timeframe: candle.timeframe,
-    timestamp_utc: candle.timestamp_utc,
-    payload: candle.payload,
-    status: "ACCEPTED",
-    feed_id: feedId,
-    candle_id: candleId,
-  };
+  const feed = canonicalFeedDocument(base, candleId);
+  const event = canonicalReceiptDocument(base, { requestIp, candleId, payload: candle.payload });
   return {
     writes: [
       { collection: DESK_COLLECTIONS.marketFeeds, documentId: feedId, data: feed, merge: true },
@@ -165,6 +168,46 @@ function canonicalCandle(candle, { now, requestIp, environment }) {
       { collection: DESK_COLLECTIONS.liveDataFeedStatus, documentId: feedId, data: { ...feed, latest_bar_age_seconds: Math.max(0, Math.floor((now.getTime() - timestamp.getTime()) / 1000)), status: "OK" }, merge: true },
     ],
     result: { market_feed_id: feedId, market_feed_candle_id: candleId, event_id: eventId },
+  };
+}
+
+function canonicalFeedDocument(base, candleId) {
+  return {
+    schema_version: "market-feed-v2",
+    source: base.source,
+    environment: base.environment,
+    provider: base.provider,
+    source_service: base.source_service,
+    feed_id: base.feed_id,
+    symbol: base.symbol,
+    timeframe: base.timeframe,
+    timeframe_group: base.timeframe_group,
+    timezone: "Europe/Paris",
+    enabled: true,
+    latest_timestamp_utc: base.timestamp_utc,
+    latest_candle_path: `${DESK_COLLECTIONS.marketFeeds}/${base.feed_id}/${DESK_COLLECTIONS.marketFeedCandles}/${candleId}`,
+    updated_at_utc: base.received_at_utc,
+  };
+}
+
+function canonicalReceiptDocument(base, { requestIp, candleId, payload }) {
+  return {
+    event_id: base.event_id,
+    source: base.source,
+    received_at_utc: base.received_at_utc,
+    endpoint: "/api/v1/webhooks/tradingview",
+    client_ip: requestIp,
+    alert_id: base.alert_id,
+    symbol: base.symbol,
+    timeframe: base.timeframe,
+    timestamp_utc: base.timestamp_utc,
+    source_bar_open_utc: base.source_bar_open_utc,
+    source_bar_close_utc: base.source_bar_close_utc,
+    timing_provenance_version: base.timing_provenance_version,
+    payload,
+    status: "ACCEPTED",
+    feed_id: base.feed_id,
+    candle_id: candleId,
   };
 }
 
@@ -245,7 +288,13 @@ function safeEqual(left, right) {
 function stripSecrets(value) {
   if (Array.isArray(value)) return value.map(stripSecrets);
   if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !SECRET_FIELDS.has(key.toLowerCase())).map(([key, item]) => [key, stripSecrets(item)]));
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !SECRET_FIELDS.has(key.toLowerCase()) && !UNTRUSTED_PROVENANCE_FIELDS.has(key.toLowerCase()))
+    .map(([key, item]) => [key, stripSecrets(item)]));
+}
+
+function isValidDate(value) {
+  return value instanceof Date && Number.isFinite(value.getTime());
 }
 
 function stableStringify(value) {

@@ -3,6 +3,8 @@ import {
   parisMarketSessionState,
 } from "../market-session-state.js";
 import { grainsTradingSessionState } from "../us-grains-data-quality.js";
+import { coreFeedHealthSql } from "./postgres-data-health-query.js";
+import { marketFeedIngestionTiming } from "./postgres-data-health-timing.js";
 
 const FALLBACK_INSTRUMENTS = Object.freeze(["MNQ", "MES"]);
 const REQUIRED_TIMEFRAMES = Object.freeze(["1", "5"]);
@@ -13,7 +15,7 @@ export async function buildPostgresDataHealth(pool, { nowUtc = new Date().toISOS
   const activeInstruments = normalizeInstruments(activeScopeResult.rows[0]?.instruments);
   const requiredInstruments = activeInstruments.length ? activeInstruments : [...FALLBACK_INSTRUMENTS];
   const [marketResult, schedulerResult] = await Promise.all([
-    pool.query(coreFeedHealthSql(), [requiredInstruments]),
+    pool.query(coreFeedHealthSql(), [requiredInstruments, nowUtc]),
     pool.query(liveSchedulerHealthSql()),
   ]);
   return projectDataHealth({
@@ -31,10 +33,17 @@ function projectDataHealth({ nowUtc, feedRows, scheduler, requiredInstruments, s
   const marketSession = grainScope ? grainsTradingSessionState(nowUtc) : parisMarketSessionState(new Date(timestampMs));
   const exchangeTimezone = grainScope ? "America/Chicago" : "America/New_York";
   const freshnessPolicy = marketDataFreshnessPolicyForSession(marketSession);
-  const feeds = feedRows.map((row) => feedFromRow(row, exchangeTimezone));
+  const feeds = selectRequiredFeeds(feedRows.map((row) => feedFromRow(row, exchangeTimezone)), requiredInstruments)
+    .map((feed) => ({ ...feed, closed_candle_age_seconds: nullableClosedCandleAgeSeconds(feed, timestampMs) }));
   feeds.forEach((feed) => { feed.provenance = marketFeedProvenance(feed); });
-  const expectedFeedCount = requiredInstruments.length * REQUIRED_TIMEFRAMES.length;
-  const freshness = coreFreshness({ feeds, timestampMs, freshnessPolicy, tradingDate: marketSession.trading_date, expectedFeedCount });
+  const requiredFeedKeys = requiredFeedKeysForScope(requiredInstruments);
+  const freshness = coreFreshness({
+    feeds,
+    requiredFeedKeys,
+    timestampMs,
+    freshnessPolicy,
+    tradingDate: marketSession.trading_date,
+  });
   return {
     ok: marketSession.market_closed === true ? freshness.coreFreshEnough : freshness.currentTradingDayReady,
     state: dataHealthState({ marketClosed: marketSession.market_closed === true, ...freshness, marketSession }),
@@ -42,7 +51,7 @@ function projectDataHealth({ nowUtc, feedRows, scheduler, requiredInstruments, s
     market_session: marketSession,
     freshness_policy: freshnessPolicy,
     core_age_seconds: freshness.core_age_seconds,
-    source_health: sourceHealthForCoreFeeds(feeds, expectedFeedCount),
+    source_health: sourceHealthForCoreFeeds(feeds, requiredFeedKeys),
     readiness_scope: {
       source: scopeSource,
       instruments: requiredInstruments,
@@ -67,45 +76,6 @@ function activeRuntimeInstrumentScopeSql() {
              AND si.execution_mode IN ('shadow', 'paper', 'live')`;
 }
 
-function coreFeedHealthSql() {
-  return `SELECT mf.instrument_code,
-                mf.timeframe,
-                mf.feed_id,
-                mf.provider,
-                mf.source_service,
-                latest.timestamp_utc AS latest_timestamp_utc,
-                (latest.timestamp_utc AT TIME ZONE 'Europe/Paris')::date::text AS latest_market_date,
-                latest.imported_at AS latest_imported_at_utc,
-                latest.source_collection AS latest_source_collection,
-                latest.raw->>'source' AS latest_candle_source,
-                event.received_at AS latest_event_received_at_utc,
-                event.alert_id AS latest_event_alert_id,
-                event.payload->>'source' AS latest_event_payload_source,
-                event.raw->>'source' AS latest_event_raw_source
-         FROM market_feeds mf
-         LEFT JOIN LATERAL (
-           SELECT mc.timestamp_utc, mc.imported_at, mc.source_collection, mc.raw
-           FROM market_candles mc
-           WHERE mc.feed_id = mf.feed_id
-             AND mc.is_closed = true
-           ORDER BY mc.timestamp_utc DESC
-           LIMIT 1
-         ) latest ON true
-         LEFT JOIN LATERAL (
-           SELECT te.received_at, te.alert_id, te.payload, te.raw
-           FROM tradingview_events te
-           WHERE te.feed_id = mf.feed_id
-             AND te.timestamp_utc = latest.timestamp_utc
-           ORDER BY te.received_at DESC NULLS LAST, te.updated_at DESC
-           LIMIT 1
-         ) event ON true
-         WHERE mf.enabled = true
-           AND mf.environment = 'prod'
-           AND mf.instrument_code = ANY($1::text[])
-           AND mf.timeframe IN ('1', '5')
-         ORDER BY mf.instrument_code, mf.timeframe`;
-}
-
 function liveSchedulerHealthSql() {
   return `SELECT service_id, status, details, heartbeat_at_utc, release_version
          FROM desk_service_heartbeats
@@ -114,6 +84,9 @@ function liveSchedulerHealthSql() {
 }
 
 function feedFromRow(row, exchangeTimezone) {
+  const latestClosedAtUtc = row.latest_candle_close_utc || closeAtUtc(row.latest_timestamp_utc, row.timeframe);
+  const ingestionTiming = marketFeedIngestionTiming(row, latestClosedAtUtc);
+  const eventFields = projectedEventFields(row, ingestionTiming);
   return {
     instrument: row.instrument_code,
     timeframe: row.timeframe,
@@ -122,33 +95,67 @@ function feedFromRow(row, exchangeTimezone) {
     source_service: row.source_service,
     latest_timestamp_utc: row.latest_timestamp_utc,
     latest_market_date: marketDate(row.latest_timestamp_utc, exchangeTimezone),
+    latest_closed_candle_at_utc: latestClosedAtUtc,
     latest_imported_at_utc: row.latest_imported_at_utc,
-    latest_received_at_utc: row.latest_event_received_at_utc,
+    latest_received_at_utc: eventFields.receivedAtUtc,
     latest_source_collection: row.latest_source_collection,
-    latest_source: row.latest_event_payload_source || row.latest_event_raw_source || row.latest_candle_source || null,
-    latest_alert_id: row.latest_event_alert_id || null,
+    latest_source: eventFields.source || row.latest_candle_source || null,
+    latest_alert_id: eventFields.alertId,
+    earliest_available_received_at_utc: row.earliest_available_received_at_utc || null,
+    timing_provenance_version: row.latest_timing_provenance_version || null,
+    ingestion_timing: ingestionTiming,
   };
 }
 
-function coreFreshness({ feeds, timestampMs, freshnessPolicy, tradingDate, expectedFeedCount }) {
-  const effectiveMarketDate = feeds.map((feed) => feed.latest_market_date).filter(Boolean).sort().at(-1) || null;
-  const coreReady = feeds.length >= expectedFeedCount && feeds.every((feed) => Boolean(feed.latest_timestamp_utc));
-  const oldestCoreLatestMs = feeds
-    .map((feed) => feedLatestCloseMs(feed))
-    .filter(Number.isFinite)
-    .sort((left, right) => left - right)
-    .at(0);
-  const core_age_seconds = Number.isFinite(oldestCoreLatestMs)
-    ? Math.max(0, Math.round((timestampMs - oldestCoreLatestMs) / 1000))
-    : null;
-  const coreFreshEnough = coreReady && core_age_seconds !== null && core_age_seconds <= freshnessPolicy.max_age_seconds;
-  return { effectiveMarketDate, coreReady, coreFreshEnough, core_age_seconds, currentTradingDayReady: coreReady && effectiveMarketDate === tradingDate && coreFreshEnough };
+function projectedEventFields(row, ingestionTiming) {
+  if (ingestionTiming.provenance === "current_event_linked") {
+    return {
+      receivedAtUtc: row.current_event_received_at_utc || null,
+      source: row.current_event_payload_source || row.current_event_raw_source || null,
+      alertId: row.current_event_alert_id || null,
+    };
+  }
+  if (row.latest_timing_provenance_version === "tradingview_webhook_timing_v1") {
+    return { receivedAtUtc: null, source: null, alertId: null };
+  }
+  return {
+    receivedAtUtc: row.latest_event_received_at_utc || null,
+    source: row.latest_event_payload_source || row.latest_event_raw_source || null,
+    alertId: row.latest_event_alert_id || null,
+  };
 }
 
-function feedLatestCloseMs(feed = {}) {
-  const latestMs = Date.parse(feed.latest_timestamp_utc || "");
-  if (!Number.isFinite(latestMs)) return NaN;
-  return latestMs + (timeframeSeconds(feed.timeframe) * 1000);
+function coreFreshness({ feeds, requiredFeedKeys, timestampMs, freshnessPolicy, tradingDate }) {
+  const feedsByKey = new Map(feeds.map((feed) => [feedKey(feed), feed]));
+  const requiredFeeds = requiredFeedKeys.map((key) => feedsByKey.get(key) || null);
+  const ages = requiredFeeds.map((feed) => closedCandleAgeSeconds(feed, timestampMs));
+  const coreReady = requiredFeeds.every(Boolean) && ages.every(Number.isFinite);
+  const core_age_seconds = coreReady ? Math.max(...ages) : null;
+  const marketDates = requiredFeeds.map((feed) => feed?.latest_market_date).filter(Boolean);
+  const effectiveMarketDate = marketDates.length === requiredFeedKeys.length && new Set(marketDates).size === 1
+    ? marketDates[0]
+    : null;
+  const marketDateReady = coreReady && requiredFeeds.every((feed) => feed.latest_market_date === tradingDate);
+  const coreFreshEnough = coreReady && core_age_seconds <= freshnessPolicy.max_age_seconds;
+  return {
+    effectiveMarketDate,
+    coreReady,
+    coreFreshEnough,
+    core_age_seconds,
+    marketDateReady,
+    currentTradingDayReady: marketDateReady && coreFreshEnough,
+  };
+}
+
+function closedCandleAgeSeconds(feed, timestampMs) {
+  const closeMs = Date.parse(feed?.latest_closed_candle_at_utc || "");
+  if (!Number.isFinite(closeMs) || closeMs > timestampMs) return NaN;
+  return Math.round((timestampMs - closeMs) / 1000);
+}
+
+function nullableClosedCandleAgeSeconds(feed, timestampMs) {
+  const age = closedCandleAgeSeconds(feed, timestampMs);
+  return Number.isFinite(age) ? age : null;
 }
 
 function timeframeSeconds(timeframe) {
@@ -162,6 +169,41 @@ function timeframeSeconds(timeframe) {
     "4H": 4 * 60 * 60,
     "240": 4 * 60 * 60,
   })[String(timeframe || "")] || 60;
+}
+
+function closeAtUtc(timestampUtc, timeframe) {
+  const timestampMs = Date.parse(timestampUtc || "");
+  if (!Number.isFinite(timestampMs)) return null;
+  return new Date(timestampMs + (timeframeSeconds(timeframe) * 1000)).toISOString();
+}
+
+function requiredFeedKeysForScope(instruments) {
+  return instruments.flatMap((instrument) => REQUIRED_TIMEFRAMES.map((timeframe) => `${instrument}|${timeframe}`));
+}
+
+function selectRequiredFeeds(feeds, requiredInstruments) {
+  const requiredKeys = new Set(requiredFeedKeysForScope(requiredInstruments));
+  const selected = new Map();
+  for (const feed of feeds) {
+    const key = feedKey(feed);
+    if (!requiredKeys.has(key) || feedIsOlderThan(feed, selected.get(key))) continue;
+    selected.set(key, feed);
+  }
+  return [...selected.values()].sort((left, right) => feedKey(left).localeCompare(feedKey(right)));
+}
+
+function feedIsOlderThan(candidate, existing) {
+  if (!existing) return false;
+  const candidateMs = Date.parse(candidate.latest_closed_candle_at_utc || "");
+  const existingMs = Date.parse(existing.latest_closed_candle_at_utc || "");
+  if (!Number.isFinite(candidateMs)) return true;
+  if (!Number.isFinite(existingMs)) return false;
+  if (candidateMs !== existingMs) return candidateMs < existingMs;
+  return String(candidate.feed_id || "") > String(existing.feed_id || "");
+}
+
+function feedKey(feed) {
+  return `${String(feed?.instrument || "").toUpperCase()}|${String(feed?.timeframe || "")}`;
 }
 
 function dataHealthState({ marketClosed, coreFreshEnough, coreReady, currentTradingDayReady, marketSession }) {
@@ -195,12 +237,13 @@ function marketFeedProvenance(feed = {}) {
   };
 }
 
-function sourceHealthForCoreFeeds(feeds = [], expectedFeedCount = 0) {
-  const core = (feeds || []).filter((feed) => REQUIRED_TIMEFRAMES.includes(String(feed.timeframe)));
+function sourceHealthForCoreFeeds(feeds = [], requiredFeedKeys = []) {
+  const requiredKeys = new Set(requiredFeedKeys);
+  const core = (feeds || []).filter((feed) => requiredKeys.has(feedKey(feed)));
   const nonDurable = core.filter((feed) => feed.provenance?.durable !== true);
   return {
     required: true,
-    durable: core.length >= expectedFeedCount && nonDurable.length === 0,
+    durable: core.length === requiredKeys.size && nonDurable.length === 0,
     durable_count: countDurableFeeds(core),
     total_count: core.length,
     non_durable_feeds: nonDurable.map(nonDurableFeedProjection),
@@ -215,17 +258,20 @@ function marketFeedSourceFacts(feed = {}) {
     sourceService: String(feed.source_service || "").trim(),
     hasWebhookEvent: Boolean(feed.latest_received_at_utc),
     hasAlertId: Boolean(feed.latest_alert_id),
+    eventLinkMismatch: feed.timing_provenance_version === "tradingview_webhook_timing_v1"
+      && feed.ingestion_timing?.provenance !== "current_event_linked",
     rescue: ["rescue", "backfill", "manual", "desktop_recent_ohlcv"].some((marker) => sourceLower.includes(marker)),
     durableSource: ["tradingview_alert_webhook", "tradingview_alert", "alert_webhook"].includes(sourceLower),
   };
 }
 
 function marketFeedDurable(facts = {}) {
-  return !facts.rescue && facts.provider === "tradingview" && facts.sourceService === "local_tradingview_webhook" && facts.hasWebhookEvent && (facts.hasAlertId || facts.durableSource);
+  return !facts.rescue && !facts.eventLinkMismatch && facts.provider === "tradingview" && facts.sourceService === "local_tradingview_webhook" && facts.hasWebhookEvent && (facts.hasAlertId || facts.durableSource);
 }
 
 function marketFeedClassification(facts = {}, durable = false) {
   if (facts.rescue) return "rescue";
+  if (facts.eventLinkMismatch) return "event_link_mismatch";
   if (durable) return "durable_alert";
   return facts.hasWebhookEvent ? "webhook_unclassified" : "unknown";
 }

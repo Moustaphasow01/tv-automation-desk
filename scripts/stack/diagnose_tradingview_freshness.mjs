@@ -33,7 +33,8 @@ export function buildTradingViewFreshnessDiagnosis(dataReadiness = {}, { checked
     feeds: dataReadiness.core_feeds,
     checkedAt,
     maxAgeSeconds,
-    effectiveMarketDate: dataReadiness.effective_market_date,
+    requiredMarketDate: dataReadiness.requested_trading_date || dataReadiness.effective_market_date,
+    marketClosed: dataReadiness.market_closed === true,
   }));
   const blockers = blockersForFeeds(feedStatuses, dataReadiness);
   const status = diagnosisStatus({ dataReadiness, blockers });
@@ -66,7 +67,7 @@ export function formatTradingViewFreshnessDiagnosis(diagnosis) {
     "Core feeds:",
   ];
   for (const feed of diagnosis.feed_statuses) {
-    lines.push(`- ${feed.label}: ${feed.status} · latest=${feed.latest_timestamp_utc || "—"} · age=${feed.age_seconds ?? "—"}s · source=${feed.provenance?.classification || "unknown"}`);
+    lines.push(`- ${feed.label}: ${feed.status} · latest=${feed.latest_timestamp_utc || "—"} · age=${feed.age_seconds ?? "—"}s · timing=${timingEvidence(feed.ingestion_timing)} · source=${feed.provenance?.classification || "unknown"}`);
   }
   if (diagnosis.blockers.length) {
     lines.push("");
@@ -87,17 +88,25 @@ export function formatTradingViewFreshnessDiagnosis(diagnosis) {
   return lines.join("\n");
 }
 
-function statusForCoreFeed({ expected, feeds, checkedAt, maxAgeSeconds, effectiveMarketDate }) {
+function statusForCoreFeed({ expected, feeds, checkedAt, maxAgeSeconds, requiredMarketDate, marketClosed }) {
   const feed = findFeed(feeds, expected);
   if (!feed) return baseFeedStatus(expected, "missing");
   const latestAt = parseDate(feed.latest_timestamp_utc);
   if (!latestAt) return { ...baseFeedStatus(expected, "invalid_timestamp"), latest_timestamp_utc: feed.latest_timestamp_utc || null };
-  const ageSeconds = Math.max(0, Math.floor((checkedAt.getTime() - latestAt.getTime()) / 1000));
+  const latestClosedAt = closedCandleAt(feed, latestAt);
+  if (!latestClosedAt) return { ...baseFeedStatus(expected, "invalid_closed_candle"), latest_timestamp_utc: latestAt.toISOString() };
+  if (latestClosedAt.getTime() > checkedAt.getTime()) {
+    return { ...baseFeedStatus(expected, "future_closed_candle"), latest_timestamp_utc: latestAt.toISOString(), latest_closed_candle_at_utc: latestClosedAt.toISOString() };
+  }
+  const age = closedCandleAge(feed, checkedAt, latestClosedAt);
+  if (!age) return { ...baseFeedStatus(expected, "invalid_closed_candle_age"), latest_timestamp_utc: latestAt.toISOString(), latest_closed_candle_at_utc: latestClosedAt.toISOString() };
+  const { ageSeconds, ageSource } = age;
   const stale = ageSeconds > maxAgeSeconds;
-  const marketDateMismatch = Boolean(effectiveMarketDate && feed.latest_market_date && feed.latest_market_date !== effectiveMarketDate);
+  const marketDateMismatch = !marketClosed && Boolean(requiredMarketDate && feed.latest_market_date && feed.latest_market_date !== requiredMarketDate);
   return {
-    ...baseFeedStatus(expected, stale ? "stale" : "fresh"),
+    ...baseFeedStatus(expected, marketClosed ? "last_known_market_closed" : stale ? "stale" : "fresh"),
     latest_timestamp_utc: latestAt.toISOString(),
+    latest_closed_candle_at_utc: latestClosedAt.toISOString(),
     latest_market_date: feed.latest_market_date || null,
     feed_id: feed.feed_id || null,
     provider: feed.provider || null,
@@ -106,7 +115,9 @@ function statusForCoreFeed({ expected, feeds, checkedAt, maxAgeSeconds, effectiv
     latest_source: feed.latest_source || null,
     latest_alert_id: feed.latest_alert_id || null,
     provenance: feed.provenance || null,
+    ingestion_timing: feed.ingestion_timing || null,
     age_seconds: ageSeconds,
+    age_source: ageSource,
     stale_by_seconds: stale ? ageSeconds - maxAgeSeconds : 0,
     seconds_until_stale: stale ? 0 : maxAgeSeconds - ageSeconds,
     market_date_mismatch: marketDateMismatch,
@@ -120,6 +131,7 @@ function baseFeedStatus(expected, status) {
     label: expected.label,
     status,
     latest_timestamp_utc: null,
+    latest_closed_candle_at_utc: null,
     latest_market_date: null,
     feed_id: null,
     provider: null,
@@ -128,7 +140,9 @@ function baseFeedStatus(expected, status) {
     latest_source: null,
     latest_alert_id: null,
     provenance: null,
+    ingestion_timing: null,
     age_seconds: null,
+    age_source: null,
     stale_by_seconds: null,
     seconds_until_stale: null,
     market_date_mismatch: false,
@@ -138,7 +152,7 @@ function baseFeedStatus(expected, status) {
 function blockersForFeeds(feedStatuses, dataReadiness) {
   const blockers = [];
   for (const feed of feedStatuses) {
-    if (["missing", "invalid_timestamp", "stale"].includes(feed.status)) {
+    if (isFeedBlocking(feed.status, dataReadiness.market_closed === true)) {
       blockers.push({
         code: `feed.${feed.instrument}.${feed.timeframe}.${feed.status}`,
         label: feed.label,
@@ -152,7 +166,7 @@ function blockersForFeeds(feedStatuses, dataReadiness) {
         detail: `latest_market_date=${feed.latest_market_date}`,
       });
     }
-    if (feed.status === "fresh" && feed.provenance?.durable !== true) {
+    if (hasMarketData(feed) && feed.provenance?.durable !== true) {
       blockers.push({
         code: `feed.${feed.instrument}.${feed.timeframe}.source_not_durable`,
         label: feed.label,
@@ -160,29 +174,27 @@ function blockersForFeeds(feedStatuses, dataReadiness) {
       });
     }
   }
-  if (dataReadiness.ok !== true && blockers.length === 0) {
+  if (dataReadiness.ok !== true && blockers.length === 0 && dataReadiness.market_closed !== true) {
     blockers.push({ code: "backend.data_readiness.not_ready", label: "Backend readiness", detail: dataReadiness.state || "unknown" });
   }
   return blockers;
 }
 
 function actionsForDiagnosis({ status, blockers, dataReadiness, maxAgeSeconds }) {
-  if (status === "READY") return [];
+  if (["READY", "MARKET_CLOSED_LAST_KNOWN"].includes(status)) return [];
   const missingOrStale = blockers
     .filter((blocker) => blocker.code.startsWith("feed."))
     .map((blocker) => blocker.label);
   return [
     {
       id: "tradingview_alerts_durable",
-      title: "Vérifier les alertes TradingView durables MNQ/MES",
+      title: "Vérifier les alertes TradingView durables",
       detail: `Feeds concernés: ${missingOrStale.join(", ") || "backend readiness"}. Les alertes doivent poster ${expectedFeedLabel(dataReadiness)} vers /api/v1/webhooks/tradingview avec une fraîcheur < ${maxAgeSeconds}s.`,
-      command: "python3 scripts/tradingview/migrate_local_alert_webhooks.py",
     },
     {
       id: "tradingview_mcp_rescue",
-      title: "Utiliser le backfill MCP local seulement comme secours diagnostic",
-      detail: `État backend=${dataReadiness.state || "unknown"} ; ce secours écrit uniquement des bougies TradingView réelles via le webhook, jamais directement en base.`,
-      command: `python3 scripts/tradingview/import_recent_ohlcv_to_webhook.py --symbols=${expectedSymbolArgs(dataReadiness)} --timeframes=${expectedTimeframeArgs(dataReadiness)} --execute --env-file .env.example`,
+      title: "Examiner le secours MCP local avant toute intervention",
+      detail: `État backend=${dataReadiness.state || "unknown"} ; le secours n'est pas exécuté par ce doctor et ne remplace jamais les alertes TradingView durables pour ${expectedFeedLabel(dataReadiness)}.`,
     },
   ];
 }
@@ -206,16 +218,6 @@ function expectedFeedLabel(dataReadiness = {}) {
   return `${instruments} ${timeframes}`;
 }
 
-function expectedSymbolArgs(dataReadiness = {}) {
-  const symbolByInstrument = { MNQ: "MNQ1!", MES: "MES1!", ZC: "ZC1!", ZW: "ZW1!" };
-  return [...new Set(expectedCoreFeeds(dataReadiness).map((feed) => symbolByInstrument[feed.instrument] || feed.instrument))]
-    .join(",");
-}
-
-function expectedTimeframeArgs(dataReadiness = {}) {
-  return [...new Set(expectedCoreFeeds(dataReadiness).map((feed) => feed.timeframe))].join(",");
-}
-
 function normalizeStringArray(value) {
   return (Array.isArray(value) ? value : [])
     .map((item) => String(item || "").trim().toUpperCase())
@@ -227,6 +229,7 @@ function timeframeLabel(timeframe) {
 }
 
 function diagnosisStatus({ dataReadiness, blockers }) {
+  if (dataReadiness.market_closed === true && blockers.length === 0) return "MARKET_CLOSED_LAST_KNOWN";
   if (dataReadiness.ok === true && blockers.length === 0) return "READY";
   if (blockers.some((blocker) => blocker.code.includes(".missing"))) return "MISSING_FEEDS";
   if (blockers.some((blocker) => blocker.code.includes(".stale"))) return "STALE_FEEDS";
@@ -242,6 +245,37 @@ function findFeed(feeds, expected) {
     const timeframe = String(feed?.timeframe || "");
     return instrument === expected.instrument && timeframe === expected.timeframe;
   }) || null;
+}
+
+function closedCandleAt(feed, latestAt) {
+  const backendClosedAt = parseDate(feed.latest_closed_candle_at_utc);
+  if (backendClosedAt) return backendClosedAt;
+  const timeframeSeconds = timeframeDurationSeconds(feed.timeframe);
+  return Number.isFinite(timeframeSeconds)
+    ? new Date(latestAt.getTime() + (timeframeSeconds * 1000))
+    : null;
+}
+
+function closedCandleAge(feed, checkedAt, latestClosedAt) {
+  const backendAge = Number(feed.closed_candle_age_seconds);
+  if (Number.isFinite(backendAge) && backendAge >= 0) {
+    return { ageSeconds: Math.round(backendAge), ageSource: "backend_closed_candle" };
+  }
+  const ageSeconds = Math.floor((checkedAt.getTime() - latestClosedAt.getTime()) / 1000);
+  return ageSeconds >= 0 ? { ageSeconds, ageSource: "legacy_close_fallback" } : null;
+}
+
+function timeframeDurationSeconds(timeframe) {
+  return ({ "1": 60, "5": 300, "15": 900, "30": 1800, "60": 3600, "1H": 3600, "240": 14400, "4H": 14400 })[String(timeframe || "")];
+}
+
+function isFeedBlocking(status, marketClosed) {
+  if (["missing", "invalid_timestamp", "invalid_closed_candle", "invalid_closed_candle_age", "future_closed_candle"].includes(status)) return true;
+  return status === "stale" && !marketClosed;
+}
+
+function hasMarketData(feed) {
+  return Boolean(feed.latest_timestamp_utc) && !["invalid_timestamp", "invalid_closed_candle", "invalid_closed_candle_age", "future_closed_candle", "missing"].includes(feed.status);
 }
 
 function resolveCheckedAt(dataReadiness, checkedAtUtc) {
@@ -284,6 +318,21 @@ function sourceDetail(feed) {
     `received_at=${provenance.received_at_utc || feed.latest_received_at_utc || "—"}`,
     `alert_id=${provenance.alert_id || feed.latest_alert_id || "—"}`,
   ].join(" · ");
+}
+
+function timingEvidence(timing) {
+  if (!timing) return "unavailable";
+  return [
+    timing.provenance || "unavailable",
+    `close→first_db_event=${timingIntervalEvidence(timing.close_to_first_import)}`,
+    `close→receipt=${timingIntervalEvidence(timing.close_to_received)}`,
+    `receipt→first_db_event=${timingIntervalEvidence(timing.received_to_persisted)}`,
+  ].join(" · ");
+}
+
+function timingIntervalEvidence(interval) {
+  if (!interval || interval.seconds === null || interval.seconds === undefined) return "—";
+  return `${interval.seconds}s (${interval.status || "unknown"})`;
 }
 
 function printUsage() {

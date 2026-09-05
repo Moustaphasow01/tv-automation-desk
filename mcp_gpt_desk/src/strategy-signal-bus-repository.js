@@ -25,6 +25,16 @@ export class PostgresStrategySignalBusRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      const existing = outbox.require_running_instance === true
+        ? await findSignalByDedupeKey(client, outbox.dedupe_key)
+        : null;
+      if (existing) {
+        await client.query("COMMIT");
+        return normalizeSignalOutboxRow(existing);
+      }
+      if (outbox.require_running_instance === true) {
+        await requireRunningStrategyInstance(client, outbox.strategy_instance_id);
+      }
       const row = await insertSignal(client, outbox);
       const saved = normalizeSignalOutboxRow(row);
       await appendSignalCreated(this.domainEvents, client, saved, outbox);
@@ -69,6 +79,24 @@ export class PostgresStrategySignalBusRepository {
     return normalizeSignalOutboxRow(await one(this.pool, `UPDATE strategy_signal_outbox
       SET status = 'consumed', consumed_at_utc = COALESCE(consumed_at_utc, $2), consumer_id = $3, updated_at_utc = now()
       WHERE signal_outbox_id = $1 AND status IN ('pending', 'published') RETURNING *`, [signal_outbox_id, now_utc, consumer_id]));
+  }
+}
+
+async function findSignalByDedupeKey(client, dedupeKey) {
+  return one(client, "SELECT * FROM strategy_signal_outbox WHERE dedupe_key = $1", [dedupeKey]);
+}
+
+async function requireRunningStrategyInstance(client, strategyInstanceId) {
+  const instance = await one(client, `SELECT strategy_instance_id
+    FROM strategy_instances
+    WHERE strategy_instance_id = $1
+      AND runtime_state = 'running'::strategy_instance_runtime_state
+    FOR SHARE`, [strategyInstanceId]);
+  if (!instance) {
+    throw repositoryError(
+      "STRATEGY_SIGNAL_INSTANCE_NOT_RUNNING",
+      "Strategy signal publication requires a running Strategy Instance.",
+    );
   }
 }
 

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { FixedClock } from "@tv-automation/desk-time";
 import { ingestTradingViewWebhook } from "../src/tradingview-webhook.js";
+import { PersistentDeskStore } from "../src/store.js";
+import { InMemoryDeskPersistence } from "./support/in-memory-desk-persistence.js";
 
 test("local TradingView webhook validates, strips secrets and writes canonical documents", async () => {
   const persistence = new RecordingPersistence();
@@ -23,6 +26,11 @@ test("local TradingView webhook validates, strips secrets and writes canonical d
       close: 102,
       volume: 42,
       studies: { rsi_14: 55 },
+      received_at_utc: "1999-01-01T00:00:00.000Z",
+      persisted_at_utc: "1999-01-01T00:00:01.000Z",
+      now: "1999-01-01T00:00:02.000Z",
+      sourceBarCloseUtc: "1999-01-01T00:00:03.000Z",
+      timingProvenanceVersion: "untrusted",
     },
   });
 
@@ -38,8 +46,32 @@ test("local TradingView webhook validates, strips secrets and writes canonical d
   assert.equal(candle.data.source, "tradingview_alert_webhook");
   assert.equal(candle.data.close, 102);
   assert.equal(candle.data.environment, "preprod");
+  assert.equal(candle.data.source_bar_open_utc, "2026-07-15T10:00:00.000Z");
+  assert.equal(candle.data.source_bar_close_utc, "2026-07-15T10:05:00.000Z");
+  assert.equal(candle.data.received_at_utc, "2026-07-15T10:01:00.000Z");
+  assert.equal(candle.data.timing_provenance_version, "tradingview_webhook_timing_v1");
   const event = persistence.writes.find((write) => write.collection === "tradingview_webhook_events");
   assert.equal(event.data.source, "tradingview_alert_webhook");
+  assert.equal(event.data.source_bar_open_utc, "2026-07-15T10:00:00.000Z");
+  assert.equal(event.data.source_bar_close_utc, "2026-07-15T10:05:00.000Z");
+  assert.equal(event.data.received_at_utc, "2026-07-15T10:01:00.000Z");
+  assert.equal(event.data.timing_provenance_version, "tradingview_webhook_timing_v1");
+  assert.equal(JSON.stringify(event.data.payload).includes("1999-01-01"), false);
+});
+
+test("persistent store supplies the webhook receipt from its injected clock", async () => {
+  const persistence = new InMemoryDeskPersistence();
+  const store = new PersistentDeskStore(new FixedClock(Date.parse("2026-07-15T10:01:00.000Z")), persistence);
+  await store.ingestTradingViewWebhook({
+    secret: "test-secret",
+    body: closedCandleBody({
+      received_at_utc: "1999-01-01T00:00:00.000Z",
+      now: "1999-01-01T00:00:01.000Z",
+    }),
+  });
+
+  const event = persistence.peek("tradingview_webhook_events", persistence.ids("tradingview_webhook_events")[0]);
+  assert.equal(event.received_at_utc, "2026-07-15T10:01:00.000Z");
 });
 
 test("local TradingView webhook targets the canonical prod feed environment by default", async () => {
@@ -144,4 +176,20 @@ class RecordingPersistence {
     this.writes.push(...writes);
     return { ok: true, write_count: writes.length };
   }
+}
+
+function closedCandleBody(overrides = {}) {
+  return {
+    token: "test-secret",
+    symbol: "CME_MINI:MNQ1!",
+    timeframe: "5",
+    timestamp_utc: "2026-07-15T10:00:00.000Z",
+    bar_status: "closed",
+    open: 100,
+    high: 103,
+    low: 99,
+    close: 102,
+    volume: 42,
+    ...overrides,
+  };
 }

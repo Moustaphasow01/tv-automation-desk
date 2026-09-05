@@ -4,6 +4,7 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import pg from "pg";
 import { buildPostgresDataHealth } from "./postgres-data-health.js";
 import { projectOperationalServices } from "./postgres-operational-health.js";
+import { upsertTradingViewEventDocument } from "./postgres-tradingview-event-repository.js";
 
 const { Pool } = pg;
 
@@ -1354,6 +1355,7 @@ async function getSpecializedDocument(client, collection, documentId) {
            'timeframe', timeframe,
            'timestamp_utc', to_char(timestamp_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
            'received_at_utc', to_char(received_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+           'event_first_persisted_at_utc', to_char(imported_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
            'alert_id', alert_id,
            'status', status,
            'payload', payload
@@ -1446,6 +1448,7 @@ async function listSpecializedDocuments(client, collection, limit) {
            'timeframe', timeframe,
            'timestamp_utc', to_char(timestamp_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
            'received_at_utc', to_char(received_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+           'event_first_persisted_at_utc', to_char(imported_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
            'alert_id', alert_id,
            'status', status,
            'payload', payload
@@ -1514,7 +1517,13 @@ async function setSpecializedDocument(client, collection, documentId, data, merg
       return true;
     }
     if (collection === TRADINGVIEW_EVENTS_COLLECTION) {
-      await upsertTradingViewEventDocument(client, documentId, data, merge);
+      await upsertTradingViewEventDocument(client, {
+        eventId: documentId,
+        data,
+        merge,
+        ensureMarketFeed,
+        eventRow: tradingViewEventRow,
+      });
       return true;
     }
     const feedId = marketCandleFeedId(collection);
@@ -1681,44 +1690,6 @@ async function upsertMarketFeedStatusDocument(client, statusId, data, merge) {
       row.timestamp_utc,
       row.status,
       row.latest_bar_age_seconds,
-      JSON.stringify(row.payload),
-      JSON.stringify(row.raw),
-      merge,
-    ],
-  );
-}
-
-async function upsertTradingViewEventDocument(client, eventId, data, merge) {
-  const row = tradingViewEventRow(eventId, data);
-  if (row.feed_id) await ensureMarketFeed(client, row.feed_id, data);
-  await client.query(
-    `INSERT INTO tradingview_events (
-       event_id, feed_id, symbol_code, timeframe, timestamp_utc, received_at,
-       alert_id, status, payload, raw
-     ) VALUES (
-       $1, $2, $3, $4, $5::timestamptz, $6::timestamptz,
-       $7, $8, $9::jsonb, $10::jsonb
-     )
-     ON CONFLICT(event_id) DO UPDATE
-     SET feed_id = EXCLUDED.feed_id,
-         symbol_code = EXCLUDED.symbol_code,
-         timeframe = EXCLUDED.timeframe,
-         timestamp_utc = EXCLUDED.timestamp_utc,
-         received_at = EXCLUDED.received_at,
-         alert_id = EXCLUDED.alert_id,
-         status = EXCLUDED.status,
-         payload = CASE WHEN $11::boolean THEN tradingview_events.payload || EXCLUDED.payload ELSE EXCLUDED.payload END,
-         raw = CASE WHEN $11::boolean THEN tradingview_events.raw || EXCLUDED.raw ELSE EXCLUDED.raw END,
-         updated_at = now()`,
-    [
-      row.event_id,
-      row.feed_id,
-      row.symbol_code,
-      row.timeframe,
-      row.timestamp_utc,
-      row.received_at,
-      row.alert_id,
-      row.status,
       JSON.stringify(row.payload),
       JSON.stringify(row.raw),
       merge,

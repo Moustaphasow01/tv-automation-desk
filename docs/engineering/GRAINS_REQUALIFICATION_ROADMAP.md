@@ -45,7 +45,7 @@ Après stabilisation des contrats, le lot produit revoit les informations utiles
 ## Avancement
 
 - Audit initial et jeux de données figés : disponibles au commit de baseline.
-- TD2-424 : en cours. TD2-425 : correctif local testé, revue d'intégration requise. Autres lots : à faire, dépendants des preuves P0.
+- TD2-424 : en cours. TD2-425 : correctif local testé, revue d'intégration requise. TD2-426 et TD2-429 : premières tranches locales testées, en cours ; aucune clôture globale. TD2-427/428/430 : à faire, dépendants des preuves P0.
 - Aucun déploiement ni changement des données de production dans cette phase locale.
 - Les résultats de commandes et preuves de chaque lot seront ajoutés ci-dessous ; une ligne planifiée n'est pas une fonctionnalité livrée.
 
@@ -75,3 +75,16 @@ Commandes vérifiées le 05/09/2026 (Windows Node dans ce poste WSL : `node.exe`
 Le garde runtime global reste à exécuter dans un environnement où le processus Node Windows trouve `rg`. Aucun contrôle n'a été désactivé. Ces tests ne certifient ni le VPS ni l'intégralité de la chaîne stratégie/context/Risk : ils couvrent le suivi à partir d'OrderIntents autorisés. La résolution opérateur des ambiguïtés et leur présentation explicite restent dans le lot produit/reconciliation.
 
 Prochaine dépendance : TD2-429 doit supprimer la consultation future du contexte et l'antériorité des fills à la clôture M5 avant toute nouvelle annonce de performance. TD2-426 doit expliquer le retard observé à l'arrivée des M5. Les anciens résultats ne sont pas recalculés dans la base de production durant cette étape.
+
+### Tranches suivantes locales — TD2-426 / TD2-429
+
+Pilotage architecture/revue conservé par l'agent principal ; exécution déléguée à Terra/Luna, avec retours de correction et validation indépendante. Le périmètre, les tests et les limites sont versionnés dans `docs/engineering/GRAINS_DATA_RELIABILITY_SLICE.md` ; les constats sont dans `reports/research/GRAINS_DATA_TIMING_AND_RUNTIME_SLICE_20260905.md`.
+
+- Réception et première insertion événement distinguées de l'ouverture/clôture ; doublons et corrections OHLC gardent une provenance non réécrite.
+- Santé bornée aux bougies clôturées, chaque paire instrument/timeframe exigée et source liée à l'événement exact ; marché fermé distingué d'une panne.
+- Audit M1→M5 reproductible : 14 divergences OHLC sur 520 fenêtres complètes, trous et bords séparés ; aucune correction de données en production.
+- Pause opérateur respectée par le lanceur ; dry-run réellement non mutateur ; publication grains sous verrou d'instance, avec test PostgreSQL concurrent.
+- Vérification : backend 1 315 pass / 1 320, 0 fail et 5 skips conditionnels ; 19 tests PostgreSQL isolés pass ; 34 tests data et 13 tests runtime ciblés pass. Architecture verte, dette statique globale non masquée.
+- VPS lu seulement : release `live-focus-dashboard-20260905.2`, huit instances grains running/shadow. Retard M1/M5 d'environ dix minutes retrouvé à la réception les 3–4 septembre ; cause amont et erreurs HTTP encore à attribuer.
+
+La prochaine tranche traite la causalité et la chaîne canonique complète. Elle devra aussi distinguer date de création outbox et timestamp explicite de publication (null dans le ledger observé), sans renommer l'une comme preuve de l'autre. Aucune promesse de performance ni de readiness lundi n'est déduite de ces tests hors marché.

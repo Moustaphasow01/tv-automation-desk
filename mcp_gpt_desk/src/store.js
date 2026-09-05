@@ -276,10 +276,10 @@ function normalizeLiveMasterActiveThesis({ thesis, master, setupDocs = [], tick 
   };
 }
 
-export function createDeskStoreFromEnv() {
+export function createDeskStoreFromEnv({ schemaMode } = {}) {
   const mode = process.env.DESK_GPT_MCP_STORE || process.env.DESK_MCP_STORE || "postgres";
   if (mode === "postgres" || mode === "postgresql") {
-    return new PersistentDeskStore(new SystemClock(), new PostgresDeskPersistence());
+    return new PersistentDeskStore(new SystemClock(), new PostgresDeskPersistence({ schemaMode }));
   }
   throw new Error(`unsupported_store_mode:${mode}`);
 }
@@ -630,7 +630,8 @@ export class PersistentDeskStore {
   async recordNinjaAddonSnapshot(input = {}) { return this.execution.recordAddonSnapshot(input); }
 
   async ingestTradingViewWebhook(input) {
-    return ingestTradingViewWebhook({ persistence: this.persistence, ...input });
+    const now = this.clock.now();
+    return ingestTradingViewWebhook({ persistence: this.persistence, ...input, now: new Date(now.epochMs) });
   }
 
   async getLatestAsiaOpenPack({ date } = {}) {

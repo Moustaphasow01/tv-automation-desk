@@ -15,23 +15,22 @@ export function selectActionableGrainSignals(input = {}) {
 
 export async function publishActionableGrainSignals(input = {}) {
   const store = input.store;
-  if (!store?.publishStrategyV2Signal) {
-    throw new Error("A store with publishStrategyV2Signal is required.");
+  const publishSignal = input.requireRunningInstance === true
+    ? store?.publishRunningStrategyV2Signal
+    : store?.publishStrategyV2Signal;
+  if (typeof publishSignal !== "function") {
+    throw new Error(input.requireRunningInstance === true
+      ? "A store with publishRunningStrategyV2Signal is required."
+      : "A store with publishStrategyV2Signal is required.");
   }
   const sourceClass = String(input.sourceClass || input.source_class || "SHADOW").toUpperCase();
   const certificationRunId = input.certificationRunId || input.certification_run_id || null;
   const signals = Array.isArray(input.signals) ? input.signals : [];
   const published = [];
+  const skipped = [];
   for (const signal of signals) {
-    const response = await store.publishStrategyV2Signal({
-      input: {
-        ...signal,
-        source_class: sourceClass,
-        certification_run_id: certificationRunId,
-        idempotency_key: `us-grains-signal:${signal.signal_id}`,
-      },
-      actor: { kind: "us-grains-live-signal-publisher" },
-    });
+    const response = await publishOneGrainSignal({ publishSignal, store, signal, sourceClass, certificationRunId, requireRunningInstance: input.requireRunningInstance === true, skipped });
+    if (!response) continue;
     published.push({
       signal_id: response.signal?.signal_id || signal.signal_id,
       signal_outbox_id: response.outbox?.signal_outbox_id || null,
@@ -52,7 +51,32 @@ export async function publishActionableGrainSignals(input = {}) {
     selected_count: signals.length,
     published_count: published.length,
     published,
+    skipped_count: skipped.length,
+    skipped,
   };
+}
+
+async function publishOneGrainSignal({ publishSignal, store, signal, sourceClass, certificationRunId, requireRunningInstance, skipped }) {
+  try {
+    return await publishSignal.call(store, {
+      input: {
+        ...signal,
+        source_class: sourceClass,
+        certification_run_id: certificationRunId,
+        idempotency_key: `us-grains-signal:${signal.signal_id}`,
+      },
+      actor: { kind: "us-grains-live-signal-publisher" },
+    });
+  } catch (error) {
+    if (!requireRunningInstance || error?.code !== "STRATEGY_SIGNAL_INSTANCE_NOT_RUNNING") throw error;
+    skipped.push({
+      signal_id: signal.signal_id,
+      strategy_instance_id: signal.strategy_instance_id,
+      status: "SKIPPED",
+      reason: "STRATEGY_SIGNAL_INSTANCE_NOT_RUNNING",
+    });
+    return null;
+  }
 }
 
 function signalActionableAt(signal, asOfUtc, { includeExpired = false } = {}) {

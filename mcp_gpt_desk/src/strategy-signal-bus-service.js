@@ -11,23 +11,20 @@ export class StrategySignalBusService {
     this.clock = clock || new SystemClock();
   }
 
-  async publishSignal(input = {}, command = {}) {
+  async publishSignal(input = {}, command = {}, { requireRunningInstance = false } = {}) {
     const signalInput = { ...input, signal_id: input.signal_id || input.id || randomUUID() };
     const normalized = normalizeStrategySignalV1(signalInput);
     if (!normalized.ok) throw serviceError("STRATEGY_SIGNAL_INVALID", `Strategy signal invalid: ${normalized.reasons.join(", ")}`, normalized);
     const saved = await this.repository.publish({
       ...normalized.signal,
-      source_class: input.source_class || input.sourceClass || "LIVE",
-      certification_run_id: input.certification_run_id || input.certificationRunId || null,
-      causation_id: input.causation_id || input.causationId || input.strategy_evaluation_id || input.strategyEvaluationId || null,
-      signal_outbox_id: input.signal_outbox_id || input.signalOutboxId || randomUUID(),
-      signal_type: "signal.emitted",
-      payload: strategySignalEnvelopeV1(normalized.signal),
-      payload_hash: normalized.outbox.payload_hash,
-      dedupe_key: normalized.outbox.dedupe_key,
-      status: "PENDING",
+      ...publicationContext(input, normalized, requireRunningInstance),
     });
-    return { status: "PUBLISHED", command_idempotency_key: command.idempotency_key || command.idempotencyKey || null, signal: normalized.signal, outbox: saved };
+    return {
+      status: "PUBLISHED",
+      command_idempotency_key: command.idempotency_key || command.idempotencyKey || null,
+      signal: normalized.signal,
+      outbox: saved,
+    };
   }
 
   async pollPendingSignals(input = {}) {
@@ -59,6 +56,43 @@ export class StrategySignalBusService {
     if (value?.utc) return new Date(value.utc).toISOString();
     return new Date(value).toISOString();
   }
+}
+
+function publicationContext(input, normalized, requireRunningInstance) {
+  return {
+    source_class: firstTruthy(
+      input.source_class,
+      input.sourceClass,
+      "LIVE",
+    ),
+    require_running_instance: requireRunningInstance === true,
+    certification_run_id: firstTruthy(
+      input.certification_run_id,
+      input.certificationRunId,
+    ) || null,
+    causation_id: firstTruthy(
+      input.causation_id,
+      input.causationId,
+      input.strategy_evaluation_id,
+      input.strategyEvaluationId,
+    ) || null,
+    signal_outbox_id: firstTruthy(
+      input.signal_outbox_id,
+      input.signalOutboxId,
+    ) || randomUUID(),
+    signal_type: "signal.emitted",
+    payload: strategySignalEnvelopeV1(normalized.signal),
+    payload_hash: normalized.outbox.payload_hash,
+    dedupe_key: normalized.outbox.dedupe_key,
+    status: "PENDING",
+  };
+}
+
+function firstTruthy(...values) {
+  for (const value of values) {
+    if (value) return value;
+  }
+  return null;
 }
 
 function serviceError(code, message, details = {}) {

@@ -3,9 +3,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { validateSearchResult } from "./ripgrep-result.mjs";
 
-const repoRoot = path.resolve(new URL("../..", import.meta.url).pathname);
+const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const guardPath = path.join(repoRoot, "scripts/quality/check_runtime_safety.mjs");
 
 describe("runtime safety guard", () => {
@@ -60,6 +62,13 @@ describe("runtime safety guard", () => {
     } finally {
       await rm(fixtureRoot, { force: true, recursive: true });
     }
+  });
+
+  it("rejects spawn errors, signals, and stderr even with no matches", async () => {
+    assert.throws(() => validateSearchResult({ status: 1, stdout: "", stderr: "execvpe rg: Permission denied" }), /rg stderr:.*Permission denied/);
+    assert.throws(() => validateSearchResult({ status: 1, stdout: "", stderr: "", error: new Error("spawn rg EACCES") }), /rg spawn failed: spawn rg EACCES/);
+    assert.throws(() => validateSearchResult({ status: null, stdout: "", stderr: "", signal: "SIGTERM" }), /rg terminated by signal: SIGTERM/);
+    assert.doesNotThrow(() => validateSearchResult({ status: 1, stdout: "", stderr: "" }));
   });
 });
 

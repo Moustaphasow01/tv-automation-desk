@@ -10,6 +10,10 @@ export function attachStrategySignalBusStoreMethods(StoreClass, helpers = {}) {
     const result = await signalBusService(this).publishSignal(input, commandActor(input, actor));
     return response("DeskStrategySignalPublishResultV2", result);
   };
+  StoreClass.prototype.publishRunningStrategyV2Signal = async function publishRunningStrategyV2Signal({ input = {}, actor = {} } = {}) {
+    const result = await signalBusService(this).publishSignal(input, commandActor(input, actor), { requireRunningInstance: true });
+    return response("DeskStrategySignalPublishResultV2", result);
+  };
   StoreClass.prototype.pollStrategyV2Signals = async function pollStrategyV2Signals(args = {}) {
     return response("DeskStrategySignalPollResultV2", await signalBusService(this).pollPendingSignals(args));
   };

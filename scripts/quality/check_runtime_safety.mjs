@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateSearchResult } from "./ripgrep-result.mjs";
 
 const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const root = path.resolve(process.env.DESK_RUNTIME_SAFETY_ROOT || defaultRoot);
@@ -108,7 +109,7 @@ function countDirectClockUsages() {
     cwd: root,
     encoding: "utf8",
   });
-  if (![0, 1].includes(result.status)) throw new Error(result.stderr || "rg failed");
+  validateSearchResult(result);
   return result.stdout
     .split(/\r?\n/)
     .filter(Boolean)
