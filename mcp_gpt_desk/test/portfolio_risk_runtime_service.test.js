@@ -42,6 +42,29 @@ describe("Portfolio Risk Runtime service", () => {
     assert.equal(result.persistence.counts.order_intents, 0);
   });
 
+  test("does not certify daily loss usage as zero when the theoretical projection lacks final outcomes", async () => {
+    const repository = new InMemoryPortfolioRiskRuntimeRepository();
+    const result = await serviceFor(repository).runPipeline(commandFixture({
+      risk_budget: { max_daily_loss_r: 2, max_portfolio_abs_size: 5 },
+    }));
+
+    assert.equal(result.status, "EXPOSURE_UNAVAILABLE");
+    assert.equal(result.targets.target_positions.length, 0);
+    assert.equal(result.intents.order_intents.length, 0);
+    assert.ok(result.risk.reason_codes.includes("LOSS_USAGE_UNAVAILABLE"));
+  });
+
+  test("reserves an existing theoretical position instead of treating a same-side signal as a reduction instruction", async () => {
+    const repository = new InMemoryPortfolioRiskRuntimeRepository();
+    const result = await serviceFor(repository).runPipeline(commandFixture({
+      positions: [{ position_id: "theory-open", account_id: "paper-sim101", instrument: "MNQ", direction: "LONG", size: 2 }],
+    }));
+
+    assert.equal(result.allocations.candidate_allocations.length, 0);
+    assert.equal(result.intents.order_intents.length, 0);
+    assert.ok(result.allocations.rejected_signals[0].issues.some((item) => item.code === "PORTFOLIO_THEORETICAL_POSITION_RESERVED"));
+  });
+
   test("is idempotent for the same runtime command key", async () => {
     const repository = new InMemoryPortfolioRiskRuntimeRepository();
     const service = serviceFor(repository);
@@ -113,6 +136,7 @@ describe("Portfolio Risk Runtime service", () => {
     await service.runPipeline(commandFixture({ idempotency_key: "portfolio-risk-postgres-1" }));
 
     assert.equal(calls[0].sql, "BEGIN");
+    assert.equal(calls.some((call) => /pg_advisory_xact_lock/.test(call.sql)), true);
     assert.equal(calls.at(-1).sql, "COMMIT");
     assert.equal(calls.some((call) => /INSERT INTO portfolio_arbitration_runs/.test(call.sql)), true);
     assert.equal(calls.some((call) => /INSERT INTO portfolio_candidate_allocations/.test(call.sql)), true);

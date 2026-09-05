@@ -1,5 +1,6 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { DomainEventOutboxRepository } from "./domain-event-outbox-repository.js";
+import { loadTheoreticalExposureAsOf, lockTheoreticalExposureScope } from "./portfolio-theoretical-exposure-repository.js";
 
 export class PostgresPortfolioRiskRuntimeRepository {
   constructor(persistence) {
@@ -21,20 +22,35 @@ export class PostgresPortfolioRiskRuntimeRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      const existing = await one(client, "SELECT * FROM portfolio_arbitration_runs WHERE idempotency_key = $1", [record.run.idempotency_key]);
+      const persistence = await persistRecord(this.domainEvents, client, record);
+      await client.query("COMMIT");
+      return persistence;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async withTheoreticalExposureSnapshot(input = {}, planner) {
+    await this.ready();
+    if (typeof planner !== "function") throw repositoryError("PORTFOLIO_EXPOSURE_PLANNER_REQUIRED", "A pure Portfolio planner is required.");
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await lockTheoreticalExposureScope(client, input);
+      const existing = await one(client, "SELECT * FROM portfolio_arbitration_runs WHERE idempotency_key = $1 FOR UPDATE", [stableIdempotencyKey(input)]);
       if (existing) {
         await client.query("COMMIT");
-        return { status: "IDEMPOTENT", portfolio_arbitration_run_id: existing.portfolio_arbitration_run_id, counts: zeroCounts(), existing };
+        return { status: "IDEMPOTENT", exposure_snapshot: existing.payload?.exposure_snapshot || null, result: storedPipeline(existing), persistence: persistedExisting(existing) };
       }
-      await insertRun(client, record.run);
-      for (const allocation of record.allocations) await insertAllocation(client, record.run.id, allocation);
-      for (const decision of record.riskDecisions) await insertRiskDecision(client, record, decision);
-      for (const target of record.targets) await insertTarget(client, record.run.id, target);
-      for (const target of record.targets) await insertTargetLinks(client, target);
-      for (const intent of record.orderIntents) await insertOrderIntentLineage(client, intent);
-      await appendPipelineDomainEvents(this.domainEvents, client, record);
+      const snapshot = await loadTheoreticalExposureAsOf(client, input);
+      const result = await planner(snapshot);
+      const record = normalizePipelineRecord({ ...input, ...result, exposure_snapshot: snapshot, idempotency_key: stableIdempotencyKey(input) });
+      const persistence = await persistRecord(this.domainEvents, client, record);
       await client.query("COMMIT");
-      return { status: "PERSISTED", portfolio_arbitration_run_id: record.run.id, counts: counts(record) };
+      return { status: "PERSISTED", exposure_snapshot: snapshot, result, persistence };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -87,6 +103,18 @@ export class InMemoryPortfolioRiskRuntimeRepository {
     return { status: "PERSISTED", portfolio_arbitration_run_id: record.run.id, counts: counts(record) };
   }
 
+  async withTheoreticalExposureSnapshot(input = {}, planner) {
+    const key = stableIdempotencyKey(input);
+    if (this.idempotency.has(key)) {
+      const existing = this.runs.get(this.idempotency.get(key));
+      return { status: "IDEMPOTENT", exposure_snapshot: existing.payload?.exposure_snapshot || null, result: storedPipeline(existing), persistence: persistedExisting(existing) };
+    }
+    const snapshot = memoryExposureSnapshot(input);
+    const result = await planner(snapshot);
+    const persistence = await this.persistPipeline({ ...input, ...result, exposure_snapshot: snapshot, idempotency_key: key });
+    return { status: "PERSISTED", exposure_snapshot: snapshot, result, persistence };
+  }
+
   async loadOrderIntentLineage({ portfolioOrderIntentId } = {}) {
     const intent = this.orderIntents.get(portfolioOrderIntentId);
     if (!intent) return null;
@@ -117,8 +145,7 @@ export function normalizePipelineRecord(input = {}) {
 }
 
 function normalizeRun(input, items) {
-  const idempotencyKey = text(input.idempotency_key || input.idempotencyKey || input.command?.idempotency_key)
-    || `portfolio-risk:${canonicalSha256({ as_of_utc: items.asOf, signal_ids: signalIds(items.allocations), account_id: input.account_id })}`;
+  const idempotencyKey = stableIdempotencyKey({ ...input, allocations: input.allocations || { candidate_allocations: items.allocations } });
   const base = {
     idempotency_key: idempotencyKey,
     portfolio_scope: text(input.portfolio_scope || input.allocations?.portfolio_scope || input.scope || "default"),
@@ -126,17 +153,69 @@ function normalizeRun(input, items) {
     status: runStatus(items),
     as_of_utc: items.asOf,
     correlation_id: text(input.correlation_id || input.correlationId),
-    signal_ids: signalIds(items.allocations),
+    signal_ids: allSignalIds(input, items.allocations),
     plan_hash: hash({ allocations: input.allocations?.plan_hash, risk: input.risk?.evaluation_hash, targets: input.targets?.plan_hash, intents: input.intents?.plan_hash }),
     payload: {
       allocation_plan: input.allocations || null,
       risk_evaluation: input.risk || null,
       target_position_plan: input.targets || null,
       order_intent_plan: input.intents || null,
+      exposure_snapshot: input.exposure_snapshot || null,
     },
   };
   return { id: text(input.portfolio_arbitration_run_id || input.run_id) || `portfolio_run_${canonicalSha256(base).slice(0, 24)}`, ...base, payload_hash: hash(base.payload) };
 }
+
+async function persistRecord(domainEvents, client, record) {
+  const existing = await one(client, "SELECT * FROM portfolio_arbitration_runs WHERE idempotency_key = $1 FOR UPDATE", [record.run.idempotency_key]);
+  if (existing) return persistedExisting(existing);
+  await insertRun(client, record.run);
+  for (const allocation of record.allocations) await insertAllocation(client, record.run.id, allocation);
+  for (const decision of record.riskDecisions) await insertRiskDecision(client, record, decision);
+  for (const target of record.targets) await insertTarget(client, record.run.id, target);
+  for (const target of record.targets) await insertTargetLinks(client, target);
+  for (const intent of record.orderIntents) await insertOrderIntentLineage(client, intent);
+  await appendPipelineDomainEvents(domainEvents, client, record);
+  return { status: "PERSISTED", portfolio_arbitration_run_id: record.run.id, counts: counts(record) };
+}
+
+function stableIdempotencyKey(input = {}) {
+  const supplied = text(input.idempotency_key || input.idempotencyKey || input.command?.idempotency_key);
+  if (supplied) return supplied;
+  const signals = input.signals || input.allocations?.candidate_allocations || [];
+  const signalIds = array(signals).map((item) => text(item.signal_id || item.id)).filter(Boolean).sort();
+  return `portfolio-risk:${canonicalSha256({ account_id: text(input.account_id || "default"), portfolio_scope: text(input.portfolio_scope || input.scope || "default"), signal_ids: signalIds })}`;
+}
+
+function persistedExisting(existing) {
+  return { status: "IDEMPOTENT", portfolio_arbitration_run_id: existing.portfolio_arbitration_run_id, counts: zeroCounts(), existing };
+}
+
+function storedPipeline(existing) {
+  const payload = existing.payload || {};
+  return {
+    status: existing.status || "IDEMPOTENT",
+    allocations: payload.allocation_plan || emptyPlan(),
+    risk: payload.risk_evaluation || emptyPlan(),
+    targets: payload.target_position_plan || emptyPlan(),
+    intents: payload.order_intent_plan || emptyPlan(),
+  };
+}
+
+function memoryExposureSnapshot(input) {
+  const mode = String(input.execution_mode || input.executionMode || "SHADOW").toUpperCase();
+  const unavailable = ["LIVE", "PAPER", "BROKER", "PHYSICAL"].includes(mode);
+  return {
+    source: "THEORETICAL_PERSISTED_AS_OF", execution_mode: mode, as_of_utc: input.as_of_utc || input.asOfUtc,
+    portfolio_scope: input.portfolio_scope || input.scope || "default", account_id: input.account_id || "default",
+    availability: unavailable ? "UNAVAILABLE" : "KNOWN",
+    reason_codes: unavailable ? ["PHYSICAL_EXPOSURE_READ_UNSUPPORTED"] : [],
+    positions: array(input.positions || input.virtual_positions), pending_order_intents: array(input.existing_order_intents), qualified_signal_ids: [],
+    reservation_instruments: [], unknown_reservation_instruments: [],
+  };
+}
+
+function emptyPlan() { return {}; }
 
 async function insertRun(client, run) {
   await client.query(`INSERT INTO portfolio_arbitration_runs (
@@ -324,7 +403,13 @@ function runStatus({ riskDecisions, targets, orderIntents }) {
   if (riskDecisions.some((item) => item.status === "BLOCK")) return "RISK_BLOCKED";
   return "NO_TARGETS";
 }
-function signalIds(allocations) { return [...new Set(allocations.flatMap((item) => array(item.signal_ids)))].sort(); }
+function allSignalIds(input, allocations) {
+  const direct = array(input.signals).map((item) => text(item.signal_id || item.id));
+  const rejected = array(input.allocations?.rejected_signals).map((item) => text(item.signal_id));
+  return [...new Set([...signalIds(allocations), ...direct, ...rejected].filter(Boolean))].sort();
+}
+
+function signalIds(allocations) { return allocations.flatMap((item) => array(item.signal_ids)); }
 async function one(client, sql, params = []) { return (await client.query(sql, params)).rows[0] || null; }
 function repositoryError(code, message) { const error = new Error(message || code); error.code = code; error.statusCode = 503; return error; }
 function hash(value) { return `sha256:${canonicalSha256(value)}`; }

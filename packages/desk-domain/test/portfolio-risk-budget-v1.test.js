@@ -107,6 +107,22 @@ describe("portfolio risk budget V1", () => {
     assert.equal(evaluation.allocation_evaluations.find((item) => item.candidate_allocation_id === "alloc-b").account_id, "paper-sim102");
   });
 
+  it("reserves approved portfolio capacity between deterministic allocations in one batch", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { max_portfolio_abs_size: 1 },
+      candidate_allocations: [
+        allocation({ id: "alloc-mes", instrument: "MES", proposed_size: 1 }),
+        allocation({ id: "alloc-mnq", instrument: "MNQ", proposed_size: 1 }),
+      ],
+      virtual_portfolio: portfolioFixture(),
+    });
+
+    assert.equal(evaluation.allocation_evaluations.find((item) => item.candidate_allocation_id === "alloc-mes").approved_size, 1);
+    assert.equal(evaluation.allocation_evaluations.find((item) => item.candidate_allocation_id === "alloc-mnq").approved_size, 0);
+    assert.equal(evaluation.status, "BLOCK");
+  });
+
   it("fails closed when no numerical budget is configured", () => {
     const evaluation = evaluatePortfolioRiskBudgetV1({
       as_of_utc: "2026-08-09T08:10:00.000Z",

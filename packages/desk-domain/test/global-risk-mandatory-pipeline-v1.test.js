@@ -89,9 +89,10 @@ describe("global risk mandatory pipeline V1", () => {
 
     assert.equal(pipeline.risk.status, "BLOCK");
     assert.equal(pipeline.risk.allocation_evaluations[0].decision, "REJECTED");
-    assert.equal(pipeline.targets.target_positions[0].net_target_size, 0);
+    assert.equal(pipeline.targets.target_positions.length, 0);
+    assert.equal(pipeline.targets.skipped_allocations[0].reason, "RISK_BLOCK_NO_APPROVED_SIZE");
     assert.equal(pipeline.intents.order_intents.length, 0);
-    assert.equal(pipeline.intents.skipped_targets[0].reason, "NO_DELTA");
+    assert.equal(pipeline.intents.status, "NO_TARGETS");
   });
 
   it("CONFLICT: opposite strategy signals net into one physical target and one OrderIntent", () => {

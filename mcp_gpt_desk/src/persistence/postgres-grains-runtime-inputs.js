@@ -21,7 +21,35 @@ export async function loadGrainRuntimeMarketInputs(
     }
   }
   const agriEvents = await loadKnownCalendar(pool, { startUtc, asOfUtc });
-  return { rowsBySymbol: Object.fromEntries(entries), agriEvents };
+  const agriCalendarCoverage = await loadCalendarCoverage(pool, asOfUtc);
+  return {
+    rowsBySymbol: Object.fromEntries(entries),
+    agriEvents,
+    agriCalendarCoverage,
+  };
+}
+
+async function loadCalendarCoverage(pool, asOfUtc) {
+  const result = await pool.query(
+    `SELECT source_id, source_type, source_status, coverage_start_utc,
+            coverage_end_utc, as_of_utc, provider, dataset_version, reason_codes,
+            metadata->>'source_version_hash' AS source_version_hash
+       FROM market_source_coverage_manifests
+      WHERE source_id = 'market_agri_events' AND as_of_utc <= $1::timestamptz`,
+    [asOfUtc],
+  );
+  return result.rows.map((row) => ({
+    sourceId: row.source_id,
+    sourceType: row.source_type,
+    status: row.source_status,
+    coverageStart: row.coverage_start_utc?.toISOString() || null,
+    coverageEnd: row.coverage_end_utc?.toISOString() || null,
+    asOf: row.as_of_utc?.toISOString() || null,
+    provider: row.provider,
+    datasetVersion: row.dataset_version,
+    sourceVersionHash: row.source_version_hash,
+    reasonCodes: row.reason_codes,
+  }));
 }
 
 async function loadClosedCandles(

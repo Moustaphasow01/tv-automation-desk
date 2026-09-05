@@ -84,6 +84,8 @@ function signalCore(item, source, defaultAccountId) {
     : null;
   const proposedTradePlan = normalizedTradePlan?.proposed_trade_plan || proposedTradePlanInput;
   const tradePlanEconomics = record(firstDefined(source.trade_plan_economics, source.tradePlanEconomics, proposedTradePlan?.economics, item.trade_plan_economics, item.tradePlanEconomics, normalizedTradePlan?.economics));
+  const requestedSize = signalSize(item, source, direction);
+  const contextSizing = contextAdjustedSize(item, source, requestedSize);
   return {
     signal_id: text(firstDefined(source.signal_id, source.id, item.signal_id, item.signal_outbox_id, item.id)),
     strategy_definition_id: text(firstDefined(source.strategy_definition_id, source.strategyDefinitionId, item.strategy_definition_id)),
@@ -92,7 +94,12 @@ function signalCore(item, source, defaultAccountId) {
     account_id: text(firstDefined(source.account_id, source.accountId, item.account_id, item.accountId, defaultAccountId)),
     instrument: upper(firstDefined(source.instrument, item.instrument)),
     direction,
-    proposed_size: signalSize(item, source, direction),
+    requested_size: requestedSize,
+    context_risk_multiplier: contextSizing.multiplier,
+    context_risk_multiplier_source: contextSizing.source,
+    proposed_size: contextSizing.size,
+    portfolio_block_reason: text(firstDefined(source.portfolio_block_reason, source.portfolioBlockReason, item.portfolio_block_reason, item.portfolioBlockReason)),
+    context_sizing_issue: contextSizing.issue,
     confidence: numberOrNull(firstDefined(source.confidence, item.confidence)),
     execution_mode_origin: upper(firstDefined(source.execution_mode_origin, source.executionModeOrigin, item.execution_mode_origin)),
     generated_at_utc: iso(firstDefined(source.generated_at_utc, source.generated_at, source.generatedAt, item.generated_at_utc)),
@@ -123,6 +130,8 @@ function signalIssues(signal, asOf, policy) {
   if (signal.generated_at_utc && Date.parse(signal.generated_at_utc) > Date.parse(asOf)) issues.push(issue("SIGNAL_GENERATED_AFTER_AS_OF", "generated_at_utc"));
   if (signal.expires_at_utc && Date.parse(signal.expires_at_utc) <= Date.parse(asOf)) issues.push(issue("SIGNAL_EXPIRED", "expires_at_utc"));
   if (signal.proposed_size <= 0) issues.push(issue("SIGNAL_SIZE_NOT_POSITIVE", "proposed_size"));
+  if (signal.context_sizing_issue) issues.push(issue(signal.context_sizing_issue, "context_risk_multiplier"));
+  if (signal.portfolio_block_reason) issues.push(issue(`PORTFOLIO_${signal.portfolio_block_reason}`, "portfolio_block_reason"));
   return issues;
 }
 
@@ -168,6 +177,9 @@ function signalContribution(signal) {
     strategy_version_id: signal.strategy_version_id,
     account_id: signal.account_id,
     direction: signal.direction,
+    requested_size: signal.requested_size,
+    context_risk_multiplier: signal.context_risk_multiplier,
+    context_risk_multiplier_source: signal.context_risk_multiplier_source || null,
     proposed_size: signal.proposed_size,
     signed_size: signedSize(signal.direction, signal.proposed_size),
     confidence: signal.confidence,
@@ -286,6 +298,42 @@ function signalSource(item) {
 function signalSize(item, source, direction) {
   if (direction === "FLAT") return 0;
   return positive(firstDefined(source.proposed_size, source.size, source.quantity, source.contracts, item.proposed_size, item.size, item.quantity, item.contracts), DEFAULT_PORTFOLIO_CANDIDATE_ALLOCATION_POLICY_V1.default_signal_size);
+}
+
+function contextAdjustedSize(item, source, requestedSize) {
+  const raw = firstDefined(
+    source.context_risk_multiplier,
+    source.contextRiskMultiplier,
+    source.context_gate?.risk_multiplier,
+    source.contextGate?.risk_multiplier,
+    item.context_risk_multiplier,
+    item.contextRiskMultiplier,
+    item.context_gate?.risk_multiplier,
+    item.contextGate?.risk_multiplier,
+    1,
+  );
+  const multiplier = numberOrNull(raw);
+  const sourceRef = text(firstDefined(
+    source.context_risk_multiplier_source,
+    source.contextRiskMultiplierSource,
+    source.context_gate?.policy_version,
+    source.contextGate?.policy_version,
+    item.context_risk_multiplier_source,
+    item.contextRiskMultiplierSource,
+  ));
+  if (multiplier === null || multiplier < 0 || multiplier > 1) {
+    return { multiplier: null, source: sourceRef || null, size: 0, issue: "CONTEXT_RISK_MULTIPLIER_INVALID" };
+  }
+  if (multiplier !== 1 && !sourceRef) {
+    return { multiplier, source: null, size: 0, issue: "CONTEXT_RISK_MULTIPLIER_PROVENANCE_REQUIRED" };
+  }
+  const size = Math.floor(requestedSize * multiplier);
+  return {
+    multiplier,
+    source: sourceRef || null,
+    size,
+    issue: size > 0 ? null : "CONTEXT_RISK_MULTIPLIER_ZERO_SIZE",
+  };
 }
 
 function normalizePolicy(policy, input = {}) {

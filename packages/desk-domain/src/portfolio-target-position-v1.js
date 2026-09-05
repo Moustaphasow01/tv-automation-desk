@@ -48,7 +48,7 @@ function approvedAllocationLeg(allocation, risk, accountId) {
     strategy_breakdown: strategyBreakdown(allocation, approved),
     approved_trade_plan: approvedTradePlanForAllocation(allocation, approved),
     risk_allocation: riskAllocationForEvaluation({ evaluation, approved, riskDecisionReference }),
-    skip_reason: allocationSkipReason(allocation, approved, riskIssue),
+    skip_reason: allocationSkipReason(allocation, approved, riskIssue, riskDecisionStatus),
   };
 }
 
@@ -232,11 +232,12 @@ function approvedSize(allocation, evaluation) {
   return positiveOrZero(firstDefined(evaluation.approved_size, allocation.approved_size, allocation.proposed_size));
 }
 
-function allocationSkipReason(allocation, approved, riskIssue = "") {
+function allocationSkipReason(allocation, approved, riskIssue = "", riskStatus = "") {
   if (riskIssue) return riskIssue;
   if (!text(allocation.id)) return "ALLOCATION_ID_MISSING";
   if (!upper(allocation.instrument)) return "INSTRUMENT_MISSING";
   if (approved < 0) return "APPROVED_SIZE_INVALID";
+  if (approved === 0) return `RISK_${upper(firstDefined(riskStatus, allocation.status, "BLOCK"))}_NO_APPROVED_SIZE`;
   return "";
 }
 

@@ -2,6 +2,7 @@ import {
   adjudicateGrainSignal,
   US_GRAINS_STRATEGY_SUITE_VERSION,
 } from "./us-grains-strategy-suite.js";
+import { evaluateGrainsCalendarCoverage } from "./grains-calendar-coverage.js";
 
 // This policy runs AFTER raw publication. Detectors never consume its result.
 export function evaluateCausalGrainContextAtBus({ signal, nowUtc }) {
@@ -102,6 +103,11 @@ function invalidContextPayload({ context, cutoff }) {
     )
   )
     return "GRAIN_CONTEXT_CALENDAR_INVALID";
+  const coverage = evaluateGrainsCalendarCoverage({
+    sources: [context.macro_event_risk.coverage?.source],
+    cutoff: new Date(cutoff).toISOString(),
+  });
+  if (!coverage.admissible) return coverage.reasonCodes[0];
   return null;
 }
 

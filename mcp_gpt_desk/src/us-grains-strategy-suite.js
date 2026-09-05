@@ -89,7 +89,14 @@ export function detectUsGrainsStrategySignals(input = {}) {
   );
   const result = { raw_signals: [], skipped_days: [] };
   for (const instrument of config.instruments)
-    detectInstrument({ config, instrument, rowsBySymbol, events, result });
+    detectInstrument({
+      config,
+      instrument,
+      rowsBySymbol,
+      events,
+      agriCalendarCoverage: input.agriCalendarCoverage,
+      result,
+    });
   const raw_signals = result.raw_signals.sort(bySignalTime);
   return {
     schema_version: "us_grains_strategy_signal_detection_v2",
@@ -107,6 +114,7 @@ function detectInstrument({
   instrument,
   rowsBySymbol,
   events,
+  agriCalendarCoverage,
   result,
 }) {
   const symbol = `${upper(instrument)}1!`;
@@ -139,6 +147,7 @@ function detectInstrument({
         priorRows,
         peerRows: peerDays[tradingDate] || [],
         events,
+        agriCalendarCoverage,
       });
       framesByCutoff.set(cutoff, frame);
       return frame;
@@ -164,6 +173,7 @@ function buildFrameAtClose(input) {
     previousM5Rows: input.priorRows,
     peerM5Rows: closedBy(input.peerRows, cutoff, 5),
     events: input.events,
+    agriCalendarCoverage: input.agriCalendarCoverage,
   });
 }
 
@@ -187,6 +197,7 @@ export function buildGrainDayFrame(input = {}) {
     rows,
     peerRows: closedBy(input.peerM5Rows || [], cutoff, 5),
     events: input.events || [],
+    agriCalendarCoverage: input.agriCalendarCoverage,
     dataQuality: {
       tradeable: quality.tradeable,
       status: quality.status,

@@ -123,6 +123,32 @@ describe("portfolio candidate allocation V1", () => {
     assert.ok(plan.rejected_signals.some((item) => item.issues.some((issue) => issue.code === "SIGNAL_FLAT_NOT_ALLOCATABLE")));
     assert.ok(plan.rejected_signals.some((item) => item.issues.some((issue) => issue.code === "SIGNAL_STATUS_NOT_ACTIVE")));
   });
+
+  it("floors a versioned context multiplier and refuses an insufficient single contract", () => {
+    const plan = buildCandidateAllocationPortfolioV1({
+      as_of_utc: "2026-08-09T08:06:00.000Z",
+      signals: [signal({
+        proposed_size: 1,
+        context_risk_multiplier: 0.85,
+        context_risk_multiplier_source: "us-grains-context-v1",
+      })],
+    });
+
+    assert.equal(plan.candidate_allocations.length, 0);
+    const issues = plan.rejected_signals[0].issues.map((item) => item.code);
+    assert.ok(issues.includes("CONTEXT_RISK_MULTIPLIER_ZERO_SIZE"));
+    assert.ok(issues.includes("SIGNAL_SIZE_NOT_POSITIVE"));
+  });
+
+  it("rejects a reduced multiplier without deterministic provenance", () => {
+    const plan = buildCandidateAllocationPortfolioV1({
+      as_of_utc: "2026-08-09T08:06:00.000Z",
+      signals: [signal({ proposed_size: 3, context_risk_multiplier: 0.5 })],
+    });
+
+    assert.equal(plan.candidate_allocations.length, 0);
+    assert.ok(plan.rejected_signals[0].issues.some((item) => item.code === "CONTEXT_RISK_MULTIPLIER_PROVENANCE_REQUIRED"));
+  });
 });
 
 function signal(overrides = {}) {

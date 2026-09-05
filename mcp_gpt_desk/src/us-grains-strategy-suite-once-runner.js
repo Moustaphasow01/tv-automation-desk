@@ -15,8 +15,8 @@ export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, d
 
   const catalogInstances = await loadGrainCatalogInstances(store, instruments);
   const runningCatalogInstances = selectRunningGrainCatalogInstances(catalogInstances);
-  const { rowsBySymbol, agriEvents } = await loadGrainRuntimeMarketInputs(store.persistence.pool, { tradingDate, asOfUtc });
-  const replay = detectSignals({ rowsBySymbol, agriEvents, instruments, startDate: tradingDate, endDate: tradingDate, asOfUtc });
+  const marketInputs = await loadGrainRuntimeMarketInputs(store.persistence.pool, { tradingDate, asOfUtc });
+  const replay = detectSignals({ ...marketInputs, instruments, startDate: tradingDate, endDate: tradingDate, asOfUtc });
   const selectedActionable = tradingSession.state === "OPEN" ? selectActionableGrainSignals({
     replay, asOfUtc, includeExpired: normalizedArgs["include-expired"] === true,
   }) : [];
@@ -39,7 +39,7 @@ export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, d
   const heartbeatedInstances = selectCatalogInstances(catalogInstances, runtimeHeartbeat.updated_instance_ids);
   const actionable = filterSignalsForRunningGrainInstances(selectedActionable, heartbeatedInstances);
   const runtimeEvaluations = await recordGrainRuntimeEvaluations(store, {
-    catalogInstances: heartbeatedInstances, replay, actionable, asOfUtc, tradingDate, tradingSession, rowsBySymbol,
+    catalogInstances: heartbeatedInstances, replay, actionable, asOfUtc, tradingDate, tradingSession, rowsBySymbol: marketInputs.rowsBySymbol,
   });
   const publish = await publishActionableGrainSignals({
     store, signals: actionable, sourceClass: normalizedArgs["source-class"] || "SHADOW",

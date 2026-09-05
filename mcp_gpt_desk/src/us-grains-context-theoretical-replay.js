@@ -12,6 +12,7 @@ export const CONTEXT_ONLY_HUMAN_GATE =
 export function replayUsGrainsContextTheoretical({
   rowsBySymbol = {},
   agriEvents = [],
+  agriCalendarCoverage = [],
   instruments,
   startDate,
   endDate,
@@ -21,6 +22,7 @@ export function replayUsGrainsContextTheoretical({
   const suite = replayUsGrainsStrategySuiteV2({
     rowsBySymbol,
     agriEvents,
+    agriCalendarCoverage,
     instruments,
     startDate,
     endDate,
@@ -38,6 +40,10 @@ export function replayUsGrainsContextTheoretical({
       policy,
     }),
   );
+  return contextOnlyReport({ suite, outcomes });
+}
+
+function contextOnlyReport({ suite, outcomes }) {
   return {
     schema_version: US_GRAINS_CONTEXT_THEORETICAL_REPLAY_VERSION,
     report_title: CONTEXT_ONLY_HUMAN_GATE,

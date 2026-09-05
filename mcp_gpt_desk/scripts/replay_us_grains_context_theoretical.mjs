@@ -136,6 +136,7 @@ function normalizedReplayInput(source) {
     ...source,
     rowsBySymbol,
     agriEvents: validEvents(frozen.agriEvents || frozen.agri_events),
+    agriCalendarCoverage: frozen.agriCalendarCoverage || [],
   };
 }
 

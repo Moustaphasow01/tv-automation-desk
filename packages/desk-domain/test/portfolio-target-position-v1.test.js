@@ -98,7 +98,7 @@ describe("portfolio target position V1", () => {
     assert.equal(plan.target_positions[0].status, "TARGETED");
   });
 
-  it("converts blocked or neutralized allocations into auditable flat targets", () => {
+  it("does not turn a blocked allocation into a synthetic flatten target", () => {
     const plan = buildPortfolioTargetPositionPlanV1({
       as_of_utc: "2026-08-09T08:20:00.000Z",
       candidate_allocations: [
@@ -108,9 +108,20 @@ describe("portfolio target position V1", () => {
       risk_budget_evaluation: evaluation([{ candidate_allocation_id: "alloc-block", approved_size: 0, status: "BLOCK", risk_decision_id: "risk-block" }]),
     });
 
-    assert.equal(plan.target_positions.length, 1);
-    assert.equal(plan.target_positions[0].net_target_size, 0);
-    assert.equal(plan.target_positions[0].status, "FLAT");
+    assert.equal(plan.target_positions.length, 0);
+    assert.ok(plan.skipped_allocations.some((item) => item.reason === "RISK_BLOCK_NO_APPROVED_SIZE"));
+  });
+
+  it("does not cancel an existing position when Risk blocks a fresh allocation", () => {
+    const plan = buildPortfolioTargetPositionPlanV1({
+      as_of_utc: "2026-08-09T08:20:00.000Z",
+      candidate_allocations: [allocation({ id: "alloc-block-open", net_direction: "SHORT", proposed_size: 1 })],
+      current_positions: [position({ signed_size: 1, direction: "LONG" })],
+      risk_budget_evaluation: evaluation([{ candidate_allocation_id: "alloc-block-open", approved_size: 0, status: "BLOCK", risk_decision_id: "risk-block-open" }]),
+    });
+
+    assert.equal(plan.target_positions.length, 0);
+    assert.ok(plan.skipped_allocations.some((item) => item.reason === "RISK_BLOCK_NO_APPROVED_SIZE"));
   });
 
   it("separates identical instruments across accounts without collision", () => {

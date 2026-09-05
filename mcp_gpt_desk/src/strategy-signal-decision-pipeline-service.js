@@ -38,7 +38,7 @@ export class StrategySignalDecisionPipelineService {
     const admissibleItems = prefilter.filter((item) => item.decision === "ADMISSIBLE");
     const rejectedItems = prefilter.filter((item) => item.decision === "REJECT");
     const waitItems = prefilter.filter((item) => item.decision === "WAIT");
-    const admissible = admissibleItems.map((item) => item.signal);
+    const admissible = admissibleItems.map(contextSizedSignal);
     const contextDecisions = await this.#recordContextDecisions(admissibleItems, nowUtc);
     if (!admissible.length) {
       const consumed = await this.#consume(rejectedItems.map((item) => item.signal), input, nowUtc);
@@ -59,16 +59,11 @@ export class StrategySignalDecisionPipelineService {
         provider_counts: { before, after: before, unchanged: true },
       };
     }
-    const pipeline = await this.riskRuntime.runPipeline({
-      as_of_utc: nowUtc,
-      account_id: accountId(input),
-      portfolio_scope: input.portfolio_scope || input.scope || accountId(input),
-      idempotency_key: idempotencyKey(input, admissible, nowUtc),
-      correlation_id: admissible[0]?.correlation_id || `strategy-signal-decision:${nowUtc}`,
-      signals: admissible,
-      risk_budget: riskBudget(input),
-      execution_policy: executionPolicy(input),
-    });
+    return this.#runAdmissible({ input, nowUtc, before, expired, pending, scopedCount: scoped.length, prefilter, admissible, rejectedItems, waitItems, contextDecisions });
+  }
+
+  async #runAdmissible({ input, nowUtc, before, expired, pending, scopedCount, prefilter, admissible, rejectedItems, waitItems, contextDecisions }) {
+    const pipeline = await this.riskRuntime.runPipeline(riskCommand(input, admissible, nowUtc));
     const terminalSignals = [...admissible, ...rejectedItems.map((item) => item.signal)];
     const consumed = await this.#consume(terminalSignals, input, nowUtc);
     const humanGates = await this.#ensureHumanGates(pipeline, nowUtc);
@@ -84,7 +79,7 @@ export class StrategySignalDecisionPipelineService {
       status: pipelineStatus(pipeline, humanGates),
       as_of_utc: nowUtc,
       pending_seen: pending.length,
-      scoped_signal_count: scoped.length,
+      scoped_signal_count: scopedCount,
       context_prefilter: prefilterSummary(prefilter),
       context_decision_count: contextDecisions.length,
       portfolio_arbitration_run_id: pipeline.persistence?.portfolio_arbitration_run_id || null,
@@ -293,8 +288,26 @@ function pipelineStatus(pipeline, humanGates = []) {
   return pipeline.status || "NO_ORDER_INTENT";
 }
 
-function idempotencyKey(input, signals, nowUtc) {
-  return input.idempotency_key || input.idempotencyKey || `strategy-signal-decision:${nowUtc}:${signals.map((item) => item.signal_id).sort().join(",")}`;
+function contextSizedSignal(item) {
+  const multiplier = item.contextGate?.risk_multiplier ?? 1;
+  const source = item.contextGate?.policy_version || item.marketContextSnapshotId || null;
+  return {
+    ...item.signal,
+    context_risk_multiplier: multiplier,
+    context_risk_multiplier_source: multiplier === 1 ? null : source,
+  };
+}
+
+function riskCommand(input, signals, nowUtc) {
+  return {
+    as_of_utc: nowUtc, account_id: accountId(input), portfolio_scope: input.portfolio_scope || input.scope || accountId(input),
+    idempotency_key: idempotencyKey(input, signals), correlation_id: signals[0]?.correlation_id || `strategy-signal-decision:${nowUtc}`,
+    signals, risk_budget: riskBudget(input), execution_policy: executionPolicy(input), execution_mode: "SHADOW",
+  };
+}
+
+function idempotencyKey(input, signals) {
+  return input.idempotency_key || input.idempotencyKey || `strategy-signal-decision:${accountId(input)}:${signals.map((item) => item.signal_id).sort().join(",")}`;
 }
 
 function accountId(input) { return String(input.account_id || input.accountId || process.env.DESK_SHADOW_RUNTIME_ACCOUNT_ID || "shadow_live"); }

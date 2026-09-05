@@ -17,47 +17,14 @@ export class PortfolioRiskRuntimeService {
   async runPipeline(input = {}) {
     if (!this.repository?.persistPipeline) throw serviceError("PORTFOLIO_RISK_REPOSITORY_UNAVAILABLE", "Portfolio Risk repository is required.");
     const asOf = this.#asOf(input);
-    const allocations = buildCandidateAllocationPortfolioV1({
-      as_of_utc: asOf,
-      portfolio_scope: input.portfolio_scope || input.scope || input.account_id,
-      signals: input.signals || [],
-      positions: input.virtual_positions || input.positions || [],
-      marks: input.marks,
-      policy: input.allocation_policy,
-    });
-    const risk = evaluatePortfolioRiskBudgetV1({
-      as_of_utc: asOf,
-      account_id: input.account_id,
-      budget: input.risk_budget,
-      candidate_allocations: allocations.candidate_allocations,
-      virtual_portfolio: input.virtual_portfolio || allocations.virtual_portfolio,
-    });
-    const targets = buildPortfolioTargetPositionPlanV1({
-      as_of_utc: asOf,
-      account_id: input.account_id,
-      candidate_allocations: allocations.candidate_allocations,
-      risk_budget_evaluation: risk,
-      current_positions: input.current_positions || [],
-    });
-    const intents = buildPortfolioOrderIntentPlanV1({
-      as_of_utc: asOf,
-      target_position_plan: targets,
-      execution_policy: input.execution_policy,
-      default_protection_plan: input.default_protection_plan,
-      existing_order_intents: input.existing_order_intents || [],
-    });
-    const persistence = await this.repository.persistPipeline({
-      as_of_utc: asOf,
-      account_id: input.account_id,
-      portfolio_scope: allocations.portfolio_scope,
-      idempotency_key: input.idempotency_key,
-      correlation_id: input.correlation_id,
-      allocations,
-      risk,
-      targets,
-      intents,
-    });
-    return { status: runtimeStatus({ allocations, risk, targets, intents }), allocations, risk, targets, intents, persistence };
+    const command = exposureCommand(input, asOf);
+    if (typeof this.repository.withTheoreticalExposureSnapshot === "function") {
+      const stored = await this.repository.withTheoreticalExposureSnapshot(command, (snapshot) => buildPipeline(input, asOf, snapshot));
+      return pipelineResult(stored.result, stored.persistence, stored.exposure_snapshot);
+    }
+    const result = buildPipeline(input, asOf, legacySnapshot(input, asOf));
+    const persistence = await this.repository.persistPipeline({ ...command, ...result });
+    return pipelineResult(result, persistence, legacySnapshot(input, asOf));
   }
 
   async processPendingSignals(input = {}) {
@@ -80,6 +47,99 @@ export class PortfolioRiskRuntimeService {
     if (value?.utc) return new Date(value.utc).toISOString();
     return new Date(value).toISOString();
   }
+}
+
+function buildPipeline(input, asOf, snapshot) {
+  const signals = exposureConstrainedSignals(input.signals || [], snapshot);
+  const allocations = buildCandidateAllocationPortfolioV1({
+    as_of_utc: asOf, portfolio_scope: input.portfolio_scope || input.scope || input.account_id,
+    signals, positions: snapshot.positions, marks: input.marks, policy: input.allocation_policy,
+  });
+  if (requiresLossUsage(input.risk_budget) && snapshot.loss_usage_availability !== "KNOWN") {
+    return unavailablePipeline(allocations, unavailableSnapshot(snapshot, "LOSS_USAGE_UNAVAILABLE"));
+  }
+  if (snapshot.availability !== "KNOWN") return unavailablePipeline(allocations, snapshot);
+  const risk = evaluatePortfolioRiskBudgetV1({
+    as_of_utc: asOf, account_id: input.account_id, budget: input.risk_budget,
+    candidate_allocations: allocations.candidate_allocations, virtual_portfolio: allocations.virtual_portfolio,
+  });
+  const targets = buildPortfolioTargetPositionPlanV1({
+    as_of_utc: asOf, account_id: input.account_id, candidate_allocations: allocations.candidate_allocations,
+    risk_budget_evaluation: risk, current_positions: snapshot.positions,
+  });
+  const intents = buildPortfolioOrderIntentPlanV1({
+    as_of_utc: asOf, target_position_plan: targets, execution_policy: input.execution_policy,
+    default_protection_plan: input.default_protection_plan, existing_order_intents: snapshot.pending_order_intents,
+  });
+  return { allocations, risk, targets, intents };
+}
+
+function exposureConstrainedSignals(signals, snapshot) {
+  return signals.map((signal) => {
+    const reason = exposureBlockReason(signal, snapshot);
+    return reason ? { ...signal, portfolio_block_reason: reason } : signal;
+  });
+}
+
+function exposureBlockReason(signal, snapshot) {
+  const instrument = String(signal.instrument || "").toUpperCase();
+  if (snapshot.availability !== "KNOWN") return snapshot.reason_codes?.[0] || "EXPOSURE_UNAVAILABLE";
+  if (snapshot.qualified_signal_ids?.includes(String(signal.signal_id || ""))) return "THEORETICAL_SIGNAL_ALREADY_QUALIFIED";
+  if (snapshot.reservation_instruments?.includes(instrument)) return "THEORETICAL_INTENT_RESERVED";
+  const position = snapshot.positions?.find((item) => item.instrument === instrument);
+  if (position) return "THEORETICAL_POSITION_RESERVED";
+  return null;
+}
+
+function unavailablePipeline(allocations, snapshot) {
+  const reason = snapshot.reason_codes?.[0] || "EXPOSURE_UNAVAILABLE";
+  return {
+    allocations,
+    risk: { status: "EXPOSURE_UNAVAILABLE", allocation_evaluations: [], reason_codes: [reason] },
+    targets: { status: "NO_TARGETS", target_positions: [], skipped_allocations: [{ reason }] },
+    intents: { status: "NO_ORDER_INTENTS", order_intents: [], skipped_targets: [{ reason }] },
+  };
+}
+
+function requiresLossUsage(budget = {}) {
+  return Number(budget.max_daily_loss_r ?? budget.maxDailyLossR) > 0
+    || Number(budget.max_weekly_loss_r ?? budget.maxWeeklyLossR) > 0;
+}
+
+function unavailableSnapshot(snapshot, reason) {
+  return { ...snapshot, availability: "UNAVAILABLE", reason_codes: [...new Set([...(snapshot.reason_codes || []), reason])] };
+}
+
+function exposureCommand(input, asOf) {
+  return {
+    ...input, as_of_utc: asOf, execution_mode: input.execution_mode || input.executionMode || "SHADOW",
+    portfolio_scope: input.portfolio_scope || input.scope || input.account_id,
+    instruments: [...new Set((input.signals || []).map((item) => String(item.instrument || "").toUpperCase()).filter(Boolean))].sort(),
+  };
+}
+
+function legacySnapshot(input, asOf) {
+  const supplied = input.exposure_snapshot || input.exposureSnapshot;
+  if (!supplied || supplied.availability !== "KNOWN") {
+    return {
+      source: "CALLER_SUPPLIED_LEGACY", as_of_utc: asOf, availability: "UNAVAILABLE",
+      reason_codes: ["THEORETICAL_EXPOSURE_SNAPSHOT_REQUIRED"], positions: [], pending_order_intents: [], reservation_instruments: [],
+    };
+  }
+  return {
+    ...supplied, source: supplied.source || "CALLER_SUPPLIED_LEGACY", as_of_utc: asOf,
+    positions: Array.isArray(supplied.positions) ? supplied.positions : [],
+    pending_order_intents: Array.isArray(supplied.pending_order_intents) ? supplied.pending_order_intents : [],
+    reservation_instruments: Array.isArray(supplied.reservation_instruments) ? supplied.reservation_instruments : [],
+  };
+}
+
+function pipelineResult(result = {}, persistence, exposureSnapshot) {
+  const allocations = result.allocations || {};
+  const risk = result.risk || {};
+  const targets = result.targets || {};
+  const intents = result.intents || {};
+  return { status: runtimeStatus({ allocations, risk, targets, intents }), allocations, risk, targets, intents, persistence, exposure_snapshot: exposureSnapshot };
 }
 
 function signalFromOutbox(item = {}) {
@@ -105,6 +165,7 @@ function signalFromOutbox(item = {}) {
 }
 
 function runtimeStatus({ allocations, risk, targets, intents }) {
+  if (risk.status === "EXPOSURE_UNAVAILABLE") return "EXPOSURE_UNAVAILABLE";
   if (intents.order_intents.length) return "ORDER_INTENTS_READY";
   if (targets.target_positions.length) return "TARGETS_READY";
   if (risk.status === "BLOCK") return "RISK_BLOCKED";

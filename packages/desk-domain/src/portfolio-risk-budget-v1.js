@@ -36,7 +36,7 @@ export function evaluatePortfolioRiskBudgetV1(input = {}) {
   const accountCapitalReference = normalizeAccountCapitalReference(firstDefined(input.account_capital_reference, input.accountCapitalReference, budget.metadata?.account_capital_reference, budget.metadata?.accountCapitalReference));
   const accountId = text(firstDefined(input.account_id, input.accountId, "default"));
   const usage = buildUsageSnapshot(portfolio, allocations, budget.correlation_groups, accountId);
-  const evaluations = allocations.map((allocation) => evaluateAllocation(allocation, budget, usage, accountId, { accountCapitalReference, portfolioAvailable }));
+  const evaluations = evaluateAllocationsSequentially({ allocations, budget, initialUsage: usage, accountId, context: { accountCapitalReference, portfolioAvailable } });
   const missing = budgetHasNoLimits(budget);
   const base = {
     schema_version: PORTFOLIO_RISK_BUDGET_EVALUATION_SCHEMA_VERSION_V1,
@@ -50,6 +50,45 @@ export function evaluatePortfolioRiskBudgetV1(input = {}) {
     gate: gateSummary(missing, evaluations),
   };
   return { ...base, evaluation_hash: hash(base) };
+}
+
+function evaluateAllocationsSequentially({ allocations, budget, initialUsage, accountId, context }) {
+  let usage = cloneUsage(initialUsage);
+  return allocations.slice().sort(allocationOrder).map((allocation) => {
+    const evaluation = evaluateAllocation(allocation, budget, usage, accountId, context);
+    usage = reserveApprovedAllocation({ usage, allocation, approvedSize: evaluation.approved_size, groups: budget.correlation_groups, defaultAccountId: accountId });
+    return evaluation;
+  });
+}
+
+function reserveApprovedAllocation({ usage, allocation, approvedSize, groups, defaultAccountId }) {
+  const approved = Number(approvedSize || 0);
+  if (!(approved > 0)) return usage;
+  const accountId = text(firstDefined(allocation.account_id, allocation.accountId, defaultAccountId));
+  const instrument = upper(allocation.instrument);
+  const next = cloneUsage(usage);
+  next.portfolio.open_abs_size = round(next.portfolio.open_abs_size + approved);
+  next.accounts[accountId] = round((next.accounts[accountId] || 0) + approved);
+  next.instruments[instrument] = round((next.instruments[instrument] || 0) + approved);
+  const group = correlationGroup(instrument, groups);
+  next.correlation_groups[group] = round((next.correlation_groups[group] || 0) + approved);
+  for (const signal of array(allocation.contributing_signals)) {
+    const id = text(signal.strategy_instance_id);
+    if (id) next.strategies[id] = round((next.strategies[id] || 0) + approved);
+  }
+  return next;
+}
+
+function cloneUsage(usage) {
+  return {
+    portfolio: { ...usage.portfolio }, accounts: { ...usage.accounts }, instruments: { ...usage.instruments },
+    strategies: { ...usage.strategies }, correlation_groups: { ...usage.correlation_groups },
+  };
+}
+
+function allocationOrder(left, right) {
+  return `${text(left.account_id)}:${upper(left.instrument)}:${text(left.id)}`
+    .localeCompare(`${text(right.account_id)}:${upper(right.instrument)}:${text(right.id)}`);
 }
 
 function evaluateAllocation(allocation, budget, usage, accountId, context = {}) {

@@ -2,6 +2,7 @@ import {
   grainChicagoDate,
   normalizeGrainRows,
 } from "./us-grains-data-quality.js";
+import { evaluateGrainsCalendarCoverage } from "./grains-calendar-coverage.js";
 import {
   causalArray as array,
   causalIso as iso,
@@ -19,6 +20,10 @@ export function buildCausalGrainContext(input = {}) {
   const bias = biasFor(ownReturn, peerReturn);
   const events = knownEvents(input.events, input.asOfUtc);
   const eventRisk = eventRiskForDay(events, input.tradingDate);
+  const calendarCoverage = evaluateGrainsCalendarCoverage({
+    sources: input.agriCalendarCoverage,
+    cutoff: input.asOfUtc,
+  });
   return {
     schema_version: "us_grains_market_context_v2",
     instrument: input.instrument,
@@ -35,13 +40,16 @@ export function buildCausalGrainContext(input = {}) {
     opportunity_zones: zones(rows, bias),
     own_return_points: ownReturn,
     peer_return_points: peerReturn,
-    macro_event_risk: eventRisk,
+    macro_event_risk: { ...eventRisk, coverage: calendarCoverage },
     risk_multiplier: bias === "NEUTRAL" ? 0.65 : 0.85,
     reason_codes: [
       bias,
-      eventRisk.high_event_count
-        ? "AGRI_EVENT_DAY"
-        : "NO_HIGH_AGRI_EVENT_NEARBY",
+      ...calendarCoverage.reasonCodes,
+      !calendarCoverage.admissible
+        ? "AGRI_EVENT_COVERAGE_UNKNOWN"
+        : eventRisk.high_event_count
+          ? "AGRI_EVENT_DAY"
+          : "NO_HIGH_AGRI_EVENT_NEARBY",
       peerReturn === null ? "PEER_CONTEXT_MISSING" : "PEER_CONTEXT_AVAILABLE",
     ],
   };
@@ -81,11 +89,16 @@ function gateFacts({ signal, context }) {
         30 * 60_000,
     ),
     qualityBlocked: context.data_quality?.tradeable === false,
+    calendarBlocked: !evaluateGrainsCalendarCoverage({
+      sources: [context.macro_event_risk?.coverage?.source],
+      cutoff: signal.source_data_cutoff_utc,
+    }).admissible,
   };
 }
 
 function gateRecommendation(facts) {
-  if (facts.qualityBlocked || facts.blackout) return "WAIT";
+  if (facts.qualityBlocked || facts.calendarBlocked || facts.blackout)
+    return "WAIT";
   if (!facts.allowed || facts.discouraged) return "REJECT";
   return facts.preferred ? "ACCEPT" : "ACCEPT_REDUCED";
 }
@@ -99,6 +112,7 @@ function gateReasons({ facts, context }) {
     facts.discouraged ? "DISCOURAGED_FAMILY" : "",
     facts.blackout ? "AGRI_REPORT_BLACKOUT" : "",
     facts.qualityBlocked ? "DATA_QUALITY_BLOCKED" : "",
+    facts.calendarBlocked ? "AGRI_CALENDAR_COVERAGE_UNPROVEN" : "",
     context.instrument_bias,
   ].filter(Boolean);
 }

@@ -13,18 +13,27 @@ export function auditCausalDetection({
     throw new Error("SOURCE_AND_DETECTOR_REQUIRED");
   const rowsBySymbol = candlesToRowsBySymbol(source.candles || []);
   const events = source.agriEvents || source.agri_events || [];
-  const base = detectorInput(
+  const coverage = source.agriCalendarCoverage || [];
+  const base = detectorInput({
     rowsBySymbol,
     events,
+    coverage,
     startDate,
     endDate,
-    endOfDay(endDate),
-  );
+    asOfUtc: endOfDay(endDate),
+  });
   const full = detect(base);
   const signals = array(full.raw_signals);
   const cutoffs = decisionCutoffs({ rowsBySymbol, startDate, endDate });
   const prefixes = cutoffs.map((cutoff) =>
-    prefixCheck({ cutoff, fullSignals: signals, rowsBySymbol, events, detect }),
+    prefixCheck({
+      cutoff,
+      fullSignals: signals,
+      rowsBySymbol,
+      events,
+      coverage,
+      detect,
+    }),
   );
   const changed = prefixes.filter((item) => !item.invariant);
   const unexpected = prefixes.reduce(
@@ -33,6 +42,10 @@ export function auditCausalDetection({
   );
   const legacy = legacySignals(source, startDate, endDate);
   const comparison = compareSignals(legacy, signals);
+  return causalAuditReport({ source, codeHashes, full, signals, prefixes, changed, unexpected, comparison });
+}
+
+function causalAuditReport({ source, codeHashes, full, signals, prefixes, changed, unexpected, comparison }) {
   return {
     schema_version: "grains_causal_detection_audit_v1",
     authority: "OFFLINE_DETECTOR_ONLY_NO_R_HUMANGATE_OR_PROVIDER_RESULT",
@@ -120,7 +133,14 @@ export function inputSha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-function prefixCheck({ cutoff, fullSignals, rowsBySymbol, events, detect }) {
+function prefixCheck({
+  cutoff,
+  fullSignals,
+  rowsBySymbol,
+  events,
+  coverage,
+  detect,
+}) {
   const date = cutoff.slice(0, 10);
   const prefixRows = Object.fromEntries(
     Object.entries(rowsBySymbol).map(([key, rows]) => [
@@ -129,24 +149,28 @@ function prefixCheck({ cutoff, fullSignals, rowsBySymbol, events, detect }) {
     ]),
   );
   const result = detect(
-    detectorInput(
-      prefixRows,
-      availableEvents(events, cutoff),
-      date,
-      date,
-      cutoff,
-    ),
+    detectorInput({
+      rowsBySymbol: prefixRows,
+      events: availableEvents(events, cutoff),
+      coverage: coverage.filter(
+        (item) => Date.parse(item.asOf) <= Date.parse(cutoff),
+      ),
+      startDate: date,
+      endDate: date,
+      asOfUtc: cutoff,
+    }),
   );
   const prefixSignals = throughCutoff(array(result.raw_signals), cutoff);
   const expected = throughCutoff(fullSignals, cutoff);
   const mutated = detect(
-    detectorInput(
-      perturbFuture(rowsBySymbol, cutoff),
+    detectorInput({
+      rowsBySymbol: perturbFuture(rowsBySymbol, cutoff),
       events,
-      date,
-      date,
-      cutoff,
-    ),
+      coverage,
+      startDate: date,
+      endDate: date,
+      asOfUtc: cutoff,
+    }),
   );
   const differences = compareCollections(expected, prefixSignals);
   const futureInvariant = compareCollections(
@@ -225,10 +249,18 @@ function perturbFuture(rowsBySymbol, cutoff) {
   );
 }
 
-function detectorInput(rowsBySymbol, events, startDate, endDate, asOfUtc) {
+function detectorInput({
+  rowsBySymbol,
+  events,
+  coverage,
+  startDate,
+  endDate,
+  asOfUtc,
+}) {
   return {
     rowsBySymbol,
     agriEvents: events,
+    agriCalendarCoverage: coverage,
     instruments: ["ZW", "ZC"],
     startDate,
     endDate,

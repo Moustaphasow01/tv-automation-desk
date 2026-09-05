@@ -7,83 +7,139 @@ import { DomainEventOutboxRepository } from "../src/domain-event-outbox-reposito
 import { StrategySignalBusService } from "../src/strategy-signal-bus-service.js";
 import { PostgresStrategySignalBusRepository } from "../src/strategy-signal-bus-repository.js";
 import { createStrategySignalDecisionPipelineService } from "../src/strategy-signal-decision-pipeline-service.js";
-import { US_GRAINS_STRATEGY_SUITE_VERSION } from "../src/us-grains-strategy-suite.js";
+import { grainSignal } from "./support/causal-grain-signal-fixture.js";
 
 const NOW = "2026-09-04T15:00:00.000Z";
 
-test("TD2-429 raw bus persists context refusal and admitted Risk/Intent/HumanGate without provider commands", {
-  skip: process.env.RUN_POSTGRES_TESTS !== "1",
-}, async (t) => {
-  const database = await createTheoreticalTestDatabase();
-  t.after(() => database.close());
-  const store = await createStore(database.pool);
-  const ids = await seedStrategy(database.pool);
-  const bus = new StrategySignalBusService({ repository: new PostgresStrategySignalBusRepository(store.persistence), clock: store.clock });
-  const long = grainSignal({ ...ids, direction: "LONG" });
-  const short = grainSignal({ ...ids, direction: "SHORT" });
-  await bus.publishSignal(long, {}, { requireRunningInstance: true });
-  await bus.publishSignal(short, {}, { requireRunningInstance: true });
-  assert.equal((await bus.pollPendingSignals({ now_utc: NOW })).count, 2);
+test(
+  "TD2-429 raw bus persists context refusal and admitted Risk/Intent/HumanGate without provider commands",
+  {
+    skip: process.env.RUN_POSTGRES_TESTS !== "1",
+  },
+  async (t) => {
+    const database = await createTheoreticalTestDatabase();
+    t.after(() => database.close());
+    const store = await createStore(database.pool);
+    const ids = await seedStrategy(database.pool);
+    const bus = new StrategySignalBusService({
+      repository: new PostgresStrategySignalBusRepository(store.persistence),
+      clock: store.clock,
+    });
+    const long = grainSignal({ ...ids, direction: "LONG" });
+    const short = grainSignal({ ...ids, direction: "SHORT" });
+    await bus.publishSignal(long, {}, { requireRunningInstance: true });
+    await bus.publishSignal(short, {}, { requireRunningInstance: true });
+    assert.equal((await bus.pollPendingSignals({ now_utc: NOW })).count, 2);
 
-  const pipeline = createStrategySignalDecisionPipelineService({ store });
-  const result = await pipeline.runOnce({ now_utc: NOW, account_id: "causal-shadow", prefer_embedded_context_gate_decision: true });
-  assert.equal(result.context_prefilter.admissible, 1);
-  assert.equal(result.context_prefilter.rejected, 1);
-  assert.equal(result.human_gate_count, 1);
-  assert.equal(result.order_intent_count, 1);
-  const decisions = (await database.pool.query("SELECT signal_id, decision, market_context_snapshot_id FROM market_context_prefilter_decisions")).rows;
-  assert.equal(decisions.find((row) => row.signal_id === short.signal_id).decision, "REJECT");
-  assert.equal(decisions.find((row) => row.signal_id === long.signal_id).market_context_snapshot_id, null);
-  const contextEvents = (await database.pool.query("SELECT payload FROM domain_event_outbox WHERE event_type = 'market.context.prefilter.decided'")).rows;
-  assert.equal(contextEvents.length, 2);
-  assert.ok(contextEvents.every((row) => row.payload.contextSource === "CAUSAL_SIGNAL_PREFIX"));
-  assert.equal(contextEvents.find((row) => row.payload.signalId === long.signal_id).payload.contextGate.recommendation, "TAKE");
-  const intent = (await database.pool.query("SELECT payload FROM portfolio_order_intent_lineage")).rows[0].payload;
-  assert.equal(intent.instrument, "ZW");
-  assert.equal(intent.execution_terms.entry.price, 500);
-  assert.equal(intent.execution_terms.stop.price, 498);
-  assert.equal(intent.execution_terms.targets[0].price, 503);
-  assert.equal((await database.pool.query("SELECT status FROM human_execution_gates")).rows[0].status, "AWAITING_MANUAL_CONFIRMATION");
-  assert.equal(Number((await database.pool.query("SELECT count(*) AS count FROM broker_provider_commands")).rows[0].count), 0);
-  assert.equal(result.provider_counts.unchanged, true);
-  assert.equal((await pipeline.runOnce({ now_utc: NOW, account_id: "causal-shadow" })).human_gate_count || 0, 0);
-});
+    const pipeline = createStrategySignalDecisionPipelineService({ store });
+    const result = await pipeline.runOnce({
+      now_utc: NOW,
+      account_id: "causal-shadow",
+      prefer_embedded_context_gate_decision: true,
+    });
+    assert.equal(result.context_prefilter.admissible, 1);
+    assert.equal(result.context_prefilter.rejected, 1);
+    assert.equal(result.human_gate_count, 1);
+    assert.equal(result.order_intent_count, 1);
+    const decisions = (
+      await database.pool.query(
+        "SELECT signal_id, decision, market_context_snapshot_id FROM market_context_prefilter_decisions",
+      )
+    ).rows;
+    assert.equal(
+      decisions.find((row) => row.signal_id === short.signal_id).decision,
+      "REJECT",
+    );
+    assert.equal(
+      decisions.find((row) => row.signal_id === long.signal_id)
+        .market_context_snapshot_id,
+      null,
+    );
+    const contextEvents = (
+      await database.pool.query(
+        "SELECT payload FROM domain_event_outbox WHERE event_type = 'market.context.prefilter.decided'",
+      )
+    ).rows;
+    assert.equal(contextEvents.length, 2);
+    assert.ok(
+      contextEvents.every(
+        (row) => row.payload.contextSource === "CAUSAL_SIGNAL_PREFIX",
+      ),
+    );
+    assert.equal(
+      contextEvents.find((row) => row.payload.signalId === long.signal_id)
+        .payload.contextGate.recommendation,
+      "TAKE",
+    );
+    const intent = (
+      await database.pool.query(
+        "SELECT payload FROM portfolio_order_intent_lineage",
+      )
+    ).rows[0].payload;
+    assert.equal(intent.instrument, "ZW");
+    assert.equal(intent.execution_terms.entry.price, 500);
+    assert.equal(intent.execution_terms.stop.price, 498);
+    assert.equal(intent.execution_terms.targets[0].price, 503);
+    assert.equal(
+      (await database.pool.query("SELECT status FROM human_execution_gates"))
+        .rows[0].status,
+      "AWAITING_MANUAL_CONFIRMATION",
+    );
+    assert.equal(
+      Number(
+        (
+          await database.pool.query(
+            "SELECT count(*) AS count FROM broker_provider_commands",
+          )
+        ).rows[0].count,
+      ),
+      0,
+    );
+    assert.equal(result.provider_counts.unchanged, true);
+    assert.equal(
+      (await pipeline.runOnce({ now_utc: NOW, account_id: "causal-shadow" }))
+        .human_gate_count || 0,
+      0,
+    );
+  },
+);
 
 async function createStore(pool) {
   const persistence = { pool, initialized: Promise.resolve() };
   const clock = { now: () => ({ utc: NOW, epochMs: Date.parse(NOW) }) };
-  return { persistence, clock, marketContext: new MarketContextRepository(persistence, { clock }), domainEvents: new DomainEventOutboxRepository(persistence) };
+  return {
+    persistence,
+    clock,
+    marketContext: new MarketContextRepository(persistence, { clock }),
+    domainEvents: new DomainEventOutboxRepository(persistence),
+  };
 }
 
 async function seedStrategy(pool) {
-  const ids = { strategy_definition_id: randomUUID(), strategy_version_id: randomUUID(), strategy_instance_id: randomUUID() };
-  await pool.query(`INSERT INTO strategy_definitions (strategy_definition_id,external_key,name,owner)
-    VALUES ($1,'causal-pipeline-test','Causal grains test','test')`, [ids.strategy_definition_id]);
-  await pool.query(`INSERT INTO strategy_versions (strategy_version_id,strategy_definition_id,version_label,
+  const ids = {
+    strategy_definition_id: randomUUID(),
+    strategy_version_id: randomUUID(),
+    strategy_instance_id: randomUUID(),
+  };
+  await pool.query(
+    `INSERT INTO strategy_definitions (strategy_definition_id,external_key,name,owner)
+    VALUES ($1,'causal-pipeline-test','Causal grains test','test')`,
+    [ids.strategy_definition_id],
+  );
+  await pool.query(
+    `INSERT INTO strategy_versions (strategy_version_id,strategy_definition_id,version_label,
     dsl_source_hash,compiled_artifact_ref,runtime_contract_bundle_version)
     VALUES ($1,$2,'test-v2',$3,'test://causal-grains','test-v2')`,
-  [ids.strategy_version_id, ids.strategy_definition_id, `sha256:${"a".repeat(64)}`]);
-  await pool.query(`INSERT INTO strategy_instances (strategy_instance_id,strategy_version_id,runtime_state,execution_mode,instrument_scope,last_heartbeat_at)
-    VALUES ($1,$2,'running','shadow',ARRAY['ZW'],$3)`, [ids.strategy_instance_id, ids.strategy_version_id, NOW]);
+    [
+      ids.strategy_version_id,
+      ids.strategy_definition_id,
+      `sha256:${"a".repeat(64)}`,
+    ],
+  );
+  await pool.query(
+    `INSERT INTO strategy_instances (strategy_instance_id,strategy_version_id,runtime_state,execution_mode,instrument_scope,last_heartbeat_at)
+    VALUES ($1,$2,'running','shadow',ARRAY['ZW'],$3)`,
+    [ids.strategy_instance_id, ids.strategy_version_id, NOW],
+  );
   return ids;
-}
-
-function grainSignal({ direction, ...ids }) {
-  const long = direction === "LONG";
-  return {
-    ...ids, signal_id: randomUUID(), correlation_id: `test-${direction}`, instrument: "ZW", direction, proposed_size: 1, confidence: 0.73,
-    source_class: "SHADOW", execution_mode_origin: "SHADOW", timeframe: "M5", session: "cbot_grains_rth",
-    generated_at_utc: NOW, source_data_cutoff_utc: NOW, expires_at_utc: "2026-09-04T15:45:00Z",
-    setup: { setup_kind: "VWAP_PULLBACK", context: {
-      schema_version: "us_grains_market_context_v2", instrument: "ZW", valid_until_utc: "2026-09-04T15:45Z", data_quality: { tradeable: true },
-      source_data_cutoff_utc: NOW, instrument_bias: "LONG_BIASED", allowed_sides: ["LONG"],
-      preferred_strategy_families: ["VWAP_PULLBACK"], discouraged_strategy_families: [],
-      risk_multiplier: 0.85, macro_event_risk: { events: [] }, reason_codes: ["LONG_BIASED"],
-    } },
-    predicates: [{ code: "TEST_PATTERN", value: true }], evidence: [{ type: "test", timestamp_utc: NOW }],
-    reason_codes: ["TEST_CAUSAL_SIGNAL"], signal_quality: { strategy_suite_version: US_GRAINS_STRATEGY_SUITE_VERSION },
-    proposed_trade_plan: { instrument: "ZW", direction, order_type: "LIMIT", entry_price: 500,
-      stop_price: long ? 498 : 502, targets: [{ price: long ? 503 : 497 }], source_data_cutoff_utc: NOW },
-    payload: { strategy_family: "VWAP_PULLBACK", market_universe: "US_GRAINS_CBOT" },
-  };
 }
