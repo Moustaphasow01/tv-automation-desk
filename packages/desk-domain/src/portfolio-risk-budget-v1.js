@@ -3,6 +3,7 @@ import { canonicalSha256 } from "./execution-scope.js";
 export const PORTFOLIO_RISK_BUDGET_SCHEMA_VERSION_V1 = "portfolio_risk_budget_v1";
 export const PORTFOLIO_RISK_BUDGET_EVALUATION_SCHEMA_VERSION_V1 = "portfolio_risk_budget_evaluation_v1";
 export const PORTFOLIO_RISK_BUDGET_STATUSES_V1 = Object.freeze(["PASS", "REDUCE", "BLOCK", "CONFIG_MISSING"]);
+export const PORTFOLIO_RISK_SIZING_MODES_V1 = Object.freeze(["REQUESTED_QUANTITY_CAP", "MONETARY_RISK_BUDGET"]);
 export const DEFAULT_PORTFOLIO_CORRELATION_GROUPS_V1 = Object.freeze({
   equity_index: Object.freeze(["MES", "ES", "MNQ", "NQ", "MYM", "YM", "M2K", "RTY"]),
   energy_crude: Object.freeze(["MCL", "CL"]),
@@ -17,6 +18,8 @@ export function normalizePortfolioRiskBudgetV1(input = {}) {
     max_portfolio_abs_size: positiveOrNull(firstDefined(input.max_portfolio_abs_size, input.maxPortfolioAbsSize)),
     max_daily_loss_r: positiveOrNull(firstDefined(input.max_daily_loss_r, input.maxDailyLossR)),
     max_weekly_loss_r: positiveOrNull(firstDefined(input.max_weekly_loss_r, input.maxWeeklyLossR)),
+    max_monetary_risk: positiveOrNull(firstDefined(input.max_monetary_risk, input.maxMonetaryRisk, input.monetary_risk_budget, input.monetaryRiskBudget)),
+    sizing_mode: normalizeSizingMode(firstDefined(input.sizing_mode, input.sizingMode)),
     max_account_abs_size: numericMap(input.max_account_abs_size),
     max_instrument_abs_size: numericMap(input.max_instrument_abs_size, upper),
     max_strategy_abs_size: numericMap(input.max_strategy_abs_size),
@@ -35,9 +38,9 @@ export function evaluatePortfolioRiskBudgetV1(input = {}) {
   const portfolioAvailable = Boolean(record(input.virtual_portfolio));
   const accountCapitalReference = normalizeAccountCapitalReference(firstDefined(input.account_capital_reference, input.accountCapitalReference, budget.metadata?.account_capital_reference, budget.metadata?.accountCapitalReference));
   const accountId = text(firstDefined(input.account_id, input.accountId, "default"));
-  const usage = buildUsageSnapshot(portfolio, allocations, budget.correlation_groups, accountId);
+  const usage = buildUsageSnapshot({ portfolio, allocations, groups: budget.correlation_groups, accountId, lossUsage: input.loss_usage || input.lossUsage });
   const evaluations = evaluateAllocationsSequentially({ allocations, budget, initialUsage: usage, accountId, context: { accountCapitalReference, portfolioAvailable } });
-  const missing = budgetHasNoLimits(budget);
+  const missing = budgetConfigurationMissing(budget);
   const base = {
     schema_version: PORTFOLIO_RISK_BUDGET_EVALUATION_SCHEMA_VERSION_V1,
     status: missing ? "CONFIG_MISSING" : aggregateStatus(evaluations),
@@ -94,7 +97,9 @@ function allocationOrder(left, right) {
 function evaluateAllocation(allocation, budget, usage, accountId, context = {}) {
   const instrument = upper(allocation.instrument);
   const allocationAccountId = text(firstDefined(allocation.account_id, allocation.accountId, accountId));
-  const proposed = positiveOrNull(allocation.proposed_size) || 0;
+  const requested = positiveOrNull(allocation.proposed_size) || 0;
+  const sizing = authorizedSizing(allocation, budget, requested);
+  const proposed = sizing.quantity;
   const group = correlationGroup(instrument, budget.correlation_groups);
   const checks = [
     limitCheck("PORTFOLIO_ABS_SIZE", usage.portfolio.open_abs_size, proposed, budget.max_portfolio_abs_size, "portfolio"),
@@ -105,19 +110,23 @@ function evaluateAllocation(allocation, budget, usage, accountId, context = {}) 
     lossCheck("DAILY_LOSS_R", usage.portfolio.total_r, budget.max_daily_loss_r),
     lossCheck("WEEKLY_LOSS_R", usage.portfolio.weekly_r, budget.max_weekly_loss_r),
   ].filter(Boolean);
-  const status = allocationStatus(checks);
+  const limitStatus = allocationStatus(checks);
+  // A sizing reduction never overrides a hard account, exposure or loss block.
+  const status = sizing.reason_code || limitStatus === "BLOCK" ? "BLOCK" : sizing.reduced ? "REDUCE" : limitStatus;
   const approvedSize = status === "BLOCK" ? 0 : Math.min(proposed, availableSize(checks, proposed));
   const base = {
     candidate_allocation_id: allocation.id || "",
     account_id: allocationAccountId,
     instrument,
-    requested_size: proposed,
+    requested_size: requested,
+    sized_size: proposed,
     approved_size: round(approvedSize),
     status,
     decision: riskDecision(status),
-    reason_codes: checks.filter((item) => item.breached).map((item) => item.code),
+    reason_codes: [...checks.filter((item) => item.breached).map((item) => item.code), ...(sizing.reason_code ? [sizing.reason_code] : [])],
     limit_checks: checks,
     limits_applied: checks.filter((item) => item.breached).map((item) => item.code),
+    sizing,
   };
   const economics = buildRiskEconomics({
     allocation,
@@ -132,6 +141,31 @@ function evaluateAllocation(allocation, budget, usage, accountId, context = {}) 
   return { risk_decision_id: `portfoliorisk:${canonicalSha256({ ...base, risk_economics: economics }).slice(0, 24)}`, ...base, ...economics };
 }
 
+function authorizedSizing(allocation, budget, requested) {
+  if (budget.sizing_mode !== "MONETARY_RISK_BUDGET") {
+    return { mode: "REQUESTED_QUANTITY_CAP", quantity: requested, requested_quantity: requested, reduced: false, reason_code: null };
+  }
+  const tradeRisk = allocationTradeRisk(allocation, 1);
+  const multiplier = allocationMultiplier(allocation);
+  if (!budget.max_monetary_risk) return unavailableSizing(requested, "MONETARY_RISK_BUDGET_UNAVAILABLE");
+  if (tradeRisk.availability !== "KNOWN" || !(tradeRisk.risk_per_contract > 0)) return unavailableSizing(requested, "MONETARY_RISK_PER_CONTRACT_UNAVAILABLE");
+  if (multiplier === null) return unavailableSizing(requested, "CONTEXT_RISK_MULTIPLIER_UNAVAILABLE");
+  const effectiveBudget = round(budget.max_monetary_risk * multiplier);
+  const quantity = Math.min(Math.floor(requested), Math.floor(effectiveBudget / tradeRisk.risk_per_contract));
+  if (quantity < 1) return { mode: "MONETARY_RISK_BUDGET", quantity: 0, requested_quantity: requested, reduced: true, reason_code: "INSUFFICIENT_MIN_CONTRACT", risk_per_contract: tradeRisk.risk_per_contract, context_risk_multiplier: multiplier, effective_monetary_risk_budget: effectiveBudget, currency: tradeRisk.currency };
+  return { mode: "MONETARY_RISK_BUDGET", quantity, requested_quantity: requested, reduced: quantity < requested, reason_code: null, risk_per_contract: tradeRisk.risk_per_contract, context_risk_multiplier: multiplier, effective_monetary_risk_budget: effectiveBudget, currency: tradeRisk.currency };
+}
+
+function unavailableSizing(requested, reasonCode) {
+  return { mode: "MONETARY_RISK_BUDGET", quantity: 0, requested_quantity: requested, reduced: true, reason_code: reasonCode, risk_per_contract: null, context_risk_multiplier: null, effective_monetary_risk_budget: null, currency: "UNAVAILABLE" };
+}
+
+function allocationMultiplier(allocation) {
+  const values = array(allocation.contributing_signals).map((signal) => finite(signal.context_risk_multiplier));
+  if (!values.length || values.some((value) => value === null || value < 0 || value > 1)) return null;
+  return Math.min(...values);
+}
+
 function strategyChecks(allocation, usage, budget) {
   return array(allocation.contributing_signals).map((signal) => {
     const id = text(signal.strategy_instance_id);
@@ -141,20 +175,26 @@ function strategyChecks(allocation, usage, budget) {
   }).filter(Boolean);
 }
 
-function buildUsageSnapshot(portfolio, allocations, groups, accountId) {
+function buildUsageSnapshot({ portfolio, allocations, groups, accountId, lossUsage }) {
   const rows = array(portfolio.by_strategy_instance);
   const positions = array(portfolio.positions);
   return {
     portfolio: {
       open_abs_size: numberAt(portfolio, ["totals", "open_abs_size"]),
-      total_r: numberAt(portfolio, ["totals", "total_r"]),
-      weekly_r: numberAt(portfolio, ["totals", "weekly_r"]),
+      total_r: lossValue(lossUsage, "daily_realized_r", numberAt(portfolio, ["totals", "total_r"])),
+      weekly_r: lossValue(lossUsage, "weekly_realized_r", numberAt(portfolio, ["totals", "weekly_r"])),
     },
     accounts: accountExposure(positions, allocations, accountId, portfolio),
     instruments: instrumentExposure(positions, allocations),
     strategies: Object.fromEntries(rows.map((row) => [text(row.strategy_instance_id), Math.abs(Number(row.open_signed_size || 0))])),
     correlation_groups: correlationExposure(positions, allocations, groups),
   };
+}
+
+function lossValue(lossUsage, key, fallback) {
+  if (record(lossUsage)?.availability !== "KNOWN") return fallback;
+  const value = finite(lossUsage[key]);
+  return value === null ? fallback : value;
 }
 
 function accountExposure(positions, allocations, defaultAccountId, portfolio) {
@@ -408,16 +448,25 @@ function gateSummary(missing, evaluations) {
   return { pass: status === "PASS", reason: status };
 }
 
-function budgetHasNoLimits(budget) {
+function budgetConfigurationMissing(budget) {
+  if (!PORTFOLIO_RISK_SIZING_MODES_V1.includes(budget.sizing_mode)) return true;
+  if (budget.sizing_mode === "MONETARY_RISK_BUDGET" && budget.max_monetary_risk === null) return true;
   return [
     budget.max_portfolio_abs_size,
     budget.max_daily_loss_r,
     budget.max_weekly_loss_r,
+    budget.max_monetary_risk,
     ...Object.values(budget.max_account_abs_size),
     ...Object.values(budget.max_instrument_abs_size),
     ...Object.values(budget.max_strategy_abs_size),
     ...Object.values(budget.max_correlation_group_abs_size),
   ].every((value) => value === null || value === undefined);
+}
+
+function normalizeSizingMode(value) {
+  if (value === null || value === undefined || value === "") return "REQUESTED_QUANTITY_CAP";
+  const mode = upper(value);
+  return PORTFOLIO_RISK_SIZING_MODES_V1.includes(mode) ? mode : "INVALID";
 }
 
 function normalizeCorrelationGroups(input) {

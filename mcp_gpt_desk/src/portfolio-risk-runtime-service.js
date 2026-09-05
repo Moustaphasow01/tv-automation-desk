@@ -53,7 +53,8 @@ function buildPipeline(input, asOf, snapshot) {
   const signals = exposureConstrainedSignals(input.signals || [], snapshot);
   const allocations = buildCandidateAllocationPortfolioV1({
     as_of_utc: asOf, portfolio_scope: input.portfolio_scope || input.scope || input.account_id,
-    signals, positions: snapshot.positions, marks: input.marks, policy: input.allocation_policy,
+    signals, positions: snapshot.positions, marks: input.marks,
+    policy: { ...(input.allocation_policy || {}), sizing_mode: input.risk_budget?.sizing_mode || input.risk_budget?.sizingMode },
   });
   if (requiresLossUsage(input.risk_budget) && snapshot.loss_usage_availability !== "KNOWN") {
     return unavailablePipeline(allocations, unavailableSnapshot(snapshot, "LOSS_USAGE_UNAVAILABLE"));
@@ -62,6 +63,7 @@ function buildPipeline(input, asOf, snapshot) {
   const risk = evaluatePortfolioRiskBudgetV1({
     as_of_utc: asOf, account_id: input.account_id, budget: input.risk_budget,
     candidate_allocations: allocations.candidate_allocations, virtual_portfolio: allocations.virtual_portfolio,
+    loss_usage: snapshot.loss_usage,
   });
   const targets = buildPortfolioTargetPositionPlanV1({
     as_of_utc: asOf, account_id: input.account_id, candidate_allocations: allocations.candidate_allocations,

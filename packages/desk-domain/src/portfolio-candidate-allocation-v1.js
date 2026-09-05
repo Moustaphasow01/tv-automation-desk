@@ -5,12 +5,14 @@ export const PORTFOLIO_CANDIDATE_ALLOCATION_SCHEMA_VERSION_V1 = "portfolio_candi
 export const VIRTUAL_STRATEGY_PORTFOLIO_SCHEMA_VERSION_V1 = "virtual_strategy_portfolio_v1";
 export const PORTFOLIO_ALLOCATION_DIRECTIONS_V1 = Object.freeze(["LONG", "SHORT", "FLAT"]);
 export const PORTFOLIO_STRATEGY_RUNTIME_STATES_V1 = Object.freeze(["ACTIVE", "SUSPENDED", "DISABLED"]);
+export const PORTFOLIO_SIZING_MODES_V1 = Object.freeze(["REQUESTED_QUANTITY_CAP", "MONETARY_RISK_BUDGET"]);
 export const DEFAULT_PORTFOLIO_CANDIDATE_ALLOCATION_POLICY_V1 = Object.freeze({
   conflict_resolution: "NET_BY_DIRECTION",
   default_signal_size: 1,
   active_signal_statuses: Object.freeze(["ACTIVE", "PENDING", "PUBLISHED"]),
   allowed_account_ids: Object.freeze([]),
   strategy_instance_states: Object.freeze({}),
+  sizing_mode: "REQUESTED_QUANTITY_CAP",
 });
 
 export function buildCandidateAllocationPortfolioV1(input = {}) {
@@ -66,12 +68,12 @@ function normalizeSignals(items, asOf, policy, defaultAccountId) {
 
 function normalizeSignal(item, asOf, policy, defaultAccountId) {
   const source = signalSource(item);
-  const signal = signalCore(item, source, defaultAccountId);
+  const signal = signalCore(item, source, defaultAccountId, policy);
   const issues = signalIssues(signal, asOf, policy);
   return { active: issues.length === 0, signal, rejected: { signal_id: signal.signal_id, issues } };
 }
 
-function signalCore(item, source, defaultAccountId) {
+function signalCore(item, source, defaultAccountId, policy) {
   const direction = upper(firstDefined(source.direction, item.direction));
   const proposedTradePlanInput = record(firstDefined(source.proposed_trade_plan, source.proposedTradePlan, item.proposed_trade_plan, item.proposedTradePlan));
   const normalizedTradePlan = proposedTradePlanInput && !proposedTradePlanInput.schema_version
@@ -85,7 +87,7 @@ function signalCore(item, source, defaultAccountId) {
   const proposedTradePlan = normalizedTradePlan?.proposed_trade_plan || proposedTradePlanInput;
   const tradePlanEconomics = record(firstDefined(source.trade_plan_economics, source.tradePlanEconomics, proposedTradePlan?.economics, item.trade_plan_economics, item.tradePlanEconomics, normalizedTradePlan?.economics));
   const requestedSize = signalSize(item, source, direction);
-  const contextSizing = contextAdjustedSize(item, source, requestedSize);
+  const contextSizing = contextAdjustedSize(item, source, requestedSize, policy);
   return {
     signal_id: text(firstDefined(source.signal_id, source.id, item.signal_id, item.signal_outbox_id, item.id)),
     strategy_definition_id: text(firstDefined(source.strategy_definition_id, source.strategyDefinitionId, item.strategy_definition_id)),
@@ -114,12 +116,23 @@ function signalCore(item, source, defaultAccountId) {
 
 function signalIssues(signal, asOf, policy) {
   const issues = [];
+  requiredSignalIssues(signal, issues);
+  signalStateIssues(signal, policy, issues);
+  signalTimingIssues(signal, asOf, issues);
+  signalSizingIssues(signal, policy, issues);
+  return issues;
+}
+
+function requiredSignalIssues(signal, issues) {
   requireText(signal.signal_id, "signal_id", issues);
   requireText(signal.strategy_instance_id, "strategy_instance_id", issues);
   requireText(signal.account_id, "account_id", issues);
   requireText(signal.instrument, "instrument", issues);
   requireText(signal.generated_at_utc, "generated_at_utc", issues);
   requireText(signal.expires_at_utc, "expires_at_utc", issues);
+}
+
+function signalStateIssues(signal, policy, issues) {
   if (!PORTFOLIO_ALLOCATION_DIRECTIONS_V1.includes(signal.direction)) issues.push(issue("SIGNAL_DIRECTION_INVALID", "direction"));
   if (signal.direction === "FLAT") issues.push(issue("SIGNAL_FLAT_NOT_ALLOCATABLE", "direction"));
   if (!policy.active_signal_statuses.includes(signal.status)) issues.push(issue("SIGNAL_STATUS_NOT_ACTIVE", "status"));
@@ -127,12 +140,18 @@ function signalIssues(signal, asOf, policy) {
   const runtimeState = strategyRuntimeState(signal.strategy_instance_id, policy);
   if (runtimeState === "DISABLED") issues.push(issue("STRATEGY_INSTANCE_DISABLED", "strategy_instance_id"));
   if (runtimeState === "SUSPENDED") issues.push(issue("STRATEGY_INSTANCE_SUSPENDED", "strategy_instance_id"));
+}
+
+function signalTimingIssues(signal, asOf, issues) {
   if (signal.generated_at_utc && Date.parse(signal.generated_at_utc) > Date.parse(asOf)) issues.push(issue("SIGNAL_GENERATED_AFTER_AS_OF", "generated_at_utc"));
   if (signal.expires_at_utc && Date.parse(signal.expires_at_utc) <= Date.parse(asOf)) issues.push(issue("SIGNAL_EXPIRED", "expires_at_utc"));
+}
+
+function signalSizingIssues(signal, policy, issues) {
+  if (!PORTFOLIO_SIZING_MODES_V1.includes(policy.sizing_mode)) issues.push(issue("PORTFOLIO_SIZING_MODE_INVALID", "sizing_mode"));
   if (signal.proposed_size <= 0) issues.push(issue("SIGNAL_SIZE_NOT_POSITIVE", "proposed_size"));
   if (signal.context_sizing_issue) issues.push(issue(signal.context_sizing_issue, "context_risk_multiplier"));
   if (signal.portfolio_block_reason) issues.push(issue(`PORTFOLIO_${signal.portfolio_block_reason}`, "portfolio_block_reason"));
-  return issues;
 }
 
 function allocateByAccountInstrument(signals, portfolioScope, asOf) {
@@ -300,8 +319,17 @@ function signalSize(item, source, direction) {
   return positive(firstDefined(source.proposed_size, source.size, source.quantity, source.contracts, item.proposed_size, item.size, item.quantity, item.contracts), DEFAULT_PORTFOLIO_CANDIDATE_ALLOCATION_POLICY_V1.default_signal_size);
 }
 
-function contextAdjustedSize(item, source, requestedSize) {
-  const raw = firstDefined(
+function contextAdjustedSize(item, source, requestedSize, policy) {
+  const multiplier = numberOrNull(contextMultiplier(item, source));
+  const sourceRef = contextMultiplierSource(item, source);
+  const invalid = multiplier === null || multiplier < 0 || multiplier > 1;
+  if (invalid) return contextSizingInvalid(sourceRef);
+  if (multiplier !== 1 && !sourceRef) return contextSizingUnproven(multiplier);
+  return contextSizingResult(multiplier, sourceRef, requestedSize, policy);
+}
+
+function contextMultiplier(item, source) {
+  return firstDefined(
     source.context_risk_multiplier,
     source.contextRiskMultiplier,
     source.context_gate?.risk_multiplier,
@@ -312,8 +340,10 @@ function contextAdjustedSize(item, source, requestedSize) {
     item.contextGate?.risk_multiplier,
     1,
   );
-  const multiplier = numberOrNull(raw);
-  const sourceRef = text(firstDefined(
+}
+
+function contextMultiplierSource(item, source) {
+  return text(firstDefined(
     source.context_risk_multiplier_source,
     source.contextRiskMultiplierSource,
     source.context_gate?.policy_version,
@@ -321,13 +351,18 @@ function contextAdjustedSize(item, source, requestedSize) {
     item.context_risk_multiplier_source,
     item.contextRiskMultiplierSource,
   ));
-  if (multiplier === null || multiplier < 0 || multiplier > 1) {
-    return { multiplier: null, source: sourceRef || null, size: 0, issue: "CONTEXT_RISK_MULTIPLIER_INVALID" };
-  }
-  if (multiplier !== 1 && !sourceRef) {
-    return { multiplier, source: null, size: 0, issue: "CONTEXT_RISK_MULTIPLIER_PROVENANCE_REQUIRED" };
-  }
-  const size = Math.floor(requestedSize * multiplier);
+}
+
+function contextSizingInvalid(sourceRef) {
+  return { multiplier: null, source: sourceRef || null, size: 0, issue: "CONTEXT_RISK_MULTIPLIER_INVALID" };
+}
+
+function contextSizingUnproven(multiplier) {
+  return { multiplier, source: null, size: 0, issue: "CONTEXT_RISK_MULTIPLIER_PROVENANCE_REQUIRED" };
+}
+
+function contextSizingResult(multiplier, sourceRef, requestedSize, policy) {
+  const size = policy.sizing_mode === "MONETARY_RISK_BUDGET" ? requestedSize : Math.floor(requestedSize * multiplier);
   return {
     multiplier,
     source: sourceRef || null,
@@ -341,6 +376,7 @@ function normalizePolicy(policy, input = {}) {
   return {
     conflict_resolution: text(firstDefined(source.conflict_resolution, "NET_BY_DIRECTION")),
     default_signal_size: positive(firstDefined(source.default_signal_size, 1), 1),
+    sizing_mode: normalizeSizingMode(firstDefined(source.sizing_mode, source.sizingMode, input.sizing_mode, input.sizingMode)),
     active_signal_statuses: unique(array(firstDefined(source.active_signal_statuses, DEFAULT_PORTFOLIO_CANDIDATE_ALLOCATION_POLICY_V1.active_signal_statuses)).map(upper)),
     allowed_account_ids: unique(array(source.allowed_account_ids).map(text).filter(Boolean)),
     strategy_instance_states: normalizeStrategyInstanceStates(firstDefined(
@@ -351,6 +387,12 @@ function normalizePolicy(policy, input = {}) {
       {},
     )),
   };
+}
+
+function normalizeSizingMode(value) {
+  if (value === null || value === undefined || value === "") return "REQUESTED_QUANTITY_CAP";
+  const mode = upper(value);
+  return PORTFOLIO_SIZING_MODES_V1.includes(mode) ? mode : "INVALID";
 }
 
 function normalizeStrategyInstanceStates(input) {

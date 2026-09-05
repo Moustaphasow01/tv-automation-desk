@@ -123,6 +123,12 @@ describe("Portfolio Risk Runtime service", () => {
       async query(sql, params = []) {
         calls.push({ sql, params });
         if (/SELECT \* FROM portfolio_arbitration_runs/.test(sql)) return { rows: [] };
+        if (/WITH open_positions AS/.test(sql)) {
+          return { rows: [{ positions: [], intents: [], qualified: [], loss_usage: {
+            daily_realized_r: 0, weekly_realized_r: 0, final_outcome_count: 0, unproven_final_outcome_count: 0, missing_closed_final_outcome_count: 0,
+            period_timezone: "UTC", provenance: "THEORETICAL_FINAL_OUTCOMES",
+          } }] };
+        }
         return { rows: [] };
       },
       release() {},

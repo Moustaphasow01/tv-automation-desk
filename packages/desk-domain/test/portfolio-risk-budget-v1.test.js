@@ -134,7 +134,81 @@ describe("portfolio risk budget V1", () => {
     assert.equal(evaluation.gate.pass, false);
     assert.equal(evaluation.allocation_evaluations.length, 0);
   });
+
+  it("reduces the monetary budget before contract flooring and never increases the requested size", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 250 },
+      candidate_allocations: [allocation({ proposed_size: 3, contributing_signals: [economicSignal({ multiplier: 0.85, risk: 100 })] })],
+      virtual_portfolio: portfolioFixture(),
+    });
+
+    const decision = evaluation.allocation_evaluations[0];
+    assert.equal(decision.status, "REDUCE");
+    assert.equal(decision.requested_size, 3);
+    assert.equal(decision.sized_size, 2);
+    assert.equal(decision.approved_size, 2);
+    assert.equal(decision.sizing.effective_monetary_risk_budget, 212.5);
+  });
+
+  it("refuses rather than inventing one contract when the reduced monetary budget is insufficient", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 100 },
+      candidate_allocations: [allocation({ proposed_size: 1, contributing_signals: [economicSignal({ multiplier: 0.85, risk: 200 })] })],
+      virtual_portfolio: portfolioFixture(),
+    });
+
+    const decision = evaluation.allocation_evaluations[0];
+    assert.equal(decision.status, "BLOCK");
+    assert.equal(decision.approved_size, 0);
+    assert.ok(decision.reason_codes.includes("INSUFFICIENT_MIN_CONTRACT"));
+  });
+
+  it("never turns a hard loss or exposure block into a monetary sizing reduction", () => {
+    for (const limits of [
+      { max_daily_loss_r: 2 },
+      { max_weekly_loss_r: 2 },
+      { max_portfolio_abs_size: 1 },
+      { max_instrument_abs_size: { MNQ: 1 } },
+    ]) {
+      const evaluation = evaluatePortfolioRiskBudgetV1({
+        as_of_utc: "2026-08-09T08:10:00.000Z",
+        budget: { sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 250, ...limits },
+        candidate_allocations: [allocation({ proposed_size: 3, contributing_signals: [economicSignal({ multiplier: 0.85, risk: 100 })] })],
+        virtual_portfolio: portfolioFixture({ total_r: -3, weekly_r: -3, open_abs_size: 1, positions: [position()] }),
+      });
+      const decision = evaluation.allocation_evaluations[0];
+      assert.equal(decision.sizing.reduced, true);
+      assert.equal(decision.status, "BLOCK");
+      assert.equal(decision.decision, "REJECTED");
+      assert.equal(decision.approved_size, 0);
+      assert.equal(evaluation.gate.pass, false);
+    }
+  });
+
+  it("monetary sizing authorizes whole contracts without exceeding a fractional request", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 1000 },
+      candidate_allocations: [allocation({ proposed_size: 1.5, contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] })],
+      virtual_portfolio: portfolioFixture(),
+    });
+    assert.equal(evaluation.allocation_evaluations[0].approved_size, 1);
+    assert.equal(evaluation.allocation_evaluations[0].status, "REDUCE");
+  });
 });
+
+function economicSignal({ multiplier, risk }) {
+  return {
+    signal_id: "sig-economic", strategy_instance_id: "inst-a", proposed_size: 1,
+    context_risk_multiplier: multiplier,
+    trade_plan_economics: {
+      availability: "KNOWN", risk_per_contract: risk, currency: "USD", entry_price: 100,
+      stop_price: 99, stop_distance_points: 1, stop_distance_ticks: 4, tick_size: 0.25, tick_value: risk / 4,
+    },
+  };
+}
 
 function budgetFixture() {
   return {

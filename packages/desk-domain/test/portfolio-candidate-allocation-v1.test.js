@@ -140,6 +140,22 @@ describe("portfolio candidate allocation V1", () => {
     assert.ok(issues.includes("SIGNAL_SIZE_NOT_POSITIVE"));
   });
 
+  it("preserves the requested contract for explicit monetary sizing while retaining multiplier evidence", () => {
+    const plan = buildCandidateAllocationPortfolioV1({
+      as_of_utc: "2026-08-09T08:06:00.000Z",
+      policy: { sizing_mode: "MONETARY_RISK_BUDGET" },
+      signals: [signal({
+        proposed_size: 1,
+        context_risk_multiplier: 0.85,
+        context_risk_multiplier_source: "us-grains-context-v1",
+      })],
+    });
+
+    assert.equal(plan.candidate_allocations.length, 1);
+    assert.equal(plan.candidate_allocations[0].proposed_size, 1);
+    assert.equal(plan.candidate_allocations[0].contributing_signals[0].context_risk_multiplier, 0.85);
+  });
+
   it("rejects a reduced multiplier without deterministic provenance", () => {
     const plan = buildCandidateAllocationPortfolioV1({
       as_of_utc: "2026-08-09T08:06:00.000Z",

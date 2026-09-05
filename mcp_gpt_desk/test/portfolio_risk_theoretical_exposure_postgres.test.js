@@ -9,6 +9,7 @@ import { createTheoreticalTestDatabase } from "./support/theoretical-postgres-fi
 
 const NOW = "2026-09-05T14:05:00.000Z";
 const LATER = "2026-09-05T14:10:00.000Z";
+const MONDAY = "2026-09-07T00:05:00.000Z";
 
 test("PostgreSQL exposure lock reserves a theoretical intent and prevents an opposing concurrent batch", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async () => {
   const database = await createTheoreticalTestDatabase();
@@ -114,6 +115,102 @@ test("a qualified signal stays rejected in a later batch after its theoretical i
   }
 });
 
+test("atomic as-of snapshot uses persisted final theoretical outcomes for daily and weekly loss", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async () => {
+  const database = await createTheoreticalTestDatabase();
+  try {
+    const repository = new PostgresPortfolioRiskRuntimeRepository({ pool: database.pool, initialized: Promise.resolve() });
+    const service = new PortfolioRiskRuntimeService({ repository, clock: { now: () => ({ utc: NOW }) } });
+    const first = await service.runPipeline(command(signal({ signal_id: "signal-loss-evidence" })));
+    const intentId = first.intents.order_intents[0].order_intent_id;
+    await insertEntryEventWithoutTrade(database.pool, intentId);
+    const beforeTrade = await database.pool.connect();
+    try {
+      const snapshot = await loadTheoreticalExposureAsOf(beforeTrade, exposureRequest());
+      assert.deepEqual(snapshot.reservation_instruments, ["ZC"]);
+    } finally { beforeTrade.release(); }
+    await insertFinalOutcome(database.pool, { tradeId: "theory-final-loss", intentId, resultR: -1, finalizedAtUtc: "2026-09-05T14:04:00.000Z" });
+    await insertFinalOutcome(database.pool, { tradeId: "theory-future-loss", intentId, resultR: -3, finalizedAtUtc: "2026-09-05T14:06:00.000Z" });
+
+    const client = await database.pool.connect();
+    try {
+      const snapshot = await loadTheoreticalExposureAsOf(client, exposureRequest());
+      assert.equal(snapshot.loss_usage_availability, "KNOWN");
+      assert.equal(snapshot.loss_usage.daily_realized_r, -1);
+      assert.equal(snapshot.loss_usage.weekly_realized_r, -1);
+      assert.equal(snapshot.loss_usage.final_outcome_count, 1);
+      assert.equal(snapshot.loss_usage.provenance, "THEORETICAL_FINAL_OUTCOMES");
+      assert.deepEqual(snapshot.reservation_instruments, []);
+    } finally { client.release(); }
+
+    const blocked = await service.runPipeline({
+      ...command(signal({ signal_id: "signal-after-loss", instrument: "ZW" })),
+      risk_budget: { max_portfolio_abs_size: 4, max_daily_loss_r: 1, max_weekly_loss_r: 2 },
+    });
+    assert.equal(blocked.risk.status, "BLOCK");
+    assert.equal(blocked.targets.target_positions.length, 0);
+    assert.equal(blocked.intents.order_intents.length, 0);
+    assert.ok(blocked.risk.allocation_evaluations[0].reason_codes.includes("DAILY_LOSS_R"));
+    await insertFinalOutcome(database.pool, {
+      tradeId: "unproven-final-loss", intentId, resultR: -9, finalizedAtUtc: "2026-09-05T14:04:30.000Z", source: "manual_unverified",
+    });
+    const unproven = await database.pool.connect();
+    try {
+      const snapshot = await loadTheoreticalExposureAsOf(unproven, exposureRequest());
+      assert.equal(snapshot.loss_usage_availability, "UNAVAILABLE");
+      assert.equal(snapshot.availability, "PARTIAL");
+      assert.ok(snapshot.reason_codes.includes("THEORETICAL_FINAL_OUTCOME_PROVENANCE_UNAVAILABLE"));
+    } finally { unproven.release(); }
+  } finally {
+    await database.close();
+  }
+});
+
+test("realized-loss periods use documented UTC day and week boundaries", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async () => {
+  const database = await createTheoreticalTestDatabase();
+  try {
+    const repository = new PostgresPortfolioRiskRuntimeRepository({ pool: database.pool, initialized: Promise.resolve() });
+    const service = new PortfolioRiskRuntimeService({ repository, clock: { now: () => ({ utc: NOW }) } });
+    const first = await service.runPipeline(command(signal({ signal_id: "signal-utc-boundary" })));
+    const intentId = first.intents.order_intents[0].order_intent_id;
+    await insertFinalOutcome(database.pool, { tradeId: "prior-week-loss", intentId, resultR: -4, finalizedAtUtc: "2026-09-04T23:59:00.000Z" });
+    await insertFinalOutcome(database.pool, { tradeId: "current-week-loss", intentId, resultR: -1, finalizedAtUtc: "2026-09-07T00:01:00.000Z" });
+    const client = await database.pool.connect();
+    try {
+      const snapshot = await loadTheoreticalExposureAsOf(client, { ...exposureRequest(), as_of_utc: MONDAY });
+      assert.equal(snapshot.loss_usage_availability, "KNOWN");
+      assert.equal(snapshot.loss_usage.period_timezone, "UTC");
+      assert.equal(snapshot.loss_usage.daily_realized_r, -1);
+      assert.equal(snapshot.loss_usage.weekly_realized_r, -1);
+      assert.equal(snapshot.loss_usage.final_outcome_count, 2);
+    } finally { client.release(); }
+  } finally {
+    await database.close();
+  }
+});
+
+test("closed theoretical trade without a final outcome is unavailable only after its close", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async () => {
+  const database = await createTheoreticalTestDatabase();
+  try {
+    const repository = new PostgresPortfolioRiskRuntimeRepository({ pool: database.pool, initialized: Promise.resolve() });
+    const service = new PortfolioRiskRuntimeService({ repository, clock: { now: () => ({ utc: NOW }) } });
+    const first = await service.runPipeline(command(signal({ signal_id: "signal-missing-outcome" })));
+    await insertClosedTradeWithoutOutcome(database.pool, {
+      tradeId: "closed-without-outcome", intentId: first.intents.order_intents[0].order_intent_id, closedAtUtc: "2026-09-05T14:04:00.000Z",
+    });
+    const client = await database.pool.connect();
+    try {
+      const beforeClose = await loadTheoreticalExposureAsOf(client, { ...exposureRequest(), as_of_utc: "2026-09-05T14:03:00.000Z" });
+      assert.equal(beforeClose.loss_usage_availability, "KNOWN");
+      assert.equal(beforeClose.loss_usage.daily_realized_r, 0);
+      const afterClose = await loadTheoreticalExposureAsOf(client, exposureRequest());
+      assert.equal(afterClose.loss_usage_availability, "UNAVAILABLE");
+      assert.ok(afterClose.reason_codes.includes("THEORETICAL_CLOSED_TRADE_OUTCOME_UNAVAILABLE"));
+    } finally { client.release(); }
+  } finally {
+    await database.close();
+  }
+});
+
 function command(item, maxPortfolio = 4, asOf = NOW) {
   return {
     as_of_utc: asOf, account_id: "shadow-grains", portfolio_scope: "shadow-grains", execution_mode: "SHADOW",
@@ -139,4 +236,40 @@ function exposureRequest() {
 
 async function count(pool, table) {
   return Number((await pool.query(`SELECT count(*)::integer AS count FROM ${table}`)).rows[0].count);
+}
+
+async function insertFinalOutcome(pool, { tradeId, intentId, resultR, finalizedAtUtc, source = "theoretical_execution_engine" }) {
+  await pool.query(`INSERT INTO trades (
+      trade_id, portfolio_order_intent_id, status, side, quantity_planned, quantity_open, quantity_closed, opened_at, closed_at, raw
+    ) VALUES ($1,$2,'closed','long',1,0,1,'2026-09-05T14:01:00.000Z',$3,jsonb_build_object('source',$4::text))`, [tradeId, intentId, finalizedAtUtc, source]);
+  await pool.query(`INSERT INTO trade_fills (trade_fill_id, trade_id, side, quantity, price, filled_at, raw)
+    VALUES ($1,$2,'buy',1,100,'2026-09-05T14:01:00.000Z','{}'::jsonb),
+           ($3,$2,'sell',1,99,$4,'{}'::jsonb)`, [
+    `fill-entry:${tradeId}`, tradeId, `fill-exit:${tradeId}`, finalizedAtUtc,
+  ]);
+  await pool.query(`INSERT INTO trade_theoretical_execution_events
+    (theoretical_execution_event_id, portfolio_order_intent_id, trade_id, event_type, event_at_utc, payload, raw)
+    VALUES ($1,$2,$3,'entry_filled','2026-09-05T14:01:00.000Z','{}'::jsonb,'{}'::jsonb),
+           ($4,$2,$3,'target_hit',$5,'{}'::jsonb,'{}'::jsonb)
+    ON CONFLICT (theoretical_execution_event_id) DO NOTHING`, [
+    `event-entry:${tradeId}`, intentId, tradeId, `event-exit:${tradeId}`, finalizedAtUtc,
+  ]);
+  await pool.query(`INSERT INTO trade_outcomes (
+      trade_outcome_id, trade_id, revision, status, schema_version, engine_version, initial_risk_amount,
+      gross_realized_pnl, total_fees, net_realized_pnl, result_r, evidence_hash, evidence, calculated_at_utc, finalized_at_utc
+    ) VALUES ($1,$2,1,'final','test-outcome-v1','test-engine',100,-100,0,-100,$3,$4,'{}'::jsonb,$5,$5)`, [
+    `outcome:${tradeId}`, tradeId, resultR, `sha256:${tradeId.padEnd(64, "a").slice(0, 64)}`, finalizedAtUtc,
+  ]);
+}
+
+async function insertEntryEventWithoutTrade(pool, intentId) {
+  await pool.query(`INSERT INTO trade_theoretical_execution_events
+    (theoretical_execution_event_id, portfolio_order_intent_id, event_type, event_at_utc, payload, raw)
+    VALUES ('event-entry:theory-final-loss',$1,'entry_filled','2026-09-05T14:01:00.000Z','{}'::jsonb,'{}'::jsonb)`, [intentId]);
+}
+
+async function insertClosedTradeWithoutOutcome(pool, { tradeId, intentId, closedAtUtc }) {
+  await pool.query(`INSERT INTO trades (
+      trade_id, portfolio_order_intent_id, status, side, quantity_planned, quantity_open, quantity_closed, opened_at, closed_at, raw
+    ) VALUES ($1,$2,'closed','long',1,0,1,'2026-09-05T14:01:00.000Z',$3,'{"source":"theoretical_execution_engine"}'::jsonb)`, [tradeId, intentId, closedAtUtc]);
 }
