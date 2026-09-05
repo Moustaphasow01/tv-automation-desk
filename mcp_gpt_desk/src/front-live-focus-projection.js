@@ -1,3 +1,5 @@
+import { buildLiveFocusDashboard } from "./front-live-focus-dashboard.js";
+
 // Human confirmation is not an execution outcome. After CONFIRMED, the dossier
 // remains active so the operator can see the theoretical entry/fill/exit follow-up.
 const TERMINAL_GATE_STATES = new Set(["REJECTED", "EXPIRED", "CANCELLED", "CANCELED"]);
@@ -23,6 +25,7 @@ export function buildLiveFocusProjection({ live, marketContext, health, nowIso }
     whyNoTrade,
     operatorJourneyState: journeyState({ tradeCards, observedOpportunities, snapshot, session, whyNoTrade, nowIso }),
     tradeCards,
+    dashboard: buildLiveFocusDashboard({ tradeCards, observedOpportunities, nowIso }),
     selectedTrade: tradeCards.find((card) => !card.terminal) || null,
     observedOpportunities,
     catalysts: rows(brief?.currentCatalysts),
@@ -78,6 +81,9 @@ function buildTradeCards(live, nowIso) {
       lastUpdatedAt: theoretical?.lastUpdatedAt || intent.updatedAt || nowIso,
       operatorState: gateStatus,
       theoreticalState: theoretical?.status || "AWAITING_ENTRY",
+      theoreticalTradeStatus: theoretical?.tradeStatus || null,
+      closedAt: theoretical?.exitAt || null,
+      entryFilledAt: theoretical?.entryFilledAt || null,
       strategyProposedPlan: signal?.proposedTradePlan || null,
       contextAdjustedPlan: signal?.contextAdjustedTradePlan || null,
       riskAuthorizedPlan: intent.executionTerms || null,

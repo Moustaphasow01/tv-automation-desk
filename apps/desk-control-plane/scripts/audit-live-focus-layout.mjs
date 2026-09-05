@@ -1,4 +1,4 @@
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -16,6 +16,10 @@ const viewports = [
   { width: 320, height: 640 },
 ];
 const targetUrl = process.argv[2] || "http://127.0.0.1:8096/#/live?focus=1";
+const projectionTest = process.env.DESK_FOCUS_DASHBOARD_PROJECTION_TEST === "1";
+if (projectionTest && !["localhost", "127.0.0.1"].includes(new URL(targetUrl).hostname)) {
+  throw new Error("Read-model preview is a local test only, never a deployed-runtime certificate.");
+}
 const outputRoot = resolve(process.env.DESK_LAYOUT_OUTPUT || "output/playwright/live-focus-layout");
 mkdirSync(outputRoot, { recursive: true });
 const browser = await chromium.launch({
@@ -26,18 +30,24 @@ const results = [];
 const networkErrors = [];
 const pageErrors = [];
 let interactions;
+let publishedDashboard;
 try {
   const context = await browser.newContext({ timezoneId: "Europe/Paris" });
   const page = await context.newPage();
+  if (projectionTest) await installDashboardProjectionTest(page);
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("response", (response) => {
     if (response.status() >= 400) networkErrors.push({ path: new URL(response.url()).pathname, status: response.status() });
+    if (new URL(response.url()).pathname === "/front-api/v1/views/live-focus" && response.ok()) {
+      response.json().then((body) => { publishedDashboard = body.data?.dashboard; }).catch(() => undefined);
+    }
   });
   await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 90_000 });
   await loginIfNeeded(page);
   await page.locator(".live-focus__queue").waitFor({ state: "visible", timeout: 60_000 });
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     results.push(await page.evaluate(auditLiveFocusLayout, viewport));
     await page.screenshot({ path: resolve(outputRoot, `live-focus-${viewport.width}x${viewport.height}.png`) });
@@ -45,9 +55,11 @@ try {
   }
   await page.setViewportSize({ width: 1366, height: 768 });
   interactions = await checkJournalInteractions(page);
+  interactions.dashboard = await checkDashboardInteractions(page);
+  interactions.failures.push(...interactions.dashboard.failures);
   const accessibility = await new AxeBuilder({ page }).include(".live-focus").analyze();
   const serious = accessibility.violations.filter((violation) => ["serious", "critical"].includes(violation.impact));
-  const report = { target: targetUrl, generatedAt: new Date().toISOString(), results, interactions, pageErrors, networkErrors,
+  const report = { target: targetUrl, evidenceMode: projectionTest ? "LOCAL_NEW_PROJECTION_WITH_REAL_READONLY_BFF_DATA" : "UNMODIFIED_RUNTIME", generatedAt: new Date().toISOString(), results, interactions, pageErrors, networkErrors, publishedDashboard,
     accessibility: { violations: accessibility.violations.map(({ id, impact, nodes }) => ({ id, impact, count: nodes.length })), seriousCritical: serious.length } };
   writeFileSync(resolve(outputRoot, "live-focus-layout-audit.json"), JSON.stringify(report, null, 2));
   const failures = results.flatMap((result) => result.failures.map((failure) => `${result.viewport.width}x${result.viewport.height}: ${failure}`));
@@ -63,6 +75,30 @@ try {
   process.exitCode = 1;
 } finally {
   await browser.close();
+}
+
+// Test harness only: apply the new reporting projection to real read-only BFF
+// records while the deployed API still lacks dashboard/closedAt. No invented
+// trade, result or command; no application runtime fallback is installed.
+async function installDashboardProjectionTest(page) {
+  const { buildLiveFocusDashboard } = await import("../../../mcp_gpt_desk/src/front-live-focus-dashboard.js");
+  await page.route("**/front-api/v1/views/live-focus**", async (route) => {
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({ response });
+    const envelope = await response.json();
+    const endpoint = new URL(route.request().url());
+    endpoint.pathname = "/front-api/v1/views/live-trading";
+    const live = await page.request.get(endpoint.toString());
+    if (!live.ok()) throw new Error("Canonical theoretical rows unavailable for local projection test.");
+    const rows = (await live.json()).data.theoreticalExecution.rows;
+    const cards = envelope.data.tradeCards.map((card) => {
+      const theoretical = rows.find((row) => row.portfolioOrderIntentId === card.orderIntentId);
+      return { ...card, closedAt: theoretical?.exitAt || null, theoreticalTradeStatus: theoretical?.tradeStatus || null };
+    });
+    envelope.data.dashboard = buildLiveFocusDashboard({ tradeCards: cards, observedOpportunities: envelope.data.observedOpportunities,
+      nowIso: new Date().toISOString() });
+    await route.fulfill({ response, json: envelope });
+  });
 }
 
 async function loginIfNeeded(page) {
@@ -120,6 +156,38 @@ async function checkJournalInteractions(page) {
   return { publishedTickets: count, filters: true, details: count > 0, failures };
 }
 
+async function checkDashboardInteractions(page) {
+  const failures = [];
+  const periodChecks = [];
+  const detail = page.locator(".live-focus__dashboard-details");
+  if (!(await detail.count())) return { availability: "BACKEND_DASHBOARD_NOT_PUBLISHED", failures };
+  const body = page.locator(".live-focus__body");
+  const initial = await body.evaluate((element) => element.clientHeight);
+  for (const [key, label] of [["WEEK", "Semaine"], ["MONTH", "Mois"], ["TODAY", "Aujourd’hui"], ["TOTAL", "Total"]]) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-pressed", "true");
+    if (await body.evaluate((element) => element.clientHeight) < initial - 2) failures.push(`Période ${label}: panneaux comprimés.`);
+    const value = await page.locator('[data-metric="realized-r"] dd > span').innerText();
+    const r = publishedDashboard?.periods[key].results.realizedR;
+    const result = publishedDashboard?.periods[key].results;
+    const emptyLabel = result?.count === 0 && result?.missingR === 0 ? "Aucune clôture" : "Non publié";
+    const expected = r === null ? emptyLabel : `${r > 0 ? "+" : ""}${new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(r)} R`;
+    if (publishedDashboard && value !== expected) failures.push(`Période ${label}: R affiché différent du BFF.`);
+    periodChecks.push({ key, value, expected: publishedDashboard ? expected : null });
+  }
+  await detail.locator("summary").click();
+  await page.screenshot({ path: resolve(outputRoot, "live-focus-dashboard-expanded.png"), fullPage: true });
+  if (await body.evaluate((element) => element.clientHeight) < initial - 2) failures.push("Dashboard déplié: panneaux comprimés.");
+  await page.locator(".live-focus__footer").scrollIntoViewIfNeeded();
+  const scroll = await page.evaluate(() => ({ top: window.scrollY, height: document.documentElement.scrollHeight, viewport: innerHeight }));
+  if (scroll.height > scroll.viewport + 2 && scroll.top <= 0) failures.push("Défilement général inaccessible après expansion.");
+  await page.screenshot({ path: resolve(outputRoot, "live-focus-dashboard-expanded-bottom.png") });
+  await detail.locator("summary").click();
+  await page.getByRole("button", { name: "Aujourd’hui", exact: true }).click();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  return { availability: "PUBLISHED", periodChecks, generalScroll: scroll, paneHeight: initial, failures };
+}
+
 function auditLiveFocusLayout(viewport) {
   const failures = [];
   const root = document.querySelector(".live-focus");
@@ -138,10 +206,11 @@ function auditLiveFocusLayout(viewport) {
     if (brief.right > decision.left || decision.right > journal.left) failures.push("Colonnes superposées ou journal non placé à droite.");
     if (Math.abs(journal.top - decision.top) > 2) failures.push("Journal repoussé sous le panneau central.");
     const track = rect(".live-focus__queue-track");
-    if (track.height < 150 || track.top > viewport.height) failures.push("Zone tickets comprimée ou sous le viewport.");
-    if (viewport.height >= 700 && document.documentElement.scrollHeight > viewport.height + 2) failures.push("Le cockpit desktop dépasse la fenêtre.");
-    if (viewport.height < 700 && !/auto|scroll/.test(getComputedStyle(document.documentElement).overflowY)) failures.push("Fenêtre basse: défilement de page bloqué.");
-    if (rect(".live-focus__calendar").bottom > viewport.height) failures.push("Calendrier inaccessible au premier écran.");
+    if (track.height < 200) failures.push("Zone tickets comprimée.");
+    if (rect(".live-focus__body").height < 550) failures.push("Panneaux opérateur comprimés sous le dashboard.");
+    if (!/auto|scroll/.test(getComputedStyle(document.documentElement).overflowY)) failures.push("Défilement général bloqué.");
+    const dashboard = rect(".live-focus__dashboard");
+    if (dashboard.height > 245) failures.push("Dashboard replié trop volumineux.");
   }
   const scrollEvidence = [];
   document.querySelectorAll("[data-focus-scroll]").forEach((element) => {

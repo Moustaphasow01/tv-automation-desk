@@ -107,6 +107,7 @@ test("Live Focus links trade cards to theoretical execution rows", () => {
       tradeStatus: "",
       latestEventAt: NOW,
       resultR: null,
+      exitAt: null,
       liveMark: { currentR: null },
       manualExecution: { status: "NOT_REPORTED", allowedActions: [] },
       outcomeAttribution: { status: "PENDING_OUTCOME" },
@@ -119,6 +120,9 @@ test("Live Focus links trade cards to theoretical execution rows", () => {
   assert.equal(projection.tradeCards[0].tradeId, "trade-tracked");
   assert.equal(projection.tradeCards[0].positionId, "position-tracked");
   assert.equal(projection.tradeCards[0].lifecycleLabel, "Entrée théorique surveillée");
+  assert.equal(projection.tradeCards[0].closedAt, null);
+  assert.equal(projection.dashboard.source, "THEORETICAL_BACKEND");
+  assert.equal(projection.dashboard.current.awaitingEntry, 1);
 });
 
 test("Live Focus keeps confirmed dossiers active while theoretical entry is still waiting", () => {

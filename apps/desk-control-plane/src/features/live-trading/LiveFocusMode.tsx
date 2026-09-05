@@ -13,7 +13,8 @@ import { gateTiming } from "./LiveHumanGate";
 import type { LiveTradingModel } from "./model";
 import { InstrumentChartPanel } from "./chart/LiveMarketChart";
 import { LiveFocusJournal, FocusQueueTimeline } from "./LiveFocusJournal";
-import { buildFocusDashboard, focusDashboardPeriodOptions, type LiveFocusDashboard, type LiveFocusDashboardPeriod } from "./focusDashboardModel";
+import { buildFocusDashboard, type LiveFocusDashboardPeriod } from "./focusDashboardModel";
+import { FocusDashboard } from "./FocusDashboard";
 import { buildFocusTradeTimeline, focusCardActionable, focusCardStatus, focusCardTerminal, focusExpirationLabel } from "./focusJournalModel";
 import { formatTradePlanPrice } from "./tradePlanFormat";
 import "./live-focus.css";
@@ -228,42 +229,6 @@ export function LiveFocusMode({ model, focus, busy, error, requestedScope, dashb
       {drawer === "chart" ? <FocusChartDrawer model={model} requestedScope={requestedScope} chartLoading={chartLoading} chartError={chartError} onScopeChange={onScopeChange} onClose={() => setDrawer(null)} /> : null}
     </div>
   );
-}
-
-function FocusDashboard({ dashboard, period, onPeriodChange }: { dashboard: LiveFocusDashboard; period: LiveFocusDashboardPeriod; onPeriodChange(period: LiveFocusDashboardPeriod): void }) {
-  return <section className="live-focus__dashboard" aria-labelledby="live-focus-dashboard-title">
-    <header className="live-focus__dashboard-head">
-      <div>
-        <small>TABLEAU DE BORD</small>
-        <h2 id="live-focus-dashboard-title">Chiffres clés du Desk</h2>
-        <span>{dashboard.windowLabel} · {dashboard.sourceLabel} · {dashboard.freshnessLabel}</span>
-      </div>
-      <div className="live-focus__dashboard-periods" role="group" aria-label="Filtrer les chiffres clés par période">
-        {focusDashboardPeriodOptions.map((option) => (
-          <button key={option.id} type="button" aria-pressed={period === option.id} onClick={() => onPeriodChange(option.id)}>
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </header>
-    <dl className="live-focus__dashboard-metrics">
-      {dashboard.metrics.map((metric) => (
-        <div key={metric.id} data-tone={metric.tone}>
-          <dt>{metric.label}</dt>
-          <dd>{metric.value}</dd>
-          <small>{metric.helper}</small>
-        </div>
-      ))}
-    </dl>
-    <div className="live-focus__dashboard-suggestions" aria-label="Suggestions de lecture du Desk">
-      {dashboard.suggestions.map((suggestion) => (
-        <article key={suggestion.id} data-tone={suggestion.tone}>
-          <strong>{suggestion.title}</strong>
-          <span>{suggestion.detail}</span>
-        </article>
-      ))}
-    </div>
-  </section>;
 }
 
 function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void }) {

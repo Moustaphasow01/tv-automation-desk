@@ -3379,6 +3379,7 @@ export type ReplayOverviewView = {
 };
 
 export type LiveFocusView = {
+  dashboard?: import("./focusDashboardContract").FocusDashboardContract;
   schemaVersion: "live_focus_view_v1";
   universe: string;
   asOf: string;
@@ -3474,6 +3475,9 @@ export type LiveFocusView = {
     expiresAt: string | null;
     operatorState: string;
     theoreticalState: string;
+    theoreticalTradeStatus?: string | null;
+    closedAt?: string | null;
+    entryFilledAt?: string | null;
     authorizedQuantity: number | null;
     riskAmount: number | null;
     expectedR: number | null;
