@@ -3,10 +3,14 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import { replayUsGrainsStrategySuiteV1, buildGrainMarketContext, adjudicateGrainSignal } from '../src/us-grains-strategy-suite.js';
+import { replayUsGrainsStrategySuiteV1, buildGrainMarketContext, adjudicateGrainSignal, US_GRAINS_STRATEGY_SUITE_VERSION } from '../src/us-grains-strategy-suite.js';
 import { simulateLimitSignalOutcome } from '../src/us-grains-strategy-engine.js';
 import { grainChicagoDate, isGrainsRth } from '../src/us-grains-data-quality.js';
 import { summarizeGrainsAuditLedger } from './lib/grains-audit-metrics.mjs';
+
+if (US_GRAINS_STRATEGY_SUITE_VERSION !== 'us_grains_strategy_suite_v1') {
+  throw new Error('LEGACY_GRAINS_AUDIT_VERSION_MISMATCH: reproduce the legacy audit from its pinned commit; use audit:grains:causal or grains:replay-context-theoretical for the causal suite.');
+}
 
 const [inputFile, outputFile, startDate, endDate] = process.argv.slice(2);
 if (!inputFile || !outputFile) throw new Error('Usage: node audit_us_grains_week.mjs <frozen-evidence.json> <report.json> <YYYY-MM-DD> <YYYY-MM-DD>');
