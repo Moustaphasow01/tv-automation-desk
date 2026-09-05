@@ -9,6 +9,9 @@ import { normalizeUtcIso } from "./desk-time-utils.js";
 import { normalizeDeskInstrumentScopes } from "./data-availability-policy.js";
 import { buildDevelopingVolumeProfile } from "./market-derived-features.js";
 import { AVERAGE_RANGE_LEGACY_VERSION, buildVolatilityIndicators, recentAverageRange as legacyRecentAverageRange, WILDER_ATR_14_VERSION } from "./market-volatility-indicators.js";
+import { lastSundayUtc, parisOffsetForDate } from "./market-feature-time.js";
+
+export { lastSundayUtc, parisOffsetForDate } from "./market-feature-time.js";
 
 export function normalizeOperationalQuery(args = {}, { requireMaster = false, requireThesis = false } = {}) {
   const required = ["strategy_id", "session", "mode", "trading_date", "run_id", "as_of_utc"];
@@ -1297,20 +1300,6 @@ export function replayWindowForSetup(setup, args = {}, pack = null, clock = new 
 
 export function publicReplayError(error) {
   return String(error?.message || error || "replay_failed").slice(0, 500);
-}
-
-export function parisOffsetForDate(dateText) {
-  const date = new Date(`${dateText}T12:00:00Z`);
-  const year = date.getUTCFullYear();
-  const dstStart = lastSundayUtc(year, 2);
-  const dstEnd = lastSundayUtc(year, 9);
-  return date >= dstStart && date < dstEnd ? "+02:00" : "+01:00";
-}
-
-export function lastSundayUtc(year, monthIndex) {
-  const date = new Date(Date.UTC(year, monthIndex + 1, 0, 12, 0, 0));
-  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
-  return date;
 }
 
 export const MARKET_FEATURE_ALGORITHMS = Object.freeze({

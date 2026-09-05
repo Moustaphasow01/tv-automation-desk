@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -22,6 +22,31 @@ describe("static quality guard", () => {
       const result = spawnGuard(fixtureRoot, path.join(fixtureRoot, "docs/engineering/static-quality-baseline.json"));
       assert.notEqual(result.status, 0);
       assert.match(result.stderr, /src\/oversized\.js has 610 lines; allowed 600/);
+    } finally {
+      await rm(fixtureRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("counts direct CLI imports as reachable while retaining real orphan detection", async () => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "desk-static-quality-cli-"));
+    try {
+      await writeFixture(fixtureRoot, { oversized: false });
+      await mkdir(path.join(fixtureRoot, "mcp_gpt_desk/scripts"), { recursive: true });
+      await writeFile(path.join(fixtureRoot, "mcp_gpt_desk/scripts/use-cli.mjs"), "import '../src/cli.js';\n");
+      await writeFile(path.join(fixtureRoot, "mcp_gpt_desk/src/cli.js"), "export const cli = true;\n");
+      await writeFile(path.join(fixtureRoot, "src/orphan.js"), "export const orphan = true;\n");
+      await writeFile(path.join(fixtureRoot, "src/types.d.ts"), "export type Orphan = string;\n");
+      const result = spawnGuard(fixtureRoot, path.join(fixtureRoot, "docs/engineering/static-quality-baseline.json"));
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.match(result.stdout, /"possibly_dead_file_count": 1/);
+
+      const baselinePath = path.join(fixtureRoot, "docs/engineering/static-quality-baseline.json");
+      const baseline = JSON.parse(await readFile(baselinePath, "utf8"));
+      baseline.aggregate_budgets.possibly_dead_file_count = 0;
+      await writeFile(baselinePath, JSON.stringify(baseline));
+      const rejected = spawnGuard(fixtureRoot, baselinePath);
+      assert.notEqual(rejected.status, 0);
+      assert.match(rejected.stderr, /possibly dead files: 1; allowed 0/);
     } finally {
       await rm(fixtureRoot, { force: true, recursive: true });
     }

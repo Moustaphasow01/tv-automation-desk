@@ -11,12 +11,12 @@ const sourceExtensions = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".css"])
 const functionExtensions = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx"]);
 const ignoredSegments = new Set([".git", ".local", ".worktrees", "dist", "node_modules", "output", "test", "generated", "__pycache__"]);
 const sourceRoots = ["src", "mcp_gpt_desk/src", "packages"];
-const cliDrivenEntrypoints = new Set([
+const fixedEntrypoints = [
   "mcp_gpt_desk/src/agent-runtime-postgres-repository.js",
   "mcp_gpt_desk/src/agent-runtime-supervisor.js",
   "mcp_gpt_desk/src/agent-runtime-supervisor-host.js",
   "mcp_gpt_desk/src/full-system-dress-rehearsal-certifier.js",
-]);
+];
 const standards = {
   max_file_lines: 600,
   max_function_lines: 60,
@@ -27,6 +27,10 @@ const standards = {
 const sourceFiles = [];
 for (const sourceRoot of sourceRoots) await collectSourceFiles(path.join(root, sourceRoot), sourceFiles);
 const sourceFileSet = new Set(sourceFiles.map(normalize));
+const cliDrivenEntrypoints = new Set([
+  ...fixedEntrypoints,
+  ...(await discoverCliEntrypoints(path.join(root, "mcp_gpt_desk/scripts"), sourceFileSet)),
+]);
 const importGraph = await buildImportGraph(sourceFiles);
 const metrics = await measureStaticQuality(sourceFiles, importGraph);
 
@@ -122,7 +126,7 @@ async function measureStaticQuality(files, graph) {
   const inbound = inboundCounts(graph);
   const possiblyDeadFiles = fileMetrics
     .map((file) => file.path)
-    .filter((file) => !entrypoint(file) && (inbound.get(file) || 0) === 0)
+    .filter((file) => !file.endsWith(".d.ts") && !entrypoint(file) && (inbound.get(file) || 0) === 0)
     .sort();
   return {
     checked_files: fileMetrics.length,
@@ -234,6 +238,37 @@ function entrypoint(file) {
     || /(^|\/)codegen\/.+\.mjs$/.test(file);
 }
 
+async function discoverCliEntrypoints(directory, sourceSet) {
+  const scripts = [];
+  await collectScriptFiles(directory, scripts);
+  const entrypoints = [];
+  for (const script of scripts) {
+    const content = await readFile(script, "utf8");
+    for (const specifier of parseSpecifiers(content)) {
+      if (!specifier.startsWith(".")) continue;
+      const target = resolveExistingSourcePathForSet(path.resolve(path.dirname(script), specifier), sourceSet);
+      if (target) entrypoints.push(relative(target));
+    }
+  }
+  return entrypoints;
+}
+
+async function collectScriptFiles(directory, files) {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      await collectScriptFiles(path.join(directory, entry.name), files);
+    } else if (entry.isFile() && [".js", ".mjs", ".cjs"].includes(path.extname(entry.name))) {
+      files.push(path.join(directory, entry.name));
+    }
+  }
+}
+
 function parseSpecifiers(content) {
   const pattern = /\b(?:import|export)\s+(?:[^'"]*?\s+from\s+)?["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)|\brequire\(\s*["']([^"']+)["']\s*\)/g;
   return [...content.matchAll(pattern)].map((match) => match[1] || match[2] || match[3]).filter(Boolean);
@@ -246,15 +281,19 @@ function resolveLocalSpecifier(file, specifier) {
 }
 
 function resolveExistingSourcePath(base) {
+  return resolveExistingSourcePathForSet(base, sourceFileSet);
+}
+
+function resolveExistingSourcePathForSet(base, sourceSet) {
   const extension = path.extname(base);
-  if (sourceExtensions.has(extension) && sourceFileSet.has(normalize(base))) return base;
+  if (sourceExtensions.has(extension) && sourceSet.has(normalize(base))) return base;
   for (const ext of sourceExtensions) {
     const candidate = `${base}${ext}`;
-    if (sourceFileSet.has(normalize(candidate))) return candidate;
+    if (sourceSet.has(normalize(candidate))) return candidate;
   }
   for (const ext of sourceExtensions) {
     const candidate = path.join(base, `index${ext}`);
-    if (sourceFileSet.has(normalize(candidate))) return candidate;
+    if (sourceSet.has(normalize(candidate))) return candidate;
   }
   return null;
 }
