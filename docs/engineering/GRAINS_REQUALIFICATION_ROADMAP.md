@@ -101,3 +101,18 @@ Implémentation locale : `a38ed8b`, garde du diagnostic legacy : `40bac0d`. Rapp
 - Comparaison figée 31 août–4 septembre : 100 détections brutes ; les 28 signaux live sont retrouvés par famille/sens/bougie source, sans prétendre que leur plan/cycle est inchangé. Les données historiques ne prouvent pas la connaissance préalable de leurs 42 événements agricoles.
 
 TD2-429 reste **en cours** : exposition entre lots, application effective des réductions dans Risk, manifeste complet et requalification des artefacts sont les prochaines conditions de sortie. La restauration de provenance/coverage macro relève également de TD2-426. Aucun merge main ou déploiement VPS dans cette tranche.
+
+### Cinq lots et analyste front parallèle — 5 septembre, tranche suivante
+
+Référence courante : `reports/research/GRAINS_FIVE_LOTS_PROGRESS_20260905.md` ; baseline de tranche `16f6c16a44a8e5f489776270f54193a67f910809`. Les paragraphes précédents restent les preuves de leurs versions, pas l'état final de cette tranche.
+
+Correctifs et outils versionnés localement : `56b0b4a`. Intégration PostgreSQL complète : 34/34, zéro exclusion ; dernier correctif de fixture Human Gate relancé séparément : 4/4 exposition.
+
+- TD2-426 : 58 événements NASS récupérés officiellement avec leur source originale. Couverture historique complète non établie ; garde partagé live/replay sans lookahead, sans calendrier vide implicite. Connaissance absente → WAIT après publication du signal brut.
+- TD2-429 : lecture PostgreSQL atomique de l'exposition/réservations, verrou de compte, idempotence et réductions de taille vérifiés. Aucun FLAT/flatten implicite sur refus Risk. Les pertes jour/semaine non publiées restent un blocage explicite si leur plafond est demandé.
+- Nouveau replay local utilisant le vrai bus, le service canonique et le suivi théorique partagé, bases isolées et manifeste complet : semaine 31 août–4 septembre, 100 signaux publiés, 100 WAIT `AGRI_CALENDAR_KNOWLEDGE_UNPROVEN`, puis expiration ; zéro Human Gate, zéro fill, zéro ordre provider. Ce résultat ne qualifie pas la performance.
+- Parcours positif PostgreSQL sur jeu de contrôle : signal → Context → Portfolio/Risk → OrderIntent → Human Gate non confirmé → entrée limite théorique → target. Aucun ordre physique. Le test contrôlé et les résultats historiques restent distincts.
+- Suites locales : backend 1 374 pass / 1 389, 0 fail, 15 exclusions conditionnelles ; domaine 486/486 ; replay/adaptateur PostgreSQL 8/8 sans exclusions ; autres tests PostgreSQL exposition/pipeline indépendants pass. Focus 15/15 et Telegram 14/14 sans appel réel. Architecture PASS ; dettes statique/runtime toujours signalées.
+- TD2-430 : deux analyses indépendantes de Live Focus et plan ciblé livrés, pour supprimer les effets décoratifs concurrents et clarifier la décision sans déplacer le rail de tickets validé. Aucun fichier frontend modifié, aucune nouvelle preuve visuelle revendiquée.
+
+TD2-426/429/427/430/428 ne sont pas clôturés globalement. La prochaine qualification exige une preuve de calendrier et des policies/sources comparables ; le marché fermé n'autorise pas à annoncer un desk prêt. Pas de merge main ni de déploiement VPS de cette tranche non qualifiée.
