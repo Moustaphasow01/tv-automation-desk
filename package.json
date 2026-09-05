@@ -12,6 +12,7 @@
     "pretest:e2e": "VITE_DESK_API_KEY=e2e-operator-key vite build --mode development",
     "test:e2e": "playwright test",
     "test:stack": "bash scripts/stack/test_real_stack.sh",
+    "test:grains:postgres": "node --input-type=module -e \"process.env.RUN_POSTGRES_TESTS='1'; await import('./mcp_gpt_desk/test/theoretical_execution_postgres.test.js');\"",
     "gate:demo-paper": "node scripts/stack/check_demo_paper_gate.mjs",
     "gate:vnext-operator": "node scripts/stack/check_vnext_operator_e2e.mjs",
     "gate:demo-paper-release": "node scripts/stack/check_demo_paper_release_gate.mjs",

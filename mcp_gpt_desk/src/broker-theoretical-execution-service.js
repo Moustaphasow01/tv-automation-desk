@@ -24,7 +24,7 @@ export async function processTheoreticalExecution(service, {
   const entries = await processTheoreticalEntries(scopedService, { entryLimit, ...scope });
   const exits = await processTheoreticalExits(scopedService, { exitLimit, ...scope });
   const backlog = typeof scopedService.repository.theoreticalExecutionBacklog === "function"
-    ? await scopedService.repository.theoreticalExecutionBacklog(scope)
+    ? await scopedService.repository.theoreticalExecutionBacklog({ ...scope, now: scopedService.now() })
     : null;
   const materialized = countMaterialized(entries, ["fill_entry", "expire_entry"])
     + countMaterialized(exits, ["fill_exit", "review_exit"]);
@@ -150,11 +150,11 @@ async function persistTheoreticalEntryAction(service, evaluated) {
 
 async function processTheoreticalExits(service, { exitLimit, portfolioOrderIntentIds }) {
   const openTrades = typeof service.repository.listTheoreticalOpenTrades === "function"
-    ? await service.repository.listTheoreticalOpenTrades({ limit: exitLimit, portfolioOrderIntentIds })
+    ? await service.repository.listTheoreticalOpenTrades({ limit: exitLimit, portfolioOrderIntentIds, now: service.now() })
     : [];
   const exits = [];
   for (const trade of openTrades) {
-    const candle = await service.repository.latestClosedCandleForTrade(trade);
+    const candle = await service.repository.latestClosedCandleForTrade(trade, { now: service.now() });
     const evaluated = evaluateTheoreticalTradeExit({ trade, candle });
     exits.push(await persistTheoreticalExitAction(service, evaluated));
   }
@@ -167,8 +167,7 @@ async function persistTheoreticalExitAction(service, evaluated) {
   }
   if (evaluated.action === "review_exit") {
     const persisted = await service.repository.recordTheoreticalReviewRequired({ result: evaluated, now: service.now() });
-    const cursorProgress = await advanceExitCursor(service, evaluated);
-    return { ...evaluated, persisted, cursor_progress: cursorProgress };
+    return { ...evaluated, persisted };
   }
   const cursorProgress = await advanceExitCursor(service, evaluated);
   return cursorProgress ? { ...evaluated, cursor_progress: cursorProgress } : evaluated;

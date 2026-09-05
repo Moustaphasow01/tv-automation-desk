@@ -361,7 +361,7 @@ export class PostgresBrokerExecutionRepository {
   async listTheoreticalOpenTrades({ limit = 100, portfolioOrderIntentIds = null } = {}) {
     return listTheoreticalOpenTradesRepository(this, { limit, portfolioOrderIntentIds });
   }
-  async latestClosedCandleForTrade(trade) { return latestTheoreticalClosedCandleForTrade(this, trade); }
+  async latestClosedCandleForTrade(trade, options = {}) { return latestTheoreticalClosedCandleForTrade(this, trade, options); }
   async advanceTheoreticalTradeCursor(input) { return advanceTheoreticalTradeCursorRepository(this, input); }
   async theoreticalExecutionBacklog(input = {}) { return theoreticalExecutionBacklogRepository(this, input); }
   async recordTheoreticalExitFill({ result, now }) { return recordTheoreticalExitFillRepository(this, { result, now }); }

@@ -22,15 +22,8 @@ export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, con
   const candleTime = timestamp(candle?.timestamp_utc || candle?.time || now);
   const expiresAt = timestamp(intent.expires_at);
   if (expiresAt && candleTime && expiresAt <= candleTime) {
-    return {
-      action: "expire_entry",
-      status: "EXPIRED",
-      reason: "ORDER_INTENT_EXPIRED",
-      event_at_utc: expiresAt.toISOString(),
-      order_intent_id: intent.order_intent_id,
-      portfolio_order_intent_id: portfolioOrderIntentId,
-      engine_version: THEORETICAL_EXECUTION_ENGINE_VERSION,
-    };
+    return candle?.theoretical_window_complete === true ? expiredEntry(intent, expiresAt)
+      : noAction("ENTRY_WINDOW_DATA_INCOMPLETE", { order_intent_id: intent.order_intent_id, portfolio_order_intent_id: portfolioOrderIntentId });
   }
   if (!candle) return noAction("CANDLE_MISSING", { order_intent_id: intent.order_intent_id, portfolio_order_intent_id: portfolioOrderIntentId });
   const setup = entryIntentAsSimulatorSetup({ intent, decision, contract });
@@ -61,6 +54,13 @@ export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, con
       engine_version: THEORETICAL_EXECUTION_ENGINE_VERSION,
     };
   }
+  if (expiresAt && timestamp(now) >= expiresAt && candle.theoretical_window_complete === true) {
+    return expiredEntry(intent, expiresAt);
+  }
+  if (expiresAt && timestamp(now) >= expiresAt && candle.theoretical_window_complete === false) {
+    return noAction("ENTRY_WINDOW_DATA_INCOMPLETE", { order_intent_id: intent.order_intent_id,
+      portfolio_order_intent_id: portfolioOrderIntentId, status: "REVIEW_REQUIRED" });
+  }
   return noAction(outcome.reason || "ENTRY_NOT_FILLED", {
     order_intent_id: intent.order_intent_id,
     portfolio_order_intent_id: portfolioOrderIntentId,
@@ -68,6 +68,15 @@ export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, con
     candle: projectCandle(candle),
     simulator_outcome: outcome,
   });
+}
+
+function expiredEntry(intent, expiresAt) {
+  return {
+    action: "expire_entry", status: "EXPIRED", reason: "ORDER_INTENT_EXPIRED",
+    event_at_utc: expiresAt.toISOString(), order_intent_id: intent.order_intent_id,
+    portfolio_order_intent_id: intent.portfolio_order_intent_id || null,
+    engine_version: THEORETICAL_EXECUTION_ENGINE_VERSION,
+  };
 }
 
 export function evaluateTheoreticalTradeExit({ trade = {}, candle = null, policy = THEORETICAL_ORDER_POLICY } = {}) {

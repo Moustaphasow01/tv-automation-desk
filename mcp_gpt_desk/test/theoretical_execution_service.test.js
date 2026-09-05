@@ -14,6 +14,17 @@ const manualEnvironment = brokerExecutionEnvironment({
   DESK_NINJA_KILL_SWITCH: "true",
 });
 
+test("nullable canonical prices and units do not become a false zero", () => {
+  const result = portfolioLineageToTheoreticalEntryCandidate({ portfolio_order_intent_id: "nullable",
+    quantity: 1, tick_size: 0.25, point_value: 50,
+    payload: { instrument: "ZC", action: "BUY", entry: { price: null, calculation_price: 100 } },
+    approved_trade_plan: { units: { point_value: null, tick_size: null }, stop: { price: 95 }, targets: [{ price: 110 }] },
+  });
+  assert.equal(result.limit_price, 100);
+  assert.equal(result.point_value, 50);
+  assert.equal(result.tick_size, 0.25);
+});
+
 test("service does not fill a theoretical LIMIT entry before the price touches", async () => {
   const repository = new TheoreticalFakeRepository({
     entryCandle: candle({ low: 100.25 }),

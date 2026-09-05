@@ -1,5 +1,6 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { materializeTradeOutcome } from "./broker-trade-outcome-repository.js";
+export { latestClosedCandleForIntent, latestClosedCandleForTrade } from "./broker-theoretical-candle-repository.js";
 
 export async function listTheoreticalEntryCandidates(repository, { limit = 100, portfolioOrderIntentIds = null } = {}) {
   await repository.ready();
@@ -109,7 +110,10 @@ export async function listTheoreticalEntryCandidates(repository, { limit = 100, 
           candidate.expiry_date DESC NULLS LAST
         LIMIT 1
       ) c ON true
-      WHERE l.status = 'READY'
+      WHERE (l.status = 'READY' OR (
+          l.status = 'EXPIRED' AND g.status = 'EXPIRED'
+          AND g.payload->>'expired_by' = 'theoretical_execution_sweeper'
+        ))
         AND ($2::text[] IS NULL OR l.portfolio_order_intent_id = ANY($2::text[]))
         AND COALESCE((l.payload #>> '{protection,ready}')::boolean, true) = true
         AND l.quantity > 0
@@ -223,40 +227,17 @@ export async function expireStalePortfolioHumanGates(repository, { limit = 200, 
   }
 }
 
-export async function latestClosedCandleForIntent(repository, intent, { now = null } = {}) {
-  await repository.ready();
-  const upperBound = earliestIso([
-    intent.expires_at,
-    now,
-  ]);
-  const candles = await rows(repository.pool, `SELECT mc.*
-      FROM market_candles mc
-      JOIN market_feeds mf ON mf.feed_id = mc.feed_id
-      WHERE mf.instrument_code = $1
-        AND mc.timeframe = '1'
-        AND mc.is_closed = true
-        AND mc.timestamp_utc > $2::timestamptz
-        AND ($3::timestamptz IS NULL OR mc.timestamp_utc <= $3::timestamptz)
-      ORDER BY mc.timestamp_utc ASC
-      LIMIT 500`, [
-    intent.contract_instrument_code || intent.instrument_code,
-    intent.requested_at,
-    upperBound,
-  ]);
-  return candles.find((candle) => intentEntryTouched(intent, candle)) || candles.at(-1) || null;
-}
-
 export async function recordTheoreticalEntryFill(repository, { result, now }) {
   await repository.ready();
   const client = await repository.pool.connect();
   try {
     await client.query("BEGIN");
-    const existing = await latestTheoreticalEntryFill(client, {
+    const intent = await lockedTheoreticalIntent(client, result);
+    const existing = await latestTheoreticalEntryTerminal(client, {
       orderIntentId: legacyOrderIntentId(result),
       portfolioOrderIntentId: portfolioOrderIntentId(result),
     });
     if (existing) return await commitValue(client, { event: existing, idempotent: true });
-    const intent = await lockedTheoreticalIntent(client, result);
     const decision = intent.trade_decision_id
       ? await one(client, "SELECT * FROM trade_decisions WHERE trade_decision_id = $1", [intent.trade_decision_id])
       : candidateDecisionFromPortfolioIntent(intent);
@@ -288,12 +269,12 @@ export async function recordTheoreticalEntryExpired(repository, { result, now })
   const client = await repository.pool.connect();
   try {
     await client.query("BEGIN");
-    const existing = await latestTheoreticalEntryExpired(client, {
+    const intent = await lockedTheoreticalIntent(client, result);
+    const existing = await latestTheoreticalEntryTerminal(client, {
       orderIntentId: legacyOrderIntentId(result),
       portfolioOrderIntentId: portfolioOrderIntentId(result),
     });
     if (existing) return await commitValue(client, { event: existing, idempotent: true });
-    const intent = await lockedTheoreticalIntent(client, result);
     const eventAt = result.event_at_utc || now;
     await expireTheoreticalIntent(client, intent);
     const event = await insertTheoreticalEvent(client, {
@@ -314,7 +295,7 @@ export async function recordTheoreticalEntryExpired(repository, { result, now })
   }
 }
 
-export async function listTheoreticalOpenTrades(repository, { limit = 100, portfolioOrderIntentIds = null } = {}) {
+export async function listTheoreticalOpenTrades(repository, { limit = 100, portfolioOrderIntentIds = null, now = new Date().toISOString() } = {}) {
   await repository.ready();
   const bounded = boundLimit(limit);
   const hasPortfolioScope = Array.isArray(portfolioOrderIntentIds);
@@ -327,9 +308,11 @@ export async function listTheoreticalOpenTrades(repository, { limit = 100, portf
       FROM trades t
       LEFT JOIN broker_contracts c ON c.broker_contract_id = t.broker_contract_id
       WHERE t.status IN ('open','scaling','protected')
+        AND t.raw->>'source' = 'theoretical_execution_engine'
         AND t.quantity_open > 0
         AND t.current_stop_price IS NOT NULL
         AND t.current_target_price IS NOT NULL
+        AND COALESCE(t.raw->>'theoretical_review_required', 'false') <> 'true'
         AND ($2::text[] IS NULL OR t.portfolio_order_intent_id = ANY($2::text[]))
         AND EXISTS (
           SELECT 1
@@ -339,11 +322,12 @@ export async function listTheoreticalOpenTrades(repository, { limit = 100, portf
             AND pending_candle.timeframe = '1'
             AND pending_candle.is_closed = true
             AND pending_candle.timestamp_utc > COALESCE(t.theoretical_cursor_at_utc, t.opened_at)
+            AND pending_candle.timestamp_utc + interval '1 minute' <= $3::timestamptz
         )
       ORDER BY COALESCE(t.theoretical_cursor_at_utc, t.opened_at) ASC NULLS FIRST,
         t.opened_at ASC NULLS FIRST,
         t.trade_id ASC
-      LIMIT $1`, [bounded, hasPortfolioScope ? scopedPortfolioIds : null]);
+      LIMIT $1`, [bounded, hasPortfolioScope ? scopedPortfolioIds : null, now]);
 }
 
 export async function advanceTheoreticalTradeCursor(repository, { tradeId, candleTimestampUtc } = {}) {
@@ -369,7 +353,7 @@ export async function advanceTheoreticalTradeCursor(repository, { tradeId, candl
     : { advanced: false, reason: "CURSOR_ALREADY_ADVANCED_OR_TRADE_CLOSED", trade_id: trade, theoretical_cursor_at_utc: cursor };
 }
 
-export async function theoreticalExecutionBacklog(repository, { portfolioOrderIntentIds = null } = {}) {
+export async function theoreticalExecutionBacklog(repository, { portfolioOrderIntentIds = null, now = new Date().toISOString() } = {}) {
   await repository.ready();
   const hasPortfolioScope = Array.isArray(portfolioOrderIntentIds);
   const scopedPortfolioIds = normalizePortfolioOrderIntentIds(portfolioOrderIntentIds);
@@ -384,39 +368,25 @@ export async function theoreticalExecutionBacklog(repository, { portfolioOrderIn
             AND pending_candle.timeframe = '1'
             AND pending_candle.is_closed = true
             AND pending_candle.timestamp_utc > COALESCE(t.theoretical_cursor_at_utc, t.opened_at)
+            AND pending_candle.timestamp_utc + interval '1 minute' <= $2::timestamptz
         )))::integer AS due_open_trades,
         min(COALESCE(t.theoretical_cursor_at_utc, t.opened_at)) AS oldest_cursor_at_utc,
         max(COALESCE(t.theoretical_cursor_at_utc, t.opened_at)) AS newest_cursor_at_utc
       FROM trades t
       LEFT JOIN broker_contracts c ON c.broker_contract_id = t.broker_contract_id
       WHERE t.status IN ('open','scaling','protected')
+        AND t.raw->>'source' = 'theoretical_execution_engine'
         AND t.quantity_open > 0
         AND t.current_stop_price IS NOT NULL
         AND t.current_target_price IS NOT NULL
-        AND ($1::text[] IS NULL OR t.portfolio_order_intent_id = ANY($1::text[]))`, [hasPortfolioScope ? scopedPortfolioIds : null]);
+        AND COALESCE(t.raw->>'theoretical_review_required', 'false') <> 'true'
+        AND ($1::text[] IS NULL OR t.portfolio_order_intent_id = ANY($1::text[]))`, [hasPortfolioScope ? scopedPortfolioIds : null, now]);
   return {
     eligible_open_trades: Number(row?.eligible_open_trades || 0),
     due_open_trades: Number(row?.due_open_trades || 0),
     oldest_cursor_at_utc: validIso(row?.oldest_cursor_at_utc),
     newest_cursor_at_utc: validIso(row?.newest_cursor_at_utc),
   };
-}
-
-export async function latestClosedCandleForTrade(repository, trade) {
-  await repository.ready();
-  const candles = await rows(repository.pool, `SELECT mc.*
-      FROM market_candles mc
-      JOIN market_feeds mf ON mf.feed_id = mc.feed_id
-      WHERE mf.instrument_code = $1
-        AND mc.timeframe = '1'
-        AND mc.is_closed = true
-        AND mc.timestamp_utc > $2::timestamptz
-      ORDER BY mc.timestamp_utc ASC
-      LIMIT 500`, [
-    trade.instrument_code,
-    trade.theoretical_cursor_at_utc || trade.opened_at,
-  ]);
-  return candles.find((candle) => tradeExitTouched(trade, candle)) || candles.at(-1) || null;
 }
 
 export async function recordTheoreticalExitFill(repository, { result, now }) {
@@ -426,6 +396,7 @@ export async function recordTheoreticalExitFill(repository, { result, now }) {
     await client.query("BEGIN");
     const trade = await lockedOpenTrade(client, result.trade_id);
     if (trade.status === "NO_OPEN_THEORETICAL_TRADE") return await commitValue(client, trade);
+    if (trade.raw?.theoretical_review_required === true) return await commitValue(client, { status: "THEORETICAL_REVIEW_REQUIRED", trade_id: trade.trade_id });
     const exit = buildTheoreticalExit({ trade, result, now });
     await updateTheoreticalExitTrade(client, { trade, exit });
     await insertTheoreticalExitFill(client, { trade, exit });
@@ -451,15 +422,20 @@ export async function recordTheoreticalExitFill(repository, { result, now }) {
 
 export async function recordTheoreticalReviewRequired(repository, { result, now }) {
   await repository.ready();
-  const event = await insertTheoreticalEvent(repository.pool, {
-    eventType: "exit_review_required",
-    orderIntentId: null,
-    portfolioOrderIntentId: portfolioOrderIntentId(result),
-    tradeId: result.trade_id,
-    eventAt: result.event_at_utc || now,
-    result,
-  });
-  return { event };
+  const client = await repository.pool.connect();
+  try {
+    await client.query("BEGIN");
+    const trade = await lockedOpenTrade(client, result.trade_id);
+    if (trade.status === "NO_OPEN_THEORETICAL_TRADE") return await commitValue(client, trade);
+    const event = await insertTheoreticalEvent(client, {
+      eventType: "exit_review_required", orderIntentId: trade.order_intent_id || null,
+      portfolioOrderIntentId: trade.portfolio_order_intent_id || null, tradeId: result.trade_id,
+      eventAt: result.event_at_utc || now, result,
+    });
+    await client.query(`UPDATE trades SET raw = raw || $2::jsonb WHERE trade_id = $1`, [result.trade_id,
+      json({ theoretical_review_required: true, theoretical_review_reason: result.reason, theoretical_review_event_id: event.theoretical_execution_event_id })]);
+    return await commitValue(client, { event });
+  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
 export async function recordManualExecutionEvent(repository, { event }) {
@@ -546,8 +522,8 @@ export function portfolioLineageToTheoreticalEntryCandidate(row = {}) {
     instrument_code: text(payload.instrument || terms.instrument || row.target_instrument).toUpperCase(),
     contract_instrument_code: text(row.contract_instrument_code || payload.instrument || terms.instrument || row.target_instrument).toUpperCase(),
     broker_symbol: row.broker_symbol || payload.provider_contract_ref?.provider_symbol || null,
-    tick_size: numberOrNull(row.tick_size),
-    point_value: numberOrNull(row.point_value),
+    tick_size: firstNumberValue(approvedTradePlan.units?.tick_size, row.tick_size),
+    point_value: firstNumberValue(approvedTradePlan.units?.point_value, row.point_value),
     decision_side: normalizeDecisionSide(payload.action || terms.side || payload.side),
     trading_date: tradingDate(requestedAt),
     session: payload.session || payload.market_session || null,
@@ -562,19 +538,9 @@ export function portfolioLineageToTheoreticalEntryCandidate(row = {}) {
   };
 }
 
-async function latestTheoreticalEntryFill(client, { orderIntentId = null, portfolioOrderIntentId = null } = {}) {
+async function latestTheoreticalEntryTerminal(client, { orderIntentId = null, portfolioOrderIntentId = null } = {}) {
   return one(client, `SELECT * FROM trade_theoretical_execution_events
-    WHERE event_type = 'entry_filled'
-      AND (
-        ($1::text IS NOT NULL AND order_intent_id = $1)
-        OR ($2::text IS NOT NULL AND portfolio_order_intent_id = $2)
-      )
-    ORDER BY event_at_utc DESC LIMIT 1`, [orderIntentId, portfolioOrderIntentId]);
-}
-
-async function latestTheoreticalEntryExpired(client, { orderIntentId = null, portfolioOrderIntentId = null } = {}) {
-  return one(client, `SELECT * FROM trade_theoretical_execution_events
-    WHERE event_type = 'entry_expired'
+    WHERE event_type IN ('entry_filled','entry_expired')
       AND (
         ($1::text IS NOT NULL AND order_intent_id = $1)
         OR ($2::text IS NOT NULL AND portfolio_order_intent_id = $2)
@@ -652,6 +618,7 @@ async function lockedPortfolioIntent(client, portfolioOrderIntentIdValue) {
 async function lockedOpenTrade(client, tradeId) {
   const trade = await one(client, "SELECT * FROM trades WHERE trade_id = $1 FOR UPDATE", [tradeId]);
   if (!trade) throw repositoryError("TRADE_NOT_FOUND", `Trade not found: ${tradeId}.`);
+  if (trade.raw?.source !== "theoretical_execution_engine") return { event: null, status: "NO_OPEN_THEORETICAL_TRADE", reason: "NON_THEORETICAL_TRADE" };
   const open = ["open", "scaling", "protected"].includes(trade.status);
   if (!open || Number(trade.quantity_open || 0) <= 0) return { event: null, status: "NO_OPEN_THEORETICAL_TRADE" };
   return trade;
@@ -685,6 +652,7 @@ function theoreticalRaw(result, intent = {}) {
     instrument: result.instrument_code || intent.instrument_code || intent.contract_instrument_code || null,
     simulator_outcome: result.simulator_outcome || null,
     candle: result.candle || null,
+    execution_units: { point_value: intent.point_value ?? null, tick_size: intent.tick_size ?? null },
     alert_only_manual_execution: true,
   };
 }
@@ -862,56 +830,6 @@ function theoreticalEventPayload(result) {
   };
 }
 
-function intentEntryTouched(intent, candle) {
-  const type = String(intent?.order_type || "").toLowerCase();
-  if (type === "market") return true;
-  if (type === "limit") return limitEntryTouched(intent, candle);
-  if (type === "stop_market") return stopMarketEntryTouched(intent, candle);
-  if (type === "stop_limit") return stopLimitEntryTouched(intent, candle);
-  return false;
-}
-
-function limitEntryTouched(intent, candle) {
-  const price = Number(intent?.limit_price);
-  if (!Number.isFinite(price)) return false;
-  return entrySide(intent) === "buy" ? candleLow(candle) <= price : candleHigh(candle) >= price;
-}
-
-function stopMarketEntryTouched(intent, candle) {
-  const price = Number(intent?.stop_price);
-  if (!Number.isFinite(price)) return false;
-  return entrySide(intent) === "buy" ? candleHigh(candle) >= price : candleLow(candle) <= price;
-}
-
-function stopLimitEntryTouched(intent, candle) {
-  const stop = Number(intent?.stop_price);
-  const limit = Number(intent?.limit_price);
-  if (!Number.isFinite(stop) || !Number.isFinite(limit)) return false;
-  const buy = entrySide(intent) === "buy";
-  return buy ? candleHigh(candle) >= stop && candleLow(candle) <= limit : candleLow(candle) <= stop && candleHigh(candle) >= limit;
-}
-
-function tradeExitTouched(trade, candle) {
-  if (String(trade?.side || "").toLowerCase() === "short") return shortExitTouched(trade, candle);
-  return longExitTouched(trade, candle);
-}
-
-function shortExitTouched(trade, candle) {
-  return priceTouched(candleHigh(candle), ">=", trade?.current_stop_price ?? trade?.initial_stop_price)
-    || priceTouched(candleLow(candle), "<=", trade?.current_target_price);
-}
-
-function longExitTouched(trade, candle) {
-  return priceTouched(candleLow(candle), "<=", trade?.current_stop_price ?? trade?.initial_stop_price)
-    || priceTouched(candleHigh(candle), ">=", trade?.current_target_price);
-}
-
-function priceTouched(actual, operator, expected) {
-  const price = Number(expected);
-  if (!Number.isFinite(actual) || !Number.isFinite(price)) return false;
-  return operator === ">=" ? actual >= price : actual <= price;
-}
-
 async function commitValue(client, valueToReturn) {
   await client.query("COMMIT");
   return valueToReturn;
@@ -926,9 +844,6 @@ function normalizePortfolioOrderIntentIds(value) {
     ? [...new Set(value.map((item) => text(item)).filter(Boolean))]
     : [];
 }
-function entrySide(intent) { return String(intent?.side || "").toLowerCase(); }
-function candleHigh(candle) { return Number(candle?.high); }
-function candleLow(candle) { return Number(candle?.low); }
 function value(object, key) {
   if (!object) return null;
   const actual = object[key];
@@ -947,6 +862,7 @@ function record(valueToInspect) { return valueToInspect && typeof valueToInspect
 function array(valueToInspect) { return Array.isArray(valueToInspect) ? valueToInspect.filter(Boolean) : []; }
 function text(valueToNormalize) { return String(valueToNormalize ?? "").trim(); }
 function numberOrNull(valueToParse) {
+  if (valueToParse === null || valueToParse === undefined || valueToParse === "" || typeof valueToParse === "boolean") return null;
   const parsed = Number(valueToParse);
   return Number.isFinite(parsed) ? parsed : null;
 }
