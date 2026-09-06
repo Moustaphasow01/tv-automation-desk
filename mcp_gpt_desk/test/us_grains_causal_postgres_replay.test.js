@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { isTradeOutcomeMonetaryProofValid } from "@tv-automation/desk-domain";
 import { runCausalPostgresReplayCli } from "../scripts/replay_us_grains_causal_postgres.mjs";
 import { createGrainsReplayDatabase, seedGrainsReplayInputs } from "../src/adapters/grains-causal-postgres-replay.js";
 import { replayCutoffs, runGrainsCausalPostgresReplay } from "../src/us-grains-causal-postgres-replay.js";
@@ -73,5 +74,7 @@ test("real PostgreSQL replay: raw pair, canonical context/risk/gate and theoreti
   assert.equal(Number(result.ledger.outcomes[0].initial_risk_amount), 100);
   assert.equal(Number(result.ledger.outcomes[0].net_realized_pnl), 150);
   assert.equal(Number(result.ledger.outcomes[0].result_r), 1.5);
+  assert.equal(result.ledger.outcomes[0].evidence.point_value, 50);
+  assert.equal(isTradeOutcomeMonetaryProofValid(result.ledger.outcomes[0]), true);
   assert.equal(result.provider_commands, 0);
 });

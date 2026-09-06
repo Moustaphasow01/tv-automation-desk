@@ -188,7 +188,8 @@ function stableIdempotencyKey(input = {}) {
   const signals = input.signals || input.allocations?.candidate_allocations || [];
   const signalIds = array(signals).map((item) => text(item.signal_id || item.id)).filter(Boolean).sort();
   return `portfolio-risk:${canonicalSha256({ account_id: text(input.account_id || "default"), portfolio_scope: text(input.portfolio_scope || input.scope || "default"), signal_ids: signalIds,
-    risk_budget: input.risk_budget || input.riskBudget || null })}`;
+    risk_budget: input.risk_budget || input.riskBudget || null,
+    allocation_policy: input.allocation_policy || null })}`;
 }
 
 function persistedExisting(existing) {

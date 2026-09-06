@@ -94,6 +94,47 @@ describe("Portfolio Risk Runtime service", () => {
     assert.equal(repository.orderIntents.size, 1);
   });
 
+  test("automatic idempotency pins allocation policy and never reuses another selection's result", async () => {
+    const repository = new InMemoryPortfolioRiskRuntimeRepository();
+    const service = serviceFor(repository);
+    const command = commandFixture({ idempotency_key: undefined });
+    const first = await service.runPipeline({ ...command, allocation_policy: { conflict_resolution: "NET_BY_DIRECTION" } });
+    const second = await service.runPipeline({ ...command, allocation_policy: { conflict_resolution: "BEST_COMPLETE_PLAN_V1" } });
+    assert.equal(first.persistence.status, "PERSISTED");
+    assert.equal(second.persistence.status, "PERSISTED");
+    assert.equal(repository.runs.size, 2);
+    const replay = await service.runPipeline({ ...command, allocation_policy: { conflict_resolution: "BEST_COMPLETE_PLAN_V1" } });
+    assert.equal(replay.persistence.status, "IDEMPOTENT");
+  });
+
+  test("rejects an explicitly invalid application allocation policy before persistence", async () => {
+    const invalidPolicies = [null, [], "BEST_COMPLETE_PLAN_V1", true,
+      { conflict_resolution: "UNKNOWN" },
+      { conflict_resolution: "BEST_COMPLETE_PLAN_V1", submission_enabled: true },
+      { allowed_account_ids: "paper-sim101" }, { active_signal_statuses: "ACTIVE" },
+      { strategy_instance_states: [] }, { sizing_mode: "UNKNOWN" }, { default_signal_size: 0 }];
+    for (const allocation_policy of invalidPolicies) {
+      const repository = new InMemoryPortfolioRiskRuntimeRepository();
+      await assert.rejects(serviceFor(repository).runPipeline(commandFixture({ allocation_policy })), (error) => {
+        assert.equal(error.code, "PORTFOLIO_ALLOCATION_POLICY_INVALID");
+        assert.equal(error.statusCode, 400);
+        return true;
+      });
+      assert.equal(repository.runs.size, 0);
+    }
+  });
+
+  test("preserves existing candidate-allocation policy fields at the application boundary", async () => {
+    const result = await serviceFor(new InMemoryPortfolioRiskRuntimeRepository()).runPipeline(commandFixture({
+      allocation_policy: { conflict_resolution: "NET_BY_DIRECTION", default_signal_size: 2,
+        active_signal_statuses: ["ACTIVE"], allowed_account_ids: ["paper-sim101"],
+        strategy_instance_states: { "strategy-instance-lot-003": "ACTIVE" } },
+    }));
+    assert.equal(result.status, "ORDER_INTENTS_READY");
+    assert.deepEqual(result.allocations.policy.allowed_account_ids, ["paper-sim101"]);
+    assert.equal(result.allocations.policy.default_signal_size, 2);
+  });
+
   test("preserves account-scoped multi-strategy allocations before TargetPosition netting", async () => {
     const repository = new InMemoryPortfolioRiskRuntimeRepository();
     const service = serviceFor(repository);

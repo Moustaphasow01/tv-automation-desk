@@ -74,6 +74,45 @@ export function calculateTradeOutcome(input = {}) {
   });
 }
 
+// Verify the monetary projection with the existing engine, without rewriting it.
+// This is consistency proof, not broker authentication or a second R policy.
+export function isTradeOutcomeMonetaryProofValid(outcome = {}) {
+  if (!monetaryProofIdentityValid(outcome)) return false;
+  const evidence = outcome.evidence;
+  if (!monetaryProofShapeValid(evidence)) return false;
+  try {
+    const calculated = calculateTradeOutcome({
+      side: evidence.side, entryPrice: evidence.entry_price, initialStopPrice: evidence.initial_stop_price,
+      initialQuantity: evidence.initial_quantity, pointValue: evidence.point_value,
+      exitFills: evidence.exit_fills, totalFees: evidence.total_fees,
+      initialRiskAmount: outcome.initial_risk_amount, calculatedAt: outcome.calculated_at_utc,
+      finalized: true,
+    });
+    return calculated.evidence_hash === outcome.evidence_hash
+      && ["gross_realized_pnl", "total_fees", "net_realized_pnl"].every(field =>
+        monetaryProjectionMatches(outcome[field], calculated[field]));
+  } catch {
+    return false;
+  }
+}
+
+function monetaryProofIdentityValid(outcome) {
+  return Boolean(outcome) && outcome.schema_version === TRADE_OUTCOME_SCHEMA_VERSION
+    && outcome.engine_version === TRADE_OUTCOME_ENGINE_VERSION && outcome.status === "final"
+    && Number.isFinite(Date.parse(outcome.calculated_at_utc || ""));
+}
+
+function monetaryProofShapeValid(evidence) {
+  const fields = ["entry_price", "initial_stop_price", "initial_quantity", "point_value", "total_fees"];
+  return Boolean(evidence) && Array.isArray(evidence.exit_fills) && evidence.exit_fills.length > 0
+    && fields.every(field => typeof evidence[field] === "number" && Number.isFinite(evidence[field]));
+}
+
+function monetaryProjectionMatches(value, expected) {
+  return value !== null && value !== undefined && value !== ""
+    && Number.isFinite(Number(value)) && Number(value) === expected;
+}
+
 function calculateExcursions({ side, entryPrice, initialQuantity, pointValue, initialRiskAmount, prices }) {
   let favorablePnl = 0;
   let adversePnl = 0;

@@ -16,6 +16,7 @@ export class PortfolioRiskRuntimeService {
 
   async runPipeline(input = {}) {
     if (!this.repository?.persistPipeline) throw serviceError("PORTFOLIO_RISK_REPOSITORY_UNAVAILABLE", "Portfolio Risk repository is required.");
+    assertApplicationAllocationPolicy(input);
     const asOf = this.#asOf(input);
     const command = exposureCommand(input, asOf);
     if (typeof this.repository.withTheoreticalExposureSnapshot === "function") {
@@ -49,6 +50,40 @@ export class PortfolioRiskRuntimeService {
     if (value?.utc) return new Date(value.utc).toISOString();
     return new Date(value).toISOString();
   }
+}
+
+function assertApplicationAllocationPolicy(input) {
+  if (!Object.prototype.hasOwnProperty.call(input, "allocation_policy")) return;
+  const policy = input.allocation_policy;
+  const supported = ["NET_BY_DIRECTION", "BEST_COMPLETE_PLAN_V1"];
+  const allowedKeys = ["conflict_resolution", "default_signal_size", "sizing_mode", "sizingMode",
+    "active_signal_statuses", "allowed_account_ids", "strategy_instance_states", "strategy_states"];
+  if (policy && typeof policy === "object" && !Array.isArray(policy)
+    && Object.keys(policy).every((key) => allowedKeys.includes(key))
+    && (!Object.prototype.hasOwnProperty.call(policy, "conflict_resolution")
+      || supported.includes(policy.conflict_resolution))
+    && applicationAllocationPolicyFieldsValid(policy)) return;
+  throw serviceError("PORTFOLIO_ALLOCATION_POLICY_INVALID",
+    "allocation_policy must use supported Portfolio policy fields and conflict_resolution.", 400);
+}
+
+function applicationAllocationPolicyFieldsValid(policy) {
+  const sizingMode = policy.sizing_mode ?? policy.sizingMode;
+  const sizingModes = ["REQUESTED_QUANTITY_CAP", "MONETARY_RISK_BUDGET"];
+  if (sizingMode !== undefined && !sizingModes.includes(String(sizingMode).trim().toUpperCase())) return false;
+  if (policy.default_signal_size !== undefined
+    && (!Number.isFinite(Number(policy.default_signal_size)) || Number(policy.default_signal_size) <= 0)) return false;
+  return applicationAllocationPolicyContainersValid(policy);
+}
+
+function applicationAllocationPolicyContainersValid(policy) {
+  if (policy.active_signal_statuses !== undefined && !Array.isArray(policy.active_signal_statuses)) return false;
+  if (policy.allowed_account_ids !== undefined && !Array.isArray(policy.allowed_account_ids)) return false;
+  for (const key of ["strategy_instance_states", "strategy_states"]) {
+    const value = policy[key];
+    if (value !== undefined && (!value || typeof value !== "object" || Array.isArray(value))) return false;
+  }
+  return true;
 }
 
 function buildPipeline(input, asOf, snapshot) {
@@ -181,4 +216,6 @@ function runtimeStatus({ allocations, risk, targets, intents }) {
   return "NO_ACTIVE_SIGNALS";
 }
 
-function serviceError(code, message) { const error = new Error(message || code); error.code = code; error.statusCode = 503; return error; }
+function serviceError(code, message, statusCode = 503) {
+  const error = new Error(message || code); error.code = code; error.statusCode = statusCode; return error;
+}

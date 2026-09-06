@@ -6,6 +6,8 @@ import { loadTheoreticalExposureAsOf } from "../src/portfolio-theoretical-exposu
 import { createBrokerExecutionRepository } from "../src/broker-execution-repository.js";
 import { PortfolioOrderIntentExecutionService } from "../src/portfolio-order-intent-execution-service.js";
 import { createTheoreticalTestDatabase } from "./support/theoretical-postgres-fixtures.js";
+import { materializeTradeOutcome } from "../src/broker-trade-outcome-repository.js";
+import { calculateTradeOutcome } from "@tv-automation/desk-domain";
 
 const NOW = "2026-09-05T14:05:00.000Z";
 const LATER = "2026-09-05T14:10:00.000Z";
@@ -134,6 +136,61 @@ test("canonical USD risk reserves pending and partially open quantity once", { s
   } finally {
     await database.close();
   }
+});
+
+test("a final outcome using a noncanonical point value is not a valid USD loss budget", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async (t) => {
+  const database = await createTheoreticalTestDatabase();
+  t.after(() => database.close());
+  const intentId = "units-proof-intent";
+  await insertMonetaryIntent(database.pool, intentId);
+  await insertPartiallyClosedTrade(database.pool, intentId);
+  await closeMonetaryTrade(database.pool, intentId);
+  const request = monetaryExposureRequest();
+  const original = (await database.pool.query("SELECT evidence FROM trade_outcomes WHERE trade_id = $1", [`trade:${intentId}`])).rows[0].evidence;
+  assert.equal((await exposure(database.pool, request)).loss_usage.monetary_availability, "KNOWN");
+  for (const pointValue of [1, null, "50", {}, -50]) {
+    await database.pool.query("UPDATE trade_outcomes SET evidence = $1 WHERE trade_id = $2", [
+      { ...original, point_value: pointValue }, `trade:${intentId}`,
+    ]);
+    const invalid = await exposure(database.pool, request);
+    assert.equal(invalid.loss_usage.monetary_availability, "UNAVAILABLE");
+    assert.equal(invalid.loss_usage.daily_loss_monetary, null);
+    assert.equal(invalid.loss_usage_availability, "KNOWN", "USD proof failure must not turn dimensionless R into zero");
+  }
+  await database.pool.query("UPDATE trade_outcomes SET evidence = $1 WHERE trade_id = $2", [original, `trade:${intentId}`]);
+  const restored = await exposure(database.pool, request);
+  assert.equal(restored.loss_usage.monetary_availability, "KNOWN");
+  assert.equal(restored.loss_usage.daily_loss_monetary, 150);
+  await database.pool.query("UPDATE trade_outcomes SET net_realized_pnl = -3 WHERE trade_id = $1", [`trade:${intentId}`]);
+  assert.equal((await exposure(database.pool, request)).loss_usage.monetary_availability, "UNAVAILABLE");
+  await database.pool.query("UPDATE trade_outcomes SET net_realized_pnl = -150, evidence_hash = 'invalid' WHERE trade_id = $1", [`trade:${intentId}`]);
+  assert.equal((await exposure(database.pool, request)).loss_usage.monetary_availability, "UNAVAILABLE");
+});
+
+test("conflicting canonical point values fail closed even with a self-consistent outcome", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async (t) => {
+  const database = await createTheoreticalTestDatabase();
+  t.after(() => database.close());
+  const intentId = "conflicting-units-intent";
+  await insertMonetaryIntent(database.pool, intentId);
+  await insertPartiallyClosedTrade(database.pool, intentId);
+  await closeMonetaryTrade(database.pool, intentId);
+  const tradeId = `trade:${intentId}`;
+  const original = (await database.pool.query("SELECT evidence FROM trade_outcomes WHERE trade_id=$1", [tradeId])).rows[0].evidence;
+  const incorrect = calculateTradeOutcome({ side: original.side, entryPrice: original.entry_price,
+    initialStopPrice: original.initial_stop_price, initialQuantity: original.initial_quantity,
+    pointValue: 1, exitFills: original.exit_fills, totalFees: original.total_fees,
+    calculatedAt: "2026-09-05T14:04:00Z" });
+  await database.pool.query(`UPDATE portfolio_order_intent_lineage SET payload =
+    jsonb_set(payload,'{approved_trade_plan,economics,units,point_value}','1')
+    WHERE portfolio_order_intent_id=$1`, [intentId]);
+  await database.pool.query(`UPDATE trade_outcomes SET evidence=$2,evidence_hash=$3,initial_risk_amount=$4,
+    gross_realized_pnl=$5,net_realized_pnl=$6 WHERE trade_id=$1`,
+  [tradeId, incorrect.evidence, incorrect.evidence_hash, incorrect.initial_risk_amount,
+    incorrect.gross_realized_pnl, incorrect.net_realized_pnl]);
+  const conflict = await exposure(database.pool, monetaryExposureRequest());
+  assert.equal(conflict.loss_usage.monetary_availability, "UNAVAILABLE");
+  assert.equal(conflict.loss_usage.daily_loss_monetary, null);
+  assert.equal(conflict.loss_usage_availability, "KNOWN");
 });
 
 test("a qualified signal stays rejected in a later batch after its theoretical intent is terminal", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async () => {
@@ -296,7 +353,7 @@ async function exposure(pool, request) {
 
 async function insertMonetaryIntent(pool, intentId) {
   const hash = `sha256:${"7".repeat(64)}`;
-  const plan = { availability: "KNOWN", economics: { availability: "KNOWN", currency: "USD", risk_per_contract: 500 } };
+  const plan = { availability: "KNOWN", economics: { availability: "KNOWN", currency: "USD", risk_per_contract: 500, units: { point_value: 50 } } };
   const risk = { availability: "KNOWN", risk_amount: 1000, risk_per_contract: 500 };
   const snapshot = { availability: "KNOWN", currency: "USD", risk_amount: 1000, risk_per_contract: 500 };
   await pool.query(`INSERT INTO portfolio_arbitration_runs
@@ -315,8 +372,8 @@ async function insertMonetaryIntent(pool, intentId) {
 async function insertPartiallyClosedTrade(pool, intentId) {
   const tradeId = `trade:${intentId}`;
   await pool.query(`INSERT INTO trades
-    (trade_id,portfolio_order_intent_id,status,side,quantity_planned,quantity_open,quantity_closed,opened_at,raw)
-    VALUES ($1,$2,'open','long',2,1,1,'2026-09-05T14:01Z','{"source":"theoretical_execution_engine"}')`, [tradeId, intentId]);
+    (trade_id,portfolio_order_intent_id,status,side,quantity_planned,quantity_open,quantity_closed,opened_at,raw,avg_entry_price,initial_stop_price)
+    VALUES ($1,$2,'open','long',2,1,1,'2026-09-05T14:01Z','{"source":"theoretical_execution_engine"}',100,90)`, [tradeId, intentId]);
   await pool.query(`INSERT INTO trade_fills (trade_fill_id,trade_id,side,quantity,price,filled_at,raw)
     VALUES ($1,$2,'buy',2,100,'2026-09-05T14:01Z','{}'),($3,$2,'sell',1,99,'2026-09-05T14:03Z','{}')`,
   [`entry:${tradeId}`, tradeId, `partial-exit:${tradeId}`]);
@@ -328,34 +385,25 @@ async function insertPartiallyClosedTrade(pool, intentId) {
 async function closeMonetaryTrade(pool, intentId) {
   const tradeId = `trade:${intentId}`;
   await pool.query(`INSERT INTO trade_fills (trade_fill_id,trade_id,side,quantity,price,filled_at,raw)
-    VALUES ($1,$2,'sell',1,95,'2026-09-05T14:04Z','{}')`, [`final-exit:${tradeId}`, tradeId]);
+    VALUES ($1,$2,'sell',1,98,'2026-09-05T14:04Z','{}')`, [`final-exit:${tradeId}`, tradeId]);
   await pool.query(`UPDATE trades SET status='closed',quantity_open=0,quantity_closed=2,closed_at='2026-09-05T14:04Z'
     WHERE trade_id=$1`, [tradeId]);
-  await pool.query(`INSERT INTO trade_outcomes
-    (trade_outcome_id,trade_id,revision,status,schema_version,engine_version,initial_risk_amount,
-      gross_realized_pnl,total_fees,net_realized_pnl,result_r,evidence_hash,evidence,calculated_at_utc,finalized_at_utc)
-    VALUES ($1,$2,1,'final','test-outcome-v1','test-engine',1000,-150,0,-150,-0.15,$3,'{}','2026-09-05T14:04Z','2026-09-05T14:04Z')`,
-  [`outcome:${tradeId}`, tradeId, `sha256:${"8".repeat(64)}`]);
+  await materializeTradeOutcome(pool, tradeId, "2026-09-05T14:04:00Z");
 }
 
 async function insertClosedMonetaryProfit(pool, intentId) {
   const tradeId = `trade:${intentId}`;
   await pool.query(`INSERT INTO trades
-    (trade_id,portfolio_order_intent_id,status,side,quantity_planned,quantity_open,quantity_closed,opened_at,closed_at,raw)
+    (trade_id,portfolio_order_intent_id,status,side,quantity_planned,quantity_open,quantity_closed,opened_at,closed_at,raw,avg_entry_price,initial_stop_price)
     VALUES ($1,$2,'closed','long',2,0,2,'2026-09-05T14:01Z','2026-09-05T14:04Z',
-      '{"source":"theoretical_execution_engine"}')`, [tradeId, intentId]);
+      '{"source":"theoretical_execution_engine"}',100,90)`, [tradeId, intentId]);
   await pool.query(`INSERT INTO trade_fills (trade_fill_id,trade_id,side,quantity,price,filled_at,raw)
     VALUES ($1,$2,'buy',2,100,'2026-09-05T14:01Z','{}'),($3,$2,'sell',2,101,'2026-09-05T14:04Z','{}')`,
   [`entry:${tradeId}`, tradeId, `exit:${tradeId}`]);
   await pool.query(`INSERT INTO trade_theoretical_execution_events
     (theoretical_execution_event_id,portfolio_order_intent_id,trade_id,event_type,event_at_utc,payload,raw)
     VALUES ($1,$2,$3,'entry_filled','2026-09-05T14:01Z','{}','{}')`, [`entry-event:${tradeId}`, intentId, tradeId]);
-  await pool.query(`INSERT INTO trade_outcomes
-    (trade_outcome_id,trade_id,revision,status,schema_version,engine_version,initial_risk_amount,
-      gross_realized_pnl,total_fees,net_realized_pnl,result_r,evidence_hash,evidence,calculated_at_utc,finalized_at_utc)
-    VALUES ($1,$2,1,'final','test-outcome-v1','test-engine',1000,100,0,100,0.1,$3,'{}',
-      '2026-09-05T14:04Z','2026-09-05T14:04Z')`,
-  [`outcome:${tradeId}`, tradeId, `sha256:${"9".repeat(64)}`]);
+  await materializeTradeOutcome(pool, tradeId, "2026-09-05T14:04:00Z");
 }
 
 async function count(pool, table) {

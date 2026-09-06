@@ -11,6 +11,26 @@ import { InMemoryStrategySignalBusRepository } from "../src/strategy-signal-bus-
 
 const NOW = "2026-08-17T09:15:00.000Z";
 
+test("an explicitly empty allocation policy cannot inherit a pipeline default or consume its signal", async () => {
+  for (const allocation_policy of [null, undefined]) {
+    const signalBusRepository = new InMemoryStrategySignalBusRepository();
+    await signalBusRepository.publish(signalOutbox());
+    const riskRepository = new InMemoryPortfolioRiskRuntimeRepository();
+    const service = new StrategySignalDecisionPipelineService({
+      signalBusRepository,
+      contextGate: new AiContextGateService({ repository: new InMemoryAiContextGateRepository() }),
+      riskRuntime: new PortfolioRiskRuntimeService({ repository: riskRepository, clock: clock() }),
+      execution: { async ensureHumanGate() { assert.fail("invalid policy must never reach Human Gate"); },
+        async materializeReadyCommands() { assert.fail("invalid policy must never reach dispatch"); } },
+      providerCounts: async () => ({ commands: 0, events: 0 }), clock: clock(),
+    });
+    await assert.rejects(service.runOnce({ now_utc: NOW, account_id: "shadow_live", allocation_policy }),
+      error => error.code === "PORTFOLIO_ALLOCATION_POLICY_INVALID" && error.statusCode === 400);
+    assert.equal(riskRepository.runs.size, 0);
+    assert.equal((await signalBusRepository.pollPending({ now_utc: NOW })).length, 1);
+  }
+});
+
 test("strategy signal decision pipeline opens Human Gate without provider side effects in SHADOW", async () => {
   const signalBusRepository = new InMemoryStrategySignalBusRepository();
   await signalBusRepository.publish(signalOutbox());

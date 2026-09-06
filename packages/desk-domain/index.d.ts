@@ -566,6 +566,7 @@ export function transitionResearchCandidateLifecycleV1(candidate?: Record<string
 export function validateResearchCandidateLifecycleSnapshotV1(candidate?: Record<string, unknown>): Record<string, unknown>;
 export function researchCandidateLifecycleHashV1(input?: Record<string, unknown>): string;
 
+export function isTradeOutcomeMonetaryProofValid(outcome?: Record<string, unknown> | null): boolean;
 export const RESEARCH_CANDIDATE_GENOME_VERSION_V1: "1.0.0";
 export const RESEARCH_CANDIDATE_GENOME_SCHEMA_VERSION_V1: "research_candidate_genome_v1";
 export const RESEARCH_CANDIDATE_NOVELTY_SCHEMA_VERSION_V1: "research_candidate_novelty_v1";

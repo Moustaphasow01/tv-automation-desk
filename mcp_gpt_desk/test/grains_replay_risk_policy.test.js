@@ -9,9 +9,22 @@ test("replay pins budget and account without admitting execution overrides", () 
   const policy = parseGrainsReplayRiskPolicy(JSON.stringify(fixture()));
   assert.equal(policy.pipelinePolicy.risk_budget.max_monetary_risk, 100);
   assert.equal(policy.accountId, "fixture-shadow");
+  assert.equal(policy.pipelinePolicy.allocation_policy.conflict_resolution, "NET_BY_DIRECTION");
   assert.match(policy.provenance.sha256, /^sha256:[a-f0-9]{64}$/);
   for (const field of ["execution_policy", "provider_id", "execution_mode", "submission_enabled"]) {
     assert.throws(() => parseGrainsReplayRiskPolicy(JSON.stringify({ ...fixture(), [field]: true })), /FIELD_NOT_ALLOWED/);
+  }
+});
+
+test("allocation policy is explicit, frozen and cannot admit execution overrides", async () => {
+  const allocation_policy = { conflict_resolution: "BEST_COMPLETE_PLAN_V1" };
+  const result = parseGrainsReplayRiskPolicy(JSON.stringify({ ...fixture(), allocation_policy }));
+  assert.deepEqual(result.pipelinePolicy.allocation_policy, allocation_policy);
+  assert.deepEqual(result.provenance.allocation_policy, allocation_policy);
+  const local = await loadGrainsReplayRiskPolicy(null, { DESK_SHADOW_PORTFOLIO_SELECTION_POLICY: "BEST_COMPLETE_PLAN_V1" });
+  assert.deepEqual(local.pipelinePolicy.allocation_policy, allocation_policy);
+  for (const value of [null, [], {}, true, { conflict_resolution: "UNKNOWN" }, { ...allocation_policy, submission_enabled: true }]) {
+    assert.throws(() => parseGrainsReplayRiskPolicy(JSON.stringify({ ...fixture(), allocation_policy: value })), /ALLOCATION_POLICY_INVALID/);
   }
 });
 test("replay default configuration is explicitly pinned without an implicit monetary cutover", async () => {

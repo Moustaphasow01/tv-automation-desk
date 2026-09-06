@@ -32,6 +32,7 @@ const QUERIES = Object.freeze({
     JOIN portfolio_target_positions p USING(target_position_id)
     WHERE t.raw->>'source'='theoretical_execution_engine' ORDER BY t.opened_at,t.trade_id`,
   outcomes: `SELECT trade_id,status,revision,result_r,initial_risk_amount,gross_realized_pnl,total_fees,
-    net_realized_pnl,finalized_at_utc,evidence_hash FROM trade_outcomes ORDER BY finalized_at_utc,trade_id,revision`,
+    net_realized_pnl,finalized_at_utc,evidence_hash,schema_version,engine_version,calculated_at_utc,evidence
+    FROM trade_outcomes ORDER BY finalized_at_utc,trade_id,revision`,
   provider_commands: `SELECT count(*)::int AS count FROM broker_provider_commands`,
 });

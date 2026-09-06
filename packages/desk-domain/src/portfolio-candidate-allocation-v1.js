@@ -1,5 +1,6 @@
 import { canonicalSha256 } from "./execution-scope.js";
 import { normalizeProposedTradePlanV1 } from "./trade-plan-economics-v1.js";
+import { selectPortfolioSignalsV1 } from "./portfolio-signal-selection-v1.js";
 
 export const PORTFOLIO_CANDIDATE_ALLOCATION_SCHEMA_VERSION_V1 = "portfolio_candidate_allocation_plan_v1";
 export const VIRTUAL_STRATEGY_PORTFOLIO_SCHEMA_VERSION_V1 = "virtual_strategy_portfolio_v1";
@@ -21,8 +22,10 @@ export function buildCandidateAllocationPortfolioV1(input = {}) {
   const policy = normalizePolicy(input.policy, input);
   const portfolioScope = text(firstDefined(input.portfolio_scope, input.scope, "default"));
   const signals = normalizeSignals(firstDefined(input.signals, input.signal_items, input.items, []), asOf, policy, defaultAccountId);
-  const activeSignals = signals.filter((item) => item.active).map((item) => item.signal);
-  const rejectedSignals = signals.filter((item) => !item.active).map((item) => item.rejected);
+  const selection = selectPortfolioSignalsV1({ signals: signals.filter((item) => item.active).map((item) => item.signal),
+    conflictResolution: policy.conflict_resolution });
+  const activeSignals = selection.selected;
+  const rejectedSignals = [...signals.filter((item) => !item.active).map((item) => item.rejected), ...selection.rejected];
   const allocations = allocateByAccountInstrument(activeSignals, portfolioScope, asOf);
   const base = {
     schema_version: PORTFOLIO_CANDIDATE_ALLOCATION_SCHEMA_VERSION_V1,

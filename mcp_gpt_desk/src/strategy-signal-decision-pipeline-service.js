@@ -306,10 +306,14 @@ function contextSizedSignal(item) {
 
 function riskCommand(input, signals, nowUtc) {
   const budget = riskBudget(input);
+  const allocationPolicy = Object.prototype.hasOwnProperty.call(input, "allocation_policy") ? input.allocation_policy : {
+    conflict_resolution: process.env.DESK_SHADOW_PORTFOLIO_SELECTION_POLICY || "NET_BY_DIRECTION",
+  };
   return {
     as_of_utc: nowUtc, account_id: accountId(input), portfolio_scope: input.portfolio_scope || input.scope || accountId(input),
-    idempotency_key: idempotencyKey(input, signals, budget), correlation_id: signals[0]?.correlation_id || `strategy-signal-decision:${nowUtc}`,
+    idempotency_key: idempotencyKey(input, signals, { budget, allocationPolicy }), correlation_id: signals[0]?.correlation_id || `strategy-signal-decision:${nowUtc}`,
     signals, risk_budget: budget, execution_policy: executionPolicy(input), execution_mode: "SHADOW",
+    allocation_policy: allocationPolicy,
     account_capital_reference: input.account_capital_reference ?? input.accountCapitalReference,
   };
 }

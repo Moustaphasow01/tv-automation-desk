@@ -152,6 +152,44 @@ test("monetary policy retries missing configuration, preserves reduced-context o
   assert.equal((await bus.pollPendingSignals({ now_utc: NOW })).count, 0);
 });
 
+test("competing canonical bus proposals retain one complete plan through Risk and Human Gate with rejected lineage", {
+  skip: process.env.RUN_POSTGRES_TESTS !== "1",
+}, async (t) => {
+  const database = await createTheoreticalTestDatabase();
+  t.after(() => database.close());
+  const store = await createStore(database.pool);
+  const ids = await seedStrategy(database.pool);
+  const bus = new StrategySignalBusService({ repository: new PostgresStrategySignalBusRepository(store.persistence), clock: store.clock });
+  const first = grainSignal({ ...ids, direction: "LONG" });
+  const second = grainSignal({ ...ids, direction: "LONG" });
+  first.confidence = 0.6;
+  second.confidence = 0.8;
+  second.proposed_trade_plan.stop_price = 497;
+  second.correlation_id = "second-competing-proposal";
+  await bus.publishSignal(first, {}, { requireRunningInstance: true });
+  await bus.publishSignal(second, {}, { requireRunningInstance: true });
+  const result = await createStrategySignalDecisionPipelineService({ store }).runOnce({
+    now_utc: NOW, account_id: "causal-shadow", prefer_embedded_context_gate_decision: true,
+    allocation_policy: { conflict_resolution: "BEST_COMPLETE_PLAN_V1" },
+    risk_budget: { sizing_mode: "MONETARY_RISK_BUDGET", monetary_risk_scope: "PER_ALLOCATION",
+      max_monetary_risk: 500, max_monetary_risk_currency: "USD",
+      max_daily_loss_monetary: 2000, max_weekly_loss_monetary: 4000, loss_currency: "USD" },
+  });
+  assert.equal(result.context_prefilter.admissible, 2);
+  assert.equal(result.human_gate_count, 1);
+  assert.equal(result.order_intent_count, 1);
+  const run = (await database.pool.query("SELECT payload FROM portfolio_arbitration_runs")).rows[0].payload;
+  assert.equal(run.allocation_plan.rejected_signals[0].signal_id, first.signal_id);
+  assert.equal(run.allocation_plan.rejected_signals[0].issues[0].selected_signal_id, second.signal_id);
+  const intent = (await database.pool.query("SELECT payload FROM portfolio_order_intent_lineage")).rows[0].payload;
+  assert.equal(intent.quantity, 1);
+  assert.equal(intent.execution_terms.entry.price, 500);
+  assert.equal(intent.execution_terms.stop.price, 497);
+  assert.equal(intent.execution_terms.targets[0].price, 503);
+  assert.equal((await database.pool.query("SELECT count(*)::int AS n FROM broker_provider_commands")).rows[0].n, 0);
+  assert.equal((await bus.pollPendingSignals({ now_utc: NOW })).count, 0);
+});
+
 async function seedStrategy(pool) {
   const ids = {
     strategy_definition_id: randomUUID(),

@@ -1,0 +1,34 @@
+{
+  "schema_version": "grains_risk_replay_policy_v1",
+  "policy_id": "grains-operator-risk-500-2000-4000-usd-complete-plan-v1",
+  "account_id": "causal-replay-shadow",
+  "allocation_policy": { "conflict_resolution": "BEST_COMPLETE_PLAN_V1" },
+  "risk_budget": {
+    "budget_id": "grains-operator-risk-500-2000-4000-usd-v1",
+    "sizing_mode": "MONETARY_RISK_BUDGET",
+    "monetary_risk_scope": "PER_ALLOCATION",
+    "max_monetary_risk": 500,
+    "max_monetary_risk_currency": "USD",
+    "max_daily_loss_monetary": 2000,
+    "max_weekly_loss_monetary": 4000,
+    "loss_currency": "USD",
+    "max_portfolio_abs_size": 20,
+    "max_account_abs_size": { "causal-replay-shadow": 20 },
+    "max_instrument_abs_size": { "ZC": 20, "ZW": 20, "MNQ": 20, "MES": 20 },
+    "max_correlation_group_abs_size": { "grains": 20, "equity_index": 20 },
+    "metadata": {
+      "execution_mode": "SHADOW",
+      "source": "operator-authorized-replay-policy",
+      "period_timezone": "UTC",
+      "loss_basis": "NET_REALIZED_LOSS_PLUS_RESERVED_STOP_RISK",
+      "quantity_ceiling": "STRATEGY_REQUEST_NOT_INCREASED"
+    }
+  },
+  "provenance": {
+    "authorized_on": "2026-09-06",
+    "operator_amounts": "500 dollars per position; 2000 dollars per day; 4000 dollars per week",
+    "selection": "Complete plan; confidence descending, signal time ascending, canonical signal ID ascending. No PnL selection or price blending.",
+    "deployment": "LOCAL_REPLAY_ONLY_NOT_VPS_ACTIVATION",
+    "calendar": "Same qualified official reconstructed calendar, not historical VPS receipt proof"
+  }
+}

@@ -1,3 +1,5 @@
+import { isTradeOutcomeMonetaryProofValid } from "@tv-automation/desk-domain";
+
 const TERMINAL_INTENT_STATUSES = Object.freeze(["REJECTED", "CANCELLED", "CANCELED", "SUPERSEDED"]);
 const THEORETICAL_MODES = new Set(["SHADOW", "SEMI_MANUAL"]);
 
@@ -127,15 +129,33 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
         AND outcome.finalized_at_utc >= date_trunc('week', $2::timestamptz AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0), 0) AS weekly_loss_monetary,
     count(*) FILTER (WHERE trade.raw->>'source' = 'theoretical_execution_engine')::integer AS final_outcome_count,
     count(*) FILTER (WHERE trade.raw->>'source' IS DISTINCT FROM 'theoretical_execution_engine')::integer AS unproven_final_outcome_count,
+    COALESCE(jsonb_agg(to_jsonb(outcome)) FILTER (
+      WHERE trade.raw->>'source' = 'theoretical_execution_engine'
+        AND outcome.finalized_at_utc >= date_trunc('week', $2::timestamptz AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+    ), '[]'::jsonb) AS monetary_outcome_proofs,
     count(*) FILTER (WHERE trade.raw->>'source' = 'theoretical_execution_engine'
       AND outcome.finalized_at_utc >= date_trunc('week', $2::timestamptz AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
-      AND upper(COALESCE(NULLIF(lineage.risk_snapshot->>'currency', ''),
+      AND (upper(COALESCE(NULLIF(lineage.risk_snapshot->>'currency', ''),
         NULLIF(lineage.payload #>> '{approved_trade_plan,economics,currency}', ''),
-        NULLIF(target.approved_trade_plan #>> '{economics,currency}', ''))) IS DISTINCT FROM $4)::integer AS monetary_outcome_gap_count
+        NULLIF(target.approved_trade_plan #>> '{economics,currency}', ''))) IS DISTINCT FROM $4
+        OR canonical_units.point_value IS NULL
+        OR outcome.evidence->'point_value' IS DISTINCT FROM canonical_units.point_value
+      ))::integer AS monetary_outcome_gap_count
   FROM trade_outcomes outcome
   JOIN trades trade ON trade.trade_id = outcome.trade_id
   JOIN portfolio_order_intent_lineage lineage ON lineage.portfolio_order_intent_id = trade.portfolio_order_intent_id
   JOIN portfolio_target_positions target ON target.target_position_id = lineage.target_position_id
+  LEFT JOIN LATERAL (
+    SELECT CASE WHEN count(DISTINCT unit) = 1 AND bool_and(
+      CASE WHEN jsonb_typeof(unit) = 'number' THEN unit::text::numeric > 0 ELSE false END
+    ) THEN jsonb_agg(unit)->0 ELSE NULL END AS point_value FROM (VALUES
+      (1, lineage.payload #> '{approved_trade_plan,economics,units,point_value}'),
+      (2, lineage.payload #> '{approved_trade_plan,units,point_value}'),
+      (3, target.approved_trade_plan #> '{economics,units,point_value}'),
+      (4, target.approved_trade_plan #> '{units,point_value}')
+    ) units(priority, unit)
+    WHERE unit IS NOT NULL AND unit <> 'null'::jsonb
+  ) canonical_units ON true
   WHERE outcome.status = 'final'
     AND outcome.finalized_at_utc IS NOT NULL
     AND outcome.finalized_at_utc <= $2::timestamptz
@@ -168,6 +188,7 @@ SELECT
     'reserved_monetary_risk', reserved_monetary_risk, 'currency', $4,
     'monetary_reservation_gap_count', monetary_reservation_gap_count,
     'monetary_outcome_gap_count', monetary_outcome_gap_count,
+    'monetary_outcome_proofs', monetary_outcome_proofs,
     'final_outcome_count', final_outcome_count, 'unproven_final_outcome_count', unproven_final_outcome_count,
     'missing_closed_final_outcome_count', missing_closed_final_outcome_count,
     'period_timezone', 'UTC', 'provenance', 'THEORETICAL_FINAL_OUTCOMES')
@@ -246,6 +267,9 @@ function normalizeLossUsage(row) {
 
 function lossUsageValues(row) {
   const source = row || {};
+  const unitGaps = numericOrNull(source.monetary_outcome_gap_count);
+  const proofGaps = Array.isArray(source.monetary_outcome_proofs)
+    ? source.monetary_outcome_proofs.filter(outcome => !isTradeOutcomeMonetaryProofValid(outcome)).length : null;
   return {
     source,
     daily: signedNumericOrNull(source.daily_realized_r),
@@ -255,7 +279,7 @@ function lossUsageValues(row) {
     reservedMonetary: moneyOrNull(source.reserved_monetary_risk),
     currency: currency(source.currency),
     monetaryReservationGapCount: numericOrNull(source.monetary_reservation_gap_count),
-    monetaryOutcomeGapCount: numericOrNull(source.monetary_outcome_gap_count),
+    monetaryOutcomeGapCount: unitGaps === null || proofGaps === null ? null : unitGaps + proofGaps,
     finalOutcomeCount: numericOrNull(source.final_outcome_count),
     unprovenCount: numericOrNull(source.unproven_final_outcome_count),
     missingClosedCount: numericOrNull(source.missing_closed_final_outcome_count),

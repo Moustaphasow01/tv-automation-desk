@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { loadTheoreticalExposureAsOf } from "../src/portfolio-theoretical-exposure-repository.js";
+import { calculateTradeOutcome } from "@tv-automation/desk-domain";
 
 test("unknown/physical mode cannot be read as a healthy theoretical account", async () => {
   const noQuery = { query() { throw new Error("SQL_NOT_EXPECTED"); } };
@@ -59,6 +60,8 @@ test("monetary loss usage exposes canonical amounts only with complete currency 
   assert.equal(unavailable.loss_usage.daily_loss_monetary, null);
   assert.equal(unavailable.loss_usage.reserved_monetary_risk, null);
   assert.equal(unavailable.loss_usage.currency, "UNAVAILABLE");
+  const missingEvidence = await loadTheoreticalExposureAsOf(monetarySource({ monetary_outcome_proofs: null }), monetaryRequest());
+  assert.equal(missingEvidence.loss_usage.monetary_availability, "UNAVAILABLE");
 });
 
 test("final-outcome provenance failure remains ordered before missing closed outcomes", async () => {
@@ -86,7 +89,13 @@ function monetarySource(overrides = {}) {
     daily_realized_r: -0.6, weekly_realized_r: -0.85,
     daily_loss_monetary: 600, weekly_loss_monetary: 850, reserved_monetary_risk: 500,
     currency: "USD", monetary_reservation_gap_count: 0, monetary_outcome_gap_count: 0,
+    monetary_outcome_proofs: [monetaryProof(95, "2026-09-03T14:00Z"), monetaryProof(88, "2026-09-04T14:00Z")],
     final_outcome_count: 2, unproven_final_outcome_count: 0, missing_closed_final_outcome_count: 0,
     period_timezone: "UTC", provenance: "THEORETICAL_FINAL_OUTCOMES", ...overrides,
   } }] }; } };
+}
+
+function monetaryProof(exitPrice, calculatedAt) {
+  return calculateTradeOutcome({ side: "long", entryPrice: 100, initialStopPrice: 80,
+    initialQuantity: 1, pointValue: 50, exitFills: [{ price: exitPrice, quantity: 1 }], calculatedAt });
 }

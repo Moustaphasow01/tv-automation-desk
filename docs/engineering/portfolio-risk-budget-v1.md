@@ -137,3 +137,35 @@ Les refus Context restent terminaux. Les modes physiques restent désactivés.
 Le replay accepte `--policy-file` et enregistre le hash du fichier, les valeurs
 effectives, le hash des données et du code. Il refuse les paramètres d'exécution
 broker dans ce fichier et n'altère jamais l'entrée figée.
+
+### Propositions concurrentes — sélection Portfolio optionnelle
+
+`allocation_policy.conflict_resolution = BEST_COMPLETE_PLAN_V1` sélectionne un
+seul plan complet par compte/instrument avant Risk. Les prix ne sont pas fusionnés
+et la quantité proposée n'est jamais additionnée à celle des autres signaux.
+Les refus `PORTFOLIO_COMPETING_SIGNAL_NOT_SELECTED` conservent le lien vers le
+signal sélectionné dans le plan d'arbitrage. Les plans incomplets sont exclus.
+
+L'option applicative est `DESK_SHADOW_PORTFOLIO_SELECTION_POLICY` ; le défaut
+`NET_BY_DIRECTION` reste inchangé. Un fichier de replay absent de cette option
+épingle le défaut historique, indépendamment des variables ambiantes. La politique
+candidate est `reports/research/GRAINS_RISK_SELECTION_POLICY_20260906.json`.
+Voir ADR 0031 pour classement, contraintes, limites et retour arrière.
+
+### Preuve de l'unité des résultats monétaires
+
+Un résultat théorique final doit porter dans `trade_outcomes.evidence.point_value`
+un nombre positif identique à la valeur du point du plan autorisé canonique.
+La projection exige l'accord des unités présentes dans les plans d'OrderIntent
+et de TargetPosition : aucune priorité de source ne doit masquer une contradiction.
+Une valeur absente, textuelle ou différente rend le budget monétaire indisponible
+pour la semaine concernée. Le domaine réutilise le calcul d'outcome existant pour
+vérifier l'empreinte de preuve, le brut, les frais et le net persistés. Modifier
+seulement la valeur du point ou son étiquette ne suffit donc pas à rendre valide
+un ancien montant erroné. Ce contrôle ne réécrit pas les résultats, ne certifie pas
+leur authenticité broker et ne remplace pas la politique R.
+
+La correction historique doit passer par la chaîne de résultats versionnés et
+préserver l'ancienne preuve. L'expiration d'un Human Gate/OrderIntent sans preuve
+terminale du suivi théorique ne libère pas une réserve. Aucun nettoyage de compte
+ni changement d'instrument ne doit servir à contourner une réserve non qualifiée.
