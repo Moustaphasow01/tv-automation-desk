@@ -100,6 +100,7 @@ function signalCore(item, source, defaultAccountId, policy) {
     context_risk_multiplier: contextSizing.multiplier,
     context_risk_multiplier_source: contextSizing.source,
     proposed_size: contextSizing.size,
+    sizing_mode: policy.sizing_mode,
     portfolio_block_reason: text(firstDefined(source.portfolio_block_reason, source.portfolioBlockReason, item.portfolio_block_reason, item.portfolioBlockReason)),
     context_sizing_issue: contextSizing.issue,
     confidence: numberOrNull(firstDefined(source.confidence, item.confidence)),
@@ -169,6 +170,7 @@ function allocationForAccountInstrument(signals, portfolioScope, asOf) {
   const base = {
     portfolio_scope: portfolioScope,
     as_of_utc: asOf,
+    sizing_mode: signals[0]?.sizing_mode || "REQUESTED_QUANTITY_CAP",
     account_id: accountId,
     signal_ids: contributions.map((item) => item.signal_id),
     instrument,
@@ -199,6 +201,7 @@ function signalContribution(signal) {
     requested_size: signal.requested_size,
     context_risk_multiplier: signal.context_risk_multiplier,
     context_risk_multiplier_source: signal.context_risk_multiplier_source || null,
+    sizing_mode: signal.sizing_mode,
     proposed_size: signal.proposed_size,
     signed_size: signedSize(signal.direction, signal.proposed_size),
     confidence: signal.confidence,
@@ -316,7 +319,10 @@ function signalSource(item) {
 
 function signalSize(item, source, direction) {
   if (direction === "FLAT") return 0;
-  return positive(firstDefined(source.proposed_size, source.size, source.quantity, source.contracts, item.proposed_size, item.size, item.quantity, item.contracts), DEFAULT_PORTFOLIO_CANDIDATE_ALLOCATION_POLICY_V1.default_signal_size);
+  const explicit = firstDefined(source.proposed_size, source.size, source.quantity, source.contracts, item.proposed_size, item.size, item.quantity, item.contracts);
+  return explicit === null
+    ? DEFAULT_PORTFOLIO_CANDIDATE_ALLOCATION_POLICY_V1.default_signal_size
+    : positive(explicit, 0);
 }
 
 function contextAdjustedSize(item, source, requestedSize, policy) {

@@ -89,6 +89,53 @@ test("account-wide persisted reservations consume the common budget across instr
   }
 });
 
+test("canonical USD risk reserves pending and partially open quantity once", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async () => {
+  const database = await createTheoreticalTestDatabase();
+  try {
+    const intentId = "monetary-partial-intent";
+    await insertMonetaryIntent(database.pool, intentId);
+    const pending = await exposure(database.pool, monetaryExposureRequest());
+    assert.equal(pending.loss_usage.monetary_availability, "KNOWN");
+    assert.equal(pending.loss_usage.reserved_monetary_risk, 1000);
+    assert.equal(pending.loss_usage.currency, "USD");
+    const missingCurrency = await exposure(database.pool, exposureRequest());
+    assert.equal(missingCurrency.loss_usage.monetary_availability, "UNAVAILABLE");
+    assert.equal(missingCurrency.loss_usage.reserved_monetary_risk, null);
+    await database.pool.query(`UPDATE portfolio_order_intent_lineage
+      SET risk_snapshot = jsonb_set(risk_snapshot,'{availability}','"UNAVAILABLE"')
+      WHERE portfolio_order_intent_id = $1`, [intentId]);
+    const missingProvenance = await exposure(database.pool, monetaryExposureRequest());
+    assert.equal(missingProvenance.loss_usage.monetary_availability, "UNAVAILABLE");
+    assert.equal(missingProvenance.loss_usage.reserved_monetary_risk, null);
+    await database.pool.query(`UPDATE portfolio_order_intent_lineage
+      SET risk_snapshot = jsonb_set(risk_snapshot,'{availability}','"KNOWN"')
+      WHERE portfolio_order_intent_id = $1`, [intentId]);
+
+    await insertPartiallyClosedTrade(database.pool, intentId);
+    const partial = await exposure(database.pool, monetaryExposureRequest());
+    assert.equal(partial.pending_order_intents.length, 0);
+    assert.equal(partial.positions.filter((item) => item.source === "THEORETICAL_TRADE")[0].size, 1);
+    assert.equal(partial.loss_usage.reserved_monetary_risk, 500);
+
+    await closeMonetaryTrade(database.pool, intentId);
+    const profitIntentId = "monetary-profit-intent";
+    await insertMonetaryIntent(database.pool, profitIntentId);
+    await insertClosedMonetaryProfit(database.pool, profitIntentId);
+    const closed = await exposure(database.pool, monetaryExposureRequest());
+    assert.equal(closed.loss_usage.reserved_monetary_risk, 0);
+    assert.equal(closed.loss_usage.daily_loss_monetary, 50);
+    assert.equal(closed.loss_usage.weekly_loss_monetary, 50);
+    assert.equal(closed.loss_usage.daily_realized_r, -0.05);
+
+    await database.pool.query("UPDATE trade_outcomes SET calculated_at_utc = '2026-09-05T14:06Z' WHERE trade_id = $1", [`trade:${intentId}`]);
+    const futureCalculation = await exposure(database.pool, monetaryExposureRequest());
+    assert.equal(futureCalculation.loss_usage_availability, "UNAVAILABLE");
+    assert.ok(futureCalculation.reason_codes.includes("THEORETICAL_CLOSED_TRADE_OUTCOME_UNAVAILABLE"));
+  } finally {
+    await database.close();
+  }
+});
+
 test("a qualified signal stays rejected in a later batch after its theoretical intent is terminal", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async () => {
   const database = await createTheoreticalTestDatabase();
   try {
@@ -232,6 +279,83 @@ function signal(overrides = {}) {
 
 function exposureRequest() {
   return { as_of_utc: NOW, account_id: "shadow-grains", portfolio_scope: "shadow-grains", execution_mode: "SHADOW", instruments: ["ZC"] };
+}
+
+function monetaryExposureRequest() {
+  return {
+    ...exposureRequest(),
+    risk_budget: { max_monetary_risk_currency: "USD" },
+  };
+}
+
+async function exposure(pool, request) {
+  const client = await pool.connect();
+  try { return await loadTheoreticalExposureAsOf(client, request); }
+  finally { client.release(); }
+}
+
+async function insertMonetaryIntent(pool, intentId) {
+  const hash = `sha256:${"7".repeat(64)}`;
+  const plan = { availability: "KNOWN", economics: { availability: "KNOWN", currency: "USD", risk_per_contract: 500 } };
+  const risk = { availability: "KNOWN", risk_amount: 1000, risk_per_contract: 500 };
+  const snapshot = { availability: "KNOWN", currency: "USD", risk_amount: 1000, risk_per_contract: 500 };
+  await pool.query(`INSERT INTO portfolio_arbitration_runs
+    (portfolio_arbitration_run_id,idempotency_key,portfolio_scope,account_id,status,as_of_utc,plan_hash,payload_hash)
+    VALUES ($1,$1,'shadow-grains','shadow-grains','ORDER_INTENTS_READY','2026-09-05T14:00Z',$2,$2)`, [intentId, hash]);
+  await pool.query(`INSERT INTO portfolio_target_positions
+    (target_position_id,portfolio_arbitration_run_id,account_id,instrument,net_direction,status,computed_at_utc,
+      target_hash,payload_hash,approved_trade_plan,risk_allocation)
+    VALUES ($1,$1,'shadow-grains','ZC','LONG','TARGETED','2026-09-05T14:00Z',$2,$2,$3,$4)`, [intentId, hash, plan, risk]);
+  await pool.query(`INSERT INTO portfolio_order_intent_lineage
+    (portfolio_order_intent_id,target_position_id,idempotency_key,status,quantity,order_intent_hash,payload_hash,
+      payload,risk_snapshot,created_at_utc)
+    VALUES ($1,$1,$1,'READY',2,$2,$2,$3,$4,'2026-09-05T14:00Z')`, [intentId, hash, { action: "BUY", approved_trade_plan: plan }, snapshot]);
+}
+
+async function insertPartiallyClosedTrade(pool, intentId) {
+  const tradeId = `trade:${intentId}`;
+  await pool.query(`INSERT INTO trades
+    (trade_id,portfolio_order_intent_id,status,side,quantity_planned,quantity_open,quantity_closed,opened_at,raw)
+    VALUES ($1,$2,'open','long',2,1,1,'2026-09-05T14:01Z','{"source":"theoretical_execution_engine"}')`, [tradeId, intentId]);
+  await pool.query(`INSERT INTO trade_fills (trade_fill_id,trade_id,side,quantity,price,filled_at,raw)
+    VALUES ($1,$2,'buy',2,100,'2026-09-05T14:01Z','{}'),($3,$2,'sell',1,99,'2026-09-05T14:03Z','{}')`,
+  [`entry:${tradeId}`, tradeId, `partial-exit:${tradeId}`]);
+  await pool.query(`INSERT INTO trade_theoretical_execution_events
+    (theoretical_execution_event_id,portfolio_order_intent_id,trade_id,event_type,event_at_utc,payload,raw)
+    VALUES ($1,$2,$3,'entry_filled','2026-09-05T14:01Z','{}','{}')`, [`entry-event:${tradeId}`, intentId, tradeId]);
+}
+
+async function closeMonetaryTrade(pool, intentId) {
+  const tradeId = `trade:${intentId}`;
+  await pool.query(`INSERT INTO trade_fills (trade_fill_id,trade_id,side,quantity,price,filled_at,raw)
+    VALUES ($1,$2,'sell',1,95,'2026-09-05T14:04Z','{}')`, [`final-exit:${tradeId}`, tradeId]);
+  await pool.query(`UPDATE trades SET status='closed',quantity_open=0,quantity_closed=2,closed_at='2026-09-05T14:04Z'
+    WHERE trade_id=$1`, [tradeId]);
+  await pool.query(`INSERT INTO trade_outcomes
+    (trade_outcome_id,trade_id,revision,status,schema_version,engine_version,initial_risk_amount,
+      gross_realized_pnl,total_fees,net_realized_pnl,result_r,evidence_hash,evidence,calculated_at_utc,finalized_at_utc)
+    VALUES ($1,$2,1,'final','test-outcome-v1','test-engine',1000,-150,0,-150,-0.15,$3,'{}','2026-09-05T14:04Z','2026-09-05T14:04Z')`,
+  [`outcome:${tradeId}`, tradeId, `sha256:${"8".repeat(64)}`]);
+}
+
+async function insertClosedMonetaryProfit(pool, intentId) {
+  const tradeId = `trade:${intentId}`;
+  await pool.query(`INSERT INTO trades
+    (trade_id,portfolio_order_intent_id,status,side,quantity_planned,quantity_open,quantity_closed,opened_at,closed_at,raw)
+    VALUES ($1,$2,'closed','long',2,0,2,'2026-09-05T14:01Z','2026-09-05T14:04Z',
+      '{"source":"theoretical_execution_engine"}')`, [tradeId, intentId]);
+  await pool.query(`INSERT INTO trade_fills (trade_fill_id,trade_id,side,quantity,price,filled_at,raw)
+    VALUES ($1,$2,'buy',2,100,'2026-09-05T14:01Z','{}'),($3,$2,'sell',2,101,'2026-09-05T14:04Z','{}')`,
+  [`entry:${tradeId}`, tradeId, `exit:${tradeId}`]);
+  await pool.query(`INSERT INTO trade_theoretical_execution_events
+    (theoretical_execution_event_id,portfolio_order_intent_id,trade_id,event_type,event_at_utc,payload,raw)
+    VALUES ($1,$2,$3,'entry_filled','2026-09-05T14:01Z','{}','{}')`, [`entry-event:${tradeId}`, intentId, tradeId]);
+  await pool.query(`INSERT INTO trade_outcomes
+    (trade_outcome_id,trade_id,revision,status,schema_version,engine_version,initial_risk_amount,
+      gross_realized_pnl,total_fees,net_realized_pnl,result_r,evidence_hash,evidence,calculated_at_utc,finalized_at_utc)
+    VALUES ($1,$2,1,'final','test-outcome-v1','test-engine',1000,100,0,100,0.1,$3,'{}',
+      '2026-09-05T14:04Z','2026-09-05T14:04Z')`,
+  [`outcome:${tradeId}`, tradeId, `sha256:${"9".repeat(64)}`]);
 }
 
 async function count(pool, table) {

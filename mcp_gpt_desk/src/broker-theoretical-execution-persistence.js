@@ -243,7 +243,7 @@ export async function insertTheoreticalTradeEvent(client, { trade, result, inten
   );
 }
 
-export async function expireTheoreticalIntent(client, intent) {
+export async function expireTheoreticalIntent(client, intent, eventAt) {
   const portfolioId = portfolioOrderIntentId(intent);
   if (portfolioId) {
     await client.query(`UPDATE portfolio_order_intent_lineage
@@ -251,12 +251,12 @@ export async function expireTheoreticalIntent(client, intent) {
       WHERE portfolio_order_intent_id = $1
         AND status NOT IN ('REJECTED','EXPIRED','CANCELLED','SUPERSEDED')`, [portfolioId]);
     await client.query(`UPDATE human_execution_gates
-      SET status = 'EXPIRED', updated_at_utc = now()
+      SET status = 'EXPIRED', updated_at_utc = $2::timestamptz
       WHERE portfolio_order_intent_id = $1
-        AND status = 'AWAITING_MANUAL_CONFIRMATION'`, [portfolioId]);
+        AND status = 'AWAITING_MANUAL_CONFIRMATION'`, [portfolioId, eventAt]);
     return;
   }
-  await client.query("UPDATE trade_order_intents SET status = 'expired', updated_at = now() WHERE order_intent_id = $1 AND status NOT IN ('cancelled','rejected','expired','superseded')", [legacyOrderIntentId(intent)]);
+  await client.query("UPDATE trade_order_intents SET status = 'expired', updated_at = $2::timestamptz WHERE order_intent_id = $1 AND status NOT IN ('cancelled','rejected','expired','superseded')", [legacyOrderIntentId(intent), eventAt]);
 }
 
 export function buildTheoreticalExit({ trade, result, now }) {

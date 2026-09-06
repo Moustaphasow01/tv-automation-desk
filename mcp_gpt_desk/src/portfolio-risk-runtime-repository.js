@@ -135,7 +135,10 @@ export function createPortfolioRiskRuntimeRepository(persistence) {
 }
 
 export function normalizePipelineRecord(input = {}) {
-  const allocations = array(input.allocations?.candidate_allocations || input.candidate_allocations);
+  // Keep unauthorizable drafts in the audited run payload, not as canonical
+  // allocation rows. A corrected policy may reconsider that same draft safely.
+  const allocations = input.risk?.status === "CONFIG_MISSING" ? []
+    : array(input.allocations?.candidate_allocations || input.candidate_allocations);
   const riskDecisions = array(input.risk?.allocation_evaluations || input.risk_decisions);
   const targets = array(input.targets?.target_positions || input.target_positions);
   const orderIntents = array(input.intents?.order_intents || input.order_intents);
@@ -184,7 +187,8 @@ function stableIdempotencyKey(input = {}) {
   if (supplied) return supplied;
   const signals = input.signals || input.allocations?.candidate_allocations || [];
   const signalIds = array(signals).map((item) => text(item.signal_id || item.id)).filter(Boolean).sort();
-  return `portfolio-risk:${canonicalSha256({ account_id: text(input.account_id || "default"), portfolio_scope: text(input.portfolio_scope || input.scope || "default"), signal_ids: signalIds })}`;
+  return `portfolio-risk:${canonicalSha256({ account_id: text(input.account_id || "default"), portfolio_scope: text(input.portfolio_scope || input.scope || "default"), signal_ids: signalIds,
+    risk_budget: input.risk_budget || input.riskBudget || null })}`;
 }
 
 function persistedExisting(existing) {

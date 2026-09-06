@@ -115,6 +115,43 @@ async function createStore(pool) {
   };
 }
 
+test("monetary policy retries missing configuration, preserves reduced-context one-contract signal and persists immutable Human Gate", {
+  skip: process.env.RUN_POSTGRES_TESTS !== "1",
+}, async (t) => {
+  const database = await createTheoreticalTestDatabase();
+  t.after(() => database.close());
+  const store = await createStore(database.pool);
+  const ids = await seedStrategy(database.pool);
+  const bus = new StrategySignalBusService({ repository: new PostgresStrategySignalBusRepository(store.persistence), clock: store.clock });
+  const signal = grainSignal({ ...ids, direction: "LONG" });
+  signal.setup.context.risk_multiplier = 0.5;
+  await bus.publishSignal(signal, {}, { requireRunningInstance: true });
+  const pipeline = createStrategySignalDecisionPipelineService({ store });
+  const budget = { sizing_mode: "MONETARY_RISK_BUDGET", monetary_risk_scope: "PER_ALLOCATION",
+    max_monetary_risk_currency: "USD", max_portfolio_abs_size: 20,
+    max_daily_loss_monetary: 2000, max_weekly_loss_monetary: 4000, loss_currency: "USD" };
+  const command = { now_utc: NOW, account_id: "causal-shadow", prefer_embedded_context_gate_decision: true };
+  const missing = await pipeline.runOnce({ ...command, risk_budget: budget });
+  assert.equal(missing.status, "RISK_CONFIG_MISSING");
+  assert.equal(missing.human_gate_count, 0);
+  assert.equal(missing.consumed_signal_outbox_ids.length, 0);
+  assert.equal((await bus.pollPendingSignals({ now_utc: NOW })).count, 1);
+  const valid = await pipeline.runOnce({ ...command, risk_budget: { ...budget, max_monetary_risk: 500 } });
+  assert.equal(valid.human_gate_count, 1);
+  assert.equal(valid.order_intent_count, 1);
+  assert.equal(valid.provider_counts.unchanged, true);
+  const row = (await database.pool.query("SELECT requested_size, approved_size, payload FROM portfolio_risk_decisions")).rows[0];
+  assert.equal(Number(row.requested_size), 1);
+  assert.equal(Number(row.approved_size), 1);
+  const intent = (await database.pool.query("SELECT payload FROM portfolio_order_intent_lineage")).rows[0].payload;
+  assert.equal(intent.quantity, 1);
+  assert.equal(intent.execution_terms.entry.price, 500);
+  assert.equal(intent.execution_terms.stop.price, 498);
+  assert.equal(intent.execution_terms.targets[0].price, 503);
+  assert.equal((await database.pool.query("SELECT count(*)::int AS n FROM broker_provider_commands")).rows[0].n, 0);
+  assert.equal((await bus.pollPendingSignals({ now_utc: NOW })).count, 0);
+});
+
 async function seedStrategy(pool) {
   const ids = {
     strategy_definition_id: randomUUID(),

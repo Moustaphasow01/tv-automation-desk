@@ -6,13 +6,53 @@ import { listTheoreticalEntryCandidates, expireStalePortfolioHumanGates, recordT
 import { latestClosedCandleForIntent, latestClosedCandleForTrade } from "../src/broker-theoretical-candle-repository.js";
 import { evaluateTheoreticalEntryIntent } from "../src/theoretical-execution-engine.js";
 import { materializeTradeOutcome, resolveOutcomePointValue } from "../src/broker-trade-outcome-repository.js";
+import { loadTheoreticalExposureAsOf } from "../src/portfolio-theoretical-exposure-repository.js";
+
+const HISTORICAL_CUTOFF = "2026-09-01T14:04:00.000Z";
 
 test("point value comes from frozen canonical units, never an invented 1", () => {
   assert.equal(resolveOutcomePointValue({ point_value: 2, intent_units: { point_value: 50 } }), 50);
+  assert.equal(resolveOutcomePointValue({ point_value: 2, intent_economics_units: { point_value: 50 } }), 50);
+  assert.equal(resolveOutcomePointValue({ target_economics_units: { point_value: 50 }, target_units: { point_value: 2 } }), 50);
   assert.equal(resolveOutcomePointValue({ raw: { execution_units: { point_value: 50 } }, intent_units: { point_value: 10 } }), 50);
   for (const value of [null, undefined, "", false, 0, -1, "not a value"]) {
     assert.equal(resolveOutcomePointValue({ point_value: value }), null);
   }
+});
+
+test("historical gate expiry records business time and releases risk only after terminal proof", {
+  skip: process.env.RUN_POSTGRES_TESTS !== "1",
+}, async (t) => {
+  const repository = await createTheoreticalTestDatabase();
+  t.after(() => repository.close());
+  const intentId = "historical-expiry";
+  await seedAuthorizedIntent(repository.pool, intentId);
+  await backdateIntentForHistoricalExpiry(repository.pool, intentId);
+
+  const sweep = await expireStalePortfolioHumanGates(repository, {
+    now: HISTORICAL_CUTOFF, portfolioOrderIntentIds: [intentId],
+  });
+  assert.equal(sweep.expired, 1);
+  const state = (await repository.pool.query(`SELECT created_at_utc,updated_at_utc,payload
+    FROM portfolio_order_intent_execution_states WHERE portfolio_order_intent_id=$1`, [intentId])).rows[0];
+  assert.equal(new Date(state.updated_at_utc).toISOString(), HISTORICAL_CUTOFF);
+  assert.equal(state.payload.expired_at_utc, HISTORICAL_CUTOFF);
+  assert.ok(Date.parse(state.created_at_utc) > Date.parse(state.updated_at_utc));
+
+  const beforeProof = await historicalExposure(repository.pool);
+  assert.equal(beforeProof.availability, "KNOWN");
+  assert.deepEqual(beforeProof.reservation_instruments, ["ZC"]);
+  assert.equal(beforeProof.reason_codes.some((code) => code.includes("AFTER_AS_OF")), false);
+
+  await recordTheoreticalEntryExpired(repository, {
+    result: { portfolio_order_intent_id: intentId, order_intent_id: intentId,
+      action: "expire_entry", status: "expired", reason: "ENTRY_WINDOW_EXPIRED",
+      event_at_utc: HISTORICAL_CUTOFF },
+    now: HISTORICAL_CUTOFF,
+  });
+  const afterProof = await historicalExposure(repository.pool);
+  assert.deepEqual(afterProof.reservation_instruments, []);
+  assert.equal(await terminalEventCount(repository.pool, intentId), 1);
 });
 
 test("canonical theoretical tracking against an isolated, fully migrated PostgreSQL database", {
@@ -121,3 +161,27 @@ test("canonical theoretical tracking against an isolated, fully migrated Postgre
     assert.equal(trade.result_r, null);
   });
 });
+
+async function backdateIntentForHistoricalExpiry(pool, intentId) {
+  await pool.query("UPDATE portfolio_arbitration_runs SET as_of_utc='2026-09-01T14:00Z' WHERE portfolio_arbitration_run_id=$1", [intentId]);
+  await pool.query("UPDATE portfolio_target_positions SET computed_at_utc='2026-09-01T14:00Z' WHERE target_position_id=$1", [intentId]);
+  await pool.query(`UPDATE human_execution_gates
+    SET expires_at_utc='2026-09-01T14:03Z', confirmed_at_utc='2026-09-01T14:00Z'
+    WHERE portfolio_order_intent_id=$1`, [intentId]);
+}
+
+async function historicalExposure(pool) {
+  const client = await pool.connect();
+  try {
+    return await loadTheoreticalExposureAsOf(client, {
+      account_id: "test", portfolio_scope: "test", execution_mode: "SHADOW",
+      instruments: ["ZC"], as_of_utc: HISTORICAL_CUTOFF,
+    });
+  } finally { client.release(); }
+}
+
+async function terminalEventCount(pool, intentId) {
+  const row = await pool.query(`SELECT count(*)::integer AS count FROM trade_theoretical_execution_events
+    WHERE portfolio_order_intent_id=$1 AND event_type='entry_expired'`, [intentId]);
+  return row.rows[0].count;
+}

@@ -138,8 +138,8 @@ describe("portfolio risk budget V1", () => {
   it("reduces the monetary budget before contract flooring and never increases the requested size", () => {
     const evaluation = evaluatePortfolioRiskBudgetV1({
       as_of_utc: "2026-08-09T08:10:00.000Z",
-      budget: { sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 250 },
-      candidate_allocations: [allocation({ proposed_size: 3, contributing_signals: [economicSignal({ multiplier: 0.85, risk: 100 })] })],
+      budget: monetaryBudget(250),
+      candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", proposed_size: 3, contributing_signals: [economicSignal({ multiplier: 0.85, risk: 100 })] })],
       virtual_portfolio: portfolioFixture(),
     });
 
@@ -154,8 +154,8 @@ describe("portfolio risk budget V1", () => {
   it("refuses rather than inventing one contract when the reduced monetary budget is insufficient", () => {
     const evaluation = evaluatePortfolioRiskBudgetV1({
       as_of_utc: "2026-08-09T08:10:00.000Z",
-      budget: { sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 100 },
-      candidate_allocations: [allocation({ proposed_size: 1, contributing_signals: [economicSignal({ multiplier: 0.85, risk: 200 })] })],
+      budget: monetaryBudget(100),
+      candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", proposed_size: 1, contributing_signals: [economicSignal({ multiplier: 0.85, risk: 200 })] })],
       virtual_portfolio: portfolioFixture(),
     });
 
@@ -174,8 +174,8 @@ describe("portfolio risk budget V1", () => {
     ]) {
       const evaluation = evaluatePortfolioRiskBudgetV1({
         as_of_utc: "2026-08-09T08:10:00.000Z",
-        budget: { sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 250, ...limits },
-        candidate_allocations: [allocation({ proposed_size: 3, contributing_signals: [economicSignal({ multiplier: 0.85, risk: 100 })] })],
+        budget: { ...monetaryBudget(250), ...limits },
+        candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", proposed_size: 3, contributing_signals: [economicSignal({ multiplier: 0.85, risk: 100 })] })],
         virtual_portfolio: portfolioFixture({ total_r: -3, weekly_r: -3, open_abs_size: 1, positions: [position()] }),
       });
       const decision = evaluation.allocation_evaluations[0];
@@ -187,15 +187,193 @@ describe("portfolio risk budget V1", () => {
     }
   });
 
-  it("monetary sizing authorizes whole contracts without exceeding a fractional request", () => {
+  it("rejects a fractional requested quantity instead of silently rounding it", () => {
     const evaluation = evaluatePortfolioRiskBudgetV1({
       as_of_utc: "2026-08-09T08:10:00.000Z",
-      budget: { sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 1000 },
-      candidate_allocations: [allocation({ proposed_size: 1.5, contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] })],
+      budget: monetaryBudget(1000),
+      candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", proposed_size: 1.5, contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] })],
       virtual_portfolio: portfolioFixture(),
     });
-    assert.equal(evaluation.allocation_evaluations[0].approved_size, 1);
-    assert.equal(evaluation.allocation_evaluations[0].status, "REDUCE");
+    assert.equal(evaluation.allocation_evaluations[0].approved_size, 0);
+    assert.equal(evaluation.allocation_evaluations[0].status, "BLOCK");
+    assert.ok(evaluation.allocation_evaluations[0].reason_codes.includes("REQUESTED_QUANTITY_INVALID"));
+  });
+
+  it("requires explicit per-allocation monetary scope and currency", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 100 },
+      candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] })],
+      virtual_portfolio: portfolioFixture(),
+    });
+
+    assert.equal(evaluation.status, "CONFIG_MISSING");
+    assert.equal(evaluation.allocation_evaluations.length, 0);
+  });
+
+  it("does not ignore declared monetary limits when the sizing mode is omitted", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { max_monetary_risk: 500, max_daily_loss_monetary: 2000, max_weekly_loss_monetary: 4000, loss_currency: "USD" },
+      candidate_allocations: [allocation({ proposed_size: 10 })],
+      virtual_portfolio: portfolioFixture(),
+    });
+    assert.equal(evaluation.status, "CONFIG_MISSING");
+    assert.equal(evaluation.allocation_evaluations.length, 0);
+  });
+
+  it("blocks monetary sizing when the configured budget currency differs", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { ...monetaryBudget(100), max_monetary_risk_currency: "EUR" },
+      candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] })],
+      virtual_portfolio: portfolioFixture(),
+    });
+
+    assert.equal(evaluation.allocation_evaluations[0].status, "BLOCK");
+    assert.ok(evaluation.allocation_evaluations[0].reason_codes.includes("MONETARY_RISK_CURRENCY_MISMATCH"));
+  });
+
+  it("keeps a hard zero contract cap instead of discarding it as missing", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { max_instrument_abs_size: { MNQ: 0 } },
+      candidate_allocations: [allocation({ proposed_size: 1 })],
+      virtual_portfolio: portfolioFixture(),
+    });
+
+    assert.equal(evaluation.status, "BLOCK");
+    assert.equal(evaluation.allocation_evaluations[0].approved_size, 0);
+  });
+
+  it("blocks when a cap has less than one whole contract remaining", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { max_instrument_abs_size: { MNQ: 2 } },
+      candidate_allocations: [allocation({ proposed_size: 1 })],
+      virtual_portfolio: portfolioFixture({ positions: [position({ signed_size: 1.5 })], open_abs_size: 1.5 }),
+    });
+
+    const decision = evaluation.allocation_evaluations[0];
+    assert.equal(decision.status, "BLOCK");
+    assert.equal(decision.approved_size, 0);
+    assert.ok(decision.reason_codes.includes("INSUFFICIENT_WHOLE_CONTRACT_CAPACITY"));
+  });
+
+  it("reserves one approved allocation once for repeated signals of one strategy", () => {
+    const contribution = (signal_id) => ({ signal_id, strategy_instance_id: "inst-a", proposed_size: 1 });
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { max_strategy_abs_size: { "inst-a": 3 }, max_portfolio_abs_size: 10 },
+      candidate_allocations: [
+        allocation({ id: "alloc-a", proposed_size: 2, contributing_signals: [contribution("sig-a"), contribution("sig-b")] }),
+        allocation({ id: "alloc-b", instrument: "ZC", proposed_size: 1, contributing_signals: [contribution("sig-c")] }),
+      ],
+      virtual_portfolio: portfolioFixture(),
+    });
+
+    assert.equal(evaluation.allocation_evaluations.find((item) => item.candidate_allocation_id === "alloc-a").approved_size, 2);
+    assert.equal(evaluation.allocation_evaluations.find((item) => item.candidate_allocation_id === "alloc-b").approved_size, 1);
+  });
+
+  it("reserves the USD daily and weekly loss envelope between monetary allocations", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: {
+        ...monetaryBudget(500), max_daily_loss_monetary: 2000,
+        max_weekly_loss_monetary: 4000, loss_currency: "USD",
+      },
+      candidate_allocations: [
+        allocation({ id: "alloc-a", sizing_mode: "MONETARY_RISK_BUDGET", proposed_size: 5, contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] }),
+        allocation({ id: "alloc-b", instrument: "NQ", sizing_mode: "MONETARY_RISK_BUDGET", proposed_size: 1, contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] }),
+      ],
+      loss_usage: monetaryLossUsage({ daily: 1600, weekly: 3500 }),
+      virtual_portfolio: portfolioFixture(),
+    });
+
+    const first = evaluation.allocation_evaluations.find((item) => item.candidate_allocation_id === "alloc-a");
+    const second = evaluation.allocation_evaluations.find((item) => item.candidate_allocation_id === "alloc-b");
+    assert.equal(first.approved_size, 4);
+    assert.equal(second.approved_size, 0);
+    assert.ok(second.reason_codes.includes("DAILY_MONETARY_LOSS_LIMIT_REACHED"));
+  });
+
+  it("fails closed when USD monetary loss usage is unavailable or mismatched", () => {
+    for (const loss_usage of [
+      {},
+      monetaryLossUsage({ currency: "EUR" }),
+    ]) {
+      const evaluation = evaluatePortfolioRiskBudgetV1({
+        as_of_utc: "2026-08-09T08:10:00.000Z",
+        budget: { ...monetaryBudget(500), max_daily_loss_monetary: 2000, max_weekly_loss_monetary: 4000, loss_currency: "USD" },
+        candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] })],
+        loss_usage,
+        virtual_portfolio: portfolioFixture(),
+      });
+      assert.equal(evaluation.allocation_evaluations[0].status, "BLOCK");
+      assert.ok(evaluation.allocation_evaluations[0].reason_codes.some((code) => code === "MONETARY_LOSS_USAGE_UNAVAILABLE" || code === "MONETARY_LOSS_CURRENCY_MISMATCH"));
+    }
+  });
+
+  it("does not round a USD loss remainder up to a whole contract", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { ...monetaryBudget(500), max_daily_loss_monetary: 2000, loss_currency: "USD" },
+      candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] })],
+      loss_usage: monetaryLossUsage({ daily: 1900.004 }),
+      virtual_portfolio: portfolioFixture(),
+    });
+    assert.equal(evaluation.allocation_evaluations[0].approved_size, 0);
+    assert.ok(evaluation.allocation_evaluations[0].reason_codes.includes("INSUFFICIENT_MIN_CONTRACT"));
+  });
+
+  it("does not use a USD loss remainder as a contract-cap remainder", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { ...monetaryBudget(10), max_daily_loss_monetary: 3, loss_currency: "USD" },
+      candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", proposed_size: 10, contributing_signals: [economicSignal({ multiplier: 1, risk: 0.25 })] })],
+      loss_usage: monetaryLossUsage(),
+      virtual_portfolio: portfolioFixture(),
+    });
+    assert.equal(evaluation.allocation_evaluations[0].approved_size, 10);
+  });
+
+  it("reserves the risk of the final contract-capped size, not the provisional size", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { ...monetaryBudget(300), max_daily_loss_monetary: 300, loss_currency: "USD", max_instrument_abs_size: { MNQ: 1 } },
+      candidate_allocations: [
+        allocation({ id: "alloc-a", sizing_mode: "MONETARY_RISK_BUDGET", proposed_size: 3, contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] }),
+        allocation({ id: "alloc-b", instrument: "NQ", sizing_mode: "MONETARY_RISK_BUDGET", proposed_size: 3, contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] }),
+      ],
+      loss_usage: monetaryLossUsage(),
+      virtual_portfolio: portfolioFixture(),
+    });
+    const first = evaluation.allocation_evaluations.find((item) => item.candidate_allocation_id === "alloc-a");
+    const second = evaluation.allocation_evaluations.find((item) => item.candidate_allocation_id === "alloc-b");
+    assert.equal(first.approved_size, 1);
+    assert.equal(first.sizing.authorized_monetary_risk, 100);
+    assert.equal(second.approved_size, 2);
+  });
+
+  it("rejects boolean monetary caps instead of coercing them to one or zero", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { ...monetaryBudget(true), max_daily_loss_monetary: false, loss_currency: "USD" },
+      candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] })],
+      virtual_portfolio: portfolioFixture(),
+    });
+    assert.equal(evaluation.status, "CONFIG_MISSING");
+  });
+
+  it("requires a matching loss currency when monetary daily or weekly caps are configured", () => {
+    const evaluation = evaluatePortfolioRiskBudgetV1({
+      as_of_utc: "2026-08-09T08:10:00.000Z",
+      budget: { ...monetaryBudget(500), max_daily_loss_monetary: 2000 },
+      candidate_allocations: [allocation({ sizing_mode: "MONETARY_RISK_BUDGET", contributing_signals: [economicSignal({ multiplier: 1, risk: 100 })] })],
+      virtual_portfolio: portfolioFixture(),
+    });
+    assert.equal(evaluation.status, "CONFIG_MISSING");
   });
 });
 
@@ -207,6 +385,23 @@ function economicSignal({ multiplier, risk }) {
       availability: "KNOWN", risk_per_contract: risk, currency: "USD", entry_price: 100,
       stop_price: 99, stop_distance_points: 1, stop_distance_ticks: 4, tick_size: 0.25, tick_value: risk / 4,
     },
+  };
+}
+
+function monetaryBudget(max_monetary_risk) {
+  return {
+    sizing_mode: "MONETARY_RISK_BUDGET",
+    max_monetary_risk,
+    max_monetary_risk_currency: "USD",
+    monetary_risk_scope: "PER_ALLOCATION",
+  };
+}
+
+function monetaryLossUsage({ daily = 0, weekly = 0, reserved = 0, currency = "USD" } = {}) {
+  return {
+    monetary_availability: "KNOWN", currency,
+    daily_loss_monetary: daily, weekly_loss_monetary: weekly,
+    reserved_monetary_risk: reserved,
   };
 }
 

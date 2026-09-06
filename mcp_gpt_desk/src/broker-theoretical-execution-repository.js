@@ -134,6 +134,7 @@ export async function listTheoreticalEntryCandidates(repository, { limit = 100, 
 
 export async function expireStalePortfolioHumanGates(repository, { limit = 200, now = new Date().toISOString(), portfolioOrderIntentIds = null } = {}) {
   await repository.ready();
+  const eventAt = validIso(now);
   const bounded = boundLimit(limit);
   const hasPortfolioScope = Array.isArray(portfolioOrderIntentIds);
   const scopedPortfolioIds = normalizePortfolioOrderIntentIds(portfolioOrderIntentIds);
@@ -155,12 +156,12 @@ export async function expireStalePortfolioHumanGates(repository, { limit = 200, 
        ORDER BY g.expires_at_utc ASC
        LIMIT $2
        FOR UPDATE OF g, l SKIP LOCKED`,
-      [now, bounded, hasPortfolioScope ? scopedPortfolioIds : null],
+      [eventAt, bounded, hasPortfolioScope ? scopedPortfolioIds : null],
     );
     for (const gate of result.rows) {
       const payload = {
         expired_by: "theoretical_execution_sweeper",
-        expired_at_utc: now,
+        expired_at_utc: eventAt,
         previous_status: "AWAITING_MANUAL_CONFIRMATION",
         reason: "HUMAN_GATE_EXPIRED",
       };
@@ -170,10 +171,10 @@ export async function expireStalePortfolioHumanGates(repository, { limit = 200, 
              revision = revision + 1,
              reason = COALESCE(reason, 'HUMAN_GATE_EXPIRED'),
              payload = payload || $2::jsonb,
-             updated_at_utc = now()
+             updated_at_utc = $3::timestamptz
          WHERE human_execution_gate_id = $1
            AND status = 'AWAITING_MANUAL_CONFIRMATION'`,
-        [gate.human_execution_gate_id, json(payload)],
+        [gate.human_execution_gate_id, json(payload), eventAt],
       );
       await client.query(
         `UPDATE portfolio_order_intent_lineage
@@ -184,14 +185,14 @@ export async function expireStalePortfolioHumanGates(repository, { limit = 200, 
       );
       await client.query(
         `INSERT INTO portfolio_order_intent_execution_states (
-           portfolio_order_intent_id, lifecycle_status, payload
-         ) VALUES ($1, 'EXPIRED', $2::jsonb)
+           portfolio_order_intent_id, lifecycle_status, payload, updated_at_utc
+         ) VALUES ($1, 'EXPIRED', $2::jsonb, $3::timestamptz)
          ON CONFLICT (portfolio_order_intent_id) DO UPDATE SET
            lifecycle_status = 'EXPIRED',
            payload = portfolio_order_intent_execution_states.payload || EXCLUDED.payload,
            revision = portfolio_order_intent_execution_states.revision + 1,
-           updated_at_utc = now()`,
-        [gate.portfolio_order_intent_id, json(payload)],
+           updated_at_utc = EXCLUDED.updated_at_utc`,
+        [gate.portfolio_order_intent_id, json(payload), eventAt],
       );
       await client.query(
         `INSERT INTO human_execution_gate_events (
@@ -204,7 +205,7 @@ export async function expireStalePortfolioHumanGates(repository, { limit = 200, 
           gate.human_execution_gate_id,
           gate.portfolio_order_intent_id,
           `human_gate_expired:${gate.human_execution_gate_id}:${new Date(gate.expires_at_utc).toISOString()}`,
-          now,
+          eventAt,
           `sha256:${canonicalSha256(payload)}`,
           json(payload),
         ],
@@ -274,7 +275,7 @@ export async function recordTheoreticalEntryExpired(repository, { result, now })
     });
     if (existing) return await commitValue(client, { event: existing, idempotent: true });
     const eventAt = result.event_at_utc || now;
-    await expireTheoreticalIntent(client, intent);
+    await expireTheoreticalIntent(client, intent, eventAt);
     const event = await insertTheoreticalEvent(client, {
       eventType: "entry_expired",
       orderIntentId: legacyOrderIntentId(intent),

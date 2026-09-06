@@ -20,7 +20,20 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
     t.trade_id AS position_id, target.account_id, target.instrument, upper(t.side::text) AS direction,
     COALESCE(sum(CASE WHEN (lower(t.side::text) = 'long' AND lower(f.side::text) = 'buy')
       OR (lower(t.side::text) = 'short' AND lower(f.side::text) = 'sell') THEN f.quantity ELSE -f.quantity END), 0) AS size,
-    max(f.filled_at) AS observed_at_utc
+    max(f.filled_at) AS observed_at_utc,
+    max(CASE
+      WHEN jsonb_typeof(lineage.risk_snapshot->'risk_per_contract') = 'number'
+        THEN (lineage.risk_snapshot->>'risk_per_contract')::numeric
+      WHEN jsonb_typeof(lineage.risk_snapshot->'risk_amount') = 'number' AND lineage.quantity > 0
+        THEN (lineage.risk_snapshot->>'risk_amount')::numeric / lineage.quantity
+      ELSE NULL
+    END) AS monetary_risk_per_contract,
+    max(upper(COALESCE(NULLIF(lineage.risk_snapshot->>'currency', ''),
+      NULLIF(lineage.payload #>> '{approved_trade_plan,economics,currency}', ''),
+      NULLIF(target.approved_trade_plan #>> '{economics,currency}', '')))) AS monetary_currency,
+    max(upper(COALESCE(NULLIF(lineage.risk_snapshot->>'availability', ''),
+      NULLIF(lineage.payload #>> '{approved_trade_plan,economics,availability}', ''),
+      NULLIF(target.approved_trade_plan #>> '{economics,availability}', '')))) AS monetary_availability
   FROM trades t
   JOIN portfolio_order_intent_lineage lineage ON lineage.portfolio_order_intent_id = t.portfolio_order_intent_id
   JOIN portfolio_target_positions target ON target.target_position_id = lineage.target_position_id
@@ -35,7 +48,20 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
   SELECT
     lineage.portfolio_order_intent_id, lineage.status, lineage.quantity, lineage.created_at_utc,
     target.account_id, target.instrument, upper(lineage.payload->>'action') AS action,
-    execution.lifecycle_status, execution.filled_quantity, execution.updated_at_utc
+    execution.lifecycle_status, execution.filled_quantity, execution.updated_at_utc,
+    CASE
+      WHEN jsonb_typeof(lineage.risk_snapshot->'risk_per_contract') = 'number'
+        THEN (lineage.risk_snapshot->>'risk_per_contract')::numeric
+      WHEN jsonb_typeof(lineage.risk_snapshot->'risk_amount') = 'number' AND lineage.quantity > 0
+        THEN (lineage.risk_snapshot->>'risk_amount')::numeric / lineage.quantity
+      ELSE NULL
+    END AS monetary_risk_per_contract,
+    upper(COALESCE(NULLIF(lineage.risk_snapshot->>'currency', ''),
+      NULLIF(lineage.payload #>> '{approved_trade_plan,economics,currency}', ''),
+      NULLIF(target.approved_trade_plan #>> '{economics,currency}', ''))) AS monetary_currency,
+    upper(COALESCE(NULLIF(lineage.risk_snapshot->>'availability', ''),
+      NULLIF(lineage.payload #>> '{approved_trade_plan,economics,availability}', ''),
+      NULLIF(target.approved_trade_plan #>> '{economics,availability}', ''))) AS monetary_availability
   FROM portfolio_order_intent_lineage lineage
   JOIN portfolio_target_positions target ON target.target_position_id = lineage.target_position_id
   LEFT JOIN portfolio_order_intent_execution_states execution
@@ -62,6 +88,21 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
         WHERE trade.portfolio_order_intent_id = lineage.portfolio_order_intent_id
       )
     )
+), monetary_reservations AS (
+  SELECT position_id AS reservation_id, size AS quantity, monetary_risk_per_contract,
+    monetary_currency, monetary_availability
+  FROM open_positions
+  UNION ALL
+  SELECT portfolio_order_intent_id, quantity, monetary_risk_per_contract,
+    monetary_currency, monetary_availability
+  FROM pending_intents
+), monetary_reservation_usage AS (
+  SELECT
+    COALESCE(sum(quantity * monetary_risk_per_contract), 0) AS reserved_monetary_risk,
+    count(*) FILTER (WHERE monetary_risk_per_contract IS NULL OR monetary_risk_per_contract <= 0
+      OR monetary_currency IS DISTINCT FROM $4
+      OR monetary_availability IS DISTINCT FROM 'KNOWN')::integer AS monetary_reservation_gap_count
+  FROM monetary_reservations
 ), qualified_signals AS (
   SELECT DISTINCT jsonb_array_elements_text(
     CASE WHEN jsonb_typeof(target.lineage->'strategy_signal_ids') = 'array'
@@ -78,8 +119,19 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
     COALESCE(sum(outcome.result_r) FILTER (WHERE trade.raw->>'source' = 'theoretical_execution_engine'
       AND outcome.finalized_at_utc >= date_trunc('week', $2::timestamptz AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
       AND outcome.finalized_at_utc <= $2::timestamptz), 0) AS weekly_realized_r,
+    greatest(-COALESCE(sum(outcome.net_realized_pnl) FILTER (
+      WHERE trade.raw->>'source' = 'theoretical_execution_engine'
+        AND outcome.finalized_at_utc >= date_trunc('day', $2::timestamptz AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0), 0) AS daily_loss_monetary,
+    greatest(-COALESCE(sum(outcome.net_realized_pnl) FILTER (
+      WHERE trade.raw->>'source' = 'theoretical_execution_engine'
+        AND outcome.finalized_at_utc >= date_trunc('week', $2::timestamptz AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'), 0), 0) AS weekly_loss_monetary,
     count(*) FILTER (WHERE trade.raw->>'source' = 'theoretical_execution_engine')::integer AS final_outcome_count,
-    count(*) FILTER (WHERE trade.raw->>'source' IS DISTINCT FROM 'theoretical_execution_engine')::integer AS unproven_final_outcome_count
+    count(*) FILTER (WHERE trade.raw->>'source' IS DISTINCT FROM 'theoretical_execution_engine')::integer AS unproven_final_outcome_count,
+    count(*) FILTER (WHERE trade.raw->>'source' = 'theoretical_execution_engine'
+      AND outcome.finalized_at_utc >= date_trunc('week', $2::timestamptz AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+      AND upper(COALESCE(NULLIF(lineage.risk_snapshot->>'currency', ''),
+        NULLIF(lineage.payload #>> '{approved_trade_plan,economics,currency}', ''),
+        NULLIF(target.approved_trade_plan #>> '{economics,currency}', ''))) IS DISTINCT FROM $4)::integer AS monetary_outcome_gap_count
   FROM trade_outcomes outcome
   JOIN trades trade ON trade.trade_id = outcome.trade_id
   JOIN portfolio_order_intent_lineage lineage ON lineage.portfolio_order_intent_id = trade.portfolio_order_intent_id
@@ -87,6 +139,7 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
   WHERE outcome.status = 'final'
     AND outcome.finalized_at_utc IS NOT NULL
     AND outcome.finalized_at_utc <= $2::timestamptz
+    AND outcome.calculated_at_utc <= $2::timestamptz
     AND target.account_id = $1
 ), closed_trade_outcome_gaps AS (
   SELECT count(*) FILTER (WHERE NOT EXISTS (
@@ -95,6 +148,7 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
         AND outcome.status = 'final'
         AND outcome.finalized_at_utc IS NOT NULL
         AND outcome.finalized_at_utc <= $2::timestamptz
+        AND outcome.calculated_at_utc <= $2::timestamptz
     ))::integer AS missing_closed_final_outcome_count
   FROM trades trade
   JOIN portfolio_order_intent_lineage lineage ON lineage.portfolio_order_intent_id = trade.portfolio_order_intent_id
@@ -110,23 +164,30 @@ SELECT
   COALESCE((SELECT jsonb_agg(to_jsonb(pending_intents)) FROM pending_intents), '[]'::jsonb) AS intents,
   COALESCE((SELECT jsonb_agg(to_jsonb(qualified_signals)) FROM qualified_signals), '[]'::jsonb) AS qualified,
   (SELECT jsonb_build_object('daily_realized_r', daily_realized_r, 'weekly_realized_r', weekly_realized_r,
+    'daily_loss_monetary', daily_loss_monetary, 'weekly_loss_monetary', weekly_loss_monetary,
+    'reserved_monetary_risk', reserved_monetary_risk, 'currency', $4,
+    'monetary_reservation_gap_count', monetary_reservation_gap_count,
+    'monetary_outcome_gap_count', monetary_outcome_gap_count,
     'final_outcome_count', final_outcome_count, 'unproven_final_outcome_count', unproven_final_outcome_count,
     'missing_closed_final_outcome_count', missing_closed_final_outcome_count,
     'period_timezone', 'UTC', 'provenance', 'THEORETICAL_FINAL_OUTCOMES')
-   FROM realized_loss_usage CROSS JOIN closed_trade_outcome_gaps) AS loss_usage`;
+   FROM realized_loss_usage CROSS JOIN closed_trade_outcome_gaps CROSS JOIN monetary_reservation_usage) AS loss_usage`;
 
 function normalizeRequest(input) {
   const instruments = [...new Set(array(input.instruments).map(upper).filter(Boolean))].sort();
   const asOf = iso(input.as_of_utc || input.asOfUtc);
   if (!asOf) throw new Error("THEORETICAL_EXPOSURE_CUTOFF_REQUIRED");
+  const accountId = text(input.account_id || input.accountId || "default");
+  const monetaryCurrency = currency(input.risk_budget?.max_monetary_risk_currency);
   return {
-    accountId: text(input.account_id || input.accountId || "default"),
+    accountId,
     portfolioScope: text(input.portfolio_scope || input.portfolioScope || input.scope || "default"),
     executionMode: upper(input.execution_mode || input.executionMode || "SHADOW"),
     requireHistoricalStatus: input.require_historical_status === true || input.requireHistoricalStatus === true,
     asOf,
     instruments,
-    intentParams: [text(input.account_id || input.accountId || "default"), asOf, TERMINAL_INTENT_STATUSES],
+    monetaryCurrency,
+    intentParams: [accountId, asOf, TERMINAL_INTENT_STATUSES, monetaryCurrency],
   };
 }
 
@@ -172,8 +233,10 @@ function normalizeLossUsage(row) {
   const values = lossUsageValues(row);
   const unavailable = unavailableLossUsage(values);
   if (unavailable) return unavailable;
+  const monetary = monetaryLossFields(values);
   return {
     availability: "KNOWN", daily_realized_r: values.daily, weekly_realized_r: values.weekly,
+    ...monetary,
     final_outcome_count: values.finalOutcomeCount, unproven_final_outcome_count: values.unprovenCount,
     missing_closed_final_outcome_count: values.missingClosedCount,
     period_timezone: text(values.source.period_timezone || "UTC"),
@@ -187,6 +250,12 @@ function lossUsageValues(row) {
     source,
     daily: signedNumericOrNull(source.daily_realized_r),
     weekly: signedNumericOrNull(source.weekly_realized_r),
+    dailyMonetary: moneyOrNull(source.daily_loss_monetary),
+    weeklyMonetary: moneyOrNull(source.weekly_loss_monetary),
+    reservedMonetary: moneyOrNull(source.reserved_monetary_risk),
+    currency: currency(source.currency),
+    monetaryReservationGapCount: numericOrNull(source.monetary_reservation_gap_count),
+    monetaryOutcomeGapCount: numericOrNull(source.monetary_outcome_gap_count),
     finalOutcomeCount: numericOrNull(source.final_outcome_count),
     unprovenCount: numericOrNull(source.unproven_final_outcome_count),
     missingClosedCount: numericOrNull(source.missing_closed_final_outcome_count),
@@ -195,11 +264,33 @@ function lossUsageValues(row) {
 
 function unavailableLossUsage(values) {
   if ([values.daily, values.weekly, values.unprovenCount, values.missingClosedCount].includes(null)) {
-    return { availability: "UNAVAILABLE", reason_codes: ["THEORETICAL_FINAL_OUTCOME_R_UNAVAILABLE"] };
+    return unavailableLossUsageFor("THEORETICAL_FINAL_OUTCOME_R_UNAVAILABLE");
   }
-  if (values.unprovenCount > 0) return { availability: "UNAVAILABLE", reason_codes: ["THEORETICAL_FINAL_OUTCOME_PROVENANCE_UNAVAILABLE"] };
-  if (values.missingClosedCount > 0) return { availability: "UNAVAILABLE", reason_codes: ["THEORETICAL_CLOSED_TRADE_OUTCOME_UNAVAILABLE"] };
+  if (values.unprovenCount > 0) return unavailableLossUsageFor("THEORETICAL_FINAL_OUTCOME_PROVENANCE_UNAVAILABLE");
+  if (values.missingClosedCount > 0) return unavailableLossUsageFor("THEORETICAL_CLOSED_TRADE_OUTCOME_UNAVAILABLE");
   return null;
+}
+
+function monetaryAvailability(values) {
+  const amounts = [values.dailyMonetary, values.weeklyMonetary, values.reservedMonetary];
+  if (!values.currency || amounts.includes(null)
+    || values.monetaryReservationGapCount === null || values.monetaryOutcomeGapCount === null) return "UNAVAILABLE";
+  return values.monetaryReservationGapCount > 0 || values.monetaryOutcomeGapCount > 0
+    ? "UNAVAILABLE"
+    : "KNOWN";
+}
+
+function monetaryLossFields(values) {
+  const availability = monetaryAvailability(values);
+  if (availability !== "KNOWN") return {
+    monetary_availability: "UNAVAILABLE", daily_loss_monetary: null,
+    weekly_loss_monetary: null, reserved_monetary_risk: null, currency: "UNAVAILABLE",
+  };
+  return {
+    monetary_availability: "KNOWN", daily_loss_monetary: values.dailyMonetary,
+    weekly_loss_monetary: values.weeklyMonetary, reserved_monetary_risk: values.reservedMonetary,
+    currency: values.currency,
+  };
 }
 
 function reservationPositions(intents) {
@@ -225,6 +316,7 @@ function unsupportedSnapshot(request) {
     availability: "UNAVAILABLE",
     reason_codes: ["PHYSICAL_EXPOSURE_READ_UNSUPPORTED"],
     loss_usage_availability: "UNAVAILABLE",
+    loss_usage: unavailableLossUsageSnapshot(),
     positions: [], pending_order_intents: [], qualified_signal_ids: [], reservation_instruments: [], unknown_reservation_instruments: [],
   };
 }
@@ -235,6 +327,7 @@ function historicalStatusUnavailable(request) {
     portfolio_scope: request.portfolioScope, account_id: request.accountId, availability: "UNAVAILABLE",
     reason_codes: ["THEORETICAL_LINEAGE_STATUS_HISTORY_UNAVAILABLE"],
     loss_usage_availability: "UNAVAILABLE",
+    loss_usage: unavailableLossUsageSnapshot(),
     positions: [], pending_order_intents: [], qualified_signal_ids: [], reservation_instruments: [], unknown_reservation_instruments: [],
   };
 }
@@ -273,5 +366,20 @@ function signedNumericOrNull(value) {
   if (value === null || value === undefined || String(value).trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+function moneyOrNull(value) {
+  const parsed = numericOrNull(value);
+  return parsed === null ? null : Math.round(parsed * 100) / 100;
+}
+function currency(value) {
+  const code = upper(value);
+  return /^[A-Z]{3}$/.test(code) ? code : null;
+}
+function unavailableLossUsageSnapshot() {
+  return { availability: "UNAVAILABLE", monetary_availability: "UNAVAILABLE", daily_loss_monetary: null,
+    weekly_loss_monetary: null, reserved_monetary_risk: null, currency: "UNAVAILABLE", reason_codes: [] };
+}
+function unavailableLossUsageFor(reasonCode) {
+  return { ...unavailableLossUsageSnapshot(), reason_codes: [reasonCode] };
 }
 function iso(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }

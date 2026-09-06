@@ -69,5 +69,9 @@ test("real PostgreSQL replay: raw pair, canonical context/risk/gate and theoreti
   assert.ok(fill, "canonical live theory must fill after creation, without human confirmation");
   assert.ok(Date.parse(fill.source_candle_timestamp_utc) >= Date.parse(signals[0].generated_at_utc));
   assert.equal(result.ledger.theoretical_events.some((row) => row.event_type === "target_hit"), true);
+  assert.equal(result.ledger.outcomes.filter(row => row.status === "final").length, 1);
+  assert.equal(Number(result.ledger.outcomes[0].initial_risk_amount), 100);
+  assert.equal(Number(result.ledger.outcomes[0].net_realized_pnl), 150);
+  assert.equal(Number(result.ledger.outcomes[0].result_r), 1.5);
   assert.equal(result.provider_commands, 0);
 });

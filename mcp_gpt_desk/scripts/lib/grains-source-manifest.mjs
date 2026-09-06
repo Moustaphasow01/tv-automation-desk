@@ -35,7 +35,8 @@ export async function captureGrainsSourceManifest() {
 export async function captureGrainsCanonicalReplaySourceManifest() {
   const core = await captureGrainsSourceManifest();
   const files = ["mcp_gpt_desk/package.json", "mcp_gpt_desk/package-lock.json",
-    "mcp_gpt_desk/scripts/replay_us_grains_causal_postgres.mjs"];
+    "mcp_gpt_desk/scripts/replay_us_grains_causal_postgres.mjs",
+    "mcp_gpt_desk/scripts/lib/grains-replay-risk-policy.mjs"];
   await collectPackage("mcp_gpt_desk/src", files);
   await collectPackage("packages/desk-contracts", files);
   await collectPackage("packages/desk-audit/src", files);

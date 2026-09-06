@@ -1,4 +1,5 @@
 import { SystemClock } from "@tv-automation/desk-time";
+import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { AiContextGateService } from "./ai-context-gate-service.js";
 import { createAiContextGateRepository } from "./ai-context-gate-repository.js";
 import { PortfolioOrderIntentExecutionService } from "./portfolio-order-intent-execution-service.js";
@@ -7,6 +8,7 @@ import { PortfolioRiskRuntimeService } from "./portfolio-risk-runtime-service.js
 import { createPortfolioRiskRuntimeRepository } from "./portfolio-risk-runtime-repository.js";
 import { createStrategySignalBusRepository } from "./strategy-signal-bus-repository.js";
 import { MarketContextPrefilterService } from "./market-context-prefilter-service.js";
+import { resolveStrategySignalRiskBudget } from "./strategy-signal-risk-policy.js";
 
 export class StrategySignalDecisionPipelineService {
   constructor({ signalBusRepository, contextPrefilter = null, contextGate, riskRuntime, execution, providerCounts = null, clock } = {}) {
@@ -64,6 +66,8 @@ export class StrategySignalDecisionPipelineService {
 
   async #runAdmissible({ input, nowUtc, before, expired, pending, scopedCount, prefilter, admissible, rejectedItems, waitItems, contextDecisions }) {
     const pipeline = await this.riskRuntime.runPipeline(riskCommand(input, admissible, nowUtc));
+    if (pipeline.risk?.status === "CONFIG_MISSING") return this.#deferRiskConfiguration({
+      pipeline, input, nowUtc, before, expired, pending, scopedCount, prefilter, admissible, rejectedItems, waitItems, contextDecisions });
     const terminalSignals = [...admissible, ...rejectedItems.map((item) => item.signal)];
     const consumed = await this.#consume(terminalSignals, input, nowUtc);
     const humanGates = await this.#ensureHumanGates(pipeline, nowUtc);
@@ -94,6 +98,20 @@ export class StrategySignalDecisionPipelineService {
       deferred_signal_outbox_ids: waitItems.map((item) => item.signal.signal_outbox_id).filter(Boolean),
       shadow_dispatch: shadowDispatch,
       provider_counts: { before, after, unchanged: true },
+    };
+  }
+
+  async #deferRiskConfiguration({ pipeline, input, nowUtc, before, expired, pending, scopedCount, prefilter, admissible, rejectedItems, waitItems, contextDecisions }) {
+    const consumed = await this.#consume(rejectedItems.map(item => item.signal), input, nowUtc);
+    return {
+      status: "RISK_CONFIG_MISSING", as_of_utc: nowUtc, pending_seen: pending.length,
+      scoped_signal_count: scopedCount, context_prefilter: prefilterSummary(prefilter),
+      context_decision_count: contextDecisions.length, risk_decision_count: 0,
+      target_position_count: 0, order_intent_count: 0, human_gate_count: 0,
+      portfolio_arbitration_run_id: pipeline.persistence?.portfolio_arbitration_run_id || null,
+      expired_signal_outbox_ids: signalOutboxIds(expired), consumed_signal_outbox_ids: consumed,
+      deferred_signal_outbox_ids: signalOutboxIds([...admissible, ...waitItems.map(item => item.signal)]),
+      provider_counts: { before, after: before, unchanged: true },
     };
   }
 
@@ -200,19 +218,7 @@ function signalInScope(item, input) {
 }
 
 function riskBudget(input) {
-  const account = accountId(input);
-  const maxAbs = positiveNumber(input.max_abs_size || input.maxAbsSize || process.env.DESK_SHADOW_RISK_MAX_ABS_SIZE, 20);
-  return input.risk_budget || input.riskBudget || {
-    budget_id: "shadow-live-risk-budget-v1",
-    max_portfolio_abs_size: maxAbs,
-    max_account_abs_size: { [account]: maxAbs },
-    max_instrument_abs_size: { MNQ: maxAbs, MES: maxAbs, ZC: maxAbs, ZW: maxAbs },
-    max_correlation_group_abs_size: { equity_index: maxAbs, grains: maxAbs },
-    metadata: {
-      execution_mode: "SHADOW",
-      source: "strategy-signal-decision-pipeline",
-    },
-  };
+  return resolveStrategySignalRiskBudget({ input, environment: process.env, accountId: accountId(input) });
 }
 
 function executionPolicy(input) {
@@ -299,15 +305,17 @@ function contextSizedSignal(item) {
 }
 
 function riskCommand(input, signals, nowUtc) {
+  const budget = riskBudget(input);
   return {
     as_of_utc: nowUtc, account_id: accountId(input), portfolio_scope: input.portfolio_scope || input.scope || accountId(input),
-    idempotency_key: idempotencyKey(input, signals), correlation_id: signals[0]?.correlation_id || `strategy-signal-decision:${nowUtc}`,
-    signals, risk_budget: riskBudget(input), execution_policy: executionPolicy(input), execution_mode: "SHADOW",
+    idempotency_key: idempotencyKey(input, signals, budget), correlation_id: signals[0]?.correlation_id || `strategy-signal-decision:${nowUtc}`,
+    signals, risk_budget: budget, execution_policy: executionPolicy(input), execution_mode: "SHADOW",
+    account_capital_reference: input.account_capital_reference ?? input.accountCapitalReference,
   };
 }
 
-function idempotencyKey(input, signals) {
-  return input.idempotency_key || input.idempotencyKey || `strategy-signal-decision:${accountId(input)}:${signals.map((item) => item.signal_id).sort().join(",")}`;
+function idempotencyKey(input, signals, budget) {
+  return input.idempotency_key || input.idempotencyKey || `strategy-signal-decision:${accountId(input)}:${canonicalSha256(budget)}:${signals.map((item) => item.signal_id).sort().join(",")}`;
 }
 
 function accountId(input) { return String(input.account_id || input.accountId || process.env.DESK_SHADOW_RUNTIME_ACCOUNT_ID || "shadow_live"); }
@@ -323,5 +331,4 @@ function asOf(input, clock) {
 }
 function array(value) { return Array.isArray(value) ? value : []; }
 function stringSet(value) { return new Set(array(value).map((item) => String(item).toUpperCase())); }
-function positiveNumber(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback; }
 function serviceError(code) { const error = new Error(code); error.code = code; error.statusCode = 503; return error; }

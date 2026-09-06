@@ -36,7 +36,8 @@ describe("Portfolio Risk Runtime service", () => {
     assert.equal(result.risk.status, "CONFIG_MISSING");
     assert.equal(result.targets.target_positions.length, 0);
     assert.equal(result.intents.order_intents.length, 0);
-    assert.equal(result.persistence.counts.allocations, 1);
+    assert.equal(result.persistence.counts.allocations, 0);
+    assert.equal([...repository.runs.values()][0].payload.allocation_plan.candidate_allocations.length, 1);
     assert.equal(result.persistence.counts.risk_decisions, 0);
     assert.equal(result.persistence.counts.target_positions, 0);
     assert.equal(result.persistence.counts.order_intents, 0);
@@ -52,6 +53,21 @@ describe("Portfolio Risk Runtime service", () => {
     assert.equal(result.targets.target_positions.length, 0);
     assert.equal(result.intents.order_intents.length, 0);
     assert.ok(result.risk.reason_codes.includes("LOSS_USAGE_UNAVAILABLE"));
+  });
+
+  test("unknown monetary loss usage cannot create an OrderIntent even when legacy exposure is known", async () => {
+    const repository = new InMemoryPortfolioRiskRuntimeRepository();
+    const result = await serviceFor(repository).runPipeline(commandFixture({
+      signals: [signal({ proposed_trade_plan: { instrument: "MNQ", direction: "LONG", entry_price: 28000,
+        stop_price: 27980, targets: [{ price: 28040 }] } })],
+      risk_budget: { sizing_mode: "MONETARY_RISK_BUDGET", monetary_risk_scope: "PER_ALLOCATION",
+        max_monetary_risk: 500, max_monetary_risk_currency: "USD", loss_currency: "USD",
+        max_daily_loss_monetary: 2000, max_weekly_loss_monetary: 4000 },
+    }));
+    assert.equal(result.intents.order_intents.length, 0);
+    assert.equal(result.targets.target_positions.length, 0);
+    assert.equal(result.risk.status, "BLOCK");
+    assert.ok(result.risk.allocation_evaluations[0].reason_codes.includes("MONETARY_LOSS_USAGE_UNAVAILABLE"));
   });
 
   test("reserves an existing theoretical position instead of treating a same-side signal as a reduction instruction", async () => {

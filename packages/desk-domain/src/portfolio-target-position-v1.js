@@ -207,8 +207,8 @@ function mergeRiskAllocation(legs) {
 }
 
 function sumNullable(items, key) {
-  const values = items.map((item) => numberOrNull(item[key])).filter((value) => value !== null);
-  return values.length ? round(values.reduce((total, value) => total + value, 0)) : null;
+  const values = items.map((item) => numberOrNull(item[key]));
+  return values.length && values.every((value) => value !== null) ? round(values.reduce((total, value) => total + value, 0)) : null;
 }
 
 function normalizeCurrentPositions(items, defaultAccountId) {
@@ -283,7 +283,7 @@ function firstDefined(...values) { return values.find((value) => value !== undef
 function text(value) { return String(value ?? "").trim(); }
 function upper(value) { return text(value).toUpperCase(); }
 function positiveOrZero(value) { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? parsed : 0; }
-function numberOrNull(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
+function numberOrNull(value) { if (value === null || value === undefined || value === "" || typeof value === "boolean" || typeof value === "object") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function iso(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
 function round(value) { return Math.round(Number(value || 0) * 10000) / 10000; }
 function groupBy(items, selector) {

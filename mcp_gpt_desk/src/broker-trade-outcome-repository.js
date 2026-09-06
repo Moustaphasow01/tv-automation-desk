@@ -2,7 +2,9 @@ import { calculateTradeOutcome } from "@tv-automation/desk-domain";
 
 export async function materializeTradeOutcome(client, tradeId, calculatedAt) {
   const trade = await one(client, `SELECT t.*, c.point_value,
+      l.payload #> '{approved_trade_plan,economics,units}' AS intent_economics_units,
       l.payload #> '{approved_trade_plan,units}' AS intent_units,
+      p.approved_trade_plan #> '{economics,units}' AS target_economics_units,
       p.approved_trade_plan->'units' AS target_units
     FROM trades t
     LEFT JOIN broker_contracts c ON c.broker_contract_id = t.broker_contract_id
@@ -43,8 +45,14 @@ export async function materializeTradeOutcome(client, tradeId, calculatedAt) {
 // An entry snapshot is immutable. Canonical intent/target units recover older
 // theoretical trades with no provider contract. No instrument-name heuristic.
 export function resolveOutcomePointValue(trade = {}) {
-  const values = [trade.raw?.execution_units?.point_value, trade.intent_units?.point_value,
-    trade.target_units?.point_value, trade.point_value];
+  const values = [
+    trade.raw?.execution_units?.point_value,
+    trade.intent_economics_units?.point_value,
+    trade.intent_units?.point_value,
+    trade.target_economics_units?.point_value,
+    trade.target_units?.point_value,
+    trade.point_value,
+  ];
   for (const value of values) {
     if (value === null || value === undefined || value === "" || typeof value === "boolean") continue;
     const numeric = Number(value);

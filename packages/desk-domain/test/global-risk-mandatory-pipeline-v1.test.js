@@ -64,6 +64,43 @@ describe("global risk mandatory pipeline V1", () => {
     assertLineage(pipeline);
   });
 
+  it("keeps risk percent unknown through TargetPosition and OrderIntent when capital is unavailable", () => {
+    const pipeline = runPipeline({
+      signals: [signal({
+        signal_id: "sig-unknown-capital", direction: "LONG", proposed_size: 1,
+        proposed_trade_plan: {
+          instrument: "MNQ", direction: "LONG", order_type: "LIMIT", entry_price: 28000,
+          stop_price: 27980, targets: [{ label: "T1", price: 28060 }], time_in_force: "DAY",
+        },
+      })],
+      budget: budget({ max_instrument_abs_size: { MNQ: 4 } }),
+    });
+
+    const risk = pipeline.risk.allocation_evaluations[0];
+    const target = pipeline.targets.target_positions[0];
+    const intent = pipeline.intents.order_intents[0];
+    assert.equal(risk.authorized.risk_pct, null);
+    assert.equal(target.risk_allocation.risk_pct, null);
+    assert.equal(intent.risk_snapshot.requested_risk_pct, null);
+    assert.equal(intent.risk_snapshot.authorized_risk_pct, null);
+  });
+
+  it("fails closed in monetary mode when one contributing signal lacks trade economics", () => {
+    const pipeline = runPipeline({
+      signals: [
+        signal({ signal_id: "sig-economics", proposed_trade_plan: { instrument: "MNQ", direction: "LONG", order_type: "LIMIT", entry_price: 28000, stop_price: 27980, targets: [{ label: "T1", price: 28060 }], time_in_force: "DAY" } }),
+        signal({ signal_id: "sig-no-economics" }),
+      ],
+      candidatePolicy: { sizing_mode: "MONETARY_RISK_BUDGET" },
+      budget: { ...budget({ max_instrument_abs_size: { MNQ: 4 } }), sizing_mode: "MONETARY_RISK_BUDGET", max_monetary_risk: 500, max_monetary_risk_currency: "USD", monetary_risk_scope: "PER_ALLOCATION" },
+    });
+
+    assert.equal(pipeline.risk.allocation_evaluations[0].status, "BLOCK");
+    assert.ok(pipeline.risk.allocation_evaluations[0].reason_codes.includes("MONETARY_RISK_PER_CONTRACT_UNAVAILABLE"));
+    assert.equal(pipeline.targets.target_positions.length, 0);
+    assert.equal(pipeline.intents.order_intents.length, 0);
+  });
+
   it("REDUCE: requested +10 is reduced by Global Risk to +4 before OrderIntent", () => {
     const pipeline = runPipeline({
       signals: [signal({ signal_id: "sig-reduce", direction: "LONG", proposed_size: 10 })],
@@ -156,8 +193,8 @@ describe("global risk mandatory pipeline V1", () => {
   });
 });
 
-function runPipeline({ signals, budget: riskBudget, virtualPortfolio = {}, currentPositions = [], existingOrderIntents = [], accountCapitalReference = null }) {
-  const allocations = buildCandidateAllocationPortfolioV1({ as_of_utc: asOf, portfolio_scope: "paper-sim101", signals });
+function runPipeline({ signals, budget: riskBudget, virtualPortfolio = {}, currentPositions = [], existingOrderIntents = [], accountCapitalReference = null, candidatePolicy = null }) {
+  const allocations = buildCandidateAllocationPortfolioV1({ as_of_utc: asOf, portfolio_scope: "paper-sim101", signals, policy: candidatePolicy });
   const risk = evaluatePortfolioRiskBudgetV1({
     as_of_utc: asOf,
     account_id: "paper-sim101",

@@ -33,6 +33,8 @@ export class PortfolioRiskRuntimeService {
     const pending = await this.signalBusRepository.pollPending({ limit: input.limit || 100, now_utc: nowUtc });
     if (!pending.length) return { status: "NO_PENDING_SIGNALS", pending_count: 0 };
     const result = await this.runPipeline({ ...input, as_of_utc: nowUtc, signals: pending.map(signalFromOutbox) });
+    if (result.risk?.status === "CONFIG_MISSING") return { ...result, pending_count: pending.length,
+      consumed_signal_outbox_ids: [], deferred_signal_outbox_ids: pending.map(item => item.signal_outbox_id) };
     const consumed = [];
     for (const item of pending) {
       const row = await this.signalBusRepository.markConsumed({ signal_outbox_id: item.signal_outbox_id, consumer_id: input.consumer_id || "portfolio-risk-runtime", now_utc: nowUtc });
@@ -64,6 +66,7 @@ function buildPipeline(input, asOf, snapshot) {
     as_of_utc: asOf, account_id: input.account_id, budget: input.risk_budget,
     candidate_allocations: allocations.candidate_allocations, virtual_portfolio: allocations.virtual_portfolio,
     loss_usage: snapshot.loss_usage,
+    account_capital_reference: input.account_capital_reference,
   });
   const targets = buildPortfolioTargetPositionPlanV1({
     as_of_utc: asOf, account_id: input.account_id, candidate_allocations: allocations.candidate_allocations,
@@ -153,8 +156,10 @@ function signalFromOutbox(item = {}) {
     strategy_version_id: payload.strategy_version_id || item.strategy_version_id,
     instrument: payload.instrument || item.instrument,
     direction: payload.direction || item.direction,
-    proposed_size: payload.proposed_size || payload.size || item.proposed_size || item.size,
-    confidence: payload.confidence || item.confidence,
+    proposed_size: payload.proposed_size ?? payload.size ?? item.proposed_size ?? item.size,
+    confidence: payload.confidence ?? item.confidence,
+    context_risk_multiplier: payload.context_risk_multiplier ?? item.context_risk_multiplier,
+    context_risk_multiplier_source: payload.context_risk_multiplier_source ?? item.context_risk_multiplier_source,
     execution_mode_origin: payload.execution_mode_origin || item.execution_mode_origin,
     generated_at_utc: payload.generated_at_utc || item.generated_at_utc,
     expires_at_utc: payload.expires_at_utc || item.expires_at_utc,
@@ -167,6 +172,7 @@ function signalFromOutbox(item = {}) {
 }
 
 function runtimeStatus({ allocations, risk, targets, intents }) {
+  if (risk.status === "CONFIG_MISSING") return "RISK_CONFIG_MISSING";
   if (risk.status === "EXPOSURE_UNAVAILABLE") return "EXPOSURE_UNAVAILABLE";
   if (intents.order_intents.length) return "ORDER_INTENTS_READY";
   if (targets.target_positions.length) return "TARGETS_READY";

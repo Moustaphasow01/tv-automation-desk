@@ -153,6 +153,7 @@ describe("portfolio candidate allocation V1", () => {
 
     assert.equal(plan.candidate_allocations.length, 1);
     assert.equal(plan.candidate_allocations[0].proposed_size, 1);
+    assert.equal(plan.candidate_allocations[0].sizing_mode, "MONETARY_RISK_BUDGET");
     assert.equal(plan.candidate_allocations[0].contributing_signals[0].context_risk_multiplier, 0.85);
   });
 
@@ -164,6 +165,16 @@ describe("portfolio candidate allocation V1", () => {
 
     assert.equal(plan.candidate_allocations.length, 0);
     assert.ok(plan.rejected_signals[0].issues.some((item) => item.code === "CONTEXT_RISK_MULTIPLIER_PROVENANCE_REQUIRED"));
+  });
+
+  it("keeps an explicit zero quantity at zero instead of defaulting one contract", () => {
+    const plan = buildCandidateAllocationPortfolioV1({
+      as_of_utc: "2026-08-09T08:06:00.000Z",
+      signals: [signal({ proposed_size: 0 })],
+    });
+
+    assert.equal(plan.candidate_allocations.length, 0);
+    assert.ok(plan.rejected_signals[0].issues.some((item) => item.code === "SIGNAL_SIZE_NOT_POSITIVE"));
   });
 });
 
