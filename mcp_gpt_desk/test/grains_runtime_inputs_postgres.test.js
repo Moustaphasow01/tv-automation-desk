@@ -183,7 +183,9 @@ function calendarVersion({ knownAtUtc, hash, events = [] }) {
       retrievedAtUtc: knownAtUtc,
       knowledgeStatus: "PROVEN_CURRENT",
       historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP",
-      metadata: { calendar_evidence_status: "CALENDAR_SCHEDULE" },
+      metadata: { calendar_evidence_status: "CALENDAR_SCHEDULE", coverage: {
+        start_utc: "2026-09-01T00:00:00Z", end_utc: "2026-09-30T00:00:00Z", instruments: ["ZC", "ZW"],
+      } },
     })),
     events,
   };

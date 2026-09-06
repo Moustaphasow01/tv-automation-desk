@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
+import {
+  qualifyGrainsCalendarEvidence,
+  validateGrainsCalendarHistoricalEvidence,
+} from "../grains-calendar-evidence.js";
 
 const CALENDAR_SOURCE_ID = "market_agri_events";
-const REQUIRED_SOURCE_IDS = Object.freeze([
-  "usda_nass_release_calendar",
-  "usda_wasde_release_schedule",
-  "usda_fas_export_sales_schedule",
-]);
 
 // Market-data boundary for immutable calendar knowledge.  Runtime consumers
 // receive events from the selected source version, never the mutable current
@@ -52,8 +51,8 @@ export async function loadGrainsCalendarVersionAt(pool, query = {}) {
     }),
   ]);
   return {
-    agriEvents: events.map(mapEvent),
-    agriCalendarCoverage: [mapCoverage(version, sources)],
+    agriEvents: events.map((event) => mapEvent(event, cutoff)),
+    agriCalendarCoverage: [mapQualifiedCoverage(version, sources)],
   };
 }
 
@@ -101,13 +100,7 @@ function normalizeSource(source, knownAtUtc) {
   const metadata = object(source.metadata);
   const knowledgeStatus = source.knowledgeStatus || source.knowledge_status || "PROVEN_CURRENT";
   const historicalKnowledgeStatus = source.historicalKnowledgeStatus || source.historical_knowledge_status || "EXTERNAL_HISTORICAL_GAP";
-  if (knowledgeStatus === "PROVEN_CURRENT" && Date.parse(retrievedAtUtc) > Date.parse(knownAtUtc))
-    throw new Error("CALENDAR_SOURCE_RETRIEVED_AFTER_VERSION_KNOWLEDGE");
-  if (historicalKnowledgeStatus === "PROVEN_HISTORICAL" && !hasHistoricalProof(metadata, knownAtUtc))
-    throw new Error("CALENDAR_HISTORICAL_PROOF_REQUIRED");
-  if (Date.parse(retrievedAtUtc) > Date.parse(knownAtUtc) && historicalKnowledgeStatus !== "PROVEN_HISTORICAL")
-    throw new Error("CALENDAR_SOURCE_AFTER_KNOWLEDGE_WITHOUT_HISTORICAL_PROOF");
-  return {
+  const normalized = {
     sourceId: requiredText(source.sourceId, "CALENDAR_SOURCE_ID_REQUIRED"),
     sourceUrl: requiredText(source.sourceUrl, "CALENDAR_SOURCE_URL_REQUIRED"),
     sourceDocumentSha256: requiredHash(
@@ -119,6 +112,18 @@ function normalizeSource(source, knownAtUtc) {
     historicalKnowledgeStatus,
     metadata,
   };
+  rejectInvalidHistoricalKnowledge(normalized, knownAtUtc);
+  return normalized;
+}
+
+function rejectInvalidHistoricalKnowledge(source, knownAtUtc) {
+  const retrievedAfterKnowledge = Date.parse(source.retrievedAtUtc) > Date.parse(knownAtUtc);
+  const claimsHistoricalKnowledge = source.historicalKnowledgeStatus === "PROVEN_HISTORICAL";
+  if (!claimsHistoricalKnowledge && retrievedAfterKnowledge)
+    throw new Error("CALENDAR_SOURCE_AFTER_KNOWLEDGE_WITHOUT_HISTORICAL_PROOF");
+  if (!claimsHistoricalKnowledge) return;
+  const proof = validateGrainsCalendarHistoricalEvidence({ source, knownAtUtc });
+  if (!proof.valid) throw new Error(proof.reasonCodes[0]);
 }
 
 function normalizeEvent(event, knownAtUtc) {
@@ -263,7 +268,7 @@ async function selectedVersion(pool, cutoff) {
 async function selectedSources(pool, versionId) {
   const result = await pool.query(
     `SELECT source_id,source_url,source_document_sha256,retrieved_at_utc,knowledge_status,historical_knowledge_status,
-            metadata->>'calendar_evidence_status' AS calendar_evidence_status
+            metadata
        FROM market_agri_calendar_version_sources
       WHERE market_agri_calendar_version_id=$1 ORDER BY source_id`,
     [versionId],
@@ -288,30 +293,20 @@ async function selectedEvents(pool, { versionId, start, cutoff }) {
   return result.rows;
 }
 
-function mapCoverage(version, sources) {
-  const sourceIds = new Set(sources.map((source) => source.source_id));
-  const missing = REQUIRED_SOURCE_IDS.filter(
-    (sourceId) => !sourceIds.has(sourceId),
-  );
-  const insufficient = sources.some(
-    (source) => source.calendar_evidence_status !== "CALENDAR_SCHEDULE"
-      || (source.knowledge_status !== "PROVEN_CURRENT" && source.historical_knowledge_status !== "PROVEN_HISTORICAL"),
-  );
-  const historicalGap = sources.some(
-    (source) => source.historical_knowledge_status !== "PROVEN_HISTORICAL",
-  );
-  const status =
-    missing.length || insufficient ? "UNKNOWN_COVERAGE" : version.source_status;
-  const reasons = new Set(version.reason_codes || []);
-  if (missing.length || insufficient)
-    reasons.add("CALENDAR_SOURCE_SET_INCOMPLETE");
-  if (historicalGap) reasons.add("EXTERNAL_HISTORICAL_GAP");
+function mapQualifiedCoverage(version, sources) {
+  const evidence = qualifyGrainsCalendarEvidence({
+    sources: sources.map(mapStoredSource),
+    knownAtUtc: version.known_at_utc,
+    coverageStart: version.coverage_start_utc,
+    coverageEnd: version.coverage_end_utc,
+  });
+  const reasons = new Set([...(version.reason_codes || []), ...evidence.reasonCodes]);
   return {
     sourceId: version.source_id,
     sourceType: "AGRI_EVENT_CALENDAR",
-    status,
-    coverageStart: isoOrNull(version.coverage_start_utc),
-    coverageEnd: isoOrNull(version.coverage_end_utc),
+    status: persistedCoverageStatus(version.source_status, evidence.status),
+    coverageStart: evidence.coverageStart,
+    coverageEnd: evidence.coverageEnd,
     asOf: isoOrNull(version.known_at_utc),
     datasetVersion: version.dataset_version,
     sourceVersionHash: version.source_version_hash,
@@ -329,8 +324,9 @@ function ambiguousCoverage(version) {
   };
 }
 
-function mapEvent(row) {
-  return {
+function mapEvent(row, cutoff) {
+  const commodityCodes = publicCommodityCodes(row.point_in_time_payload);
+  const event = {
     market_agri_event_id: row.market_agri_event_id,
     event_kind: row.event_kind,
     title: row.title,
@@ -338,7 +334,46 @@ function mapEvent(row) {
     event_timestamp_utc: isoOrNull(row.event_timestamp_utc),
     source_published_at_utc: isoOrNull(row.source_published_at_utc),
     calendar_version_known_at_utc: isoOrNull(row.calendar_version_known_at_utc),
+    ...(commodityCodes ? { commodity_codes: commodityCodes } : {}),
   };
+  const result = publicResultAtCutoff({
+    payload: row.point_in_time_payload,
+    eventTimestampUtc: row.event_timestamp_utc,
+    versionKnownAtUtc: row.calendar_version_known_at_utc,
+    cutoff,
+  });
+  return result ? { ...event, result } : event;
+}
+
+function publicCommodityCodes(payload) {
+  const codes = object(payload).commodity_codes;
+  if (!Array.isArray(codes) || !codes.every((code) => typeof code === "string" && code.trim()))
+    return null;
+  return [...new Set(codes.map((code) => code.trim().toUpperCase()))];
+}
+
+function persistedCoverageStatus(sourceStatus, evidenceStatus) {
+  return sourceStatus === "AVAILABLE" && evidenceStatus === "AVAILABLE"
+    ? "AVAILABLE"
+    : sourceStatus === "AVAILABLE" ? "UNKNOWN_COVERAGE" : sourceStatus;
+}
+
+function publicResultAtCutoff({ payload, eventTimestampUtc, versionKnownAtUtc, cutoff }) {
+  const result = object(payload).result;
+  const availableAtUtc = safeTimestamp(result?.availableAtUtc);
+  if (!availableAtUtc || !isObject(result?.values)) return null;
+  const availableAfterEvent = Math.max(
+    Date.parse(eventTimestampUtc),
+    Date.parse(availableAtUtc),
+  );
+  if (Date.parse(availableAtUtc) > Date.parse(versionKnownAtUtc)) return null;
+  if (Date.parse(cutoff) < availableAfterEvent) return null;
+  return { availableAtUtc, values: result.values };
+}
+
+function safeTimestamp(value) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
 function versionIdentity(version) {
@@ -401,13 +436,6 @@ function contentEvent(event) {
   };
 }
 
-function hasHistoricalProof(metadata, knownAtUtc) {
-  const proof = object(metadata.historical_evidence);
-  const observedAtUtc = optionalTimestamp(proof.observed_at_utc);
-  return /^sha256:[a-f0-9]{64}$/.test(String(proof.document_sha256 || ""))
-    && Boolean(observedAtUtc) && Date.parse(observedAtUtc) <= Date.parse(knownAtUtc);
-}
-
 function requiredText(value, code) {
   if (typeof value !== "string" || !value.trim()) throw new Error(code);
   return value.trim();
@@ -438,9 +466,13 @@ function arrayOfStrings(value) {
 }
 
 function object(value) {
-  return value && typeof value === "object" && !Array.isArray(value)
+  return isObject(value)
     ? value
     : {};
+}
+
+function isObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function stableJson(value) {

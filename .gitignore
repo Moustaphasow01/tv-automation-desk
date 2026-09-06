@@ -27,6 +27,7 @@ command_queue.json
 # Generated datasets and exports
 # Private, frozen PostgreSQL evidence for the grains audit (report is versioned).
 /output/research/grains-week-20260905/
+/output/research/grains-calendar-20260906/
 tmp/
 screenshots/
 signals/

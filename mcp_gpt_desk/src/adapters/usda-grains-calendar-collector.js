@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
+import { qualifyGrainsCalendarEvidence } from "../grains-calendar-evidence.js";
 
 export async function collectUsdaGrainsCalendar({
   sources,
   retrievedAtUtc,
   fetchText,
+  coverageStart = null,
+  coverageEnd = null,
 }) {
   if (!Number.isFinite(Date.parse(retrievedAtUtc)))
     throw new Error("USDA_RETRIEVAL_TIME_REQUIRED");
@@ -14,7 +17,7 @@ export async function collectUsdaGrainsCalendar({
   );
   const manifests = results.map((result) => result.manifest);
   const agriEvents = uniqueEvents(results.flatMap((result) => result.events));
-  const agriCalendarCoverage = coverage({ manifests, retrievedAtUtc });
+  const agriCalendarCoverage = coverage({ manifests, retrievedAtUtc, coverageStart, coverageEnd });
   return {
     manifests,
     agriEvents,
@@ -44,20 +47,7 @@ function calendarVersionInput({
     sourceVersionHash: coverage.sourceVersionHash,
     provider: coverage.provider,
     reasonCodes: coverage.reasonCodes,
-    sources: manifests.map((manifest) => ({
-      sourceId: manifest.sourceId,
-      sourceUrl: manifest.sourceUrl,
-      sourceDocumentSha256: manifest.sha256,
-      retrievedAtUtc: manifest.retrieved_at_utc,
-      knowledgeStatus: manifest.knowledge_status,
-      historicalKnowledgeStatus: manifest.historical_knowledge_status,
-      metadata: {
-        source_kind: manifest.sourceKind,
-        calendar_created_at_utc: manifest.calendar_created_at_utc,
-        calendar_dtstamp_utc: manifest.calendar_dtstamp_utc,
-        calendar_evidence_status: manifest.calendar_evidence_status,
-      },
-    })),
+    sources: manifests.map(sourceRecord),
     events: agriEvents,
   };
 }
@@ -82,6 +72,7 @@ async function collectSource({ source, retrievedAtUtc, fetchText }) {
     calendar_dtstamp_utc: icsMetadata(text, "DTSTAMP"),
     calendar_evidence_status:
       source.calendarEvidenceStatus || defaultEvidenceStatus(source),
+    coverage: source.coverage || null,
     source_document: source.sourceKind === "ICS" ? text : null,
     document_size_bytes: Buffer.byteLength(text),
   };
@@ -165,39 +156,53 @@ function classifyEventKind(summary) {
         : "OTHER";
 }
 
-function coverage({ manifests, retrievedAtUtc }) {
+function coverage({ manifests, retrievedAtUtc, coverageStart, coverageEnd }) {
+  const qualified = qualifyGrainsCalendarEvidence({
+    sources: manifests.map(sourceRecord), knownAtUtc: retrievedAtUtc,
+    coverageStart, coverageEnd,
+  });
   const sourceVersionHash = `sha256:${createHash("sha256")
     .update(
       manifests
-        .map((item) => item.sha256)
+        .map((item) => `${item.sourceId}|${item.sha256}|${JSON.stringify(item.coverage)}`)
         .sort()
         .join("|"),
     )
+    .update(JSON.stringify({ coverageStart, coverageEnd }))
     .digest("hex")}`;
   return [
     {
       sourceId: "market_agri_events",
       sourceType: "AGRI_EVENT_CALENDAR",
-      status: "UNKNOWN_COVERAGE",
-      coverageStart: null,
-      coverageEnd: null,
+      status: qualified.status,
+      coverageStart: qualified.coverageStart,
+      coverageEnd: qualified.coverageEnd,
       asOf: retrievedAtUtc,
       datasetVersion: sourceVersionHash,
       sourceVersionHash,
       provider: "USDA",
-      reasonCodes: coverageReasonCodes(manifests),
+      reasonCodes: qualified.reasonCodes,
+      sourceDiagnostics: qualified.sourceDiagnostics,
     },
   ];
 }
 
-function coverageReasonCodes(manifests) {
-  const incomplete = manifests.some(
-    (manifest) => manifest.calendar_evidence_status !== "CALENDAR_SCHEDULE",
-  );
-  return [
-    ...(incomplete ? ["CALENDAR_SOURCE_SET_INCOMPLETE"] : []),
-    "EXTERNAL_HISTORICAL_GAP",
-  ];
+function sourceRecord(manifest) {
+  return {
+    sourceId: manifest.sourceId,
+    sourceUrl: manifest.sourceUrl,
+    sourceDocumentSha256: manifest.sha256,
+    retrievedAtUtc: manifest.retrieved_at_utc,
+    knowledgeStatus: manifest.knowledge_status,
+    historicalKnowledgeStatus: manifest.historical_knowledge_status,
+    metadata: {
+      source_kind: manifest.sourceKind,
+      calendar_created_at_utc: manifest.calendar_created_at_utc,
+      calendar_dtstamp_utc: manifest.calendar_dtstamp_utc,
+      calendar_evidence_status: manifest.calendar_evidence_status,
+      coverage: manifest.coverage,
+    },
+  };
 }
 
 function grainRelevant(summary) {

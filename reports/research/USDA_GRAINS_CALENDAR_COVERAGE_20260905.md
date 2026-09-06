@@ -1,5 +1,7 @@
 # USDA grains calendar coverage — TD2-426
 
+> État historique du 5 septembre, conservé sans réécriture des preuves. Suite actuelle : [qualification et comparaison du 6 septembre](USDA_GRAINS_CALENDAR_QUALIFICATION_20260906.md). La reconstruction officielle est désormais qualifiable avec ses réserves ; elle ne devient pas une réception locale historique prouvée.
+
 The local collector now stores three official-source manifests in
 `output/research/grains-week-20260905/usda-nass-calendar-current.json`: the
 [NASS 2026 iCalendar](https://www.nass.usda.gov/Publications/Calendar/2026/NassReleases2026.ics),

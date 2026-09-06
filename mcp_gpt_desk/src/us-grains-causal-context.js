@@ -18,7 +18,8 @@ export function buildCausalGrainContext(input = {}) {
   const ownReturn = sessionReturn(rows);
   const peerReturn = sessionReturn(peerRows);
   const bias = biasFor(ownReturn, peerReturn);
-  const events = knownEvents(input.events, input.asOfUtc);
+  const events = knownEvents(input.events, input.asOfUtc).filter((event) =>
+    !event.commodity_codes?.length || event.commodity_codes.includes(upper(input.instrument)));
   const eventRisk = eventRiskForDay(events, input.tradingDate);
   const calendarCoverage = evaluateGrainsCalendarCoverage({
     sources: input.agriCalendarCoverage,
@@ -134,6 +135,9 @@ export function normalizeKnownAgriEvents(events, asOfUtc) {
       ),
       actual_available_at_utc: iso(event.actual_available_at_utc),
       importance: upper(event.importance || "MEDIUM"),
+      ...(Array.isArray(event.commodity_codes)
+        ? { commodity_codes: event.commodity_codes.map(upper).filter(Boolean) }
+        : {}),
     }))
     .filter(
       (event) =>

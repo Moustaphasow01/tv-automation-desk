@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { candlesToRowsBySymbol } from "../src/grains-causal-detection-audit.js";
-import { detectUsGrainsStrategySignals } from "../src/us-grains-strategy-suite.js";
+import { detectCalendarVersionedGrainsSignals } from "../src/grains-calendar-detection.js";
 import {
   createGrainsReplayDatabase,
   seedGrainsReplayCalendar,
@@ -40,15 +40,15 @@ export async function runCausalPostgresReplayCli(argv = process.argv.slice(2)) {
       startUtc: calendarStartUtc(startDate),
       asOfUtc,
     });
-    const signals = detectUsGrainsStrategySignals({
-      rowsBySymbol,
-      agriEvents: calendarRuntime.agriEvents,
-      agriCalendarCoverage: calendarRuntime.agriCalendarCoverage,
-      instruments: (args.instruments || "ZW,ZC").split(",").map((item) => item.trim().toUpperCase()),
-      startDate,
-      endDate,
-      asOfUtc,
-    }).raw_signals;
+    const detection = await detectCalendarVersionedGrainsSignals({
+      detectionInput: { rowsBySymbol, startDate, endDate, asOfUtc,
+        instruments: (args.instruments || "ZW,ZC").split(",").map((item) => item.trim().toUpperCase()) },
+      calendarKnownTimes: calendarVersions.map((version) => version.knownAtUtc),
+      readCalendarAt: (cutoff) => loadGrainsCalendarVersionAt(db.pool, {
+        startUtc: calendarStartUtc(startDate), asOfUtc: cutoff,
+      }),
+    });
+    const signals = detection.raw_signals;
     const seeded = await seedGrainsReplayInputs(db.pool, { candles, signals, asOfUtc,
       provenance: { input_sha256: sha256(inputText), code_manifest_sha256: sha256(JSON.stringify(codeHashes)) } });
     const report = await runGrainsCausalPostgresReplay({
@@ -64,7 +64,19 @@ export async function runCausalPostgresReplayCli(argv = process.argv.slice(2)) {
     if (JSON.stringify(await captureGrainsCanonicalReplaySourceManifest()) !== JSON.stringify(codeHashes)) {
       throw new Error("REPLAY_CODE_CHANGED_DURING_RUN");
     }
-    const artifact = {
+    const artifact = buildReplayArtifact({ inputPath, inputText, frozen, candles, calendarVersions,
+      codeHashes, calendarSeed, calendarRuntime, detection, seeded, report });
+    await mkdir(dirname(resolve(outputPath)), { recursive: true });
+    await writeFile(outputPath, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+    return artifact;
+  } finally {
+    await db.close();
+  }
+}
+
+export function buildReplayArtifact({ inputPath, inputText, frozen, candles, calendarVersions,
+  codeHashes, calendarSeed, calendarRuntime, detection, seeded, report }) {
+  return {
       schema_version: "us_grains_causal_postgres_replay_cli_v1",
       input: { path: resolve(inputPath), sha256: sha256(inputText), candle_count: candles.length },
       source_provenance: { legacy_receipt_times: "UNVERIFIED", agri_calendar_coverage: calendarVersions.length ? "LEDGER_VERSIONED" : "MISSING_WAIT_EXPECTED",
@@ -76,18 +88,13 @@ export async function runCausalPostgresReplayCli(argv = process.argv.slice(2)) {
         calendar: {
           seed: calendarSeed,
           runtime: calendarRuntime,
+          knowledge_intervals: detection.calendar_intervals,
           ignored_unversioned_event_count: array(frozen.agriEvents || frozen.agri_events).length,
           ignored_unversioned_coverage_count: array(frozen.agriCalendarCoverage || frozen.agri_calendar_coverage).length,
         },
         identities: seeded.runtime_signals.map((row) => ({ signal_id: row.signal_id, source_signal_id: row.source_signal_id, seed_identity: row.seed_identity })) },
       report,
     };
-    await mkdir(dirname(resolve(outputPath)), { recursive: true });
-    await writeFile(outputPath, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
-    return artifact;
-  } finally {
-    await db.close();
-  }
 }
 
 function parseArgs(argv) {

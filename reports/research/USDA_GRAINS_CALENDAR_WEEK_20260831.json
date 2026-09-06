@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "grains_calendar_evidence_manifest_v1",
+  "coverageStart": "2026-08-31T00:00:00.000Z",
+  "coverageEnd": "2026-09-04T23:59:59.999Z",
+  "sources": [
+    {
+      "sourceId": "usda_nass_release_calendar",
+      "sourceUrl": "https://data.nass.usda.gov/Publications/Calendar/2026/2026ReleaseCalendar_12Months_11x17_Color.pdf",
+      "documentFile": "nass-2026.pdf",
+      "documentSha256": "sha256:b18abe835a69c6b9fb27cb5407f00848948d4960daa3da9b1aa8e0ce342f839a",
+      "coverage": { "start_utc": "2026-08-31T00:00:00.000Z", "end_utc": "2026-09-04T23:59:59.999Z", "instruments": ["ZC", "ZW"] },
+      "review": {
+        "scope": "Scheduled NASS reports directly relevant to corn/wheat in this five-day interval; not an archive of unscheduled news or actual report values.",
+        "citation": "Single-page annual calendar, August 31 and September 1-4 cells; footer: square=15:00 ET, triangle=16:00 ET, remaining reports=15:00 ET. Agricultural Prices and Crop Progress on August31; Grain Crushings monthly and annual on September1. Other listed reports concern livestock/dairy/cotton/peanuts and are outside this grains scope.",
+        "evidenceLevel": "OFFICIAL_SOURCE_DECLARED_REVISION_NOT_ARCHIVED_RECEIPT",
+        "limitation": "PDF modification date and official Last-Modified header establish the source-declared January revision, not an independently timestamped January download. Subsequent schedule changes cannot be absolutely excluded. No current report actual is imported."
+      },
+      "historicalEvidence": {
+        "kind": "OFFICIAL_VERSION_METADATA",
+        "document_sha256": "sha256:b18abe835a69c6b9fb27cb5407f00848948d4960daa3da9b1aa8e0ce342f839a",
+        "document_url": "https://data.nass.usda.gov/Publications/Calendar/2026/2026ReleaseCalendar_12Months_11x17_Color.pdf",
+        "document_modified_at_utc": "2026-01-29T20:08:49.000Z",
+        "server_last_modified_utc": "2026-01-29T20:24:34.000Z",
+        "headers_file": "nass-2026.headers",
+        "headers_sha256": "sha256:2c2bef8ad71e1d3b3f212324a0c07455428a5c8fd58d38a7b25758876fe91518",
+        "metadata_file": "nass-2026.metadata.json",
+        "metadata_sha256": "sha256:7d3e60734750071a2e3922cc376594e2b74332b4c7b774c90838def0e5faedff",
+        "citation": "NASS PDF /ModDate D:20260129150849-05'00'; HTTPS Last-Modified Thu, 29 Jan 2026 20:24:34 GMT; both captured with original bytes on September6. Revision-derived knowledge, not a claimed historical local receipt."
+      },
+      "events": [
+        { "eventId": "nass-agricultural-prices-20260831", "eventKind": "OTHER", "title": "USDA Agricultural Prices", "scheduledAtUtc": "2026-08-31T19:00:00.000Z", "importance": "HIGH", "instruments": ["ZC", "ZW"], "evidenceCitation": "Annual ASB calendar August31 Agricultural Prices square; square legend15:00 ET." },
+        { "eventId": "nass-crop-progress-20260831", "eventKind": "CROP_PROGRESS", "title": "USDA Crop Progress", "scheduledAtUtc": "2026-08-31T20:00:00.000Z", "importance": "HIGH", "instruments": ["ZC", "ZW"], "evidenceCitation": "Annual ASB calendar August31 Crop Progress triangle; triangle legend16:00 ET." },
+        { "eventId": "nass-grain-crushings-20260901", "eventKind": "OTHER", "title": "USDA Grain Crushings — monthly and annual summary", "scheduledAtUtc": "2026-09-01T19:00:00.000Z", "importance": "HIGH", "instruments": ["ZC"], "evidenceCitation": "Annual ASB calendar September1 Grain Crushings and Grain Crushings-Ann; no symbol, footer default15:00 ET. Both simultaneous publications grouped without a duplicate blackout." }
+      ]
+    },
+    {
+      "sourceId": "usda_wasde_release_schedule",
+      "sourceUrl": "https://esmis.nal.usda.gov/sites/default/release-files/795765/wasde0226.pdf",
+      "documentFile": "wasde-202602.pdf",
+      "documentSha256": "sha256:9686e73678add1536d252e2c1245b722c4c9ca4fa9f3f7a8789494d2f2fd737b",
+      "coverage": { "start_utc": "2026-08-31T00:00:00.000Z", "end_utc": "2026-09-04T23:59:59.999Z", "instruments": ["ZC", "ZW"] },
+      "review": { "scope": "WASDE scheduled publications only, five-day interval.", "citation": "Dated February10 2026 on page1; page6 final paragraph lists 2026 release dates including August12 and September11. No WASDE scheduled in August31-September4 interval.", "evidenceLevel": "DATED_OFFICIAL_DOCUMENT" },
+      "historicalEvidence": {
+        "kind": "OFFICIAL_DATED_PUBLICATION",
+        "document_sha256": "sha256:9686e73678add1536d252e2c1245b722c4c9ca4fa9f3f7a8789494d2f2fd737b",
+        "document_url": "https://esmis.nal.usda.gov/sites/default/release-files/795765/wasde0226.pdf",
+        "published_at_utc": "2026-02-11T00:00:00.000Z",
+        "citation": "WASDE668 dated February10 2026, page1. Conservative knowledge bound at following midnight UTC, after official17:00UTC publication, not a claim of exact reception time. Schedule is page6."
+      },
+      "events": []
+    },
+    {
+      "sourceId": "usda_fas_export_sales_schedule",
+      "sourceUrl": "https://apps.fas.usda.gov/info/factsheets/expsls.pdf",
+      "documentFile": "fas-rule-2019.pdf",
+      "documentSha256": "sha256:d962c474ad652957216a7e848ffd492b71de86804b98fefebd1899b2a349c1ae",
+      "coverage": { "start_utc": "2026-08-31T00:00:00.000Z", "end_utc": "2026-09-04T23:59:59.999Z", "instruments": ["ZC", "ZW"] },
+      "review": {
+        "scope": "Expected weekly export sales release derived from a published recurring rule, not a promise that no unannounced rescheduling or daily sales news exists.",
+        "citation": "USDA fact sheet Updated5-8-2019, page2 Accessing the Information/Weekly Report: Thursday08:30 ET. September3 2026 is Thursday. Companion NASS annual calendar marks Labor Day September7, not August28/31. Dynamic current FAS calendar and later release archive corroborate but do not supply ex-ante proof.",
+        "evidenceLevel": "OFFICIAL_RECURRING_RULE_DERIVED_EVENT",
+        "limitation": "Recurrence-derived expected time, not an individually archived September3 notice. Daily export announcements are unscheduled and their occurrence/results are not preloaded."
+      },
+      "historicalEvidence": {
+        "kind": "OFFICIAL_DATED_PUBLICATION",
+        "document_sha256": "sha256:d962c474ad652957216a7e848ffd492b71de86804b98fefebd1899b2a349c1ae",
+        "document_url": "https://apps.fas.usda.gov/info/factsheets/expsls.pdf",
+        "published_at_utc": "2019-05-09T00:00:00.000Z",
+        "citation": "Fact sheet Updated5-8-2019 page1, conservative next-midnight UTC knowledge bound; recurring weekly rule page2."
+      },
+      "events": [
+        { "eventId": "fas-weekly-export-sales-20260903", "eventKind": "EXPORT_SALES", "title": "USDA Weekly Export Sales — expected under published schedule rule", "scheduledAtUtc": "2026-09-03T12:30:00.000Z", "importance": "HIGH", "instruments": ["ZC", "ZW"], "evidenceCitation": "Derived from official dated2019 Thursday08:30 ET recurrence, applicable non-holiday week; not derived from report actuals or the current dynamic website calendar." }
+      ]
+    }
+  ]
+}

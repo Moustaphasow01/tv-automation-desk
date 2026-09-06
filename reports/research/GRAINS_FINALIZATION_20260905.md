@@ -10,7 +10,11 @@ Code versionné localement : `e8e863d` (calendrier), `374ace6` (Risk), `d013cd3`
 
 Main distant vérifié : `3ed9f242c640e6b0885f5523ba2349c3203ca94a`. VPS lu sans mutation : release `live-focus-dashboard-20260905.2`, même commit, migration 062. Onze services Desk et huit instances grains running/shadow observés. La branche locale contient désormais une migration 063, non appliquée au VPS. Aucun merge main, déploiement, ordre provider, confirmation humaine réelle ou envoi Telegram réel dans cette tranche.
 
-## État des cinq lots
+## Actualisation du 6 septembre — calendrier et comparaison
+
+Voir [le rapport détaillé](USDA_GRAINS_CALENDAR_QUALIFICATION_20260906.md). À données/code identiques sur le 31 août–4 septembre, le calendrier officiellement reconstruit fait passer le contexte de 100 WAIT à 90 ADMISSIBLE / 10 REJECT. Les 90 admis sont ensuite refusés au portefeuille : quantité proposée 1 × multiplicateur contextuel, arrondie à 0 sous la policy locale REQUESTED_QUANTITY_CAP. Aucun Risk individuel, Intent ou Human Gate ; aucune performance en R évaluable. La reconstruction n'est pas un reçu VPS historique. Les anciennes lignes et résultats ci-dessous restent le bilan daté du 5 septembre, pas le dernier verdict. Rien déployé.
+
+## État des cinq lots au 5 septembre
 
 | Lot | Livré et testé localement | Condition restant ouverte |
 |---|---|---|

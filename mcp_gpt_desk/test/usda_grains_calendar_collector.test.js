@@ -174,7 +174,7 @@ test("dated FAS and WASDE evidence is hashed but cannot certify historical calen
   assert.equal(result.agriCalendarCoverage[0].status, "UNKNOWN_COVERAGE");
   assert.ok(
     result.agriCalendarCoverage[0].reasonCodes.includes(
-      "EXTERNAL_HISTORICAL_GAP",
+      "CALENDAR_COVERAGE_WINDOW_INVALID",
     ),
   );
   assert.ok(
@@ -182,6 +182,19 @@ test("dated FAS and WASDE evidence is hashed but cannot certify historical calen
       "CALENDAR_SOURCE_SET_INCOMPLETE",
     ),
   );
+});
+
+test("complete current schedules qualify without pretending they were collected in the past", async () => {
+  const coverage = { start_utc: "2026-09-06T00:00Z", end_utc: "2026-09-12T23:59:59Z", instruments: ["ZC", "ZW"] };
+  const sources = ["usda_nass_release_calendar", "usda_wasde_release_schedule", "usda_fas_export_sales_schedule"]
+    .map((sourceId) => ({ sourceId, sourceKind: "ICS", url: `https://example.test/${sourceId}.ics`, coverage }));
+  const result = await collectUsdaGrainsCalendar({ sources,
+    coverageStart: coverage.start_utc, coverageEnd: coverage.end_utc,
+    retrievedAtUtc: "2026-09-06T12:00:00.000Z", fetchText: async () => "BEGIN:VCALENDAR\nEND:VCALENDAR" });
+  assert.equal(result.agriCalendarCoverage[0].status, "AVAILABLE");
+  assert.equal(result.calendarVersion.knownAtUtc, "2026-09-06T12:00:00.000Z");
+  assert.equal(result.calendarVersion.sources[0].historicalKnowledgeStatus, "EXTERNAL_HISTORICAL_GAP");
+  assert.equal(result.agriEvents.length, 0, "a verified empty schedule is different from unknown coverage");
 });
 
 test("generic official source reader is bounded and rejects empty and HTTP responses", async () => {

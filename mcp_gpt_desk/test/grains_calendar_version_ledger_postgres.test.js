@@ -9,7 +9,7 @@ import { createTheoreticalTestDatabase } from "./support/theoretical-postgres-fi
 const CUTOFF = "2026-09-04T15:00:00.000Z";
 
 test(
-  "calendar ledger preserves the source-version event snapshot and historical gaps fail closed",
+  "calendar ledger preserves the source-version event snapshot and incomplete sources fail closed",
   { skip: process.env.RUN_POSTGRES_TESTS !== "1" },
   async (t) => {
     const database = await createTheoreticalTestDatabase();
@@ -46,11 +46,6 @@ test(
         "CALENDAR_SOURCE_SET_INCOMPLETE",
       ),
     );
-    assert.ok(
-      historical.agriCalendarCoverage[0].reasonCodes.includes(
-        "EXTERNAL_HISTORICAL_GAP",
-      ),
-    );
 
     await appendGrainsCalendarVersion(
       database.pool,
@@ -60,6 +55,7 @@ test(
         sourceIds: requiredSources(),
         historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP",
         title: "Future version",
+        pointInTimePayload: { commodity_codes: ["ZC"] },
       }),
     );
     assert.equal(
@@ -68,16 +64,42 @@ test(
     );
     const prospective = await load(database.pool, "2026-09-04T15:02:00.000Z");
     assert.equal(prospective.agriCalendarCoverage[0].status, "AVAILABLE");
-    assert.ok(
-      prospective.agriCalendarCoverage[0].reasonCodes.includes(
-        "EXTERNAL_HISTORICAL_GAP",
-      ),
+    assert.deepEqual(prospective.agriEvents[0].commodity_codes, ["ZC"]);
+    const beforeResult = await load(database.pool, "2026-09-05T12:15:00.000Z");
+    assert.equal(beforeResult.agriEvents[0].result, undefined);
+    await appendGrainsCalendarVersion(database.pool, version({
+      hash: "7", knownAtUtc: "2026-09-05T12:31:00Z", sourceIds: requiredSources(),
+      historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP",
+      sourcePublishedAtUtc: "2026-09-04T15:01:00Z",
+      pointInTimePayload: {
+        result: { availableAtUtc: "2026-09-05T12:30:00Z", values: { actual: 42 } },
+      },
+    }));
+    const afterResult = await load(database.pool, "2026-09-05T12:31:00.000Z");
+    assert.deepEqual(afterResult.agriEvents[0].result, {
+      availableAtUtc: "2026-09-05T12:30:00.000Z", values: { actual: 42 },
+    });
+    await appendGrainsCalendarVersion(database.pool, version({
+      hash: "6", knownAtUtc: "2026-09-05T12:32:00Z", sourceIds: requiredSources(),
+      historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP", status: "STALE",
+    }));
+    assert.equal(
+      (await load(database.pool, "2026-09-05T12:32:00.000Z")).agriCalendarCoverage[0].status,
+      "STALE",
     );
     await assert.rejects(
       () =>
         database.pool.query(
           "UPDATE market_agri_calendar_versions SET provider='mutated'",
         ),
+      /append-only/,
+    );
+    await assert.rejects(
+      () => database.pool.query("UPDATE market_agri_calendar_version_sources SET source_url='mutated'"),
+      /append-only/,
+    );
+    await assert.rejects(
+      () => database.pool.query("UPDATE market_agri_calendar_version_events SET title='mutated'"),
       /append-only/,
     );
     await assert.rejects(
@@ -121,17 +143,43 @@ test(
 );
 
 test(
+  "a dated official source collected after the cutoff remains available when its proof matches",
+  { skip: process.env.RUN_POSTGRES_TESTS !== "1" },
+  async (t) => {
+    const database = await createTheoreticalTestDatabase();
+    t.after(() => database.close());
+    const knownAtUtc = "2026-09-04T14:00:00Z";
+    const archived = version({
+      hash: "8", knownAtUtc, sourceIds: requiredSources(),
+      retrievedAtUtc: "2026-09-05T10:00:00Z", historicalKnowledgeStatus: "PROVEN_HISTORICAL",
+    });
+    archived.sources.forEach((source) => {
+      source.knowledgeStatus = "EXTERNAL_HISTORICAL_GAP";
+      source.metadata.historical_evidence = historicalEvidence(source, knownAtUtc);
+    });
+    await appendGrainsCalendarVersion(database.pool, archived);
+    const loaded = await load(database.pool, knownAtUtc);
+    assert.equal(loaded.agriCalendarCoverage[0].status, "AVAILABLE");
+  },
+);
+
+test(
   "calendar knowledge cannot be backdated and same-cutoff versions fail closed",
   { skip: process.env.RUN_POSTGRES_TESTS !== "1" },
   async (t) => {
     const database = await createTheoreticalTestDatabase();
     t.after(() => database.close());
+    const futureHistoricalProof = version({
+      hash: "d", knownAtUtc: "2026-09-04T14:00:00Z", sourceIds: requiredSources(),
+      historicalKnowledgeStatus: "PROVEN_HISTORICAL", retrievedAtUtc: "2026-09-04T14:01:00Z",
+    });
+    futureHistoricalProof.sources.forEach((source) => {
+      source.knowledgeStatus = "EXTERNAL_HISTORICAL_GAP";
+      source.metadata.historical_evidence = historicalEvidence(source, "2026-09-04T14:00:01Z");
+    });
     await assert.rejects(
-      () => appendGrainsCalendarVersion(database.pool, version({
-        hash: "d", knownAtUtc: "2026-09-04T14:00:00Z", sourceIds: requiredSources(),
-        historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP", retrievedAtUtc: "2026-09-04T14:01:00Z",
-      })),
-      /CALENDAR_SOURCE_RETRIEVED_AFTER_VERSION_KNOWLEDGE/,
+      () => appendGrainsCalendarVersion(database.pool, futureHistoricalProof),
+      /CALENDAR_HISTORICAL_PROOF_AFTER_KNOWLEDGE/,
     );
     await assert.rejects(
       () => appendGrainsCalendarVersion(database.pool, version({
@@ -199,12 +247,14 @@ function version({
   historicalKnowledgeStatus,
   sourcePublishedAtUtc = knownAtUtc,
   retrievedAtUtc = knownAtUtc,
+  status = "AVAILABLE",
   title = "Immutable event",
+  pointInTimePayload = {},
 }) {
   const digest = `sha256:${hash.repeat(64)}`;
   return {
     knownAtUtc,
-    status: "AVAILABLE",
+    status,
     coverageStart: "2026-08-01T00:00:00Z",
     coverageEnd: "2026-09-30T00:00:00Z",
     datasetVersion: digest,
@@ -217,7 +267,14 @@ function version({
       retrievedAtUtc,
       knowledgeStatus: "PROVEN_CURRENT",
       historicalKnowledgeStatus,
-      metadata: { calendar_evidence_status: "CALENDAR_SCHEDULE" },
+      metadata: {
+        calendar_evidence_status: "CALENDAR_SCHEDULE",
+        coverage: {
+          start_utc: "2026-08-01T00:00:00Z",
+          end_utc: "2026-09-30T00:00:00Z",
+          instruments: ["ZC", "ZW"],
+        },
+      },
     })),
     events: [
       {
@@ -228,8 +285,19 @@ function version({
         importance: "HIGH",
         provider: "USDA",
         source_published_at_utc: sourcePublishedAtUtc,
+        point_in_time_payload: pointInTimePayload,
       },
     ],
+  };
+}
+
+function historicalEvidence(source, published_at_utc) {
+  return {
+    kind: "OFFICIAL_DATED_PUBLICATION",
+    document_sha256: source.sourceDocumentSha256,
+    document_url: source.sourceUrl,
+    published_at_utc,
+    citation: "Official dated USDA publication",
   };
 }
 
