@@ -45,21 +45,8 @@ export class DomainEventOutboxRepository {
 
   async listAfter({ cursor = "", limit = 100 } = {}) {
     await this.ready();
-    let checkpoint = null;
     const requestedCursor = String(cursor || "").trim();
-    if (requestedCursor) {
-      if (requestedCursor === "front_checkpoint_empty") {
-        const checkpointNow = await currentCheckpoint(this.pool);
-        if (!checkpointNow) return { events: [], resyncRequired: false, checkpoint: null };
-        return { events: [], resyncRequired: true, checkpoint: checkpointNow };
-      }
-      const found = await this.pool.query(
-        "SELECT created_at_utc, domain_event_id FROM domain_event_outbox WHERE domain_event_id = $1",
-        [requestedCursor],
-      );
-      checkpoint = found.rows[0] || null;
-      if (!checkpoint) return { events: [], resyncRequired: true, checkpoint: await currentCheckpoint(this.pool) };
-    } else {
+    if (!requestedCursor) {
       return {
         events: [],
         resyncRequired: false,
@@ -67,16 +54,44 @@ export class DomainEventOutboxRepository {
         checkpoint: await currentCheckpoint(this.pool),
       };
     }
-    const result = await this.pool.query(`SELECT * FROM domain_event_outbox
-      WHERE ($1::timestamptz IS NULL OR (created_at_utc, domain_event_id) > ($1, $2))
-      ORDER BY created_at_utc, domain_event_id
-      LIMIT $3`, [checkpoint?.created_at_utc || null, checkpoint?.domain_event_id || "", bounded(limit)]);
-    return { events: result.rows.map(mapEvent), resyncRequired: false, checkpoint: await currentCheckpoint(this.pool) };
+    if (requestedCursor === "front_checkpoint_empty") {
+      const checkpointNow = await currentCheckpoint(this.pool);
+      if (!checkpointNow) return { events: [], resyncRequired: false, checkpoint: null };
+      return { events: [], resyncRequired: true, checkpoint: checkpointNow };
+    }
+    const result = await this.pool.query(`WITH checkpoint AS (
+        SELECT created_at_utc, domain_event_id
+        FROM domain_event_outbox
+        WHERE domain_event_id = $1::text
+      ), page AS (
+      SELECT event.domain_event_id, event.aggregate_id, event.aggregate_type,
+        event.aggregate_sequence, event.event_type, event.revision,
+        event.occurred_at_utc, event.received_at_utc, event.source,
+        event.correlation_id, event.causation_id, event.schema_version,
+        event.payload_hash, event.payload, event.created_at_utc,
+        to_char(event.occurred_at_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at_exact_utc,
+        to_char(event.received_at_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS received_at_exact_utc
+      FROM domain_event_outbox event
+      CROSS JOIN checkpoint
+      WHERE (event.created_at_utc, event.domain_event_id)
+        > (checkpoint.created_at_utc, checkpoint.domain_event_id)
+      ORDER BY event.created_at_utc, event.domain_event_id
+      LIMIT $2::int
+      )
+      SELECT EXISTS(SELECT 1 FROM checkpoint) AS cursor_found, page.*
+      FROM (SELECT 1) anchor
+      LEFT JOIN page ON TRUE
+      ORDER BY page.created_at_utc NULLS LAST, page.domain_event_id NULLS LAST`, [requestedCursor, bounded(limit)]);
+    if (!result.rows[0]?.cursor_found) {
+      return { events: [], resyncRequired: true, checkpoint: await currentCheckpoint(this.pool) };
+    }
+    const events = result.rows.filter((row) => row.domain_event_id).map(mapEvent);
+    return { events, resyncRequired: false, checkpoint: await currentCheckpoint(this.pool) };
   }
 }
 
 async function currentCheckpoint(pool) {
-  const result = await pool.query(`SELECT domain_event_id, created_at_utc
+  const result = await pool.query(`SELECT domain_event_id
     FROM domain_event_outbox ORDER BY created_at_utc DESC, domain_event_id DESC LIMIT 1`);
   return result.rows[0]?.domain_event_id || null;
 }
@@ -122,8 +137,8 @@ function mapEvent(row = {}) {
     aggregateId: row.aggregate_id,
     aggregateType: row.aggregate_type,
     eventType: row.event_type,
-    occurredAt: iso(row.occurred_at_utc),
-    receivedAt: iso(row.received_at_utc),
+    occurredAt: row.occurred_at_exact_utc || iso(row.occurred_at_utc),
+    receivedAt: row.received_at_exact_utc || iso(row.received_at_utc),
     source: row.source,
     correlationId: row.correlation_id,
     causationId: row.causation_id || undefined,
@@ -138,5 +153,5 @@ function bounded(value) { return Math.max(1, Math.min(500, Math.trunc(Number(val
 function positiveInteger(value) { const parsed = Number(value); return Number.isInteger(parsed) && parsed > 0 ? parsed : null; }
 function nullable(value) { const result = String(value ?? "").trim(); return result || null; }
 function required(value, code) { const result = nullable(value); if (result) return result; throw coded(code, code); }
-function iso(value) { const parsed = Date.parse(value || ""); if (!Number.isFinite(parsed)) throw coded("DOMAIN_EVENT_TIMESTAMP_INVALID", "Domain event timestamp is invalid."); return new Date(parsed).toISOString(); }
+function iso(value) { const parsed = value instanceof Date ? value.getTime() : Date.parse(value || ""); if (!Number.isFinite(parsed)) throw coded("DOMAIN_EVENT_TIMESTAMP_INVALID", "Domain event timestamp is invalid."); return new Date(parsed).toISOString(); }
 function coded(code, message) { const error = new Error(message || code); error.code = code; return error; }

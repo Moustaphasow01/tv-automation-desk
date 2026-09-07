@@ -7,6 +7,7 @@ param(
     [int]$TimeoutSeconds = 900,
     [int]$PollSeconds = 5,
     [string]$FailureReason = "",
+    [switch]$RequireEmptyAgentQueue,
     [ValidateSet("verified", "rolled_back")][string]$CompletionStatus = "verified"
 )
 
@@ -30,6 +31,7 @@ $deploymentSql = ConvertTo-DeskPsqlLiteral $DeploymentId
 $releaseSql = ConvertTo-DeskPsqlLiteral $ReleaseVersion
 $failureSql = if ([string]::IsNullOrEmpty($FailureReason)) { "" } else { ConvertTo-DeskPsqlLiteral $FailureReason }
 $completionSql = ConvertTo-DeskPsqlLiteral $CompletionStatus
+$requireEmptyAgentQueueSql = if ($RequireEmptyAgentQueue) { "TRUE" } else { "FALSE" }
 
 if ($Action -in @("Begin", "Pause")) {
     $beginSql = @"
@@ -188,6 +190,10 @@ SELECT CASE WHEN
     WHERE deployment_id = '$deploymentSql' AND status = 'draining'
   )
 THEN (
+  (SELECT count(*) FROM agent_tasks
+   WHERE status IN ('CLAIMED', 'RUNNING')
+      OR ($requireEmptyAgentQueueSql AND status IN ('PENDING', 'READY', 'WAITING_DEPENDENCY')))
+  +
   (SELECT count(*) FROM desk_documents
    WHERE collection = 'desk_agent_work_items'
      AND data->>'status' = 'CLAIMED'

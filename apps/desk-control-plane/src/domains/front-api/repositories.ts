@@ -172,8 +172,28 @@ export function frontViewQueryKey(
   queryScope?: string,
 ) {
   return queryScope
-    ? ["front-view-scope", queryScope, viewName, stableParams] as const
-    : ["front-view", viewName, stableParams] as const;
+    ? frontViewQueryKeys.scoped(queryScope, viewName, stableParams)
+    : frontViewQueryKeys.view(viewName, stableParams);
+}
+
+export const frontViewQueryKeys = {
+  view: (viewName: FrontViewName, stableParams: readonly (readonly [string, string])[] = []) =>
+    ["front-view", viewName, stableParams] as const,
+  scoped: (queryScope: string, viewName: FrontViewName, stableParams: readonly (readonly [string, string])[] = []) =>
+    ["front-view-scope", queryScope, viewName, stableParams] as const,
+};
+
+export type FrontViewScopeMatch = "DESK_ONLY" | "INCLUDING_MARKET_SERIES";
+
+export function matchesFrontViewQuery(
+  queryKey: readonly unknown[],
+  viewNames: readonly FrontViewName[],
+  scopeMatch: FrontViewScopeMatch = "DESK_ONLY",
+): boolean {
+  if (queryKey[0] === "front-view") return viewNames.includes(queryKey[1] as FrontViewName);
+  if (queryKey[0] !== "front-view-scope") return false;
+  if (scopeMatch === "DESK_ONLY" && queryKey[1] === "market-series") return false;
+  return viewNames.includes(queryKey[2] as FrontViewName);
 }
 
 export function useCommandStatus(commandId: string | null) {

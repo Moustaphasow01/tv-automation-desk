@@ -5,6 +5,17 @@ on:
   push:
 
 jobs:
+  windows-deployment:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Windows deployment and drain contracts
+        run: node scripts/quality/check_windows_deployment_kit.mjs
+
   grains-postgres:
     runs-on: ubuntu-latest
     timeout-minutes: 20

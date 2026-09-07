@@ -6,10 +6,13 @@ import { createCommandRuntimeState, reduceCommandEvent, type CommandRuntimeState
 import {
   createRealtimeEventState,
   frontViewNamesForRealtimeEvent,
-  reduceRealtimeEvent,
   type EventEnvelope,
   type RealtimeEventState
 } from "@/domains/realtime/eventEnvelope";
+import {
+  admitRealtimeEvent,
+  RealtimeQuerySynchronizer,
+} from "@/domains/realtime/realtimeQuerySync";
 import { createDeskTransport, type RealtimeTransportStatus } from "@/shared/transport";
 
 export type RealtimeStatus = {
@@ -40,7 +43,7 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
   const [commands, setCommands] = useState<CommandRuntimeState>(() => createCommandRuntimeState());
   const [resyncing, setResyncing] = useState(false);
   const connectionStatusRef = useRef<RealtimeTransportStatus>("CONNECTING");
-  const initialEventsRef = useRef(events);
+  const eventsRef = useRef(events);
   const pendingInvalidationsRef = useRef(new Set<FrontViewName>());
   const invalidationTimerRef = useRef<number | null>(null);
   const transport = useMemo(() => createDeskTransport(config), [config]);
@@ -52,6 +55,10 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
 
   useEffect(() => {
     const pendingInvalidations = pendingInvalidationsRef.current;
+    const querySync = new RealtimeQuerySynchronizer(queryClient, {
+      onError: setLatestError,
+      onRecoveryState: setResyncing,
+    });
     const scheduleViewInvalidations = (viewNames: readonly FrontViewName[]) => {
       viewNames.forEach((viewName) => pendingInvalidationsRef.current.add(viewName));
       if (invalidationTimerRef.current !== null) return;
@@ -59,60 +66,40 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
         const pending = [...pendingInvalidationsRef.current];
         pendingInvalidationsRef.current.clear();
         invalidationTimerRef.current = null;
-        pending.forEach((viewName) => {
-          void queryClient.invalidateQueries({ queryKey: ["front-view", viewName] });
-        });
+        void querySync.refreshInvalidatedViews(pending);
       }, 100);
     };
     const subscription = transport.subscribeEvents({
       onEvent(event: EventEnvelope) {
         if (event.eventType === "desk.resync_required") {
           clearPersistedRealtimeCursor(config);
-          setResyncing(true);
-          const affected = frontViewNamesForRealtimeEvent(event);
-          void Promise.all(affected.map((viewName) => queryClient.refetchQueries({ queryKey: ["front-view", viewName] })))
-            .then(() => queryClient.refetchQueries({ queryKey: ["front-view-scope", "market-series"] }))
-            .finally(() => {
-              setEvents(createRealtimeEventState());
-              setResyncing(false);
-            });
+          void querySync.recover();
           return;
         }
-        setEvents((current) => {
-          const next = reduceRealtimeEvent(current, event);
-          persistRealtimeCursor(config, next.lastEventId);
-          if (next.sequenceGapCount > current.sequenceGapCount) {
-            setResyncing(true);
-            const affected = frontViewNamesForRealtimeEvent(event);
-            void Promise.all(affected.map((viewName) => queryClient.refetchQueries({ queryKey: ["front-view", viewName] })))
-              .then(() => queryClient.refetchQueries({ queryKey: ["front-view-scope", "market-series"] }))
-              .finally(() => setResyncing(false));
-          }
-          return next;
-        });
-        setCommands((current) => reduceCommandEvent(current, event));
-        scheduleViewInvalidations(frontViewNamesForRealtimeEvent(event));
-        setLatestError(null);
+        const admitted = admitRealtimeEvent(eventsRef.current, event);
+        eventsRef.current = admitted.state;
+        setEvents(admitted.state);
+        if (admitted.disposition === "DUPLICATE") return;
+        persistRealtimeCursor(config, admitted.state.lastEventId);
+        if (admitted.applyCommandEffect) setCommands((current) => reduceCommandEvent(current, event));
+        if (admitted.requiresRecovery) void querySync.recover();
+        else if (admitted.refreshCanonicalQueries) scheduleViewInvalidations(frontViewNamesForRealtimeEvent(event));
       },
       onStatus(status) {
         const previous = connectionStatusRef.current;
         connectionStatusRef.current = status;
         setConnectionStatus(status);
         if (status === "OPEN" && previous === "RECONNECTING") {
-          setResyncing(true);
-          void Promise.all([
-            queryClient.refetchQueries({ queryKey: ["front-view", "command-center"] }),
-            queryClient.refetchQueries({ queryKey: ["front-view", "live-trading"] }),
-            queryClient.refetchQueries({ queryKey: ["front-view-scope", "market-series"] }),
-          ]).finally(() => setResyncing(false));
+          void querySync.recover();
         }
       },
       onError(error) {
-        setLatestError(error.message);
+        querySync.recordConnectionError(error);
       }
-    }, initialEventsRef.current);
+    }, loadPersistedRealtimeState(config));
 
     return () => {
+      querySync.close();
       subscription.close();
       if (invalidationTimerRef.current !== null) window.clearTimeout(invalidationTimerRef.current);
       invalidationTimerRef.current = null;

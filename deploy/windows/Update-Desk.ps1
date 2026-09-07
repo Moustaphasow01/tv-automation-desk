@@ -16,6 +16,7 @@ param(
     [switch]$SkipDrain,
     [switch]$KeepFrozen,
     [switch]$QuiesceFrozenState,
+    [switch]$RequireEmptyAgentQueue,
     [switch]$Rehearsal
 )
 
@@ -106,6 +107,7 @@ if ($Rehearsal) {
     $deploymentId = $null
     $installAttempted = $false
     $producerScheduledTaskState = @()
+    $emptyAgentQueueWaitFailed = $false
     try {
         if ((Get-Item -LiteralPath $ReleasePath).PSIsContainer) {
             $probeRoot = $ReleasePath
@@ -149,13 +151,20 @@ if ($Rehearsal) {
             $drainScript = Join-Path $probeRoot "deploy\windows\Invoke-DeskDrain.ps1"
             $pauseOutput = @(& $drainScript -Action Pause -DatabaseUrl $envValues["DATABASE_URL"] -ReleaseVersion $targetVersion -PostgresBin $PostgresBin)
             $deploymentId = [string]($pauseOutput | Select-Object -Last 1)
+            try {
+                & $drainScript -Action Wait -DatabaseUrl $envValues["DATABASE_URL"] -ReleaseVersion $targetVersion `
+                    -DeploymentId $deploymentId -PostgresBin $PostgresBin `
+                    -RequireEmptyAgentQueue:$RequireEmptyAgentQueue
+            } catch {
+                if ($RequireEmptyAgentQueue) { $emptyAgentQueueWaitFailed = $true }
+                throw
+            }
             Stop-DeskProducerServices
             Assert-DeskProducerScheduledTasksStopped
             if ($KeepFrozen) {
                 Disable-DeskFrozenProducerServices
                 Assert-DeskFrozenProducerServices
             }
-            & $drainScript -Action Wait -DatabaseUrl $envValues["DATABASE_URL"] -ReleaseVersion $targetVersion -DeploymentId $deploymentId -PostgresBin $PostgresBin
         }
 
         if ($KeepFrozen) {
@@ -232,6 +241,10 @@ if ($Rehearsal) {
             } catch {
                 Write-Warning "Producer scheduled tasks could not be fully stopped during recovery: $($_.Exception.Message)"
             }
+        }
+        if ($emptyAgentQueueWaitFailed) {
+            Write-Warning "Transitional Agent Runtime queue drain did not complete; deployment remains in DRAIN for operator adjudication."
+            throw $updateError
         }
         $recovery = Invoke-DeskUpdateRecovery `
             -DeploymentId $deploymentId `

@@ -15,6 +15,7 @@ const bffConfig: DeskAppConfig = {
 
 describe("front realtime transport", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -71,7 +72,59 @@ describe("front realtime transport", () => {
     expect(statuses).toContain("CONNECTING");
     expect(statuses.at(-1)).toBe("CLOSED");
   });
+
+  it("reports disconnection immediately and resumes from the latest cursor after backoff", () => {
+    vi.useFakeTimers();
+    const sourceInstances: FakeEventSource[] = [];
+    vi.stubGlobal("window", {
+      location: { origin: "https://desk.example" },
+      setTimeout,
+      clearTimeout
+    });
+    vi.stubGlobal(
+      "EventSource",
+      class extends FakeEventSource {
+        constructor(url: string) {
+          super(url);
+          sourceInstances.push(this);
+        }
+      }
+    );
+    const statuses: string[] = [];
+    const errors: string[] = [];
+    const subscription = createDeskTransport(bffConfig).subscribeEvents({
+      onEvent: () => undefined,
+      onStatus: (status) => statuses.push(status),
+      onError: (error) => errors.push(error.message),
+    });
+
+    sourceInstances[0]?.onopen?.();
+    sourceInstances[0]?.onmessage?.({ data: JSON.stringify(event("evt_latest")) });
+    sourceInstances[0]?.onerror?.();
+
+    expect(statuses).toEqual(["CONNECTING", "OPEN", "RECONNECTING"]);
+    expect(errors).toEqual(["BFF_EVENTS_RECONNECTING"]);
+    expect(sourceInstances).toHaveLength(1);
+
+    vi.advanceTimersByTime(1_000);
+    expect(sourceInstances[1]?.url).toBe("https://desk.example/front-api/v1/events?cursor=evt_latest");
+    sourceInstances[1]?.onopen?.();
+    expect(statuses.at(-1)).toBe("OPEN");
+
+    subscription.close();
+  });
 });
+
+function event(eventId: string): EventEnvelope {
+  return {
+    eventId,
+    eventType: "desk.snapshot.updated",
+    occurredAt: "2026-08-10T13:15:00.000Z",
+    correlationId: "corr_transport_test",
+    schemaVersion: "1.0.0",
+    payload: { source: "sse" }
+  };
+}
 
 class FakeEventSource {
   onerror: (() => void) | null = null;

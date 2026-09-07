@@ -299,6 +299,8 @@ async function insertTargetLinks(client, target) {
 }
 
 async function insertOrderIntentLineage(client, intent) {
+  // created_at_utc intentionally remains the database ingestion clock. The
+  // causal request clock is the immutable payload.requested_at_utc.
   await client.query(`INSERT INTO portfolio_order_intent_lineage (
       portfolio_order_intent_id, target_position_id, trade_order_intent_id, idempotency_key,
       status, broker_submission_allowed, quantity, order_intent_hash, payload_hash, payload
@@ -383,7 +385,7 @@ async function appendPipelineDomainEvents(outbox, client, record) {
       aggregateId: intent.order_intent_id,
       aggregateType: "order_intent",
       eventType: "order_intent.created",
-      occurredAt: intent.created_at_utc || record.run.as_of_utc,
+      occurredAt: intent.requested_at_utc || record.run.as_of_utc,
       correlationId,
       causationId: intent.target_position_id,
       source: "portfolio-risk-runtime",

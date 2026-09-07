@@ -108,7 +108,7 @@ function createBffTransport(config: DeskAppConfig): DeskTransport {
         }
       };
 
-      const startSse = (status: RealtimeTransportStatus = "CONNECTING") => {
+      const startSse = (status?: RealtimeTransportStatus) => {
         if (closed) return;
         if (typeof EventSource === "undefined") {
           const error = Object.assign(new Error("BFF_EVENTS_UNSUPPORTED"), { code: "BFF_EVENTS_UNSUPPORTED" });
@@ -117,7 +117,7 @@ function createBffTransport(config: DeskAppConfig): DeskTransport {
           return;
         }
 
-        handlers.onStatus?.(status);
+        if (status) handlers.onStatus?.(status);
         source = new EventSource(buildRealtimeSseUrl(config.frontApiBaseUrl, lastEventId));
         source.onopen = () => {
           reconnectAttempt = 0;
@@ -130,15 +130,16 @@ function createBffTransport(config: DeskAppConfig): DeskTransport {
 
           source?.close();
           source = null;
+          handlers.onStatus?.("RECONNECTING");
           handlers.onError?.(Object.assign(new Error("BFF_EVENTS_RECONNECTING"), { code: "BFF_EVENTS_RECONNECTING" }));
           const delayMs = Math.min(1_000 * 2 ** reconnectAttempt, 10_000);
           reconnectAttempt += 1;
-          reconnectTimer = window.setTimeout(() => startSse("RECONNECTING"), delayMs);
+          reconnectTimer = window.setTimeout(() => startSse(), delayMs);
         };
         source.onmessage = (message) => parseMessage(message.data);
       };
 
-      startSse();
+      startSse("CONNECTING");
 
       return {
         close() {

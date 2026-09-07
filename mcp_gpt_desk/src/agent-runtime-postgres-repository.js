@@ -24,6 +24,7 @@ import {
   updateTask,
 } from "./agent-runtime-postgres-common.js";
 import { recordTaskRunMetrics } from "./agent-runtime-metrics-postgres.js";
+import { acquireAgentRuntimeClaimDeploymentAdmission } from "./persistence/postgres-agent-runtime-deployment-admission.js";
 
 export { mapTaskRow } from "./agent-runtime-postgres-common.js";
 
@@ -42,6 +43,8 @@ export class PostgresAgentRuntimeRepository {
     taskTypePatterns = [],
   } = {}) {
     return this.withTransaction(async (client) => {
+      const admission = await acquireAgentRuntimeClaimDeploymentAdmission(client);
+      if (!admission.allowed) return null;
       const row = await selectClaimableTask(client, { lane, nowUtc, taskTypePatterns });
       if (!row) return null;
       const transition = claimAgentTaskV1(mapTaskRow(row), {

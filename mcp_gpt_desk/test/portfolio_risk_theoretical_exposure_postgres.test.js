@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PostgresPortfolioRiskRuntimeRepository } from "../src/portfolio-risk-runtime-repository.js";
+import { normalizePipelineRecord, PostgresPortfolioRiskRuntimeRepository } from "../src/portfolio-risk-runtime-repository.js";
 import { PortfolioRiskRuntimeService } from "../src/portfolio-risk-runtime-service.js";
 import { loadTheoreticalExposureAsOf } from "../src/portfolio-theoretical-exposure-repository.js";
 import { createBrokerExecutionRepository } from "../src/broker-execution-repository.js";
@@ -29,6 +29,73 @@ test("PostgreSQL exposure lock reserves a theoretical intent and prevents an opp
     assert.equal(await count(database.pool, "portfolio_order_intent_lineage"), 1);
     const blocked = results.find((item) => item.intents.order_intents.length === 0);
     assert.ok(blocked.allocations.rejected_signals[0].issues.some((issue) => issue.code === "PORTFOLIO_THEORETICAL_INTENT_RESERVED"));
+  } finally {
+    await database.close();
+  }
+});
+
+test("causal exposure and Portfolio run identity ignore different PostgreSQL wall clocks", { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async () => {
+  const database = await createTheoreticalTestDatabase();
+  try {
+    const persistence = { pool: database.pool, initialized: Promise.resolve() };
+    const repository = new PostgresPortfolioRiskRuntimeRepository(persistence);
+    const service = new PortfolioRiskRuntimeService({ repository, clock: { now: () => ({ utc: NOW }) } });
+    const first = await service.runPipeline(command(signal({ signal_id: "signal-causal-clock" })));
+    const intentId = first.intents.order_intents[0].order_intent_id;
+    const gates = new PortfolioOrderIntentExecutionService({ persistence, clock: { now: () => ({ utc: NOW }) } });
+    await gates.ensureHumanGate({ portfolioOrderIntentId: intentId, expiresAtUtc: LATER, as_of_utc: NOW });
+    await database.pool.query(`INSERT INTO portfolio_order_intent_execution_states
+      (portfolio_order_intent_id,lifecycle_status,filled_quantity,payload,updated_at_utc)
+      VALUES ($1,'AWAITING_MANUAL_CONFIRMATION',0,'{}','2030-01-01T00:00:00Z')`, [intentId]);
+    await database.pool.query("UPDATE portfolio_order_intent_lineage SET created_at_utc='2030-01-01T00:00:00Z' WHERE portfolio_order_intent_id=$1", [intentId]);
+
+    const firstSnapshot = await exposure(database.pool, exposureRequest());
+    const firstRunId = causalProofRunId(firstSnapshot);
+    await database.pool.query("UPDATE portfolio_order_intent_lineage SET created_at_utc='2040-01-01T00:00:00Z' WHERE portfolio_order_intent_id=$1", [intentId]);
+    await database.pool.query("UPDATE portfolio_order_intent_execution_states SET updated_at_utc='2041-01-01T00:00:00Z' WHERE portfolio_order_intent_id=$1", [intentId]);
+    const secondSnapshot = await exposure(database.pool, exposureRequest());
+
+    assert.deepEqual(secondSnapshot, firstSnapshot);
+    assert.equal(causalProofRunId(secondSnapshot), firstRunId);
+    assert.equal(secondSnapshot.pending_order_intents[0].requested_at_utc, "2026-09-05T14:05:00.000Z");
+    assert.equal(secondSnapshot.pending_order_intents[0].requested_at_provenance, "ORDER_INTENT_REQUESTED_AT");
+    assert.equal(secondSnapshot.pending_order_intents[0].created_at_utc, undefined);
+    assert.equal(secondSnapshot.positions[0].observed_at_utc, NOW);
+
+    await database.pool.query(`UPDATE portfolio_order_intent_execution_states
+      SET lifecycle_status='BLOCKED',payload=jsonb_build_object('reason','HUMAN_GATE_EXPIRED')
+      WHERE portfolio_order_intent_id=$1`, [intentId]);
+    const silentBlockedTransition = await exposure(database.pool, exposureRequest());
+    assert.equal(silentBlockedTransition.availability, "PARTIAL");
+    assert.equal(silentBlockedTransition.pending_order_intents[0].execution_state_provenance, "PERSISTED_CAUSAL_EVENT_UNAVAILABLE");
+    assert.ok(silentBlockedTransition.reason_codes.includes("THEORETICAL_EXECUTION_STATE_CAUSAL_EVENT_UNAVAILABLE:ZC"));
+
+    await database.pool.query(`UPDATE portfolio_order_intent_execution_states
+      SET lifecycle_status='LEASED',payload=jsonb_build_object('leased_at_utc','2026-09-05T14:10:00.000Z')
+      WHERE portfolio_order_intent_id=$1`, [intentId]);
+    const futureClaim = await exposure(database.pool, exposureRequest());
+    assert.equal(futureClaim.availability, "PARTIAL");
+    assert.ok(futureClaim.reason_codes.includes("THEORETICAL_EXECUTION_STATE_AFTER_AS_OF:ZC"));
+    assert.equal(futureClaim.positions[0].observed_at_utc, NOW);
+
+    await database.pool.query(`UPDATE portfolio_order_intent_execution_states
+      SET payload=jsonb_build_object('leased_at_utc','2026-09-05T14:04:00.000Z')
+      WHERE portfolio_order_intent_id=$1`, [intentId]);
+    const provenClaim = await exposure(database.pool, exposureRequest());
+    assert.equal(provenClaim.availability, "KNOWN");
+    assert.equal(provenClaim.pending_order_intents[0].lifecycle_status, "LEASED");
+    assert.equal(provenClaim.positions[0].observed_at_utc, NOW);
+
+    const gate = (await database.pool.query("SELECT human_execution_gate_id FROM human_execution_gates WHERE portfolio_order_intent_id=$1", [intentId])).rows[0];
+    await database.pool.query(`INSERT INTO human_execution_gate_events
+      (human_execution_gate_event_id,human_execution_gate_id,portfolio_order_intent_id,event_type,occurred_at_utc,payload_hash,payload)
+      VALUES ('future-causal-event',$1,$2,'CONFIRM_REQUESTED','2026-09-05T14:11:00Z',$3,'{}')`,
+    [gate.human_execution_gate_id, intentId, `sha256:${"9".repeat(64)}`]);
+    const future = await exposure(database.pool, exposureRequest());
+    assert.equal(future.availability, "PARTIAL");
+    assert.ok(future.reason_codes.includes("THEORETICAL_EXECUTION_STATE_AFTER_AS_OF:ZC"));
+    assert.equal(future.pending_order_intents[0].latest_event_at_utc, undefined);
+    assert.equal(future.positions[0].observed_at_utc, NOW);
   } finally {
     await database.close();
   }
@@ -336,6 +403,15 @@ function signal(overrides = {}) {
 
 function exposureRequest() {
   return { as_of_utc: NOW, account_id: "shadow-grains", portfolio_scope: "shadow-grains", execution_mode: "SHADOW", instruments: ["ZC"] };
+}
+
+function causalProofRunId(exposureSnapshot) {
+  return normalizePipelineRecord({
+    as_of_utc: LATER, account_id: "shadow-grains", portfolio_scope: "shadow-grains",
+    idempotency_key: "td2-433-causal-clock-proof", exposure_snapshot: exposureSnapshot,
+    allocations: { candidate_allocations: [] }, risk: { allocation_evaluations: [] },
+    targets: { target_positions: [] }, intents: { order_intents: [] },
+  }).run.id;
 }
 
 function monetaryExposureRequest() {

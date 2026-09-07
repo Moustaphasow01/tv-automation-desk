@@ -65,6 +65,10 @@ test("real PostgreSQL replay: raw pair, canonical context/risk/gate and theoreti
   assert.equal(result.ledger.context.filter((row) => row.decision === "REJECT").length, 1);
   assert.equal(result.ledger.risk.length, 1);
   assert.equal(result.ledger.intents.length, 1);
+  assert.equal(result.ledger.intents[0].requested_at_utc, result.ledger.intents[0].payload.requested_at_utc);
+  assert.equal(result.ledger.intents[0].requested_at_provenance, "ORDER_INTENT_REQUESTED_AT");
+  assert.ok(result.ledger.intents[0].ingested_at_utc);
+  assert.equal(result.ledger.intents[0].created_at_utc, undefined);
   assert.equal(result.ledger.human_gates[0].status, "AWAITING_MANUAL_CONFIRMATION");
   const fill = result.ledger.theoretical_events.find((row) => row.event_type === "entry_filled");
   assert.ok(fill, "canonical live theory must fill after creation, without human confirmation");

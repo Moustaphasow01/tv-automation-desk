@@ -41,6 +41,7 @@ const required = [
   "deploy/windows/Invoke-DeskRuntimeMaintenance.ps1",
   "deploy/windows/Invoke-DeskBackupVerification.ps1",
   "deploy/windows/Update-Desk.ps1",
+  "deploy/windows/Test-DeskAgentRuntimeDrain.ps1",
   "deploy/windows/Test-DeskUpdateRecovery.ps1",
   "deploy/windows/Test-DeskProducerScheduledTasks.ps1",
   "deploy/windows/Test-DeskAgentSupervisorInstallMode.ps1",
@@ -101,6 +102,7 @@ const required = [
   "mcp_gpt_desk/scripts/run_strategy_signal_decision_pipeline_once.mjs",
   "mcp_gpt_desk/scripts/refresh_usda_grains_calendar.mjs",
   "mcp_gpt_desk/src/persistence/postgres-deployment-producer-admission.js",
+  "mcp_gpt_desk/src/persistence/postgres-agent-runtime-deployment-admission.js",
   "mcp_gpt_desk/test/deployment_producer_admission.test.js",
   "mcp_gpt_desk/test/deployment_producer_admission_postgres.test.js",
   "mcp_gpt_desk/test/support/producer-admission-loss-child.mjs",
@@ -336,6 +338,27 @@ if (!drain.includes("'revision', (control.data->>'revision')::bigint + 1")) {
 }
 if (!drain.includes("collection='desk_deployment_controls' AND document_id='producer_hold'")) {
   violations.push("deployment_without_id_does_not_use_singleton_owner");
+}
+if (!drain.includes("FROM agent_tasks") || !drain.includes("status IN ('CLAIMED', 'RUNNING')")) {
+  violations.push("deployment_drain_ignores_agent_runtime_tasks");
+}
+if (!drain.includes("RequireEmptyAgentQueue")
+    || !drain.includes("status IN ('PENDING', 'READY', 'WAITING_DEPENDENCY')")) {
+  violations.push("transitional_empty_agent_queue_guard_missing");
+}
+const agentRuntimeDrainTest = content.get("deploy/windows/Test-DeskAgentRuntimeDrain.ps1");
+for (const expected of ["CLAIMED/RUNNING Agent Runtime tasks", "expired Agent Runtime rows", "Stop-DeskProducerServices"]) {
+  if (!agentRuntimeDrainTest.includes(expected)) violations.push(`agent_runtime_drain_test_missing:${expected}`);
+}
+if (!update.includes("-RequireEmptyAgentQueue:$RequireEmptyAgentQueue")
+    || !update.includes("if ($emptyAgentQueueWaitFailed)")) {
+  violations.push("update_empty_agent_queue_fail_closed_missing");
+}
+const agentPauseIndex = update.indexOf("-Action Pause");
+const agentWaitIndex = update.indexOf("-Action Wait", agentPauseIndex);
+const producerStopIndex = update.indexOf("Stop-DeskProducerServices", agentPauseIndex);
+if (agentPauseIndex < 0 || agentWaitIndex < agentPauseIndex || producerStopIndex < agentWaitIndex) {
+  violations.push("agent_runtime_tasks_not_drained_before_service_stop");
 }
 
 const producerAdmission = content.get("mcp_gpt_desk/src/persistence/postgres-deployment-producer-admission.js");
@@ -575,7 +598,7 @@ if (!recoveryTest.includes('"audit,start,health,resume"') || !recoveryTest.inclu
 }
 if (process.platform === "win32") {
   const powerShell = resolve(process.env.SystemRoot || "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe");
-  for (const relative of ["deploy/windows/Test-DeskUpdateRecovery.ps1", "deploy/windows/Test-DeskProducerScheduledTasks.ps1", "deploy/windows/Test-DeskAgentSupervisorInstallMode.ps1", "deploy/windows/Test-DeskNodeVersionCompatibility.ps1", "deploy/windows/Test-DeskGrainsCalendarHealth.ps1", "deploy/windows/database/Test-DeskDatabaseExternal.ps1"]) {
+  for (const relative of ["deploy/windows/Test-DeskUpdateRecovery.ps1", "deploy/windows/Test-DeskProducerScheduledTasks.ps1", "deploy/windows/Test-DeskAgentRuntimeDrain.ps1", "deploy/windows/Test-DeskAgentSupervisorInstallMode.ps1", "deploy/windows/Test-DeskNodeVersionCompatibility.ps1", "deploy/windows/Test-DeskGrainsCalendarHealth.ps1", "deploy/windows/database/Test-DeskDatabaseExternal.ps1"]) {
     const result = spawnSync(powerShell, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", resolve(root, relative)], {
       cwd: root,
       encoding: "utf8",

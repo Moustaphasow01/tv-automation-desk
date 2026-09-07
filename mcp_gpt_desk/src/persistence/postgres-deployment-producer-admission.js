@@ -3,7 +3,7 @@ import pg from "pg";
 const { Client } = pg;
 const HOLD_SCHEMA = "desk_deployment_producer_hold_v1";
 const HOLD_STATES = new Set(["OPEN", "DRAIN", "FROZEN", "FAILED"]);
-const LOCK_KEYS = Object.freeze([741912, 90]);
+export const DEPLOYMENT_PRODUCER_LOCK_KEYS = Object.freeze([741912, 90]);
 
 export function createDeploymentProducerClient({ connectionString, applicationName }) {
   if (!String(connectionString || "").trim()) throw admissionError("DEPLOYMENT_PRODUCER_DATABASE_REQUIRED");
@@ -26,7 +26,7 @@ export async function runWithDeploymentProducerAdmission(client, operation, opti
     await client.connect();
     const lock = await client.query(
       "SELECT pg_try_advisory_lock_shared($1, $2) AS acquired",
-      LOCK_KEYS,
+      DEPLOYMENT_PRODUCER_LOCK_KEYS,
     );
     acquired = lock.rows[0]?.acquired === true;
     if (!acquired) return skipped("TRANSITION", null);
@@ -37,7 +37,7 @@ export async function runWithDeploymentProducerAdmission(client, operation, opti
        LIMIT 1`,
     );
     if (result.rows.length !== 1) throw admissionError("DEPLOYMENT_PRODUCER_HOLD_MISSING");
-    const control = validateControl(result.rows[0]?.data);
+    const control = validateDeploymentProducerHold(result.rows[0]?.data);
     if (control.state !== "OPEN") return skipped(control.state, control.deployment_id);
     const value = await Promise.race([operation(), connectionLoss.promise]);
     return { executed: true, value };
@@ -75,7 +75,7 @@ function createConnectionLossGuard(client, terminate, isClosing) {
   };
 }
 
-function validateControl(value) {
+export function validateDeploymentProducerHold(value) {
   const validObject = value && typeof value === "object" && !Array.isArray(value);
   const state = validObject ? value.state : null;
   const held = validObject ? value.held : null;
@@ -94,7 +94,10 @@ async function closeAdmissionClient(client, { acquired, operationError }) {
   let cleanupError = null;
   if (acquired) {
     try {
-      const result = await client.query("SELECT pg_advisory_unlock_shared($1, $2) AS released", LOCK_KEYS);
+      const result = await client.query(
+        "SELECT pg_advisory_unlock_shared($1, $2) AS released",
+        DEPLOYMENT_PRODUCER_LOCK_KEYS,
+      );
       if (result.rows[0]?.released !== true) cleanupError = admissionError("DEPLOYMENT_PRODUCER_UNLOCK_FAILED");
     } catch (error) { cleanupError = error; }
   }

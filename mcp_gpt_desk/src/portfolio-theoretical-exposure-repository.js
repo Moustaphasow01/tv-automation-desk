@@ -48,9 +48,17 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
       OR (lower(t.side::text) = 'short' AND lower(f.side::text) = 'sell') THEN f.quantity ELSE -f.quantity END), 0) > 0
 ), pending_intents AS (
   SELECT
-    lineage.portfolio_order_intent_id, lineage.status, lineage.quantity, lineage.created_at_utc,
+    lineage.portfolio_order_intent_id, lineage.status, lineage.quantity,
+    lineage.payload->>'requested_at_utc' AS requested_at_utc,
+    target.computed_at_utc AS target_computed_at_utc,
     target.account_id, target.instrument, upper(lineage.payload->>'action') AS action,
-    execution.lifecycle_status, execution.filled_quantity, execution.updated_at_utc,
+    execution.portfolio_order_intent_id IS NOT NULL AS has_execution_state,
+    execution.lifecycle_status, execution.filled_quantity,
+    causal_event.last_event_at_utc, causal_event.latest_event_at_utc,
+    causal_event.state_event_at_utc,
+    execution.payload->>'leased_at_utc' AS state_leased_at_utc,
+    state_command.status AS state_command_status,
+    state_command.payload->>'dispatch_completed_at_utc' AS state_dispatch_completed_at_utc,
     CASE
       WHEN jsonb_typeof(lineage.risk_snapshot->'risk_per_contract') = 'number'
         THEN (lineage.risk_snapshot->>'risk_per_contract')::numeric
@@ -68,6 +76,56 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
   JOIN portfolio_target_positions target ON target.target_position_id = lineage.target_position_id
   LEFT JOIN portfolio_order_intent_execution_states execution
     ON execution.portfolio_order_intent_id = lineage.portfolio_order_intent_id
+  LEFT JOIN broker_provider_commands state_command
+    ON state_command.execution_provider_command_id = execution.execution_provider_command_id
+  LEFT JOIN LATERAL (
+    SELECT
+      max(event_at_utc) FILTER (WHERE event_at_utc <= $2::timestamptz) AS last_event_at_utc,
+      max(event_at_utc) AS latest_event_at_utc,
+      max(event_at_utc) FILTER (
+        WHERE upper(execution.lifecycle_status::text) = ANY(proven_lifecycle_statuses)
+      ) AS state_event_at_utc
+    FROM (
+      SELECT gate_event.occurred_at_utc AS event_at_utc,
+        CASE upper(gate_event.event_type::text)
+          WHEN 'OPENED' THEN ARRAY['AWAITING_MANUAL_CONFIRMATION']::text[]
+          WHEN 'CONFIRMED' THEN ARRAY['AWAITING_MANUAL_CONFIRMATION']::text[]
+          WHEN 'REVERTED' THEN ARRAY['AWAITING_MANUAL_CONFIRMATION']::text[]
+          WHEN 'REJECTED' THEN ARRAY['BLOCKED']::text[]
+          WHEN 'REFUSED' THEN ARRAY['BLOCKED']::text[]
+          WHEN 'EXPIRED' THEN ARRAY['EXPIRED']::text[]
+          ELSE ARRAY[]::text[]
+        END AS proven_lifecycle_statuses
+      FROM human_execution_gate_events gate_event
+      WHERE gate_event.portfolio_order_intent_id = lineage.portfolio_order_intent_id
+      UNION ALL
+      SELECT theoretical_event.event_at_utc,
+        CASE lower(theoretical_event.event_type::text)
+          WHEN 'entry_expired' THEN ARRAY['EXPIRED']::text[]
+          ELSE ARRAY[]::text[]
+        END
+      FROM trade_theoretical_execution_events theoretical_event
+      WHERE theoretical_event.portfolio_order_intent_id = lineage.portfolio_order_intent_id
+      UNION ALL
+      SELECT provider_command.available_at, ARRAY['PROVIDER_COMMAND_READY']::text[]
+      FROM broker_provider_commands provider_command
+      WHERE provider_command.portfolio_order_intent_id = lineage.portfolio_order_intent_id
+      UNION ALL
+      SELECT provider_event.occurred_at,
+        CASE upper(provider_event.event_type::text)
+          WHEN 'ORDER_ACCEPTED' THEN ARRAY['ACKNOWLEDGED']::text[]
+          WHEN 'ORDER_WORKING' THEN ARRAY['ACKNOWLEDGED']::text[]
+          WHEN 'ORDER_PARTIALLY_FILLED' THEN ARRAY['PARTIALLY_FILLED']::text[]
+          WHEN 'ORDER_FILLED' THEN ARRAY['FILLED']::text[]
+          WHEN 'ORDER_REJECTED' THEN ARRAY['REJECTED']::text[]
+          WHEN 'ORDER_CANCELLED' THEN ARRAY['CANCELLED']::text[]
+          WHEN 'PROVIDER_ERROR' THEN ARRAY['RECONCILIATION_REQUIRED']::text[]
+          ELSE ARRAY['UNKNOWN']::text[]
+        END
+      FROM broker_provider_events provider_event
+      WHERE provider_event.portfolio_order_intent_id = lineage.portfolio_order_intent_id
+    ) intent_events
+  ) causal_event ON true
   WHERE target.account_id = $1
     AND target.computed_at_utc <= $2::timestamptz
     AND upper(lineage.status) <> ALL($3::text[])
@@ -240,14 +298,21 @@ function lockKeys(input) {
 
 function buildSnapshot(request, positionRows, intentRows, qualifiedRows, lossRow) {
   const positions = positionRows.map(normalizePosition);
-  const pending = intentRows.map(normalizeIntent);
+  const pending = intentRows.map((row) => normalizeIntent(row, request.asOf));
   const unknown = pending.filter((item) => ["UNKNOWN", "RECONCILIATION_REQUIRED"].includes(item.lifecycle_status));
-  const futureState = pending.filter((item) => item.updated_at_utc && item.updated_at_utc > request.asOf);
+  const futureState = pending.filter((item) => item.latest_event_at_utc && item.latest_event_at_utc > request.asOf);
+  const futureRequest = pending.filter((item) => item.requested_at_utc && item.requested_at_utc > request.asOf);
+  const invalidRequest = pending.filter((item) => item.requested_at_provenance === "ORDER_INTENT_REQUESTED_AT_INVALID");
+  const unprovenState = pending.filter((item) => item.execution_state_provenance === "PERSISTED_CAUSAL_EVENT_UNAVAILABLE");
   const invalid = [...positions, ...pending].filter((item) => item.invalid_numeric === true);
   const lossUsage = normalizeLossUsage(lossRow);
+  const causalPending = pending.map(withoutFutureEventTime);
   const reasons = [
     ...unknown.map((item) => `THEORETICAL_INTENT_${item.lifecycle_status}:${item.instrument}`),
     ...futureState.map((item) => `THEORETICAL_EXECUTION_STATE_AFTER_AS_OF:${item.instrument}`),
+    ...futureRequest.map((item) => `THEORETICAL_INTENT_REQUESTED_AFTER_AS_OF:${item.instrument}`),
+    ...invalidRequest.map((item) => `THEORETICAL_INTENT_REQUESTED_AT_INVALID:${item.instrument}`),
+    ...unprovenState.map((item) => `THEORETICAL_EXECUTION_STATE_CAUSAL_EVENT_UNAVAILABLE:${item.instrument}`),
     ...invalid.map((item) => `THEORETICAL_EXPOSURE_NUMERIC_INVALID:${item.instrument}`),
   ];
   return {
@@ -256,13 +321,14 @@ function buildSnapshot(request, positionRows, intentRows, qualifiedRows, lossRow
     as_of_utc: request.asOf,
     portfolio_scope: request.portfolioScope,
     account_id: request.accountId,
-    availability: unknown.length || futureState.length || invalid.length || lossUsage.availability !== "KNOWN" ? "PARTIAL" : "KNOWN",
+    availability: unknown.length || futureState.length || futureRequest.length || invalidRequest.length || unprovenState.length
+      || invalid.length || lossUsage.availability !== "KNOWN" ? "PARTIAL" : "KNOWN",
     as_of_status_provenance: "CURRENT_LINEAGE_STATUS_UNVERSIONED",
     loss_usage_availability: lossUsage.availability,
     loss_usage: lossUsage,
     reason_codes: [...reasons, ...(lossUsage.reason_codes || [])],
-    positions: [...positions.filter((item) => item.size > 0), ...reservationPositions(pending)],
-    pending_order_intents: pending.filter((item) => item.quantity > 0),
+    positions: [...positions.filter((item) => item.size > 0), ...reservationPositions(causalPending)],
+    pending_order_intents: causalPending.filter((item) => item.quantity > 0),
     qualified_signal_ids: [...new Set(qualifiedRows.map((item) => text(item.signal_id)).filter(Boolean))],
     reservation_instruments: [...new Set(pending.filter((item) => item.quantity > 0).map((item) => item.instrument))],
     unknown_reservation_instruments: [...new Set(unknown.map((item) => item.instrument))],
@@ -343,7 +409,7 @@ function reservationPositions(intents) {
     instrument: item.instrument,
     direction: item.action === "SELL" ? "SHORT" : "LONG",
     size: item.quantity,
-    observed_at_utc: item.updated_at_utc || item.created_at_utc,
+    observed_at_utc: item.last_event_at_utc || item.requested_at_utc,
     source: "THEORETICAL_PENDING_ORDER_INTENT",
     reservation: true,
   }));
@@ -384,18 +450,63 @@ function normalizePosition(row) {
   };
 }
 
-function normalizeIntent(row) {
+function normalizeIntent(row, asOf) {
+  const suppliedRequestedAt = text(row.requested_at_utc);
+  const requestedAt = suppliedRequestedAt ? iso(suppliedRequestedAt) : iso(row.target_computed_at_utc);
+  const transitionTimes = causalTransitionTimes(row);
+  const stateProofAt = latestIso([iso(row.state_event_at_utc), ...stateTransitionProofTimes(row)]);
+  const latestEventAt = latestIso([iso(row.latest_event_at_utc), ...transitionTimes]);
+  const lastEventAt = latestIso([iso(row.last_event_at_utc), ...transitionTimes.filter((time) => time <= asOf)]);
   return {
     portfolio_order_intent_id: text(row.portfolio_order_intent_id), account_id: text(row.account_id), instrument: upper(row.instrument),
     action: upper(row.action), quantity: numericOrNull(row.quantity), status: upper(row.status),
     lifecycle_status: upper(row.lifecycle_status || "AWAITING_MANUAL_CONFIRMATION"),
-    execution_state_provenance: row.lifecycle_status ? "PERSISTED" : "UNAVAILABLE",
+    execution_state_provenance: executionStateProvenance(row.has_execution_state, stateProofAt),
     filled_quantity: row.lifecycle_status ? numericOrNull(row.filled_quantity) : null,
-    created_at_utc: iso(row.created_at_utc), updated_at_utc: iso(row.updated_at_utc),
-    invalid_numeric: numericOrNull(row.quantity) === null || Boolean(row.lifecycle_status) && numericOrNull(row.filled_quantity) === null,
+    requested_at_utc: requestedAt,
+    requested_at_provenance: requestedAtProvenance(suppliedRequestedAt, requestedAt),
+    last_event_at_utc: lastEventAt, latest_event_at_utc: latestEventAt,
+    invalid_numeric: requestedAt === null || numericOrNull(row.quantity) === null
+      || Boolean(row.lifecycle_status) && numericOrNull(row.filled_quantity) === null,
     source: "THEORETICAL_ORDER_INTENT",
   };
 }
+
+function withoutFutureEventTime({ latest_event_at_utc, ...intent }) { return intent; }
+
+function executionStateProvenance(hasExecutionState, stateProofAt) {
+  if (!hasExecutionState) return "LINEAGE_DEFAULT";
+  return stateProofAt ? "PERSISTED_CAUSAL_EVENT" : "PERSISTED_CAUSAL_EVENT_UNAVAILABLE";
+}
+
+function requestedAtProvenance(suppliedRequestedAt, requestedAt) {
+  if (!suppliedRequestedAt) return "TARGET_COMPUTED_AT_FALLBACK";
+  return requestedAt ? "ORDER_INTENT_REQUESTED_AT" : "ORDER_INTENT_REQUESTED_AT_INVALID";
+}
+
+function causalTransitionTimes(row) {
+  return [row.state_leased_at_utc, row.state_dispatch_completed_at_utc]
+    .map(iso).filter(Boolean);
+}
+
+function stateTransitionProofTimes(row) {
+  const lifecycleStatus = upper(row.lifecycle_status);
+  const commandStatus = upper(row.state_command_status);
+  const dispatchLifecycleStatus = lifecycleStatusForCompletedCommandStatus(commandStatus);
+  return [
+    lifecycleStatus === "LEASED" ? iso(row.state_leased_at_utc) : null,
+    lifecycleStatus === dispatchLifecycleStatus
+      ? iso(row.state_dispatch_completed_at_utc) : null,
+  ].filter(Boolean);
+}
+
+function lifecycleStatusForCompletedCommandStatus(status) {
+  return ({ SENT: "SENT", ACKNOWLEDGED: "ACKNOWLEDGED",
+    FAILED: "REJECTED", CANCELLED: "CANCELLED", EXPIRED: "EXPIRED", BLOCKED: "BLOCKED", UNKNOWN: "UNKNOWN",
+    RECONCILIATION_REQUIRED: "RECONCILIATION_REQUIRED" })[status] || null;
+}
+
+function latestIso(values) { return values.filter(Boolean).sort().at(-1) || null; }
 
 function array(value) { return Array.isArray(value) ? value : []; }
 function text(value) { return String(value ?? "").trim(); }
@@ -425,4 +536,7 @@ function unavailableLossUsageSnapshot() {
 function unavailableLossUsageFor(reasonCode) {
   return { ...unavailableLossUsageSnapshot(), reason_codes: [reasonCode] };
 }
-function iso(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
+function iso(value) {
+  const parsed = value instanceof Date ? value.getTime() : Date.parse(value || "");
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}

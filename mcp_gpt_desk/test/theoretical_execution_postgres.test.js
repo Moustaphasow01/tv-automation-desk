@@ -190,6 +190,9 @@ test("canonical theoretical tracking against an isolated, fully migrated Postgre
 async function backdateIntentForHistoricalExpiry(pool, intentId) {
   await pool.query("UPDATE portfolio_arbitration_runs SET as_of_utc='2026-09-01T14:00Z' WHERE portfolio_arbitration_run_id=$1", [intentId]);
   await pool.query("UPDATE portfolio_target_positions SET computed_at_utc='2026-09-01T14:00Z' WHERE target_position_id=$1", [intentId]);
+  await pool.query(`UPDATE portfolio_order_intent_lineage
+    SET payload = jsonb_set(payload, '{requested_at_utc}', to_jsonb('2026-09-01T14:00:00.000Z'::text))
+    WHERE portfolio_order_intent_id=$1`, [intentId]);
   await pool.query(`UPDATE human_execution_gates
     SET expires_at_utc='2026-09-01T14:03Z', confirmed_at_utc='2026-09-01T14:00Z'
     WHERE portfolio_order_intent_id=$1`, [intentId]);

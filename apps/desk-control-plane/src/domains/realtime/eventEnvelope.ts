@@ -233,10 +233,14 @@ export function frontViewNamesForRealtimeEvent(event: EventEnvelope): readonly F
     case "research.run.updated":
       return ["command-center", "research-lab", "research-experiments", "research-candidates"];
     case "desk.resync_required":
-      return ["command-center", "live-trading", "live-focus", "live-plan", "live-timeline", "sessions", "execution-reconciliation", "portfolio", "operations-observability"];
+      return frontViewNamesForRealtimeRecovery();
     default:
       return ["command-center"];
   }
+}
+
+export function frontViewNamesForRealtimeRecovery(): readonly FrontViewName[] {
+  return ["command-center", "live-trading", "live-focus", "live-plan", "live-timeline", "sessions", "execution-reconciliation", "portfolio", "operations-observability"];
 }
 
 function isSchemaVersion(value: string): value is SchemaVersion {
