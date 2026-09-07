@@ -17,8 +17,11 @@ if (-not $DeploymentId) {
     if ($Action -in @("Begin", "Pause")) {
         $DeploymentId = "deploy-" + (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ") + "-" + [guid]::NewGuid().ToString("N").Substring(0, 8)
     } else {
-        $latest = (& $psql --tuples-only --no-align --dbname $DatabaseUrl --command "SELECT deployment_id FROM desk_deployment_runs WHERE status IN ('draining','drained','switching','verifying','failed') ORDER BY started_at_utc DESC LIMIT 1;").Trim()
-        if ($LASTEXITCODE -ne 0 -or -not $latest) { throw "No active deployment drain was found." }
+        $latest = (Invoke-DeskExternal -FilePath $psql -Arguments @(
+            "--set", "ON_ERROR_STOP=1", "--tuples-only", "--no-align", "--dbname", $DatabaseUrl,
+            "--command", "SELECT deployment_id FROM desk_deployment_runs WHERE status IN ('draining','drained','switching','verifying','failed') ORDER BY started_at_utc DESC LIMIT 1;"
+        ) -PassThru).Trim()
+        if (-not $latest) { throw "No active deployment drain was found." }
         $DeploymentId = $latest
     }
 }
@@ -115,8 +118,10 @@ SELECT (
       OR (status = 'leased' AND (lease_expires_at IS NULL OR lease_expires_at > now())))
 )::integer;
 "@
-        $activeText = (& $psql --tuples-only --no-align --dbname $DatabaseUrl --command $countSql).Trim()
-        if ($LASTEXITCODE -ne 0) { throw "Unable to inspect active work during drain." }
+        $activeText = (Invoke-DeskExternal -FilePath $psql -Arguments @(
+            "--set", "ON_ERROR_STOP=1", "--tuples-only", "--no-align",
+            "--dbname", $DatabaseUrl, "--command", $countSql
+        ) -PassThru).Trim()
         $active = [int]$activeText
         Write-Host "Drain $DeploymentId`: active work=$active"
         if ($active -eq 0) { break }
@@ -132,9 +137,36 @@ SELECT (
 }
 
 if ($Action -eq "Fail") {
-    $failSql = "UPDATE desk_deployment_runs SET status='failed', details=details || jsonb_build_object('failure_reason','$failureSql'), updated_at_utc=now() WHERE deployment_id='$deploymentSql';"
+    $failSql = @"
+BEGIN;
+UPDATE desk_documents
+SET data = data || jsonb_build_object(
+      'enabled', false,
+      'status', 'PAUSED',
+      'reason', 'DEPLOYMENT_RECOVERY_FAILURE',
+      'changed_by', 'deployment-fail:$deploymentSql',
+      'updated_at_utc', now()
+    ),
+    updated_at = now()
+WHERE collection = 'desk_claim_lane_controls'
+  AND document_id IN ('live', 'replay');
+UPDATE broker_execution_locks
+SET locked = true,
+    reason = 'Deployment recovery failure $deploymentSql',
+    set_by = 'deployment-fail',
+    set_at = now(),
+    expires_at = NULL,
+    metadata = metadata || jsonb_build_object('deployment_id', '$deploymentSql', 'deployment_failure', true)
+WHERE scope_type = 'global' AND scope_value = '*';
+UPDATE desk_deployment_runs
+SET status = 'failed',
+    details = details || jsonb_build_object('failure_reason', '$failureSql'),
+    updated_at_utc = now()
+WHERE deployment_id = '$deploymentSql';
+COMMIT;
+"@
     Invoke-DeskExternal -FilePath $psql -Arguments @("--set", "ON_ERROR_STOP=1", "--dbname", $DatabaseUrl, "--command", $failSql)
-    Write-Host "Deployment $DeploymentId marked failed. Safety drain remains active."
+    Write-Host "Deployment $DeploymentId marked failed. Safety drain was reasserted."
     return
 }
 

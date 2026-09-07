@@ -1,0 +1,85 @@
+{
+  "schema_version": "trade_outcome_correction_manifest_v1",
+  "manifest_id": "grains-point-value-correction-20260907",
+  "scope": "Six finalized theoretical grain outcomes whose stored evidence used point_value=1 while both canonical Intent and Target economics store point_value=50.",
+  "corrections": [
+    {
+      "idempotency_key": "grains-point-value-correction-20260907.trade_portfolio_order_intent_34676b9775b51603d1e578ef",
+      "trade_id": "trade_portfolio_order_intent_34676b9775b51603d1e578ef",
+      "portfolio_order_intent_id": "portfolio_order_intent_34676b9775b51603d1e578ef",
+      "expected_trade_outcome_id": "trade_outcome_trade_portfolio_order_intent_34676b9775b51603d1e578ef_1",
+      "expected_revision": 1,
+      "expected_evidence_hash": "d6cd2e245aad10a7e8c6791e4156dc47b2939bafaa3a86190afdd5e57e15adb2",
+      "expected_evidence_point_value": 1,
+      "canonical_point_value": 50,
+      "expected_economic_finalized_at_utc": "2026-08-31T17:04:00.000Z",
+      "expected_corrected_net_pnl_usd": -137.5,
+      "expected_result_r": -1
+    },
+    {
+      "idempotency_key": "grains-point-value-correction-20260907.trade_portfolio_order_intent_b2e063ee62d063cfa0490bd7",
+      "trade_id": "trade_portfolio_order_intent_b2e063ee62d063cfa0490bd7",
+      "portfolio_order_intent_id": "portfolio_order_intent_b2e063ee62d063cfa0490bd7",
+      "expected_trade_outcome_id": "trade_outcome_trade_portfolio_order_intent_b2e063ee62d063cfa0490bd7_1",
+      "expected_revision": 1,
+      "expected_evidence_hash": "1f12057a46ecd0618a388af4b73114c68ade66234b9cbaff70d6f713aca929db",
+      "expected_evidence_point_value": 1,
+      "canonical_point_value": 50,
+      "expected_economic_finalized_at_utc": "2026-08-31T17:54:00.000Z",
+      "expected_corrected_net_pnl_usd": -50,
+      "expected_result_r": -1
+    },
+    {
+      "idempotency_key": "grains-point-value-correction-20260907.trade_portfolio_order_intent_b259bf782f40efe3a33344de",
+      "trade_id": "trade_portfolio_order_intent_b259bf782f40efe3a33344de",
+      "portfolio_order_intent_id": "portfolio_order_intent_b259bf782f40efe3a33344de",
+      "expected_trade_outcome_id": "trade_outcome_trade_portfolio_order_intent_b259bf782f40efe3a33344de_1",
+      "expected_revision": 1,
+      "expected_evidence_hash": "573862592bf993759d6fc7ad2d86b95ba8d1f1d341c780fb3cd416c784dff409",
+      "expected_evidence_point_value": 1,
+      "canonical_point_value": 50,
+      "expected_economic_finalized_at_utc": "2026-08-31T18:13:00.000Z",
+      "expected_corrected_net_pnl_usd": 137.5,
+      "expected_result_r": 1.57142857
+    },
+    {
+      "idempotency_key": "grains-point-value-correction-20260907.trade_portfolio_order_intent_a849b148249cae0749cca81a",
+      "trade_id": "trade_portfolio_order_intent_a849b148249cae0749cca81a",
+      "portfolio_order_intent_id": "portfolio_order_intent_a849b148249cae0749cca81a",
+      "expected_trade_outcome_id": "trade_outcome_trade_portfolio_order_intent_a849b148249cae0749cca81a_1",
+      "expected_revision": 1,
+      "expected_evidence_hash": "4fd4c731d36cf9959d70050ede5cb9c93ce91932259004901673c13748919d5b",
+      "expected_evidence_point_value": 1,
+      "canonical_point_value": 50,
+      "expected_economic_finalized_at_utc": "2026-09-04T15:28:00.000Z",
+      "expected_corrected_net_pnl_usd": 100,
+      "expected_result_r": 1.6
+    },
+    {
+      "idempotency_key": "grains-point-value-correction-20260907.trade_portfolio_order_intent_5210131ace12c9bdd461ef53",
+      "trade_id": "trade_portfolio_order_intent_5210131ace12c9bdd461ef53",
+      "portfolio_order_intent_id": "portfolio_order_intent_5210131ace12c9bdd461ef53",
+      "expected_trade_outcome_id": "trade_outcome_trade_portfolio_order_intent_5210131ace12c9bdd461ef53_1",
+      "expected_revision": 1,
+      "expected_evidence_hash": "a4dee3a6e6728da18db766eceac05ff0294d1364b20e6ea677e904518f6c1dff",
+      "expected_evidence_point_value": 1,
+      "canonical_point_value": 50,
+      "expected_economic_finalized_at_utc": "2026-09-04T15:58:00.000Z",
+      "expected_corrected_net_pnl_usd": -62.5,
+      "expected_result_r": -1
+    },
+    {
+      "idempotency_key": "grains-point-value-correction-20260907.trade_portfolio_order_intent_ef78eb7fc002caf34455ff84",
+      "trade_id": "trade_portfolio_order_intent_ef78eb7fc002caf34455ff84",
+      "portfolio_order_intent_id": "portfolio_order_intent_ef78eb7fc002caf34455ff84",
+      "expected_trade_outcome_id": "trade_outcome_trade_portfolio_order_intent_ef78eb7fc002caf34455ff84_1",
+      "expected_revision": 1,
+      "expected_evidence_hash": "57bb38689281215259c7e486f66c22518779b2bad56371b37b18b9c488979d5d",
+      "expected_evidence_point_value": 1,
+      "canonical_point_value": 50,
+      "expected_economic_finalized_at_utc": "2026-09-04T16:48:00.000Z",
+      "expected_corrected_net_pnl_usd": -50,
+      "expected_result_r": -1
+    }
+  ]
+}

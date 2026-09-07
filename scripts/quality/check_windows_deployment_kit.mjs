@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,8 @@ const required = [
   "deploy/windows/Invoke-DeskV5FrozenRelease.ps1",
   "deploy/windows/Test-DeskV5FrozenRelease.ps1",
   "deploy/windows/Register-DeskMaintenanceTasks.ps1",
+  "deploy/windows/Run-GrainsCalendarRefresh.ps1",
+  "deploy/windows/Test-DeskGrainsCalendarHealth.ps1",
   "deploy/windows/Test-DeskLocalHealth.ps1",
   "deploy/windows/Test-DeskCanary.ps1",
   "deploy/windows/Invoke-DeskDrain.ps1",
@@ -33,6 +36,7 @@ const required = [
   "deploy/windows/Invoke-DeskRuntimeMaintenance.ps1",
   "deploy/windows/Invoke-DeskBackupVerification.ps1",
   "deploy/windows/Update-Desk.ps1",
+  "deploy/windows/Test-DeskUpdateRecovery.ps1",
   "deploy/windows/Rollback-Desk.ps1",
   "deploy/windows/Test-DeskRelease.ps1",
   "deploy/windows/Test-DeskDeployment.ps1",
@@ -40,7 +44,10 @@ const required = [
   "deploy/windows/database/Initialize-DeskPostgres.ps1",
   "deploy/windows/database/Ensure-DeskContextReadOnlyRole.ps1",
   "deploy/windows/database/Restore-DeskDatabase.ps1",
+  "deploy/windows/database/DeskDatabase.Common.ps1",
+  "deploy/windows/database/Test-DeskDatabaseExternal.ps1",
   "deploy/windows/database/Invoke-DeskSchema.ps1",
+  "deploy/windows/database/Test-DeskTheoreticalExecutionPortfolioLineage.ps1",
   "deploy/windows/database/Backup-DeskDatabase.ps1",
   "deploy/windows/database/Backup-DeskObjectStore.ps1",
   "deploy/windows/database/Compare-DeskDatabases.ps1",
@@ -134,6 +141,7 @@ for (const expected of [
   "DESK_AI_REPLAY_WORKER_GROUP=replay-v4",
   "DESK_AI_CONTEXT_DATABASE_URL=postgresql://desk_ai_context:__DESK_DB_CONTEXT_PASSWORD__@127.0.0.1:5432/desk",
   "DESK_AI_CONTEXT_REQUIRE_DEDICATED_DATABASE_URL=true",
+  "DESK_GRAINS_CALENDAR_ENABLED=false",
 ]) {
   if (!env.includes(expected)) violations.push(`env_missing:${expected}`);
 }
@@ -178,6 +186,21 @@ for (const expected of [
 }
 if (contextRoleProvisioning.includes("$IsWindows")) {
   violations.push("context_role_provisioning_not_windows_powershell_5_compatible");
+}
+
+const grainsCalendarRefresh = content.get("deploy/windows/Run-GrainsCalendarRefresh.ps1");
+for (const expected of ["refresh_usda_grains_calendar.mjs", "--output-root", "--status-file"]) {
+  if (!grainsCalendarRefresh.includes(expected)) violations.push(`grains_calendar_refresh_wrapper_missing:${expected}`);
+}
+const maintenanceTasks = content.get("deploy/windows/Register-DeskMaintenanceTasks.ps1");
+for (const expected of [
+  'TaskName "DeskFutures-GrainsCalendarRefresh"',
+  "Run-GrainsCalendarRefresh.ps1",
+  "New-TimeSpan -Minutes 30",
+  "ExecutionTimeLimit (New-TimeSpan -Minutes 5)",
+  "-MultipleInstances IgnoreNew",
+]) {
+  if (!maintenanceTasks.includes(expected)) violations.push(`grains_calendar_schedule_contract_missing:${expected}`);
 }
 
 const backupVerification = content.get("deploy/windows/Invoke-DeskBackupVerification.ps1");
@@ -238,6 +261,9 @@ if (!update.includes("KeepFrozen") || !update.includes('"CompleteFrozen"') || !u
 if (!update.includes("QuiesceFrozenState") || !update.includes("quiesce_v5_frozen_state.mjs") || !update.includes("--require-broker-lock")) violations.push("v5_frozen_quiesce_not_enforced");
 const drain = content.get("deploy/windows/Invoke-DeskDrain.ps1");
 if (!drain.includes('if ($Action -eq "CompleteFrozen")') || !drain.includes("ENGINE_V5_VALIDATION_HOLD")) violations.push("strict_frozen_drain_missing");
+if (!drain.includes("DEPLOYMENT_RECOVERY_FAILURE") || !drain.includes("Safety drain was reasserted")) {
+  violations.push("failed_deployment_does_not_reassert_safety_drain");
+}
 
 for (const name of ["DeskApi", "DeskLiveRuntime", "DeskReplayPreparation", "DeskBrokerManagement", "DeskTelegram", "DeskAgentRuntimeSupervisor", "DeskCodexLive01", "DeskCodexLive02", "DeskCodexReplay01", "DeskCaddy"]) {
   const xml = content.get(`deploy/windows/services/${name}.xml.template`);
@@ -298,6 +324,15 @@ for (const service of ["DeskFuturesLiveRuntime", "DeskFuturesReplayPreparation",
 if (!install.includes('"telegram_alert_worker"')) violations.push("frozen_expected_services_not_reduced");
 const localHealth = content.get("deploy/windows/Test-DeskLocalHealth.ps1");
 if (!localHealth.includes("DESK_RUNTIME_PROFILE") || !localHealth.includes("AllowDisabledAiWorkers")) violations.push("frozen_health_profile_missing");
+for (const service of ["DeskFuturesAgentRuntimeSupervisor", "DeskFuturesAgentRuntimeResearch"]) {
+  if (!localHealth.includes(service)) violations.push(`local_health_service_missing:${service}`);
+}
+for (const expected of ["DESK_GRAINS_CALENDAR_ENABLED", "grains-calendar.json", "grains_calendar", "degradations"]) {
+  if (!localHealth.includes(expected)) violations.push(`grains_calendar_local_health_missing:${expected}`);
+}
+if (/grainsCalendar[^\n]*failures|failures[^\n]*grainsCalendar/.test(localHealth)) {
+  violations.push("grains_calendar_degradation_can_fail_process_health");
+}
 const frozenOrchestrator = content.get("deploy/windows/Invoke-DeskV5FrozenRelease.ps1");
 if (!frozenOrchestrator.includes("DeployFrozen") || !frozenOrchestrator.includes("RollbackFrozen") || !frozenOrchestrator.includes("PrepareJune11")) violations.push("v5_frozen_orchestrator_incomplete");
 if (!frozenOrchestrator.includes("-QuiesceFrozenState")) violations.push("v5_frozen_orchestrator_quiesce_missing");
@@ -340,11 +375,74 @@ for (const requiredBeforeMigration of [
 if (!update.includes("$QuiesceFrozenState = $true")) {
   violations.push("frozen_target_does_not_force_quiesce");
 }
-if (!update.includes("if ($KeepFrozen)") || !update.includes("else {\n                Start-DeskServices")) {
+if (!update.includes("-PreserveFrozenServices") || !update.includes("-RestoreServices { Start-DeskServices }")) {
   violations.push("frozen_preinstall_failure_restart_guard_missing");
 }
 if (/if \(-not \$installAttempted\)\s*\{\s*Start-DeskServices/.test(update)) {
   violations.push("frozen_preinstall_failure_can_restart_services");
+}
+if (!update.includes("Invoke-DeskUpdateRecovery") || !update.includes("health_verified") || !update.includes("controls_restored")) {
+  violations.push("update_resilient_recovery_or_health_gate_missing");
+}
+if (!/Rollback-Desk\.ps1[\s\S]{0,180}-SkipStart/.test(update)) {
+  violations.push("update_rollback_starts_services_inside_rollback_step");
+}
+if (/catch\s*\{[\s\S]{0,500}Write-Error/.test(update)) {
+  violations.push("update_recovery_can_mask_original_error");
+}
+
+const databaseCommon = content.get("deploy/windows/database/DeskDatabase.Common.ps1");
+for (const expected of [
+  'EnvironmentVariables["PGCLIENTENCODING"] = "UTF8"',
+  'client_min_messages=warning',
+  "RedirectStandardOutput = $true",
+  "RedirectStandardError = $true",
+  "ReadToEndAsync()",
+  "[switch]$PassThru",
+]) {
+  if (!databaseCommon.includes(expected)) violations.push(`postgres_utf8_process_contract_missing:${expected}`);
+}
+if (databaseCommon.includes("$Arguments -join")) {
+  violations.push("postgres_failure_can_expose_command_arguments");
+}
+if (!databaseCommon.includes('GetEnvironmentVariable("PGOPTIONS", "Process")') || !databaseCommon.includes('"$pgOptions $warningOption"')) {
+  violations.push("postgres_process_does_not_preserve_inherited_pgoptions");
+}
+const databaseExternalTest = content.get("deploy/windows/database/Test-DeskDatabaseExternal.ps1");
+for (const expected of ["application_name=test_sentinel", "client_min_messages=warning", "0x00E9", "Write-Utf8", "complexArgument", "top-secret", "exit code 7"]) {
+  if (!databaseExternalTest.includes(expected)) violations.push(`postgres_external_process_test_missing:${expected}`);
+}
+for (const relative of [
+  "deploy/windows/database/Invoke-DeskSchema.ps1",
+  "deploy/windows/database/Test-DeskTheoreticalExecutionPortfolioLineage.ps1",
+  "deploy/windows/Invoke-DeskDrain.ps1",
+]) {
+  const postgresCaller = content.get(relative);
+  if (/&\s+\$psql\b/.test(postgresCaller)) violations.push(`direct_psql_native_invocation:${relative}`);
+  if (!postgresCaller.includes("Invoke-DeskExternal") || !postgresCaller.includes("ON_ERROR_STOP=1")) {
+    violations.push(`postgres_caller_not_fail_closed:${relative}`);
+  }
+}
+
+const recoveryTest = content.get("deploy/windows/Test-DeskUpdateRecovery.ps1");
+for (const scenario of ["deploy-sql", "pre-drain backup failure", "deploy-drain", "deploy-canary", "deploy-rollback", "deploy-start", "deploy-resume", "deploy-frozen"]) {
+  if (!recoveryTest.includes(scenario)) violations.push(`update_recovery_failure_scenario_missing:${scenario}`);
+}
+if (!recoveryTest.includes('"audit,start,health,resume"') || !recoveryTest.includes('"audit,rollback,start,health,resume"')) {
+  violations.push("update_recovery_order_assertions_missing");
+}
+if (process.platform === "win32") {
+  const powerShell = resolve(process.env.SystemRoot || "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe");
+  for (const relative of ["deploy/windows/Test-DeskUpdateRecovery.ps1", "deploy/windows/Test-DeskGrainsCalendarHealth.ps1", "deploy/windows/database/Test-DeskDatabaseExternal.ps1"]) {
+    const result = spawnSync(powerShell, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", resolve(root, relative)], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    if (result.status !== 0) {
+      const detail = String(result.stderr || result.stdout || result.error?.message || "unknown error").trim();
+      violations.push(`windows_powershell_test_failed:${relative}:${detail}`);
+    }
+  }
 }
 
 const skipTestsIndex = buildRelease.indexOf("if (-not $SkipTests)");

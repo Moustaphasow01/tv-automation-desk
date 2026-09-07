@@ -27,8 +27,9 @@ export async function createTheoreticalTestDatabase() {
 
 const hash = `sha256:${"1".repeat(64)}`;
 export async function seedAuthorizedIntent(pool, id, { status = "READY", gate = "AWAITING_MANUAL_CONFIRMATION", pointValue = 50 } = {}) {
+  const units = { point_value: pointValue, tick_size: 0.25 };
   const plan = { entry: { price: 100 }, stop: { price: 95 }, targets: [{ price: 110 }],
-    units: { point_value: pointValue, tick_size: 0.25 } };
+    units, economics: { availability: "KNOWN", currency: "USD", units } };
   const payload = { instrument: "ZC", action: "BUY", quantity: 1, order_type: "LIMIT",
     requested_at_utc: "2026-09-04T14:00:00Z", expires_at_utc: "2026-09-04T14:03:00Z",
     approved_trade_plan: plan, protection: { ready: true, stop_price: 95, target_price: 110 } };

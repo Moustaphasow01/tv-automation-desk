@@ -263,3 +263,146 @@ function Start-DeskServices {
         }
     }
 }
+
+function Get-DeskGrainsCalendarTimeReasonCodes {
+    param(
+        [ValidateSet("as_of", "fresh_until")][string]$Field,
+        [AllowNull()][object]$Value,
+        [Parameter(Mandatory = $true)][datetime]$NowUtc,
+        [int]$MaxCadenceMinutes = 60
+    )
+
+    $parsedUtc = [datetime]::MinValue
+    $parseStyle = [Globalization.DateTimeStyles]::AdjustToUniversal
+    if (-not [datetime]::TryParse([string]$Value, [Globalization.CultureInfo]::InvariantCulture, $parseStyle, [ref]$parsedUtc)) {
+        if ($Field -eq "as_of") { return "grains_calendar_as_of_invalid" }
+        return "grains_calendar_fresh_until_invalid"
+    }
+    if ($Field -eq "fresh_until") {
+        if ($parsedUtc.ToUniversalTime() -le $NowUtc.ToUniversalTime()) { return "grains_calendar_freshness_expired" }
+        return
+    }
+    $ageMinutes = ($NowUtc.ToUniversalTime() - $parsedUtc.ToUniversalTime()).TotalMinutes
+    if ($ageMinutes -gt $MaxCadenceMinutes) { Write-Output "grains_calendar_as_of_stale" }
+    if ($ageMinutes -lt -5) { Write-Output "grains_calendar_as_of_future" }
+}
+
+function Get-DeskGrainsCalendarDiagnostic {
+    param(
+        [ValidateSet("enabled", "disabled", "invalid")][string]$Policy = "disabled",
+        [AllowNull()][object]$StatusDocument,
+        [Parameter(Mandatory = $true)][datetime]$NowUtc,
+        [int]$MaxCadenceMinutes = 60
+    )
+    $observedStatus = "MISSING"
+    $asOfRaw = $null
+    $freshUntilRaw = $null
+    $sourceReasonCodes = @()
+    if ($null -ne $StatusDocument) {
+        $statusProperty = $StatusDocument.PSObject.Properties["status"]
+        $asOfProperty = $StatusDocument.PSObject.Properties["asOfUtc"]
+        $freshUntilProperty = $StatusDocument.PSObject.Properties["freshUntilUtc"]
+        $reasonCodesProperty = $StatusDocument.PSObject.Properties["reasonCodes"]
+        if ($statusProperty -and $statusProperty.Value) { $observedStatus = [string]$statusProperty.Value }
+        if ($asOfProperty) { $asOfRaw = $asOfProperty.Value }
+        if ($freshUntilProperty) { $freshUntilRaw = $freshUntilProperty.Value }
+        if ($reasonCodesProperty) { $sourceReasonCodes = @($reasonCodesProperty.Value) }
+    }
+    if ($Policy -ne "enabled") {
+        $invalidPolicy = $Policy -eq "invalid"
+        return [pscustomobject][ordered]@{
+            enabled = $false
+            status = $(if ($invalidPolicy) { "CONFIG_INVALID" } else { "DISABLED_BY_POLICY" })
+            observed_status = $observedStatus
+            as_of_utc = $asOfRaw
+            fresh_until_utc = $freshUntilRaw
+            degraded = $invalidPolicy
+            reason_codes = $(if ($invalidPolicy) { @("grains_calendar_config_invalid") } else { @() })
+            source_reason_codes = $sourceReasonCodes
+        }
+    }
+
+    $reasons = New-Object System.Collections.Generic.List[string]
+    if ($observedStatus -ne "AVAILABLE") {
+        $reasons.Add("grains_calendar_status_" + $observedStatus.ToLowerInvariant())
+    } else {
+        foreach ($reason in @(Get-DeskGrainsCalendarTimeReasonCodes `
+            -Field as_of -Value $asOfRaw -NowUtc $NowUtc -MaxCadenceMinutes $MaxCadenceMinutes)) {
+            $reasons.Add($reason)
+        }
+        foreach ($reason in @(Get-DeskGrainsCalendarTimeReasonCodes `
+            -Field fresh_until -Value $freshUntilRaw -NowUtc $NowUtc -MaxCadenceMinutes $MaxCadenceMinutes)) {
+            $reasons.Add($reason)
+        }
+    }
+
+    return [pscustomobject][ordered]@{
+        enabled = $true
+        status = $observedStatus
+        observed_status = $observedStatus
+        as_of_utc = $asOfRaw
+        fresh_until_utc = $freshUntilRaw
+        degraded = $reasons.Count -gt 0
+        reason_codes = @($reasons)
+        source_reason_codes = $sourceReasonCodes
+    }
+}
+
+function Invoke-DeskUpdateRecovery {
+    param(
+        [string]$DeploymentId = "",
+        [Parameter(Mandatory = $true)][bool]$InstallAttempted,
+        [Parameter(Mandatory = $true)][bool]$KeepFrozen,
+        [Parameter(Mandatory = $true)][scriptblock]$MarkDeploymentFailed,
+        [Parameter(Mandatory = $true)][scriptblock]$RollbackInstallation,
+        [Parameter(Mandatory = $true)][scriptblock]$RestoreServices,
+        [Parameter(Mandatory = $true)][scriptblock]$PreserveFrozenServices,
+        [Parameter(Mandatory = $true)][scriptblock]$VerifyLocalHealth,
+        [Parameter(Mandatory = $true)][scriptblock]$RestoreDrainControls
+    )
+
+    $errors = New-Object System.Collections.Generic.List[string]
+    function Invoke-RecoveryAction {
+        param([string]$Label, [scriptblock]$Action)
+        try {
+            @(& $Action) | Out-Null
+            return $true
+        } catch {
+            $errors.Add("$Label`: $($_.Exception.Message)")
+            return $false
+        }
+    }
+
+    $attempted = (-not [string]::IsNullOrWhiteSpace($DeploymentId)) -or $InstallAttempted
+    if (-not $attempted) {
+        return [pscustomobject]@{ recovery_attempted = $false; health_verified = $false; controls_restored = $false; errors = @() }
+    }
+    if ($DeploymentId) { [void](Invoke-RecoveryAction "deployment_failure_audit" $MarkDeploymentFailed) }
+    $candidateReady = -not $InstallAttempted
+    if ($InstallAttempted) {
+        $candidateReady = Invoke-RecoveryAction "installation_rollback" $RollbackInstallation
+    }
+    if ($candidateReady) {
+        if ($KeepFrozen) {
+            $candidateReady = Invoke-RecoveryAction "frozen_service_hold" $PreserveFrozenServices
+        } else {
+            [void](Invoke-RecoveryAction "service_restart" $RestoreServices)
+        }
+    }
+    $healthy = $false
+    if ($candidateReady) { $healthy = Invoke-RecoveryAction "local_health" $VerifyLocalHealth }
+    $controlsRestored = $false
+    if ($healthy) {
+        $controlsRestored = if ($DeploymentId) {
+            Invoke-RecoveryAction "drain_control_restore" $RestoreDrainControls
+        } else {
+            $true
+        }
+    }
+    return [pscustomobject]@{
+        recovery_attempted = $true
+        health_verified = $healthy
+        controls_restored = $controlsRestored
+        errors = @($errors)
+    }
+}

@@ -20,19 +20,22 @@ test("point value comes from frozen canonical units, never an invented 1", () =>
   }
 });
 
-test("historical gate expiry records business time and releases risk only after terminal proof", {
+test("historical source-less expiry stays reserved while source-backed expiry releases risk", {
   skip: process.env.RUN_POSTGRES_TESTS !== "1",
 }, async (t) => {
   const repository = await createTheoreticalTestDatabase();
   t.after(() => repository.close());
   const intentId = "historical-expiry";
+  const provenIntentId = "historical-expiry-proven";
   await seedAuthorizedIntent(repository.pool, intentId);
+  await seedAuthorizedIntent(repository.pool, provenIntentId);
   await backdateIntentForHistoricalExpiry(repository.pool, intentId);
+  await backdateIntentForHistoricalExpiry(repository.pool, provenIntentId);
 
   const sweep = await expireStalePortfolioHumanGates(repository, {
-    now: HISTORICAL_CUTOFF, portfolioOrderIntentIds: [intentId],
+    now: HISTORICAL_CUTOFF, portfolioOrderIntentIds: [intentId, provenIntentId],
   });
-  assert.equal(sweep.expired, 1);
+  assert.equal(sweep.expired, 2);
   const state = (await repository.pool.query(`SELECT created_at_utc,updated_at_utc,payload
     FROM portfolio_order_intent_execution_states WHERE portfolio_order_intent_id=$1`, [intentId])).rows[0];
   assert.equal(new Date(state.updated_at_utc).toISOString(), HISTORICAL_CUTOFF);
@@ -50,8 +53,18 @@ test("historical gate expiry records business time and releases risk only after 
       event_at_utc: HISTORICAL_CUTOFF },
     now: HISTORICAL_CUTOFF,
   });
+  const afterUnproven = await historicalExposure(repository.pool);
+  assert.equal(afterUnproven.pending_order_intents.length, 2);
+  await recordTheoreticalEntryExpired(repository, {
+    result: { portfolio_order_intent_id: provenIntentId, order_intent_id: provenIntentId,
+      action: "expire_entry", status: "expired", reason: "ENTRY_WINDOW_EXPIRED",
+      event_at_utc: HISTORICAL_CUTOFF,
+      candle: { feed_id: "historical-feed", timestamp_utc: "2026-09-01T14:03:00.000Z" } },
+    now: HISTORICAL_CUTOFF,
+  });
   const afterProof = await historicalExposure(repository.pool);
-  assert.deepEqual(afterProof.reservation_instruments, []);
+  assert.equal(afterProof.pending_order_intents.length, 1);
+  assert.equal(afterProof.pending_order_intents[0].portfolio_order_intent_id, intentId);
   assert.equal(await terminalEventCount(repository.pool, intentId), 1);
 });
 

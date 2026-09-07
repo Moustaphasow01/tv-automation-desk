@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import { qualifyGrainsCalendarEvidence } from "../grains-calendar-evidence.js";
+import { parseUsdaGrainsCalendarDocument } from "./usda-grains-calendar-document-parser.js";
+
+const FETCH_TIMEOUT_MS = 15000, MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
+const MAX_REDIRECTS = 3;
 
 export async function collectUsdaGrainsCalendar({
   sources,
@@ -10,18 +14,19 @@ export async function collectUsdaGrainsCalendar({
 }) {
   if (!Number.isFinite(Date.parse(retrievedAtUtc)))
     throw new Error("USDA_RETRIEVAL_TIME_REQUIRED");
-  const results = await Promise.all(
-    sources.map((source) =>
-      collectSource({ source, retrievedAtUtc, fetchText }),
-    ),
-  );
-  const manifests = results.map((result) => result.manifest);
-  const agriEvents = uniqueEvents(results.flatMap((result) => result.events));
-  const agriCalendarCoverage = coverage({ manifests, retrievedAtUtc, coverageStart, coverageEnd });
-  return {
-    manifests,
-    agriEvents,
-    agriCalendarCoverage,
+  if (!Array.isArray(sources) || !sources.length)
+    throw new Error("USDA_CALENDAR_SOURCES_REQUIRED");
+  if (typeof fetchText !== "function")
+    throw new Error("USDA_CALENDAR_FETCH_REQUIRED");
+  const results = await Promise.all(sources.map((source) => collectSource({
+    source, retrievedAtUtc, fetchText, coverageStart, coverageEnd,
+  })));
+  const manifests = results.map(({ manifest }) => manifest);
+  const agriEvents = uniqueEvents(results.flatMap(({ events }) => events));
+  const agriCalendarCoverage = calendarCoverage({
+    manifests, retrievedAtUtc, coverageStart, coverageEnd,
+  });
+  return { manifests, agriEvents, agriCalendarCoverage,
     calendarVersion: calendarVersionInput({
       manifests,
       agriEvents,
@@ -31,12 +36,45 @@ export async function collectUsdaGrainsCalendar({
   };
 }
 
-function calendarVersionInput({
-  manifests,
-  agriEvents,
-  coverage,
-  retrievedAtUtc,
-}) {
+async function collectSource(command) {
+  const { source, retrievedAtUtc, fetchText, coverageStart, coverageEnd } = command;
+  const text = await fetchText(source.url, source);
+  if (typeof text !== "string" || !text.trim())
+    throw new Error("USDA_SOURCE_DOCUMENT_INVALID");
+  const hash = createHash("sha256").update(text).digest("hex");
+  const parsed = parseUsdaGrainsCalendarDocument({
+    text, source, retrievedAtUtc, coverageStart, coverageEnd, hash,
+  });
+  return {
+    manifest: manifest({ source, text, retrievedAtUtc, hash, parsed }),
+    events: parsed.events,
+  };
+}
+
+function manifest({ source, text, retrievedAtUtc, hash, parsed }) {
+  return {
+    sourceId: source.sourceId,
+    sourceUrl: source.url,
+    sourceKind: source.sourceKind,
+    sha256: `sha256:${hash}`,
+    retrieved_at_utc: retrievedAtUtc,
+    knowledge_status: "PROVEN_CURRENT",
+    historical_knowledge_status: "EXTERNAL_HISTORICAL_GAP",
+    calendar_created_at_utc: parsed.calendarCreatedAtUtc,
+    calendar_dtstamp_utc: parsed.calendarDtstampUtc,
+    calendar_evidence_status: parsed.evidenceStatus,
+    coverage: parsed.coverage,
+    source_scope: source.scope || null,
+    expected_year: source.expectedYear || null,
+    document_years: parsed.documentYears,
+    pagination_detected: parsed.paginationDetected,
+    requested_window_covered: parsed.requestedWindowCovered,
+    source_document: text,
+    document_size_bytes: Buffer.byteLength(text),
+  };
+}
+
+function calendarVersionInput({ manifests, agriEvents, coverage, retrievedAtUtc }) {
   return {
     sourceId: "market_agri_events",
     status: coverage.status,
@@ -52,223 +90,59 @@ function calendarVersionInput({
   };
 }
 
-async function collectSource({ source, retrievedAtUtc, fetchText }) {
-  const text = await fetchText(source.url, source);
-  if (source.sourceKind === "ICS" && !isIcalendar(text)) {
-    throw new Error("USDA_ICALENDAR_DOCUMENT_INVALID");
-  }
-  if (source.sourceKind !== "ICS" && !hasDocumentText(text))
-    throw new Error("USDA_SOURCE_DOCUMENT_INVALID");
-  const hash = createHash("sha256").update(text).digest("hex");
-  const manifest = {
-    sourceId: source.sourceId,
-    sourceUrl: source.url,
-    sourceKind: source.sourceKind,
-    sha256: `sha256:${hash}`,
-    retrieved_at_utc: retrievedAtUtc,
-    knowledge_status: "PROVEN_CURRENT",
-    historical_knowledge_status: "EXTERNAL_HISTORICAL_GAP",
-    calendar_created_at_utc: icsMetadata(text, "CREATED"),
-    calendar_dtstamp_utc: icsMetadata(text, "DTSTAMP"),
-    calendar_evidence_status:
-      source.calendarEvidenceStatus || defaultEvidenceStatus(source),
-    coverage: source.coverage || null,
-    source_document: source.sourceKind === "ICS" ? text : null,
-    document_size_bytes: Buffer.byteLength(text),
-  };
-  return {
-    manifest,
-    events:
-      source.sourceKind === "ICS"
-        ? parseNassIcs({ text, source, retrievedAtUtc, hash })
-        : [],
-  };
-}
-
-function isIcalendar(text) {
-  return /^BEGIN:VCALENDAR\s/m.test(text) && /END:VCALENDAR\s*$/.test(text);
-}
-
-function hasDocumentText(text) {
-  return typeof text === "string" && text.trim().length > 0;
-}
-
-function defaultEvidenceStatus(source) {
-  return source.sourceKind === "ICS" ? "CALENDAR_SCHEDULE" : "INSUFFICIENT";
-}
-
-function parseNassIcs({ text, source, retrievedAtUtc, hash }) {
-  return text
-    .replace(/\r?\n[ \t]/g, "")
-    .split("BEGIN:VEVENT")
-    .slice(1)
-    .map((block) => eventFromBlock({ block, source, retrievedAtUtc, hash }))
-    .filter(Boolean);
-}
-
-function eventFromBlock({ block, source, retrievedAtUtc, hash }) {
-  const value = (name) =>
-    block.match(new RegExp(`(?:^|\\n)${name}(?:;[^:]*)?:(.+)`))?.[1]?.trim() ||
-    null;
-  const summary = value("SUMMARY");
-  const stamp = value("DTSTART");
-  const uid = value("UID");
-  if (!summary || !stamp || !grainRelevant(summary)) return null;
-  const eventKind = classifyEventKind(summary);
-  const tzid = block.match(/(?:^|\n)DTSTART;[^:\r\n]*TZID=([^;:\r\n]+)/)?.[1];
-  const eventTime = icsUtc(stamp, tzid?.replaceAll('"', "") || source.timezone);
-  if (!eventTime) throw new Error("USDA_ICALENDAR_EVENT_TIME_INVALID");
-  return {
-    market_agri_event_id: `usda-nass-${uid || createHash("sha256").update(`${source.url}|${summary}|${eventTime}`).digest("hex").slice(0, 20)}`,
-    universe_key: "US_GRAINS_CBOT",
-    event_kind: eventKind,
-    title: summary,
-    commodity_codes: ["ZC", "ZW"],
-    event_timestamp_utc: eventTime,
-    provider: "USDA_NASS",
-    source_url: source.url,
-    importance: ["WASDE", "GRAIN_STOCKS", "ACREAGE"].includes(eventKind)
-      ? "CRITICAL"
-      : "HIGH",
-    source_published_at_utc: retrievedAtUtc,
-    point_in_time_payload: {
-      canonical_kind: /crop production/i.test(summary)
-        ? "CROP_PRODUCTION"
-        : null,
-      source_manifest_sha256: `sha256:${hash}`,
-      source_timezone: stamp.endsWith("Z") ? "UTC" : tzid || source.timezone,
-      knowledge_status: "PROVEN_CURRENT",
-      historical_knowledge_status: "EXTERNAL_HISTORICAL_GAP",
-    },
-  };
-}
-
-function classifyEventKind(summary) {
-  const value = summary.toUpperCase();
-  if (value.includes("CROP PROGRESS")) return "CROP_PROGRESS";
-  if (value.includes("PROSPECTIVE PLANTINGS")) return "PROSPECTIVE_PLANTINGS";
-  return value.includes("WASDE")
-    ? "WASDE"
-    : value.includes("GRAIN STOCKS")
-      ? "GRAIN_STOCKS"
-      : value.includes("ACREAGE")
-        ? "ACREAGE"
-        : "OTHER";
-}
-
-function coverage({ manifests, retrievedAtUtc, coverageStart, coverageEnd }) {
+function calendarCoverage({ manifests, retrievedAtUtc, coverageStart, coverageEnd }) {
   const qualified = qualifyGrainsCalendarEvidence({
-    sources: manifests.map(sourceRecord), knownAtUtc: retrievedAtUtc,
-    coverageStart, coverageEnd,
+    sources: manifests.map(sourceRecord),
+    knownAtUtc: retrievedAtUtc,
+    coverageStart,
+    coverageEnd,
   });
-  const sourceVersionHash = `sha256:${createHash("sha256")
-    .update(
-      manifests
-        .map((item) => `${item.sourceId}|${item.sha256}|${JSON.stringify(item.coverage)}`)
-        .sort()
-        .join("|"),
-    )
+  const sourceVersionHash = versionHash(manifests, coverageStart, coverageEnd);
+  return [{
+    sourceId: "market_agri_events",
+    sourceType: "AGRI_EVENT_CALENDAR",
+    status: qualified.status,
+    coverageStart: qualified.coverageStart,
+    coverageEnd: qualified.coverageEnd,
+    asOf: retrievedAtUtc,
+    datasetVersion: sourceVersionHash,
+    sourceVersionHash,
+    provider: "USDA",
+    reasonCodes: qualified.reasonCodes,
+    sourceDiagnostics: qualified.sourceDiagnostics,
+  }];
+}
+
+function versionHash(manifests, coverageStart, coverageEnd) {
+  return `sha256:${createHash("sha256")
+    .update(manifests.map((item) =>
+      `${item.sourceId}|${item.sha256}|${JSON.stringify(item.coverage)}`)
+      .sort().join("|"))
     .update(JSON.stringify({ coverageStart, coverageEnd }))
     .digest("hex")}`;
-  return [
-    {
-      sourceId: "market_agri_events",
-      sourceType: "AGRI_EVENT_CALENDAR",
-      status: qualified.status,
-      coverageStart: qualified.coverageStart,
-      coverageEnd: qualified.coverageEnd,
-      asOf: retrievedAtUtc,
-      datasetVersion: sourceVersionHash,
-      sourceVersionHash,
-      provider: "USDA",
-      reasonCodes: qualified.reasonCodes,
-      sourceDiagnostics: qualified.sourceDiagnostics,
-    },
-  ];
 }
 
-function sourceRecord(manifest) {
+function sourceRecord(item) {
   return {
-    sourceId: manifest.sourceId,
-    sourceUrl: manifest.sourceUrl,
-    sourceDocumentSha256: manifest.sha256,
-    retrievedAtUtc: manifest.retrieved_at_utc,
-    knowledgeStatus: manifest.knowledge_status,
-    historicalKnowledgeStatus: manifest.historical_knowledge_status,
+    sourceId: item.sourceId,
+    sourceUrl: item.sourceUrl,
+    sourceDocumentSha256: item.sha256,
+    retrievedAtUtc: item.retrieved_at_utc,
+    knowledgeStatus: item.knowledge_status,
+    historicalKnowledgeStatus: item.historical_knowledge_status,
     metadata: {
-      source_kind: manifest.sourceKind,
-      calendar_created_at_utc: manifest.calendar_created_at_utc,
-      calendar_dtstamp_utc: manifest.calendar_dtstamp_utc,
-      calendar_evidence_status: manifest.calendar_evidence_status,
-      coverage: manifest.coverage,
+      source_kind: item.sourceKind,
+      source_scope: item.source_scope,
+      expected_year: item.expected_year,
+      document_years: item.document_years,
+      pagination_detected: item.pagination_detected,
+      requested_window_covered: item.requested_window_covered,
+      calendar_created_at_utc: item.calendar_created_at_utc,
+      calendar_dtstamp_utc: item.calendar_dtstamp_utc,
+      calendar_evidence_status: item.calendar_evidence_status,
+      coverage: item.coverage,
     },
   };
-}
-
-function grainRelevant(summary) {
-  return /WASDE|CROP PRODUCTION|GRAIN STOCKS|ACREAGE|CROP PROGRESS|PROSPECTIVE PLANTINGS/i.test(
-    summary,
-  );
-}
-function icsMetadata(text, field) {
-  const value = text.match(
-    new RegExp(`(?:^|\\n)${field}:(\\d{8}T\\d{6}Z)`),
-  )?.[1];
-  return value ? icsUtc(value, null) : null;
-}
-function icsUtc(value, timezone) {
-  const match = String(value).match(
-    /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/,
-  );
-  if (!match) return null;
-  const [year, month, day, hour, minute, second] = match
-    .slice(1, 7)
-    .map(Number);
-  const target = Date.UTC(year, month - 1, day, hour, minute, second);
-  if (
-    new Date(target).toISOString().replace(/[-:]/g, "").slice(0, 15) !==
-    value.slice(0, 15)
-  )
-    return null;
-  if (match[7]) return new Date(target).toISOString();
-  if (!timezone) return null;
-  let formatter;
-  try {
-    formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    });
-  } catch {
-    return null;
-  }
-  let instant = target;
-  for (let index = 0; index < 3; index += 1) {
-    instant += target - localEpoch(formatter, instant);
-  }
-  // A missing or repeated wall-clock time cannot be resolved silently.
-  if (localEpoch(formatter, instant) !== target) return null;
-  if (
-    [-3600000, 3600000].some(
-      (delta) => localEpoch(formatter, instant + delta) === target,
-    )
-  )
-    return null;
-  return new Date(instant).toISOString();
-}
-
-function localEpoch(formatter, instant) {
-  const p = Object.fromEntries(
-    formatter
-      .formatToParts(new Date(instant))
-      .map(({ type, value }) => [type, value]),
-  );
-  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
 }
 
 function uniqueEvents(events) {
@@ -279,26 +153,97 @@ function uniqueEvents(events) {
       throw new Error("USDA_EVENT_ID_CONFLICT");
     seen.set(event.market_agri_event_id, event);
   }
-  return [...seen.values()];
+  return [...seen.values()].sort((left, right) =>
+    left.event_timestamp_utc.localeCompare(right.event_timestamp_utc)
+      || left.market_agri_event_id.localeCompare(right.market_agri_event_id));
 }
 
 export async function fetchUsdaCalendarText(url, fetchImpl = fetch) {
-  const response = await fetchResponse(url, fetchImpl);
-  if (!response.ok) throw new Error(`USDA_CALENDAR_HTTP_${response.status}`);
-  const mime = response.headers.get("content-type") || "";
-  if (/html|json/i.test(mime))
-    throw new Error("USDA_CALENDAR_CONTENT_TYPE_INVALID");
-  return response.text();
+  return fetchBoundedText({
+    url, fetchImpl, errorPrefix: "USDA_CALENDAR",
+    validMime: (mime) => !/html|json/i.test(mime),
+  });
 }
 
 export async function fetchUsdaSourceText(url, fetchImpl = fetch) {
-  const response = await fetchResponse(url, fetchImpl);
-  if (!response.ok) throw new Error(`USDA_SOURCE_HTTP_${response.status}`);
-  const text = await response.text();
-  if (!hasDocumentText(text)) throw new Error("USDA_SOURCE_DOCUMENT_EMPTY");
+  return fetchBoundedText({
+    url, fetchImpl, errorPrefix: "USDA_SOURCE",
+    validMime: (mime) => !mime || /text|html|calendar|json|xml/i.test(mime),
+  });
+}
+
+async function fetchBoundedText({ url, fetchImpl, errorPrefix, validMime }) {
+  const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+  const response = await fetchWithRedirects({ url, fetchImpl, signal });
+  if (!response.ok) throw new Error(`${errorPrefix}_HTTP_${response.status}`);
+  const mime = response.headers.get("content-type") || "";
+  if (!validMime(mime)) throw new Error(`${errorPrefix}_CONTENT_TYPE_INVALID`);
+  const statedSize = Number(response.headers.get("content-length"));
+  if (Number.isFinite(statedSize) && statedSize > MAX_DOCUMENT_BYTES)
+    throw new Error(`${errorPrefix}_DOCUMENT_TOO_LARGE`);
+  const bytes = await readBoundedBody(response, errorPrefix);
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (cause) {
+    throw new Error(`${errorPrefix}_DOCUMENT_ENCODING_INVALID`, { cause });
+  }
+  if (!text.trim()) throw new Error(`${errorPrefix}_DOCUMENT_EMPTY`);
   return text;
 }
 
-function fetchResponse(url, fetchImpl) {
-  return fetchImpl(url, { signal: AbortSignal.timeout(15000) });
+async function fetchWithRedirects({ url, fetchImpl, signal }) {
+  let current = httpsUrl(url);
+  for (let count = 0; count <= MAX_REDIRECTS; count += 1) {
+    const response = await fetchImpl(current.href, { signal, redirect: "manual" });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get("location");
+    if (!location) throw new Error("USDA_SOURCE_REDIRECT_LOCATION_REQUIRED");
+    if (count === MAX_REDIRECTS) throw new Error("USDA_SOURCE_REDIRECT_LIMIT");
+    const next = httpsUrl(new URL(location, current).href);
+    if (!allowedRedirect(current, next)) throw new Error("USDA_SOURCE_REDIRECT_FORBIDDEN");
+    await response.body?.cancel();
+    current = next;
+  }
+  throw new Error("USDA_SOURCE_REDIRECT_LIMIT");
+}
+
+async function readBoundedBody(response, errorPrefix) {
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_DOCUMENT_BYTES) {
+      await reader.cancel();
+      throw new Error(`${errorPrefix}_DOCUMENT_TOO_LARGE`);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+function httpsUrl(value) {
+  const parsed = new URL(value);
+  if (parsed.protocol !== "https:") throw new Error("USDA_SOURCE_HTTPS_REQUIRED");
+  if (parsed.username || parsed.password) throw new Error("USDA_SOURCE_CREDENTIALS_FORBIDDEN");
+  return parsed;
+}
+
+function allowedRedirect(current, next) {
+  if (current.hostname === next.hostname) return true;
+  return usdaHost(current.hostname) && usdaHost(next.hostname);
+}
+
+function usdaHost(hostname) {
+  return hostname === "usda.gov" || hostname.endsWith(".usda.gov");
 }

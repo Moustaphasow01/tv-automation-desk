@@ -5,6 +5,7 @@ import {
   normalizeMarketSourceStateV1,
 } from "@tv-automation/desk-domain";
 import { SystemClock } from "@tv-automation/desk-time";
+import { loadCurrentGrainsCalendar } from "./persistence/postgres-grains-calendar-current-state.js";
 
 export class MarketContextRepository {
   constructor(persistence, { eventOutbox = null, clock = new SystemClock() } = {}) {
@@ -17,7 +18,7 @@ export class MarketContextRepository {
   async current(universe = "US_GRAINS_CBOT", nowUtc = null) {
     const asOfUtc = nowUtc || this.clock.now().utc;
     await this.#ready();
-    const [snapshotResult, briefResult, briefHistoryResult, coverageResult, prefilterResult, workerResult] = await Promise.all([
+    const [snapshotResult, briefResult, briefHistoryResult, coverageResult, prefilterResult, workerResult, calendar] = await Promise.all([
       this.pool.query(`SELECT * FROM market_context_snapshots
         WHERE universe=$1 ORDER BY created_at_utc DESC LIMIT 1`, [universe]),
       this.pool.query(`SELECT * FROM market_desk_briefs
@@ -46,6 +47,7 @@ export class MarketContextRepository {
         LEFT JOIN agent_task_run_metrics r ON r.agent_task_id=t.agent_task_id
         WHERE m.mission_key='us-grains-market-context-live'
         GROUP BY m.agent_mission_id, m.model_policy`),
+      this.calendarAt(asOfUtc),
     ]);
     const snapshot = mapSnapshot(snapshotResult.rows[0], asOfUtc);
     const brief = mapBrief(briefResult.rows[0], asOfUtc);
@@ -59,11 +61,20 @@ export class MarketContextRepository {
         index === 0,
         index === 0 ? null : history[index - 1]?.market_desk_brief_id || null,
       )),
-      sourceStates: coverageResult.rows.map(mapCoverage),
+      sourceStates: [
+        ...coverageResult.rows.filter((row) => row.source_id !== "market_agri_events").map(mapCoverage),
+        calendar.sourceState,
+      ],
+      agriEvents: calendar.events,
       prefilterDecisions: prefilterResult.rows.map(mapPrefilterDecision),
       workerRuntime: mapWorkerRuntime(workerResult.rows[0], asOfUtc),
       asOf: asOfUtc,
     };
+  }
+
+  async calendarAt(asOfUtc) {
+    await this.#ready();
+    return loadCurrentGrainsCalendar(this.pool, asOfUtc);
   }
 
   async upsertSourceCoverage(input = {}) {

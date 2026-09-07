@@ -5,6 +5,8 @@ import {
   loadGrainsCalendarVersionAt,
 } from "../src/persistence/postgres-grains-calendar-ledger.js";
 import { createTheoreticalTestDatabase } from "./support/theoretical-postgres-fixtures.js";
+import { MarketContextRepository } from "../src/market-context-repository.js";
+import { withGrainsCalendarRefreshLease } from "../src/persistence/postgres-grains-calendar-refresh-lease.js";
 
 const CUTOFF = "2026-09-04T15:00:00.000Z";
 
@@ -232,6 +234,37 @@ test(
     );
   },
 );
+
+test("automated freshness is shared by runtime and operator projection and excludes concurrent refreshes", {
+  skip: process.env.RUN_POSTGRES_TESTS !== "1",
+}, async (t) => {
+  const database = await createTheoreticalTestDatabase();
+  t.after(() => database.close());
+  const input = version({ hash: "8", knownAtUtc: "2026-09-04T08:00:00Z",
+    sourceIds: requiredSources(), historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP" });
+  input.metadata = { ingestion_mode: "AUTOMATED_USDA_V1", freshness_max_age_seconds: 21600 };
+  await appendGrainsCalendarVersion(database.pool, input);
+  const context = new MarketContextRepository({ pool: database.pool, initialized: Promise.resolve() });
+  await context.upsertSourceCoverage({
+    sourceId: "market_agri_events", sourceType: "AGRI_EVENT_CALENDAR", status: "AVAILABLE",
+    asOf: "2026-09-04T18:00:00Z", coverageStart: "2026-08-01T00:00:00Z",
+    coverageEnd: "2026-12-31T00:00:00Z", datasetVersion: "test-legacy-must-not-win",
+  });
+  const fresh = await context.current("US_GRAINS_CBOT", "2026-09-04T13:59:59Z");
+  assert.equal(fresh.sourceStates.find((source) => source.sourceId === "market_agri_events").status, "AVAILABLE");
+  const stale = await context.current("US_GRAINS_CBOT", "2026-09-04T14:00:00Z");
+  const staleSource = stale.sourceStates.find((source) => source.sourceId === "market_agri_events");
+  assert.equal(staleSource.status, "STALE");
+  assert.equal(staleSource.datasetVersion, input.datasetVersion);
+  assert.equal((await load(database.pool, "2026-09-04T14:00:00Z")).agriCalendarCoverage[0].status, "STALE");
+  assert.equal((await context.calendarAt("2026-09-04T07:59:59Z")).sourceState.status, "UNKNOWN_COVERAGE");
+  await withGrainsCalendarRefreshLease(database.pool, async () => {
+    const competing = await withGrainsCalendarRefreshLease(database.pool, () => assert.fail("concurrent refresh"));
+    assert.equal(competing.status, "ALREADY_RUNNING");
+  });
+  await assert.rejects(withGrainsCalendarRefreshLease(database.pool, () => { throw new Error("fixture failure"); }), /fixture failure/);
+  assert.equal(await withGrainsCalendarRefreshLease(database.pool, async () => "recovered"), "recovered");
+});
 
 function load(pool, asOfUtc) {
   return loadGrainsCalendarVersionAt(pool, {

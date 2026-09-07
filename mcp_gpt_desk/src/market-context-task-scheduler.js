@@ -178,20 +178,11 @@ export class MarketContextTaskScheduler {
         ORDER BY timestamp_utc DESC LIMIT 120`, [feedId, sourceDataCutoff]);
       series[`${instrument}:${timeframe}`] = summarizeSeries(result.rows.reverse());
     }
-    const agriEvents = await safeRows(this.pool, `SELECT event_kind, title, event_timestamp_utc,
-      importance,
-      COALESCE(point_in_time_payload->>'event_status', 'SCHEDULED') AS event_status,
-      actual_available_at_utc,
-      COALESCE(NULLIF(point_in_time_payload->>'source_published_at_utc', '')::timestamptz, created_at_utc) AS source_published_at_utc,
-      source_provider AS provider,
-      COALESCE(point_in_time_payload->>'dataset_version', 'legacy_agri_events') AS dataset_version,
-      source_url
-      FROM market_agri_events
-      WHERE universe_key='US_GRAINS_CBOT'
-        AND COALESCE(NULLIF(point_in_time_payload->>'source_published_at_utc', '')::timestamptz, created_at_utc) <= $1
-        AND event_timestamp_utc BETWEEN $1::timestamptz - interval '7 days'
-                                   AND $1::timestamptz + interval '14 days'
-      ORDER BY event_timestamp_utc LIMIT 80`, [sourceDataCutoff]);
+    const calendar = await this.store.marketContext.calendarAt(sourceDataCutoff);
+    const bundleSources = [
+      ...sourceStates.filter((source) => source.sourceId !== "market_agri_events"),
+      calendar.sourceState,
+    ];
     const recent = await Promise.all([
       safeRows(this.pool, `SELECT strategy_instance_id, status, instrument, timeframe, source_data_cutoff_utc,
         signal_id, reason_codes FROM strategy_runtime_evaluations ORDER BY completed_at_utc DESC LIMIT 80`),
@@ -208,14 +199,14 @@ export class MarketContextTaskScheduler {
       cutoff: sourceDataCutoff,
       canonicalMarketSession: session,
       series,
-      agriEventManifest: sourceStates.find((item) => item.sourceId === "market_agri_events") || null,
-      coveredAgriEvents: agriEvents,
+      agriEventManifest: calendar.sourceState,
+      coveredAgriEvents: calendar.events,
       recentEvaluations: recent[0],
       recentSignals: recent[1],
       activeIncidents: recent[2],
       previousSnapshot: previous.snapshot,
       previousBrief: previous.brief,
-      sourceStates,
+      sourceStates: bundleSources,
       authority: { execution: false, risk: false, humanGate: false, provider: false },
     };
   }

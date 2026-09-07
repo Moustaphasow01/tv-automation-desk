@@ -107,10 +107,9 @@ $desk_migration_contract$;
 '@
 $contractSql = $contractSql.Replace("__EXPECTED_CHECKSUM__", $expectedChecksum)
 
-& $psql --set ON_ERROR_STOP=1 --dbname $DatabaseUrl --command $contractSql
-if ($LASTEXITCODE -ne 0) {
-    throw "PostgreSQL migration 058 contract verification failed."
-}
+Invoke-DeskExternal -FilePath $psql -Arguments @(
+    "--set", "ON_ERROR_STOP=1", "--dbname", $DatabaseUrl, "--command", $contractSql
+)
 
 $evidenceSql = @'
 SELECT json_build_object(
@@ -125,9 +124,9 @@ SELECT json_build_object(
 FROM desk_schema_migrations
 WHERE migration_id = '058_theoretical_execution_portfolio_lineage';
 '@
-$evidence = @(& $psql --tuples-only --no-align --dbname $DatabaseUrl --command $evidenceSql)
-if ($LASTEXITCODE -ne 0) {
-    throw "Unable to read PostgreSQL migration 058 verification evidence."
-}
-Write-Host ([string]($evidence -join "")).Trim()
+$evidence = Invoke-DeskExternal -FilePath $psql -Arguments @(
+    "--set", "ON_ERROR_STOP=1", "--tuples-only", "--no-align",
+    "--dbname", $DatabaseUrl, "--command", $evidenceSql
+) -PassThru
+Write-Host ([string]$evidence).Trim()
 Write-Host "PostgreSQL migration 058 contract verified."

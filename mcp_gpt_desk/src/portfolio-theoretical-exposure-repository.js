@@ -75,6 +75,8 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
       SELECT 1 FROM trade_theoretical_execution_events event
       WHERE event.portfolio_order_intent_id = lineage.portfolio_order_intent_id
         AND event.event_type = 'entry_expired'
+        AND event.source_candle_feed_id IS NOT NULL
+        AND event.source_candle_timestamp_utc IS NOT NULL
         AND event.event_at_utc <= $2::timestamptz
     )
     AND NOT (

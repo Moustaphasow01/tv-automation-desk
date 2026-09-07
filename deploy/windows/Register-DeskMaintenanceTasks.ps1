@@ -50,4 +50,10 @@ if (Get-ScheduledTask -TaskName "DeskFuturesUsGrainsShadowRuntime" -ErrorAction 
     Unregister-ScheduledTask -TaskName "DeskFuturesUsGrainsShadowRuntime" -Confirm:$false
 }
 
-Write-Host "Desk maintenance tasks registered: health, runtime retention, database/object backup, backup verification, US grains shadow runtime."
+$calendarScript = Join-Path $InstallRoot "current\deploy\windows\Run-GrainsCalendarRefresh.ps1"
+$calendarAction = New-ScheduledTaskAction -Execute $powerShell -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$calendarScript`" -InstallRoot `"$InstallRoot`" -DataRoot `"$DataRoot`""
+$calendarTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 30)
+$calendarSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+Register-ScheduledTask -TaskName "DeskFutures-GrainsCalendarRefresh" -Action $calendarAction -Trigger $calendarTrigger -Principal $principal -Settings $calendarSettings -Force | Out-Null
+
+Write-Host "Desk maintenance tasks registered: health, runtime retention, database/object backup, backup verification, US grains shadow runtime, grains calendar refresh."

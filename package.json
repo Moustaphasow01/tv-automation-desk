@@ -12,7 +12,7 @@
     "pretest:e2e": "VITE_DESK_API_KEY=e2e-operator-key vite build --mode development",
     "test:e2e": "playwright test",
     "test:stack": "bash scripts/stack/test_real_stack.sh",
-    "test:grains:postgres": "node --input-type=module -e \"process.env.RUN_POSTGRES_TESTS='1'; for (const name of ['theoretical_execution_postgres', 'tradingview_webhook_postgres', 'postgres_data_health_timing_integration', 'us_grains_signal_publication_postgres', 'grains_runtime_inputs_postgres', 'grains_calendar_version_ledger_postgres', 'grains_causal_pipeline_postgres', 'portfolio_risk_theoretical_exposure_postgres', 'grains_replay_database_postgres', 'us_grains_causal_postgres_replay', 'telegram_canonical_delivery_postgres']) await import('./mcp_gpt_desk/test/'+name+'.test.js');\"",
+    "test:grains:postgres": "node --input-type=module -e \"process.env.RUN_POSTGRES_TESTS='1'; for (const name of ['theoretical_execution_postgres', 'theoretical_trade_outcome_correction_postgres', 'historical_grains_intent_qualification_postgres', 'tradingview_webhook_postgres', 'postgres_data_health_timing_integration', 'us_grains_signal_publication_postgres', 'grains_runtime_inputs_postgres', 'grains_calendar_version_ledger_postgres', 'grains_causal_pipeline_postgres', 'portfolio_risk_theoretical_exposure_postgres', 'grains_replay_database_postgres', 'us_grains_causal_postgres_replay', 'telegram_canonical_delivery_postgres']) await import('./mcp_gpt_desk/test/'+name+'.test.js');\"",
     "test:telegram": "node --test mcp_gpt_desk/test/telegram_client.test.js mcp_gpt_desk/test/telegram_alert_service.test.js mcp_gpt_desk/test/telegram_delivery_runtime.test.js mcp_gpt_desk/test/telegram_trading_message.test.js mcp_gpt_desk/test/semi_manual_paper_readiness.test.js",
     "test:grains:data": "node --test mcp_gpt_desk/test/tradingview_webhook.test.js mcp_gpt_desk/test/postgres_data_health_active_scope.test.js mcp_gpt_desk/test/market_data_latency_audit.test.js scripts/stack/diagnose_tradingview_freshness.test.mjs",
     "test:grains:runtime": "node --test mcp_gpt_desk/test/us_grains_strategy_suite_once_runner.test.js mcp_gpt_desk/test/us_grains_live_signal_publisher.test.js mcp_gpt_desk/test/strategy_signal_bus_service.test.js",
@@ -21,6 +21,10 @@
     "test:grains:calendar-artifact": "node --test mcp_gpt_desk/test/grains_calendar_replay_artifact.test.js",
     "grains:import-calendar-evidence": "node mcp_gpt_desk/scripts/import_grains_calendar_evidence.mjs",
     "grains:collect-usda-calendar": "node mcp_gpt_desk/scripts/collect_usda_grains_calendar.mjs",
+    "grains:refresh-usda-calendar": "node mcp_gpt_desk/scripts/refresh_usda_grains_calendar.mjs",
+    "grains:correct-theoretical-outcomes": "node mcp_gpt_desk/scripts/correct_theoretical_trade_outcomes.mjs",
+    "grains:qualify-historical-intents": "node mcp_gpt_desk/scripts/qualify_historical_grains_intents.mjs",
+    "test:grains:calendar-refresh": "node --test mcp_gpt_desk/test/grains_calendar_freshness.test.js mcp_gpt_desk/test/grains_calendar_refresh.test.js mcp_gpt_desk/test/grains_calendar_file_archive.test.js mcp_gpt_desk/test/grains_calendar_refresh_source.test.js mcp_gpt_desk/test/grains_calendar_refresh_lease.test.js",
     "audit:grains:causal": "node mcp_gpt_desk/scripts/audit_grains_causal_detection.mjs",
     "grains:replay-context-theoretical": "node mcp_gpt_desk/scripts/replay_us_grains_context_theoretical.mjs",
     "grains:replay-canonical-postgres": "node mcp_gpt_desk/scripts/replay_us_grains_causal_postgres.mjs",
@@ -96,6 +100,11 @@
     "plan:market-storage": "npm --prefix mcp_gpt_desk run data:storage-plan -- --summary",
     "catalog:features": "npm --prefix mcp_gpt_desk run feature:catalog -- --summary",
     "certify:resilience": "node scripts/quality/certify_resilience.mjs"
+  },
+  "overrides": {
+    "nanoid": "3.3.18",
+    "postcss": "8.5.23",
+    "undici": "7.29.0"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.20",

@@ -166,11 +166,11 @@ test("dated FAS and WASDE evidence is hashed but cannot certify historical calen
     fetchText: async (url) =>
       url.endsWith("wasde") || url.endsWith("fas")
         ? "official dated source evidence"
-        : "BEGIN:VCALENDAR\nEND:VCALENDAR",
+        : "BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART:20260911T160000Z\nSUMMARY:Crop Production\nEND:VEVENT\nEND:VCALENDAR",
   });
   assert.equal(result.manifests.length, 3);
   assert.equal(result.calendarVersion.sources.length, 3);
-  assert.equal(result.manifests[1].source_document, null);
+  assert.equal(result.manifests[1].source_document, "official dated source evidence");
   assert.equal(result.agriCalendarCoverage[0].status, "UNKNOWN_COVERAGE");
   assert.ok(
     result.agriCalendarCoverage[0].reasonCodes.includes(
@@ -184,17 +184,17 @@ test("dated FAS and WASDE evidence is hashed but cannot certify historical calen
   );
 });
 
-test("complete current schedules qualify without pretending they were collected in the past", async () => {
-  const coverage = { start_utc: "2026-09-06T00:00Z", end_utc: "2026-09-12T23:59:59Z", instruments: ["ZC", "ZW"] };
-  const sources = ["usda_nass_release_calendar", "usda_wasde_release_schedule", "usda_fas_export_sales_schedule"]
-    .map((sourceId) => ({ sourceId, sourceKind: "ICS", url: `https://example.test/${sourceId}.ics`, coverage }));
-  const result = await collectUsdaGrainsCalendar({ sources,
-    coverageStart: coverage.start_utc, coverageEnd: coverage.end_utc,
-    retrievedAtUtc: "2026-09-06T12:00:00.000Z", fetchText: async () => "BEGIN:VCALENDAR\nEND:VCALENDAR" });
-  assert.equal(result.agriCalendarCoverage[0].status, "AVAILABLE");
-  assert.equal(result.calendarVersion.knownAtUtc, "2026-09-06T12:00:00.000Z");
-  assert.equal(result.calendarVersion.sources[0].historicalKnowledgeStatus, "EXTERNAL_HISTORICAL_GAP");
-  assert.equal(result.agriEvents.length, 0, "a verified empty schedule is different from unknown coverage");
+test("a source coverage label cannot turn an empty calendar into proof", async () => {
+  await assert.rejects(() => collectUsdaGrainsCalendar({
+    sources: [{ ...source(), coverage: {
+      start_utc: "2026-01-01T00:00Z", end_utc: "2026-12-31T23:59Z",
+      instruments: ["ZC", "ZW"],
+    } }],
+    coverageStart: "2026-09-06T00:00Z",
+    coverageEnd: "2026-09-12T23:59:59Z",
+    retrievedAtUtc: "2026-09-06T12:00:00.000Z",
+    fetchText: async () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
+  }), /EVENTS_REQUIRED/);
 });
 
 test("generic official source reader is bounded and rejects empty and HTTP responses", async () => {

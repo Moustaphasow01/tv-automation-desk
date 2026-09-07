@@ -40,9 +40,11 @@ foreach ($file in $files) {
     $migrationId = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
     $checksum = Get-DeskFileSha256 $file.FullName
     $query = "SELECT content_sha256 FROM desk_schema_migrations WHERE migration_id = '$migrationId';"
-    $existingOutput = @(& $psql --tuples-only --no-align --dbname $DatabaseUrl --command $query)
-    if ($LASTEXITCODE -ne 0) { throw "Unable to read migration ledger for $migrationId" }
-    $existing = ([string]($existingOutput -join "")).Trim()
+    $existingOutput = Invoke-DeskExternal -FilePath $psql -Arguments @(
+        "--set", "ON_ERROR_STOP=1", "--tuples-only", "--no-align",
+        "--dbname", $DatabaseUrl, "--command", $query
+    ) -PassThru
+    $existing = ([string]$existingOutput).Trim()
     if ($existing) {
         if ($existing -ne $checksum) {
             throw "Migration checksum mismatch for $migrationId. Recorded=$existing current=$checksum"

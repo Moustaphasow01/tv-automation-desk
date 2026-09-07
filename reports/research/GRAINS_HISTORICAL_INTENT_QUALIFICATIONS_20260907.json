@@ -1,0 +1,103 @@
+{
+  "schema_version": "historical_grains_intent_qualification_manifest_v1",
+  "manifest_id": "grains-historical-intent-qualification-20260907",
+  "scope": "Eight historical grain intents with no executable entry price and unavailable economics. Qualification is administrative evidence only and retains every reservation.",
+  "qualifications": [
+    {
+      "idempotency_key": "grains-historical-intent-qualification-20260907.0bd7386b2bdb2f001386303a",
+      "portfolio_order_intent_id": "portfolio_order_intent_0bd7386b2bdb2f001386303a",
+      "target_position_id": "targetpos:d88ad4ee9a0b61bbd59a2616c1dad2fb88bab5d95584bc580ab5b039b0d7d84f",
+      "source_signal_id": "bb8086b9-37ec-4c1d-85c3-88b191f6ef63",
+      "expected_previous_revision": 0,
+      "expected_lineage_payload_hash": "sha256:a1c0281d42fde4c67e1b08dbd5a3908a6c494fb0bc6e6ff7ec7baa7cc7a68904",
+      "expected_target_payload_hash": "sha256:6674fc51ea552e167d2f36ddffcb99a6c2520cdcfc2ecec1d00994ca4ab1751b",
+      "expected_signal_payload_hash": "sha256:2d41e8603d2352932256417b911cf29311157e3c7f73bf54d33bfa8ebe612f26",
+      "expected_theoretical_event_count": 1,
+      "expected_unproven_expiry_count": 1
+    },
+    {
+      "idempotency_key": "grains-historical-intent-qualification-20260907.282a54a876b4fae76f7617b3",
+      "portfolio_order_intent_id": "portfolio_order_intent_282a54a876b4fae76f7617b3",
+      "target_position_id": "targetpos:7e6b6f3295a175b829df073e8f7eb235535c38a9650b84f9b3daaf2859890212",
+      "source_signal_id": "f5a2c865-8080-44cc-8e49-1486ef8c1524",
+      "expected_previous_revision": 0,
+      "expected_lineage_payload_hash": "sha256:5f7e53ed9699c0343f76ffa91c382d3d47c96b465d35a8a94add01416195e003",
+      "expected_target_payload_hash": "sha256:6368924381c530e24564758b0be3377ce99d6a09318978df4522b9222fa9012e",
+      "expected_signal_payload_hash": "sha256:6c9a14ca14bb04faf23a58438bf0282d4f3a28f07481a014ffac560df7324147",
+      "expected_theoretical_event_count": 1,
+      "expected_unproven_expiry_count": 1
+    },
+    {
+      "idempotency_key": "grains-historical-intent-qualification-20260907.32ae43edc75abf9acd80b208",
+      "portfolio_order_intent_id": "portfolio_order_intent_32ae43edc75abf9acd80b208",
+      "target_position_id": "targetpos:f6b8d92002c957596e0364f3afd9804600f96faf5a63dcbc4f1dfffa0f25b3fb",
+      "source_signal_id": "4b3cbaee-a05f-4645-86b2-eae36a33d480",
+      "expected_previous_revision": 0,
+      "expected_lineage_payload_hash": "sha256:7109b6e36e81010c6d676c8efdb200a96432a1b3060cb3a3c8a66fbb8262aeb3",
+      "expected_target_payload_hash": "sha256:e074d9bacaa8df8607d054c49a84ec68e8c8dc69833a843a2d6f137cb681c98f",
+      "expected_signal_payload_hash": "sha256:84ac96391f66d814a987bfd2f09a57dc71b09aa4e26afc7fee4890a98ef27fee",
+      "expected_theoretical_event_count": 1,
+      "expected_unproven_expiry_count": 1
+    },
+    {
+      "idempotency_key": "grains-historical-intent-qualification-20260907.712451937a93497bcfeb328e",
+      "portfolio_order_intent_id": "portfolio_order_intent_712451937a93497bcfeb328e",
+      "target_position_id": "targetpos:57eb5dac48d0be1aac8fc5f3befe6bcd5161e56176d311492e69bb7916aed3d8",
+      "source_signal_id": "932574b8-c52b-4165-88e5-e9e2cec0db64",
+      "expected_previous_revision": 0,
+      "expected_lineage_payload_hash": "sha256:6eb31f402973f4364ec7929ff6ebdfb595989a7528822ed078de36841db8eb8a",
+      "expected_target_payload_hash": "sha256:460408aae9d6ae05376b89c778b667bdc897b65c68b02c1ec3f0f0ed54da8ef6",
+      "expected_signal_payload_hash": "sha256:97f7dd3c79bd3129fd58f7b2db1752db6477f3d0e4fbb29c91b89b74f11ae637",
+      "expected_theoretical_event_count": 0,
+      "expected_unproven_expiry_count": 0
+    },
+    {
+      "idempotency_key": "grains-historical-intent-qualification-20260907.76cdf00503a3dd6bc1d4c290",
+      "portfolio_order_intent_id": "portfolio_order_intent_76cdf00503a3dd6bc1d4c290",
+      "target_position_id": "targetpos:52daaa801412f4da7d6f388e9e96be3f6f5fcac69dafccf574485e7cacd8ff0c",
+      "source_signal_id": "10a9f732-1740-4157-87ce-088094059c9e",
+      "expected_previous_revision": 0,
+      "expected_lineage_payload_hash": "sha256:e72433d23e1a78dc6e5101a42b9bc598f83532d313dabb582cfdde588e253b71",
+      "expected_target_payload_hash": "sha256:b531a4f7cb3ee0fdd0d5399afa969bb3f62cb1dfc4a9e0f95b656da01813e1ae",
+      "expected_signal_payload_hash": "sha256:eb85c83608ff95fb9929289a38437fb5421942352a12f42631d73b7cc9962ed9",
+      "expected_theoretical_event_count": 0,
+      "expected_unproven_expiry_count": 0
+    },
+    {
+      "idempotency_key": "grains-historical-intent-qualification-20260907.992136b97674b2ab89264b93",
+      "portfolio_order_intent_id": "portfolio_order_intent_992136b97674b2ab89264b93",
+      "target_position_id": "targetpos:265f96b89686916eb202488c6c1526d1831f7d62d7ee580e9ec7776bb59aa9be",
+      "source_signal_id": "1004c460-1819-4eb6-8b8a-07a0442be0dd",
+      "expected_previous_revision": 0,
+      "expected_lineage_payload_hash": "sha256:b9383e1e430d945ebcf29db98dfb4bd55ed1f20ea66ea25fb9b207973d67cc58",
+      "expected_target_payload_hash": "sha256:4a4fe2e615d5ab8b3a22f41dca8cf66e6c91049f131c0502f474a7dc25d9efa9",
+      "expected_signal_payload_hash": "sha256:afccfb06c6c949b8b07a67ced880a87255cf28bfb49102b7d9d39bae14072311",
+      "expected_theoretical_event_count": 0,
+      "expected_unproven_expiry_count": 0
+    },
+    {
+      "idempotency_key": "grains-historical-intent-qualification-20260907.a2859895e880da7307ea1b43",
+      "portfolio_order_intent_id": "portfolio_order_intent_a2859895e880da7307ea1b43",
+      "target_position_id": "targetpos:8aa6020bdd1b12ff15b3fdc7fa2ea5ad76a8a4366dce574c145c93f359deff03",
+      "source_signal_id": "591dea1a-dbcc-4512-8950-a6e0a7f09d9b",
+      "expected_previous_revision": 0,
+      "expected_lineage_payload_hash": "sha256:a7f2f78d14c9e91428e86ffd983b115f73ab287dd441b6a3888f5522fc01e089",
+      "expected_target_payload_hash": "sha256:2ba1d7d54e6ee3284e20cc60278e4cf050678dc5d15a29c6a9b1ee3c35bfdd4e",
+      "expected_signal_payload_hash": "sha256:8f95382dda9d154c24df13522d7acb6a01b51782c37025ac12a44bd651e9d41e",
+      "expected_theoretical_event_count": 0,
+      "expected_unproven_expiry_count": 0
+    },
+    {
+      "idempotency_key": "grains-historical-intent-qualification-20260907.b50eab184ac98b50fd084140",
+      "portfolio_order_intent_id": "portfolio_order_intent_b50eab184ac98b50fd084140",
+      "target_position_id": "targetpos:7a8c98867b06f7f1e5ed21caa48b2ae12bb30beac3a244a792e01a68034f3b4e",
+      "source_signal_id": "aee4b740-3988-40f5-8736-43318b3ffbe9",
+      "expected_previous_revision": 0,
+      "expected_lineage_payload_hash": "sha256:a9eaefe09240103cff16d9bb7a7e57fb89e44ed7dba9ec558254bd9f17935a27",
+      "expected_target_payload_hash": "sha256:05c96afa3c6bc712effc12583f89e5b2319422e4a5273023c0349cba554bba5c",
+      "expected_signal_payload_hash": "sha256:7f075cb2d1754e0d0e8ce9ac3813c28d172cc2c942c4ddfd3498e8c5ea027444",
+      "expected_theoretical_event_count": 1,
+      "expected_unproven_expiry_count": 1
+    }
+  ]
+}

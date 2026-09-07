@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 $envFile = Join-Path $DataRoot "config\desk.env"
 $isFrozenRuntime = $false
+$grainsCalendarPolicy = "disabled"
 if (Test-Path -LiteralPath $envFile -PathType Leaf) {
     $envValues = Read-DeskEnvFile $envFile
     if ($envValues["DESK_RUNTIME_PROFILE"] -eq "deterministic_strategy_v5_frozen") {
@@ -17,6 +18,14 @@ if (Test-Path -LiteralPath $envFile -PathType Leaf) {
     }
     if ($isFrozenRuntime -or $envValues["DESK_AI_WORKER_MODE"] -eq "disabled") {
         $AllowDisabledAiWorkers = $true
+    }
+    if ($envValues.ContainsKey("DESK_GRAINS_CALENDAR_ENABLED")) {
+        $configuredCalendarPolicy = [string]$envValues["DESK_GRAINS_CALENDAR_ENABLED"]
+        if ($configuredCalendarPolicy -ceq "true") {
+            $grainsCalendarPolicy = "enabled"
+        } elseif ($configuredCalendarPolicy -cne "false") {
+            $grainsCalendarPolicy = "invalid"
+        }
     }
 }
 $statusRoot = Join-Path $DataRoot "status"
@@ -27,6 +36,8 @@ $services = @(
     "DeskFuturesReplayPreparation",
     "DeskFuturesBrokerManagement",
     "DeskFuturesTelegram",
+    "DeskFuturesAgentRuntimeSupervisor",
+    "DeskFuturesAgentRuntimeResearch",
     "DeskFuturesCodexLive01",
     "DeskFuturesCodexLive02",
     "DeskFuturesCodexReplay01",
@@ -42,6 +53,8 @@ $disabledServices = if ($isFrozenRuntime) {
         "DeskFuturesLiveRuntime",
         "DeskFuturesReplayPreparation",
         "DeskFuturesBrokerManagement",
+        "DeskFuturesAgentRuntimeSupervisor",
+        "DeskFuturesAgentRuntimeResearch",
         "DeskFuturesCodexLive01",
         "DeskFuturesCodexLive02",
         "DeskFuturesCodexReplay01"
@@ -84,6 +97,22 @@ if (Test-Path -LiteralPath $ninjaStatusPath) {
     try { $ninja = Get-Content -LiteralPath $ninjaStatusPath -Raw | ConvertFrom-Json } catch { $failures += "ninja_status_invalid" }
 }
 
+$grainsStatusPath = Join-Path $statusRoot "grains-calendar.json"
+$grainsStatus = $null
+if (Test-Path -LiteralPath $grainsStatusPath -PathType Leaf) {
+    try {
+        $grainsStatus = Get-Content -LiteralPath $grainsStatusPath -Raw | ConvertFrom-Json
+    } catch {
+        $grainsStatus = [pscustomobject]@{ status = "INVALID_JSON" }
+    }
+}
+$grainsCalendar = Get-DeskGrainsCalendarDiagnostic `
+    -Policy $grainsCalendarPolicy `
+    -StatusDocument $grainsStatus `
+    -NowUtc (Get-Date).ToUniversalTime() `
+    -MaxCadenceMinutes 60
+$degradations = @($grainsCalendar.reason_codes)
+
 $payload = [ordered]@{
     schema = "desk_local_health_v1"
     ok = $failures.Count -eq 0
@@ -91,6 +120,9 @@ $payload = [ordered]@{
     services = $serviceStates
     api = $api
     ninja = $ninja
+    degraded = $degradations.Count -gt 0
+    grains_calendar = $grainsCalendar
+    degradations = $degradations
     failures = $failures
 }
 $temporary = Join-Path $statusRoot ("health-" + [guid]::NewGuid().ToString("N") + ".tmp")
@@ -98,4 +130,8 @@ $destination = Join-Path $statusRoot "health.json"
 $payload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $temporary -Encoding UTF8
 Move-Item -LiteralPath $temporary -Destination $destination -Force
 if ($failures.Count -gt 0) { throw "Desk health failed: $($failures -join ', ')" }
-Write-Host "Desk local health passed."
+if ($degradations.Count -gt 0) {
+    Write-Host "Desk local health passed with non-blocking degradations: $($degradations -join ', ')"
+} else {
+    Write-Host "Desk local health passed."
+}

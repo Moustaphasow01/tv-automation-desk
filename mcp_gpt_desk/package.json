@@ -17,6 +17,7 @@
     "strategy:promote-full-history-shadow-live": "node scripts/promote_data_driven_full_history_survivors_to_shadow_live.mjs",
     "strategy:signal-pipeline:once": "node scripts/run_strategy_signal_decision_pipeline_once.mjs",
     "macro:refresh": "node scripts/refresh_macro_calendar.mjs",
+    "calendar:grains:refresh": "node scripts/refresh_usda_grains_calendar.mjs",
     "news:refresh": "node scripts/refresh_news.mjs",
     "telegram:worker": "node scripts/run_telegram_alert_worker.mjs",
     "telegram:once": "node scripts/run_telegram_alert_worker.mjs --once",
@@ -78,8 +79,9 @@
   },
   "overrides": {
     "@hono/node-server": "^2.0.11",
-    "fast-uri": "^3.1.4",
+    "fast-uri": "3.1.6",
     "hono": "^4.13.1",
-    "ip-address": "^10.4.0"
+    "ip-address": "^10.4.0",
+    "qs": "6.16.0"
   }
 }

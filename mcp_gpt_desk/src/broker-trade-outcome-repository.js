@@ -1,6 +1,6 @@
 import { calculateTradeOutcome } from "@tv-automation/desk-domain";
 
-export async function materializeTradeOutcome(client, tradeId, calculatedAt) {
+export async function materializeTradeOutcome(client, tradeId, calculatedAt, options = {}) {
   const trade = await one(client, `SELECT t.*, c.point_value,
       l.payload #> '{approved_trade_plan,economics,units}' AS intent_economics_units,
       l.payload #> '{approved_trade_plan,units}' AS intent_units,
@@ -38,7 +38,9 @@ export async function materializeTradeOutcome(client, tradeId, calculatedAt) {
     calculatedAt,
     finalized: trade.status === "closed",
   });
-  await persistOutcome(client, tradeId, outcome);
+  await persistOutcome(client, tradeId, outcome, {
+    finalizedAt: options.finalizedAt || calculatedAt,
+  });
   return outcome;
 }
 
@@ -61,12 +63,12 @@ export function resolveOutcomePointValue(trade = {}) {
   return null;
 }
 
-async function persistOutcome(client, tradeId, outcome) {
+async function persistOutcome(client, tradeId, outcome, { finalizedAt }) {
   const duplicate = await one(client, "SELECT trade_outcome_id,status FROM trade_outcomes WHERE trade_id = $1 AND evidence_hash = $2", [tradeId, outcome.evidence_hash]);
   if (duplicate?.status === "void") {
     throw Object.assign(new Error("Superseded outcome evidence cannot overwrite the current projection."), { code: "OUTCOME_EVIDENCE_SUPERSEDED" });
   }
-  if (!duplicate) await insertOutcomeRevision(client, tradeId, outcome);
+  if (!duplicate) await insertOutcomeRevision(client, tradeId, outcome, { finalizedAt });
   await client.query(
     `UPDATE trades SET initial_risk_amount = $2, gross_realized_pnl = $3, total_fees = $4,
        net_realized_pnl = $5, realized_pnl = $5, result_r = $6, mfe_r = $7, mae_r = $8,
@@ -79,7 +81,7 @@ async function persistOutcome(client, tradeId, outcome) {
   );
 }
 
-async function insertOutcomeRevision(client, tradeId, outcome) {
+async function insertOutcomeRevision(client, tradeId, outcome, { finalizedAt }) {
   const latest = await one(client, "SELECT COALESCE(max(revision), 0)::integer AS revision FROM trade_outcomes WHERE trade_id = $1", [tradeId]);
   const revision = Number(latest?.revision || 0) + 1;
   const outcomeId = `trade_outcome_${tradeId}_${revision}`;
@@ -96,13 +98,13 @@ async function insertOutcomeRevision(client, tradeId, outcome) {
        mfe_r, mae_r, evidence_hash, evidence, calculated_at_utc, finalized_at_utc
      ) VALUES (
        $1,$2,$3,$4::trade_outcome_status,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,
-       CASE WHEN $4 = 'final' THEN $16::timestamptz ELSE NULL END
+       CASE WHEN $4 = 'final' THEN $17::timestamptz ELSE NULL END
      )
      ON CONFLICT (trade_id, evidence_hash) DO NOTHING`,
     [outcomeId, tradeId, revision, outcome.status, outcome.schema_version, outcome.engine_version,
       outcome.initial_risk_amount, outcome.gross_realized_pnl, outcome.total_fees,
       outcome.net_realized_pnl, outcome.result_r, outcome.mfe_r, outcome.mae_r,
-      outcome.evidence_hash, JSON.stringify(outcome.evidence), outcome.calculated_at_utc],
+      outcome.evidence_hash, JSON.stringify(outcome.evidence), outcome.calculated_at_utc, finalizedAt],
   );
 }
 

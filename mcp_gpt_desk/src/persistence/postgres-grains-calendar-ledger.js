@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { applyGrainsCalendarFreshness } from "../grains-calendar-freshness.js";
 import {
   qualifyGrainsCalendarEvidence,
   validateGrainsCalendarHistoricalEvidence,
@@ -52,7 +53,9 @@ export async function loadGrainsCalendarVersionAt(pool, query = {}) {
   ]);
   return {
     agriEvents: events.map((event) => mapEvent(event, cutoff)),
-    agriCalendarCoverage: [mapQualifiedCoverage(version, sources)],
+    agriCalendarCoverage: [applyGrainsCalendarFreshness(mapQualifiedCoverage(version, sources), {
+      metadata: version.metadata, cutoff,
+    })],
   };
 }
 
@@ -253,7 +256,7 @@ async function selectedVersion(pool, cutoff) {
   const result = await pool.query(
     `WITH eligible AS (
        SELECT market_agri_calendar_version_id,source_id,source_status,coverage_start_utc,coverage_end_utc,
-              known_at_utc,dataset_version,source_version_hash,provider,reason_codes,
+              known_at_utc,dataset_version,source_version_hash,provider,reason_codes,metadata,
               max(known_at_utc) OVER () AS latest_known_at_utc
          FROM market_agri_calendar_versions
         WHERE source_id=$1 AND known_at_utc <= $2::timestamptz
@@ -334,6 +337,8 @@ function mapEvent(row, cutoff) {
     event_timestamp_utc: isoOrNull(row.event_timestamp_utc),
     source_published_at_utc: isoOrNull(row.source_published_at_utc),
     calendar_version_known_at_utc: isoOrNull(row.calendar_version_known_at_utc),
+    provider: row.source_provider,
+    source_url: row.source_url || null,
     ...(commodityCodes ? { commodity_codes: commodityCodes } : {}),
   };
   const result = publicResultAtCutoff({

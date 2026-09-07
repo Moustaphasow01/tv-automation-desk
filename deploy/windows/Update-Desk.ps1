@@ -209,23 +209,21 @@ if ($Rehearsal) {
         Write-Host $(if ($KeepFrozen) { "Desk update $targetVersion verified under strict freeze." } else { "Desk update $targetVersion verified and reopened." })
     } catch {
         $updateError = $_
-        if ($deploymentId) {
-            & (Join-Path $probeRoot "deploy\windows\Invoke-DeskDrain.ps1") `
-                -Action Fail -DatabaseUrl $envValues["DATABASE_URL"] -DeploymentId $deploymentId `
-                -PostgresBin $PostgresBin -FailureReason $updateError.Exception.Message
-        }
-        if (-not $installAttempted) {
-            if ($KeepFrozen) {
-                Disable-DeskFrozenProducerServices
-                Assert-DeskFrozenProducerServices
-            } else {
-                Start-DeskServices
-            }
-            throw $updateError
-        }
-        try {
-            & (Join-Path $PSScriptRoot "Rollback-Desk.ps1") -InstallRoot $InstallRoot -DataRoot $DataRoot
-            if ($KeepFrozen) {
+        $recovery = Invoke-DeskUpdateRecovery `
+            -DeploymentId $deploymentId `
+            -InstallAttempted $installAttempted `
+            -KeepFrozen $KeepFrozen `
+            -MarkDeploymentFailed {
+                & (Join-Path $probeRoot "deploy\windows\Invoke-DeskDrain.ps1") `
+                    -Action Fail -DatabaseUrl $envValues["DATABASE_URL"] -DeploymentId $deploymentId `
+                    -PostgresBin $PostgresBin -FailureReason $updateError.Exception.Message
+            } `
+            -RollbackInstallation {
+                & (Join-Path $PSScriptRoot "Rollback-Desk.ps1") `
+                    -InstallRoot $InstallRoot -DataRoot $DataRoot -SkipStart
+            } `
+            -RestoreServices { Start-DeskServices } `
+            -PreserveFrozenServices {
                 Disable-DeskFrozenProducerServices
                 Assert-DeskFrozenProducerServices
                 $frozenEnv = Get-Content -LiteralPath $envFile -Raw
@@ -238,22 +236,31 @@ if ($Rehearsal) {
                     $frozenEnv = if ($frozenEnv -match $pattern) { [regex]::Replace($frozenEnv, $pattern, "$($setting.Key)=$($setting.Value)") } else { $frozenEnv + "`n$($setting.Key)=$($setting.Value)`n" }
                 }
                 [System.IO.File]::WriteAllText($envFile, $frozenEnv, [System.Text.UTF8Encoding]::new($false))
-            }
-            & (Join-Path $InstallRoot "current\deploy\windows\Test-DeskLocalHealth.ps1") -DataRoot $DataRoot -AllowDisabledAiWorkers:$KeepFrozen
-            if ($deploymentId) {
+            } `
+            -VerifyLocalHealth {
+                & (Join-Path $InstallRoot "current\deploy\windows\Test-DeskLocalHealth.ps1") `
+                    -DataRoot $DataRoot -AllowDisabledAiWorkers:$KeepFrozen
+            } `
+            -RestoreDrainControls {
                 & (Join-Path $probeRoot "deploy\windows\Invoke-DeskDrain.ps1") `
-                    -Action $(if ($KeepFrozen) { "CompleteFrozen" } else { "Resume" }) -DatabaseUrl $envValues["DATABASE_URL"] -DeploymentId $deploymentId `
+                    -Action $(if ($KeepFrozen) { "CompleteFrozen" } else { "Resume" }) `
+                    -DatabaseUrl $envValues["DATABASE_URL"] -DeploymentId $deploymentId `
                     -PostgresBin $PostgresBin -CompletionStatus rolled_back
+                if ($KeepFrozen) {
+                    & $NodeExecutable "--env-file=$envFile" `
+                        (Join-Path $InstallRoot "current\app\mcp_gpt_desk\scripts\verify_v5_frozen_state.mjs") `
+                        "--freeze-only" `
+                        "--require-broker-lock"
+                    if ($LASTEXITCODE -ne 0) { throw "Strict freeze rollback postcondition failed." }
+                }
             }
-            if ($KeepFrozen) {
-                & $NodeExecutable "--env-file=$envFile" `
-                    (Join-Path $InstallRoot "current\app\mcp_gpt_desk\scripts\verify_v5_frozen_state.mjs") `
-                    "--freeze-only" `
-                    "--require-broker-lock"
-                if ($LASTEXITCODE -ne 0) { throw "Strict freeze rollback postcondition failed." }
-            }
-        } catch {
-            Write-Error "Automatic rollback failed; claims and broker execution remain drained. $($_.Exception.Message)"
+        foreach ($recoveryError in @($recovery.errors)) {
+            Write-Warning "Desk update recovery step failed; safety drain remains authoritative where controls were not restored. $recoveryError"
+        }
+        if ($recovery.recovery_attempted -and -not $recovery.health_verified) {
+            Write-Warning "Automatic recovery did not establish local health; claims and broker execution remain drained."
+        } elseif ($deploymentId -and -not $recovery.controls_restored) {
+            Write-Warning "Automatic recovery could not restore the prior drain controls; the safety drain remains active."
         }
         throw $updateError
     } finally {
