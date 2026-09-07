@@ -211,3 +211,47 @@ Le défaut P0 de disparition intermittente du brief est corrigé et déployé sa
 Recette Chromium authentifiée sur `/#/live?instrument=ZW&focus=1` : brief réel visible, aucun faux « Analyse de contexte non publiée » ni « momentanément indisponible », largeur document 1 280 sans overflow horizontal. Après une rafale volontairement hors profil, le service a récupéré automatiquement en 3,8 s. Sur huit rafraîchissements réalistes espacés : **8/8 HTTP 200**, **8/8 market-context AVAILABLE**, **8/8 briefs disponibles**, zéro brief manquant et zéro faux « non publié ». Une réponse globale PARTIAL concernait uniquement les sources distinctes session/macro/news ; le brief contextuel est resté stable.
 
 Capture : `output/playwright/td2-438/live-focus-after.png`. TD2-416 (badge visuel de transport déconnecté) et les timeouts des sources session/macro/news restent des lots séparés ; ils ne doivent pas être confondus avec la perte de contexte corrigée ici.
+
+## Clôture TD2-435 / TD2-416 — sources BFF et déconnexion réseau
+
+Les deux lots sont corrigés, testés et déployés. Cette clôture ne modifie ni les stratégies, ni les décisions Risk, ni les permissions, ni les machines d'état d'exécution.
+
+### Causes et corrections
+
+- **Stabilité des sources BFF** : les projections session, macro et news partageaient bien un lecteur coalescé, mais `live-session` reconstruisait un scope avec un `as_of_utc` explicite généré à la volée. Les trois lectures « état courant » n'avaient donc pas la même identité de cache et pouvaient relancer simultanément la lecture lourde. La vue transmet désormais le scope courant commun sans fabriquer d'horodatage. Le contexte de session est lu une fois et partagé ; aucune hausse artificielle de timeout ou de taille de pool ne masque le défaut.
+- **Déconnexion réseau explicite** : le transport expose un état `OFFLINE`, ferme le SSE dès la perte réseau et reprend avec le même curseur au retour. Live Focus conserve la dernière projection datée, affiche un bandeau français « Réseau indisponible », bloque les actions sensibles et ne retire le bandeau qu'après une relecture canonique réussie. Aucun résultat métier, statut broker ou `allowedAction` n'est déduit côté Front.
+- **Preuve d'audit** : le scénario navigateur n'ajoute plus de paramètre arbitraire qui casserait volontairement la coalescence. Il vérifie dix lectures réalistes, la coupure réelle, la projection conservée, les actions bloquées et la récupération.
+
+La première release `.1` a précisément révélé l'identité de cache différente à froid. Elle n'a pas été considérée comme suffisante : le correctif de scope a été ajouté, retesté et livré dans `.2` avant clôture.
+
+### Validation finale
+
+| Contrôle | Résultat |
+| --- | --- |
+| Backend complet local | **1 608 tests**, 1 559 réussis, 49 ignorés, 0 échec |
+| Backend release Windows | **1 608 tests**, 1 558 réussis, 50 ignorés, 0 échec |
+| BFF/projections ciblés | **65/65** |
+| Frontend | **327/327**, typecheck, lint et build verts |
+| Navigateur — sources BFF | **10/10 HTTP 200** ; session, macro, news et autres sources suivies sans état `UNAVAILABLE`/`ERROR` |
+| Navigateur — réseau | bandeau OFFLINE visible, dernière projection conservée, **0 action sensible active**, récupération après relecture canonique |
+| Responsive / interactions | **10 viewports**, aucun débordement ni échec ; défilement souris et clavier vérifié |
+| Accessibilité | Axe : **0 serious/critical** |
+| Rulebook | 1 000 règles valides ; sélecteur 25/25, scanner 9/9 ; audit heuristique 0 erreur et 887 avertissements historiques |
+| Guards | architecture, API, données réelles, isolation legacy, sécurité, runtime et Windows verts |
+
+Sur les dix sondes, l'enrichissement `agri-calendar` de `market-context` a été borné par son budget lors des trois premières lectures puis est revenu `AVAILABLE`. Le snapshot et le brief canoniques sont restés publiés : il s'agit d'une dégradation explicite d'enrichissement, pas d'une disparition BFF ni d'un faux état vide.
+
+### Release VPS et sécurité
+
+- Release active : `grains-bff-network-resilience-20260907.2`.
+- Commit runtime : `e273f5e47d0955e47afb5c59d421cdbccef0401d`.
+- Archive SHA256 : `4366c4984844cf5ab466c2239aa3b9579fdaeae2bd4396dbe8f8c42c1c3f5d5c`, 5 421 fichiers.
+- Sauvegarde PostgreSQL : `desk-native-20260907T211019Z.dump`, SHA256 `419d570bd20d9e3c9315a0f32eb015b77e63a9161b224fd3c31b93e996948a1c`.
+- Sauvegarde objets : `desk-objects-20260907T211728Z.tar.gz`, SHA256 `594a22354783cf11a759246907df179832dcefd5f8e3cb99eee1e0ef7e0974ef`.
+- Drain : `deploy-20260907T211943Z-a7f92616`, zéro travail actif ; schéma courant `068_market_context_read_path`.
+- Onze services sur onze `Running` et `Automatic`; `/healthz` et `/readyz` verts.
+- Risque 500 USD/position, 2 000 USD/jour, 4 000 USD/semaine conservé. AUTO et LIVE physiques désactivés, bridge broker désactivé, kill switch actif, quantité physique maximale 0.
+
+Un premier déploiement a été arrêté **avant bascule** faute d'espace pour `pg_dump`. Seuls le dump partiel, les zones temporaires et d'anciennes paires de sauvegardes déjà validées ont été nettoyés ; la dernière sauvegarde valide a été préservée. PostgreSQL et les services arrêtés par l'incident disque ont été relancés et revérifiés avant un nouveau cycle complet avec sauvegardes fraîches. Aucun rollback produit ni ordre n'a été déclenché.
+
+Preuves navigateur : `output/playwright/td2-416-435/network-realistic-final/network-recovery-audit.json` et `output/playwright/td2-416-435/layout-final-v2/live-focus-layout-audit.json`. Le 7 septembre est férié sur les grains ; la recette certifie la résilience BFF et réseau, pas la production d'un événement de marché live pendant une séance fermée.

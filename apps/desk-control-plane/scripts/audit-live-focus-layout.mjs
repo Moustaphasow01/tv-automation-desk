@@ -146,6 +146,9 @@ async function checkJournalInteractions(page) {
   await page.locator(".live-focus__queue-track").evaluate((element) => { element.scrollTop = 0; });
   await page.locator(".live-focus__brief").focus();
   await page.keyboard.press("End");
+  // Chromium may animate the native overflow scroll. Observe the settled
+  // position instead of classifying the first animation frame as a failure.
+  await page.waitForTimeout(250);
   const briefReachable = await page.locator(".live-focus__brief").evaluate((element) => element.scrollHeight <= element.clientHeight + 2 || element.scrollTop > 0);
   if (!briefReachable) failures.push("Le brief ne défile pas au clavier.");
   await page.locator(".live-focus__brief").evaluate((element) => { element.scrollTop = 0; });

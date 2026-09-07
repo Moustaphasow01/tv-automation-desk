@@ -22,6 +22,18 @@
 
 Verification after this slice: **160/160 Front**, **20/20 BFF/PostgreSQL**, **3/3 real-stack E2E**, production build PASS, architecture/data/legacy guards PASS, Axe **76 audits / 0 serious-critical**, Visual QA **4/4**, performance **37/37**, and Rulebook scanner **0 error / 61 historical warnings**. The preparatory Front slice is complete. Jira `TD2-416` remains in progress and is blocked by `TD2-417` until the backend publishes the canonical OrderIntent/Human Gate/provider/reconciliation contracts and the real Human Gate lifecycle can replace the current fail-closed unavailable state.
 
+### Closure addendum — 2026-09-07
+
+The blocked statement above is retained as the historical status of the original August preparatory slice. The later backend contracts and execution work resolved that dependency; **TD2-416 is now complete for explicit network-disconnection presentation**.
+
+- The transport publishes `OFFLINE`, closes SSE immediately, reconnects with the persisted cursor and waits for canonical query recovery before returning to the connected presentation.
+- Live Focus retains and timestamps the last known projection, renders an explicit French offline banner, and keeps sensitive operator actions unavailable while offline or resynchronizing.
+- The UI still consumes backend `allowedActions`; it does not infer permission from a local status and does not alter post-Risk fields.
+- Real-browser evidence on release `grains-bff-network-resilience-20260907.2`: ten successful BFF probes, session/macro/news available, offline banner visible, zero sensitive action enabled, projection retained, recovery completed, ten responsive viewports and zero serious/critical Axe issue.
+- Full validation at closure: frontend **327/327**, targeted BFF/projection **65/65**, backend local **1 608** tests with zero failure, release build **1 608** tests with zero failure.
+
+This addendum certifies network-loss and BFF-source stability only. It does not reinterpret ACK as FILL, create provider authority, or certify a live market event on the 7 September grains holiday.
+
 ## Executive status
 
 | Area | Status | Evidence |

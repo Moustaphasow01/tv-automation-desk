@@ -36,7 +36,6 @@ try {
   const endpoint = new URL("/front-api/v1/views/live-focus", targetUrl);
   endpoint.searchParams.set("instrument", "ZW");
   for (let index = 0; index < 10; index += 1) {
-    endpoint.searchParams.set("auditProbe", String(index));
     const startedAt = Date.now();
     const response = await context.request.get(endpoint.toString(), { timeout: 90_000 });
     const body = response.ok() ? await response.json() : null;
