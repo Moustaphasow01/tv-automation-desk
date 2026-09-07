@@ -33,9 +33,7 @@ function transaction(client, mode) {
   };
 }
 
-async function loadCandidate(client, specification, mode) {
-  const lock = mode === "APPLY" ? " FOR UPDATE OF lineage,qualification" : "";
-  return one(client, `SELECT lineage.portfolio_order_intent_id,lineage.status AS current_lineage_status,
+const LOAD_CANDIDATE_SQL = `SELECT lineage.portfolio_order_intent_id,lineage.status AS current_lineage_status,
       lineage.payload_hash AS current_lineage_payload_hash,
       qualification.historical_intent_qualification_id,qualification.revision AS qualification_revision,
       qualification.expected_lineage_payload_hash,qualification.manifest_hash AS qualification_manifest_hash,
@@ -80,8 +78,29 @@ async function loadCandidate(client, specification, mode) {
           WHERE trade.portfolio_order_intent_id=lineage.portfolio_order_intent_id
             AND NULLIF(fill.broker_fill_ref,'') IS NOT NULL)) AS third_party_reference_count
     ) execution ON true
-    WHERE lineage.portfolio_order_intent_id=$1${lock}`,
+    WHERE lineage.portfolio_order_intent_id=$1`;
+
+async function loadCandidate(client, specification, mode) {
+  if (mode === "APPLY") await lockCandidateExecutionScope(client, specification);
+  return one(client, LOAD_CANDIDATE_SQL,
+    [specification.portfolio_order_intent_id, specification.qualification_idempotency_key]);
+}
+
+async function lockCandidateExecutionScope(client, specification) {
+  const lineage = await one(client, `SELECT portfolio_order_intent_id,trade_order_intent_id
+    FROM portfolio_order_intent_lineage WHERE portfolio_order_intent_id=$1 FOR UPDATE`,
+  [specification.portfolio_order_intent_id]);
+  if (!lineage) return;
+  await client.query(`SELECT historical_intent_qualification_id
+    FROM portfolio_historical_intent_qualifications
+    WHERE portfolio_order_intent_id=$1 AND idempotency_key=$2 FOR UPDATE`,
   [specification.portfolio_order_intent_id, specification.qualification_idempotency_key]);
+  await client.query(`SELECT portfolio_order_intent_id FROM portfolio_order_intent_execution_states
+    WHERE portfolio_order_intent_id=$1 FOR UPDATE`, [specification.portfolio_order_intent_id]);
+  if (lineage.trade_order_intent_id) {
+    await client.query("SELECT order_intent_id FROM trade_order_intents WHERE order_intent_id=$1 FOR UPDATE",
+      [lineage.trade_order_intent_id]);
+  }
 }
 
 async function appendAdjudication(client, command) {

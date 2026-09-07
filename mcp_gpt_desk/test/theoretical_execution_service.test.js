@@ -105,6 +105,7 @@ test("service can process theoretical tracking at an injected replay cutoff", as
   assert.equal(repository.candleLookup.candidate.order_intent_id, "order_intent_1");
   assert.equal(repository.candleLookup.options.now, replayNow);
   assert.equal(repository.entryFill.now, replayNow);
+  assert.equal(repository.entryScope.now, replayNow);
 });
 
 test("service can scope theoretical replay tracking to explicit Portfolio OrderIntent IDs", async () => {

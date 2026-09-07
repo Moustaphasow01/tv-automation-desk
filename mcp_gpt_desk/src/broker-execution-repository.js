@@ -349,8 +349,8 @@ export class PostgresBrokerExecutionRepository {
     return { intent, decision, riskCheck, approvals, outbox, orders };
   }
 
-  async listTheoreticalEntryCandidates({ limit = 100, portfolioOrderIntentIds = null } = {}) {
-    return listTheoreticalEntryCandidatesRepository(this, { limit, portfolioOrderIntentIds });
+  async listTheoreticalEntryCandidates({ limit = 100, portfolioOrderIntentIds = null, now } = {}) {
+    return listTheoreticalEntryCandidatesRepository(this, { limit, portfolioOrderIntentIds, now });
   }
   async expireStalePortfolioHumanGates({ limit = 200, now, portfolioOrderIntentIds = null } = {}) {
     return expireStalePortfolioHumanGatesRepository(this, { limit, now, portfolioOrderIntentIds });

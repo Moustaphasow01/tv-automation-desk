@@ -80,6 +80,15 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
         AND adjudication.created_at_utc <= $2::timestamptz
     )
     AND NOT EXISTS (
+      SELECT 1 FROM portfolio_administrative_reservation_cancellations cancellation
+      WHERE cancellation.portfolio_order_intent_id = lineage.portfolio_order_intent_id
+        AND cancellation.status = 'CANCELLED_ADMINISTRATIVE_NO_OPEN_EXPOSURE'
+        AND cancellation.reservation_disposition = 'ADMINISTRATIVELY_RELEASED'
+        AND cancellation.historical_outcome_disposition = 'UNDETERMINED_PRESERVED'
+        AND cancellation.effective_at_utc <= $2::timestamptz
+        AND cancellation.created_at_utc <= $2::timestamptz
+    )
+    AND NOT EXISTS (
       SELECT 1 FROM trade_theoretical_execution_events event
       WHERE event.portfolio_order_intent_id = lineage.portfolio_order_intent_id
         AND event.event_type = 'entry_expired'

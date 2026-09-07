@@ -117,7 +117,9 @@ function actualManualExecutionFields(input = {}) {
 
 async function processTheoreticalEntries(service, { entryLimit, portfolioOrderIntentIds }) {
   const candidates = typeof service.repository.listTheoreticalEntryCandidates === "function"
-    ? await service.repository.listTheoreticalEntryCandidates({ limit: entryLimit, portfolioOrderIntentIds })
+    ? await service.repository.listTheoreticalEntryCandidates({
+      limit: entryLimit, portfolioOrderIntentIds, now: service.now(),
+    })
     : [];
   const entries = [];
   for (const candidate of candidates) {

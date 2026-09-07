@@ -253,6 +253,7 @@ export { DEFAULT_PORTFOLIO_CORRELATION_GROUPS_V1,
   normalizePortfolioRiskBudgetV1,
 } from "./src/portfolio-risk-budget-v1.js";
 export { INVALID_ORIGIN_ADJUDICATION_SCHEMA_VERSION_V1, INVALID_ORIGIN_ATTESTATION_SCHEMA_VERSION_V1, adjudicateInvalidOriginReservationV1 } from "./src/portfolio-invalid-origin-adjudication-v1.js";
+export { ADMINISTRATIVE_RESERVATION_CANCELLATION_SCHEMA_VERSION_V1, cancelAdministrativeReservationV1 } from "./src/portfolio-administrative-reservation-cancellation-v1.js";
 export {
   PORTFOLIO_TARGET_POSITION_PLAN_SCHEMA_VERSION_V1,
   TARGET_POSITION_SCHEMA_VERSION_V1,

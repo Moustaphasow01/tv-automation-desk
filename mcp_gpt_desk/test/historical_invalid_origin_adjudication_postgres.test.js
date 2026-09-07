@@ -5,6 +5,8 @@ import { test } from "node:test";
 import { adjudicateHistoricalInvalidOriginIntents } from "../src/application/adjudicate-historical-invalid-origin-intents.js";
 import { createPostgresInvalidOriginIntentAdjudication } from "../src/persistence/postgres-invalid-origin-intent-adjudication.js";
 import { loadTheoreticalExposureAsOf } from "../src/portfolio-theoretical-exposure-repository.js";
+import { listTheoreticalEntryCandidates, recordTheoreticalEntryExpired }
+  from "../src/broker-theoretical-execution-repository.js";
 import { createTheoreticalTestDatabase, seedAuthorizedIntent } from "./support/theoretical-postgres-fixtures.js";
 
 const sourceManifest = JSON.parse(await readFile(new URL(
@@ -21,10 +23,15 @@ test("invalid-origin adjudication is prospective, exact, idempotent, and executi
   t.after(() => database.close());
   await seedRetainedQualifications(database.pool);
   const repository = createPostgresInvalidOriginIntentAdjudication(database.pool);
+  const candidateRepository = { pool: database.pool, ready: async () => undefined, available: true };
+  const intentIds = manifest.adjudications.map((entry) => entry.portfolio_order_intent_id);
 
   const beforeCutoff = await exposure(database.pool, "2026-09-07T09:59:59Z");
   assert.equal(beforeCutoff.pending_order_intents.length, 8);
   assert.equal(beforeCutoff.loss_usage.monetary_availability, "UNAVAILABLE");
+  assert.equal((await listTheoreticalEntryCandidates(candidateRepository, {
+    limit: 100, portfolioOrderIntentIds: intentIds, now: "2026-09-07T09:59:59Z",
+  })).length, 8);
 
   await assertContradictoryEvidenceRefused(database.pool, repository);
   const dryRun = await adjudicateHistoricalInvalidOriginIntents(command("DRY_RUN"), { repository });
@@ -55,6 +62,16 @@ test("invalid-origin adjudication is prospective, exact, idempotent, and executi
   assert.equal(afterCutoff.loss_usage.reserved_monetary_risk, 0);
   assert.equal(afterCutoff.loss_usage.daily_loss_monetary, 0);
   assert.equal(afterCutoff.loss_usage.weekly_loss_monetary, 0);
+  assert.equal((await listTheoreticalEntryCandidates(candidateRepository, {
+    limit: 100, portfolioOrderIntentIds: intentIds, now: instantAfter(knowledgeWindow.last),
+  })).length, 0);
+  const staleIntentId = intentIds[0];
+  await assert.rejects(recordTheoreticalEntryExpired(candidateRepository, {
+    result: { portfolio_order_intent_id: staleIntentId, order_intent_id: staleIntentId,
+      action: "expire_entry", status: "EXPIRED", reason: "ORDER_INTENT_EXPIRED",
+      event_at_utc: "2026-08-27T00:00:00Z" },
+    now: instantAfter(knowledgeWindow.last),
+  }), { code: "THEORETICAL_INTENT_ADMINISTRATIVELY_CANCELLED" });
   await assertInvalidAttestationRowsRefused(database.pool);
 
   await seedUnrelatedUnknownReservation(database.pool);
@@ -84,7 +101,7 @@ async function assertContradictoryEvidenceRefused(pool, repository) {
 
 async function seedRetainedQualifications(pool) {
   for (const [index, source] of sourceManifest.qualifications.entries()) {
-    await seedAuthorizedIntent(pool, source.portfolio_order_intent_id, { status: "EXPIRED" });
+    await seedAuthorizedIntent(pool, source.portfolio_order_intent_id, { status: "EXPIRED", gate: "EXPIRED" });
     await pool.query(`UPDATE portfolio_arbitration_runs SET account_id='shadow-grains',portfolio_scope=$2
       WHERE portfolio_arbitration_run_id=$1`, [source.portfolio_order_intent_id, index % 2 ? "scope-b" : "scope-a"]);
     await pool.query("UPDATE portfolio_target_positions SET account_id='shadow-grains' WHERE target_position_id=$1",
@@ -92,6 +109,8 @@ async function seedRetainedQualifications(pool) {
     await pool.query(`UPDATE portfolio_order_intent_lineage SET payload_hash=$2,risk_snapshot='{}'::jsonb,
       payload=jsonb_set(payload,'{approved_trade_plan,economics,availability}','\"UNAVAILABLE\"'::jsonb)
       WHERE portfolio_order_intent_id=$1`, [source.portfolio_order_intent_id, source.expected_lineage_payload_hash]);
+    await pool.query(`UPDATE human_execution_gates SET payload='{"expired_by":"theoretical_execution_sweeper"}'
+      WHERE portfolio_order_intent_id=$1`, [source.portfolio_order_intent_id]);
     await insertQualification(pool, source);
   }
 }

@@ -126,21 +126,48 @@ async function lockedIntent(client, orderIntentId) {
 }
 
 async function lockedPortfolioIntent(client, portfolioOrderIntentIdValue) {
+  const locked = await one(client, `SELECT portfolio_order_intent_id
+    FROM portfolio_order_intent_lineage WHERE portfolio_order_intent_id = $1 FOR UPDATE`,
+  [portfolioOrderIntentIdValue]);
+  if (!locked) {
+    throw repositoryError("PORTFOLIO_ORDER_INTENT_NOT_FOUND",
+      `Portfolio OrderIntent not found: ${portfolioOrderIntentIdValue}.`);
+  }
   const row = await one(client, `SELECT l.*, l.payload AS order_intent_payload,
       t.account_id AS target_account_id, t.instrument AS target_instrument,
       t.approved_trade_plan, t.risk_allocation, t.expected_exposure,
       t.lineage AS target_lineage, t.payload AS target_position_payload,
       g.human_execution_gate_id, g.status AS human_gate_status,
       g.expires_at_utc AS human_gate_expires_at_utc,
+      EXISTS (
+        SELECT 1 FROM portfolio_invalid_origin_adjudications adjudication
+        WHERE adjudication.portfolio_order_intent_id=l.portfolio_order_intent_id
+          AND adjudication.status='CANCELLED_INVALID_ORIGIN'
+          AND adjudication.reservation_disposition='ADMINISTRATIVELY_RELEASED'
+          AND adjudication.effective_at_utc <= clock_timestamp()
+          AND adjudication.created_at_utc <= clock_timestamp()
+      ) AS invalid_origin_administratively_cancelled,
+      EXISTS (
+        SELECT 1 FROM portfolio_administrative_reservation_cancellations cancellation
+        WHERE cancellation.portfolio_order_intent_id=l.portfolio_order_intent_id
+          AND cancellation.status='CANCELLED_ADMINISTRATIVE_NO_OPEN_EXPOSURE'
+          AND cancellation.reservation_disposition='ADMINISTRATIVELY_RELEASED'
+          AND cancellation.historical_outcome_disposition='UNDETERMINED_PRESERVED'
+          AND cancellation.effective_at_utc <= clock_timestamp()
+          AND cancellation.created_at_utc <= clock_timestamp()
+      ) AS administratively_cancelled,
       ${PORTFOLIO_THEORETICAL_CANDIDATE_COLUMNS_SQL}
     FROM portfolio_order_intent_lineage l
     JOIN portfolio_target_positions t ON t.target_position_id = l.target_position_id
     LEFT JOIN human_execution_gates g ON g.portfolio_order_intent_id = l.portfolio_order_intent_id
     ${PORTFOLIO_THEORETICAL_BROKER_ACCOUNT_JOIN_SQL}
     ${PORTFOLIO_THEORETICAL_CONTRACT_JOIN_SQL}
-    WHERE l.portfolio_order_intent_id = $1
-    FOR UPDATE OF l`, [portfolioOrderIntentIdValue]);
+    WHERE l.portfolio_order_intent_id = $1`, [portfolioOrderIntentIdValue]);
   if (!row) throw repositoryError("PORTFOLIO_ORDER_INTENT_NOT_FOUND", `Portfolio OrderIntent not found: ${portfolioOrderIntentIdValue}.`);
+  if (row.invalid_origin_administratively_cancelled || row.administratively_cancelled) {
+    throw repositoryError("THEORETICAL_INTENT_ADMINISTRATIVELY_CANCELLED",
+      `Portfolio OrderIntent was administratively cancelled: ${portfolioOrderIntentIdValue}.`);
+  }
   return portfolioLineageToTheoreticalEntryCandidate(row);
 }
 

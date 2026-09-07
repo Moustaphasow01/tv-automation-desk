@@ -36,9 +36,17 @@ import {
 export { latestClosedCandleForIntent, latestClosedCandleForTrade } from "./broker-theoretical-candle-repository.js";
 export { portfolioLineageToTheoreticalEntryCandidate } from "./broker-theoretical-execution-persistence.js";
 
-export async function listTheoreticalEntryCandidates(repository, { limit = 100, portfolioOrderIntentIds = null } = {}) {
+export async function listTheoreticalEntryCandidates(repository, {
+  limit = 100, portfolioOrderIntentIds = null, now = new Date().toISOString(),
+} = {}) {
   await repository.ready();
   const bounded = boundLimit(limit);
+  const knownAt = validIso(now);
+  if (!knownAt) {
+    const error = new Error("A valid theoretical execution as-of time is required.");
+    error.code = "THEORETICAL_EXECUTION_AS_OF_INVALID";
+    throw error;
+  }
   const hasPortfolioScope = Array.isArray(portfolioOrderIntentIds);
   const scopedPortfolioIds = normalizePortfolioOrderIntentIds(portfolioOrderIntentIds);
   if (hasPortfolioScope && scopedPortfolioIds.length === 0) return [];
@@ -113,6 +121,23 @@ export async function listTheoreticalEntryCandidates(repository, { limit = 100, 
           AND g.payload->>'expired_by' = 'theoretical_execution_sweeper'
         ))
         AND ($2::text[] IS NULL OR l.portfolio_order_intent_id = ANY($2::text[]))
+        AND NOT EXISTS (
+          SELECT 1 FROM portfolio_invalid_origin_adjudications adjudication
+          WHERE adjudication.portfolio_order_intent_id=l.portfolio_order_intent_id
+            AND adjudication.status='CANCELLED_INVALID_ORIGIN'
+            AND adjudication.reservation_disposition='ADMINISTRATIVELY_RELEASED'
+            AND adjudication.effective_at_utc <= $3::timestamptz
+            AND adjudication.created_at_utc <= $3::timestamptz
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM portfolio_administrative_reservation_cancellations cancellation
+          WHERE cancellation.portfolio_order_intent_id=l.portfolio_order_intent_id
+            AND cancellation.status='CANCELLED_ADMINISTRATIVE_NO_OPEN_EXPOSURE'
+            AND cancellation.reservation_disposition='ADMINISTRATIVELY_RELEASED'
+            AND cancellation.historical_outcome_disposition='UNDETERMINED_PRESERVED'
+            AND cancellation.effective_at_utc <= $3::timestamptz
+            AND cancellation.created_at_utc <= $3::timestamptz
+        )
         AND COALESCE((l.payload #>> '{protection,ready}')::boolean, true) = true
         AND l.quantity > 0
         AND NOT EXISTS (
@@ -126,7 +151,7 @@ export async function listTheoreticalEntryCandidates(repository, { limit = 100, 
             AND tr.status NOT IN ('cancelled','rejected','expired','error')
         )
       ORDER BY l.created_at_utc ASC
-      LIMIT $1`, [bounded, hasPortfolioScope ? scopedPortfolioIds : null]);
+      LIMIT $1`, [bounded, hasPortfolioScope ? scopedPortfolioIds : null, knownAt]);
   return [...legacyCandidates, ...portfolioCandidates.map(portfolioLineageToTheoreticalEntryCandidate)]
     .sort((left, right) => Date.parse(left.requested_at || 0) - Date.parse(right.requested_at || 0))
     .slice(0, bounded);

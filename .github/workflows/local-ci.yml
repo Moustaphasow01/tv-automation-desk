@@ -5,6 +5,34 @@ on:
   push:
 
 jobs:
+  grains-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: desk
+          POSTGRES_PASSWORD: desk_local_only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U desk -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mcp_gpt_desk/package-lock.json
+      - run: npm --prefix mcp_gpt_desk ci
+      - name: Real PostgreSQL grains, administrative history and producer fences
+        run: npm run test:grains:postgres
+
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20

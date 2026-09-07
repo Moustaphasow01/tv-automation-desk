@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { PostgresBrokerExecutionRepository, evaluateBrokerProtectionSnapshot } from "../src/broker-execution-repository.js";
 
+test("theoretical candidate facade preserves the replay clock for administrative release visibility", async () => {
+  const calls = [];
+  const repository = new PostgresBrokerExecutionRepository({
+    pool: { async query(sql, params) { calls.push({ sql, params }); return { rows: [] }; } },
+    initialized: Promise.resolve(),
+  });
+  const now = "2026-09-04T14:00:00.000Z";
+  assert.deepEqual(await repository.listTheoreticalEntryCandidates({
+    limit: 12, portfolioOrderIntentIds: ["portfolio_test"], now,
+  }), []);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].params, [12, ["portfolio_test"], now]);
+});
+
 test("findOpenTradeForMonitor joins the originating desk position and filters it independently", async () => {
   const calls = [];
   const expected = {
