@@ -7,6 +7,7 @@ import {
 import { createTheoreticalTestDatabase } from "./support/theoretical-postgres-fixtures.js";
 import { MarketContextRepository } from "../src/market-context-repository.js";
 import { withGrainsCalendarRefreshLease } from "../src/persistence/postgres-grains-calendar-refresh-lease.js";
+import { loadCurrentGrainsCalendar } from "../src/persistence/postgres-grains-calendar-current-state.js";
 
 const CUTOFF = "2026-09-04T15:00:00.000Z";
 
@@ -141,6 +142,37 @@ test(
     assert.equal(first.inserted, true);
     assert.equal(duplicate.inserted, false);
     assert.equal(duplicate.version.knownAtUtc, "2026-09-01T12:00:00.000Z");
+  },
+);
+
+test(
+  "partial source events remain visible while unavailable coverage stays inadmissible",
+  { skip: process.env.RUN_POSTGRES_TESTS !== "1" },
+  async (t) => {
+    const database = await createTheoreticalTestDatabase();
+    t.after(() => database.close());
+    const partial = version({
+      hash: "5", knownAtUtc: "2026-09-04T14:00:00Z",
+      sourceIds: ["usda_nass_release_calendar", "usda_wasde_release_schedule"],
+      historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP",
+      status: "UNAVAILABLE", title: "Received NASS event",
+    });
+    partial.reasonCodes = ["CALENDAR_REQUIRED_SOURCE_FETCH_FAILED", "USDA_SOURCE_HTTP_403"];
+    partial.metadata = { source_failures: [{
+      source_id: "usda_fas_export_sales_schedule",
+      source_url: "https://www.fas.usda.gov/data/scheduled-reports",
+      reason_code: "USDA_SOURCE_HTTP_403",
+    }] };
+    await appendGrainsCalendarVersion(database.pool, partial);
+    const loaded = await load(database.pool, "2026-09-04T14:00:00Z");
+    assert.equal(loaded.agriEvents[0].title, "Received NASS event");
+    assert.equal(loaded.agriCalendarCoverage[0].status, "UNAVAILABLE");
+    assert.ok(loaded.agriCalendarCoverage[0].reasonCodes.includes("USDA_SOURCE_HTTP_403"));
+    assert.ok(loaded.agriCalendarCoverage[0].reasonCodes.includes("CALENDAR_SOURCE_SET_INCOMPLETE"));
+    const current = await loadCurrentGrainsCalendar(database.pool, "2026-09-04T14:00:00Z");
+    assert.equal(current.events[0].title, "Received NASS event");
+    assert.equal(current.sourceState.status, "UNAVAILABLE");
+    assert.equal(current.sourceState.lastSuccessfulAt, null);
   },
 );
 

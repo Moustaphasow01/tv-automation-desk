@@ -28,6 +28,17 @@ async function refreshUnderLease(ports) {
   try {
     const collected = await ports.collect({ asOfUtc: startedAtUtc });
     archiveRef = await ports.archive(collected);
+    if (collected.calendarVersion.status === "UNAVAILABLE") {
+      const version = automatedVersion(collected.calendarVersion, archiveRef);
+      const receipt = await ports.append(version);
+      return ports.writeStatus({
+        status: "UNAVAILABLE", startedAtUtc, asOfUtc: ports.nowUtc(), archiveRef,
+        knownAtUtc: version.knownAtUtc, version: receipt.version, inserted: receipt.inserted,
+        eventCount: version.events.length, sourceCount: version.sources.length,
+        reasonCodes: version.reasonCodes,
+        sourceDiagnostics: collected.agriCalendarCoverage[0]?.sourceDiagnostics || [],
+      });
+    }
     if (collected.calendarVersion.status !== "AVAILABLE") {
       return ports.writeStatus({
         status: "UNKNOWN_COVERAGE", startedAtUtc, asOfUtc: ports.nowUtc(), archiveRef,

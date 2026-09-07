@@ -35,3 +35,22 @@ test("a failed refresh preserves last-success provenance, without presenting it 
   assert.deepEqual(result.lastSuccessfulVersion, { id: "v1" });
   assert.equal(result.knownAtUtc, undefined);
 });
+
+test("a persisted partial version does not replace or extend the last successful calendar", async (t) => {
+  const { archive, statusFile } = await fixture(t);
+  await archive.writeStatus({
+    status: "AVAILABLE", knownAtUtc: "2026-09-07T08:00:00Z",
+    freshUntilUtc: "2026-09-07T14:00:00Z", version: { id: "full-v1" },
+  });
+  await archive.writeStatus({
+    status: "UNAVAILABLE", knownAtUtc: "2026-09-07T08:30:00Z",
+    version: { id: "partial-v2" }, reasonCodes: ["USDA_SOURCE_HTTP_403"],
+  });
+  const result = JSON.parse(await readFile(statusFile, "utf8"));
+  assert.equal(result.status, "UNAVAILABLE");
+  assert.equal(result.knownAtUtc, "2026-09-07T08:30:00Z");
+  assert.deepEqual(result.version, { id: "partial-v2" });
+  assert.equal(result.lastSuccessfulAtUtc, "2026-09-07T08:00:00Z");
+  assert.deepEqual(result.lastSuccessfulVersion, { id: "full-v1" });
+  assert.equal(result.freshUntilUtc, undefined);
+});

@@ -40,6 +40,25 @@ test("incomplete coverage and archival failure never publish or refresh last goo
   assert.ok(failed.calls.every((call) => typeof call === "string"));
 });
 
+test("partial source receipt is appended as unavailable without a freshness extension", async () => {
+  const partial = fixture();
+  partial.version.status = "UNAVAILABLE";
+  partial.version.sources = [1, 2];
+  partial.version.reasonCodes = ["CALENDAR_REQUIRED_SOURCE_FETCH_FAILED", "USDA_SOURCE_HTTP_403"];
+  const result = await refreshGrainsCalendar({ mode: "ENABLED" }, partial.ports);
+  assert.deepEqual(partial.calls.slice(0, 3), ["lock", "collect", "archive"]);
+  assert.equal(typeof partial.calls[3], "object");
+  assert.equal(partial.calls[3].status, "UNAVAILABLE");
+  assert.equal(partial.calls[3].sources.length, 2);
+  assert.equal(result.status, "UNAVAILABLE");
+  assert.equal(result.eventCount, 1);
+  assert.equal(result.sourceCount, 2);
+  assert.equal(result.knownAtUtc, "2026-09-07T08:01:00Z");
+  assert.equal(result.freshUntilUtc, undefined);
+  assert.deepEqual(result.reasonCodes,
+    ["CALENDAR_REQUIRED_SOURCE_FETCH_FAILED", "USDA_SOURCE_HTTP_403"]);
+});
+
 test("disabled and already-running refresh do not perform network or database publication", async () => {
   const disabled = fixture();
   assert.equal((await refreshGrainsCalendar({ mode: "DISABLED" }, disabled.ports)).status, "DISABLED_BY_POLICY");
