@@ -1,0 +1,71 @@
+{
+  "schema_version": "historical_invalid_origin_adjudication_manifest_v1",
+  "manifest_id": "grains-invalid-origin-adjudication-20260907",
+  "scope": "Eight retained invalid-origin qualifications administratively cancelled by explicit operator attestation. No execution, fill, expiry, R, PnL, source, or lineage mutation is authorized.",
+  "adjudications": [
+    {
+      "idempotency_key": "grains-invalid-origin-adjudication-20260907.0bd7386b2bdb2f001386303a",
+      "portfolio_order_intent_id": "portfolio_order_intent_0bd7386b2bdb2f001386303a",
+      "qualification_idempotency_key": "grains-historical-intent-qualification-20260907.0bd7386b2bdb2f001386303a",
+      "expected_previous_adjudication_revision": 0,
+      "expected_qualification_revision": 1,
+      "expected_qualification_manifest_hash": "831b7fa057f851ef81a5eaaf270d1118d63b83ac3793d3c295717aa8586c9ba1"
+    },
+    {
+      "idempotency_key": "grains-invalid-origin-adjudication-20260907.282a54a876b4fae76f7617b3",
+      "portfolio_order_intent_id": "portfolio_order_intent_282a54a876b4fae76f7617b3",
+      "qualification_idempotency_key": "grains-historical-intent-qualification-20260907.282a54a876b4fae76f7617b3",
+      "expected_previous_adjudication_revision": 0,
+      "expected_qualification_revision": 1,
+      "expected_qualification_manifest_hash": "831b7fa057f851ef81a5eaaf270d1118d63b83ac3793d3c295717aa8586c9ba1"
+    },
+    {
+      "idempotency_key": "grains-invalid-origin-adjudication-20260907.32ae43edc75abf9acd80b208",
+      "portfolio_order_intent_id": "portfolio_order_intent_32ae43edc75abf9acd80b208",
+      "qualification_idempotency_key": "grains-historical-intent-qualification-20260907.32ae43edc75abf9acd80b208",
+      "expected_previous_adjudication_revision": 0,
+      "expected_qualification_revision": 1,
+      "expected_qualification_manifest_hash": "831b7fa057f851ef81a5eaaf270d1118d63b83ac3793d3c295717aa8586c9ba1"
+    },
+    {
+      "idempotency_key": "grains-invalid-origin-adjudication-20260907.712451937a93497bcfeb328e",
+      "portfolio_order_intent_id": "portfolio_order_intent_712451937a93497bcfeb328e",
+      "qualification_idempotency_key": "grains-historical-intent-qualification-20260907.712451937a93497bcfeb328e",
+      "expected_previous_adjudication_revision": 0,
+      "expected_qualification_revision": 1,
+      "expected_qualification_manifest_hash": "831b7fa057f851ef81a5eaaf270d1118d63b83ac3793d3c295717aa8586c9ba1"
+    },
+    {
+      "idempotency_key": "grains-invalid-origin-adjudication-20260907.76cdf00503a3dd6bc1d4c290",
+      "portfolio_order_intent_id": "portfolio_order_intent_76cdf00503a3dd6bc1d4c290",
+      "qualification_idempotency_key": "grains-historical-intent-qualification-20260907.76cdf00503a3dd6bc1d4c290",
+      "expected_previous_adjudication_revision": 0,
+      "expected_qualification_revision": 1,
+      "expected_qualification_manifest_hash": "831b7fa057f851ef81a5eaaf270d1118d63b83ac3793d3c295717aa8586c9ba1"
+    },
+    {
+      "idempotency_key": "grains-invalid-origin-adjudication-20260907.992136b97674b2ab89264b93",
+      "portfolio_order_intent_id": "portfolio_order_intent_992136b97674b2ab89264b93",
+      "qualification_idempotency_key": "grains-historical-intent-qualification-20260907.992136b97674b2ab89264b93",
+      "expected_previous_adjudication_revision": 0,
+      "expected_qualification_revision": 1,
+      "expected_qualification_manifest_hash": "831b7fa057f851ef81a5eaaf270d1118d63b83ac3793d3c295717aa8586c9ba1"
+    },
+    {
+      "idempotency_key": "grains-invalid-origin-adjudication-20260907.a2859895e880da7307ea1b43",
+      "portfolio_order_intent_id": "portfolio_order_intent_a2859895e880da7307ea1b43",
+      "qualification_idempotency_key": "grains-historical-intent-qualification-20260907.a2859895e880da7307ea1b43",
+      "expected_previous_adjudication_revision": 0,
+      "expected_qualification_revision": 1,
+      "expected_qualification_manifest_hash": "831b7fa057f851ef81a5eaaf270d1118d63b83ac3793d3c295717aa8586c9ba1"
+    },
+    {
+      "idempotency_key": "grains-invalid-origin-adjudication-20260907.b50eab184ac98b50fd084140",
+      "portfolio_order_intent_id": "portfolio_order_intent_b50eab184ac98b50fd084140",
+      "qualification_idempotency_key": "grains-historical-intent-qualification-20260907.b50eab184ac98b50fd084140",
+      "expected_previous_adjudication_revision": 0,
+      "expected_qualification_revision": 1,
+      "expected_qualification_manifest_hash": "831b7fa057f851ef81a5eaaf270d1118d63b83ac3793d3c295717aa8586c9ba1"
+    }
+  ]
+}

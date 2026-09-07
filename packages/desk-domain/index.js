@@ -245,14 +245,14 @@ export {
   buildCandidateAllocationPortfolioV1,
   buildVirtualStrategyPortfolioV1,
 } from "./src/portfolio-candidate-allocation-v1.js";
-export {
-  DEFAULT_PORTFOLIO_CORRELATION_GROUPS_V1,
+export { DEFAULT_PORTFOLIO_CORRELATION_GROUPS_V1,
   PORTFOLIO_RISK_BUDGET_EVALUATION_SCHEMA_VERSION_V1,
   PORTFOLIO_RISK_BUDGET_SCHEMA_VERSION_V1,
   PORTFOLIO_RISK_BUDGET_STATUSES_V1,
   evaluatePortfolioRiskBudgetV1,
   normalizePortfolioRiskBudgetV1,
 } from "./src/portfolio-risk-budget-v1.js";
+export { INVALID_ORIGIN_ADJUDICATION_SCHEMA_VERSION_V1, INVALID_ORIGIN_ATTESTATION_SCHEMA_VERSION_V1, adjudicateInvalidOriginReservationV1 } from "./src/portfolio-invalid-origin-adjudication-v1.js";
 export {
   PORTFOLIO_TARGET_POSITION_PLAN_SCHEMA_VERSION_V1,
   TARGET_POSITION_SCHEMA_VERSION_V1,
