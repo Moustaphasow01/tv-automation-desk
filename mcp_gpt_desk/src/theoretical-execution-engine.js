@@ -22,7 +22,7 @@ export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, con
   const candleTime = timestamp(candle?.timestamp_utc || candle?.time || now);
   const expiresAt = timestamp(intent.expires_at);
   if (expiresAt && candleTime && expiresAt <= candleTime) {
-    return candle?.theoretical_window_complete === true ? expiredEntry(intent, expiresAt)
+    return candle?.theoretical_window_complete === true ? expiredEntry(intent, expiresAt, candle)
       : noAction("ENTRY_WINDOW_DATA_INCOMPLETE", { order_intent_id: intent.order_intent_id, portfolio_order_intent_id: portfolioOrderIntentId });
   }
   if (!candle) return noAction("CANDLE_MISSING", { order_intent_id: intent.order_intent_id, portfolio_order_intent_id: portfolioOrderIntentId });
@@ -55,7 +55,7 @@ export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, con
     };
   }
   if (expiresAt && timestamp(now) >= expiresAt && candle.theoretical_window_complete === true) {
-    return expiredEntry(intent, expiresAt);
+    return expiredEntry(intent, expiresAt, candle);
   }
   if (expiresAt && timestamp(now) >= expiresAt && candle.theoretical_window_complete === false) {
     return noAction("ENTRY_WINDOW_DATA_INCOMPLETE", { order_intent_id: intent.order_intent_id,
@@ -70,11 +70,12 @@ export function evaluateTheoreticalEntryIntent({ intent = {}, decision = {}, con
   });
 }
 
-function expiredEntry(intent, expiresAt) {
+function expiredEntry(intent, expiresAt, evidenceCandle) {
   return {
     action: "expire_entry", status: "EXPIRED", reason: "ORDER_INTENT_EXPIRED",
     event_at_utc: expiresAt.toISOString(), order_intent_id: intent.order_intent_id,
     portfolio_order_intent_id: intent.portfolio_order_intent_id || null,
+    candle: projectCandle(evidenceCandle),
     engine_version: THEORETICAL_EXECUTION_ENGINE_VERSION,
   };
 }

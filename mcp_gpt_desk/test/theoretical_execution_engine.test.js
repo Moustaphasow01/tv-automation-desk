@@ -76,6 +76,8 @@ test("theoretical execution expires an entry instead of auto-filling after TTL",
 
   assert.equal(result.action, "expire_entry");
   assert.equal(result.reason, "ORDER_INTENT_EXPIRED");
+  assert.equal(result.candle.feed_id, "feed_mnq_1");
+  assert.equal(result.candle.timestamp_utc, "2026-08-12T10:02:00.000Z");
 });
 
 test("elapsed wall clock without entry-window evidence does not fabricate expiration", () => {
@@ -89,6 +91,8 @@ test("a complete untouched entry window expires even when the last bar opens bef
     candle: { ...candle({ time: "2026-08-12T10:59:00Z", low: 101 }), theoretical_window_complete: true } });
   assert.equal(result.action, "expire_entry");
   assert.equal(result.event_at_utc, "2026-08-12T11:00:00.000Z");
+  assert.equal(result.candle.feed_id, "feed_mnq_1");
+  assert.equal(result.candle.timestamp_utc, "2026-08-12T10:59:00.000Z");
 });
 
 test("theoretical execution follows open trades and marks intrabar stop/target ambiguity as review", () => {

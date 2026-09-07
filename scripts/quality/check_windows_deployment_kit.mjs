@@ -27,6 +27,8 @@ const required = [
   "deploy/windows/Register-DeskMaintenanceTasks.ps1",
   "deploy/windows/Run-GrainsCalendarRefresh.ps1",
   "deploy/windows/Test-DeskGrainsCalendarHealth.ps1",
+  "deploy/windows/Set-DeskGrainsRiskPolicy.ps1",
+  "deploy/windows/Test-DeskGrainsRiskPolicy.ps1",
   "deploy/windows/Test-DeskLocalHealth.ps1",
   "deploy/windows/Test-DeskCanary.ps1",
   "deploy/windows/Invoke-DeskDrain.ps1",

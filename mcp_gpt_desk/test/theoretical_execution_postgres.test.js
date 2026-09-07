@@ -98,6 +98,12 @@ test("canonical theoretical tracking against an isolated, fully migrated Postgre
     const result = evaluateTheoreticalEntryIntent({ intent, candle: complete, now: "2026-09-04T14:10Z" });
     assert.equal(result.action, "expire_entry");
     await recordTheoreticalEntryExpired(repository, { result, now: "2026-09-04T14:10Z" });
+    const terminal = (await repository.pool.query(`SELECT source_candle_feed_id,source_candle_timestamp_utc
+      FROM trade_theoretical_execution_events WHERE portfolio_order_intent_id='awaiting'`)).rows[0];
+    assert.equal(terminal.source_candle_feed_id, "td2_zc");
+    assert.equal(new Date(terminal.source_candle_timestamp_utc).toISOString(), "2026-09-04T14:02:00.000Z");
+    const released = await historicalExposure(repository.pool);
+    assert.equal(released.pending_order_intents.some((row) => row.portfolio_order_intent_id === "awaiting"), false);
     const racedFill = await recordTheoreticalEntryFill(repository, { result: { ...result, price: 100, quantity: 1 }, now: "2026-09-04T14:10Z" });
     assert.equal(racedFill.idempotent, true);
     assert.equal(racedFill.event.event_type, "entry_expired");
