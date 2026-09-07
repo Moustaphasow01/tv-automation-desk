@@ -295,7 +295,7 @@ function validUtc(year, month, day, hour, minute, second) {
   return date.toISOString();
 }
 
-function zonedUtc(year, month, day, hour, minute, second, timezone) {
+export function zonedUtc(year, month, day, hour, minute, second, timezone) {
   const wallClock = validUtc(year, month, day, hour, minute, second);
   if (!wallClock) return null;
   let formatter;
