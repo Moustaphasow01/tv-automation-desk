@@ -31,7 +31,10 @@ const repositoryFiles = listRepositoryFiles();
 const secretFindings = await scanSecrets(repositoryFiles);
 if (secretFindings.length) failures.push(...secretFindings);
 
-const packages = await inspectPackages(["package-lock.json", "mcp_gpt_desk/package-lock.json"]);
+const packages = await inspectPackages([
+  "package-lock.json", "mcp_gpt_desk/package-lock.json",
+  "apps/desk-control-plane/package-lock.json",
+]);
 const images = await inspectImages(repositoryFiles);
 const sbom = buildSbom(packages, images, secretFindings);
 await writeSbom(sbom);
@@ -109,11 +112,15 @@ async function inspectPackages(lockfiles) {
         version: metadata.version || null,
         license: metadata.license || null,
         integrity: metadata.integrity || null,
+        workspace_link: metadata.link === true,
       }));
-    const missingIntegrity = dependencies.filter((item) => !item.integrity);
+    const registryDependencies = dependencies.filter((item) => !item.workspace_link);
+    const missingIntegrity = registryDependencies.filter((item) => !item.integrity);
     const deniedLicenses = dependencies.filter((item) => isDeniedLicense(item.license));
-    const missingLicense = dependencies.filter((item) => !item.license);
-    if (missingIntegrity.length) warnings.push(`${lockfile}: ${missingIntegrity.length} dependencies without integrity`);
+    const missingLicense = registryDependencies.filter((item) => !item.license);
+    for (const item of missingIntegrity) {
+      failures.push(`${lockfile}: registry dependency without integrity: ${item.name}`);
+    }
     for (const item of deniedLicenses) {
       failures.push(`${lockfile}: denied license ${item.license} on ${item.name}`);
     }
