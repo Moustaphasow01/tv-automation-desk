@@ -95,7 +95,24 @@ Artefact baseline SHA256 :
 2 431 bougies du vendredi importées le 6 septembre (dont 696 RTH), provenance
 de réception historique non établie et calendrier courant non rétrodaté.
 Ce résultat n'est donc ni OOS certifié ni performance effectivement réalisée
-par le desk en live. Comparaison post-correctif à ajouter après gel du SHA.
+par le desk en live.
+
+Comparaison post-correctif `cd554226c409243987ac98db3d36faded876c738` exécutée
+avec exactement les mêmes entrées et politique : mêmes chiffres, mêmes décisions
+Context/Risk/Target/Human Gate, mêmes trades et outcomes. Empreinte sémantique
+commune : `712de973ec83f5ea632004171907e6dfb22feb09f4f1415f2d52a2fc00b7d915`.
+Artefact post-correctif SHA256 :
+`bb70601e93824cf4cecf50c2334f46281996cd717972b61b4bb9b57730c826be`.
+
+La comparaison a aussi révélé une anomalie indépendante, **TD2-433, ouverte** :
+`pending_order_intents.created_at_utc` prend `DEFAULT now()` lorsque le repository
+omet cette date ; la projection exposure réutilise cette horloge réelle dans
+`positions.observed_at_utc` et cinq identifiants de runs Portfolio. Six dates
+d'intents diffèrent entre deux replays identiques. Les résultats économiques
+observés sont inchangés, mais l'impact causal potentiel interdit de certifier
+une reproductibilité intégrale du ledger. Pas de correction ajoutée en cours
+de déploiement. Correctif ciblé ReplayClock et double replay à prévoir avant
+certification stricte ; aucun assouplissement de Risk ou de stratégie.
 
 ## Validation, dette et limites
 
@@ -107,8 +124,13 @@ par le desk en live. Comparaison post-correctif à ajouter après gel du SHA.
   tâches et le libellé du cutoff BFF ; compensations intégrées ci-dessus.
 - Candidat final ciblé : 78/78 sans skip ni annulation ; API complète 52/52.
   Test PowerShell natif de conservation du superviseur : PASS ; garde du kit
-  Windows : PASS, 107 fichiers. La suite backend complète et le build Windows
-  seront consignés après achèvement. L'ancien test de timeout Linux (14 août)
+  Windows : PASS, 107 fichiers. Suite backend complète Linux : 1 570 tests,
+  1 528 pass, 42 skips conditionnels, zéro échec/annulation. PostgreSQL réel
+  ciblé : 17/17, sans skip (calendrier, causalité, runtime, horloges et
+  persistance atomique signal → Risk → TargetPosition → OrderIntent → Human Gate).
+  Build Windows : 1 570 tests backend, 1 527 pass, 43 skips conditionnels,
+  zéro échec/annulation ; frontend historique 75/75, VNext 311/311.
+  Archive vérifiée : 5 418 fichiers. L'ancien test de timeout Linux (14 août)
   utilisait une promesse sans handle actif ; double test-only corrigé, délai
   et assertions du BFF inchangés. Aucune annulation comptée comme réussite.
 - Architecture : module session dédié, duplication de la logique grains retirée
@@ -125,3 +147,80 @@ par le desk en live. Comparaison post-correctif à ajouter après gel du SHA.
 Preuves techniques locales sous
 `output/research/grains-context-resumption-20260907/`. Aucun secret, cookie,
 PIN, environnement complet ou état de session navigateur dans ce rapport.
+
+## Livraison constatée le 7 septembre
+
+- Release réellement servie : `grains-context-resumption-20260907.1`, source
+  `cd554226c409243987ac98db3d36faded876c738`, migration 067 inchangée.
+  Archive SHA256 `0a04727505c08bf9a85631d41e46b63a3e333ff0c1db85f9dac207001bda821b`.
+- Déploiement normal `deploy-20260907T155121Z-b001c5a0`, terminé vérifié et
+  rouvert vers 15:55 UTC : canary, santé locale, front/health/readiness publics,
+  rejet webhook sans secret, restauration des contrôles et conservation des
+  paramètres protégés. Aucun SkipBackup/SkipTests. Onze services Running,
+  démarrage Automatic ; workers legacy en shadow, anciennes files PAUSED.
+- Sauvegarde PostgreSQL `desk-native-20260907T154139Z.dump`, SHA256
+  `8afd77c65ca2f655fc0813e3166def5959cc276be3b69acbc88ab1f9a035b977`.
+  Objets `desk-objects-20260907T154909Z.tar.gz`, SHA256
+  `b99dc784c1d0dce785622f95b5e9351efbecf618f276146d15a63163c45c779d`.
+- Troisième cycle calendrier autonome observé à 15:45:59 UTC : 74 événements,
+  trois sources, version `d05bb806-d43c-4723-afae-438d972362e4`, valable jusqu'à
+  21:45:59 UTC. Tâche toujours activée et replanifiée après installation.
+- Telegram : test idempotent distinct de tout trade envoyé à 15:56:41.849 UTC,
+  delivery `telegram_delivery_acf49c62-ea9f-404f-96a9-f7324396392f`, message 2581,
+  configuration inchangée. Cela prouve le transport du canal, pas un fill réel.
+- Contrôle navigateur réel : premier accès après restart partiel avec timeout
+  de connexion au contexte ; second accès à 15:57:44 UTC AVAILABLE sans warning,
+  session HOLIDAY, prochaine session `2026-09-08T13:30:00Z`. Inspection PG : aucun
+  verrou en attente. L'ancien brief reste STALE avant publication du worker.
+- Préflight d'activation : refus correct tant qu'un READY ancien contrat coexiste
+  avec le READY V2. La cadence est passée de 30 à 60 minutes : le vieux bucket
+  15:30 dépasse le nouveau bucket 15:00 et n'est remplacé qu'au cycle 16:00.
+  Aucun contournement, suppression ni activation forcée. Nettoyage naturel
+  constaté à 16:00 ; préflight vert puis activation ciblée à 16:01:23 UTC,
+  reçu `agent-runtime-supervisor-mode-20260907-160123.json`.
+  Une tâche READY V2 `69ca47a5-17eb-4df0-b93b-332bf9d29aa4`, analyse
+  `2026-09-07T16:00:10.218Z`, prix `2026-09-04T18:20:00Z`, session HOLIDAY.
+- **TD2-434, ouvert, P1 proposé** : dissocier ordre de supersession et bucket de
+  cadence. Contre-revue : un superviseur déjà actif aurait pris V1 d'abord,
+  mais le runner la refuse avant LLM/persistance ; risque limité à une tâche
+  terminale et un cycle perdu. Tests à ajouter pour cadence 30→60, cycle ancien
+  contre tâche récente, et préservation des tâches CLAIMED/RUNNING.
+- Trois nouvelles lectures navigateur à 15:59:59, 16:00:14 et 16:00:30 UTC :
+  HTTP 200, AVAILABLE, aucun warning, HOLIDAY cohérent. Latences 7 379 / 4 889 /
+  3 839 ms : pas de perte de données sur ces lectures, mais pas de certification
+  de performance ni d'absence permanente de saturation.
+
+### Échec réel du premier démarrage et correctif de recette
+
+L'activation .1 ne vaut **pas** réussite du worker. Tâche prise à 16:01:24,
+puis arrêt du lanceur avant Codex et aucune publication. Preuve Windows :
+le chemin d'entrée `C:/DeskFutures/current/...` diffère de `import.meta.url`
+résolu sous `C:/DeskFutures/releases/grains-context-resumption-20260907.1/...`.
+Le guard CLI ajouté pour permettre l'import de tests renvoyait donc false
+sous la jonction utilisée en production. La sortie précoce ferme stdin ;
+le parent ne gérait pas l'erreur Socket `write EOF`, puis redémarrait en
+laissant le bail CLAIMED. Les tests de santé ne détectaient pas ce cas.
+
+Analyste remis en shadow à 16:06:31 (actuateur existant). Tâche exacte
+`69ca47a5-17eb-4df0-b93b-332bf9d29aa4` récupérée par `repository.failTask`
+à 16:08:49.697, code `AGENT_RUNNER_INPUT_EOF_OBSERVED`, événement TASK_FAILED,
+état READY, retry après 16:09:49.697. Aucun faux succès, suppression ou écriture
+SQL brute de l'état ; token de bail utilisé en mémoire, non publié.
+
+Correctif candidat : résolution réelle des deux chemins, import inert,
+validation d'entrée avant initialisation DB/LLM ; erreur stdin du processus
+fils convertie en échec structuré récupérable du parent ; supersession TD2-434
+fondée sur l'heure d'analyse et gardes de dates, pas le bucket.
+Tests CLI via alias/jonction et fermeture anticipée ajoutés ; les deux tests
+PostgreSQL d'horloge/supersession sont enregistrés dans `test:grains:postgres`.
+Nouvelle livraison et vraie publication restent à attester : TD2-432 non clos.
+
+Recette locale corrective : 26/26 tests ciblés sans skip ; PostgreSQL réel
+3/3 (horloges et supersession), sans skip ; garde architecture verte. Une
+première version du test CLI dépassait 10 secondes en chargeant les imports
+du desk à vide. Les imports DB/LLM ont été différés après validation : le
+test alias et le test import inert passent désormais en environ 0,4 seconde,
+sans relâcher leur timeout. Aucune donnée marché ni stratégie modifiée.
+Windows natif local (Node 24.11.1) : six tests de processus/CLI passent,
+dont jonction réelle et EOF ; nouvelle vérification sous Node 22 prévue dans
+le build Windows isolé. Les fichiers correctifs sont gelés avant ce build.

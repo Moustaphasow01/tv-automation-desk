@@ -387,6 +387,13 @@ function runProcess({ command, args, cwd, env, timeoutMs, input }) {
     }, runnerTimeoutMs(input, timeoutMs));
     child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
     child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    child.stdin.on("error", () => {
+      clearTimeout(timer);
+      reject(Object.assign(new Error("Agent task runner closed its input before payload delivery."), {
+        code: "AGENT_RUNNER_STDIN_FAILED", retryable: true,
+      }));
+      child.kill("SIGTERM");
+    });
     child.on("error", (error) => {
       clearTimeout(timer);
       reject(Object.assign(error, { code: error.code || "AGENT_RUNNER_SPAWN_FAILED", retryable: true }));

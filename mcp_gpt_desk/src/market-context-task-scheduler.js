@@ -24,6 +24,10 @@ WITH stale_dispatches AS (
     AND t.status = 'READY'
     AND d.agent_task_id IS NOT NULL
     AND d.source_data_cutoff_utc <= $1::timestamptz
+    AND COALESCE(d.not_before_utc, d.created_at_utc) <= $1::timestamptz
+    AND COALESCE(t.not_before_utc, t.created_at_utc) <= $1::timestamptz
+    AND d.created_at_utc <= $1::timestamptz
+    AND t.created_at_utc <= $1::timestamptz
     AND ($2::uuid IS NULL OR t.agent_task_id <> $2::uuid)
 ),
 cancelled_tasks AS (
@@ -32,7 +36,7 @@ cancelled_tasks AS (
          last_error = jsonb_build_object(
            'code', $3::text,
            'superseded_by_task_id', $2::text,
-           'superseded_cutoff_utc', $1::text,
+           'superseded_analysis_as_of_utc', $1::text,
            'cancelled_at_utc', now()
          ),
          lease_token = NULL,
@@ -80,7 +84,7 @@ export class MarketContextTaskScheduler {
     const existing = await this.pool.query(`SELECT * FROM market_context_task_dispatches
       WHERE universe=$1 AND source_data_cutoff_utc=$2 AND reason_hash=$3`, [MARKET_CONTEXT_UNIVERSE, cutoffBucket, reasonHash]);
     if (existing.rows[0]) {
-      const superseded = await this.#supersedeReadyContextTasks({ currentCutoffUtc: cutoffBucket, keepTaskId: existing.rows[0].agent_task_id });
+      const superseded = await this.#supersedeReadyContextTasks({ analysisAsOfUtc: nowUtc, keepTaskId: existing.rows[0].agent_task_id });
       return { status: "DEDUPED", dispatch_id: existing.rows[0].dispatch_id, task_id: existing.rows[0].agent_task_id, superseded_task_count: superseded.length };
     }
     const ids = stableIds({ cutoffBucket, reasonHash });
@@ -110,7 +114,7 @@ export class MarketContextTaskScheduler {
           trigger_reasons: eventReasons }),
         MARKET_CONTEXT_UNIVERSE,
       ]);
-      const superseded = await this.#supersedeReadyContextTasks({ client, currentCutoffUtc: cutoffBucket, keepTaskId: ids.taskId });
+      const superseded = await this.#supersedeReadyContextTasks({ client, analysisAsOfUtc: nowUtc, keepTaskId: ids.taskId });
       await client.query("SELECT pg_notify('desk_agent_runtime_ready', $1)", [JSON.stringify({ schema: "desk_agent_runtime_ready_v1", lane: "live", status: "READY" })]);
       await client.query("COMMIT");
       return { status: "ENQUEUED", ...ids, trigger: triggerType, trigger_reasons: eventReasons,
@@ -125,9 +129,9 @@ export class MarketContextTaskScheduler {
     }
   }
 
-  async #supersedeReadyContextTasks({ client = this.pool, currentCutoffUtc, keepTaskId }) {
+  async #supersedeReadyContextTasks({ client = this.pool, analysisAsOfUtc, keepTaskId }) {
     const result = await client.query(MARKET_CONTEXT_SUPERSEDE_READY_SQL, [
-      currentCutoffUtc,
+      analysisAsOfUtc,
       keepTaskId,
       MARKET_CONTEXT_SUPERSEDED_CODE,
       MARKET_CONTEXT_UNIVERSE,

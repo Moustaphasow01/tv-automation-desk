@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 import process from "node:process";
+import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import { canonicalSha256 } from "@tv-automation/desk-domain";
-import { CodexExecAdapter } from "../src/codex-exec-adapter.js";
-import { loadCodexRuntimeSettings } from "../src/codex-runtime-settings.js";
-import { createDeskStoreFromEnv } from "../src/store.js";
+import { fileURLToPath } from "node:url";
 
 async function runTask({ store, input }) {
-  const task = input?.task || {};
-  if (task.task_type !== "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH") throw coded("US_GRAINS_CONTEXT_TASK_TYPE_UNSUPPORTED", false);
-  const bundle = task.payload?.bundle;
-  const timeContract = assertBundle(bundle);
+  const { task, bundle, timeContract } = validateRunnerInput(input);
+  const [{ canonicalSha256 }, { CodexExecAdapter }, { loadCodexRuntimeSettings }] = await Promise.all([
+    import("@tv-automation/desk-domain"),
+    import("../src/codex-exec-adapter.js"),
+    import("../src/codex-runtime-settings.js"),
+  ]);
   const adapter = new CodexExecAdapter({
     cwd: resolve(process.env.DESK_AGENT_SUPERVISOR_PROJECT_ROOT || process.cwd()),
     runtimeSettingsProvider: () => loadCodexRuntimeSettings(store.persistence),
@@ -24,7 +23,8 @@ async function runTask({ store, input }) {
     reasoningEffort: input?.execution_policy?.reasoning_effort || "high",
     timeoutMs: input?.execution_policy?.timeout_ms || 780_000,
   });
-  const persisted = await persistOutput({ store, input, bundle, timeContract, output: analysis.output });
+  const persisted = await persistOutput({ store, input, bundle, timeContract,
+    output: analysis.output, canonicalSha256 });
   return {
     ok: true,
     status: "MARKET_CONTEXT_PUBLISHED",
@@ -36,7 +36,15 @@ async function runTask({ store, input }) {
   };
 }
 
-async function persistOutput({ store, input, bundle, timeContract, output }) {
+function validateRunnerInput(input) {
+  const task = input?.task || {};
+  if (task.task_type !== "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH")
+    throw coded("US_GRAINS_CONTEXT_TASK_TYPE_UNSUPPORTED", false);
+  const bundle = task.payload?.bundle;
+  return { task, bundle, timeContract: assertBundle(bundle) };
+}
+
+async function persistOutput({ store, input, bundle, timeContract, output, canonicalSha256 }) {
   assertOutput(output);
   const task = input.task;
   const createdAt = store.clock.now().utc;
@@ -294,16 +302,34 @@ const OUTPUT_SCHEMA = {
   required: ["schemaVersion", "marketRegime", "volatilityRegime", "globalBias", "instrumentViews", "preferredStrategyFamilies", "discouragedStrategyFamilies", "opportunityZones", "noTradeZones", "invalidationConditions", "riskMultiplier", "headline", "operatorSummary", "marketInterpretation", "deskIntent", "whyNoTrade", "whatDeskWants", "whatDeskAvoids", "currentCatalysts", "nextExpectedEvents", "reasonCodes"],
 };
 
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  const input = await readJsonStdin();
-  const store = createDeskStoreFromEnv();
+export function isUsGrainsMarketContextRunnerEntrypoint(entryPath = process.argv[1], moduleUrl = import.meta.url) {
+  if (!entryPath) return false;
   try {
+    const entryRealPath = realpathSync.native(resolve(entryPath));
+    const moduleRealPath = realpathSync.native(fileURLToPath(moduleUrl));
+    return process.platform === "win32"
+      ? entryRealPath.toLowerCase() === moduleRealPath.toLowerCase()
+      : entryRealPath === moduleRealPath;
+  } catch {
+    return false;
+  }
+}
+
+async function runCli() {
+  let store = null;
+  try {
+    const input = await readJsonStdin();
+    validateRunnerInput(input);
+    const { createDeskStoreFromEnv } = await import("../src/store.js");
+    store = createDeskStoreFromEnv();
     await store.persistence.initialized;
     const result = await runTask({ store, input });
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {
     process.stdout.write(`${JSON.stringify(failure(error))}\n`);
   } finally {
-    await store.persistence.close?.();
+    await store?.persistence?.close?.();
   }
 }
+
+if (isUsGrainsMarketContextRunnerEntrypoint()) await runCli();
