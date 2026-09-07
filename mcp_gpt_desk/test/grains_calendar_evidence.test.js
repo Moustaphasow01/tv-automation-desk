@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { qualifyGrainsCalendarEvidence } from "../src/grains-calendar-evidence.js";
+import {
+  GRAINS_CALENDAR_POLICY_V2,
+  DORMAN_CALENDAR_SOURCE_ID,
+} from "../src/grains-calendar-source-policy.js";
 
 const KNOWN_AT = "2026-09-04T15:00:00.000Z";
 const WINDOW = {
@@ -107,6 +111,59 @@ test("conflicting duplicate required source evidence fails closed", () => {
   assert.ok(result.reasonCodes.includes("CALENDAR_REQUIRED_SOURCE_AMBIGUOUS"));
 });
 
+test("V2 admits the secondary publisher only for an explicit FAS HTTP 403 receipt", () => {
+  const sources = requiredSources().slice(0, 2);
+  sources.push(source(DORMAN_CALENDAR_SOURCE_ID, { metadata: {
+    calendar_evidence_status: "CALENDAR_SCHEDULE",
+    coverage: coverage(),
+    authority_class: "SECONDARY_PUBLISHER",
+    provider: "DORMAN_TRADING",
+    upstream_claim: "USDA",
+    source_policy_id: GRAINS_CALENDAR_POLICY_V2,
+    document_receipts: ["index.html", "calendar.pdf"].map((name, index) => ({
+      source_url: `https://www.dormantrading.com/${name}`,
+      document_sha256: `sha256:${String(index + 1).repeat(64)}`,
+      received_at_utc: KNOWN_AT,
+      archive_receipt: `receipts/current-${index}.json`,
+    })),
+  } }));
+  const accepted = qualifyGrainsCalendarEvidence({
+    sources, knownAtUtc: KNOWN_AT, ...WINDOW, policyId: GRAINS_CALENDAR_POLICY_V2,
+    fallbackEvidence: fas403Evidence(),
+  });
+  assert.equal(accepted.status, "AVAILABLE");
+
+  for (const mutation of [
+    { authority_class: "USDA_DIRECT" },
+    { document_receipts: [] },
+  ]) {
+    const rejected = qualifyGrainsCalendarEvidence({
+      sources: sources.map((item) => item.sourceId === DORMAN_CALENDAR_SOURCE_ID
+        ? { ...item, metadata: { ...item.metadata, ...mutation } } : item),
+      knownAtUtc: KNOWN_AT, ...WINDOW, policyId: GRAINS_CALENDAR_POLICY_V2,
+      fallbackEvidence: fas403Evidence(),
+    });
+    assert.equal(rejected.status, "UNKNOWN_COVERAGE");
+  }
+  const forgedReason = qualifyGrainsCalendarEvidence({
+    sources, knownAtUtc: KNOWN_AT, ...WINDOW, policyId: GRAINS_CALENDAR_POLICY_V2,
+    fallbackEvidence: { ...fas403Evidence(), reasonCode: "USDA_SOURCE_HTTP_503" },
+  });
+  assert.equal(forgedReason.status, "UNKNOWN_COVERAGE");
+});
+
+test("V1 and an unknown policy never treat Dorman as qualifying USDA evidence", () => {
+  const dormanOnly = [
+    ...requiredSources().slice(0, 2),
+    source(DORMAN_CALENDAR_SOURCE_ID),
+  ];
+  assert.equal(qualify({ sources: dormanOnly }).status, "UNKNOWN_COVERAGE");
+  const unknown = qualifyGrainsCalendarEvidence({
+    sources: requiredSources(), knownAtUtc: KNOWN_AT, ...WINDOW, policyId: "POLICY_UNKNOWN",
+  });
+  assert.deepEqual(unknown.reasonCodes, ["CALENDAR_SOURCE_POLICY_UNSUPPORTED"]);
+});
+
 function qualify({ sources }) {
   return qualifyGrainsCalendarEvidence({ sources, knownAtUtc: KNOWN_AT, ...WINDOW });
 }
@@ -154,4 +211,15 @@ function source(sourceId, overrides = {}) {
 
 function coverage(start_utc = "2026-08-01T00:00:00.000Z", end_utc = "2026-09-30T00:00:00.000Z") {
   return { start_utc, end_utc, instruments: ["ZC", "ZW"] };
+}
+
+function fas403Evidence() {
+  return {
+    sourceId: "usda_fas_export_sales_schedule",
+    sourceUrl: "https://fas.usda.gov/data/scheduled-reports",
+    reasonCode: "USDA_SOURCE_HTTP_403",
+    observed_at_utc: KNOWN_AT,
+    observation_sha256: `sha256:${"f".repeat(64)}`,
+    archive_receipt: "receipts/fas-403.json",
+  };
 }

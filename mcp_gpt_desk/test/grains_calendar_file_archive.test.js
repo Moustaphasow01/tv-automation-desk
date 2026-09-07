@@ -54,3 +54,20 @@ test("a persisted partial version does not replace or extend the last successful
   assert.deepEqual(result.lastSuccessfulVersion, { id: "full-v1" });
   assert.equal(result.freshUntilUtc, undefined);
 });
+
+test("binary PDF receipts preserve exact bytes and content hash", async (t) => {
+  const { archive, outputRoot } = await fixture(t);
+  const bytes = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0, 255]);
+  const receiptRef = await archive.archiveDocument({
+    source: {
+      sourceId: "dorman_2026_09", url: "https://www.dormantrading.com/calendar.pdf",
+      archiveSuffix: ".pdf",
+    },
+    bytes,
+    receivedAtUtc: "2026-09-07T08:00:00Z",
+  });
+  const receipt = JSON.parse(await readFile(path.join(outputRoot, receiptRef), "utf8"));
+  assert.match(receipt.document, /\.pdf$/);
+  assert.deepEqual(await readFile(path.join(outputRoot, receipt.document)), Buffer.from(bytes));
+  assert.equal(receipt.bytes, bytes.byteLength);
+});

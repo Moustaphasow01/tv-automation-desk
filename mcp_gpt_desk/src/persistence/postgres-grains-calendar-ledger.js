@@ -4,6 +4,10 @@ import {
   qualifyGrainsCalendarEvidence,
   validateGrainsCalendarHistoricalEvidence,
 } from "../grains-calendar-evidence.js";
+import {
+  GRAINS_CALENDAR_POLICY_V1,
+  requireGrainsCalendarSourcePolicy,
+} from "../grains-calendar-source-policy.js";
 
 const CALENDAR_SOURCE_ID = "market_agri_events";
 
@@ -60,6 +64,9 @@ export async function loadGrainsCalendarVersionAt(pool, query = {}) {
 }
 
 function normalizeCalendarVersion(calendar) {
+  const metadata = object(calendar.metadata);
+  const policyId = metadata.source_policy_id || GRAINS_CALENDAR_POLICY_V1;
+  requireGrainsCalendarSourcePolicy(policyId);
   const sourceVersionHash = requiredHash(
     calendar.sourceVersionHash,
     "CALENDAR_VERSION_HASH_REQUIRED",
@@ -72,7 +79,7 @@ function normalizeCalendarVersion(calendar) {
     ? calendar.sources.map((source) => normalizeSource(source, knownAtUtc))
     : [];
   if (!sources.length) throw new Error("CALENDAR_SOURCES_REQUIRED");
-  return {
+  const normalized = {
     marketAgriCalendarVersionId:
       calendar.marketAgriCalendarVersionId || randomUUID(),
     sourceId: calendar.sourceId || CALENDAR_SOURCE_ID,
@@ -87,12 +94,25 @@ function normalizeCalendarVersion(calendar) {
     sourceVersionHash,
     provider: calendar.provider || null,
     reasonCodes: arrayOfStrings(calendar.reasonCodes),
-    metadata: object(calendar.metadata),
+    metadata,
     sources,
     events: Array.isArray(calendar.events)
       ? calendar.events.map((event) => normalizeEvent(event, knownAtUtc))
       : [],
   };
+  if (normalized.sourceStatus === "AVAILABLE" && policyId !== GRAINS_CALENDAR_POLICY_V1) {
+    const evidence = qualifyGrainsCalendarEvidence({
+      sources: normalized.sources,
+      knownAtUtc: normalized.knownAtUtc,
+      coverageStart: normalized.coverageStart,
+      coverageEnd: normalized.coverageEnd,
+      policyId,
+      fallbackEvidence: metadata.fas_failure_evidence,
+    });
+    if (evidence.status !== "AVAILABLE")
+      throw new Error(evidence.reasonCodes[0] || "CALENDAR_EVIDENCE_INVALID");
+  }
+  return normalized;
 }
 
 function normalizeSource(source, knownAtUtc) {
@@ -297,11 +317,14 @@ async function selectedEvents(pool, { versionId, start, cutoff }) {
 }
 
 function mapQualifiedCoverage(version, sources) {
+  const policyId = object(version.metadata).source_policy_id || GRAINS_CALENDAR_POLICY_V1;
   const evidence = qualifyGrainsCalendarEvidence({
     sources: sources.map(mapStoredSource),
     knownAtUtc: version.known_at_utc,
     coverageStart: version.coverage_start_utc,
     coverageEnd: version.coverage_end_utc,
+    policyId,
+    fallbackEvidence: object(version.metadata).fas_failure_evidence,
   });
   const reasons = new Set([...(version.reason_codes || []), ...evidence.reasonCodes]);
   return {

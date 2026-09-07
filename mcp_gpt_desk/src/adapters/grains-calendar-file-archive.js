@@ -5,12 +5,14 @@ import path from "node:path";
 export function createGrainsCalendarFileArchive({ outputRoot, statusFile }) {
   const root = path.resolve(outputRoot);
   return {
-    archiveDocument: async ({ source, text, receivedAtUtc }) => {
-      const documentHash = sha256(text);
-      const document = await immutableFile(root, "documents", documentHash, text, ".txt");
+    archiveDocument: async ({ source, text, bytes, receivedAtUtc }) => {
+      const content = documentContent({ text, bytes });
+      const documentHash = sha256(content);
+      const suffix = archiveSuffix(source, bytes);
+      const document = await immutableFile(root, "documents", documentHash, content, suffix);
       const receipt = JSON.stringify({
         sourceId: source.sourceId, sourceUrl: source.url, receivedAtUtc,
-        documentSha256: `sha256:${documentHash}`, document, bytes: Buffer.byteLength(text),
+        documentSha256: `sha256:${documentHash}`, document, bytes: content.byteLength,
       });
       return immutableFile(root, "receipts", sha256(receipt), receipt, ".json");
     },
@@ -61,3 +63,21 @@ async function atomicJson(filename, value) {
 }
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
+
+function documentContent({ text, bytes }) {
+  if (bytes !== undefined) {
+    if (!(bytes instanceof Uint8Array) || !bytes.byteLength)
+      throw new Error("CALENDAR_ARCHIVE_DOCUMENT_INVALID");
+    return Buffer.from(bytes);
+  }
+  if (typeof text !== "string" || !text.length)
+    throw new Error("CALENDAR_ARCHIVE_DOCUMENT_INVALID");
+  return Buffer.from(text);
+}
+
+function archiveSuffix(source, bytes) {
+  const suffix = source?.archiveSuffix || (bytes !== undefined ? ".bin" : ".txt");
+  if (!/^\.[a-z0-9]{2,8}$/.test(suffix))
+    throw new Error("CALENDAR_ARCHIVE_SUFFIX_INVALID");
+  return suffix;
+}

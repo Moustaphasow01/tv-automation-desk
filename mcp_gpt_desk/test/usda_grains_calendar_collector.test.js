@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assembleGrainsCalendarCollection,
   collectUsdaGrainsCalendar,
   fetchUsdaCalendarText,
   fetchUsdaSourceText,
 } from "../src/adapters/usda-grains-calendar-collector.js";
+import { GRAINS_CALENDAR_POLICY_V2 } from "../src/grains-calendar-source-policy.js";
 
 test("collector keeps retrieval knowledge current and historical coverage unknown", async () => {
   const text =
@@ -214,6 +216,38 @@ test("generic official source reader is bounded and rejects empty and HTTP respo
       ),
     /HTTP_502/,
   );
+});
+
+test("V2 refuses conflicting primary and secondary export-sale timestamps", () => {
+  const direct = {
+    market_agri_event_id: "direct", event_kind: "EXPORT_SALES", provider: "USDA_FAS",
+    event_timestamp_utc: "2026-09-10T12:30:00.000Z",
+  };
+  const secondary = {
+    market_agri_event_id: "secondary", event_kind: "EXPORT_SALES", provider: "DORMAN_TRADING",
+    event_timestamp_utc: "2026-09-11T12:30:00.000Z",
+  };
+  const result = assembleGrainsCalendarCollection({
+    manifests: [], agriEvents: [direct, secondary],
+    retrievedAtUtc: "2026-09-07T12:00:00Z",
+    coverageStart: "2026-09-07T12:00:00Z",
+    coverageEnd: "2026-09-14T11:59:59Z",
+    policyId: GRAINS_CALENDAR_POLICY_V2,
+  });
+  assert.ok(result.calendarVersion.reasonCodes.includes("CALENDAR_EXPORT_SALES_SOURCE_CONFLICT"));
+  assert.equal(result.calendarVersion.status, "UNKNOWN_COVERAGE");
+  assert.deepEqual(result.agriEvents.map((item) => item.market_agri_event_id), ["direct"]);
+});
+
+test("USDA reader cancels rejected HTTP bodies", async () => {
+  let cancelled = false;
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode("blocked")); },
+    cancel() { cancelled = true; },
+  });
+  await assert.rejects(() => fetchUsdaSourceText("https://fas.usda.gov/test",
+    async () => new Response(body, { status: 403 })), /HTTP_403/);
+  assert.equal(cancelled, true);
 });
 
 function event(start, title = "Grain Stocks", uid = null) {

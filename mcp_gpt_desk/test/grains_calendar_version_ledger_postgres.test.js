@@ -8,6 +8,7 @@ import { createTheoreticalTestDatabase } from "./support/theoretical-postgres-fi
 import { MarketContextRepository } from "../src/market-context-repository.js";
 import { withGrainsCalendarRefreshLease } from "../src/persistence/postgres-grains-calendar-refresh-lease.js";
 import { loadCurrentGrainsCalendar } from "../src/persistence/postgres-grains-calendar-current-state.js";
+import { GRAINS_CALENDAR_POLICY_V2 } from "../src/grains-calendar-source-policy.js";
 
 const CUTOFF = "2026-09-04T15:00:00.000Z";
 
@@ -296,6 +297,66 @@ test("automated freshness is shared by runtime and operator projection and exclu
   });
   await assert.rejects(withGrainsCalendarRefreshLease(database.pool, () => { throw new Error("fixture failure"); }), /fixture failure/);
   assert.equal(await withGrainsCalendarRefreshLease(database.pool, async () => "recovered"), "recovered");
+});
+
+test("ledger requalifies V2 secondary provenance and receipts without historical backdating", {
+  skip: process.env.RUN_POSTGRES_TESTS !== "1",
+}, async (t) => {
+  const database = await createTheoreticalTestDatabase();
+  t.after(() => database.close());
+  const knownAtUtc = "2026-09-04T15:00:00Z";
+  const input = version({
+    hash: "4", knownAtUtc,
+    sourceIds: [
+      "usda_nass_release_calendar",
+      "usda_wasde_release_schedule",
+      "dorman_export_sales_schedule",
+    ],
+    historicalKnowledgeStatus: "EXTERNAL_HISTORICAL_GAP",
+  });
+  input.metadata = {
+    source_policy_id: GRAINS_CALENDAR_POLICY_V2,
+    fas_failure_evidence: {
+      sourceId: "usda_fas_export_sales_schedule",
+      sourceUrl: "https://fas.usda.gov/data/scheduled-reports",
+      reasonCode: "USDA_SOURCE_HTTP_403",
+      observed_at_utc: knownAtUtc,
+      observation_sha256: `sha256:${"f".repeat(64)}`,
+      archive_receipt: "receipts/fas-403.json",
+    },
+  };
+  const dorman = input.sources.find((source) => source.sourceId === "dorman_export_sales_schedule");
+  dorman.sourceUrl = "https://www.dormantrading.com/trading-resources/market-calendar/";
+  dorman.metadata = {
+    ...dorman.metadata,
+    authority_class: "SECONDARY_PUBLISHER",
+    provider: "DORMAN_TRADING",
+    upstream_claim: "USDA",
+    source_policy_id: GRAINS_CALENDAR_POLICY_V2,
+    document_receipts: ["market-calendar/", "calendar.pdf"].map((name, index) => ({
+      source_url: `https://www.dormantrading.com/${name}`,
+      document_sha256: `sha256:${String(index + 1).repeat(64)}`,
+      received_at_utc: knownAtUtc,
+      archive_receipt: `receipts/${index}.json`,
+    })),
+  };
+  await appendGrainsCalendarVersion(database.pool, input);
+  const loaded = await load(database.pool, knownAtUtc);
+  assert.equal(loaded.agriCalendarCoverage[0].status, "AVAILABLE");
+
+  await assert.rejects(() => appendGrainsCalendarVersion(database.pool, {
+    ...input,
+    sourceVersionHash: `sha256:${"2".repeat(64)}`,
+    datasetVersion: `sha256:${"2".repeat(64)}`,
+    metadata: { source_policy_id: GRAINS_CALENDAR_POLICY_V2 },
+  }), /CALENDAR_SECONDARY_FALLBACK_REASON_INVALID/);
+
+  await assert.rejects(() => appendGrainsCalendarVersion(database.pool, {
+    ...input,
+    sourceVersionHash: `sha256:${"3".repeat(64)}`,
+    datasetVersion: `sha256:${"3".repeat(64)}`,
+    metadata: { source_policy_id: "UNSUPPORTED" },
+  }), /CALENDAR_SOURCE_POLICY_UNSUPPORTED/);
 });
 
 function load(pool, asOfUtc) {

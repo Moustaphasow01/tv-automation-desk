@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createUsdaCalendarCollection } from "../src/adapters/usda-grains-calendar-refresh-source.js";
+import { GRAINS_CALENDAR_POLICY_V2 } from "../src/grains-calendar-source-policy.js";
 
 test("collection archives all actual receipts and qualifies coverage only from final receipt", async () => {
   const calls = [];
@@ -92,4 +93,74 @@ test("clock regression and new year during receipt cannot backdate a published c
     });
     await assert.rejects(collect({ asOfUtc }), error);
   }
+});
+
+test("V2 activates Dorman only after exact FAS 403 and records that primary failure", async () => {
+  const archived = [];
+  const collect = createUsdaCalendarCollection({
+    policyId: GRAINS_CALENDAR_POLICY_V2,
+    nowUtc: () => "2026-09-07T12:00:00Z",
+    fetchText: async (url) => {
+      if (url.includes("fas.usda")) throw new Error("USDA_SOURCE_HTTP_403");
+      return "official";
+    },
+    archiveDocument: async (value) => { archived.push(value); return "receipt.json"; },
+    parseCollection: async (command) => ({
+      manifests: [{ sourceId: "nass" }, { sourceId: "wasde" }],
+      agriEvents: [{ market_agri_event_id: "nass" }],
+      calendarVersion: { status: "UNKNOWN_COVERAGE", metadata: {}, reasonCodes: [] },
+      agriCalendarCoverage: [{ status: "UNKNOWN_COVERAGE", reasonCodes: [] }],
+      command,
+    }),
+    collectDorman: async (command) => {
+      assert.equal(command.expectedYear, 2026);
+      return {
+        manifest: { sourceId: "dorman_export_sales_schedule" },
+        events: [{ market_agri_event_id: "dorman" }],
+      };
+    },
+    assembleCollection: (command) => ({
+      manifests: command.manifests,
+      agriEvents: command.agriEvents,
+      agriCalendarCoverage: [{ status: "AVAILABLE", reasonCodes: [] }],
+      calendarVersion: {
+        status: "AVAILABLE", metadata: {
+          source_policy_id: command.policyId,
+          fas_failure_evidence: command.fallbackEvidence,
+        }, reasonCodes: [],
+      },
+    }),
+  });
+  const result = await collect({ asOfUtc: "2026-09-07T12:00:00Z" });
+  assert.equal(archived.length, 3);
+  assert.equal(archived.some((item) =>
+    item.source.sourceKind === "HTTP_FAILURE_OBSERVATION"), true);
+  assert.equal(result.calendarVersion.status, "AVAILABLE");
+  assert.equal(result.calendarVersion.metadata.fallback_activation_reason, "USDA_SOURCE_HTTP_403");
+  assert.equal(result.calendarVersion.metadata.primary_source_failure.source_id,
+    "usda_fas_export_sales_schedule");
+  assert.match(result.calendarVersion.metadata.fas_failure_evidence.observation_sha256,
+    /^sha256:[a-f0-9]{64}$/);
+  assert.equal(result.sourceFailures.length, 1);
+});
+
+test("V2 does not activate Dorman for a non-403 primary failure", async () => {
+  const collect = createUsdaCalendarCollection({
+    policyId: GRAINS_CALENDAR_POLICY_V2,
+    nowUtc: () => "2026-09-07T12:00:00Z",
+    fetchText: async (url) => {
+      if (url.includes("fas.usda")) throw new Error("USDA_SOURCE_HTTP_503");
+      return "official";
+    },
+    archiveDocument: async () => "receipt.json",
+    collectDorman: async () => assert.fail("Dorman is restricted to the exact FAS 403 gate"),
+    parseCollection: async (command) => ({
+      manifests: [], agriEvents: [], agriCalendarCoverage: [{ reasonCodes: [] }],
+      calendarVersion: { status: "UNKNOWN_COVERAGE", metadata: {}, reasonCodes: [],
+        knownAtUtc: command.retrievedAtUtc },
+    }),
+  });
+  const result = await collect({ asOfUtc: "2026-09-07T12:00:00Z" });
+  assert.equal(result.calendarVersion.status, "UNAVAILABLE");
+  assert.ok(result.calendarVersion.reasonCodes.includes("USDA_SOURCE_HTTP_503"));
 });

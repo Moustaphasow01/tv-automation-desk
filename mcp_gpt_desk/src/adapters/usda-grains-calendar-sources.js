@@ -28,21 +28,21 @@ export function buildUsdaGrainsCalendarSources({
     throw new Error("USDA_CALENDAR_AS_OF_YEAR_MISMATCH");
   return Object.freeze([
     source({
-      sourceId: "usda_nass_release_calendar",
+      sourceId: NASS_CALENDAR_SOURCE_ID,
       sourceKind: "NASS_ICS",
       url: `${NASS_CALENDAR_ROOT}/${year}/NassReleases${year}.ics`,
       expectedYear: year,
       reportKind: "NASS_AGRICULTURAL_STATISTICS_BOARD_RELEASES",
     }),
     source({
-      sourceId: "usda_wasde_release_schedule",
+      sourceId: WASDE_CALENDAR_SOURCE_ID,
       sourceKind: "WASDE_HTML",
       url: WASDE_SCHEDULE_URL,
       expectedYear: year,
       reportKind: "WASDE_RELEASES",
     }),
     source({
-      sourceId: "usda_fas_export_sales_schedule",
+      sourceId: FAS_CALENDAR_SOURCE_ID,
       sourceKind: "FAS_SCHEDULE_HTML",
       url: FAS_SCHEDULE_URL,
       expectedYear: year,
@@ -71,3 +71,8 @@ function requiredTimestamp(value, code) {
   if (!Number.isFinite(parsed)) throw new Error(code);
   return new Date(parsed).toISOString();
 }
+import {
+  FAS_CALENDAR_SOURCE_ID,
+  NASS_CALENDAR_SOURCE_ID,
+  WASDE_CALENDAR_SOURCE_ID,
+} from "../grains-calendar-source-policy.js";
