@@ -1,5 +1,11 @@
 # Reprise contrôlée du contexte grains — TD2-432
 
+État final vérifié le 7 septembre à 16:48 UTC : **reprise du véritable analyste
+Codex livrée et publication visible**. Release `.2`, source `ba4e787`.
+TD2-434 corrigé ; TD2-433 (ledger/replay) et TD2-435 (rafraîchissement/SSE)
+restent ouverts. Ce document ne clôture pas la certification live/backtest,
+la rentabilité hors échantillon ni l'ensemble du chantier frontend.
+
 ## Périmètre et état de recette
 
 Chantier autorisé par le GO du 7 septembre 2026, lié à TD2-426 et TD2-429.
@@ -224,3 +230,132 @@ sans relâcher leur timeout. Aucune donnée marché ni stratégie modifiée.
 Windows natif local (Node 24.11.1) : six tests de processus/CLI passent,
 dont jonction réelle et EOF ; nouvelle vérification sous Node 22 prévue dans
 le build Windows isolé. Les fichiers correctifs sont gelés avant ce build.
+
+### Release corrective .2 — preuves de construction
+
+- Source `ba4e78730c1c885bfd59fa7fc065c7d87a98e434`, release
+  `grains-context-resumption-20260907.2`, archive SHA256
+  `cf96a6a5229a7b00bffa1b24a5673f69c5f3d24abe0d5e709982648f1eff9e56`.
+- Build Windows isolé Node 22 et manifeste 5 418 fichiers vérifiés ; aucun
+  SkipTests. Backend : 1 578 tests, 1 534 pass, 44 skip, zéro fail/cancel.
+  Front VNext : 311/311 ; front historique : 75/75. Tests CLI/jonction/EOF
+  réussis sur ce build, après les 6/6 locaux avec timeout 10 secondes.
+- Les tests PostgreSQL horloges/supersession ont été exécutés séparément sur
+  PostgreSQL réel : 3/3, aucun skip. Les autres skips du build ne sont pas
+  déclarés couverts par ce résultat ciblé.
+- Replay figé du vendredi relancé sur ce SHA : données/policy inchangées,
+  22 signaux/context, 14 décisions Portfolio, 10 Risk, 6 Targets/Intents/Gates,
+  9 événements théoriques, 3 fills/trades/outcomes, 3 expirations. R inchangés
+  `[1,6 ; 1,44444444 ; -1]`, total `+2,04444444 R` conditionnel.
+  Artefact `conditional-replay-20260904-hotfix-ba4e787.json`, SHA256
+  `3d9120490fc54749f0124bf3a18f4be2a898255371d081bc9f041d45402b94c1`.
+  Comparateur exhaustif normalisé des trois runs :
+  `bf1d95f76f6c12ed5dc6d1f98a5faf8bb6ac2de71194e295a8594ee2c392ea1`.
+  Ce nouveau comparateur est documenté dans le rapport delta hotfix ; il ne
+  remplace pas silencieusement l'empreinte du premier comparateur.
+- TD2-433 et parité historique stricte restent ouverts : heures murales dans
+  le ledger, réceptions historiques postérieures, calendrier point-in-time
+  non prouvé. Aucune certification OOS/rentabilité issue de ce replay.
+- Déploiement .2 lancé avec sauvegardes, vérification de la source précédente
+  `cd554226`, politique protégée inchangée. Publication réelle à attester
+  après bascule ; ne pas confondre build vert et analyste fonctionnel.
+
+### Écart de présentation découvert en contre-revue — TD2-435
+
+La transaction `MarketContextRepository.persistAnalysis` alimente réellement
+les événements snapshot/brief publiés et le store les expose au SSE. Le front
+accepte ces types et cible `live-focus`. Cependant `RealtimeProvider.tsx`
+invalide `['front-view','live-focus']`, alors que `LiveTradingPage.tsx` utilise
+`['front-view-scope','live-focus','live-focus',params]`. La reconnexion ne
+recharge pas non plus explicitement cette clé. Le polling de 60 secondes
+actualise finalement la page, mais pas l'événement immédiatement.
+
+TD2-435 créé, P1 : correction centralisée des clés + test de cache réel et
+recette reconnexion/publication/rendu. Non corrigé dans la release .2 ; aucune
+certification d'affichage instantané ou de chaîne SSE intégrale à ce stade.
+Cette limite ne retire pas la persistance canonique d'un brief ni les gardes
+backend ; elle doit rester distincte d'un échec du worker ou de la source.
+
+### .2 effectivement livrée et activation ciblée
+
+Release `.2` / `ba4e787` servie, migration 067 : déploiement
+`deploy-20260907T163419Z-c5c358f5` terminé verified/reopened vers 16:38 UTC,
+santé locale et front/health/readiness publics verts, protections restaurées.
+Sauvegarde `desk-native-20260907T162437Z.dump`, SHA256
+`2eb22913137a2a9d5277288586247280f578924b76da1a8025d497eddfe27be8` ; objets
+`desk-objects-20260907T163203Z.tar.gz`, SHA256
+`3aea9a9c35054224a6dfd98b5a38e6c4919ce2964af16a5cf82294ce5a69cfad`.
+
+Contrôle 16:39:07 UTC : onze services Running/Automatic ; plafonds monétaires
+et broker OFF inchangés ; calendrier naturel 16:26:16.992 UTC AVAILABLE,
+74 événements/trois sources, version `111d7865-6d8c-434a-8876-337cf8e53d09`,
+valable jusqu'à 22:26:16.992. Tâche calendrier activée après installation.
+
+Préflight relu à l'application, une tâche READY seulement, exact scope grains
+ADVISORY_ONLY, concurrence un. Activation à 16:39:39, reçu
+`agent-runtime-supervisor-mode-20260907-163939.json`. Tâche
+`d398ab47-aee9-49f8-94f2-5a7a835f67f7` CLAIMED à 16:39:39.835 ; analyse
+`2026-09-07T16:39:28.110Z`, cutoff prix `2026-09-04T18:20:00Z`, HOLIDAY.
+Le processus réel `codex.exe` a démarré ; à 16:41:29 l'analyse était encore
+en cours sans nouvel échec. Cette observation ne vaut pas encore publication.
+Ancien READY remplacé canoniquement, sans intervention SQL brute.
+
+### Publication réelle et recette finale
+
+- Tâche `d398ab47-aee9-49f8-94f2-5a7a835f67f7` **DONE** à
+  `2026-09-07T16:45:28.076Z`, outcome COMPLETED, aucune erreur, tentative un,
+  durée 348 187 ms (~5 min 48 s), attente de file 9 839 ms. Conversation gérée
+  ouverte, compteur passé à neuf tours ; aucune tâche LLM simulée.
+- Snapshot `market-context-e928bdc96041cabf52e0990b` et brief
+  `market-brief-e928bdc96041cabf52e0990b` persistés à 16:45:27.883 UTC,
+  AVAILABLE, analyse `16:39:28.110Z`, prix `2026-09-04T18:20:00Z`, échéance
+  `2026-09-07T17:39:28.110Z` (pas recalée sur l'heure de publication).
+  HOLIDAY ; prochains prix nécessaires à la prochaine RTH du 8 septembre.
+- Texte réellement généré en français : fermeture fériée, date exacte des
+  derniers prix, ZC et ZW distingués, aucun côté actif, autorité consultative,
+  sources météo/news générales non fournies explicitement reconnues. Les codes
+  libres de régime restent bruts/anglais dans une sous-section de l'UI :
+  limite de présentation, pas traduction intégrale certifiée.
+- Navigateur réel déjà ouvert, sans refresh forcé ni appel de commande :
+  événement snapshot reçu 16:45:30.368, brief 16:45:30.585 ; réponse BFF
+  nouvelle à 16:45:47.179 et rendu nouveau à 16:45:47.225 (~19,34 secondes
+  après publication). Capture `output/playwright/grains-context-resumption-20260907/after-focus.png`
+  inspectée : contexte consultable, fermeture visible, ancien ticket clairement
+  historique/non actionnable, aucun faux ticket prêt.
+- **Limite SSE confirmée** : 44 réceptions pour quatre IDs uniques répétés
+  toutes ~4–7 secondes, occurredAt transmis à la seconde entière. TD2-435
+  conserve la correction du cache scoped et l'enquête curseur/répétition.
+  Cette observation ne certifie ni déduplication parfaite ni reconnexion sans
+  perte ; elle prouve la publication durable, la transmission et le rendu.
+- Contrôle 16:47:14.856 UTC : zéro commande provider et zéro confirmation
+  Human Gate depuis 15:41, zéro verrou PostgreSQL en attente. Onze services
+  Running/Automatic à 16:48:16. Plafonds 500/2 000/4 000 USD conservés.
+- Calendrier autonome supplémentaire à 16:39:19.671 UTC : 74 événements,
+  trois sources, AVAILABLE jusqu'à 22:39:19.671, version
+  `2b7fe281-984b-47b3-b668-5b3657056bf2`, prochain cycle planifié 17:09:16 UTC.
+  Aucun relais local ou PC. L'analyste reste activé uniquement sur son scope.
+- Front réellement servi : `index-DwZkJcKB.js`, CSS `index-CNeeGDsH.css`.
+  Aucun code React/CSS modifié dans ce lot ; le contrôle visuel ne remplace
+  pas une nouvelle certification responsive/a11y exhaustive.
+- Telegram : transport réel vérifié par message 2581 à 15:56:41 sous .1,
+  service Running après .2 ; pas de second message identique et aucun signal
+  de trading fictif pour les besoins de recette.
+- Télémétrie brute du task : total_tokens=1 182 794, cost_micros_usd=0.
+  Ce compteur n'est pas assimilé à une mesure facturée du seul appel ; coût
+  nul non certifié. Performance/coût du worker à qualifier séparément.
+
+### Cause des répétitions SSE confirmée en lecture seule
+
+À 16:51:32 UTC, requête PostgreSQL READ ONLY sur les quatre IDs réellement
+observés : `created_at_utc=2026-09-07T16:45:27.924523Z` pour les quatre lignes.
+Le checkpoint repassant par `pg`/Date JavaScript devient
+`2026-09-07T16:45:27.924Z`. Après le dernier ID, la requête actuelle relit
+**quatre** lignes ; la comparaison native PostgreSQL n'en relit **aucune**.
+Cause établie : perte des microsecondes dans `domain-event-outbox-repository.js`
+`listAfter` (lecture checkpoint puis réinjection Date). Le mapper qui expose
+`occurredAt` à `.000` est un problème de précision distinct, pas le curseur.
+
+Preuve : `output/research/grains-context-resumption-20260907/sse-cursor-proof.json`.
+Correctif suivant TD2-435 : pagination native dans une requête/CTE + test PG
+sous-milliseconde et cache scoped/reconnexion. Aucun changement appliqué dans
+ce contrôle READ ONLY ; la release .2 reste celle testée et livrée.
