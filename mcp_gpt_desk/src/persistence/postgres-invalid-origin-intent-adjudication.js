@@ -1,5 +1,10 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
 
+const ADJUDICATION_FIELDS = `portfolio_order_intent_id,manifest_hash,revision,
+  expected_qualification_revision,expected_qualification_manifest_hash,status,
+  reservation_disposition,effective_at_utc,adjudicated_by,adjudication_reason,
+  operator_attestation_hash,operator_attestation`;
+
 export function createPostgresInvalidOriginIntentAdjudication(pool) {
   return { execute: (options, work) => execute(pool, options, work) };
 }
@@ -21,7 +26,8 @@ async function execute(pool, { mode, batchId }, work) {
 
 function transaction(client, mode) {
   return {
-    findApplied: (key) => one(client, "SELECT * FROM portfolio_invalid_origin_adjudications WHERE idempotency_key=$1", [key]),
+    findApplied: (key) => one(client,
+      `SELECT ${ADJUDICATION_FIELDS} FROM portfolio_invalid_origin_adjudications WHERE idempotency_key=$1`, [key]),
     loadCandidate: (specification) => loadCandidate(client, specification, mode),
     appendAdjudication: (command) => appendAdjudication(client, command),
   };
@@ -91,7 +97,7 @@ async function appendAdjudication(client, command) {
       reservation_disposition,effective_at_utc,adjudicated_by,adjudication_reason,
       operator_attestation,operator_attestation_hash,manifest_hash,evidence
     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'CANCELLED_INVALID_ORIGIN','ADMINISTRATIVELY_RELEASED',
-      $9,$10,$11,$12::jsonb,$13,$14,$15::jsonb) RETURNING *`, [id,
+      $9,$10,$11,$12::jsonb,$13,$14,$15::jsonb) RETURNING ${ADJUDICATION_FIELDS}`, [id,
     command.specification.idempotency_key, command.specification.portfolio_order_intent_id,
     command.candidate.historical_intent_qualification_id, revision,
     command.specification.expected_previous_adjudication_revision,
