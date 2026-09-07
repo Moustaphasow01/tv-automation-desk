@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLiveFocusView } from "@/domains/front-api/viewModels";
+import { isLiveFocusView, type LiveFocusView } from "@/domains/front-api/viewModels";
 
 describe("Live Focus deep contract", () => {
   it("accepts the canonical safe empty snapshot", () => {
@@ -11,9 +11,27 @@ describe("Live Focus deep contract", () => {
     expect(isLiveFocusView({ ...fixture(), tradeCards: [{ signalId: "signal-only" }] })).toBe(false);
     expect(isLiveFocusView({ ...fixture(), observedOpportunities: [{ signalId: "signal-1", diagnosticOnly: false }] })).toBe(false);
   });
+
+  it("accepts explicit unavailable counters without converting them to false zeroes", () => {
+    const value = fixture();
+    value.whyNoTrade.stageCounts = { contextAccepted: null, contextWait: null, contextRejected: null };
+    value.contextWorker = {
+      ...value.contextWorker,
+      availability: "UNAVAILABLE",
+      reasonCodes: ["MARKET_CONTEXT_POOL_CHECKOUT_TIMEOUT"],
+      taskCount: null,
+      successCount: null,
+      failureCount: null,
+      activeCount: null,
+      retryCount: null,
+      totalTokens: null,
+      costMicrosUsd: null,
+    };
+    expect(isLiveFocusView(value)).toBe(true);
+  });
 });
 
-function fixture() {
+function fixture(): LiveFocusView {
   return {
     schemaVersion: "live_focus_view_v1",
     universe: "US_GRAINS_CBOT",

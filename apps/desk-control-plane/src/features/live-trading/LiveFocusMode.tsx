@@ -255,7 +255,7 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
     <article><small>Ce que le desk recherche</small><p>{preferred.length ? `Le desk privilégie ${preferred.join(", ")}.` : "Aucune famille de stratégie n’est privilégiée dans l’état publié."}</p></article>
     <article><small>Points de vigilance</small><p>{vigilance.length ? formatOperatorParagraph(`${vigilance.join(". ")}.`) : "Aucun point de vigilance supplémentaire n’est publié."}</p></article>
     <button type="button" className="live-focus__brief-open" onClick={onOpen}><FaInfoCircle aria-hidden="true" />Voir le brief complet</button>
-    <small className="live-focus__brief-source">Brief {contextStatus.label} · consultatif · données arrêtées à {displayTime(focus.technical.sourceDataCutoff || focus.asOf)} · valide jusqu’à {displayTime(typeof focus.marketContext.validUntil === "string" ? focus.marketContext.validUntil : null)} · analyste {focus.contextWorker.successCount} succès / {focus.contextWorker.failureCount} échec(s)</small>
+    <small className="live-focus__brief-source">Brief {contextStatus.label} · consultatif · données arrêtées à {displayTime(focus.technical.sourceDataCutoff || focus.asOf)} · valide jusqu’à {displayTime(typeof focus.marketContext.validUntil === "string" ? focus.marketContext.validUntil : null)} · analyste {focusMetric(focus.contextWorker.successCount)} succès / {focusMetric(focus.contextWorker.failureCount)} échec(s)</small>
   </div>;
 }
 
@@ -344,7 +344,7 @@ function FocusBriefDrawer({ focus, onClose }: { focus: LiveFocusView; onClose():
     <section><h3>Pourquoi aucun trade ?</h3><TagList values={focus.whyNoTrade.topReasons.map(focusReason)} empty="Aucun blocage publié" /></section>
     <section className="live-focus-drawer__columns"><div><h3>Zones d’opportunité</h3><ZoneList zones={currentZones} /></div><div><h3>Zones à éviter</h3><ZoneList zones={noTradeZones} /></div></section>
     <section><h3>Sources et fraîcheur</h3><div className="live-focus-drawer__source-grid">{focus.sourceStates.map((source, index) => <article key={valueText(source.sourceId, String(index))}><strong>{valueText(source.sourceId, "Source")}</strong><span>{operatorCode(valueText(source.status, "UNKNOWN"))}</span><small>{displayTime(valueText(source.dataCutoff ?? source.asOf, null))}</small></article>)}</div></section>
-    <section><h3>Analyste contextuel</h3><dl className="live-focus-drawer__facts"><Fact label="Tâches" value={String(focus.contextWorker.taskCount)} /><Fact label="Succès" value={String(focus.contextWorker.successCount)} /><Fact label="Échecs" value={String(focus.contextWorker.failureCount)} /><Fact label="Relances" value={String(focus.contextWorker.retryCount)} /><Fact label="Latence moyenne" value={focus.contextWorker.averageLatencyMs === null ? "Non mesurée" : `${Math.round(focus.contextWorker.averageLatencyMs)} ms`} /><Fact label="Tokens" value={String(focus.contextWorker.totalTokens)} /></dl></section>
+    <section><h3>Analyste contextuel</h3><dl className="live-focus-drawer__facts"><Fact label="Tâches" value={focusMetric(focus.contextWorker.taskCount)} /><Fact label="Succès" value={focusMetric(focus.contextWorker.successCount)} /><Fact label="Échecs" value={focusMetric(focus.contextWorker.failureCount)} /><Fact label="Relances" value={focusMetric(focus.contextWorker.retryCount)} /><Fact label="Latence moyenne" value={focus.contextWorker.averageLatencyMs === null ? "Non disponible" : `${Math.round(focus.contextWorker.averageLatencyMs)} ms`} /><Fact label="Tokens" value={focusMetric(focus.contextWorker.totalTokens)} /></dl></section>
     <section><h3>Historique de séance</h3><ol className="live-focus-drawer__history">{focus.briefHistory.length ? focus.briefHistory.map((item) => <li key={item.marketDeskBriefId} data-current={item.current}><div><strong>{item.current ? "Brief actuel" : "Historique"}</strong><span>{operatorCode(item.status)}</span></div><small>{displayTime(item.createdAt)} → {displayTime(item.validUntil)} · {item.invalidationReason ? operatorReason(item.invalidationReason) : "aucune invalidation publiée"}</small></li>) : <li><small>Aucun brief historique publié.</small></li>}</ol></section>
   </FocusDrawer>;
 }
@@ -419,9 +419,12 @@ function FocusPosition({ model }: { model: LiveTradingModel }) {
 
 function FocusPipeline({ focus }: { focus: LiveFocusView }) {
   const counts = focus.whyNoTrade.stageCounts;
+  const contextCountsAvailable = [counts.contextAccepted, counts.contextWait, counts.contextRejected]
+    .every((value) => value !== null && value !== undefined);
   const stages = [
     { label: "Le desk a repéré quelque chose", published: Number(counts.signals || 0) > 0, result: `${counts.signals || 0} signal(s)` },
-    { label: "Le contexte est-il favorable ?", published: Number(counts.contextAccepted || 0) > 0, result: `${counts.contextAccepted || 0} admis · ${counts.contextWait || 0} en attente · ${counts.contextRejected || 0} refusés` },
+    { label: "Le contexte est-il favorable ?", published: contextCountsAvailable && Number(counts.contextAccepted || 0) > 0,
+      result: contextCountsAvailable ? `${counts.contextAccepted || 0} admis · ${counts.contextWait || 0} en attente · ${counts.contextRejected || 0} refusés` : "Lecture du contexte indisponible" },
     { label: "Est-ce compatible avec le portefeuille ?", published: Number(counts.portfolioSelected || 0) > 0, result: `${counts.portfolioSelected || 0} sélection(s)` },
     { label: "Quel ordre exactement ?", published: Number(counts.orderIntents || 0) > 0, result: `${counts.orderIntents || 0} ordre(s) proposé(s)` },
     { label: "À vous de valider", published: focus.tradeCards.some(focusCardActionable), result: `${focus.tradeCards.filter(focusCardActionable).length} dossier(s) à décider` },
@@ -434,6 +437,8 @@ function FocusPipeline({ focus }: { focus: LiveFocusView }) {
     })}
   </ol>;
 }
+
+function focusMetric(value: number | null) { return value === null ? "Non disponible" : String(value); }
 
 function resolveBackendFocusState(focus: LiveFocusView, model: LiveTradingModel) {
   const stage = focus.operatorJourneyState.stage;

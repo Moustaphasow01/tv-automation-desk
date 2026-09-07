@@ -7,6 +7,22 @@ import {
 import { SystemClock } from "@tv-automation/desk-time";
 import { loadCurrentGrainsCalendar } from "./persistence/postgres-grains-calendar-current-state.js";
 
+const DEFAULT_READ_BUDGET_MS = 15_000;
+const CORE_STATEMENT_TIMEOUT_MS = 1_000;
+const MAX_ENRICHMENT_STATEMENT_TIMEOUT_MS = 700;
+const MIN_STATEMENT_TIMEOUT_MS = 50;
+const READ_BUDGET_RESERVE_MS = 100;
+
+const CURRENT_CONTEXT_SQL = `WITH latest_snapshot AS (
+  SELECT * FROM market_context_snapshots
+  WHERE universe=$1 ORDER BY created_at_utc DESC LIMIT 1
+)
+SELECT row_to_json(snapshot_row) AS snapshot,
+  (SELECT row_to_json(brief_row) FROM market_desk_briefs brief_row
+    WHERE brief_row.market_context_snapshot_id=snapshot_row.market_context_snapshot_id
+    ORDER BY brief_row.created_at_utc DESC LIMIT 1) AS brief
+FROM latest_snapshot snapshot_row`;
+
 export class MarketContextRepository {
   constructor(persistence, { eventOutbox = null, clock = new SystemClock() } = {}) {
     this.persistence = persistence;
@@ -15,61 +31,12 @@ export class MarketContextRepository {
     this.clock = clock;
   }
 
-  async current(universe = "US_GRAINS_CBOT", nowUtc = null) {
+  async current(universe = "US_GRAINS_CBOT", nowUtc = null, options = {}) {
     const asOfUtc = nowUtc || this.clock.now().utc;
     await this.#ready();
-    const [snapshotResult, briefResult, briefHistoryResult, coverageResult, prefilterResult, workerResult, calendar] = await Promise.all([
-      this.pool.query(`SELECT * FROM market_context_snapshots
-        WHERE universe=$1 ORDER BY created_at_utc DESC LIMIT 1`, [universe]),
-      this.pool.query(`SELECT * FROM market_desk_briefs
-        WHERE universe=$1 ORDER BY created_at_utc DESC LIMIT 1`, [universe]),
-      this.pool.query(`SELECT * FROM market_desk_briefs
-        WHERE universe=$1 ORDER BY created_at_utc DESC LIMIT 12`, [universe]),
-      this.pool.query("SELECT * FROM market_source_coverage_manifests ORDER BY source_id"),
-      this.pool.query(`SELECT market_context_prefilter_decision_id, market_context_snapshot_id,
-        signal_id, decision, reason_codes, source_data_cutoff_utc, decided_at_utc
-        FROM market_context_prefilter_decisions
-        WHERE universe=$1 AND decided_at_utc >= $2::timestamptz - interval '24 hours'
-        ORDER BY decided_at_utc DESC LIMIT 500`, [universe, asOfUtc]),
-      this.pool.query(`SELECT m.model_policy,
-        count(t.agent_task_id)::int AS task_count,
-        count(*) FILTER (WHERE t.status='DONE')::int AS success_count,
-        count(*) FILTER (WHERE t.status IN ('ERROR','CANCELLED'))::int AS failure_count,
-        count(*) FILTER (WHERE t.status IN ('READY','CLAIMED','RUNNING'))::int AS active_count,
-        coalesce(sum(greatest(t.attempt_count - 1, 0)),0)::bigint AS retry_count,
-        max(t.completed_at_utc) AS last_completed_at,
-        avg(r.total_latency_ms)::bigint AS average_latency_ms,
-        coalesce(sum(r.total_tokens),0)::bigint AS total_tokens,
-        coalesce(sum(r.cost_micros_usd),0)::bigint AS cost_micros_usd
-        FROM agent_missions m
-        LEFT JOIN agent_tasks t ON t.agent_mission_id=m.agent_mission_id
-          AND t.task_type='LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH'
-        LEFT JOIN agent_task_run_metrics r ON r.agent_task_id=t.agent_task_id
-        WHERE m.mission_key='us-grains-market-context-live'
-        GROUP BY m.agent_mission_id, m.model_policy`),
-      this.calendarAt(asOfUtc),
-    ]);
-    const snapshot = mapSnapshot(snapshotResult.rows[0], asOfUtc);
-    const brief = mapBrief(briefResult.rows[0], asOfUtc);
-    return {
-      universe,
-      snapshot,
-      brief,
-      briefHistory: briefHistoryResult.rows.map((row, index, history) => mapBriefHistory(
-        row,
-        asOfUtc,
-        index === 0,
-        index === 0 ? null : history[index - 1]?.market_desk_brief_id || null,
-      )),
-      sourceStates: [
-        ...coverageResult.rows.filter((row) => row.source_id !== "market_agri_events").map(mapCoverage),
-        calendar.sourceState,
-      ],
-      agriEvents: calendar.events,
-      prefilterDecisions: prefilterResult.rows.map(mapPrefilterDecision),
-      workerRuntime: mapWorkerRuntime(workerResult.rows[0], asOfUtc),
-      asOf: asOfUtc,
-    };
+    const readBudgetMs = boundedReadBudget(options.readBudgetMs);
+    const records = await readCurrentRecords(this.pool, { universe, asOfUtc, readBudgetMs });
+    return mapCurrentRecords(records, { universe, asOfUtc });
   }
 
   async calendarAt(asOfUtc) {
@@ -165,6 +132,190 @@ export class MarketContextRepository {
     if (!this.pool) throw coded("MARKET_CONTEXT_REPOSITORY_UNAVAILABLE");
     await this.persistence.initialized;
   }
+}
+
+async function readCurrentRecords(pool, { universe, asOfUtc, readBudgetMs }) {
+  const deadline = performance.now() + readBudgetMs;
+  const client = await acquireReadClient(pool);
+  try {
+    await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const core = await readCore(client, { universe, deadline });
+    const enrichment = await readEnrichments(client, { universe, asOfUtc, deadline });
+    await client.query("COMMIT");
+    return { core, ...enrichment };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw sanitizeCoreReadError(error);
+  } finally {
+    client.release();
+  }
+}
+
+async function acquireReadClient(pool) {
+  try {
+    return await pool.connect();
+  } catch (error) {
+    throw coded(isPoolCheckoutTimeout(error)
+      ? "MARKET_CONTEXT_POOL_CHECKOUT_TIMEOUT"
+      : "MARKET_CONTEXT_READ_UNAVAILABLE", error);
+  }
+}
+
+async function readCore(client, { universe, deadline }) {
+  const remaining = remainingBudget(deadline);
+  if (remaining < MIN_STATEMENT_TIMEOUT_MS) throw coded("MARKET_CONTEXT_READ_BUDGET_EXHAUSTED");
+  const timeoutMs = Math.min(CORE_STATEMENT_TIMEOUT_MS, remaining);
+  await setLocalStatementTimeout(client, timeoutMs);
+  try {
+    return await client.query(CURRENT_CONTEXT_SQL, [universe]);
+  } finally {
+    await client.query("SET LOCAL statement_timeout = 0").catch(() => {});
+  }
+}
+
+async function readEnrichments(client, { universe, asOfUtc, deadline }) {
+  const values = {};
+  const diagnostics = [];
+  const steps = enrichmentSteps(universe, asOfUtc);
+  let remainingStatements = steps.reduce((total, step) => total + step.statementCount, 0);
+  for (const step of steps) {
+    const budget = enrichmentStatementBudget(deadline, remainingStatements);
+    remainingStatements -= step.statementCount;
+    if (budget < MIN_STATEMENT_TIMEOUT_MS) {
+      diagnostics.push(readDiagnostic(step.name, "MARKET_CONTEXT_READ_BUDGET_EXHAUSTED"));
+      values[step.name] = null;
+      continue;
+    }
+    const result = await readEnrichment(client, step, budget);
+    values[step.name] = result.value;
+    if (result.diagnostic) diagnostics.push(result.diagnostic);
+  }
+  return { values, diagnostics };
+}
+
+async function readEnrichment(client, step, timeoutMs) {
+  const savepoint = `market_context_${step.name.replaceAll("-", "_")}`;
+  await client.query(`SAVEPOINT ${savepoint}`);
+  await setLocalStatementTimeout(client, timeoutMs);
+  try {
+    const value = await step.read(client);
+    await client.query("SET LOCAL statement_timeout = 0");
+    await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+    return { value, diagnostic: null };
+  } catch (error) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+    await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+    return { value: null, diagnostic: readDiagnostic(step.name, enrichmentErrorCode(error)) };
+  }
+}
+
+function enrichmentSteps(universe, asOfUtc) {
+  return [
+    { name: "brief-history", statementCount: 1, read: (client) => client.query(`SELECT * FROM market_desk_briefs
+      WHERE universe=$1 ORDER BY created_at_utc DESC LIMIT 12`, [universe]) },
+    { name: "source-coverage", statementCount: 1, read: (client) => client.query(
+      "SELECT * FROM market_source_coverage_manifests ORDER BY source_id") },
+    { name: "prefilter-decisions", statementCount: 1, read: (client) => client.query(`SELECT market_context_prefilter_decision_id,
+      market_context_snapshot_id, signal_id, decision, reason_codes, source_data_cutoff_utc, decided_at_utc
+      FROM market_context_prefilter_decisions
+      WHERE universe=$1 AND decided_at_utc >= $2::timestamptz - interval '24 hours'
+      ORDER BY decided_at_utc DESC LIMIT 500`, [universe, asOfUtc]) },
+    { name: "worker-runtime", statementCount: 1, read: (client) => client.query(WORKER_RUNTIME_SQL) },
+    { name: "agri-calendar", statementCount: 3, read: (client) => loadCurrentGrainsCalendar(client, asOfUtc) },
+  ];
+}
+
+const WORKER_RUNTIME_SQL = `SELECT m.model_policy,
+  count(t.agent_task_id)::int AS task_count,
+  count(*) FILTER (WHERE t.status='DONE')::int AS success_count,
+  count(*) FILTER (WHERE t.status IN ('ERROR','CANCELLED'))::int AS failure_count,
+  count(*) FILTER (WHERE t.status IN ('READY','CLAIMED','RUNNING'))::int AS active_count,
+  coalesce(sum(greatest(t.attempt_count - 1, 0)),0)::bigint AS retry_count,
+  max(t.completed_at_utc) AS last_completed_at,
+  avg(r.total_latency_ms)::bigint AS average_latency_ms,
+  coalesce(sum(r.total_tokens),0)::bigint AS total_tokens,
+  coalesce(sum(r.cost_micros_usd),0)::bigint AS cost_micros_usd
+  FROM agent_missions m
+  LEFT JOIN agent_tasks t ON t.agent_mission_id=m.agent_mission_id
+    AND t.task_type='LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH'
+  LEFT JOIN agent_task_run_metrics r ON r.agent_task_id=t.agent_task_id
+  WHERE m.mission_key='us-grains-market-context-live'
+  GROUP BY m.agent_mission_id, m.model_policy`;
+
+function mapCurrentRecords(records, { universe, asOfUtc }) {
+  const core = records.core.rows[0] || {};
+  const briefHistoryRows = records.values["brief-history"]?.rows;
+  const coverageRows = records.values["source-coverage"]?.rows;
+  const prefilterRows = records.values["prefilter-decisions"]?.rows;
+  const workerRows = records.values["worker-runtime"]?.rows;
+  const calendar = records.values["agri-calendar"];
+  const fallbackHistory = core.brief ? [core.brief] : [];
+  return {
+    universe,
+    snapshot: mapSnapshot(core.snapshot, asOfUtc),
+    brief: mapBrief(core.brief, asOfUtc),
+    briefHistory: mapBriefHistoryRows(briefHistoryRows || fallbackHistory, asOfUtc),
+    sourceStates: mapSourceStates(coverageRows, calendar),
+    agriEvents: calendar?.events ?? null,
+    prefilterDecisions: prefilterRows ? prefilterRows.map(mapPrefilterDecision) : null,
+    workerRuntime: workerRows?.[0] ? mapWorkerRuntime(workerRows[0], asOfUtc) : null,
+    readStatus: records.diagnostics.length ? "PARTIAL" : "AVAILABLE",
+    readDiagnostics: records.diagnostics,
+    asOf: asOfUtc,
+  };
+}
+
+function mapBriefHistoryRows(rows, asOfUtc) {
+  return rows.map((row, index, history) => mapBriefHistory(
+    row, asOfUtc, index === 0,
+    index === 0 ? null : history[index - 1]?.market_desk_brief_id || null,
+  ));
+}
+
+function mapSourceStates(coverageRows, calendar) {
+  const coverage = Array.isArray(coverageRows)
+    ? coverageRows.filter((row) => row.source_id !== "market_agri_events").map(mapCoverage)
+    : [];
+  return calendar?.sourceState ? [...coverage, calendar.sourceState] : coverage;
+}
+
+function enrichmentStatementBudget(deadline, remainingStatements) {
+  const remaining = remainingBudget(deadline);
+  if (remainingStatements <= 0) return 0;
+  return Math.min(MAX_ENRICHMENT_STATEMENT_TIMEOUT_MS, Math.floor(remaining / remainingStatements));
+}
+
+function remainingBudget(deadline) {
+  return Math.max(0, deadline - performance.now() - READ_BUDGET_RESERVE_MS);
+}
+
+function boundedReadBudget(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(500, Math.min(60_000, Math.trunc(parsed))) : DEFAULT_READ_BUDGET_MS;
+}
+
+function setLocalStatementTimeout(client, timeoutMs) {
+  const bounded = Math.max(MIN_STATEMENT_TIMEOUT_MS, Math.trunc(timeoutMs));
+  return client.query(`SET LOCAL statement_timeout = '${bounded}ms'`);
+}
+
+function readDiagnostic(component, code) {
+  return { component, status: "UNAVAILABLE", code };
+}
+
+function enrichmentErrorCode(error) {
+  return error?.code === "57014"
+    ? "MARKET_CONTEXT_ENRICHMENT_TIMEOUT"
+    : "MARKET_CONTEXT_ENRICHMENT_UNAVAILABLE";
+}
+
+function sanitizeCoreReadError(error) {
+  if (String(error?.code || "").startsWith("MARKET_CONTEXT_")) return error;
+  return coded(error?.code === "57014" ? "MARKET_CONTEXT_CORE_TIMEOUT" : "MARKET_CONTEXT_CORE_READ_UNAVAILABLE", error);
+}
+
+function isPoolCheckoutTimeout(error) {
+  return error?.message === "timeout exceeded when trying to connect";
 }
 
 async function invalidateCurrent(client, snapshot) {
@@ -266,6 +417,8 @@ function mapPrefilterDecision(row = {}) {
 function mapWorkerRuntime(row, nowUtc) {
   const policy = row?.model_policy || {};
   return {
+    availability: "AVAILABLE",
+    reasonCodes: [],
     taskType: "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH",
     lane: "live",
     cadenceMinutes: { marketOpen: 30, marketClosed: 60 },
@@ -287,4 +440,8 @@ function mapWorkerRuntime(row, nowUtc) {
 
 function hash(value) { return `sha256:${canonicalSha256(value)}`; }
 function uuidOrNull(value) { return /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(value || "")) ? value : null; }
-function coded(code) { const error = new Error(code); error.code = code; return error; }
+function coded(code, cause = null) {
+  const error = new Error(code, cause ? { cause } : undefined);
+  error.code = code;
+  return error;
+}

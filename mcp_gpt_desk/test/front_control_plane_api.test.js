@@ -2164,6 +2164,49 @@ test("Live Focus keeps an authoritative empty execution projection as a legitima
   assert.equal(envelope.data.whyNoTrade.stageCounts.orderIntents, 0);
 });
 
+test("Live Focus reports an unavailable context read without inventing an empty publication", async () => {
+  const store = frontControlPlaneStore();
+  store.getCurrentMarketContext = async () => {
+    throw Object.assign(new Error("sanitized"), { code: "MARKET_CONTEXT_POOL_CHECKOUT_TIMEOUT" });
+  };
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-focus",
+    query: { diagnostic: "context-pool-timeout" },
+  });
+
+  assert.equal(envelope.meta.availability, "PARTIAL");
+  assert.equal(envelope.meta.warnings.includes("market-context:MARKET_CONTEXT_POOL_CHECKOUT_TIMEOUT"), true);
+  assert.equal(envelope.meta.sources.find((item) => item.source === "market-context")?.state, "UNAVAILABLE");
+  assert.equal(envelope.data.marketDeskBrief.headline, "Analyse de contexte momentanément indisponible");
+  assert.equal(envelope.data.whyNoTrade.stageCounts.contextAccepted, null);
+  assert.equal(envelope.data.contextWorker.successCount, null);
+});
+
+test("Live Focus keeps its canonical brief when only a context enrichment is degraded", async () => {
+  const store = frontControlPlaneStore();
+  store.getCurrentMarketContext = async () => ({
+    universe: "US_GRAINS_CBOT",
+    snapshot: { status: "AVAILABLE", marketContextSnapshotId: "context-kept", sourceDataCutoff: "2026-08-11T08:00:00.000Z" },
+    brief: { status: "AVAILABLE", marketDeskBriefId: "brief-kept", headline: "Brief canonique conservé" },
+    briefHistory: [], sourceStates: [], agriEvents: [], prefilterDecisions: null, workerRuntime: null,
+    readStatus: "PARTIAL",
+    readDiagnostics: [{ component: "worker-runtime", status: "UNAVAILABLE", code: "MARKET_CONTEXT_ENRICHMENT_TIMEOUT" }],
+    asOf: "2026-08-11T08:00:00.000Z",
+  });
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-focus",
+    query: { diagnostic: "context-enrichment-timeout" },
+  });
+
+  assert.equal(envelope.meta.availability, "PARTIAL");
+  assert.equal(envelope.meta.sources.find((item) => item.source === "market-context")?.state, "DEGRADED");
+  assert.equal(envelope.data.marketContext.marketContextSnapshotId, "context-kept");
+  assert.equal(envelope.data.marketDeskBrief.marketDeskBriefId, "brief-kept");
+  assert.equal(envelope.data.contextWorker.failureCount, null);
+});
+
 test("front control plane command center publishes canonical truth and isolates legacy execution history", async () => {
   const envelope = await handleFrontControlPlane(frontControlPlaneStore(), {
     pathname: "/front-api/v1/views/command-center",

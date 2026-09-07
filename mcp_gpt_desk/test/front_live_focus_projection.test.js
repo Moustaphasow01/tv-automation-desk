@@ -32,6 +32,50 @@ test("Live Focus retains the historical single-cutoff contract when no dual cloc
   assert.equal(projection.marketContext.status, "PARTIAL");
 });
 
+test("Live Focus distinguishes a failed context read from a successful empty publication", () => {
+  const failedRead = buildLiveFocusProjection({
+    live: liveFixture(),
+    marketContext: {
+      readStatus: "UNAVAILABLE",
+      readDiagnostics: [{ component: "core", code: "MARKET_CONTEXT_POOL_CHECKOUT_TIMEOUT" }],
+      prefilterDecisions: null,
+      workerRuntime: null,
+    },
+    health: healthFixture(), nowIso: NOW,
+  });
+  assert.equal(failedRead.marketDeskBrief.headline, "Analyse de contexte momentanément indisponible");
+  assert.equal(failedRead.whyNoTrade.stageCounts.contextAccepted, null);
+  assert.equal(failedRead.contextWorker.successCount, null);
+  assert.equal(failedRead.whyNoTrade.topReasons.includes("MARKET_CONTEXT_READ_UNAVAILABLE"), true);
+
+  const emptyRead = buildLiveFocusProjection({
+    live: liveFixture(),
+    marketContext: { readStatus: "AVAILABLE", snapshot: null, brief: null, prefilterDecisions: [] },
+    health: healthFixture(), nowIso: NOW,
+  });
+  assert.equal(emptyRead.marketDeskBrief.headline, "Analyse de contexte non publiée");
+  assert.equal(emptyRead.whyNoTrade.stageCounts.contextAccepted, 0);
+  assert.equal(emptyRead.whyNoTrade.topReasons.includes("MARKET_CONTEXT_NOT_PUBLISHED"), true);
+});
+
+test("Live Focus preserves canonical context when optional enrichments are degraded", () => {
+  const projection = buildLiveFocusProjection({
+    live: liveFixture(),
+    marketContext: {
+      snapshot: { status: "AVAILABLE", marketContextSnapshotId: "context-kept", sourceDataCutoff: NOW },
+      brief: { status: "AVAILABLE", marketDeskBriefId: "brief-kept", headline: "Brief conservé" },
+      readStatus: "PARTIAL",
+      readDiagnostics: [{ component: "worker-runtime", code: "MARKET_CONTEXT_ENRICHMENT_TIMEOUT" }],
+      prefilterDecisions: null,
+      workerRuntime: null,
+    },
+    health: healthFixture(), nowIso: NOW,
+  });
+  assert.equal(projection.marketContext.marketContextSnapshotId, "context-kept");
+  assert.equal(projection.marketDeskBrief.marketDeskBriefId, "brief-kept");
+  assert.equal(projection.contextWorker.failureCount, null);
+});
+
 test("Live Focus keeps a raw signal diagnostic and never promotes it to a trade card", () => {
   const projection = buildLiveFocusProjection({
     live: liveFixture(),

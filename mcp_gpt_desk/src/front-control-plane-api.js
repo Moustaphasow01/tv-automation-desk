@@ -173,7 +173,7 @@ const VIEW_SOURCE_DEPENDENCIES = {
   "strategy-detail": ["strategy", "research", "execution", "incidents"],
   "strategy-compare": ["strategy", "research", "simulation-runs"],
   "live-trading": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "live-market-snapshot", "live-session", "front-macro", "front-news", "assistant-runtime", "performance", "health"],
-  "live-focus": ["execution", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "live-market-snapshot", "live-session", "front-macro", "front-news", "assistant-runtime", "performance", "health", "market-context"],
+  "live-focus": ["market-context", "execution", "health", "strategy", "incidents", "ai-context", "portfolio-risk", "market-series", "live-market-snapshot", "live-session", "front-macro", "front-news", "assistant-runtime", "performance"],
   "live-signal-detail": ["execution", "strategy", "portfolio-risk", "ai-context"],
   "order-detail": ["execution", "live-market-snapshot"],
   "position-detail": ["execution"],
@@ -289,11 +289,12 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
   const started = currentTick(store?.clock);
   const warnings = [];
   const deskQuery = viewName === "live-trading" ? withoutMarketSeriesScope(query) : query;
+  const sourceTimeoutMs = number(store?.frontControlPlaneSourceTimeoutMs, FRONT_SOURCE_TIMEOUT_MS);
   const source = (label, factory, cacheQuery = deskQuery) => safeSource(
     label,
     cachedSource(store, label, cacheQuery, factory, number(store?.frontControlPlaneSourceCacheTtlMs, FRONT_SOURCE_CACHE_TTL_MS)),
     warnings,
-    number(store?.frontControlPlaneSourceTimeoutMs, FRONT_SOURCE_TIMEOUT_MS),
+    sourceTimeoutMs,
   );
   const loaders = {
     execution: () => source("execution", () => call(store, "getExecutionOverview", deskQuery)),
@@ -347,10 +348,14 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     "prompt-registry": () => source("prompt-registry", () => call(store, "getPromptRegistryOverview", {})),
     "observability-policy": () => source("observability-policy", () => call(store, "getOperationsObservabilityPolicy", {})),
     health: () => typeof store?.health === "function" ? source("health", () => store.health()) : Promise.resolve(null),
-    "market-context": () => source("market-context", () => call(store, "getCurrentMarketContext", { universe: "US_GRAINS_CBOT" })),
+    "market-context": () => source("market-context", () => call(store, "getCurrentMarketContext", {
+      universe: "US_GRAINS_CBOT",
+      readBudgetMs: Math.max(500, sourceTimeoutMs - 1_500),
+    })),
   };
   const dependencies = VIEW_SOURCE_DEPENDENCIES[viewName] || [];
   const loaded = Object.fromEntries(await Promise.all(dependencies.map(async (name) => [name, await loaders[name]()]))) ;
+  appendMarketContextReadWarnings(warnings, loaded["market-context"]);
   const context = {
     execution: loaded.execution ?? null,
     strategy: loaded.strategy ?? null,
@@ -382,7 +387,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
     promptRegistry: loaded["prompt-registry"] ?? null,
     observabilityPolicy: loaded["observability-policy"] ?? null,
     health: loaded.health ?? null,
-    marketContext: loaded["market-context"] ?? null,
+    marketContext: loaded["market-context"] ?? unavailableMarketContextRead(warnings, currentTick(store?.clock).utc),
     query, warnings, clock: store?.clock, nowIso: currentTick(store?.clock).utc, actor,
   };
   return envelope({
@@ -1640,7 +1645,7 @@ function envelope({ viewName, data, started, stale, warnings = [], clock, source
       stale,
       availability: viewAvailability(warnings, sources),
       warnings,
-      sources: sources.map((source) => ({ source, state: warnings.some((warning) => warning.startsWith(`${source}:`)) ? "UNAVAILABLE" : "AVAILABLE" })),
+      sources: sources.map((source) => ({ source, state: frontSourceState(warnings, source) })),
       latencyMs: Math.max(0, tick.epochMs - started.epochMs),
       correlationId: `corr_front_view_${viewName}_${hash(now).slice(0, 12)}`,
       schemaVersion: "1.0.0",
@@ -2185,6 +2190,34 @@ async function safeSource(label, promise, warnings, timeoutMs = FRONT_SOURCE_TIM
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+function appendMarketContextReadWarnings(warnings, marketContext) {
+  for (const diagnostic of rows(marketContext?.readDiagnostics)) {
+    const component = text(diagnostic?.component, "read").replaceAll(/[^a-z0-9-]/gi, "-").toLowerCase();
+    const code = text(diagnostic?.code, "MARKET_CONTEXT_ENRICHMENT_UNAVAILABLE");
+    warnings.push(`market-context.${component}:${code}`);
+  }
+}
+function unavailableMarketContextRead(warnings, asOf) {
+  const warning = warnings.find((item) => item.startsWith("market-context:"));
+  if (!warning) return null;
+  return {
+    universe: "US_GRAINS_CBOT",
+    snapshot: null,
+    brief: null,
+    briefHistory: [],
+    sourceStates: [],
+    agriEvents: null,
+    prefilterDecisions: null,
+    workerRuntime: null,
+    readStatus: "UNAVAILABLE",
+    readDiagnostics: [{ component: "core", status: "UNAVAILABLE", code: warning.slice(warning.indexOf(":") + 1) }],
+    asOf,
+  };
+}
+function frontSourceState(warnings, source) {
+  if (warnings.some((warning) => warning.startsWith(`${source}:`))) return "UNAVAILABLE";
+  return warnings.some((warning) => warning.startsWith(`${source}.`)) ? "DEGRADED" : "AVAILABLE";
 }
 function cachedSource(store, label, query, factory, ttlMs = FRONT_SOURCE_CACHE_TTL_MS) {
   if (!store || (typeof store !== "object" && typeof store !== "function")) return Promise.resolve().then(factory);

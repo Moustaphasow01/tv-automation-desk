@@ -492,7 +492,9 @@ export class PersistentDeskStore {
   }
   async getCurrentMarketContext(args = {}) {
     if (!this.marketContext) return { universe: args.universe || "US_GRAINS_CBOT", snapshot: null, brief: null, sourceStates: [], asOf: this.clock.now().utc };
-    return this.marketContext.current(args.universe || "US_GRAINS_CBOT", this.clock.now().utc);
+    return this.marketContext.current(args.universe || "US_GRAINS_CBOT", this.clock.now().utc, {
+      readBudgetMs: args.readBudgetMs,
+    });
   }
   async compareOperationsReplays({ ids }) { return this.operations.compareReplays(ids); }
   async listOperationsIncidents(args = {}) { return this.operations.listIncidents(args); }

@@ -3437,7 +3437,7 @@ export type LiveFocusView = {
     whyNoTradeSummaryId: string;
     status: string;
     topReasons: readonly string[];
-    stageCounts: Record<string, number>;
+    stageCounts: Record<string, number | null>;
     blockingConditions: readonly { code: string; source: string }[];
     nextExpectedEvaluationAt: string | null;
     nextContextRefreshAt: string | null;
@@ -3536,22 +3536,24 @@ export type LiveFocusView = {
   watchlist: LiveTradingView["watchlist"];
   sourceStates: readonly Record<string, unknown>[];
   contextWorker: {
+    availability?: string;
+    reasonCodes?: readonly string[];
     taskType: string;
     lane: string;
     cadenceMinutes: { marketOpen: number; marketClosed: number };
     timeoutMs: number;
     modelPolicy: Record<string, unknown>;
-    taskCount: number;
-    successCount: number;
-    failureCount: number;
-    activeCount: number;
+    taskCount: number | null;
+    successCount: number | null;
+    failureCount: number | null;
+    activeCount: number | null;
     lastCompletedAt: string | null;
     lastSuccessfulBriefAt: string | null;
     briefAgeSeconds: number | null;
-    retryCount: number;
+    retryCount: number | null;
     averageLatencyMs: number | null;
-    totalTokens: number;
-    costMicrosUsd: number;
+    totalTokens: number | null;
+    costMicrosUsd: number | null;
   };
   nextActions: readonly unknown[];
   technical: { source: string; sourceDataCutoff: string | null; revision: number };
@@ -3978,8 +3980,12 @@ export function isLiveFocusView(value: unknown): value is LiveFocusView {
 
 function validContextWorker(value: unknown): value is LiveFocusView["contextWorker"] {
   const item = value as LiveFocusView["contextWorker"];
-  return Boolean(item && typeof item.taskType === "string" && item.lane === "live" && typeof item.timeoutMs === "number" && typeof item.taskCount === "number" && typeof item.successCount === "number" && typeof item.failureCount === "number" && typeof item.activeCount === "number");
+  return Boolean(item && typeof item.taskType === "string" && item.lane === "live" && typeof item.timeoutMs === "number"
+    && nullableNumber(item.taskCount) && nullableNumber(item.successCount)
+    && nullableNumber(item.failureCount) && nullableNumber(item.activeCount));
 }
+
+function nullableNumber(value: unknown) { return value === null || typeof value === "number"; }
 
 function validFocusSafety(value: unknown): value is LiveFocusView["safety"] {
   const item = value as LiveFocusView["safety"];

@@ -9,6 +9,7 @@ const TERMINAL_THEORETICAL_STATES = new Set(["STOP_HIT", "TARGET_HIT", "EXPIRED"
 export function buildLiveFocusProjection({ live, marketContext, health, nowIso }) {
   const snapshot = marketContext?.snapshot || null;
   const brief = marketContext?.brief || null;
+  const contextReadUnavailable = marketContext?.readStatus === "UNAVAILABLE";
   const session = canonicalGrainsSession(health, nowIso);
   const tradeCards = buildTradeCards(live, nowIso);
   const observedOpportunities = buildObservedOpportunities(live, tradeCards, nowIso);
@@ -19,8 +20,8 @@ export function buildLiveFocusProjection({ live, marketContext, health, nowIso }
     asOf: nowIso,
     safety: { autoExecutionEnabled: false, physicalLiveEnabled: false, humanGateRequired: true, authority: "BACKEND" },
     session,
-    marketContext: snapshot || unavailableContext(marketContext, nowIso),
-    marketDeskBrief: brief || unavailableBrief(marketContext, whyNoTrade, nowIso),
+    marketContext: snapshot || unavailableContext(marketContext, nowIso, contextReadUnavailable),
+    marketDeskBrief: brief || unavailableBrief(marketContext, whyNoTrade, nowIso, contextReadUnavailable),
     briefHistory: rows(marketContext?.briefHistory),
     whyNoTrade,
     operatorJourneyState: journeyState({ tradeCards, observedOpportunities, snapshot, session, whyNoTrade, nowIso }),
@@ -32,7 +33,7 @@ export function buildLiveFocusProjection({ live, marketContext, health, nowIso }
     marketSeries: live.marketSeries,
     watchlist: live.watchlist,
     sourceStates: marketContext?.sourceStates || [],
-    contextWorker: marketContext?.workerRuntime || unavailableContextWorker(),
+    contextWorker: marketContext?.workerRuntime || unavailableContextWorker(marketContext),
     nextActions: operatorNextActions({ tradeCards, whyNoTrade }),
     technical: {
       source: "front-api/live-focus",
@@ -158,6 +159,7 @@ function buildObservedOpportunities(live, tradeCards, nowIso) {
 
 function buildWhyNoTrade({ live, marketContext, snapshot, brief, tradeCards, observedOpportunities, session, nowIso }) {
   const evaluations = rows(live?.canonicalRuntime?.activeStrategyInstances);
+  const prefiltersPublished = Array.isArray(marketContext?.prefilterDecisions);
   const prefilters = rows(marketContext?.prefilterDecisions);
   const arbitrations = rows(live?.arbitrations);
   const signalCount = rows(live?.signals).length;
@@ -165,9 +167,9 @@ function buildWhyNoTrade({ live, marketContext, snapshot, brief, tradeCards, obs
     evaluated: evaluations.length,
     noSignal: Math.max(0, evaluations.length - signalCount),
     signals: signalCount,
-    contextAccepted: prefilters.filter((item) => upper(item.decision) === "ADMISSIBLE").length,
-    contextWait: prefilters.filter((item) => upper(item.decision) === "WAIT").length,
-    contextRejected: prefilters.filter((item) => upper(item.decision) === "REJECT").length,
+    contextAccepted: prefiltersPublished ? prefilters.filter((item) => upper(item.decision) === "ADMISSIBLE").length : null,
+    contextWait: prefiltersPublished ? prefilters.filter((item) => upper(item.decision) === "WAIT").length : null,
+    contextRejected: prefiltersPublished ? prefilters.filter((item) => upper(item.decision) === "REJECT").length : null,
     portfolioSelected: arbitrations.filter((item) => ["SELECTED", "TAKE", "APPROVED"].includes(upper(item.status || item.decision))).length,
     portfolioRejected: arbitrations.filter((item) => upper(item.status || item.decision) === "REJECT").length,
     riskApproved: rows(live?.riskChecks).filter((item) => ["PASS", "APPROVED", "TAKE"].includes(upper(item.status || item.decision))).length,
@@ -178,7 +180,9 @@ function buildWhyNoTrade({ live, marketContext, snapshot, brief, tradeCards, obs
   };
   const topReasons = [];
   if (session.marketState !== "OPEN") topReasons.push("MARKET_CLOSED");
-  if (!snapshot) topReasons.push("MARKET_CONTEXT_UNAVAILABLE");
+  if (!snapshot) topReasons.push(marketContext?.readStatus === "UNAVAILABLE"
+    ? "MARKET_CONTEXT_READ_UNAVAILABLE"
+    : "MARKET_CONTEXT_NOT_PUBLISHED");
   else if (snapshot.status !== "AVAILABLE") topReasons.push(`MARKET_CONTEXT_${snapshot.status}`);
   if (!counts.signals) topReasons.push("NO_SETUP");
   if (counts.signals && !tradeCards.length) topReasons.push("NO_SIGNAL_REACHED_HUMAN_GATE");
@@ -231,9 +235,27 @@ function canonicalGrainsSession(health, nowIso) {
 }
 function canonicalMarketState(value) { const state = upper(value); return ["OPEN", "PREOPEN", "POSTCLOSE", "CLOSED", "BREAK", "HOLIDAY"].includes(state) ? state : "UNKNOWN"; }
 
-function unavailableContext(marketContext, nowIso) { return { status: "UNAVAILABLE", universe: "US_GRAINS_CBOT", asOf: marketContext?.asOf || nowIso, reasonCodes: ["MARKET_CONTEXT_NOT_PUBLISHED"], sourceStates: marketContext?.sourceStates || [] }; }
-function unavailableBrief(marketContext, whyNoTrade, nowIso) { return { status: "UNAVAILABLE", universe: "US_GRAINS_CBOT", createdAt: nowIso, headline: "Analyse de contexte non publiée", operatorSummary: "Le Desk déterministe continue ; aucune autorité IA n'est supposée.", whyNoTrade: whyNoTrade.topReasons[0] || "NO_SETUP", sourceStates: marketContext?.sourceStates || [] }; }
-function unavailableContextWorker() { return { taskType: "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH", lane: "live", cadenceMinutes: { marketOpen: 30, marketClosed: 60 }, timeoutMs: 780000, modelPolicy: {}, taskCount: 0, successCount: 0, failureCount: 0, activeCount: 0, lastCompletedAt: null, lastSuccessfulBriefAt: null, briefAgeSeconds: null, retryCount: 0, averageLatencyMs: null, totalTokens: 0, costMicrosUsd: 0 }; }
+function unavailableContext(marketContext, nowIso, readUnavailable) {
+  return { status: "UNAVAILABLE", universe: "US_GRAINS_CBOT", asOf: marketContext?.asOf || nowIso,
+    reasonCodes: [readUnavailable ? "MARKET_CONTEXT_READ_UNAVAILABLE" : "MARKET_CONTEXT_NOT_PUBLISHED"],
+    sourceStates: marketContext?.sourceStates || [] };
+}
+function unavailableBrief(marketContext, whyNoTrade, nowIso, readUnavailable) {
+  return { status: "UNAVAILABLE", universe: "US_GRAINS_CBOT", createdAt: nowIso,
+    headline: readUnavailable ? "Analyse de contexte momentanément indisponible" : "Analyse de contexte non publiée",
+    operatorSummary: readUnavailable
+      ? "La dernière lecture du contexte a échoué ; aucune absence de publication n'est déduite."
+      : "Le Desk déterministe continue ; aucune autorité IA n'est supposée.",
+    whyNoTrade: whyNoTrade.topReasons[0] || "NO_SETUP", sourceStates: marketContext?.sourceStates || [] };
+}
+function unavailableContextWorker(marketContext) {
+  const reasonCodes = rows(marketContext?.readDiagnostics).map((item) => item.code).filter(Boolean);
+  return { availability: "UNAVAILABLE", reasonCodes, taskType: "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH", lane: "live",
+    cadenceMinutes: { marketOpen: 30, marketClosed: 60 }, timeoutMs: 780000, modelPolicy: {},
+    taskCount: null, successCount: null, failureCount: null, activeCount: null, lastCompletedAt: null,
+    lastSuccessfulBriefAt: null, briefAgeSeconds: null, retryCount: null, averageLatencyMs: null,
+    totalTokens: null, costMicrosUsd: null };
+}
 function whyThisTrade(intent, signal) {
   const strategyEvidence = rows(signal?.reasonCodes);
   const contextEvidence = rows(signal?.contextReasonCodes);

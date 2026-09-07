@@ -283,6 +283,49 @@ describe("Live Trading cockpit components", () => {
     expect(markup).not.toContain("Macro blackout");
   });
 
+  it("renders unavailable context counters explicitly instead of false zeroes", () => {
+    const focus = focusView();
+    focus.whyNoTrade.stageCounts = {
+      ...focus.whyNoTrade.stageCounts,
+      contextAccepted: null,
+      contextWait: null,
+      contextRejected: null,
+    };
+    focus.contextWorker = {
+      ...focus.contextWorker,
+      taskCount: null,
+      successCount: null,
+      failureCount: null,
+      activeCount: null,
+      retryCount: null,
+      totalTokens: null,
+      costMicrosUsd: null,
+    };
+
+    const markup = render(
+      <LiveFocusMode
+        model={cockpitModel()}
+        focus={focus}
+        busy={false}
+        error={null}
+        requestedScope={{ instrument: "ZC", timeframe: "15" }}
+        dashboardPeriod="TODAY"
+        chartLoading={false}
+        chartError={null}
+        onExit={() => undefined}
+        onScopeChange={() => undefined}
+        onDashboardPeriodChange={() => undefined}
+        onSelectDecision={() => undefined}
+        onSubmitGate={noopSubmit}
+        onSubmitManual={noopSubmit}
+      />,
+    );
+
+    expect(markup).toContain("Non disponible succès / Non disponible échec(s)");
+    expect(markup).toContain("Lecture du contexte indisponible");
+    expect(markup).not.toContain("0 admis · 0 en attente · 0 refusés");
+  });
+
   it("keeps the journal accessible even before the first signal", () => {
     const markup = render(<LiveFocusJournal focus={focusView()} selectedSignalId={null} onSelectDecision={() => undefined} onOpenTrade={() => undefined} onOpenChart={() => undefined} />);
     expect(markup).toContain("Prêts à poser &amp; historique");
