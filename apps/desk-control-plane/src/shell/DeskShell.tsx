@@ -156,7 +156,7 @@ export function DeskShell() {
     navigate(target.to);
     setSearchQuery("");
   };
-  const runtimeTone = realtime?.connectionStatus === "FAILED" || realtime?.connectionStatus === "RECONNECTING" ? "status-warn" : "status-ok";
+  const runtimeTone = realtime?.connectionStatus === "OPEN" && !realtime.resyncing ? "status-ok" : "status-warn";
   const currentDate = realtime?.now
     ? new Intl.DateTimeFormat("fr-FR", {
         day: "2-digit",

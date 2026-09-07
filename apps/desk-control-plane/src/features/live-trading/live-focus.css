@@ -138,6 +138,57 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
   background: rgba(7, 20, 30, .96);
 }
 
+.live-focus-connectivity {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin: 6px clamp(10px, 1.2vw, 16px) 0;
+  padding: 9px 12px;
+  border: 1px solid rgba(241, 184, 75, 0.34);
+  border-radius: 12px;
+  color: var(--focus-amber);
+  background: rgba(62, 43, 15, 0.92);
+}
+
+.live-focus-connectivity[data-kind="offline"],
+.live-focus-connectivity[data-kind="failed"] {
+  border-color: rgba(255, 108, 121, 0.42);
+  color: var(--focus-red);
+  background: rgba(62, 20, 27, 0.94);
+}
+
+.live-focus-connectivity > div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.live-focus-connectivity strong,
+.live-focus-connectivity span,
+.live-focus-connectivity small {
+  overflow-wrap: anywhere;
+}
+
+.live-focus-connectivity span,
+.live-focus-connectivity small {
+  color: var(--focus-secondary);
+  font-size: var(--focus-type-small);
+}
+
+.live-focus-connectivity .is-spinning {
+  animation: live-focus-connectivity-spin 1s linear infinite;
+}
+
+@keyframes live-focus-connectivity-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-focus-connectivity .is-spinning { animation: none; }
+}
+
 .live-focus__identity {
   display: flex;
   min-width: 0;
@@ -2111,6 +2162,8 @@ body.desk-live-focus-document .desk-density-viewport .desk-app-shell.desk-app-sh
 }
 @media (max-width: 620px) {
   .live-focus__header { gap: 8px; }
+  .live-focus-connectivity { grid-template-columns: auto minmax(0, 1fr); }
+  .live-focus-connectivity > small { grid-column: 1 / -1; }
   .live-focus__policy { justify-content: flex-start; margin-left: 0; }
   .live-focus__mission-ribbon dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .live-focus__ticket, .live-focus__position, .live-focus__market-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }

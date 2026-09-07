@@ -12,6 +12,7 @@ import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
 import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
 import { LiveFocusJournal } from "@/features/live-trading/LiveFocusJournal";
+import { RealtimeContext, type RealtimeStatus } from "@/domains/realtime/RealtimeProvider";
 import { catalystMilestoneLabel, LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
 import { buildFocusQueueItems, buildFocusSignalFlowItems, filterFocusQueueItems } from "@/features/live-trading/focusJournalModel";
 import { focusTradePlanFromCard } from "@/features/live-trading/focusTradePlan";
@@ -519,6 +520,62 @@ describe("Live Trading cockpit components", () => {
     expect(markup).toContain("Les actions opérateur sont temporairement bloquées");
     expect(markup).not.toContain("Valider ce dossier uniquement");
     expect(markup).not.toContain("Refuser ce dossier");
+  });
+
+  it("keeps the last projection visible, identifies a network outage and blocks sensitive actions", () => {
+    const model = withOrderIntent(cockpitModel());
+    model.gateActions = [{
+      action: "CONFIRM",
+      actionId: "confirm-intent-cockpit",
+      label: "Valider ce dossier uniquement",
+      commandType: "execution.order_intent.confirm",
+      environment: "PAPER",
+      permission: "ALLOWED",
+      requiresConfirmation: true,
+      requiresReason: true,
+      expectedRevision: "revision-cockpit",
+      impactPreview: "test",
+      payload: { portfolioOrderIntentId: "intent-cockpit" },
+    }];
+    const activeCard = { ...focusTradeCard(), orderIntentId: "intent-cockpit", operatorState: "AWAITING_MANUAL_CONFIRMATION", terminal: false, terminalReason: null, actionable: true, expiredByTime: false, temporalState: "NEW", lifecycleLabel: "À décider", priority: "ACTIONABLE" as const, denialReasons: [], expiresAt: "2099-09-01T16:00:00.000Z" };
+    const offline = {
+      now: new Date("2026-09-01T14:31:00.000Z"),
+      heartbeatLabel: "16:31:00",
+      connectionStatus: "OFFLINE",
+      latestError: "BFF_NETWORK_OFFLINE",
+      events: {},
+      commands: {},
+      resyncing: false,
+      lastConnectedAt: "2026-09-01T14:30:05.000Z",
+      disconnectedAt: "2026-09-01T14:30:30.000Z",
+      lastEventAt: "2026-09-01T14:30:00.000Z",
+    } as RealtimeStatus;
+    const markup = render(
+      createElement(RealtimeContext.Provider, { value: offline },
+        <LiveFocusMode
+          model={model}
+          focus={{ ...focusView(), tradeCards: [activeCard] }}
+          busy={false}
+          error={null}
+          requestedScope={{ instrument: "ZW", timeframe: "15" }}
+          dashboardPeriod="TODAY"
+          chartLoading={false}
+          chartError={null}
+          onExit={() => undefined}
+          onScopeChange={() => undefined}
+          onDashboardPeriodChange={() => undefined}
+          onSelectDecision={() => undefined}
+          onSubmitGate={noopSubmit}
+          onSubmitManual={noopSubmit}
+        />,
+      ),
+    );
+
+    expect(markup).toContain("Réseau indisponible");
+    expect(markup).toContain("Dernière projection connue");
+    expect(markup).toContain("Ticket d’action");
+    expect(markup).toContain("ZW pullback");
+    expect(markup).not.toContain("Valider ce dossier uniquement");
   });
 
   it("selects the journal ticket by canonical signal ID after chronological sorting", () => {

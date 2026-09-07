@@ -13,8 +13,12 @@ const FRONT_API_MAP = [
 
 const FRONT_SESSION_CACHE_TTL_MS = boundedTtlMs(process.env.DESK_FRONT_SESSION_CACHE_TTL_MS, 5_000, 0, 60_000);
 const FRONT_MARKET_CACHE_TTL_MS = boundedTtlMs(process.env.DESK_FRONT_MARKET_CACHE_TTL_MS, 15_000, 0, 120_000);
+const FRONT_LIVE_CONTEXT_CACHE_TTL_MS = boundedTtlMs(process.env.DESK_FRONT_LIVE_CONTEXT_CACHE_TTL_MS, 10_000, 0, 60_000);
+const FRONT_MACRO_CACHE_TTL_MS = boundedTtlMs(process.env.DESK_FRONT_MACRO_CACHE_TTL_MS, 30_000, 0, 120_000);
 const frontSessionCaches = new WeakMap();
 const frontMarketCaches = new WeakMap();
+const frontLiveContextCaches = new WeakMap();
+const frontMacroCaches = new WeakMap();
 
 export function normalizeFrontApiScope(input = {}, now = new Date(frontSessionEpochMs())) {
   const session = input.session === "ny_open" ? "ny_open" : "asia_open";
@@ -42,11 +46,9 @@ export async function loadFrontDeskSession(store, scopeInput = {}) {
 }
 
 async function loadFrontDeskSessionUncached(store, scope, scopeInput = {}) {
-  const live = await store.getLiveDeskState({
-    ...scope,
-    front_cache: scopeInput.front_cache === true,
-  });
-  const resolvedScope = live.resolved_scope || scope;
+  const context = await loadFrontLiveContext(store, scopeInput);
+  const { live } = context;
+  const resolvedScope = context.scope;
   const masterResult = await safeRead(() => store.getLatestMasterAnalysis(resolvedScope), {});
   const masterAnalysis = masterResult.analysis || null;
   const masterId = masterAnalysis?.analysis_id || live.latest_master?.analysis_id || null;
@@ -72,6 +74,7 @@ async function loadFrontDeskSessionUncached(store, scope, scopeInput = {}) {
         date: scope.trading_date,
         mode: scope.mode,
         as_of_utc: resolvedScope.as_of_utc || scope.as_of_utc,
+        front_cache: scopeInput.front_cache === true,
       }), {}),
     deferSecondaryResources
       ? {}
@@ -107,7 +110,46 @@ async function loadFrontDeskSessionUncached(store, scope, scopeInput = {}) {
   });
 }
 
-export async function loadFrontDailyMacroSource(store, { date, mode = "live", as_of_utc } = {}) {
+/**
+ * One coalesced live-state read shared by the session, macro and news BFF sources.
+ * The returned object remains an infrastructure read model; it does not merge the
+ * semantic availability of those three independently reported sources.
+ */
+export async function loadFrontLiveContext(store, scopeInput = {}) {
+  const scope = normalizeFrontApiScope(scopeInput);
+  const read = async () => {
+    const live = await store.getLiveDeskState({
+      ...scope,
+      front_cache: scopeInput.front_cache === true,
+    });
+    return { scope: live.resolved_scope || scope, live };
+  };
+  if (scopeInput.front_cache !== true || FRONT_LIVE_CONTEXT_CACHE_TTL_MS <= 0) return read();
+  return cachedFrontRead(
+    frontLiveContextCaches,
+    store,
+    frontLiveContextCacheKey(scopeInput, scope),
+    FRONT_LIVE_CONTEXT_CACHE_TTL_MS,
+    read,
+  );
+}
+
+export async function loadFrontDailyMacroSource(store, input = {}) {
+  const { date, mode = "live", as_of_utc, front_cache = false } = input;
+  if (front_cache === true && FRONT_MACRO_CACHE_TTL_MS > 0) {
+    const key = frontMacroCacheKey(input);
+    return cachedFrontRead(
+      frontMacroCaches,
+      store,
+      key,
+      FRONT_MACRO_CACHE_TTL_MS,
+      () => loadFrontDailyMacroSourceUncached(store, { date, mode, as_of_utc }),
+    );
+  }
+  return loadFrontDailyMacroSourceUncached(store, { date, mode, as_of_utc });
+}
+
+async function loadFrontDailyMacroSourceUncached(store, { date, mode = "live", as_of_utc } = {}) {
   const centerUtc = validTimestamp(as_of_utc) || `${date}T12:00:00.000Z`;
   const window = macroWindow(centerUtc, 48, 48);
   let packWarning = null;
@@ -305,6 +347,31 @@ function frontScopeCacheKey(input = {}, scope = {}, ttlMs = 5_000) {
     asOfBucket,
     input.defer_secondary_resources === true ? "deferred" : "full",
   ]);
+}
+
+function frontLiveContextCacheKey(input = {}, scope = {}) {
+  const explicitAsOf = Boolean(input.as_of_utc);
+  const asOfMs = Date.parse(scope.as_of_utc || "");
+  const asOfBucket = explicitAsOf && Number.isFinite(asOfMs)
+    ? Math.floor(asOfMs / FRONT_LIVE_CONTEXT_CACHE_TTL_MS)
+    : "front-now";
+  return JSON.stringify([
+    "live-context",
+    scope.strategy_id,
+    scope.session,
+    scope.mode,
+    scope.trading_date,
+    scope.run_id,
+    asOfBucket,
+  ]);
+}
+
+function frontMacroCacheKey(input = {}) {
+  const asOfMs = Date.parse(input.as_of_utc || "");
+  const asOfBucket = Number.isFinite(asOfMs)
+    ? Math.floor(asOfMs / FRONT_MACRO_CACHE_TTL_MS)
+    : "front-now";
+  return JSON.stringify(["macro", isoDate(input.date) || "", input.mode || "live", asOfBucket]);
 }
 
 function boundedTtlMs(value, fallback, min, max) {

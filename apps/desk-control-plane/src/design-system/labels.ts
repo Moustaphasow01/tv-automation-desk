@@ -386,6 +386,7 @@ export const presentConnectionStatus = makePresenter({
   CONNECTING: { label: "Connexion...", tone: "warning" },
   OPEN: { label: "Connecté", tone: "success" },
   RECONNECTING: { label: "Reconnexion...", tone: "warning" },
+  OFFLINE: { label: "Réseau indisponible", tone: "danger" },
   CLOSED: { label: "Fermé", tone: "neutral" },
   FAILED: { label: "Échec", tone: "danger" },
 });

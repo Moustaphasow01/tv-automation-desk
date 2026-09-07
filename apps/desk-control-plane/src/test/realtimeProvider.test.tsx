@@ -58,6 +58,7 @@ describe("mounted realtime provider", () => {
 
     expect((latest as RealtimeStatus | null)?.connectionStatus).toBe("RECONNECTING");
     expect((latest as RealtimeStatus | null)?.latestError).toBe("BFF_EVENTS_RECONNECTING");
+    expect((latest as RealtimeStatus | null)?.disconnectedAt).not.toBeNull();
 
     await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
     await act(async () => { sources[1]?.onopen?.(); await Promise.resolve(); });
@@ -65,6 +66,8 @@ describe("mounted realtime provider", () => {
     expect((latest as RealtimeStatus | null)?.connectionStatus).toBe("OPEN");
     expect((latest as RealtimeStatus | null)?.resyncing).toBe(false);
     expect((latest as RealtimeStatus | null)?.latestError).toBeNull();
+    expect((latest as RealtimeStatus | null)?.lastConnectedAt).not.toBeNull();
+    expect((latest as RealtimeStatus | null)?.disconnectedAt).toBeNull();
     expect(focus).toHaveBeenCalledTimes(2);
     expect(chart).toHaveBeenCalledTimes(2);
 

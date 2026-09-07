@@ -7,6 +7,7 @@ import {
   loadFrontMacroResource,
   loadFrontMarketResource,
 } from "../src/front-api-resources.js";
+import { loadFrontDeskSession } from "../src/front-session-projection.js";
 
 const scope = {
   strategy_id: "asia_open",
@@ -237,6 +238,37 @@ test("macro and news remain available without a session pack or Master", async (
   assert.equal(calls.every(([, input]) => input.pack_id === undefined && input.pack_build_id === undefined), true);
   assert.equal(calls.find(([kind]) => kind === "news")[1].as_of_utc, scope.as_of_utc);
   assert.equal(calls.filter(([kind]) => kind === "macro").every(([, input]) => input.as_of_utc === undefined), true);
+});
+
+test("live session, macro and news coalesce shared live and macro reads", async () => {
+  let liveReads = 0;
+  let macroReads = 0;
+  const store = fakeStore({
+    getLiveDeskState: async () => {
+      liveReads += 1;
+      await Promise.resolve();
+      return liveFixture();
+    },
+    getMacroCalendar: async () => {
+      macroReads += 1;
+      await Promise.resolve();
+      return { events: [{ scheduled_at_paris: "2026-07-14T10:45:00+02:00", title: "CPI US", importance: "high" }] };
+    },
+  });
+  const { as_of_utc: _asOf, ...currentScope } = scope;
+  const cachedScope = { ...currentScope, front_cache: true, defer_secondary_resources: true };
+
+  const [session, macro, headlines] = await Promise.all([
+    loadFrontDeskSession(store, cachedScope),
+    loadFrontApiResource(store, "/api/v1/macro/calendar", cachedScope),
+    loadFrontApiResource(store, "/api/v1/news/headlines", cachedScope),
+  ]);
+
+  assert.equal(session.id, "asia_open");
+  assert.equal(macro.macro[0].title, "CPI US");
+  assert.equal(headlines.headlines[0].title, "Futures stables avant le CPI");
+  assert.equal(liveReads, 1, "all auxiliary sources must share one live desk read");
+  assert.equal(macroReads, 1, "macro and news must share one macro calendar read");
 });
 
 test("news resources expose the complete daily macro calendar when no headline provider is configured", async () => {

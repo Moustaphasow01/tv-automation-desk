@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SystemClock } from "@tv-automation/desk-time";
 import {
   loadFrontDailyMacroSource,
+  loadFrontLiveContext,
   loadFrontMarketSnapshot,
   normalizeFrontApiScope,
   projectDeskSession,
@@ -262,9 +263,6 @@ export const FRONT_RESOURCE_CACHE_SECONDS = {
   "/api/v1/performance/day": 15,
 };
 
-const LIVE_CONTEXT_CACHE_TTL_MS = boundedTtlMs(process.env.DESK_FRONT_LIVE_CONTEXT_CACHE_TTL_MS, 10_000, 0, 60_000);
-const liveContextCaches = new WeakMap();
-
 export async function loadFrontApiResource(store, pathname, scopeInput = {}) {
   if (pathname === "/api/v1/market/snapshot") return loadFrontMarketResource(store, scopeInput);
   if (pathname === "/api/v1/positions/current") return loadFrontPositionResource(store, scopeInput);
@@ -350,6 +348,7 @@ export async function loadFrontMacroResource(store, scopeInput = {}) {
     date: context.scope.trading_date,
     mode: context.scope.mode,
     as_of_utc: context.live.resolved_scope?.as_of_utc || context.scope.as_of_utc,
+    front_cache: scopeInput.front_cache === true,
   }), "macro_calendar_not_available");
   const projected = projectDeskSession({ live: context.live, macro: macroRead.value });
   return frontApiResourceSchemas.macro.parse({
@@ -423,17 +422,7 @@ export async function loadFrontAuditResource(store, scopeInput = {}) {
 }
 
 async function liveContext(store, scopeInput) {
-  const scope = normalizeFrontApiScope(scopeInput);
-  if (scopeInput.front_cache !== true || LIVE_CONTEXT_CACHE_TTL_MS <= 0) {
-    const live = await store.getLiveDeskState(scope);
-    return { scope: live.resolved_scope || scope, live };
-  }
-  return cachedLiveContext(
-    store,
-    liveContextCacheKey(scopeInput, scope),
-    () => store.getLiveDeskState({ ...scope, front_cache: true })
-      .then((live) => ({ scope: live.resolved_scope || scope, live })),
-  );
+  return loadFrontLiveContext(store, scopeInput);
 }
 
 async function loadNewsSource(store, scopeInput) {
@@ -451,6 +440,7 @@ async function loadNewsSource(store, scopeInput) {
       date: context.scope.trading_date,
       mode: context.scope.mode,
       as_of_utc: context.live.resolved_scope?.as_of_utc || context.scope.as_of_utc,
+      front_cache: scopeInput.front_cache === true,
     }), "macro_calendar_not_available"),
   ]);
   const news = newsRead.value || { items: [] };
@@ -507,65 +497,4 @@ function firstEventTimestamp(event = {}) {
   return event.scheduled_at_paris || event.timestamp_paris || event.published_at_paris || event.datetime || event.timestamp;
 }
 
-function cachedLiveContext(store, key, read) {
-  if (!store) return read();
-  const cache = liveContextCacheFor(store);
-  const now = frontApiResourceEpochMs();
-  const existing = cache.get(key);
-  if (existing && existing.expiresAt > now) return existing.promise;
-  const entry = { expiresAt: Number.POSITIVE_INFINITY, promise: null };
-  entry.promise = Promise.resolve()
-    .then(read)
-    .then((context) => {
-      if (cache.get(key) === entry) entry.expiresAt = frontApiResourceEpochMs() + LIVE_CONTEXT_CACHE_TTL_MS;
-      return context;
-    })
-    .catch((error) => {
-      if (cache.get(key) === entry) cache.delete(key);
-      throw error;
-    });
-  cache.set(key, entry);
-  pruneLiveContextCache(cache, now);
-  return entry.promise;
-}
-
-function liveContextCacheFor(store) {
-  let cache = liveContextCaches.get(store);
-  if (!cache) {
-    cache = new Map();
-    liveContextCaches.set(store, cache);
-  }
-  return cache;
-}
-
-function pruneLiveContextCache(cache, now = frontApiResourceEpochMs()) {
-  if (cache.size <= 100) return;
-  for (const [key, entry] of cache) {
-    if (entry.expiresAt <= now) cache.delete(key);
-  }
-  while (cache.size > 100) {
-    cache.delete(cache.keys().next().value);
-  }
-}
-
 function frontApiResourceEpochMs() { return FRONT_API_RESOURCE_CLOCK.now().epochMs; }
-
-function liveContextCacheKey(input = {}, scope = {}) {
-  const explicitAsOf = Boolean(input.as_of_utc);
-  const asOfMs = Date.parse(scope.as_of_utc || "");
-  const asOfBucket = explicitAsOf && Number.isFinite(asOfMs) ? Math.floor(asOfMs / LIVE_CONTEXT_CACHE_TTL_MS) : "front-now";
-  return JSON.stringify([
-    scope.strategy_id,
-    scope.session,
-    scope.mode,
-    scope.trading_date,
-    scope.run_id,
-    asOfBucket,
-  ]);
-}
-
-function boundedTtlMs(value, fallback, min, max) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(min, Math.min(parsed, max));
-}

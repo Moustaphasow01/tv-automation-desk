@@ -23,6 +23,9 @@ export type RealtimeStatus = {
   events: RealtimeEventState;
   commands: CommandRuntimeState;
   resyncing: boolean;
+  lastConnectedAt: string | null;
+  disconnectedAt: string | null;
+  lastEventAt: string | null;
 };
 
 export const RealtimeContext = createContext<RealtimeStatus | null>(null);
@@ -42,6 +45,9 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
   const [events, setEvents] = useState<RealtimeEventState>(() => loadPersistedRealtimeState(config));
   const [commands, setCommands] = useState<CommandRuntimeState>(() => createCommandRuntimeState());
   const [resyncing, setResyncing] = useState(false);
+  const [lastConnectedAt, setLastConnectedAt] = useState<string | null>(null);
+  const [disconnectedAt, setDisconnectedAt] = useState<string | null>(null);
+  const [lastEventAt, setLastEventAt] = useState<string | null>(null);
   const connectionStatusRef = useRef<RealtimeTransportStatus>("CONNECTING");
   const eventsRef = useRef(events);
   const pendingInvalidationsRef = useRef(new Set<FrontViewName>());
@@ -71,6 +77,7 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
     };
     const subscription = transport.subscribeEvents({
       onEvent(event: EventEnvelope) {
+        setLastEventAt(new Date().toISOString());
         if (event.eventType === "desk.resync_required") {
           clearPersistedRealtimeCursor(config);
           void querySync.recover();
@@ -89,7 +96,13 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
         const previous = connectionStatusRef.current;
         connectionStatusRef.current = status;
         setConnectionStatus(status);
-        if (status === "OPEN" && previous === "RECONNECTING") {
+        if (status === "OPEN") {
+          setLastConnectedAt(new Date().toISOString());
+          setDisconnectedAt(null);
+        } else if (["RECONNECTING", "OFFLINE", "FAILED"].includes(status)) {
+          setDisconnectedAt((current) => current ?? new Date().toISOString());
+        }
+        if (status === "OPEN" && ["RECONNECTING", "OFFLINE", "FAILED"].includes(previous)) {
           void querySync.recover();
         }
       },
@@ -119,9 +132,12 @@ export function RealtimeProvider({ config, queryClient, children }: RealtimeProv
       latestError,
       events,
       commands,
-      resyncing
+      resyncing,
+      lastConnectedAt,
+      disconnectedAt,
+      lastEventAt
     }),
-    [commands, connectionStatus, events, latestError, now, resyncing]
+    [commands, connectionStatus, disconnectedAt, events, lastConnectedAt, lastEventAt, latestError, now, resyncing]
   );
 
   return <RealtimeContext.Provider value={value}>{children}</RealtimeContext.Provider>;

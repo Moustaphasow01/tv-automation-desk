@@ -130,6 +130,7 @@ const REASON_CODES: Readonly<Record<string, string>> = {
   BREAKOUT_CONFIRMED: "Cassure confirmée",
   BFF_EVENTS_INVALID_MESSAGE: "Événement temps réel illisible",
   BFF_EVENTS_RECONNECTING: "Reconnexion au flux d’événements",
+  BFF_NETWORK_OFFLINE: "Réseau indisponible",
   BFF_EVENTS_UNSUPPORTED: "Flux temps réel non pris en charge",
   BULLISH: "Orientation haussière",
   CONTEXT_AVAILABLE: "Contexte de marché disponible",

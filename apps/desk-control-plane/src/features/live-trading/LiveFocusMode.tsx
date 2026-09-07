@@ -15,6 +15,7 @@ import { InstrumentChartPanel } from "./chart/LiveMarketChart";
 import { LiveFocusJournal, FocusQueueTimeline } from "./LiveFocusJournal";
 import { buildFocusDashboard, type LiveFocusDashboardPeriod } from "./focusDashboardModel";
 import { FocusDashboard } from "./FocusDashboard";
+import { LiveFocusConnectivityBanner } from "./LiveFocusConnectivityBanner";
 import { buildFocusTradeTimeline, focusCardActionable, focusCardStatus, focusCardTerminal, focusExpirationLabel } from "./focusJournalModel";
 import { formatTradePlanPrice } from "./tradePlanFormat";
 import "./live-focus.css";
@@ -54,6 +55,8 @@ export function LiveFocusMode({ model, focus, busy, error, projectionError = fal
   onSubmitManual(action: LiveManualExecutionAction, input: { price?: number | null; quantity?: number | null; reason?: string }): Promise<void>;
 }) {
   const realtime = useContext(RealtimeContext);
+  const realtimeUnavailable = Boolean(realtime && (realtime.connectionStatus !== "OPEN" || realtime.resyncing));
+  const actionsBlocked = projectionError || realtimeUnavailable;
   const state = resolveBackendFocusState(focus, model);
   const queue = useMemo(() => focus.tradeCards, [focus.tradeCards]);
   const selectedIndex = Math.max(0, queue.findIndex((item) => item.signalId === model.latestSignal?.signalId));
@@ -73,10 +76,10 @@ export function LiveFocusMode({ model, focus, busy, error, projectionError = fal
   const skipManual = useMemo(() => manualActions.find((action) => action.action === "REPORT_SKIPPED" && action.permission === "ALLOWED"), [manualActions]);
   const stopManual = useMemo(() => manualActions.find((action) => action.action === "REPORT_STOP_PLACED" && action.permission === "ALLOWED"), [manualActions]);
   const primary = useMemo(() => gateConfirm ? ({ kind: "gate", action: gateConfirm } as const) : primaryManual ? ({ kind: "manual", action: primaryManual } as const) : null, [gateConfirm, primaryManual]);
-  const availablePrimary = projectionError ? null : primary;
-  const availableGateReject = projectionError ? undefined : gateReject;
-  const availableSkipManual = projectionError ? undefined : skipManual;
-  const availableStopManual = projectionError ? undefined : stopManual;
+  const availablePrimary = actionsBlocked ? null : primary;
+  const availableGateReject = actionsBlocked ? undefined : gateReject;
+  const availableSkipManual = actionsBlocked ? undefined : skipManual;
+  const availableStopManual = actionsBlocked ? undefined : stopManual;
   const plan = selectedCard ? focusTradePlanFromCard(selectedCard) : focusTradePlan(model);
   const drawerCard = drawerCardId
     ? queue.find((card) => card.orderIntentId === drawerCardId || card.tradeCardId === drawerCardId || card.signalId === drawerCardId) ?? selectedCard
@@ -91,8 +94,8 @@ export function LiveFocusMode({ model, focus, busy, error, projectionError = fal
   useFocusPerception({ model, stateCode: state.code, stateLabel: state.label, timingLabel: timing.label, timingUrgency: timing.urgency, soundProfile });
 
   useEffect(() => {
-    if (projectionError) setPending(null);
-  }, [projectionError]);
+    if (actionsBlocked) setPending(null);
+  }, [actionsBlocked]);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -172,6 +175,8 @@ export function LiveFocusMode({ model, focus, busy, error, projectionError = fal
         <button type="button" className="live-focus__return" onClick={onExit}><FaArrowLeft aria-hidden="true" />Retour au direct <kbd>Esc</kbd></button>
       </header>
 
+      <LiveFocusConnectivityBanner realtime={realtime} projectionAsOf={focus.asOf} />
+
       <FocusMissionRibbon model={model} focus={focus} state={state} timingLabel={timing.label} />
 
       <FocusDashboard dashboard={dashboard} period={dashboardPeriod} onPeriodChange={onDashboardPeriodChange} />
@@ -200,7 +205,7 @@ export function LiveFocusMode({ model, focus, busy, error, projectionError = fal
             {selectedCard ? <button type="button" onClick={() => { setDrawerCardId(selectedCard.orderIntentId); setDrawer("trade"); }}><FaInfoCircle aria-hidden="true" />Voir le dossier</button> : null}
           </div>
           {ticket.warning ? <p className="live-focus__integrity-warning" role="alert"><FaExclamationTriangle aria-hidden="true" />{ticket.warning}</p> : null}
-          {!projectionError && !primary && !gateReject && !skipManual ? <p className="live-focus__locked"><FaLock aria-hidden="true" />{model.gateBlockedReason}</p> : null}
+          {!actionsBlocked && !primary && !gateReject && !skipManual ? <p className="live-focus__locked"><FaLock aria-hidden="true" />{model.gateBlockedReason}</p> : null}
           {error ? <p className="live-focus__error" role="alert">La commande a échoué. Le Focus a rechargé la vérité backend et n’a créé aucun état local de remplacement.</p> : null}
           <div className="live-focus__decision-support">
             <article className="live-focus__support-card" aria-labelledby="live-focus-situation-title">
@@ -233,7 +238,7 @@ export function LiveFocusMode({ model, focus, busy, error, projectionError = fal
         />
       </div>
       <footer className="live-focus__footer"><span><kbd>↑</kbd><kbd>↓</kbd> dossiers</span><span><kbd>G</kbd> graphique</span><span><kbd>C</kbd> copier</span><span><kbd>R</kbd> refuser</span><span><kbd>S</kbd> stop placé</span><button type="button" className="live-focus__sound" aria-pressed={soundProfile.enabled} onClick={() => { const next = writeLiveFocusSoundProfile({ ...soundProfile, enabled: !soundProfile.enabled }); setSoundProfile(next); }}>{soundProfile.enabled ? <FaVolumeUp aria-hidden="true" /> : <FaVolumeMute aria-hidden="true" />}{soundProfile.enabled ? "Sons actifs" : "Sons coupés"}</button><button type="button" className="live-focus__help-trigger" aria-expanded={showHelp} onClick={() => setShowHelp((value) => !value)}><FaQuestionCircle aria-hidden="true" />Raccourcis <kbd>?</kbd></button><span className="live-focus__session">Séance {focus.whyNoTrade.stageCounts.signals ?? 0} signaux · {focus.whyNoTrade.stageCounts.orderIntents ?? 0} ordres proposés · {focus.tradeCards.filter(focusCardActionable).length} à décider · {model.signalFunnel.theoreticalTracked} suivis</span><small>{focus.session.marketSession} · arrêté à {displayTime(focus.asOf)}</small></footer>
-      {pending && !projectionError ? <FocusActionDialog pending={pending} model={model} busy={busy} onCancel={() => setPending(null)} onSubmitGate={async (action, reason) => { await onSubmitGate(action, reason); setPending(null); }} onSubmitManual={async (action, input) => { await onSubmitManual(action, input); setPending(null); }} /> : null}
+      {pending && !actionsBlocked ? <FocusActionDialog pending={pending} model={model} busy={busy} onCancel={() => setPending(null)} onSubmitGate={async (action, reason) => { await onSubmitGate(action, reason); setPending(null); }} onSubmitManual={async (action, input) => { await onSubmitManual(action, input); setPending(null); }} /> : null}
       {showHelp ? <FocusHelpDialog profile={soundProfile} onChange={(next) => { setSoundProfile(writeLiveFocusSoundProfile(next)); }} onClose={() => setShowHelp(false)} /> : null}
       {drawer === "brief" ? <FocusBriefDrawer focus={focus} onClose={() => setDrawer(null)} /> : null}
       {drawer === "trade" && drawerCard ? <FocusTradeDrawer card={drawerCard} onClose={() => setDrawer(null)} /> : null}

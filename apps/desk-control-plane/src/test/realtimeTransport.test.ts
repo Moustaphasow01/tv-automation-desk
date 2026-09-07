@@ -113,6 +113,53 @@ describe("front realtime transport", () => {
 
     subscription.close();
   });
+
+  it("reports browser offline immediately and reconnects with the same cursor when the network returns", () => {
+    const sourceInstances: FakeEventSource[] = [];
+    const listeners = new Map<string, Set<() => void>>();
+    const network = { onLine: true };
+    vi.stubGlobal("navigator", network);
+    vi.stubGlobal("window", {
+      location: { origin: "https://desk.example" },
+      setTimeout,
+      clearTimeout,
+      addEventListener: (type: string, listener: () => void) => {
+        const current = listeners.get(type) ?? new Set();
+        current.add(listener);
+        listeners.set(type, current);
+      },
+      removeEventListener: (type: string, listener: () => void) => listeners.get(type)?.delete(listener),
+    });
+    vi.stubGlobal("EventSource", class extends FakeEventSource {
+      constructor(url: string) {
+        super(url);
+        sourceInstances.push(this);
+      }
+    });
+    const statuses: string[] = [];
+    const errors: string[] = [];
+    const subscription = createDeskTransport(bffConfig).subscribeEvents({
+      onEvent: () => undefined,
+      onStatus: (status) => statuses.push(status),
+      onError: (error) => errors.push(error.message),
+    });
+    sourceInstances[0]?.onopen?.();
+    sourceInstances[0]?.onmessage?.({ data: JSON.stringify(event("evt_before_offline")) });
+
+    network.onLine = false;
+    listeners.get("offline")?.forEach((listener) => listener());
+    expect(statuses.at(-1)).toBe("OFFLINE");
+    expect(errors.at(-1)).toBe("BFF_NETWORK_OFFLINE");
+
+    network.onLine = true;
+    listeners.get("online")?.forEach((listener) => listener());
+    expect(statuses.at(-1)).toBe("RECONNECTING");
+    expect(sourceInstances[1]?.url).toBe("https://desk.example/front-api/v1/events?cursor=evt_before_offline");
+
+    subscription.close();
+    expect(listeners.get("offline")?.size).toBe(0);
+    expect(listeners.get("online")?.size).toBe(0);
+  });
 });
 
 function event(eventId: string): EventEnvelope {

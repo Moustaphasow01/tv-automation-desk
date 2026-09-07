@@ -3,7 +3,7 @@ import { assertCommandAccepted, assertCommandSnapshot, buildCommandHeaders, prep
 import { assertEventEnvelope, type EventEnvelope, type RealtimeEventState } from "@/domains/realtime/eventEnvelope";
 import type { CapabilityCatalog, FrontViewName, ViewEnvelope } from "@/shared/contracts";
 
-export type RealtimeTransportStatus = "CONNECTING" | "OPEN" | "RECONNECTING" | "CLOSED" | "FAILED";
+export type RealtimeTransportStatus = "CONNECTING" | "OPEN" | "RECONNECTING" | "OFFLINE" | "CLOSED" | "FAILED";
 
 export type RealtimeEventHandlers = {
   onEvent(event: EventEnvelope): void;
@@ -98,6 +98,22 @@ function createBffTransport(config: DeskAppConfig): DeskTransport {
       let reconnectAttempt = 0;
       let lastEventId = lastState?.lastEventId ?? null;
 
+      const clearReconnectTimer = () => {
+        if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      };
+
+      const browserIsOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
+
+      const reportOffline = () => {
+        if (closed) return;
+        clearReconnectTimer();
+        source?.close();
+        source = null;
+        handlers.onStatus?.("OFFLINE");
+        handlers.onError?.(Object.assign(new Error("BFF_NETWORK_OFFLINE"), { code: "BFF_NETWORK_OFFLINE" }));
+      };
+
       const parseMessage = (data: string) => {
         try {
           const event = assertEventEnvelope(JSON.parse(data));
@@ -110,6 +126,10 @@ function createBffTransport(config: DeskAppConfig): DeskTransport {
 
       const startSse = (status?: RealtimeTransportStatus) => {
         if (closed) return;
+        if (browserIsOffline()) {
+          reportOffline();
+          return;
+        }
         if (typeof EventSource === "undefined") {
           const error = Object.assign(new Error("BFF_EVENTS_UNSUPPORTED"), { code: "BFF_EVENTS_UNSUPPORTED" });
           handlers.onStatus?.("FAILED");
@@ -130,22 +150,41 @@ function createBffTransport(config: DeskAppConfig): DeskTransport {
 
           source?.close();
           source = null;
+          if (browserIsOffline()) {
+            reportOffline();
+            return;
+          }
           handlers.onStatus?.("RECONNECTING");
           handlers.onError?.(Object.assign(new Error("BFF_EVENTS_RECONNECTING"), { code: "BFF_EVENTS_RECONNECTING" }));
           const delayMs = Math.min(1_000 * 2 ** reconnectAttempt, 10_000);
           reconnectAttempt += 1;
-          reconnectTimer = window.setTimeout(() => startSse(), delayMs);
+          clearReconnectTimer();
+          reconnectTimer = window.setTimeout(() => {
+            reconnectTimer = null;
+            startSse();
+          }, delayMs);
         };
         source.onmessage = (message) => parseMessage(message.data);
       };
+
+      const onOffline = () => reportOffline();
+      const onOnline = () => {
+        if (closed || source) return;
+        clearReconnectTimer();
+        startSse("RECONNECTING");
+      };
+      window.addEventListener?.("offline", onOffline);
+      window.addEventListener?.("online", onOnline);
 
       startSse("CONNECTING");
 
       return {
         close() {
           closed = true;
-          if (reconnectTimer != null) window.clearTimeout(reconnectTimer);
+          clearReconnectTimer();
           source?.close();
+          window.removeEventListener?.("offline", onOffline);
+          window.removeEventListener?.("online", onOnline);
           handlers.onStatus?.("CLOSED");
         }
       };
