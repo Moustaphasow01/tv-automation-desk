@@ -4,6 +4,34 @@ import { buildLiveFocusProjection } from "../src/front-live-focus-projection.js"
 
 const NOW = "2026-09-01T14:35:00.000Z";
 
+test("Live Focus never displays a fresh analyst clock as fresh closed price data", () => {
+  const analysisAt = "2026-09-07T15:00:00.000Z";
+  const pricesAt = "2026-09-04T18:20:00.000Z";
+  const snapshot = {
+    status: "AVAILABLE", sourceDataCutoff: analysisAt,
+    analysisAsOfUtc: analysisAt, marketDataCutoffUtc: pricesAt,
+  };
+  const projection = buildLiveFocusProjection({
+    live: liveFixture(), marketContext: { snapshot },
+    health: healthFixture(), nowIso: analysisAt,
+  });
+  assert.equal(projection.technical.sourceDataCutoff, pricesAt);
+  assert.equal(projection.marketContext.sourceDataCutoff, analysisAt);
+  assert.equal(projection.marketContext.analysisAsOfUtc, analysisAt);
+  assert.equal(projection.marketContext.marketDataCutoffUtc, pricesAt);
+  assert.equal(projection.tradeCards.length, 0);
+  assert.equal(projection.safety.physicalLiveEnabled, false);
+});
+
+test("Live Focus retains the historical single-cutoff contract when no dual clock exists", () => {
+  const projection = buildLiveFocusProjection({
+    live: liveFixture(), marketContext: { snapshot: { status: "PARTIAL", sourceDataCutoff: NOW } },
+    health: healthFixture(), nowIso: NOW,
+  });
+  assert.equal(projection.technical.sourceDataCutoff, NOW);
+  assert.equal(projection.marketContext.status, "PARTIAL");
+});
+
 test("Live Focus keeps a raw signal diagnostic and never promotes it to a trade card", () => {
   const projection = buildLiveFocusProjection({
     live: liveFixture(),

@@ -348,6 +348,74 @@ function Start-DeskServices {
     }
 }
 
+function Test-DeskExactWindowsPath {
+    param([Parameter(Mandatory = $true)][pscustomobject]$Spec)
+    if ([string]::IsNullOrWhiteSpace([string]$Spec.Actual)) { return $false }
+    try {
+        $actualPath = [System.IO.Path]::GetFullPath([string]$Spec.Actual)
+        $expectedPath = [System.IO.Path]::GetFullPath([string]$Spec.Expected)
+        return [string]::Equals($actualPath, $expectedPath, [System.StringComparison]::OrdinalIgnoreCase)
+    } catch {
+        return $false
+    }
+}
+
+function Get-DeskExactServiceEnvValue {
+    param([Parameter(Mandatory = $true)][pscustomobject]$Spec)
+    $matches = @($Spec.Service.env | Where-Object { [string]$_.name -ceq [string]$Spec.Name })
+    if ($matches.Count -ne 1) { throw "Agent supervisor environment shape is invalid." }
+    return [string]$matches[0].value
+}
+
+function Test-DeskUsGrainsSupervisorConfig {
+    param([Parameter(Mandatory = $true)][pscustomobject]$Spec)
+    $service = $Spec.Config.service
+    if (-not $service -or [string]$service.id -cne "DeskFuturesAgentRuntimeSupervisor") { return $false }
+    $projectRoot = Join-Path $Spec.InstallRoot "current\app\mcp_gpt_desk"
+    $runner = Join-Path $projectRoot "scripts\run_us_grains_market_context_task_runner.mjs"
+    $arguments = '--env-file="' + (Join-Path $Spec.DataRoot "config\desk.env") + '" "' + `
+        (Join-Path $projectRoot "scripts\run_agent_runtime_supervisor.mjs") + '"'
+    $env = { param($name) Get-DeskExactServiceEnvValue ([pscustomobject]@{ Service = $service; Name = $name }) }
+    $path = { param($actual, $expected) Test-DeskExactWindowsPath ([pscustomobject]@{ Actual = $actual; Expected = $expected }) }
+    if (-not (& $path ([string]$service.executable) $Spec.NodeExecutable)) { return $false }
+    if (-not (& $path ([string]$service.workingdirectory) $projectRoot)) { return $false }
+    if (-not [string]::Equals([string]$service.arguments, $arguments, [System.StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ((& $env "DESK_AGENT_SUPERVISOR_SERVICE_ID") -cne "agent_runtime_supervisor_live") { return $false }
+    if ((& $env "DESK_AGENT_WORKER_POOL") -cne "live" -or (& $env "DESK_AGENT_SUPERVISOR_LANE") -cne "live") { return $false }
+    if ((& $env "DESK_AGENT_SCHEDULER_MODE") -cne "disabled") { return $false }
+    if (-not (& $path (& $env "DESK_AGENT_SUPERVISOR_RUNNER_COMMAND") $Spec.NodeExecutable)) { return $false }
+    if (-not (& $path (& $env "DESK_AGENT_SUPERVISOR_RUNNER_ARGS") $runner)) { return $false }
+    if (-not (& $path (& $env "DESK_AGENT_SUPERVISOR_PROJECT_ROOT") $projectRoot)) { return $false }
+    $policy = (& $env "DESK_AGENT_POOL_POLICY_JSON") | ConvertFrom-Json
+    $pools = @($policy.pools.PSObject.Properties)
+    if ($pools.Count -ne 1 -or $pools[0].Name -cne "live") { return $false }
+    $live = $pools[0].Value
+    return [int]$live.max_concurrent_workers -eq 1 `
+        -and @($live.task_type_patterns).Count -eq 1 `
+        -and [string]@($live.task_type_patterns)[0] -ceq "LIVE_US_GRAINS_MARKET_CONTEXT_*" `
+        -and @($live.responsibilities).Count -eq 1 `
+        -and [string]@($live.responsibilities)[0] -ceq "MARKET_CONTEXT_ANALYSIS"
+}
+
+function Resolve-DeskAgentRuntimeSupervisorInstallMode {
+    param([Parameter(Mandatory = $true)][pscustomobject]$Spec)
+    if ($Spec.KeepAiWorkersDisabled -or $Spec.AiWorkerMode -eq "disabled") { return "disabled" }
+    if (-not (Test-Path -LiteralPath $Spec.ExistingConfigPath -PathType Leaf)) { return "shadow" }
+    try {
+        $config = New-Object System.Xml.XmlDocument
+        $config.XmlResolver = $null
+        $config.LoadXml((Get-Content -LiteralPath $Spec.ExistingConfigPath -Raw))
+        $scope = [pscustomobject]@{ Config = $config; InstallRoot = $Spec.InstallRoot
+            DataRoot = $Spec.DataRoot; NodeExecutable = $Spec.NodeExecutable }
+        if (-not (Test-DeskUsGrainsSupervisorConfig $scope)) { return "shadow" }
+        $mode = Get-DeskExactServiceEnvValue ([pscustomobject]@{ Service = $config.service; Name = "DESK_AGENT_SUPERVISOR_MODE" })
+        if ($mode -notin @("disabled", "shadow", "active")) { return "shadow" }
+        return $mode
+    } catch {
+        return "shadow"
+    }
+}
+
 function Get-DeskGrainsCalendarTimeReasonCodes {
     param(
         [ValidateSet("as_of", "fresh_until")][string]$Field,

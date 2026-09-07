@@ -27,6 +27,14 @@ $codexHome = Join-Path $DataRoot "codex"
 $envFile = Join-Path $DataRoot "config\desk.env"
 New-Item -ItemType Directory -Path $serviceRoot, $logRoot, $binRoot, $codexHome -Force | Out-Null
 if (-not (Test-Path -LiteralPath $envFile)) { throw "Desk environment file missing: $envFile" }
+$agentSupervisorMode = Resolve-DeskAgentRuntimeSupervisorInstallMode ([pscustomobject]@{
+    ExistingConfigPath = Join-Path $serviceRoot "DeskAgentRuntimeSupervisor.xml"
+    InstallRoot = $InstallRoot
+    DataRoot = $DataRoot
+    NodeExecutable = $node
+    AiWorkerMode = $AiWorkerMode
+    KeepAiWorkersDisabled = [bool]$KeepAiWorkersDisabled
+})
 
 function Copy-DeskServiceExecutable {
     param(
@@ -63,7 +71,7 @@ $replacements = [ordered]@{
     "__CODEX_EXE__" = $CodexExecutable
     "__CODEX_HOME__" = $codexHome
     "__AI_WORKER_MODE__" = $AiWorkerMode
-    "__AGENT_SUPERVISOR_MODE__" = "shadow"
+    "__AGENT_SUPERVISOR_MODE__" = $agentSupervisorMode
 }
 
 $templates = @(

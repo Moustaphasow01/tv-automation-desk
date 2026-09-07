@@ -43,6 +43,9 @@ function projectDataHealth({ nowUtc, feedRows, scheduler, requiredInstruments, s
     timestampMs,
     freshnessPolicy,
     tradingDate: marketSession.trading_date,
+    lastExpectedMarketDate: marketSession.last_expected_market_date,
+    lastExpectedCoreClosesUtc:
+      marketSession.last_expected_core_close_utc_by_timeframe,
   });
   return {
     ok: marketSession.market_closed === true ? freshness.coreFreshEnough : freshness.currentTradingDayReady,
@@ -125,7 +128,8 @@ function projectedEventFields(row, ingestionTiming) {
   };
 }
 
-function coreFreshness({ feeds, requiredFeedKeys, timestampMs, freshnessPolicy, tradingDate }) {
+function coreFreshness(input) {
+  const { feeds, requiredFeedKeys, timestampMs, freshnessPolicy, tradingDate } = input;
   const feedsByKey = new Map(feeds.map((feed) => [feedKey(feed), feed]));
   const requiredFeeds = requiredFeedKeys.map((key) => feedsByKey.get(key) || null);
   const ages = requiredFeeds.map((feed) => closedCandleAgeSeconds(feed, timestampMs));
@@ -136,7 +140,16 @@ function coreFreshness({ feeds, requiredFeedKeys, timestampMs, freshnessPolicy, 
     ? marketDates[0]
     : null;
   const marketDateReady = coreReady && requiredFeeds.every((feed) => feed.latest_market_date === tradingDate);
-  const coreFreshEnough = coreReady && core_age_seconds <= freshnessPolicy.max_age_seconds;
+  const lastExpectedDateReady = !input.lastExpectedMarketDate
+    || requiredFeeds.every((feed) => feed?.latest_market_date === input.lastExpectedMarketDate);
+  const lastExpectedCloseReady = lastExpectedClosesReady(
+    requiredFeeds,
+    input.lastExpectedCoreClosesUtc,
+  );
+  const coreFreshEnough = coreReady
+    && lastExpectedDateReady
+    && lastExpectedCloseReady
+    && core_age_seconds <= freshnessPolicy.max_age_seconds;
   return {
     effectiveMarketDate,
     coreReady,
@@ -145,6 +158,15 @@ function coreFreshness({ feeds, requiredFeedKeys, timestampMs, freshnessPolicy, 
     marketDateReady,
     currentTradingDayReady: marketDateReady && coreFreshEnough,
   };
+}
+
+function lastExpectedClosesReady(feeds, expectedByTimeframe) {
+  if (!expectedByTimeframe) return true;
+  return feeds.every((feed) => {
+    const expected = expectedByTimeframe[String(feed?.timeframe || "")];
+    return !expected
+      || Date.parse(feed?.latest_closed_candle_at_utc || "") === Date.parse(expected);
+  });
 }
 
 function closedCandleAgeSeconds(feed, timestampMs) {
@@ -208,6 +230,7 @@ function feedKey(feed) {
 
 function dataHealthState({ marketClosed, coreFreshEnough, coreReady, currentTradingDayReady, marketSession }) {
   if (marketClosed) return coreFreshEnough ? marketSession.state : coreReady ? "stale_market_closed" : "missing";
+  if (marketSession.reopen_data_grace_active && !currentTradingDayReady) return "awaiting_first_closed_bar";
   return currentTradingDayReady ? "ready" : coreReady ? "stale" : "missing";
 }
 

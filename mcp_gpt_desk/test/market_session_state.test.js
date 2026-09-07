@@ -52,3 +52,12 @@ test("Market data freshness policy accounts for delayed CBOT grains TradingView 
     15 * 60,
   );
 });
+
+test("Market data freshness policy keeps the explicit Labor Day close last-known only", () => {
+  const policy = marketDataFreshnessPolicyForSession({
+    reason: "cbot_grains_labor_day_2026_closed",
+  });
+
+  assert.equal(policy.max_age_seconds, 96 * 60 * 60);
+  assert.equal(policy.reason, "cbot_grains_labor_day_2026_closed");
+});

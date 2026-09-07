@@ -43,6 +43,7 @@ const required = [
   "deploy/windows/Update-Desk.ps1",
   "deploy/windows/Test-DeskUpdateRecovery.ps1",
   "deploy/windows/Test-DeskProducerScheduledTasks.ps1",
+  "deploy/windows/Test-DeskAgentSupervisorInstallMode.ps1",
   "deploy/windows/Rollback-Desk.ps1",
   "deploy/windows/Test-DeskRelease.ps1",
   "deploy/windows/Test-DeskDeployment.ps1",
@@ -428,6 +429,13 @@ if (!aiMode.includes('Invoke-DeskCommand -FilePath $codex -Arguments @("login", 
 if (!aiMode.includes("DESK_AI_WORKER_MODE")) violations.push("ai_worker_mode_switch_missing");
 const installServices = content.get("deploy/windows/Install-DeskServices.ps1");
 if (!installServices.includes("KeepAiWorkersDisabled") || !installServices.includes("StartupType Disabled")) violations.push("frozen_ai_service_disable_missing");
+for (const expected of ["Resolve-DeskAgentRuntimeSupervisorInstallMode", '"__AGENT_SUPERVISOR_MODE__" = $agentSupervisorMode']) {
+  if (!installServices.includes(expected)) violations.push(`agent_supervisor_install_mode_persistence_missing:${expected}`);
+}
+const supervisorInstallModeTest = content.get("deploy/windows/Test-DeskAgentSupervisorInstallMode.ps1");
+for (const expected of ["first install did not default to shadow", "exact US grains active scope was not preserved", "explicit disabled AI mode did not close supervisor", "malformed XML did not fail closed to shadow", "scope drift preserved active mode"]) {
+  if (!supervisorInstallModeTest.includes(expected)) violations.push(`agent_supervisor_install_mode_test_missing:${expected}`);
+}
 const frozenReleaseCheck = content.get("deploy/windows/Test-DeskV5FrozenRelease.ps1");
 for (const service of ["DeskFuturesLiveRuntime", "DeskFuturesReplayPreparation", "DeskFuturesBrokerManagement", "DeskFuturesAgentRuntimeSupervisor", "DeskFuturesCodexLive01", "DeskFuturesCodexLive02", "DeskFuturesCodexReplay01"]) {
   if (!installServices.includes(service)) violations.push(`frozen_service_not_disabled:${service}`);
@@ -567,7 +575,7 @@ if (!recoveryTest.includes('"audit,start,health,resume"') || !recoveryTest.inclu
 }
 if (process.platform === "win32") {
   const powerShell = resolve(process.env.SystemRoot || "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe");
-  for (const relative of ["deploy/windows/Test-DeskUpdateRecovery.ps1", "deploy/windows/Test-DeskProducerScheduledTasks.ps1", "deploy/windows/Test-DeskNodeVersionCompatibility.ps1", "deploy/windows/Test-DeskGrainsCalendarHealth.ps1", "deploy/windows/database/Test-DeskDatabaseExternal.ps1"]) {
+  for (const relative of ["deploy/windows/Test-DeskUpdateRecovery.ps1", "deploy/windows/Test-DeskProducerScheduledTasks.ps1", "deploy/windows/Test-DeskAgentSupervisorInstallMode.ps1", "deploy/windows/Test-DeskNodeVersionCompatibility.ps1", "deploy/windows/Test-DeskGrainsCalendarHealth.ps1", "deploy/windows/database/Test-DeskDatabaseExternal.ps1"]) {
     const result = spawnSync(powerShell, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", resolve(root, relative)], {
       cwd: root,
       encoding: "utf8",

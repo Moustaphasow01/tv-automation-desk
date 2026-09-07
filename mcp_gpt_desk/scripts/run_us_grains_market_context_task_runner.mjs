@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import process from "node:process";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { CodexExecAdapter } from "../src/codex-exec-adapter.js";
 import { loadCodexRuntimeSettings } from "../src/codex-runtime-settings.js";
@@ -10,20 +11,20 @@ async function runTask({ store, input }) {
   const task = input?.task || {};
   if (task.task_type !== "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH") throw coded("US_GRAINS_CONTEXT_TASK_TYPE_UNSUPPORTED", false);
   const bundle = task.payload?.bundle;
-  assertBundle(bundle);
+  const timeContract = assertBundle(bundle);
   const adapter = new CodexExecAdapter({
     cwd: resolve(process.env.DESK_AGENT_SUPERVISOR_PROJECT_ROOT || process.cwd()),
     runtimeSettingsProvider: () => loadCodexRuntimeSettings(store.persistence),
   });
   const analysis = await adapter.analyze({
-    prompt: buildPrompt(bundle),
+    prompt: buildPrompt(bundle, timeContract),
     outputSchema: OUTPUT_SCHEMA,
     outputNormalizer: (value) => value,
     sessionId: input?.conversation?.conversation?.external_conversation_ref || null,
     reasoningEffort: input?.execution_policy?.reasoning_effort || "high",
     timeoutMs: input?.execution_policy?.timeout_ms || 780_000,
   });
-  const persisted = await persistOutput({ store, input, bundle, output: analysis.output });
+  const persisted = await persistOutput({ store, input, bundle, timeContract, output: analysis.output });
   return {
     ok: true,
     status: "MARKET_CONTEXT_PUBLISHED",
@@ -35,23 +36,38 @@ async function runTask({ store, input }) {
   };
 }
 
-async function persistOutput({ store, input, bundle, output }) {
+async function persistOutput({ store, input, bundle, timeContract, output }) {
   assertOutput(output);
   const task = input.task;
   const createdAt = store.clock.now().utc;
-  const validityMinutes = bundle.canonicalMarketSession.marketState === "OPEN" ? 30 : 60;
-  const validUntil = new Date(Date.parse(createdAt) + validityMinutes * 60_000).toISOString();
-  const digest = canonicalSha256({ task: task.task_id, cutoff: bundle.cutoff, output });
-  const requiredReady = requiredSourcesReady(bundle.sourceStates, bundle.cutoff);
+  const { validFrom, validUntil } = marketContextValidityWindow({
+    analysisAsOfUtc: timeContract.analysisAsOfUtc,
+    marketState: bundle.canonicalMarketSession.marketState,
+    publishedAtUtc: createdAt,
+  });
+  const digest = canonicalSha256({ task: task.task_id,
+    analysisAsOfUtc: timeContract.analysisAsOfUtc,
+    marketDataCutoffUtc: timeContract.marketDataCutoffUtc,
+    publishedAtUtc: validFrom, output });
+  const requiredReady = requiredSourcesReady(bundle.sourceStates, {
+    ...timeContract,
+    marketState: bundle.canonicalMarketSession.marketState,
+  });
   const status = requiredReady ? "AVAILABLE" : "PARTIAL";
+  const enforcedReasons = marketTimeReasonCodes({
+    ...timeContract,
+    marketState: bundle.canonicalMarketSession.marketState,
+  });
   const snapshotId = `market-context-${digest.slice(0, 24)}`;
   const snapshot = {
     marketContextSnapshotId: snapshotId,
     universe: "US_GRAINS_CBOT",
     createdAt,
-    validFrom: createdAt,
+    validFrom,
     validUntil,
-    sourceDataCutoff: bundle.cutoff,
+    sourceDataCutoff: timeContract.analysisAsOfUtc,
+    analysisAsOfUtc: timeContract.analysisAsOfUtc,
+    marketDataCutoffUtc: timeContract.marketDataCutoffUtc,
     marketState: bundle.canonicalMarketSession.marketState,
     marketSession: bundle.canonicalMarketSession.marketSession,
     marketRegime: output.marketRegime,
@@ -65,8 +81,11 @@ async function persistOutput({ store, input, bundle, output }) {
     invalidationConditions: output.invalidationConditions,
     riskMultiplier: Math.min(1, Number(output.riskMultiplier)),
     sourceStates: bundle.sourceStates,
-    reasonCodes: [...new Set([...output.reasonCodes, ...(requiredReady ? [] : ["REQUIRED_SOURCE_NOT_READY"])])],
-    provenance: [{ source: "agent-runtime", taskId: task.task_id, dataCutoff: bundle.cutoff }],
+    reasonCodes: [...new Set([...output.reasonCodes, ...enforcedReasons, ...(requiredReady ? [] : ["REQUIRED_SOURCE_NOT_READY"])])],
+    provenance: [{ source: "agent-runtime", taskId: task.task_id,
+      analysisAsOfUtc: timeContract.analysisAsOfUtc,
+      marketDataCutoffUtc: timeContract.marketDataCutoffUtc,
+      dataCutoff: timeContract.marketDataCutoffUtc }],
     workerId: input.lease?.worker_id || task.assigned_worker_id || null,
     taskId: task.task_id,
     modelPolicyVersion: input.execution_policy_snapshot?.policy_hash || input.execution_policy?.model || "runtime-policy",
@@ -80,9 +99,11 @@ async function persistOutput({ store, input, bundle, output }) {
     marketContextSnapshotId: snapshotId,
     universe: "US_GRAINS_CBOT",
     createdAt,
-    validFrom: createdAt,
+    validFrom,
     validUntil,
-    sourceDataCutoff: bundle.cutoff,
+    sourceDataCutoff: timeContract.analysisAsOfUtc,
+    analysisAsOfUtc: timeContract.analysisAsOfUtc,
+    marketDataCutoffUtc: timeContract.marketDataCutoffUtc,
     status,
     headline: output.headline,
     operatorSummary: output.operatorSummary,
@@ -111,24 +132,33 @@ async function persistOutput({ store, input, bundle, output }) {
   return store.marketContext.persistAnalysis({ snapshot, brief });
 }
 
-function buildPrompt(bundle) {
+export function buildPrompt(bundle, timeContract) {
   return [
     "You are US_GRAINS_MARKET_CONTEXT_ANALYST. Analyze market context; do not find or execute a trade.",
     "Authority is advisory only. Never create ProviderCommand, alter Risk, confirm HumanGate, enable AUTO/LIVE, or change post-Risk terms.",
     "Use only the bounded bundle below. Respect sourceDataCutoff and source availability. Empty agri events only mean no event when the manifest is AVAILABLE and covers the cutoff.",
+    `Knowledge is bounded at analysisAsOfUtc=${timeContract.analysisAsOfUtc}. Price bars are bounded independently at marketDataCutoffUtc=${timeContract.marketDataCutoffUtc}; every included bar is closed by that instant.`,
+    "When the canonical market is not OPEN, describe prices as last-known closed bars. Do not present them as a current quote or extend their coverage to analysisAsOfUtc.",
+    "Write headline, operatorSummary, marketInterpretation, deskIntent, whyNoTrade, and other human-facing narrative text in French. Keep enum values, reason codes, identifiers, and schema keys unchanged.",
+    "When the canonical market is not OPEN, include the exact UTC date and time of marketDataCutoffUtc in the headline, operator summary, or market interpretation so the last-known price date is explicit.",
     "Produce strict JSON matching the schema. Keep ZC and ZW instrument views distinct. Opportunity zones are context framing, not orders.",
     "If sources are incomplete, say so in reasonCodes and narrative; never invent availability, news, weather, macro facts or prices.",
     JSON.stringify(bundle),
   ].join("\n\n");
 }
 
-function requiredSourcesReady(states, cutoff) {
+export function requiredSourcesReady(states, timeInput) {
+  const time = normalizeTimeInput(timeInput);
   const required = ["ZC_1", "ZC_5", "ZW_1", "ZW_5", "market_agri_events", "canonical_grains_session"];
   return required.every((id) => {
     const source = states.find((item) => item.sourceId === id);
     if (!source || source.status !== "AVAILABLE") return false;
-    if (id === "canonical_grains_session") return true;
-    return source.coverageStart && source.coverageEnd && Date.parse(source.coverageStart) <= Date.parse(cutoff) && Date.parse(source.coverageEnd) >= Date.parse(cutoff);
+    const cutoff = id === "ZC_1" || id === "ZC_5" || id === "ZW_1" || id === "ZW_5"
+      ? time.marketDataCutoffUtc
+      : time.analysisAsOfUtc;
+    return source.coverageStart && source.coverageEnd
+      && Date.parse(source.coverageStart) <= Date.parse(cutoff)
+      && Date.parse(source.coverageEnd) >= Date.parse(cutoff);
   });
 }
 
@@ -136,6 +166,51 @@ function assertBundle(bundle) {
   if (!bundle || bundle.schemaVersion !== "us_grains_market_context_bundle_v1") throw coded("US_GRAINS_CONTEXT_BUNDLE_INVALID", false);
   if (bundle.universe !== "US_GRAINS_CBOT" || !bundle.cutoff || !bundle.canonicalMarketSession) throw coded("US_GRAINS_CONTEXT_BUNDLE_SCOPE_INVALID", false);
   if (!Array.isArray(bundle.sourceStates)) throw coded("US_GRAINS_CONTEXT_SOURCE_STATES_REQUIRED", false);
+  return resolveBundleTimeContract(bundle);
+}
+
+export function resolveBundleTimeContract(bundle = {}) {
+  if (bundle.timeContractVersion !== "us_grains_market_context_time_v2")
+    throw coded("US_GRAINS_CONTEXT_TIME_CONTRACT_VERSION_UNSUPPORTED", false);
+  const analysisAsOfUtc = isoOrNull(bundle.analysisAsOfUtc);
+  const marketDataCutoffUtc = isoOrNull(bundle.marketDataCutoffUtc);
+  const sourceDataCutoffUtc = isoOrNull(bundle.sourceDataCutoff);
+  const compatibilityCutoffUtc = isoOrNull(bundle.cutoff);
+  if (!analysisAsOfUtc || !marketDataCutoffUtc || !sourceDataCutoffUtc || !compatibilityCutoffUtc)
+    throw coded("US_GRAINS_CONTEXT_TIME_CONTRACT_REQUIRED", false);
+  if (analysisAsOfUtc !== sourceDataCutoffUtc || analysisAsOfUtc !== compatibilityCutoffUtc)
+    throw coded("US_GRAINS_CONTEXT_CUTOFF_ALIAS_MISMATCH", false);
+  if (Date.parse(marketDataCutoffUtc) > Date.parse(analysisAsOfUtc))
+    throw coded("US_GRAINS_CONTEXT_MARKET_DATA_LOOKAHEAD", false);
+  return { analysisAsOfUtc, marketDataCutoffUtc };
+}
+
+export function marketContextValidityWindow({ analysisAsOfUtc, marketState, publishedAtUtc } = {}) {
+  const analysisAt = isoOrNull(analysisAsOfUtc);
+  const validFrom = isoOrNull(publishedAtUtc);
+  if (!analysisAt || !validFrom) throw coded("US_GRAINS_CONTEXT_ANALYSIS_AS_OF_REQUIRED", false);
+  const validityMinutes = marketState === "OPEN" ? 30 : 60;
+  const validUntil = new Date(Date.parse(analysisAt) + validityMinutes * 60_000).toISOString();
+  if (Date.parse(validFrom) < Date.parse(analysisAt))
+    throw coded("US_GRAINS_CONTEXT_PUBLICATION_BEFORE_ANALYSIS", false);
+  if (Date.parse(validFrom) >= Date.parse(validUntil))
+    throw coded("US_GRAINS_CONTEXT_ANALYSIS_EXPIRED_BEFORE_PUBLICATION", false);
+  return { validFrom, validUntil };
+}
+
+function marketTimeReasonCodes({ analysisAsOfUtc, marketDataCutoffUtc, marketState }) {
+  if (marketState === "OPEN" || Date.parse(marketDataCutoffUtc) >= Date.parse(analysisAsOfUtc)) return [];
+  return ["MARKET_PRICES_LAST_KNOWN_WHILE_MARKET_NOT_OPEN"];
+}
+
+function normalizeTimeInput(value) {
+  if (typeof value === "string") return { analysisAsOfUtc: value, marketDataCutoffUtc: value };
+  return value || {};
+}
+
+function isoOrNull(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
 function assertOutput(output) {
@@ -219,15 +294,16 @@ const OUTPUT_SCHEMA = {
   required: ["schemaVersion", "marketRegime", "volatilityRegime", "globalBias", "instrumentViews", "preferredStrategyFamilies", "discouragedStrategyFamilies", "opportunityZones", "noTradeZones", "invalidationConditions", "riskMultiplier", "headline", "operatorSummary", "marketInterpretation", "deskIntent", "whyNoTrade", "whatDeskWants", "whatDeskAvoids", "currentCatalysts", "nextExpectedEvents", "reasonCodes"],
 };
 
-const input = await readJsonStdin();
-const store = createDeskStoreFromEnv();
-
-try {
-  await store.persistence.initialized;
-  const result = await runTask({ store, input });
-  process.stdout.write(`${JSON.stringify(result)}\n`);
-} catch (error) {
-  process.stdout.write(`${JSON.stringify(failure(error))}\n`);
-} finally {
-  await store.persistence.close?.();
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  const input = await readJsonStdin();
+  const store = createDeskStoreFromEnv();
+  try {
+    await store.persistence.initialized;
+    const result = await runTask({ store, input });
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+  } catch (error) {
+    process.stdout.write(`${JSON.stringify(failure(error))}\n`);
+  } finally {
+    await store.persistence.close?.();
+  }
 }

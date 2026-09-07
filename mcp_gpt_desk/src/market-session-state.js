@@ -1,14 +1,13 @@
 import { toParisIso } from "@tv-automation/desk-time";
+import { cbotGrainsFreshnessPolicy } from "./cbot-grains-rth-calendar.js";
 
 const CME_DAILY_MAINTENANCE_START_MINUTES = 17 * 60;
 const CME_DAILY_MAINTENANCE_END_MINUTES = 18 * 60;
 const CME_WEEKLY_OPEN_MINUTES = 18 * 60;
 const CME_WEEKLY_CLOSE_MINUTES = 17 * 60;
 const DEFAULT_OPEN_MARKET_FRESHNESS_SECONDS = 15 * 60;
-const CBOT_GRAINS_OPEN_FRESHNESS_SECONDS = 20 * 60;
 const CME_DAILY_MAINTENANCE_FRESHNESS_SECONDS = 2 * 60 * 60;
 const CME_WEEKEND_FRESHNESS_SECONDS = 74 * 60 * 60;
-const CBOT_GRAINS_DAILY_CLOSED_FRESHNESS_SECONDS = 24 * 60 * 60;
 
 export function parisMarketSessionState(now = new Date()) {
   const epochMs = normalizeEpochMs(now);
@@ -68,25 +67,9 @@ export function cmeEquityFuturesSessionState(now = new Date()) {
 }
 
 export function marketDataFreshnessPolicyForSession(session = {}) {
+  const grainsPolicy = cbotGrainsFreshnessPolicy(session);
+  if (grainsPolicy) return grainsPolicy;
   const reason = String(session.reason || "");
-  if (["cbot_grains_weekend_closed", "cbot_grains_monday_preopen"].includes(reason)) {
-    return {
-      max_age_seconds: CME_WEEKEND_FRESHNESS_SECONDS,
-      reason,
-    };
-  }
-  if (["cbot_grains_preopen", "cbot_grains_postclose"].includes(reason)) {
-    return {
-      max_age_seconds: CBOT_GRAINS_DAILY_CLOSED_FRESHNESS_SECONDS,
-      reason,
-    };
-  }
-  if (reason === "cbot_grains_open") {
-    return {
-      max_age_seconds: CBOT_GRAINS_OPEN_FRESHNESS_SECONDS,
-      reason,
-    };
-  }
   if (reason === "cme_daily_maintenance_break") {
     return {
       max_age_seconds: CME_DAILY_MAINTENANCE_FRESHNESS_SECONDS,

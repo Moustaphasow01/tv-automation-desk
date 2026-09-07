@@ -218,14 +218,14 @@ async function insertBrief(client, value) {
 function mapSnapshot(row, nowUtc) {
   if (!row) return null;
   const payload = row.payload || {};
-  const expired = Date.parse(row.valid_until_utc) < Date.parse(nowUtc);
+  const expired = new Date(row.valid_until_utc).getTime() < Date.parse(nowUtc);
   return { ...payload, status: expired && payload.status === "AVAILABLE" ? "STALE" : payload.status };
 }
 
 function mapBrief(row, nowUtc) {
   if (!row) return null;
   const payload = row.payload || {};
-  const expired = Date.parse(row.valid_until_utc) < Date.parse(nowUtc);
+  const expired = new Date(row.valid_until_utc).getTime() < Date.parse(nowUtc);
   return { ...payload, status: expired && payload.status === "AVAILABLE" ? "STALE" : payload.status };
 }
 
@@ -248,7 +248,7 @@ function mapCoverage(row = {}) {
     asOf: row.as_of_utc, dataCutoff: row.data_cutoff_utc, lastSuccessfulAt: row.last_successful_import_at_utc,
     provider: row.provider, datasetVersion: row.dataset_version, missingness: row.missingness,
     reasonCodes: row.reason_codes,
-  }, { cutoff: row.as_of_utc });
+  }, { cutoff: row.data_cutoff_utc || row.as_of_utc });
 }
 
 function mapPrefilterDecision(row = {}) {

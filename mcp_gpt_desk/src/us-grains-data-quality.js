@@ -1,4 +1,5 @@
 import { chicagoPartsAtUtc } from "./us-grains-chicago-time.js";
+import { cbotGrainsRthSessionState } from "./cbot-grains-rth-calendar.js";
 
 export const US_GRAINS_DATA_QUALITY_VERSION = "us_grains_data_quality_v2";
 
@@ -11,7 +12,6 @@ const MIN_RTH_M1_ROWS = 250;
 const MIN_RTH_M5_ROWS = 50;
 const MAX_GAP_MINUTES_M1 = 3;
 const MAX_GAP_MINUTES_M5 = 10;
-const CHICAGO_TZ = "America/Chicago";
 const RTH_START_MINUTE = 8 * 60 + 30;
 const RTH_END_MINUTE = 13 * 60 + 20;
 
@@ -118,40 +118,7 @@ export function isGrainsRth(timestampUtc) {
 }
 
 export function grainsTradingSessionState(timestampUtc) {
-  const asOfUtc = iso(timestampUtc);
-  if (!asOfUtc) throw new Error("invalid_grains_session_timestamp");
-  const parts = zonedParts(asOfUtc);
-  const minute = Number(parts.hour) * 60 + Number(parts.minute);
-  const weekday = isWeekday(parts.weekday);
-  const open =
-    weekday && minute >= RTH_START_MINUTE && minute <= RTH_END_MINUTE;
-  const state = open
-    ? "OPEN"
-    : !weekday
-      ? "WEEKEND_CLOSED"
-      : minute < RTH_START_MINUTE
-        ? "PREOPEN"
-        : "POSTCLOSE";
-  const reason =
-    state === "PREOPEN" && parts.weekday === "Mon"
-      ? "cbot_grains_monday_preopen"
-      : `cbot_grains_${state.toLowerCase()}`;
-  return {
-    market_profile: "cbot_us_grains_rth",
-    active_session: open
-      ? "CBOT_GRAINS_RTH"
-      : state === "PREOPEN"
-        ? "CBOT_GRAINS_PREOPEN"
-        : "CBOT_GRAINS_CLOSED",
-    exchange_timezone: CHICAGO_TZ,
-    timestamp_utc: asOfUtc,
-    trading_date: grainChicagoDate(asOfUtc),
-    weekday: parts.weekday,
-    market_closed: !open,
-    state,
-    reason,
-    next_eligible_at_utc: open ? asOfUtc : nextGrainsRthOpen(asOfUtc),
-  };
+  return cbotGrainsRthSessionState(timestampUtc);
 }
 
 export function grainsRuntimeEvaluationDisposition({
@@ -261,21 +228,6 @@ function zonedParts(timestampUtc) {
 function chicagoMinute(timestampUtc) {
   const parts = zonedParts(timestampUtc);
   return Number(parts.hour) * 60 + Number(parts.minute);
-}
-
-function nextGrainsRthOpen(timestampUtc) {
-  const startMs = Date.parse(timestampUtc);
-  const rounded = startMs - (startMs % 60_000);
-  for (let offset = 60_000; offset <= 8 * 24 * 60 * 60_000; offset += 60_000) {
-    const candidate = new Date(rounded + offset).toISOString();
-    const parts = zonedParts(candidate);
-    if (
-      isWeekday(parts.weekday) &&
-      Number(parts.hour) * 60 + Number(parts.minute) === RTH_START_MINUTE
-    )
-      return candidate;
-  }
-  return null;
 }
 
 function isWeekday(value) {

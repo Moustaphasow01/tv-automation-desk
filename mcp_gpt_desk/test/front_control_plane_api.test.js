@@ -28,6 +28,17 @@ const viewNames = [
   "workflow-detail", "event-detail", "operations-runbooks", "governance-prompts", "governance-policies",
 ];
 
+function sourcePendingBeyondBffTimeout() {
+  let guardTimer;
+  const promise = new Promise((_, reject) => {
+    guardTimer = setTimeout(
+      () => reject(new Error("test_source_outlived_expected_bff_timeout")),
+      1_000,
+    );
+  });
+  return { promise, dispose: () => clearTimeout(guardTimer) };
+}
+
 test("front control plane router exposes views, commands and realtime events only on intended methods", () => {
   assert.equal(isFrontControlPlanePath("/front-api/v1/views/command-center"), true);
   assert.equal(isFrontControlPlanePath(FRONT_CONTROL_PLANE_COMMANDS_PATH), true);
@@ -2090,27 +2101,37 @@ test("front control plane order-detail publishes post-risk portfolio OrderIntent
 test("front control plane degrades a view when one source times out", async () => {
   const store = frontControlPlaneStore();
   store.frontControlPlaneSourceTimeoutMs = 5;
-  store.listOperationsIncidents = async () => new Promise(() => {});
-  const envelope = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/command-center", query: { scope: "timeout-test" } });
-  assert.equal(envelope.meta.availability, "PARTIAL");
-  assert.equal(envelope.meta.warnings.includes("incidents:FRONT_SOURCE_TIMEOUT"), true);
-  assert.equal(typeof envelope.data.summary, "object");
-  assert.equal(envelope.data.summary.criticalIncidents, null);
-  assert.equal(envelope.data.risk.activeAlerts, null);
+  const pendingSource = sourcePendingBeyondBffTimeout();
+  store.listOperationsIncidents = async () => pendingSource.promise;
+  try {
+    const envelope = await handleFrontControlPlane(store, { pathname: "/front-api/v1/views/command-center", query: { scope: "timeout-test" } });
+    assert.equal(envelope.meta.availability, "PARTIAL");
+    assert.equal(envelope.meta.warnings.includes("incidents:FRONT_SOURCE_TIMEOUT"), true);
+    assert.equal(typeof envelope.data.summary, "object");
+    assert.equal(envelope.data.summary.criticalIncidents, null);
+    assert.equal(envelope.data.risk.activeAlerts, null);
+  } finally {
+    pendingSource.dispose();
+  }
 });
 
 test("Live Focus fails closed when its authoritative execution source times out", async () => {
   const store = frontControlPlaneStore();
   store.frontControlPlaneSourceTimeoutMs = 5;
-  store.getExecutionOverview = async () => new Promise(() => {});
+  const pendingSource = sourcePendingBeyondBffTimeout();
+  store.getExecutionOverview = async () => pendingSource.promise;
 
-  await assert.rejects(() => handleFrontControlPlane(store, {
-    pathname: "/front-api/v1/views/live-focus",
-    query: { diagnostic: "execution-timeout" },
-  }), (error) => (
-    error.code === "LIVE_FOCUS_EXECUTION_UNAVAILABLE"
-    && error.statusCode === 503
-  ));
+  try {
+    await assert.rejects(() => handleFrontControlPlane(store, {
+      pathname: "/front-api/v1/views/live-focus",
+      query: { diagnostic: "execution-timeout" },
+    }), (error) => (
+      error.code === "LIVE_FOCUS_EXECUTION_UNAVAILABLE"
+      && error.statusCode === 503
+    ));
+  } finally {
+    pendingSource.dispose();
+  }
 });
 
 test("Live Focus rejects an execution adapter returning no projection", async () => {

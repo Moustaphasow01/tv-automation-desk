@@ -54,6 +54,72 @@ test("data readiness evaluates active grains feed freshness from candle close ti
   assert.equal(result.core_feeds.find((feed) => feed.timeframe === "5").closed_candle_age_seconds, 992);
 });
 
+test("data readiness treats the qualified Labor Day RTH closure as last-known, not an outage", async () => {
+  const rows = grainFeedRowsAt({
+    m1: "2026-09-04T18:19:00.000Z",
+    m5: "2026-09-04T18:15:00.000Z",
+  });
+  const result = await buildPostgresDataHealth(grainHealthPool({ rows }), {
+    nowUtc: "2026-09-07T15:10:00.000Z",
+  });
+
+  assert.equal(result.market_session.state, "HOLIDAY");
+  assert.equal(result.market_closed, true);
+  assert.equal(result.state, "HOLIDAY");
+  assert.equal(result.ok, true);
+  assert.equal(result.next_eligible_at_utc, "2026-09-08T13:30:00.000Z");
+  assert.equal(result.freshness_policy.max_age_seconds, 96 * 60 * 60);
+});
+
+test("Labor Day last-known readiness rejects a non-Friday core candle", async () => {
+  const rows = grainFeedRowsAt({
+    m1: "2026-09-03T18:19:00.000Z",
+    m5: "2026-09-03T18:15:00.000Z",
+  });
+  const result = await buildPostgresDataHealth(grainHealthPool({ rows }), {
+    nowUtc: "2026-09-07T15:10:00.000Z",
+  });
+
+  assert.equal(result.market_session.state, "HOLIDAY");
+  assert.equal(result.ok, false);
+  assert.equal(result.state, "stale_market_closed");
+  assert.equal(result.effective_market_date, "2026-09-03");
+});
+
+test("Labor Day last-known readiness rejects a truncated Friday core session", async () => {
+  const rows = grainFeedRowsAt({
+    m1: "2026-09-04T13:30:00.000Z",
+    m5: "2026-09-04T13:30:00.000Z",
+  });
+  const result = await buildPostgresDataHealth(grainHealthPool({ rows }), {
+    nowUtc: "2026-09-07T15:10:00.000Z",
+  });
+
+  assert.equal(result.effective_market_date, "2026-09-04");
+  assert.equal(result.ok, false);
+  assert.equal(result.state, "stale_market_closed");
+});
+
+test("data readiness labels reopening tolerance without making Friday candles fresh on Tuesday", async () => {
+  const rows = grainFeedRowsAt({
+    m1: "2026-09-04T18:19:00.000Z",
+    m5: "2026-09-04T18:15:00.000Z",
+  });
+  const duringGrace = await buildPostgresDataHealth(grainHealthPool({ rows }), {
+    nowUtc: "2026-09-08T13:40:00.000Z",
+  });
+  const afterGrace = await buildPostgresDataHealth(grainHealthPool({ rows }), {
+    nowUtc: "2026-09-08T13:56:00.000Z",
+  });
+
+  assert.equal(duringGrace.market_closed, false);
+  assert.equal(duringGrace.ok, false);
+  assert.equal(duringGrace.state, "awaiting_first_closed_bar");
+  assert.equal(duringGrace.effective_market_date, "2026-09-04");
+  assert.equal(afterGrace.ok, false);
+  assert.equal(afterGrace.state, "stale");
+});
+
 test("data readiness binds latest candles to their M5 close instead of admitting an open candle", async () => {
   const calls = [];
   const pool = grainHealthPool({

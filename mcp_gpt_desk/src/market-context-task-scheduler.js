@@ -4,6 +4,7 @@ import { SystemClock } from "@tv-automation/desk-time";
 const MISSION_ID = "f23b52e4-1955-4c8a-b8c7-216dd65e2c40";
 const MARKET_CONTEXT_UNIVERSE = "US_GRAINS_CBOT";
 const MARKET_CONTEXT_TASK_TYPE = "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH";
+const MARKET_CONTEXT_TIME_CONTRACT_VERSION = "us_grains_market_context_time_v2";
 const MARKET_CONTEXT_SUPERSEDED_CODE = "SUPERSEDED_BY_NEWER_MARKET_CONTEXT_TASK";
 const REQUIRED_FEEDS = Object.freeze([
   ["ZC", "1", "prod__tradingview__ZC1!__1"],
@@ -73,7 +74,9 @@ export class MarketContextTaskScheduler {
     const bundle = await this.#buildBundle({ nowUtc, session, sourceStates });
     const eventReasons = detectMarketContextEventReasons(bundle);
     const triggerType = eventReasons.length ? "EVENT" : trigger;
-    const reasonHash = canonicalSha256({ triggerType, eventReasons, cutoffBucket, session: session.marketSession, sourceStates: sourceStates.map(sourceSignature) }).slice(0, 24);
+    const reasonHash = canonicalSha256({ triggerType, eventReasons, cutoffBucket,
+      timeContractVersion: MARKET_CONTEXT_TIME_CONTRACT_VERSION,
+      session: session.marketSession, sourceStates: sourceStates.map(sourceSignature) }).slice(0, 24);
     const existing = await this.pool.query(`SELECT * FROM market_context_task_dispatches
       WHERE universe=$1 AND source_data_cutoff_utc=$2 AND reason_hash=$3`, [MARKET_CONTEXT_UNIVERSE, cutoffBucket, reasonHash]);
     if (existing.rows[0]) {
@@ -90,7 +93,10 @@ export class MarketContextTaskScheduler {
       ) VALUES ($1,$2,$3,$9,'live','READY',30,$4::jsonb,$5,3,$6,$7,$8::jsonb)
       ON CONFLICT (agent_task_id) DO NOTHING`, [
         ids.taskId, MISSION_ID, ids.taskKey, JSON.stringify({ schema_version: "us_grains_market_context_task_v1", trigger: triggerType, trigger_reasons: eventReasons, reason_hash: reasonHash, bundle }),
-        `idem-${ids.taskId}`, nowUtc, ids.correlationId, JSON.stringify({ universe: "US_GRAINS_CBOT", authority: "ADVISORY_ONLY", trigger_reasons: eventReasons }),
+        `idem-${ids.taskId}`, nowUtc, ids.correlationId, JSON.stringify({ universe: "US_GRAINS_CBOT", authority: "ADVISORY_ONLY",
+          time_contract_version: bundle.timeContractVersion, analysis_as_of_utc: bundle.analysisAsOfUtc,
+          market_data_cutoff_utc: bundle.marketDataCutoffUtc,
+          trigger_reasons: eventReasons }),
         MARKET_CONTEXT_TASK_TYPE,
       ]);
       await client.query(`INSERT INTO market_context_task_dispatches (
@@ -98,13 +104,19 @@ export class MarketContextTaskScheduler {
         status, agent_task_id, not_before_utc, metadata
       ) VALUES ($1,$8,$2,$3,$4,'ENQUEUED',$5,$6,$7::jsonb)`, [
         ids.dispatchId, cutoffBucket, reasonHash, triggerType, ids.taskId, nowUtc,
-        JSON.stringify({ cadence_minutes: cadenceMinutes, market_session: session.marketSession, trigger_reasons: eventReasons }),
+        JSON.stringify({ cadence_minutes: cadenceMinutes, market_session: session.marketSession,
+          time_contract_version: bundle.timeContractVersion, analysis_as_of_utc: bundle.analysisAsOfUtc,
+          market_data_cutoff_utc: bundle.marketDataCutoffUtc,
+          trigger_reasons: eventReasons }),
         MARKET_CONTEXT_UNIVERSE,
       ]);
       const superseded = await this.#supersedeReadyContextTasks({ client, currentCutoffUtc: cutoffBucket, keepTaskId: ids.taskId });
       await client.query("SELECT pg_notify('desk_agent_runtime_ready', $1)", [JSON.stringify({ schema: "desk_agent_runtime_ready_v1", lane: "live", status: "READY" })]);
       await client.query("COMMIT");
-      return { status: "ENQUEUED", ...ids, trigger: triggerType, trigger_reasons: eventReasons, source_data_cutoff_utc: bundle.cutoff, source_states: sourceStates, superseded_task_count: superseded.length };
+      return { status: "ENQUEUED", ...ids, trigger: triggerType, trigger_reasons: eventReasons,
+        analysis_as_of_utc: bundle.analysisAsOfUtc, source_data_cutoff_utc: bundle.cutoff,
+        market_data_cutoff_utc: bundle.marketDataCutoffUtc,
+        source_states: sourceStates, superseded_task_count: superseded.length };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -127,21 +139,36 @@ export class MarketContextTaskScheduler {
   async #refreshFeedCoverage(nowUtc, session) {
     const states = [];
     for (const [instrument, timeframe, feedId] of REQUIRED_FEEDS) {
+      const eligibleBarOpenUtc = eligibleBarOpenCutoffUtc(nowUtc, timeframe);
       const result = await this.pool.query(`SELECT min(timestamp_utc) AS coverage_start,
-        max(timestamp_utc) AS coverage_end, count(*)::int AS row_count
-        FROM market_candles WHERE feed_id=$1 AND is_closed=true`, [feedId]);
+        max(timestamp_utc) AS coverage_end,
+        (max(timestamp_utc) AT TIME ZONE 'America/Chicago')::date::text AS latest_market_date,
+        count(*)::int AS row_count
+        FROM market_candles WHERE feed_id=$1 AND is_closed=true AND timestamp_utc <= $2`,
+      [feedId, eligibleBarOpenUtc]);
       const row = result.rows[0] || {};
       const available = Boolean(row.coverage_start && row.coverage_end);
-      const ageMs = available ? Math.max(0, Date.parse(nowUtc) - Date.parse(row.coverage_end)) : Number.POSITIVE_INFINITY;
+      const coverageEnd = available ? barCloseUtc(row.coverage_end, timeframe) : null;
+      const ageMs = available ? Math.max(0, Date.parse(nowUtc) - Date.parse(coverageEnd)) : Number.POSITIVE_INFINITY;
       const freshnessMs = marketContextFreshnessThresholdMs({ timeframe, readinessPolicy: session.freshnessPolicy });
-      const stale = session.marketState === "OPEN" && ageMs > freshnessMs;
+      const freshness = marketBarCoverageAssessment({ available, ageMs, freshnessMs,
+        timeframe, coverageEnd, latestMarketDate: row.latest_market_date,
+        lastExpectedMarketDate: session.lastExpectedMarketDate,
+        lastExpectedCoreClosesUtc: session.lastExpectedCoreClosesUtc });
       const state = await this.store.marketContext.upsertSourceCoverage({
-        sourceId: `${instrument}_${timeframe}`, sourceType: "OHLCV", status: !available ? "UNAVAILABLE" : stale ? "STALE" : "AVAILABLE",
-        requiredFor: ["MARKET_CONTEXT_SNAPSHOT", "CONTEXT_PREFILTER"], dataCutoff: nowUtc,
-        coverageStart: row.coverage_start, coverageEnd: row.coverage_end, asOf: nowUtc,
-        lastSuccessfulAt: row.coverage_end, provider: "TRADINGVIEW_WEBHOOK", datasetVersion: "market_candles_v1",
-        missingness: available ? 0 : 1, reasonCodes: !available ? ["NO_CLOSED_BARS"] : stale ? ["CLOSED_BARS_STALE_DURING_ACTIVE_SESSION"] : ["CLOSED_BARS_AVAILABLE"],
-        metadata: { feed_id: feedId, row_count: Number(row.row_count || 0), age_ms: Number.isFinite(ageMs) ? ageMs : null, freshness_threshold_ms: freshnessMs },
+        sourceId: `${instrument}_${timeframe}`, sourceType: "OHLCV", status: !available ? "UNAVAILABLE" : freshness.stale ? "STALE" : "AVAILABLE",
+        requiredFor: ["MARKET_CONTEXT_SNAPSHOT", "CONTEXT_PREFILTER"], dataCutoff: coverageEnd || nowUtc,
+        coverageStart: row.coverage_start, coverageEnd, asOf: nowUtc,
+        lastSuccessfulAt: coverageEnd, provider: "TRADINGVIEW_WEBHOOK", datasetVersion: "market_candles_v1",
+        missingness: available ? 0 : 1,
+        reasonCodes: marketBarReasonCodes({ available, stale: freshness.stale,
+          expectedMarketDateMismatch: freshness.expectedMarketDateMismatch,
+          expectedMarketCloseMismatch: freshness.expectedMarketCloseMismatch, marketState: session.marketState }),
+        metadata: { feed_id: feedId, row_count: Number(row.row_count || 0), age_ms: Number.isFinite(ageMs) ? ageMs : null,
+          freshness_threshold_ms: freshnessMs, latest_market_date: row.latest_market_date || null,
+          last_expected_market_date: session.lastExpectedMarketDate,
+          last_expected_core_close_utc: freshness.lastExpectedCloseUtc,
+          latest_bar_open_utc: isoOrNull(row.coverage_end), latest_bar_close_utc: coverageEnd },
       });
       states.push(state);
     }
@@ -170,15 +197,16 @@ export class MarketContextTaskScheduler {
 
   async #buildBundle({ nowUtc, session, sourceStates }) {
     const latestCutoffs = sourceStates.filter((source) => source.sourceType === "OHLCV" && source.coverageEnd).map((source) => Date.parse(source.coverageEnd));
-    const sourceDataCutoff = latestCutoffs.length ? new Date(Math.min(...latestCutoffs)).toISOString() : nowUtc;
+    const marketDataCutoffUtc = latestCutoffs.length ? new Date(Math.min(...latestCutoffs)).toISOString() : nowUtc;
     const series = {};
     for (const [instrument, timeframe, feedId] of REQUIRED_FEEDS) {
+      const barOpenCutoffUtc = eligibleBarOpenCutoffUtc(marketDataCutoffUtc, timeframe);
       const result = await this.pool.query(`SELECT timestamp_utc, open, high, low, close, volume
         FROM market_candles WHERE feed_id=$1 AND is_closed=true AND timestamp_utc <= $2
-        ORDER BY timestamp_utc DESC LIMIT 120`, [feedId, sourceDataCutoff]);
-      series[`${instrument}:${timeframe}`] = summarizeSeries(result.rows.reverse());
+        ORDER BY timestamp_utc DESC LIMIT 120`, [feedId, barOpenCutoffUtc]);
+      series[`${instrument}:${timeframe}`] = summarizeSeries(result.rows.reverse(), timeframe);
     }
-    const calendar = await this.store.marketContext.calendarAt(sourceDataCutoff);
+    const calendar = await this.store.marketContext.calendarAt(nowUtc);
     const bundleSources = [
       ...sourceStates.filter((source) => source.sourceId !== "market_agri_events"),
       calendar.sourceState,
@@ -195,8 +223,12 @@ export class MarketContextTaskScheduler {
     const previous = await this.store.marketContext.current("US_GRAINS_CBOT", nowUtc);
     return {
       schemaVersion: "us_grains_market_context_bundle_v1",
+      timeContractVersion: MARKET_CONTEXT_TIME_CONTRACT_VERSION,
       universe: "US_GRAINS_CBOT",
-      cutoff: sourceDataCutoff,
+      analysisAsOfUtc: nowUtc,
+      marketDataCutoffUtc,
+      sourceDataCutoff: nowUtc,
+      cutoff: nowUtc,
       canonicalMarketSession: session,
       series,
       agriEventManifest: calendar.sourceState,
@@ -223,6 +255,8 @@ function canonicalSession(health, nowUtc) {
     sessionStart: source.session_start_utc || null,
     sessionEnd: source.session_end_utc || null,
     nextEligibleAt: source.next_eligible_at_utc || null,
+    lastExpectedMarketDate: source.last_expected_market_date || null,
+    lastExpectedCoreClosesUtc: source.last_expected_core_close_utc_by_timeframe || null,
     asOf: source.as_of_utc || nowUtc,
     freshnessPolicy: health?.data_readiness?.freshness_policy || null,
     source: "data_readiness.market_session",
@@ -234,12 +268,17 @@ function normalizedMarketState(value) {
   return ["OPEN", "PREOPEN", "POSTCLOSE", "CLOSED", "BREAK", "HOLIDAY"].includes(state) ? state : "UNKNOWN";
 }
 
-function summarizeSeries(rows) {
+function summarizeSeries(rows, timeframe) {
   if (!rows.length) return { availability: "UNAVAILABLE", asOf: null, bars: [] };
-  const normalized = rows.map((row) => ({ timestamp: new Date(row.timestamp_utc).toISOString(), open: Number(row.open), high: Number(row.high), low: Number(row.low), close: Number(row.close), volume: row.volume === null ? null : Number(row.volume) }));
+  const normalized = rows.map((row) => ({ timestamp: new Date(row.timestamp_utc).toISOString(),
+    closedAt: barCloseUtc(row.timestamp_utc, timeframe), open: Number(row.open), high: Number(row.high),
+    low: Number(row.low), close: Number(row.close), volume: row.volume === null ? null : Number(row.volume) }));
   const first = normalized[0], last = normalized.at(-1);
   const returns = first.close ? (last.close - first.close) / first.close : null;
-  return { availability: "AVAILABLE", asOf: last.timestamp, barCount: normalized.length, return: returns, high: Math.max(...normalized.map((row) => row.high)), low: Math.min(...normalized.map((row) => row.low)), latest: last, bars: normalized.slice(-30) };
+  return { availability: "AVAILABLE", asOf: last.closedAt, lastBarOpenedAt: last.timestamp,
+    lastBarClosedAt: last.closedAt, barCount: normalized.length, return: returns,
+    high: Math.max(...normalized.map((row) => row.high)), low: Math.min(...normalized.map((row) => row.low)),
+    latest: last, bars: normalized.slice(-30) };
 }
 
 async function safeRows(pool, sql, params) { try { return (await pool.query(sql, params)).rows; } catch { return []; } }
@@ -264,10 +303,43 @@ export function detectMarketContextEventReasons(bundle) {
     if (Math.abs(Number(series.return || 0)) >= 0.0075) reasons.push(`VOLATILITY_SHOCK_${key.replace(":", "_")}`);
     if (structureBreak(series.bars)) reasons.push(`STRUCTURE_BREAK_${key.replace(":", "_")}`);
   }
-  const cutoff = Date.parse(bundle.cutoff);
+  const cutoff = Date.parse(bundle.analysisAsOfUtc || bundle.cutoff);
   if (bundle.coveredAgriEvents.some((event) => ["HIGH", "CRITICAL"].includes(event.importance) && Math.abs(Date.parse(event.event_timestamp_utc) - cutoff) <= 15 * 60_000)) reasons.push("HIGH_AGRI_EVENT_NEARBY");
   return [...new Set(reasons)].sort();
 }
 function structureBreak(bars = []) { if (bars.length < 4) return false; const prior = bars.slice(0, -1), latest = bars.at(-1); return latest.close > Math.max(...prior.map((bar) => bar.high)) || latest.close < Math.min(...prior.map((bar) => bar.low)); }
+export function eligibleBarOpenCutoffUtc(value, timeframe) {
+  const instant = timestampMs(value);
+  const minutes = Number(timeframe);
+  if (!Number.isFinite(instant) || !Number.isFinite(minutes) || minutes <= 0) return null;
+  return new Date(instant - minutes * 60_000).toISOString();
+}
+export function barCloseUtc(value, timeframe) {
+  const open = timestampMs(value);
+  const minutes = Number(timeframe);
+  if (!Number.isFinite(open) || !Number.isFinite(minutes) || minutes <= 0) return null;
+  return new Date(open + minutes * 60_000).toISOString();
+}
+export function marketBarCoverageAssessment({ available, ageMs, freshnessMs, timeframe, coverageEnd,
+  latestMarketDate, lastExpectedMarketDate, lastExpectedCoreClosesUtc }) {
+  const expectedMarketDateMismatch = Boolean(available && lastExpectedMarketDate
+    && String(latestMarketDate || "") !== String(lastExpectedMarketDate));
+  const lastExpectedCloseUtc = isoOrNull(lastExpectedCoreClosesUtc?.[String(timeframe)]);
+  const expectedMarketCloseMismatch = Boolean(available && lastExpectedCloseUtc
+    && isoOrNull(coverageEnd) !== lastExpectedCloseUtc);
+  const stale = Boolean(available && (expectedMarketDateMismatch || expectedMarketCloseMismatch || ageMs > freshnessMs));
+  return { stale, expectedMarketDateMismatch, expectedMarketCloseMismatch, lastExpectedCloseUtc };
+}
+function marketBarReasonCodes({ available, stale, expectedMarketDateMismatch, expectedMarketCloseMismatch, marketState }) {
+  if (!available) return ["NO_CLOSED_BARS"];
+  if (expectedMarketDateMismatch) return ["CLOSED_BARS_NOT_FROM_LAST_EXPECTED_MARKET_DATE"];
+  if (expectedMarketCloseMismatch) return ["CLOSED_BARS_NOT_AT_LAST_EXPECTED_SESSION_CLOSE"];
+  if (stale && marketState === "OPEN") return ["CLOSED_BARS_STALE_DURING_ACTIVE_SESSION"];
+  if (stale) return ["CLOSED_BARS_STALE_FOR_MARKET_SESSION"];
+  if (marketState !== "OPEN") return ["CLOSED_BARS_LAST_KNOWN_MARKET_NOT_OPEN"];
+  return ["CLOSED_BARS_AVAILABLE"];
+}
+function isoOrNull(value) { const parsed = timestampMs(value); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
+function timestampMs(value) { return value instanceof Date ? value.getTime() : Date.parse(value || ""); }
 function stableIds(input) { const hash = canonicalSha256(input); const taskId = uuidFromHash(hash); return { taskId, taskKey: `us-grains-market-context:${input.cutoffBucket}:${input.reasonHash}`, dispatchId: `context-dispatch-${hash.slice(0, 24)}`, correlationId: `corr-context-${hash.slice(0, 24)}` }; }
 function uuidFromHash(hash) { const value = hash.replace(/^sha256:/, "").padEnd(32, "0"); const variant = ((Number.parseInt(value[16] || "8", 16) & 3) | 8).toString(16); return `${value.slice(0, 8)}-${value.slice(8, 12)}-4${value.slice(13, 16)}-${variant}${value.slice(17, 20)}-${value.slice(20, 32)}`; }

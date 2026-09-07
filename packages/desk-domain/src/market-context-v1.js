@@ -52,7 +52,8 @@ export function evaluateAgriEventCoverageV1({ sourceState, cutoff, familyRequire
 
 export function normalizeMarketContextSnapshotV1(input = {}) {
   const sourceDataCutoff = requiredIso(input.sourceDataCutoff || input.source_data_cutoff, "MARKET_CONTEXT_CUTOFF_REQUIRED");
-  const sourceStates = array(input.sourceStates || input.source_states).map((source) => normalizeMarketSourceStateV1(source, { cutoff: sourceDataCutoff }));
+  const time = normalizeContextTimeContract(input, sourceDataCutoff);
+  const sourceStates = normalizeContextSources(input, sourceDataCutoff, time);
   const status = canonicalContextStatus(input.status, sourceStates);
   return {
     marketContextSnapshotId: required(input.marketContextSnapshotId || input.market_context_snapshot_id, "MARKET_CONTEXT_ID_REQUIRED"),
@@ -62,6 +63,7 @@ export function normalizeMarketContextSnapshotV1(input = {}) {
     validFrom: requiredIso(input.validFrom || input.valid_from, "MARKET_CONTEXT_VALID_FROM_REQUIRED"),
     validUntil: requiredIso(input.validUntil || input.valid_until, "MARKET_CONTEXT_VALID_UNTIL_REQUIRED"),
     sourceDataCutoff,
+    ...time,
     marketState: required(input.marketState || input.market_state, "MARKET_CONTEXT_MARKET_STATE_REQUIRED"),
     marketSession: required(input.marketSession || input.market_session, "MARKET_CONTEXT_MARKET_SESSION_REQUIRED"),
     marketRegime: required(input.marketRegime || input.market_regime, "MARKET_CONTEXT_REGIME_REQUIRED"),
@@ -89,7 +91,8 @@ export function normalizeMarketContextSnapshotV1(input = {}) {
 
 export function normalizeMarketDeskBriefV1(input = {}) {
   const sourceDataCutoff = requiredIso(input.sourceDataCutoff || input.source_data_cutoff, "MARKET_DESK_BRIEF_CUTOFF_REQUIRED");
-  const sourceStates = array(input.sourceStates || input.source_states).map((source) => normalizeMarketSourceStateV1(source, { cutoff: sourceDataCutoff }));
+  const time = normalizeContextTimeContract(input, sourceDataCutoff);
+  const sourceStates = normalizeContextSources(input, sourceDataCutoff, time);
   return {
     marketDeskBriefId: required(input.marketDeskBriefId || input.market_desk_brief_id, "MARKET_DESK_BRIEF_ID_REQUIRED"),
     marketContextSnapshotId: required(input.marketContextSnapshotId || input.market_context_snapshot_id, "MARKET_DESK_BRIEF_CONTEXT_REQUIRED"),
@@ -99,6 +102,7 @@ export function normalizeMarketDeskBriefV1(input = {}) {
     validFrom: requiredIso(input.validFrom || input.valid_from, "MARKET_DESK_BRIEF_VALID_FROM_REQUIRED"),
     validUntil: requiredIso(input.validUntil || input.valid_until, "MARKET_DESK_BRIEF_VALID_UNTIL_REQUIRED"),
     sourceDataCutoff,
+    ...time,
     status: canonicalContextStatus(input.status, sourceStates),
     headline: required(input.headline, "MARKET_DESK_BRIEF_HEADLINE_REQUIRED"),
     operatorSummary: required(input.operatorSummary || input.operator_summary, "MARKET_DESK_BRIEF_SUMMARY_REQUIRED"),
@@ -124,6 +128,35 @@ export function normalizeMarketDeskBriefV1(input = {}) {
     supersedesBriefId: nullable(input.supersedesBriefId || input.supersedes_brief_id),
     invalidationReason: nullable(input.invalidationReason || input.invalidation_reason),
   };
+}
+
+function normalizeContextTimeContract(input, sourceDataCutoff) {
+  const analysis = input.analysisAsOfUtc ?? input.analysis_as_of_utc;
+  const market = input.marketDataCutoffUtc ?? input.market_data_cutoff_utc;
+  if (analysis === undefined && market === undefined) return {};
+  const analysisAsOfUtc = requiredIso(analysis, "MARKET_CONTEXT_ANALYSIS_AS_OF_REQUIRED");
+  const marketDataCutoffUtc = requiredIso(market, "MARKET_CONTEXT_MARKET_DATA_CUTOFF_REQUIRED");
+  if (sourceDataCutoff !== analysisAsOfUtc) throw coded("MARKET_CONTEXT_KNOWLEDGE_CUTOFF_MISMATCH");
+  if (Date.parse(marketDataCutoffUtc) > Date.parse(analysisAsOfUtc)) throw coded("MARKET_CONTEXT_MARKET_DATA_LOOKAHEAD");
+  const createdAt = requiredIso(input.createdAt || input.created_at, "MARKET_CONTEXT_CREATED_AT_REQUIRED");
+  const validFrom = requiredIso(input.validFrom || input.valid_from, "MARKET_CONTEXT_VALID_FROM_REQUIRED");
+  const validUntil = requiredIso(input.validUntil || input.valid_until, "MARKET_CONTEXT_VALID_UNTIL_REQUIRED");
+  if (Date.parse(analysisAsOfUtc) > Date.parse(createdAt)
+    || Date.parse(validFrom) < Date.parse(createdAt)
+    || Date.parse(validUntil) <= Date.parse(validFrom)) throw coded("MARKET_CONTEXT_PUBLICATION_TIME_INVALID");
+  return { analysisAsOfUtc, marketDataCutoffUtc };
+}
+
+function normalizeContextSources(input, sourceDataCutoff, time) {
+  return array(input.sourceStates || input.source_states).map((source) => {
+    const sourceType = source.sourceType || source.source_type;
+    const cutoff = time.analysisAsOfUtc && sourceType === "OHLCV"
+      ? time.marketDataCutoffUtc : sourceDataCutoff;
+    const normalized = normalizeMarketSourceStateV1(source, { cutoff });
+    if (time.analysisAsOfUtc && normalized.asOf
+      && Date.parse(normalized.asOf) > Date.parse(time.analysisAsOfUtc)) throw coded("MARKET_CONTEXT_SOURCE_KNOWLEDGE_LOOKAHEAD");
+    return normalized;
+  });
 }
 
 function canonicalContextStatus(requestedStatus, sourceStates) {
@@ -266,8 +299,8 @@ function normalizeInstrumentView(input = {}) {
     allowedSides: strings(input.allowedSides || input.allowed_sides).map((value) => value.toUpperCase()),
     preferredFamilies: strings(input.preferredFamilies || input.preferred_families).map((value) => value.toUpperCase()),
     discouragedFamilies: strings(input.discouragedFamilies || input.discouraged_families).map((value) => value.toUpperCase()),
-    ownReturn: finiteOrNull(input.ownReturn || input.own_return),
-    peerReturn: finiteOrNull(input.peerReturn || input.peer_return),
+    ownReturn: finiteOrNull(input.ownReturn ?? input.own_return),
+    peerReturn: finiteOrNull(input.peerReturn ?? input.peer_return),
     regime: nullable(input.regime),
     volatilityRegime: nullable(input.volatilityRegime || input.volatility_regime),
     zones: array(input.zones).map(normalizeZone),
@@ -301,8 +334,8 @@ function text(value) { return String(value ?? "").trim(); }
 function nullable(value) { return text(value) || null; }
 function required(value, code) { const normalized = nullable(value); if (normalized) return normalized; throw coded(code); }
 function requiredIso(value, code) { const normalized = nullableIso(value); if (normalized) return normalized; throw coded(code); }
-function nullableIso(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
-function finite(value) { return Number.isFinite(Number(value)); }
+function nullableIso(value) { const parsed = value instanceof Date ? value.getTime() : Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
+function finite(value) { return (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isFinite(Number(value)); }
 function finiteOrNull(value) { return finite(value) ? Number(value) : null; }
 function boundedNumber(value, fallback, min, max) { const parsed = finite(value) ? Number(value) : fallback; return Math.max(min, Math.min(max, parsed)); }
 function member(value, members, fallback) { const normalized = text(value).toUpperCase(); return members.includes(normalized) ? normalized : fallback; }

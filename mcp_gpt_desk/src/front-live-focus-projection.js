@@ -36,7 +36,9 @@ export function buildLiveFocusProjection({ live, marketContext, health, nowIso }
     nextActions: operatorNextActions({ tradeCards, whyNoTrade }),
     technical: {
       source: "front-api/live-focus",
-      sourceDataCutoff: snapshot?.sourceDataCutoff || live.marketSeries?.asOf || null,
+      // The existing UI labels this field as the price-data cutoff, not the
+      // analyst's knowledge clock. Keep the full dual clock on marketContext.
+      sourceDataCutoff: snapshot?.marketDataCutoffUtc || snapshot?.sourceDataCutoff || live.marketSeries?.asOf || null,
       revision: Math.max(0, ...tradeCards.map((card) => Number(card.revision || 0))),
     },
   };
