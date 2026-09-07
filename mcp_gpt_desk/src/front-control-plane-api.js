@@ -323,7 +323,7 @@ async function loadControlPlaneView(store, viewName, query, actor = {}) {
       return sessions.map(sessionSummary);
     }),
     "live-session": () => source("live-session", () => loadFrontDeskSession(store, {
-      ...normalizeFrontApiScope(deskQuery),
+      ...deskQuery,
       front_cache: true,
       defer_secondary_resources: true,
     })),

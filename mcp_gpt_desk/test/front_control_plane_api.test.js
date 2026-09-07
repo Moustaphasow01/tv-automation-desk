@@ -2164,6 +2164,27 @@ test("Live Focus keeps an authoritative empty execution projection as a legitima
   assert.equal(envelope.data.whyNoTrade.stageCounts.orderIntents, 0);
 });
 
+test("Live Focus coalesces session, macro and news on one current live-context read", async () => {
+  const store = frontControlPlaneStore();
+  const getLiveDeskState = store.getLiveDeskState.bind(store);
+  let liveReads = 0;
+  store.getLiveDeskState = async (...args) => {
+    liveReads += 1;
+    await Promise.resolve();
+    return getLiveDeskState(...args);
+  };
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-focus",
+    query: { instrument: "ZW" },
+  });
+
+  assert.equal(envelope.meta.warnings.includes("live-session:FRONT_SOURCE_TIMEOUT"), false);
+  assert.equal(envelope.meta.warnings.includes("front-macro:FRONT_SOURCE_TIMEOUT"), false);
+  assert.equal(envelope.meta.warnings.includes("front-news:FRONT_SOURCE_TIMEOUT"), false);
+  assert.equal(liveReads, 1, "the three sources must use the same implicit-current cache identity");
+});
+
 test("Live Focus reports an unavailable context read without inventing an empty publication", async () => {
   const store = frontControlPlaneStore();
   store.getCurrentMarketContext = async () => {
