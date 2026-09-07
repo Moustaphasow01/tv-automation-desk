@@ -1,5 +1,12 @@
 import { canonicalSha256 } from "@tv-automation/desk-domain";
 import { SystemClock } from "@tv-automation/desk-time";
+import {
+  buildMarketContextEventFacts,
+  detectMarketContextEventReasons,
+  previousMarketContextEventFactsFromDispatch,
+} from "./market-context-event-policy.js";
+
+export { detectMarketContextEventReasons } from "./market-context-event-policy.js";
 
 const MISSION_ID = "f23b52e4-1955-4c8a-b8c7-216dd65e2c40";
 const MARKET_CONTEXT_UNIVERSE = "US_GRAINS_CBOT";
@@ -76,12 +83,15 @@ export class MarketContextTaskScheduler {
     const cutoffBucket = floorUtc(nowUtc, cadenceMinutes);
     const sourceStates = await this.#refreshFeedCoverage(nowUtc, session);
     const bundle = await this.#buildBundle({ nowUtc, session, sourceStates });
-    const eventReasons = detectMarketContextEventReasons(bundle);
+    const previousEventFacts = await this.#previousEventFacts(nowUtc);
+    const eventFacts = buildMarketContextEventFacts(bundle);
+    const eventReasons = detectMarketContextEventReasons({ ...bundle, previousEventFacts });
     const triggerType = eventReasons.length ? "EVENT" : trigger;
     const reasonHash = canonicalSha256({ triggerType, eventReasons, cutoffBucket,
+      eventFacts: eventReasons.length ? eventFacts : null,
       timeContractVersion: MARKET_CONTEXT_TIME_CONTRACT_VERSION,
       session: session.marketSession, sourceStates: sourceStates.map(sourceSignature) }).slice(0, 24);
-    const existing = await this.pool.query(`SELECT * FROM market_context_task_dispatches
+    const existing = await this.pool.query(`SELECT dispatch_id, agent_task_id FROM market_context_task_dispatches
       WHERE universe=$1 AND source_data_cutoff_utc=$2 AND reason_hash=$3`, [MARKET_CONTEXT_UNIVERSE, cutoffBucket, reasonHash]);
     if (existing.rows[0]) {
       const superseded = await this.#supersedeReadyContextTasks({ analysisAsOfUtc: nowUtc, keepTaskId: existing.rows[0].agent_task_id });
@@ -100,7 +110,7 @@ export class MarketContextTaskScheduler {
         `idem-${ids.taskId}`, nowUtc, ids.correlationId, JSON.stringify({ universe: "US_GRAINS_CBOT", authority: "ADVISORY_ONLY",
           time_contract_version: bundle.timeContractVersion, analysis_as_of_utc: bundle.analysisAsOfUtc,
           market_data_cutoff_utc: bundle.marketDataCutoffUtc,
-          trigger_reasons: eventReasons }),
+          trigger_reasons: eventReasons, event_facts: eventFacts }),
         MARKET_CONTEXT_TASK_TYPE,
       ]);
       await client.query(`INSERT INTO market_context_task_dispatches (
@@ -111,7 +121,7 @@ export class MarketContextTaskScheduler {
         JSON.stringify({ cadence_minutes: cadenceMinutes, market_session: session.marketSession,
           time_contract_version: bundle.timeContractVersion, analysis_as_of_utc: bundle.analysisAsOfUtc,
           market_data_cutoff_utc: bundle.marketDataCutoffUtc,
-          trigger_reasons: eventReasons }),
+          trigger_reasons: eventReasons, event_facts: eventFacts }),
         MARKET_CONTEXT_UNIVERSE,
       ]);
       const superseded = await this.#supersedeReadyContextTasks({ client, analysisAsOfUtc: nowUtc, keepTaskId: ids.taskId });
@@ -138,6 +148,13 @@ export class MarketContextTaskScheduler {
       MARKET_CONTEXT_TASK_TYPE,
     ]);
     return result.rows;
+  }
+
+  async #previousEventFacts(nowUtc) {
+    const result = await this.pool.query(`SELECT metadata FROM market_context_task_dispatches
+      WHERE universe=$1 AND created_at_utc <= $2
+      ORDER BY created_at_utc DESC, dispatch_id DESC LIMIT 1`, [MARKET_CONTEXT_UNIVERSE, nowUtc]);
+    return previousMarketContextEventFactsFromDispatch(result.rows[0]);
   }
 
   async #refreshFeedCoverage(nowUtc, session) {
@@ -294,24 +311,6 @@ export function marketContextFreshnessThresholdMs({ timeframe, readinessPolicy =
   const readinessMs = Number(readinessPolicy?.max_age_seconds) * 1000;
   return Number.isFinite(readinessMs) && readinessMs > 0 ? Math.max(fallbackMs, readinessMs) : fallbackMs;
 }
-export function detectMarketContextEventReasons(bundle) {
-  const reasons = [];
-  const previous = bundle.previousSnapshot;
-  if (previous?.marketSession && previous.marketSession !== bundle.canonicalMarketSession.marketSession) reasons.push("SESSION_TRANSITION");
-  const priorSources = new Map((previous?.sourceStates || []).map((source) => [source.sourceId, source.status]));
-  for (const source of bundle.sourceStates) {
-    const prior = priorSources.get(source.sourceId);
-    if (prior && prior !== source.status) reasons.push(`SOURCE_${source.sourceId}_${prior}_TO_${source.status}`);
-  }
-  for (const [key, series] of Object.entries(bundle.series)) {
-    if (Math.abs(Number(series.return || 0)) >= 0.0075) reasons.push(`VOLATILITY_SHOCK_${key.replace(":", "_")}`);
-    if (structureBreak(series.bars)) reasons.push(`STRUCTURE_BREAK_${key.replace(":", "_")}`);
-  }
-  const cutoff = Date.parse(bundle.analysisAsOfUtc || bundle.cutoff);
-  if (bundle.coveredAgriEvents.some((event) => ["HIGH", "CRITICAL"].includes(event.importance) && Math.abs(Date.parse(event.event_timestamp_utc) - cutoff) <= 15 * 60_000)) reasons.push("HIGH_AGRI_EVENT_NEARBY");
-  return [...new Set(reasons)].sort();
-}
-function structureBreak(bars = []) { if (bars.length < 4) return false; const prior = bars.slice(0, -1), latest = bars.at(-1); return latest.close > Math.max(...prior.map((bar) => bar.high)) || latest.close < Math.min(...prior.map((bar) => bar.low)); }
 export function eligibleBarOpenCutoffUtc(value, timeframe) {
   const instant = timestampMs(value);
   const minutes = Number(timeframe);

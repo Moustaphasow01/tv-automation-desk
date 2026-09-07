@@ -66,7 +66,8 @@ function schedulerFixture(observed) {
   const query = async (sql, params = []) => {
     if (sql.includes("min(timestamp_utc) AS coverage_start")) return { rows: [{}] };
     if (sql.includes("SELECT timestamp_utc, open, high, low, close, volume")) return { rows: [] };
-    if (sql.includes("SELECT * FROM market_context_task_dispatches")) return { rows: [] };
+    if (sql.includes("SELECT dispatch_id, agent_task_id FROM market_context_task_dispatches")) return { rows: [] };
+    if (sql.includes("SELECT metadata FROM market_context_task_dispatches")) return { rows: [] };
     if (sql.includes("INSERT INTO market_context_task_dispatches")) observed.buckets.push(params[1]);
     if (sql === MARKET_CONTEXT_SUPERSEDE_READY_SQL) observed.supersessionAsOf.push(params[0]);
     return { rows: [] };

@@ -150,7 +150,7 @@ test("agri-event proximity is evaluated at analysis knowledge time, not the old 
 });
 
 test("closed-market scheduling reads current calendar knowledge and only includes commonly closed bars", async () => {
-  const observed = { aggregateCutoffs: new Map(), seriesCutoffs: new Map(), calendarCalls: [], taskPayload: null };
+  const observed = { aggregateCutoffs: new Map(), seriesCutoffs: new Map(), calendarCalls: [], taskPayload: null, dispatchMetadata: null };
   const rowsByFeed = new Map([
     ["prod__tradingview__ZC1!__1", { first: "2026-09-04T18:18:00.000Z", last: "2026-09-04T18:19:00.000Z", marketDate: "2026-09-04" }],
     ["prod__tradingview__ZC1!__5", { first: "2026-09-04T18:10:00.000Z", last: "2026-09-04T18:15:00.000Z", marketDate: "2026-09-04" }],
@@ -170,8 +170,14 @@ test("closed-market scheduling reads current calendar knowledge and only include
       return { rows: [bar(feed.last, 101), bar(feed.first, 100)] };
     }
     if (sql.includes("SELECT * FROM market_context_task_dispatches")) return { rows: [] };
+    if (sql.includes("SELECT dispatch_id, agent_task_id FROM market_context_task_dispatches")) return { rows: [] };
+    if (sql.includes("SELECT metadata FROM market_context_task_dispatches")) return { rows: [] };
     if (sql.includes("INSERT INTO agent_tasks")) {
       observed.taskPayload = JSON.parse(params[3]);
+      return { rows: [] };
+    }
+    if (sql.includes("INSERT INTO market_context_task_dispatches")) {
+      observed.dispatchMetadata = JSON.parse(params[6]);
       return { rows: [] };
     }
     return { rows: [] };
@@ -211,6 +217,9 @@ test("closed-market scheduling reads current calendar knowledge and only include
   assert.equal(observed.taskPayload.bundle.sourceDataCutoff, ANALYSIS_AS_OF);
   assert.equal(observed.taskPayload.bundle.cutoff, ANALYSIS_AS_OF);
   assert.equal(observed.taskPayload.bundle.timeContractVersion, "us_grains_market_context_time_v2");
+  assert.equal(observed.dispatchMetadata.event_facts.schemaVersion, "market_context_event_facts_v1");
+  assert.equal(observed.dispatchMetadata.event_facts.marketDataCutoffUtc, MARKET_DATA_CUTOFF);
+  assert.equal(observed.dispatchMetadata.event_facts.series["ZC:1"].lastBarClosedAt, MARKET_DATA_CUTOFF);
   assert.equal(observed.taskPayload.bundle.series["ZC:1"].lastBarOpenedAt, "2026-09-04T18:19:00.000Z");
   assert.equal(observed.taskPayload.bundle.series["ZC:1"].lastBarClosedAt, MARKET_DATA_CUTOFF);
   assert.equal(observed.taskPayload.bundle.series["ZC:5"].lastBarOpenedAt, "2026-09-04T18:15:00.000Z");
