@@ -82,7 +82,8 @@ function buildSummaryProjection({ data, activeLocks }) {
     pendingApproval: data.intents.filter((item) => item.status === "pending_approval").length,
     queued: data.intents.filter((item) => item.status === "queued").length,
     activeOrders: data.orders.filter((item) => !["filled", "cancelled", "rejected", "expired"].includes(item.status)).length,
-    openTrades: data.trades.filter((item) => !["closed", "cancelled", "rejected", "expired"].includes(item.status)).length,
+    openTrades: data.trades.filter((item) => !item.administrative_resolution_status
+      && !["closed", "cancelled", "rejected", "expired"].includes(item.status)).length,
     healthyBridges: data.bridges.filter((item) => ["healthy", "armed"].includes(item.status)).length,
     activeLocks: activeLocks.length,
     pendingManagement: data.managementIntents.filter((item) => item.status === "pending_approval").length,

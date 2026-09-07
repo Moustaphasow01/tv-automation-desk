@@ -58,6 +58,10 @@ export class PostgresBrokerExecutionRepository {
         ORDER BY o.created_at DESC LIMIT $1`, [bounded]),
       rows(this.pool, `SELECT t.*, o.schema_version AS canonical_outcome_schema_version,
           o.engine_version AS canonical_outcome_engine_version, o.status AS canonical_outcome_status,
+          resolution.status AS administrative_resolution_status,
+          resolution.exposure_disposition AS administrative_exposure_disposition,
+          resolution.historical_outcome_disposition AS administrative_historical_outcome_disposition,
+          resolution.effective_at_utc AS administrative_resolution_effective_at_utc,
           c.instrument_code, c.broker_symbol, a.account_label
         FROM trades t
         LEFT JOIN LATERAL (
@@ -65,6 +69,15 @@ export class PostgresBrokerExecutionRepository {
           WHERE candidate.trade_id = t.trade_id
           ORDER BY candidate.revision DESC LIMIT 1
         ) o ON true
+        LEFT JOIN LATERAL (
+          SELECT candidate.status,candidate.exposure_disposition,
+            candidate.historical_outcome_disposition,candidate.effective_at_utc
+          FROM trade_theoretical_administrative_resolutions candidate
+          WHERE candidate.trade_id=t.trade_id
+            AND candidate.effective_at_utc <= now()
+            AND candidate.created_at_utc <= now()
+          ORDER BY candidate.created_at_utc DESC LIMIT 1
+        ) resolution ON true
         LEFT JOIN broker_contracts c ON c.broker_contract_id = t.broker_contract_id
         LEFT JOIN broker_accounts a ON a.broker_account_id = t.broker_account_id
         ORDER BY t.created_at DESC LIMIT $1`, [bounded]),

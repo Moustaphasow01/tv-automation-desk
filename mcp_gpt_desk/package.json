@@ -18,6 +18,7 @@
     "strategy:signal-pipeline:once": "node scripts/run_strategy_signal_decision_pipeline_once.mjs",
     "macro:refresh": "node scripts/refresh_macro_calendar.mjs",
     "calendar:grains:refresh": "node scripts/refresh_usda_grains_calendar.mjs",
+    "theoretical:resolve-review": "node scripts/resolve_theoretical_trade_administrative_review.mjs",
     "news:refresh": "node scripts/refresh_news.mjs",
     "telegram:worker": "node scripts/run_telegram_alert_worker.mjs",
     "telegram:once": "node scripts/run_telegram_alert_worker.mjs --once",

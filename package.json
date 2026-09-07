@@ -24,6 +24,8 @@
     "grains:refresh-usda-calendar": "node mcp_gpt_desk/scripts/refresh_usda_grains_calendar.mjs",
     "grains:correct-theoretical-outcomes": "node mcp_gpt_desk/scripts/correct_theoretical_trade_outcomes.mjs",
     "grains:qualify-historical-intents": "node mcp_gpt_desk/scripts/qualify_historical_grains_intents.mjs",
+    "desk:resolve-theoretical-review": "node mcp_gpt_desk/scripts/resolve_theoretical_trade_administrative_review.mjs",
+    "test:grains:theoretical-resolution:postgres": "RUN_POSTGRES_TESTS=1 node --test mcp_gpt_desk/test/theoretical_trade_administrative_resolution_postgres.test.js",
     "test:grains:calendar-refresh": "node --test mcp_gpt_desk/test/grains_calendar_freshness.test.js mcp_gpt_desk/test/grains_calendar_refresh.test.js mcp_gpt_desk/test/grains_calendar_file_archive.test.js mcp_gpt_desk/test/grains_calendar_refresh_source.test.js mcp_gpt_desk/test/grains_calendar_refresh_lease.test.js",
     "audit:grains:causal": "node mcp_gpt_desk/scripts/audit_grains_causal_detection.mjs",
     "grains:replay-context-theoretical": "node mcp_gpt_desk/scripts/replay_us_grains_context_theoretical.mjs",

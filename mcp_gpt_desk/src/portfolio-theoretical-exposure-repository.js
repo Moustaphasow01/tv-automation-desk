@@ -43,6 +43,15 @@ const THEORETICAL_EXPOSURE_SNAPSHOT_SQL = `WITH open_positions AS (
   WHERE t.raw->>'source' = 'theoretical_execution_engine'
     AND t.opened_at <= $2::timestamptz
     AND target.account_id = $1
+    AND NOT EXISTS (
+      SELECT 1 FROM trade_theoretical_administrative_resolutions resolution
+      WHERE resolution.trade_id=t.trade_id
+        AND resolution.status='ADMINISTRATIVELY_RESOLVED_NO_REAL_EXPOSURE'
+        AND resolution.exposure_disposition='ADMINISTRATIVELY_RELEASED'
+        AND resolution.historical_outcome_disposition='UNDETERMINED_PRESERVED'
+        AND resolution.effective_at_utc <= $2::timestamptz
+        AND resolution.created_at_utc <= $2::timestamptz
+    )
   GROUP BY t.trade_id, target.account_id, target.instrument, t.side
   HAVING COALESCE(sum(CASE WHEN (lower(t.side::text) = 'long' AND lower(f.side::text) = 'buy')
       OR (lower(t.side::text) = 'short' AND lower(f.side::text) = 'sell') THEN f.quantity ELSE -f.quantity END), 0) > 0

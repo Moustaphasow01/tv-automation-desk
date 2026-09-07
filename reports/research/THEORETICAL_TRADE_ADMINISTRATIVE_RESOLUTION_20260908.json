@@ -1,0 +1,16 @@
+{
+  "schema_version": "theoretical_trade_administrative_resolution_manifest_v1",
+  "manifest_id": "theoretical-trade-administrative-resolution-20260908",
+  "scope": "Exact ambiguous historical MNQ theoretical trade; no physical or manual execution exists",
+  "resolutions": [
+    {
+      "idempotency_key": "theoretical-trade-administrative-resolution-20260908.a056d3b3696a71192b2a6484",
+      "trade_id": "trade_portfolio_order_intent_a056d3b3696a71192b2a6484",
+      "portfolio_order_intent_id": "portfolio_order_intent_a056d3b3696a71192b2a6484",
+      "expected_trade_revision": 0,
+      "expected_trade_status": "open",
+      "expected_quantity_open": 2,
+      "expected_lineage_payload_hash": "sha256:c2d3b753594ad6df6089536273e3269bbc423205d45f34df20c4c515a45e4b3b"
+    }
+  ]
+}

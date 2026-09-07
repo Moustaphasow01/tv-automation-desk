@@ -125,6 +125,52 @@ test("publishes the Risk-authorized expected R from canonical trade-plan economi
   assert.deepEqual(projection.rows[0].targets.map((target) => target.ratioR), [1.5, 2.5]);
 });
 
+test("keeps an administratively resolved theoretical trade auditable without open exposure or invented R", () => {
+  const portfolioIntent = intent("intent-administratively-resolved", "signal-administratively-resolved");
+  const projection = buildLiveTheoreticalExecution({
+    execution: {
+      portfolioOrderIntents: [portfolioIntent],
+      humanExecutionGates: [gate(portfolioIntent.portfolio_order_intent_id, "EXPIRED")],
+      humanExecutionGateEvents: [],
+      theoreticalEvents: [{
+        portfolio_order_intent_id: portfolioIntent.portfolio_order_intent_id,
+        trade_id: "trade-administratively-resolved",
+        event_type: "exit_review_required",
+        event_at_utc: "2026-08-30T10:05:00.000Z",
+      }],
+      manualExecutionEvents: [],
+      trades: [{
+        portfolio_order_intent_id: portfolioIntent.portfolio_order_intent_id,
+        trade_id: "trade-administratively-resolved",
+        status: "open",
+        quantity_open: 2,
+        avg_entry_price: 400,
+        result_r: null,
+        administrative_resolution_status: "ADMINISTRATIVELY_RESOLVED_NO_REAL_EXPOSURE",
+        administrative_exposure_disposition: "ADMINISTRATIVELY_RELEASED",
+        administrative_historical_outcome_disposition: "UNDETERMINED_PRESERVED",
+        administrative_resolution_effective_at_utc: "2026-09-08T00:00:00.000Z",
+      }],
+      providerCommands: [],
+      providerEvents: [],
+    },
+    nowIso: "2026-09-08T12:00:00.000Z",
+  });
+
+  assert.equal(projection.summary.openTrades, 0);
+  assert.equal(projection.summary.closedTrades, 0);
+  assert.equal(projection.summary.totalClosedR, null);
+  assert.equal(projection.rows[0].status, "ADMINISTRATIVELY_RESOLVED");
+  assert.equal(projection.rows[0].tradeStatus, "ADMINISTRATIVELY_RESOLVED");
+  assert.equal(projection.rows[0].resultR, null);
+  assert.deepEqual(projection.rows[0].administrativeResolution, {
+    status: "ADMINISTRATIVELY_RESOLVED_NO_REAL_EXPOSURE",
+    exposureDisposition: "ADMINISTRATIVELY_RELEASED",
+    historicalOutcomeDisposition: "UNDETERMINED_PRESERVED",
+    effectiveAt: "2026-09-08T00:00:00.000Z",
+  });
+});
+
 function intent(id, signalId) { return { portfolio_order_intent_id: id, target_position_id: `target-${id}`, quantity: 1, status: "READY", created_at_utc: "2026-08-30T09:59:00.000Z", payload: { order_intent_id: id, instrument: "ZC", action: "BUY", order_type: "LIMIT", quantity: 1, source_signal_id: signalId, entry: { price: 400 }, protection: { stop_price: 398, target_price: 404 } } }; }
 function gate(id, status) { return { portfolio_order_intent_id: id, status, operator_id: "operator", confirmed_at_utc: status === "CONFIRMED" ? "2026-08-30T10:00:00.000Z" : null, rejected_at_utc: status === "REJECTED" ? "2026-08-30T10:00:00.000Z" : null }; }
 function event(intentId, tradeId, eventType) { return { portfolio_order_intent_id: intentId, trade_id: tradeId, event_type: eventType, event_at_utc: "2026-08-30T10:05:00.000Z", price: 404 }; }

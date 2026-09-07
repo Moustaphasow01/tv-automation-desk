@@ -347,6 +347,11 @@ export async function listTheoreticalOpenTrades(repository, { limit = 100, portf
         AND t.current_stop_price IS NOT NULL
         AND t.current_target_price IS NOT NULL
         AND COALESCE(t.raw->>'theoretical_review_required', 'false') <> 'true'
+        AND NOT EXISTS (SELECT 1 FROM trade_theoretical_administrative_resolutions resolution
+          WHERE resolution.trade_id=t.trade_id
+            AND resolution.status='ADMINISTRATIVELY_RESOLVED_NO_REAL_EXPOSURE'
+            AND resolution.effective_at_utc <= $3::timestamptz
+            AND resolution.created_at_utc <= $3::timestamptz)
         AND ($2::text[] IS NULL OR t.portfolio_order_intent_id = ANY($2::text[]))
         AND EXISTS (
           SELECT 1
@@ -414,6 +419,11 @@ export async function theoreticalExecutionBacklog(repository, { portfolioOrderIn
         AND t.current_stop_price IS NOT NULL
         AND t.current_target_price IS NOT NULL
         AND COALESCE(t.raw->>'theoretical_review_required', 'false') <> 'true'
+        AND NOT EXISTS (SELECT 1 FROM trade_theoretical_administrative_resolutions resolution
+          WHERE resolution.trade_id=t.trade_id
+            AND resolution.status='ADMINISTRATIVELY_RESOLVED_NO_REAL_EXPOSURE'
+            AND resolution.effective_at_utc <= $2::timestamptz
+            AND resolution.created_at_utc <= $2::timestamptz)
         AND ($1::text[] IS NULL OR t.portfolio_order_intent_id = ANY($1::text[]))`, [hasPortfolioScope ? scopedPortfolioIds : null, now]);
   return {
     eligible_open_trades: Number(row?.eligible_open_trades || 0),

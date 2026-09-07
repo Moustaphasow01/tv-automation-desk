@@ -61,6 +61,33 @@ test("portfolio risk projection keeps partial source failures visible", () => {
   assert.equal(view.summary.status, "ACTION_REQUIRED");
 });
 
+test("administrative no-real-exposure resolution removes a legacy theoretical trade from current risk only", () => {
+  const view = buildPortfolioRiskOverview({
+    generatedAt: "2026-09-08T12:00:00.000Z",
+    execution: executionOverview({
+      trades: [{
+        trade_id: "trade-resolved",
+        broker_account_id: "sim101",
+        broker_contract_id: "mnq-sep",
+        status: "open",
+        side: "long",
+        quantity_open: 2,
+        result_r: null,
+        administrative_resolution_status: "ADMINISTRATIVELY_RESOLVED_NO_REAL_EXPOSURE",
+      }],
+      intents: [],
+      orders: [],
+      locks: [],
+    }),
+    strategy: strategyOverview(),
+    performance: { ok: true, items: [] },
+  });
+
+  assert.equal(view.summary.openTrades, 0);
+  assert.deepEqual(view.exposures, []);
+  assert.deepEqual(view.portfolio_state.positions, []);
+});
+
 function executionOverview(overrides = {}) {
   return {
     safety: { submissionPossible: true, liveAccountAllowed: false, riskPercent: 0.25, maxContracts: 5 },

@@ -479,7 +479,9 @@ function isActiveOrder(order) {
 }
 
 function isOpenTrade(trade) {
-  return OPEN_TRADE_STATUSES.has(String(trade?.status || "").toLowerCase()) && Math.abs(finite(trade?.quantity_open) || 0) > 0;
+  return !trade?.administrative_resolution_status
+    && OPEN_TRADE_STATUSES.has(String(trade?.status || "").toLowerCase())
+    && Math.abs(finite(trade?.quantity_open) || 0) > 0;
 }
 
 function safeArray(value) {

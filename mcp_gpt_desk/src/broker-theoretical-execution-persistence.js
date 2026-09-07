@@ -172,8 +172,20 @@ async function lockedPortfolioIntent(client, portfolioOrderIntentIdValue) {
 }
 
 export async function lockedOpenTrade(client, tradeId) {
-  const trade = await one(client, "SELECT * FROM trades WHERE trade_id = $1 FOR UPDATE", [tradeId]);
+  const trade = await one(client, `SELECT t.*,EXISTS (
+      SELECT 1 FROM trade_theoretical_administrative_resolutions resolution
+      WHERE resolution.trade_id=t.trade_id
+        AND resolution.status='ADMINISTRATIVELY_RESOLVED_NO_REAL_EXPOSURE'
+        AND resolution.exposure_disposition='ADMINISTRATIVELY_RELEASED'
+        AND resolution.effective_at_utc <= clock_timestamp()
+        AND resolution.created_at_utc <= clock_timestamp()
+    ) AS administratively_resolved
+    FROM trades t WHERE t.trade_id = $1 FOR UPDATE`, [tradeId]);
   if (!trade) throw repositoryError("TRADE_NOT_FOUND", `Trade not found: ${tradeId}.`);
+  if (trade.administratively_resolved === true) {
+    return { event: null, status: "THEORETICAL_TRADE_ADMINISTRATIVELY_RESOLVED",
+      reason: "NO_REAL_EXPOSURE_ATTESTED", trade_id: trade.trade_id };
+  }
   if (trade.raw?.source !== "theoretical_execution_engine") return { event: null, status: "NO_OPEN_THEORETICAL_TRADE", reason: "NON_THEORETICAL_TRADE" };
   const open = ["open", "scaling", "protected"].includes(trade.status);
   if (!open || Number(trade.quantity_open || 0) <= 0) return { event: null, status: "NO_OPEN_THEORETICAL_TRADE" };

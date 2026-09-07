@@ -137,7 +137,8 @@ function portfolioReconciliationSummary({ execution, risk, nowIso }) {
 }
 
 function isOpenPortfolioTrade(item = {}) {
-  return upper(item.status) === "OPEN" || number(item.quantity_open, 0) > 0;
+  return !item.administrative_resolution_status
+    && (upper(item.status) === "OPEN" || number(item.quantity_open, 0) > 0);
 }
 
 function latestAccountSnapshot(value) {

@@ -1,7 +1,8 @@
 import { manualExecutionActionProjection } from "./front-control-plane-permissions.js";
 
 const ATTRIBUTION_POLICY_VERSION = "operator_outcome_attribution_v1";
-const TERMINAL_TRADE_STATES = new Set(["CLOSED", "CANCELLED", "REJECTED", "EXPIRED", "ERROR"]);
+const TERMINAL_TRADE_STATES = new Set(["CLOSED", "CANCELLED", "REJECTED", "EXPIRED", "ERROR",
+  "ADMINISTRATIVELY_RESOLVED"]);
 const MANUAL_EXECUTION_EVIDENCE = new Set(["PLACED", "FILLED", "CLOSED"]);
 const DEFAULT_PROJECTION_NOW_UTC = "1970-01-01T00:00:00.000Z";
 
@@ -133,6 +134,8 @@ function theoreticalRow({ execution, intent, actor }) {
   const stopPlaced = manualEvents.some((event) => upper(event?.event_type) === "NOTE" && (upper(event?.payload?.manual_note_type) === "STOP_PLACED" || event?.payload?.stop_placed === true));
   const latestDecision = gateEvents.find((event) => ["CONFIRMED", "REJECTED", "REVERTED", "EXPIRED"].includes(upper(event.event_type))) || null;
   const status = theoreticalStatus({ latestEvent, trade, gate, intent });
+  const tradeStatus = trade?.administrative_resolution_status
+    ? "ADMINISTRATIVELY_RESOLVED" : upper(trade?.status);
   const resultR = upper(trade?.status) === "CLOSED" ? finiteOrNull(trade?.result_r) : null;
   const attribution = operatorOutcomeAttribution({ gate, latestDecision, latestManual: manualLifecycle, resultR, trade });
   const terms = object(intent.execution_terms || payload.execution_terms || payload.approved_trade_plan);
@@ -172,7 +175,13 @@ function theoreticalRow({ execution, intent, actor }) {
     exitPrice: firstFinite(events.find((event) => ["TARGET_HIT", "STOP_HIT"].includes(upper(event.event_type)))?.price, trade?.avg_exit_price),
     resultR,
     tradeId: text(trade?.trade_id),
-    tradeStatus: upper(trade?.status),
+    tradeStatus,
+    administrativeResolution: trade?.administrative_resolution_status ? {
+      status: upper(trade.administrative_resolution_status),
+      exposureDisposition: upper(trade.administrative_exposure_disposition),
+      historicalOutcomeDisposition: upper(trade.administrative_historical_outcome_disposition),
+      effectiveAt: iso(trade.administrative_resolution_effective_at_utc),
+    } : null,
     sourceCandleAt: iso(latestEvent?.source_candle_timestamp_utc),
     sourceTimeframe: text(nested(latestEvent, "payload", "candle", "timeframe") || nested(latestEvent, "raw", "candle", "timeframe")),
     physicalExecutionCreated: rows(execution.providerCommands).some((command) => String(command.portfolio_order_intent_id || "") === id),
@@ -226,6 +235,7 @@ function attribution(status, theoreticalResultR, capturedR, missedR, avoidedLoss
 }
 
 function theoreticalStatus({ latestEvent, trade, gate, intent }) {
+  if (trade?.administrative_resolution_status) return "ADMINISTRATIVELY_RESOLVED";
   const event = upper(latestEvent?.event_type);
   if (event === "ENTRY_EXPIRED") return "ENTRY_EXPIRED";
   if (event) return event;
