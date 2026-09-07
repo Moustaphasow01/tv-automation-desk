@@ -180,3 +180,34 @@ Plafonds **500/2 000/4 000 USD**, broker disabled, kill switch true, quantité p
 **TD2-433 et TD2-437 : réalisés, testés et déployés**, avec commentaires de preuve avant clôture. **TD2-435 : code livré, recette en revue**, pas déclaré totalement clos : attribution de première publication uniquement au SSE à compléter, défaut de lecture **TD2-438** et présentation déconnectée **TD2-416** explicites. **TD2-436** demeure au backlog : éviter les analyses redondantes sur les mêmes bougies hors séance.
 
 Le prochain lot prioritaire est TD2-438, puis la recette complète TD2-435/416. Les tests techniques et le résultat de replay conditionnel **+2,04444444 R / +200 USD** ne constituent ni une validation de rentabilité générale, ni une preuve hors échantillon, ni une certification live/backtest historique avec données manquantes. La dette qualité statique préexistante demeure non résolue ; aucun seuil abaissé, aucune conformité globale revendiquée.
+
+## Clôture TD2-438 — résilience de lecture du contexte Live Focus
+
+Le défaut P0 de disparition intermittente du brief est corrigé et déployé sans changement de stratégie, de politique Risk ni d'autorité d'exécution.
+
+- Cause : une vue Live Focus lançait quatorze sources en parallèle, tandis que le dépôt de contexte ouvrait sept lectures PostgreSQL concurrentes et indivisibles. Une expiration d'acquisition `pg-pool` annulait alors toute la source ; la projection transformait cette erreur technique en faux « contexte non publié » et en compteurs `0/0`.
+- Correction : un seul client PostgreSQL, transaction `REPEATABLE READ READ ONLY`, lecture atomique snapshot/brief, enrichissements séquentiels bornés par budget et savepoints, diagnostics partiels explicites, et valeurs inconnues `null` au lieu de faux zéros.
+- Index 068 : brief par snapshot/date et décisions de préfiltre par univers/date.
+- Contrat Front : une indisponibilité de lecture est distinguée d'une absence métier ; un enrichissement dégradé conserve le snapshot et le brief canoniques datés.
+
+### Validation locale
+
+- Backend complet : **1 606 tests**, **1 557 réussis**, zéro échec, 49 ignorés selon leurs préconditions.
+- Frontend : **325/325** tests et build de production verts.
+- Tests ciblés backend/BFF/projection : **71/71** ; résilience unitaire : **3/3**.
+- PostgreSQL réel : le nouveau scénario pool `max=1` prouve échec borné puis récupération. La suite globale a passé 69/70 lors d'une exécution ; l'ancien scénario de perte de connexion n'a pas atteint son rendez-vous enfant à temps sous charge, puis a repassé **2/2** isolément. Aucun fichier concerné par ce scénario n'est modifié par TD2-438.
+- Typecheck, architecture Front, sécurité supply-chain, secrets navigateur, kit Windows, contrats stratégie, migrations et runtime-safety : verts. Trois audits npm : zéro vulnérabilité.
+- Qualité statique globale : dette préexistante inchangée, seuils non abaissés.
+
+### Release et recette VPS
+
+- Release : `grains-live-focus-read-resilience-20260907.1`.
+- Commit source : `62d861f86e321513fe9e2cc4e139cf70002bef05`.
+- Archive SHA256 : `5f0c966c71fba06499698335a97f3dc95afb9b608f6a26e2fcb210e8c6df8d06`, **5 421 fichiers** vérifiés.
+- Sauvegardes fraîchement créées, drain avec zéro travail actif, migration 068 appliquée, canary et contrôles publics verts, reprise vérifiée.
+- Onze services sur onze `Running` et `Automatic`. Risque **500/2 000/4 000 USD** conservé. AUTO et LIVE physiques `false`, bridge Ninja désactivé, kill switch `true`, maximum physique `0`, legacy `false`.
+- Tâches autonomes `DeskFutures-GrainsCalendarRefresh` et `DeskFutures-UsGrainsShadowRuntime` présentes et prêtes.
+
+Recette Chromium authentifiée sur `/#/live?instrument=ZW&focus=1` : brief réel visible, aucun faux « Analyse de contexte non publiée » ni « momentanément indisponible », largeur document 1 280 sans overflow horizontal. Après une rafale volontairement hors profil, le service a récupéré automatiquement en 3,8 s. Sur huit rafraîchissements réalistes espacés : **8/8 HTTP 200**, **8/8 market-context AVAILABLE**, **8/8 briefs disponibles**, zéro brief manquant et zéro faux « non publié ». Une réponse globale PARTIAL concernait uniquement les sources distinctes session/macro/news ; le brief contextuel est resté stable.
+
+Capture : `output/playwright/td2-438/live-focus-after.png`. TD2-416 (badge visuel de transport déconnecté) et les timeouts des sources session/macro/news restent des lots séparés ; ils ne doivent pas être confondus avec la perte de contexte corrigée ici.
