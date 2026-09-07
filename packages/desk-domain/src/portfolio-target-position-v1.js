@@ -30,6 +30,7 @@ function approvedAllocationLeg(allocation, risk, accountId) {
   const evaluation = rawEvaluation || {};
   const approved = approvedSize(allocation, evaluation);
   const direction = upper(firstDefined(allocation.net_direction, allocation.direction));
+  const approvedTradePlan = approvedTradePlanForAllocation(allocation, approved);
   const riskDecisionStatus = upper(firstDefined(evaluation?.status, allocation.status, "PASS"));
   const riskDecisionReference = riskIssue ? "" : riskDecisionRef(id, evaluation, approved, risk);
   return {
@@ -46,9 +47,9 @@ function approvedAllocationLeg(allocation, risk, accountId) {
     requested_size: positiveOrZero(firstDefined(allocation.proposed_size, evaluation.requested_size)),
     status: text(firstDefined(evaluation.status, allocation.status, "PASS")),
     strategy_breakdown: strategyBreakdown(allocation, approved),
-    approved_trade_plan: approvedTradePlanForAllocation(allocation, approved),
+    approved_trade_plan: approvedTradePlan,
     risk_allocation: riskAllocationForEvaluation({ evaluation, approved, riskDecisionReference }),
-    skip_reason: allocationSkipReason(allocation, approved, riskIssue, riskDecisionStatus),
+    skip_reason: allocationSkipReason({ allocation, approved, riskIssue, riskDecisionStatus, approvedTradePlan }),
   };
 }
 
@@ -143,8 +144,12 @@ function normalizeRiskBudgetEvaluation(input) {
 function approvedTradePlanForAllocation(allocation, approved) {
   const signals = array(allocation.contributing_signals);
   const netDirection = upper(firstDefined(allocation.net_direction, allocation.direction));
-  const directionalSignals = signals.filter((item) => upper(firstDefined(item.direction, item.net_direction, item.proposed_trade_plan?.direction, item.proposedTradePlan?.direction)) === netDirection);
-  const planSignals = directionalSignals.length ? directionalSignals : signals;
+  if (netDirection === "FLAT") return { availability: "NOT_APPLICABLE", reason_code: "FLAT_TARGET_NO_TRADE_PLAN" };
+  const signalsWithPlans = signals.filter((item) => proposedTradePlan(item));
+  const planSignals = signalsWithPlans.filter((item) => signalPlanDirection(item) === netDirection);
+  if (signalsWithPlans.length && !planSignals.length) {
+    return { availability: "UNAVAILABLE", reason_code: "ALIGNED_TRADE_PLAN_REQUIRED", expected_direction: netDirection };
+  }
   const plans = planSignals.map((item) => record(firstDefined(item.proposed_trade_plan, item.proposedTradePlan))).filter(Boolean);
   const plan = plans[0];
   if (!plan) return { availability: "UNAVAILABLE", reason_code: "PROPOSED_TRADE_PLAN_UNAVAILABLE" };
@@ -160,7 +165,7 @@ function approvedTradePlanForAllocation(allocation, approved) {
     targets: array(plan.targets),
     time_in_force: text(firstDefined(plan.time_in_force, "DAY")),
     invalidation: plan.invalidation || null,
-    economics: plan.economics || record(firstDefined(signals[0]?.trade_plan_economics, signals[0]?.tradePlanEconomics)) || null,
+    economics: plan.economics || record(firstDefined(planSignals[0]?.trade_plan_economics, planSignals[0]?.tradePlanEconomics)) || null,
     immutable_after_risk: true,
     merge_policy: plans.length === 1 ? "SINGLE_SIGNAL" : "FIRST_SIGNAL_PARTIAL",
   };
@@ -232,13 +237,42 @@ function approvedSize(allocation, evaluation) {
   return positiveOrZero(firstDefined(evaluation.approved_size, allocation.approved_size, allocation.proposed_size));
 }
 
-function allocationSkipReason(allocation, approved, riskIssue = "", riskStatus = "") {
+function allocationSkipReason({ allocation, approved, riskIssue = "", riskDecisionStatus = "", approvedTradePlan }) {
   if (riskIssue) return riskIssue;
   if (!text(allocation.id)) return "ALLOCATION_ID_MISSING";
   if (!upper(allocation.instrument)) return "INSTRUMENT_MISSING";
+  const directionIssue = allocationDirectionIssue(allocation);
+  if (directionIssue) return directionIssue;
   if (approved < 0) return "APPROVED_SIZE_INVALID";
-  if (approved === 0) return `RISK_${upper(firstDefined(riskStatus, allocation.status, "BLOCK"))}_NO_APPROVED_SIZE`;
+  if (approved === 0) return `RISK_${upper(firstDefined(riskDecisionStatus, allocation.status, "BLOCK"))}_NO_APPROVED_SIZE`;
+  if (approvedTradePlan?.reason_code === "ALIGNED_TRADE_PLAN_REQUIRED") return approvedTradePlan.reason_code;
   return "";
+}
+
+function allocationDirectionIssue(allocation) {
+  const direction = upper(firstDefined(allocation.net_direction, allocation.direction));
+  if (!["LONG", "SHORT", "FLAT"].includes(direction)) return "ALLOCATION_DIRECTION_INVALID";
+  if (allocation.net_size === undefined || allocation.net_size === null || allocation.net_size === "") return "";
+  const netSize = numberOrNull(allocation.net_size);
+  if (netSize === null) return "ALLOCATION_NET_SIZE_INVALID";
+  if (directionFromSignedSize(netSize) !== direction) return "ALLOCATION_DIRECTION_MISMATCH";
+  return "";
+}
+
+function proposedTradePlan(signal) {
+  return record(firstDefined(signal.proposed_trade_plan, signal.proposedTradePlan));
+}
+
+function signalPlanDirection(signal) {
+  const plan = proposedTradePlan(signal);
+  const signalDirection = upper(firstDefined(signal.direction, signal.net_direction));
+  const planDirections = [plan?.direction, plan?.side, plan?.economics?.direction]
+    .filter((value) => value !== undefined && value !== null && value !== "")
+    .map(upper);
+  if (!["LONG", "SHORT"].includes(signalDirection) || !planDirections.length) return "";
+  if (planDirections.some((direction) => !["LONG", "SHORT"].includes(direction))) return "";
+  if (new Set(planDirections).size !== 1 || planDirections[0] !== signalDirection) return "";
+  return signalDirection;
 }
 
 function riskDecisionIssue(allocation, evaluation, risk) {

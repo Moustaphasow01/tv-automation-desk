@@ -14,6 +14,27 @@ test("theoretical candidate facade preserves the replay clock for administrative
   }), []);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].params, [12, ["portfolio_test"], now]);
+  const sql = calls[0].sql;
+  const eligibilityStart = sql.indexOf("WITH eligible_portfolio_intents AS MATERIALIZED");
+  const targetEligibility = sql.indexOf("JOIN portfolio_target_positions t", eligibilityStart);
+  const gateEligibility = sql.indexOf("LEFT JOIN human_execution_gates g", targetEligibility);
+  const deterministicOrder = sql.indexOf(
+    "ORDER BY l.created_at_utc ASC, l.portfolio_order_intent_id ASC",
+    gateEligibility,
+  );
+  const preLimit = sql.indexOf("LIMIT $1", eligibilityStart);
+  const enrichmentStart = sql.indexOf("FROM eligible_portfolio_intents eligible", preLimit);
+  const signalEnrichment = sql.indexOf("FROM strategy_signal_outbox s", enrichmentStart);
+  assert.ok(eligibilityStart >= 0);
+  assert.ok(targetEligibility > eligibilityStart);
+  assert.ok(gateEligibility > targetEligibility);
+  assert.ok(deterministicOrder > gateEligibility);
+  assert.ok(preLimit > eligibilityStart);
+  assert.ok(preLimit > deterministicOrder);
+  assert.ok(enrichmentStart > preLimit);
+  assert.ok(signalEnrichment > enrichmentStart);
+  assert.equal(sql.slice(eligibilityStart, preLimit).match(/AND NOT EXISTS \(/g)?.length, 4);
+  assert.equal(sql.slice(enrichmentStart).includes("portfolio_administrative_reservation_cancellations"), false);
 });
 
 test("findOpenTradeForMonitor joins the originating desk position and filters it independently", async () => {

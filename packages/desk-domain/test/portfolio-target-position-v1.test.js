@@ -86,6 +86,69 @@ describe("portfolio target position V1", () => {
     assert.equal(target.strategy_breakdown.find((item) => item.strategy_instance_id === "inst-long").signed_size, 3);
   });
 
+  it("selects a LONG plan when eight LONG signals net against six SHORT signals", () => {
+    const shortSignals = Array.from({ length: 6 }, (_, index) => signalWithPlan(`short-${index}`, "SHORT"));
+    const longSignals = Array.from({ length: 8 }, (_, index) => signalWithPlan(`long-${index}`, "LONG"));
+    const plan = buildPortfolioTargetPositionPlanV1({
+      as_of_utc: "2026-08-20T22:00:00.000Z",
+      account_id: "shadow_live",
+      candidate_allocations: [allocation({
+        id: "alloc-eight-long-six-short",
+        net_direction: "LONG",
+        net_size: 2,
+        proposed_size: 2,
+        contributing_signals: [...shortSignals, ...longSignals],
+      })],
+      risk_budget_evaluation: evaluation([{ candidate_allocation_id: "alloc-eight-long-six-short", approved_size: 2, status: "PASS", risk_decision_id: "risk-eight-long-six-short" }]),
+    });
+
+    const target = plan.target_positions[0];
+    assert.equal(target.net_direction, "LONG");
+    assert.equal(target.net_target_size, 2);
+    assert.equal(target.approved_trade_plan.side, "LONG");
+    assert.equal(target.approved_trade_plan.source_signal_id, "long-0");
+  });
+
+  it("refuses an allocation when no trade plan aligns with its net direction", () => {
+    const plan = buildPortfolioTargetPositionPlanV1({
+      as_of_utc: "2026-08-20T22:00:00.000Z",
+      account_id: "shadow_live",
+      candidate_allocations: [allocation({
+        id: "alloc-no-aligned-plan",
+        net_direction: "LONG",
+        net_size: 2,
+        proposed_size: 2,
+        contributing_signals: [
+          ...Array.from({ length: 6 }, (_, index) => signalWithPlan(`short-plan-${index}`, "SHORT")),
+          ...Array.from({ length: 8 }, (_, index) => signalWithoutPlan(`long-without-plan-${index}`, "LONG")),
+        ],
+      })],
+      risk_budget_evaluation: evaluation([{ candidate_allocation_id: "alloc-no-aligned-plan", approved_size: 2, status: "PASS", risk_decision_id: "risk-no-aligned-plan" }]),
+    });
+
+    assert.equal(plan.target_positions.length, 0);
+    assert.deepEqual(plan.skipped_allocations, [{ candidate_allocation_id: "alloc-no-aligned-plan", reason: "ALIGNED_TRADE_PLAN_REQUIRED" }]);
+  });
+
+  it("preserves neutralized FLAT allocation semantics", () => {
+    const plan = buildPortfolioTargetPositionPlanV1({
+      as_of_utc: "2026-08-20T22:00:00.000Z",
+      account_id: "shadow_live",
+      candidate_allocations: [allocation({
+        id: "alloc-flat",
+        net_direction: "FLAT",
+        net_size: 0,
+        proposed_size: 0,
+        status: "NEUTRALIZED",
+        contributing_signals: [signalWithPlan("flat-long", "LONG"), signalWithPlan("flat-short", "SHORT")],
+      })],
+      risk_budget_evaluation: evaluation([{ candidate_allocation_id: "alloc-flat", approved_size: 0, status: "NEUTRALIZED", risk_decision_id: "risk-flat" }]),
+    });
+
+    assert.equal(plan.target_positions.length, 0);
+    assert.deepEqual(plan.skipped_allocations, [{ candidate_allocation_id: "alloc-flat", reason: "RISK_NEUTRALIZED_NO_APPROVED_SIZE" }]);
+  });
+
   it("uses reduced risk size instead of requested allocation size", () => {
     const plan = buildPortfolioTargetPositionPlanV1({
       as_of_utc: "2026-08-09T08:20:00.000Z",
@@ -198,4 +261,18 @@ function tradePlan({ direction = "LONG", entry = 100, stop = 90, target = 120 } 
     targets: [{ label: "T1", availability: "KNOWN", price: target }],
     time_in_force: "DAY",
   };
+}
+
+function signalWithPlan(id, direction) {
+  return {
+    signal_id: id,
+    strategy_instance_id: `instance-${id}`,
+    direction,
+    proposed_size: 1,
+    proposed_trade_plan: tradePlan({ direction, stop: direction === "LONG" ? 90 : 110, target: direction === "LONG" ? 120 : 80 }),
+  };
+}
+
+function signalWithoutPlan(id, direction) {
+  return { signal_id: id, strategy_instance_id: `instance-${id}`, direction, proposed_size: 1 };
 }

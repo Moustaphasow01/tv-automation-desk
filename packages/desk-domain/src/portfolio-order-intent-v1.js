@@ -331,7 +331,31 @@ function targetAuthorityIssues(target, { targetSize }) {
   const approvedTarget = finite(firstDefined(target.risk_approved_net_size, target.approved_net_target_size));
   if (approvedTarget === null) issues.push("RISK_APPROVED_TARGET_REQUIRED");
   else if (round(approvedTarget) !== round(targetSize)) issues.push("RISK_APPROVED_TARGET_MUTATED");
+  issues.push(...approvedTradePlanDirectionIssues(target, targetSize));
   return issues;
+}
+function approvedTradePlanDirectionIssues(target, targetSize) {
+  const plan = record(firstDefined(target.approved_trade_plan, target.approvedTradePlan));
+  const expectedDirection = directionFromSignedSize(targetSize);
+  const targetDirection = upper(target.net_direction);
+  if (targetDirection && !["LONG", "SHORT", "FLAT"].includes(targetDirection)) return ["TARGET_POSITION_DIRECTION_INVALID"];
+  if (targetDirection && targetDirection !== expectedDirection) return ["TARGET_POSITION_DIRECTION_MISMATCH"];
+  if (!plan || plan.availability === "UNAVAILABLE" || expectedDirection === "FLAT") return [];
+  const planDirections = [plan.side, plan.direction, plan.economics?.direction]
+    .filter((value) => value !== undefined && value !== null && value !== "")
+    .map(upper);
+  if (!planDirections.length || planDirections.some((direction) => !["LONG", "SHORT"].includes(direction))) {
+    return ["APPROVED_TRADE_PLAN_DIRECTION_INVALID"];
+  }
+  if (new Set(planDirections).size !== 1 || planDirections[0] !== expectedDirection) {
+    return ["APPROVED_TRADE_PLAN_DIRECTION_MISMATCH"];
+  }
+  return [];
+}
+function directionFromSignedSize(value) {
+  if (value > 0) return "LONG";
+  if (value < 0) return "SHORT";
+  return "FLAT";
 }
 function sameTargetKey(intent, target) { return upper(firstDefined(intent.instrument, intent.provider_contract_ref?.instrument)) === instrument(target) && text(firstDefined(intent.account_id, intent.broker_account_id)) === accountId(target, {}); }
 function targetKey(target) { return `${accountId(target, {})}:${instrument(target)}`; }
@@ -362,7 +386,7 @@ function record(value) { return value && typeof value === "object" && !Array.isA
 function firstDefined(...values) { return values.find((value) => value !== undefined && value !== null && value !== "") ?? null; }
 function text(value) { return String(value ?? "").trim(); }
 function upper(value) { return text(value).toUpperCase(); }
-function finite(value) { if (value === null || value === undefined || value === "") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
+function finite(value) { if (value === null || value === undefined || value === "" || typeof value === "boolean" || typeof value === "object") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function positiveOrNull(value) { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? parsed : null; }
 function iso(value) { const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null; }
 function round(value) { return Math.round(Number(value || 0) * 10000) / 10000; }

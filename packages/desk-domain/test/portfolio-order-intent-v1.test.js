@@ -157,6 +157,51 @@ describe("portfolio order intent V1", () => {
     assert.equal(plan.order_intents.length, 0);
     assert.equal(plan.skipped_targets[0].reason, "RISK_APPROVED_TARGET_MUTATED");
   });
+
+  it("refuses a LONG target carrying a SHORT approved trade plan before READY", () => {
+    const plan = buildPortfolioOrderIntentPlanV1({
+      target_positions: [target({
+        net_direction: "LONG",
+        net_target_size: 2,
+        delta_size: 2,
+        approved_trade_plan: approvedTradePlan("SHORT"),
+      })],
+    });
+
+    assert.equal(plan.order_intents.length, 0);
+    assert.equal(plan.status, "NO_ORDER_INTENTS");
+    assert.equal(plan.skipped_targets[0].reason, "APPROVED_TRADE_PLAN_DIRECTION_MISMATCH");
+  });
+
+  it("does not treat boolean prices as decimal zero", () => {
+    const plan = buildPortfolioOrderIntentPlanV1({
+      target_positions: [target({
+        net_direction: "LONG",
+        approved_trade_plan: { ...approvedTradePlan("LONG"), stop: { price: false }, targets: [{ price: false }] },
+      })],
+    });
+
+    assert.equal(plan.order_intents[0].status, "PROTECTION_REQUIRED");
+    assert.deepEqual(plan.order_intents[0].protection.missing, ["STOP_PRICE_REQUIRED", "TARGET_PRICE_REQUIRED"]);
+    assert.equal(plan.order_intents[0].protection.stop_price, null);
+    assert.equal(plan.order_intents[0].protection.target_price, null);
+  });
+
+  it("preserves FLAT target semantics without creating an OrderIntent", () => {
+    const plan = buildPortfolioOrderIntentPlanV1({
+      target_positions: [target({
+        net_direction: "FLAT",
+        net_target_size: 0,
+        current_net_size: 0,
+        delta_size: 0,
+        risk_approved_net_size: 0,
+        approved_trade_plan: approvedTradePlan("SHORT"),
+      })],
+    });
+
+    assert.equal(plan.order_intents.length, 0);
+    assert.equal(plan.skipped_targets[0].reason, "NO_DELTA");
+  });
 });
 
 function target(overrides = {}) {
@@ -183,5 +228,16 @@ function protection(overrides = {}) {
     target_price: 28100,
     max_slippage_ticks: 4,
     ...overrides,
+  };
+}
+
+function approvedTradePlan(side) {
+  return {
+    availability: "KNOWN",
+    side,
+    entry: { availability: "KNOWN", price: 28000 },
+    stop: { availability: "KNOWN", price: side === "LONG" ? 27900 : 28100 },
+    targets: [{ availability: "KNOWN", price: side === "LONG" ? 28100 : 27900 }],
+    economics: { direction: side },
   };
 }

@@ -73,49 +73,11 @@ export async function listTheoreticalEntryCandidates(repository, {
         )
       ORDER BY i.requested_at ASC
       LIMIT $1`, [bounded]);
-  const portfolioCandidates = await rows(repository.pool, `SELECT l.*, l.payload AS order_intent_payload,
-        t.account_id AS target_account_id, t.instrument AS target_instrument,
-        t.approved_trade_plan, t.risk_allocation, t.expected_exposure,
-        t.lineage AS target_lineage, t.payload AS target_position_payload,
-        g.human_execution_gate_id, g.status AS human_gate_status,
-        g.expires_at_utc AS human_gate_expires_at_utc,
-        ss.signal_id AS source_strategy_signal_id,
-        ss.generated_at_utc AS source_signal_generated_at_utc,
-        ss.source_data_cutoff_utc AS source_signal_cutoff_utc,
-        ss.expires_at_utc AS source_signal_expires_at_utc,
-        ${PORTFOLIO_THEORETICAL_CANDIDATE_COLUMNS_SQL}
+  const portfolioCandidates = await rows(repository.pool, `WITH eligible_portfolio_intents AS MATERIALIZED (
+      SELECT l.portfolio_order_intent_id, l.created_at_utc
       FROM portfolio_order_intent_lineage l
       JOIN portfolio_target_positions t ON t.target_position_id = l.target_position_id
       LEFT JOIN human_execution_gates g ON g.portfolio_order_intent_id = l.portfolio_order_intent_id
-      ${PORTFOLIO_THEORETICAL_BROKER_ACCOUNT_JOIN_SQL}
-      LEFT JOIN LATERAL (
-        SELECT s.signal_id, s.generated_at_utc, s.source_data_cutoff_utc, s.expires_at_utc
-        FROM strategy_signal_outbox s
-        WHERE s.signal_id::text = ANY(ARRAY(
-          SELECT DISTINCT signal_id
-          FROM (
-            SELECT jsonb_array_elements_text(
-              CASE WHEN jsonb_typeof(l.lineage->'strategy_signal_ids') = 'array'
-                THEN l.lineage->'strategy_signal_ids'
-                ELSE '[]'::jsonb
-              END
-            ) AS signal_id
-            UNION ALL
-            SELECT jsonb_array_elements_text(
-              CASE WHEN jsonb_typeof(l.payload #> '{source,lineage,strategy_signal_ids}') = 'array'
-                THEN l.payload #> '{source,lineage,strategy_signal_ids}'
-                ELSE '[]'::jsonb
-              END
-            ) AS signal_id
-            UNION ALL SELECT NULLIF(l.payload->>'source_signal_id', '')
-            UNION ALL SELECT NULLIF(l.payload #>> '{approved_trade_plan,source_signal_id}', '')
-          ) signal_ids
-          WHERE signal_id IS NOT NULL AND signal_id <> ''
-        ))
-        ORDER BY s.generated_at_utc DESC NULLS LAST
-        LIMIT 1
-      ) ss ON true
-      ${PORTFOLIO_THEORETICAL_CONTRACT_JOIN_SQL}
       WHERE (l.status = 'READY' OR (
           l.status = 'EXPIRED' AND g.status = 'EXPIRED'
           AND g.payload->>'expired_by' = 'theoretical_execution_sweeper'
@@ -150,8 +112,56 @@ export async function listTheoreticalEntryCandidates(repository, {
           WHERE tr.portfolio_order_intent_id = l.portfolio_order_intent_id
             AND tr.status NOT IN ('cancelled','rejected','expired','error')
         )
-      ORDER BY l.created_at_utc ASC
-      LIMIT $1`, [bounded, hasPortfolioScope ? scopedPortfolioIds : null, knownAt]);
+      ORDER BY l.created_at_utc ASC, l.portfolio_order_intent_id ASC
+      LIMIT $1
+    )
+      SELECT l.*, l.payload AS order_intent_payload,
+        t.account_id AS target_account_id, t.instrument AS target_instrument,
+        t.approved_trade_plan, t.risk_allocation, t.expected_exposure,
+        t.lineage AS target_lineage, t.payload AS target_position_payload,
+        g.human_execution_gate_id, g.status AS human_gate_status,
+        g.expires_at_utc AS human_gate_expires_at_utc,
+        ss.signal_id AS source_strategy_signal_id,
+        ss.generated_at_utc AS source_signal_generated_at_utc,
+        ss.source_data_cutoff_utc AS source_signal_cutoff_utc,
+        ss.expires_at_utc AS source_signal_expires_at_utc,
+        ${PORTFOLIO_THEORETICAL_CANDIDATE_COLUMNS_SQL}
+      FROM eligible_portfolio_intents eligible
+      JOIN portfolio_order_intent_lineage l
+        ON l.portfolio_order_intent_id = eligible.portfolio_order_intent_id
+      JOIN portfolio_target_positions t ON t.target_position_id = l.target_position_id
+      LEFT JOIN human_execution_gates g ON g.portfolio_order_intent_id = l.portfolio_order_intent_id
+      ${PORTFOLIO_THEORETICAL_BROKER_ACCOUNT_JOIN_SQL}
+      LEFT JOIN LATERAL (
+        SELECT s.signal_id, s.generated_at_utc, s.source_data_cutoff_utc, s.expires_at_utc
+        FROM strategy_signal_outbox s
+        WHERE s.signal_id::text = ANY(ARRAY(
+          SELECT DISTINCT signal_id
+          FROM (
+            SELECT jsonb_array_elements_text(
+              CASE WHEN jsonb_typeof(l.lineage->'strategy_signal_ids') = 'array'
+                THEN l.lineage->'strategy_signal_ids'
+                ELSE '[]'::jsonb
+              END
+            ) AS signal_id
+            UNION ALL
+            SELECT jsonb_array_elements_text(
+              CASE WHEN jsonb_typeof(l.payload #> '{source,lineage,strategy_signal_ids}') = 'array'
+                THEN l.payload #> '{source,lineage,strategy_signal_ids}'
+                ELSE '[]'::jsonb
+              END
+            ) AS signal_id
+            UNION ALL SELECT NULLIF(l.payload->>'source_signal_id', '')
+            UNION ALL SELECT NULLIF(l.payload #>> '{approved_trade_plan,source_signal_id}', '')
+          ) signal_ids
+          WHERE signal_id IS NOT NULL AND signal_id <> ''
+        ))
+        ORDER BY s.generated_at_utc DESC NULLS LAST
+        LIMIT 1
+      ) ss ON true
+      ${PORTFOLIO_THEORETICAL_CONTRACT_JOIN_SQL}
+      ORDER BY eligible.created_at_utc ASC, eligible.portfolio_order_intent_id ASC`,
+  [bounded, hasPortfolioScope ? scopedPortfolioIds : null, knownAt]);
   return [...legacyCandidates, ...portfolioCandidates.map(portfolioLineageToTheoreticalEntryCandidate)]
     .sort((left, right) => Date.parse(left.requested_at || 0) - Date.parse(right.requested_at || 0))
     .slice(0, bounded);

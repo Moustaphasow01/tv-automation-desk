@@ -84,6 +84,12 @@ test("canonical theoretical tracking against an isolated, fully migrated Postgre
     const candidates = await listTheoreticalEntryCandidates(repository, { portfolioOrderIntentIds: ["awaiting", "rejected", "confirmed", "unrelated-expiry"] });
     assert.deepEqual(candidates.map((row) => row.portfolio_order_intent_id).sort(), ["awaiting", "confirmed", "rejected"]);
     assert.equal(candidates[0].point_value, 50);
+    const limited = await listTheoreticalEntryCandidates(repository, {
+      limit: 2,
+      portfolioOrderIntentIds: ["rejected", "unrelated-expiry", "confirmed", "awaiting"],
+    });
+    assert.deepEqual(limited.map((row) => row.portfolio_order_intent_id), ["awaiting", "confirmed"]);
+    assert.equal(limited.every((row) => row.point_value === 50), true);
     assert.equal((await repository.pool.query("SELECT count(*) FROM broker_provider_commands")).rows[0].count, "0");
   });
   await t.test("M1 reads obey the replay clock and the complete non-touch window expires", async () => {
