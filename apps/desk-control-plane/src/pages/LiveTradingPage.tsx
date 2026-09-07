@@ -225,6 +225,7 @@ export function LiveTradingPage() {
       focus={focusQuery.data.data}
       busy={Boolean(submittingActionId)}
       error={commandError}
+      projectionError={focusQuery.isError}
       requestedScope={marketScope}
       dashboardPeriod={focusDashboardPeriod}
       chartLoading={chartQuery.isFetching}

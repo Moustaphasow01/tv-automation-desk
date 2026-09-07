@@ -1007,6 +1007,13 @@ function liveTrading({ execution, strategy, incidents, ai, risk, health, marketS
 function demoPaperReadiness(context) { return buildDemoPaperReadiness({ ...context, rows }); }
 
 function liveFocus(context) {
+  if (context.execution === null || context.execution === undefined) {
+    throw codedError(
+      "LIVE_FOCUS_EXECUTION_UNAVAILABLE",
+      "Live Focus requires the authoritative execution projection.",
+      503,
+    );
+  }
   const live = liveTrading(context);
   const executionValue = context.execution || {};
   const currentCohort = currentLiveLineageCohort({

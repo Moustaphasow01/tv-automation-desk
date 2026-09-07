@@ -434,6 +434,50 @@ describe("Live Trading cockpit components", () => {
     else expect(markup).not.toContain("Valider ce dossier uniquement");
   });
 
+  it("retains the last Focus projection but blocks operator actions after a refresh failure", () => {
+    const model = withOrderIntent(cockpitModel());
+    model.gateActions = ["CONFIRM", "REJECT"].map((action) => ({
+      action,
+      actionId: `${action.toLowerCase()}-intent-cockpit`,
+      label: action === "CONFIRM" ? "Valider ce dossier uniquement" : "Refuser ce dossier",
+      commandType: action === "CONFIRM" ? "execution.order_intent.confirm" : "execution.order_intent.reject",
+      environment: "PAPER",
+      permission: "ALLOWED",
+      requiresConfirmation: true,
+      requiresReason: true,
+      expectedRevision: "revision-cockpit",
+      impactPreview: "test",
+      payload: { portfolioOrderIntentId: "intent-cockpit" },
+    })) as LiveTradingModel["gateActions"];
+    const activeCard = { ...focusTradeCard(), orderIntentId: "intent-cockpit", operatorState: "AWAITING_MANUAL_CONFIRMATION", terminal: false, terminalReason: null, actionable: true, expiredByTime: false, temporalState: "NEW", lifecycleLabel: "À décider", priority: "ACTIONABLE" as const, denialReasons: [], expiresAt: "2099-09-01T16:00:00.000Z" };
+    const markup = render(
+      <LiveFocusMode
+        model={model}
+        focus={{ ...focusView(), asOf: "not-a-date", tradeCards: [activeCard] }}
+        busy={false}
+        error={null}
+        projectionError
+        requestedScope={{ instrument: "ZW", timeframe: "15" }}
+        dashboardPeriod="TODAY"
+        chartLoading={false}
+        chartError={null}
+        onExit={() => undefined}
+        onScopeChange={() => undefined}
+        onDashboardPeriodChange={() => undefined}
+        onSelectDecision={() => undefined}
+        onSubmitGate={noopSubmit}
+        onSubmitManual={noopSubmit}
+      />,
+    );
+
+    expect(markup).toContain("Ticket d’action");
+    expect(markup).toContain("ZW pullback");
+    expect(markup).toContain("dernière projection conservée, arrêtée au Horodatage non publié");
+    expect(markup).toContain("Les actions opérateur sont temporairement bloquées");
+    expect(markup).not.toContain("Valider ce dossier uniquement");
+    expect(markup).not.toContain("Refuser ce dossier");
+  });
+
   it("selects the journal ticket by canonical signal ID after chronological sorting", () => {
     const selected = focusTradeCard();
     const recent = { ...selected, orderIntentId: "intent-recent", signalId: "signal-recent", createdAt: "2026-09-01T13:55:00.000Z" };

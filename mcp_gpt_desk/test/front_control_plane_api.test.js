@@ -2099,6 +2099,50 @@ test("front control plane degrades a view when one source times out", async () =
   assert.equal(envelope.data.risk.activeAlerts, null);
 });
 
+test("Live Focus fails closed when its authoritative execution source times out", async () => {
+  const store = frontControlPlaneStore();
+  store.frontControlPlaneSourceTimeoutMs = 5;
+  store.getExecutionOverview = async () => new Promise(() => {});
+
+  await assert.rejects(() => handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-focus",
+    query: { diagnostic: "execution-timeout" },
+  }), (error) => (
+    error.code === "LIVE_FOCUS_EXECUTION_UNAVAILABLE"
+    && error.statusCode === 503
+  ));
+});
+
+test("Live Focus rejects an execution adapter returning no projection", async () => {
+  const store = frontControlPlaneStore();
+  store.getExecutionOverview = async () => undefined;
+  await assert.rejects(() => handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-focus",
+    query: { diagnostic: "missing-execution" },
+  }), { code: "LIVE_FOCUS_EXECUTION_UNAVAILABLE", statusCode: 503 });
+});
+
+test("Live Focus keeps an authoritative empty execution projection as a legitimate empty view", async () => {
+  const store = frontControlPlaneStore({
+    execution: {
+      portfolioOrderIntents: [],
+      humanExecutionGates: [],
+      theoreticalEvents: [],
+      manualExecutionEvents: [],
+      trades: [],
+    },
+  });
+
+  const envelope = await handleFrontControlPlane(store, {
+    pathname: "/front-api/v1/views/live-focus",
+    query: { diagnostic: "empty-execution" },
+  });
+
+  assert.equal(envelope.meta.warnings.some((warning) => warning.startsWith("execution:")), false);
+  assert.equal(envelope.data.tradeCards.length, 0);
+  assert.equal(envelope.data.whyNoTrade.stageCounts.orderIntents, 0);
+});
+
 test("front control plane command center publishes canonical truth and isolates legacy execution history", async () => {
   const envelope = await handleFrontControlPlane(frontControlPlaneStore(), {
     pathname: "/front-api/v1/views/command-center",
