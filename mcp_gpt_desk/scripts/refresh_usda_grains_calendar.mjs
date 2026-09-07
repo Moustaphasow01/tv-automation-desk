@@ -6,6 +6,14 @@ import { createGrainsCalendarFileArchive } from "../src/adapters/grains-calendar
 import { createUsdaCalendarCollection } from "../src/adapters/usda-grains-calendar-refresh-source.js";
 import { appendGrainsCalendarVersion } from "../src/persistence/postgres-grains-calendar-ledger.js";
 import { withGrainsCalendarRefreshLease } from "../src/persistence/postgres-grains-calendar-refresh-lease.js";
+import {
+  createDeploymentProducerClient,
+  runWithDeploymentProducerAdmission,
+} from "../src/persistence/postgres-deployment-producer-admission.js";
+import {
+  GRAINS_CALENDAR_POLICY_V1,
+  requireGrainsCalendarSourcePolicy,
+} from "../src/grains-calendar-source-policy.js";
 
 main().catch(() => {
   console.error(JSON.stringify({ status: "UNAVAILABLE", reasonCodes: ["CALENDAR_REFRESH_BOOTSTRAP_FAILED"] }));
@@ -17,27 +25,38 @@ async function main() {
   const enabled = process.env.DESK_GRAINS_CALENDAR_ENABLED;
   if (enabled !== undefined && !["true", "false"].includes(enabled))
     throw new Error("CALENDAR_REFRESH_ENABLED_INVALID");
-  const archive = createGrainsCalendarFileArchive(args);
+  const policyId = process.env.DESK_GRAINS_CALENDAR_SOURCE_POLICY || GRAINS_CALENDAR_POLICY_V1;
+  requireGrainsCalendarSourcePolicy(policyId);
   const nowUtc = () => new Date().toISOString();
   const mode = enabled === "true" ? "ENABLED" : "DISABLED";
   const connectionString = process.env.DESK_POSTGRES_URL || process.env.POSTGRES_URL || process.env.DATABASE_URL;
-  if (mode === "ENABLED" && !connectionString) throw new Error("CALENDAR_DATABASE_REQUIRED");
+  if (!connectionString) throw new Error("CALENDAR_DATABASE_REQUIRED");
   const pool = mode === "ENABLED" ? new pg.Pool({
     connectionString, max: 3, connectionTimeoutMillis: 5000,
     idleTimeoutMillis: 5000, statement_timeout: 30000,
     application_name: "desk-grains-calendar-refresh",
   }) : null;
+  const admissionClient = createDeploymentProducerClient({
+    connectionString,
+    applicationName: "desk-grains-calendar-refresh-admission",
+  });
   try {
-    const result = await refreshGrainsCalendar({ mode }, {
-      nowUtc,
-      collect: createUsdaCalendarCollection({ nowUtc, archiveDocument: archive.archiveDocument }),
-      archive: archive.archiveCollection,
-      append: (version) => appendGrainsCalendarVersion(pool, version),
-      exclusive: (work) => withGrainsCalendarRefreshLease(pool, work),
-      writeStatus: archive.writeStatus,
+    const outcome = await runWithDeploymentProducerAdmission(admissionClient, async () => {
+      const archive = createGrainsCalendarFileArchive(args);
+      return refreshGrainsCalendar({ mode }, {
+        nowUtc,
+        collect: createUsdaCalendarCollection({
+          nowUtc, archiveDocument: archive.archiveDocument, policyId,
+        }),
+        archive: archive.archiveCollection,
+        append: (version) => appendGrainsCalendarVersion(pool, version),
+        exclusive: (work) => withGrainsCalendarRefreshLease(pool, work),
+        writeStatus: archive.writeStatus,
+      });
     });
+    const result = outcome.executed ? outcome.value : outcome;
     console.log(JSON.stringify(result));
-    if (!["AVAILABLE", "ALREADY_RUNNING", "DISABLED_BY_POLICY"].includes(result.status)) process.exitCode = 1;
+    if (!["AVAILABLE", "ALREADY_RUNNING", "DISABLED_BY_POLICY", "DEPLOYMENT_PRODUCER_HOLD_ACTIVE"].includes(result.status)) process.exitCode = 1;
   } finally { await pool?.end(); }
 }
 

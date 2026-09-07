@@ -244,8 +244,92 @@ function Assert-DeskFrozenProducerServices {
     }
 }
 
+function Test-DeskNodeVersionCompatibility {
+    param(
+        [Parameter(Mandatory = $true)][string]$RuntimeVersion,
+        [Parameter(Mandatory = $true)][string]$MinimumVersion
+    )
+    try {
+        $runtime = [version]$RuntimeVersion.Trim().TrimStart("v")
+        $minimum = [version]$MinimumVersion.Trim().TrimStart("v")
+        return $runtime -ge $minimum
+    } catch {
+        return $false
+    }
+}
+
+function Get-DeskProducerScheduledTaskNames {
+    return @(
+        "DeskFutures-UsGrainsShadowRuntime",
+        "DeskFutures-GrainsCalendarRefresh"
+    )
+}
+
+function Test-DeskScheduledTaskEnabled {
+    param([Parameter(Mandatory = $true)][object]$Task)
+
+    $enabledProperty = $null
+    if ($Task.PSObject.Properties["Settings"] -and $null -ne $Task.Settings) {
+        $enabledProperty = $Task.Settings.PSObject.Properties["Enabled"]
+    }
+    if ($enabledProperty) { return [bool]$enabledProperty.Value }
+    return [string]$Task.State -ne "Disabled"
+}
+
+function Get-DeskProducerScheduledTaskState {
+    $states = @()
+    foreach ($name in @(Get-DeskProducerScheduledTaskNames)) {
+        $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        $states += [pscustomobject][ordered]@{
+            task_name = $name
+            enabled = $null -ne $task -and (Test-DeskScheduledTaskEnabled -Task $task)
+        }
+    }
+    return $states
+}
+
+function Stop-DeskProducerScheduledTasks {
+    foreach ($name in @(Get-DeskProducerScheduledTaskNames)) {
+        $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        if (-not $task) { continue }
+        Disable-ScheduledTask -TaskName $name | Out-Null
+        $disabledTask = Get-ScheduledTask -TaskName $name -ErrorAction Stop
+        if ([string]$disabledTask.State -eq "Running") { Stop-ScheduledTask -TaskName $name }
+    }
+}
+
+function Restore-DeskProducerScheduledTaskState {
+    param([Parameter(Mandatory = $true)][object[]]$State)
+
+    foreach ($entry in @($State)) {
+        $name = [string]$entry.task_name
+        $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        if (-not $task) { throw "Producer scheduled task missing after installation: $name" }
+        if ([bool]$entry.enabled) {
+            Enable-ScheduledTask -TaskName $name | Out-Null
+        } else {
+            Disable-ScheduledTask -TaskName $name | Out-Null
+            if ([string]$task.State -eq "Running") { Stop-ScheduledTask -TaskName $name }
+        }
+    }
+}
+
+function Assert-DeskProducerScheduledTasksStopped {
+    $violations = @()
+    foreach ($name in @(Get-DeskProducerScheduledTaskNames)) {
+        $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        if ($task -and ((Test-DeskScheduledTaskEnabled -Task $task) -or [string]$task.State -eq "Running")) {
+            $violations += $name
+        }
+    }
+    if ($violations.Count -gt 0) {
+        throw "Producer scheduled tasks are not stopped and disabled: $($violations -join ', ')"
+    }
+}
+
 
 function Stop-DeskProducerServices {
+    Stop-DeskProducerScheduledTasks
     foreach ($name in @("DeskFuturesCodexReplay01", "DeskFuturesCodexLive02", "DeskFuturesCodexLive01", "DeskFuturesAgentRuntimeResearch", "DeskFuturesAgentRuntimeSupervisor", "DeskFuturesTelegram", "DeskFuturesBrokerManagement", "DeskFuturesReplayPreparation", "DeskFuturesLiveRuntime")) {
         $service = Get-Service -Name $name -ErrorAction SilentlyContinue
         if ($service -and $service.Status -ne "Stopped") {

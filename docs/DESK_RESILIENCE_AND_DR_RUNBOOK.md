@@ -40,18 +40,46 @@ mode `active`.
 
 `Update-Desk.ps1` exécute automatiquement :
 
-1. sauvegarde PostgreSQL et objets immuables ;
-2. vérification de la release et migrations additives ;
-3. canary isolé sur loopback ;
-4. pause des lanes LIVE/Replay et verrouillage broker ;
-5. arrêt des producteurs puis attente des leases/outbox actifs ;
-6. bascule atomique de la jonction `current` ;
-7. santé locale et smoke test public ;
-8. restauration exacte des contrôles antérieurs.
+1. vérification de la release, sauvegarde PostgreSQL et objets immuables ;
+2. arrêt/désactivation des tâches productrices puis pause des lanes LIVE/Replay et verrouillage broker ;
+3. arrêt des services producteurs puis attente des leases/outbox actifs ;
+4. migrations additives, puis canary isolé sur loopback ;
+5. bascule atomique de la jonction `current`, tâches initialement désactivées ;
+6. santé locale et smoke test public ;
+7. réarmement des tâches à leur état précédent derrière la barrière `DRAIN` ;
+8. restauration vérifiée des contrôles antérieurs, en dernière étape.
 
 Si la nouvelle release échoue après la bascule, le code précédent est restauré.
 Si le rollback ne peut pas être vérifié, les claims et l’exécution restent
 verrouillés : il ne faut jamais les rouvrir manuellement sans diagnostic.
+
+### Barrière des producteurs planifiés
+
+Les producteurs US grains, signal pipeline et calendrier n'exécutent du travail
+que si le document singleton `desk_deployment_controls/producer_hold` est valide
+et à l'état `OPEN`. Ils conservent un advisory lock partagé PostgreSQL pendant
+toute leur exécution. Une perte de cette session arrête immédiatement le
+processus avant toute nouvelle étape applicative. Cet arrêt du processus ne
+prouve pas à lui seul l'annulation d'une requête déjà envoyée sur une autre
+connexion. Après acquisition du verrou exclusif, `Pause`
+termine aussi les seules connexions de travail identifiées de ces trois
+producteurs dans la base courante; une requête envoyée mais non validée ne peut
+donc pas survivre au drain. Les terminaisons sont attendues et leur succès ainsi
+que l'absence des connexions ciblées sont vérifiés. Les transactions déjà validées
+avant le drain ne sont pas annulées rétroactivement. Les transitions restaurent exactement l'état
+antérieur (`OPEN` ou `FROZEN`) du singleton.
+
+Lors de la première installation de cette barrière, seul
+`Invoke-DeskDrain.ps1 -Action Pause` est autorisé à initialiser le singleton :
+les runners refusent une ligne absente ou malformée. `Update-Desk.ps1` désactive
+et arrête d'abord les tâches planifiées, puis exécute `Pause`; il les réarme
+derrière l'état `DRAIN` et ne restaure le contrôle antérieur qu'en dernière
+étape. Un état `FROZEN` n'est jamais rouvert implicitement.
+
+Les lignes historiques de `desk_deployment_runs`, y compris des drains anciens
+non terminés, restent des journaux immuables pour cette décision : elles ne sont
+ni consultées pour l'admission courante, ni nettoyées automatiquement. Toute
+reprise ou terminaison doit nommer le propriétaire indiqué par le singleton.
 
 Lors d'un rollback V5.1/V2.1, ne convertir ni réépingler aucun document vers
 V5.0/V2.0 ou V4/V1. Le code

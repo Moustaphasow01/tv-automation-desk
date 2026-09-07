@@ -105,6 +105,7 @@ if ($Rehearsal) {
     $probeTemporary = $null
     $deploymentId = $null
     $installAttempted = $false
+    $producerScheduledTaskState = @()
     try {
         if ((Get-Item -LiteralPath $ReleasePath).PSIsContainer) {
             $probeRoot = $ReleasePath
@@ -142,10 +143,14 @@ if ($Rehearsal) {
         $keepAiWorkersDisabled = $KeepFrozen -or ($AiWorkerMode -eq "disabled")
 
         if (-not $SkipDrain) {
+            $producerScheduledTaskState = @(Get-DeskProducerScheduledTaskState)
+            Stop-DeskProducerScheduledTasks
+            Assert-DeskProducerScheduledTasksStopped
             $drainScript = Join-Path $probeRoot "deploy\windows\Invoke-DeskDrain.ps1"
             $pauseOutput = @(& $drainScript -Action Pause -DatabaseUrl $envValues["DATABASE_URL"] -ReleaseVersion $targetVersion -PostgresBin $PostgresBin)
             $deploymentId = [string]($pauseOutput | Select-Object -Last 1)
             Stop-DeskProducerServices
+            Assert-DeskProducerScheduledTasksStopped
             if ($KeepFrozen) {
                 Disable-DeskFrozenProducerServices
                 Assert-DeskFrozenProducerServices
@@ -191,13 +196,24 @@ if ($Rehearsal) {
             -PostgresBin $PostgresBin `
             -MigrationDatabaseUrl $MigrationDatabaseUrl `
             -PostgresServiceName $PostgresServiceName `
-            -KeepAiWorkersDisabled:$keepAiWorkersDisabled
+            -KeepAiWorkersDisabled:$keepAiWorkersDisabled `
+            -ProducerTasksInitiallyDisabled:([bool]$deploymentId)
 
+        if ($deploymentId) {
+            Stop-DeskProducerScheduledTasks
+            Assert-DeskProducerScheduledTasksStopped
+        }
         & (Join-Path $InstallRoot "current\deploy\windows\Test-DeskLocalHealth.ps1") -DataRoot $DataRoot -AllowDisabledAiWorkers:$keepAiWorkersDisabled
         & (Join-Path $InstallRoot "current\deploy\windows\Test-DeskDeployment.ps1") -PublicBaseUrl "https://$Domain"
         if ($deploymentId) {
+            if (-not $KeepFrozen) {
+                Restore-DeskProducerScheduledTaskState -State $producerScheduledTaskState
+            }
             & (Join-Path $InstallRoot "current\deploy\windows\Invoke-DeskDrain.ps1") `
                 -Action $(if ($KeepFrozen) { "CompleteFrozen" } else { "Resume" }) -DatabaseUrl $envValues["DATABASE_URL"] -DeploymentId $deploymentId -PostgresBin $PostgresBin
+            if ($KeepFrozen) {
+                Assert-DeskProducerScheduledTasksStopped
+            }
         }
         if ($KeepFrozen) {
             & $NodeExecutable "--env-file=$envFile" `
@@ -209,6 +225,14 @@ if ($Rehearsal) {
         Write-Host $(if ($KeepFrozen) { "Desk update $targetVersion verified under strict freeze." } else { "Desk update $targetVersion verified and reopened." })
     } catch {
         $updateError = $_
+        if ($deploymentId) {
+            try {
+                Stop-DeskProducerScheduledTasks
+                Assert-DeskProducerScheduledTasksStopped
+            } catch {
+                Write-Warning "Producer scheduled tasks could not be fully stopped during recovery: $($_.Exception.Message)"
+            }
+        }
         $recovery = Invoke-DeskUpdateRecovery `
             -DeploymentId $deploymentId `
             -InstallAttempted $installAttempted `
@@ -224,6 +248,8 @@ if ($Rehearsal) {
             } `
             -RestoreServices { Start-DeskServices } `
             -PreserveFrozenServices {
+                Stop-DeskProducerScheduledTasks
+                Assert-DeskProducerScheduledTasksStopped
                 Disable-DeskFrozenProducerServices
                 Assert-DeskFrozenProducerServices
                 $frozenEnv = Get-Content -LiteralPath $envFile -Raw
@@ -247,6 +273,7 @@ if ($Rehearsal) {
                     -DatabaseUrl $envValues["DATABASE_URL"] -DeploymentId $deploymentId `
                     -PostgresBin $PostgresBin -CompletionStatus rolled_back
                 if ($KeepFrozen) {
+                    Assert-DeskProducerScheduledTasksStopped
                     & $NodeExecutable "--env-file=$envFile" `
                         (Join-Path $InstallRoot "current\app\mcp_gpt_desk\scripts\verify_v5_frozen_state.mjs") `
                         "--freeze-only" `
@@ -254,6 +281,13 @@ if ($Rehearsal) {
                     if ($LASTEXITCODE -ne 0) { throw "Strict freeze rollback postcondition failed." }
                 }
             }
+        if ($recovery.controls_restored -and -not $KeepFrozen) {
+            try {
+                Restore-DeskProducerScheduledTaskState -State $producerScheduledTaskState
+            } catch {
+                Write-Warning "Producer scheduled task state could not be restored after rollback: $($_.Exception.Message)"
+            }
+        }
         foreach ($recoveryError in @($recovery.errors)) {
             Write-Warning "Desk update recovery step failed; safety drain remains authoritative where controls were not restored. $recoveryError"
         }

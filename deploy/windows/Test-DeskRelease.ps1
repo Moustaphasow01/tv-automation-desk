@@ -13,6 +13,21 @@ $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ($manifest.schema -ne "desk_windows_release_v1") { throw "Unsupported release schema: $($manifest.schema)" }
 
 $failures = @()
+$nodeMinimumProperty = $manifest.PSObject.Properties["node_minimum"]
+if (-not $nodeMinimumProperty) {
+    $failures += "node-minimum-missing"
+} else {
+    try {
+        $declaredNodeMinimum = [version][string]$nodeMinimumProperty.Value
+        $node = Resolve-DeskExecutable -Name "node.exe" -ExplicitPath $NodeExecutable
+        $runtimeNodeVersion = (Invoke-DeskCapturedCommand -FilePath $node -Arguments @("--version")).Trim()
+        if (-not (Test-DeskNodeVersionCompatibility -RuntimeVersion $runtimeNodeVersion -MinimumVersion $declaredNodeMinimum.ToString())) {
+            $failures += "node-runtime-below-declared-minimum"
+        }
+    } catch {
+        $failures += "node-minimum-or-runtime-invalid"
+    }
+}
 $standardReleaseFiles = @(
     "front/index.html",
     "front/manifest.webmanifest",
@@ -126,7 +141,6 @@ Get-ChildItem -LiteralPath $ReleaseRoot -File -Recurse -Force | ForEach-Object {
 }
 if ($failures.Count -gt 0) { throw "Release verification failed: $($failures -join ', ')" }
 if ($isV5Frozen) {
-    $node = Resolve-DeskExecutable -Name "node.exe" -ExplicitPath $NodeExecutable
     Invoke-DeskCommand -FilePath $node -Arguments @(
         (Join-Path $ReleaseRoot "app\mcp_gpt_desk\scripts\verify_release_contract_integrity.mjs"),
         "--release-root=$ReleaseRoot"

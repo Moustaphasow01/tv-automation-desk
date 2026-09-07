@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const required = [
+  ".github/workflows/local-ci.yml",
+  "mcp_gpt_desk/package.json",
   "config/strategy-contract-lock.json",
   "config/execution-policy-lock.json",
   "deploy/caddy/Caddyfile.template",
@@ -16,6 +18,7 @@ const required = [
   "deploy/windows/Install-DeskServices.ps1",
   "deploy/windows/Install-DeskPrerequisites.ps1",
   "deploy/windows/Test-DeskPrerequisites.ps1",
+  "deploy/windows/Test-DeskNodeVersionCompatibility.ps1",
   "deploy/windows/Install-DeskNinjaTrader.ps1",
   "deploy/windows/Install-DeskCodex.ps1",
   "deploy/windows/Test-DeskCodexInference.ps1",
@@ -39,6 +42,7 @@ const required = [
   "deploy/windows/Invoke-DeskBackupVerification.ps1",
   "deploy/windows/Update-Desk.ps1",
   "deploy/windows/Test-DeskUpdateRecovery.ps1",
+  "deploy/windows/Test-DeskProducerScheduledTasks.ps1",
   "deploy/windows/Rollback-Desk.ps1",
   "deploy/windows/Test-DeskRelease.ps1",
   "deploy/windows/Test-DeskDeployment.ps1",
@@ -92,6 +96,13 @@ const required = [
   "mcp_gpt_desk/scripts/run_telegram_alert_worker.mjs",
   "mcp_gpt_desk/scripts/run_desk_ai_worker.mjs",
   "mcp_gpt_desk/scripts/run_agent_runtime_supervisor.mjs",
+  "mcp_gpt_desk/scripts/run_us_grains_strategy_suite_once.mjs",
+  "mcp_gpt_desk/scripts/run_strategy_signal_decision_pipeline_once.mjs",
+  "mcp_gpt_desk/scripts/refresh_usda_grains_calendar.mjs",
+  "mcp_gpt_desk/src/persistence/postgres-deployment-producer-admission.js",
+  "mcp_gpt_desk/test/deployment_producer_admission.test.js",
+  "mcp_gpt_desk/test/deployment_producer_admission_postgres.test.js",
+  "mcp_gpt_desk/test/support/producer-admission-loss-child.mjs",
   "mcp_gpt_desk/src/agent-runtime-admin-service.js",
   "mcp_gpt_desk/src/agent-runtime-admin-tools.js",
   "mcp_gpt_desk/src/agent-runtime-metrics-postgres.js",
@@ -239,6 +250,17 @@ if (!update.includes("-AllowDisabledAiWorkers:$keepAiWorkersDisabled")) {
   violations.push("update_ai_worker_disabled_mode_not_passed_to_healthcheck");
 }
 const buildRelease = content.get("deploy/windows/Build-DeskRelease.ps1");
+const prerequisites = content.get("deploy/windows/Test-DeskPrerequisites.ps1");
+const localCi = content.get(".github/workflows/local-ci.yml");
+const backendPackage = JSON.parse(content.get("mcp_gpt_desk/package.json"));
+if (!localCi.includes('node-version: "22"')) violations.push("local_ci_node_minimum_below_22");
+if (backendPackage.engines?.node !== ">=22") violations.push("backend_node_engine_below_22");
+if (!prerequisites.includes('-MinimumVersion "22.0.0"') || !prerequisites.includes('"Node.js >= 22"')) {
+  violations.push("windows_node_minimum_below_22");
+}
+if (!buildRelease.includes('node_minimum = "22.0.0"') || !buildRelease.includes('requires Node.js >= 22.0.0')) {
+  violations.push("release_node_minimum_below_22");
+}
 for (const dependencyInstall of [
   'Invoke-DeskCommand -FilePath $npm -Arguments @("ci", "--ignore-scripts")',
   '"--prefix", "apps/desk-control-plane", "ci", "--ignore-scripts"',
@@ -261,10 +283,98 @@ if (!frozenRelease.includes('ReleaseProfile = "deterministic_strategy_v5_frozen"
 if (!buildRelease.includes('"schemas"')) violations.push("release_archive_mcp_schemas_missing");
 if (!update.includes("KeepFrozen") || !update.includes('"CompleteFrozen"') || !update.includes("KeepAiWorkersDisabled")) violations.push("update_can_reopen_v5_release");
 if (!update.includes("QuiesceFrozenState") || !update.includes("quiesce_v5_frozen_state.mjs") || !update.includes("--require-broker-lock")) violations.push("v5_frozen_quiesce_not_enforced");
+for (const expected of [
+  "Get-DeskProducerScheduledTaskState",
+  "Stop-DeskProducerScheduledTasks",
+  "Assert-DeskProducerScheduledTasksStopped",
+  "Restore-DeskProducerScheduledTaskState",
+]) {
+  if (!update.includes(expected)) violations.push(`producer_scheduled_task_update_guard_missing:${expected}`);
+}
+if (!update.includes("$producerScheduledTaskState = @(Get-DeskProducerScheduledTaskState)")) {
+  violations.push("producer_scheduled_task_state_not_snapshotted");
+}
+if (!update.includes("if ($recovery.controls_restored -and -not $KeepFrozen)")) {
+  violations.push("producer_scheduled_task_rollback_state_not_restored");
+}
 const drain = content.get("deploy/windows/Invoke-DeskDrain.ps1");
 if (!drain.includes('if ($Action -eq "CompleteFrozen")') || !drain.includes("ENGINE_V5_VALIDATION_HOLD")) violations.push("strict_frozen_drain_missing");
 if (!drain.includes("DEPLOYMENT_RECOVERY_FAILURE") || !drain.includes("Safety drain was reasserted")) {
   violations.push("failed_deployment_does_not_reassert_safety_drain");
+}
+for (const expected of [
+  "desk_deployment_producer_hold_v1",
+  "previous_producer_hold",
+  "DEPLOYMENT_PRODUCER_HOLD_OWNER_MISMATCH",
+  "DEPLOYMENT_PRODUCER_PREVIOUS_HOLD_INVALID",
+  "DEPLOYMENT_DRAIN_RUN_NOT_ACTIVE",
+  "DEPLOYMENT_CLAIM_CONTROLS_OWNER_MISMATCH",
+  "DEPLOYMENT_EXECUTION_LOCK_OWNER_MISMATCH",
+]) {
+  if (!drain.includes(expected)) violations.push(`deployment_producer_hold_transition_missing:${expected}`);
+}
+if ((drain.match(/pg_advisory_xact_lock\(741912, 90\)/g) || []).length < 4) {
+  violations.push("deployment_producer_hold_exclusive_transition_missing");
+}
+for (const applicationName of [
+  "desk-us-grains-strategy-suite-work",
+  "desk-strategy-signal-decision-pipeline-work",
+  "desk-grains-calendar-refresh",
+]) {
+  if (!drain.includes(applicationName)) violations.push(`deployment_producer_connection_drain_missing:${applicationName}`);
+}
+if (!drain.includes("pg_terminate_backend(producer_pid, 10000)") || !drain.includes("datname = current_database()")
+    || !drain.includes("DEPLOYMENT_PRODUCER_CONNECTION_STILL_PRESENT")) {
+  violations.push("deployment_producer_connection_drain_not_database_scoped");
+}
+if ((drain.match(/ON CONFLICT\(scope_type, scope_value\) DO UPDATE/g) || []).length < 3) {
+  violations.push("deployment_broker_lock_not_fail_closed_upsert");
+}
+if (!drain.includes("'revision', (control.data->>'revision')::bigint + 1")) {
+  violations.push("deployment_producer_hold_resume_revision_can_regress");
+}
+if (!drain.includes("collection='desk_deployment_controls' AND document_id='producer_hold'")) {
+  violations.push("deployment_without_id_does_not_use_singleton_owner");
+}
+
+const producerAdmission = content.get("mcp_gpt_desk/src/persistence/postgres-deployment-producer-admission.js");
+for (const expected of [
+  "pg_try_advisory_lock_shared",
+  "pg_advisory_unlock_shared",
+  "DEPLOYMENT_PRODUCER_HOLD_MISSING",
+  "DEPLOYMENT_PRODUCER_HOLD_INVALID",
+  "DEPLOYMENT_PRODUCER_ADMISSION_LOST",
+  "process.exit(exitCode)",
+]) {
+  if (!producerAdmission.includes(expected)) violations.push(`deployment_producer_admission_missing:${expected}`);
+}
+for (const relative of [
+  "mcp_gpt_desk/scripts/run_us_grains_strategy_suite_once.mjs",
+  "mcp_gpt_desk/scripts/run_strategy_signal_decision_pipeline_once.mjs",
+  "mcp_gpt_desk/scripts/refresh_usda_grains_calendar.mjs",
+]) {
+  const producer = content.get(relative);
+  if (!producer.includes("createDeploymentProducerClient") || !producer.includes("runWithDeploymentProducerAdmission")) {
+    violations.push(`deployment_producer_admission_not_wrapped:${relative}`);
+  }
+}
+const grainsSuite = content.get("mcp_gpt_desk/scripts/run_us_grains_strategy_suite_once.mjs");
+const signalPipeline = content.get("mcp_gpt_desk/scripts/run_strategy_signal_decision_pipeline_once.mjs");
+const calendarRefresh = content.get("mcp_gpt_desk/scripts/refresh_usda_grains_calendar.mjs");
+if (!/const outcome = await runWithDeploymentProducerAdmission[\s\S]{0,200}createDeskStoreFromEnv/.test(grainsSuite)) {
+  violations.push("grains_suite_store_created_before_producer_admission");
+}
+if (!/const outcome = await runWithDeploymentProducerAdmission[\s\S]{0,200}createDeskStoreFromEnv/.test(signalPipeline)) {
+  violations.push("signal_pipeline_store_created_before_producer_admission");
+}
+if (!grainsSuite.includes('DESK_DATABASE_APPLICATION_NAME = "desk-us-grains-strategy-suite-work"')) {
+  violations.push("grains_suite_work_connection_not_identifiable");
+}
+if (!signalPipeline.includes('DESK_DATABASE_APPLICATION_NAME = "desk-strategy-signal-decision-pipeline-work"')) {
+  violations.push("signal_pipeline_work_connection_not_identifiable");
+}
+if (!/const outcome = await runWithDeploymentProducerAdmission[\s\S]{0,200}createGrainsCalendarFileArchive/.test(calendarRefresh)) {
+  violations.push("grains_calendar_archive_created_before_producer_admission");
 }
 
 for (const name of ["DeskApi", "DeskLiveRuntime", "DeskReplayPreparation", "DeskBrokerManagement", "DeskTelegram", "DeskAgentRuntimeSupervisor", "DeskCodexLive01", "DeskCodexLive02", "DeskCodexReplay01", "DeskCaddy"]) {
@@ -340,6 +450,9 @@ if (!frozenOrchestrator.includes("DeployFrozen") || !frozenOrchestrator.includes
 if (!frozenOrchestrator.includes("-QuiesceFrozenState")) violations.push("v5_frozen_orchestrator_quiesce_missing");
 const releaseTest = content.get("deploy/windows/Test-DeskRelease.ps1");
 if (!releaseTest.includes("RequireV5Frozen") || !releaseTest.includes("execution-policy-lock-not-v4-3") || !releaseTest.includes("master-lock-not-v5-4") || !releaseTest.includes("monitor-lock-not-v2-4") || !releaseTest.includes("deterministic-compiler-lock-not-v1-4") || !releaseTest.includes("condition-engine-lock-not-v1-2")) violations.push("release_contract_lock_validation_missing");
+if (!releaseTest.includes('"node-runtime-below-declared-minimum"') || !releaseTest.includes("$declaredNodeMinimum")) {
+  violations.push("release_manifest_node_runtime_compatibility_not_enforced");
+}
 const deploymentCommon = content.get("deploy/windows/DeskDeployment.Common.ps1");
 const frozenProducerServices = [
   "DeskFuturesLiveRuntime",
@@ -357,11 +470,30 @@ for (const helper of [
   "Get-DeskFrozenProducerServiceNames",
   "Disable-DeskFrozenProducerServices",
   "Assert-DeskFrozenProducerServices",
+  "Get-DeskProducerScheduledTaskNames",
+  "Test-DeskNodeVersionCompatibility",
+  "Get-DeskProducerScheduledTaskState",
+  "Stop-DeskProducerScheduledTasks",
+  "Restore-DeskProducerScheduledTaskState",
+  "Assert-DeskProducerScheduledTasksStopped",
 ]) {
   if (!deploymentCommon.includes(`function ${helper}`)) violations.push(`frozen_common_helper_missing:${helper}`);
 }
 
 const migrationIndex = update.indexOf("Invoke-DeskSchema.ps1");
+const scheduledStopIndex = update.indexOf("Assert-DeskProducerScheduledTasksStopped");
+if (scheduledStopIndex < 0 || migrationIndex < 0 || scheduledStopIndex > migrationIndex) {
+  violations.push("producer_scheduled_tasks_not_stopped_before_migration");
+}
+const pauseIndex = update.indexOf("-Action Pause");
+if (scheduledStopIndex < 0 || pauseIndex < 0 || scheduledStopIndex > pauseIndex) {
+  violations.push("producer_scheduled_tasks_not_stopped_before_hold_transition");
+}
+const successRestoreIndex = update.indexOf("Restore-DeskProducerScheduledTaskState -State $producerScheduledTaskState");
+const installedDrainIndex = update.indexOf('Join-Path $InstallRoot "current\\deploy\\windows\\Invoke-DeskDrain.ps1"');
+if (successRestoreIndex < 0 || installedDrainIndex < 0 || successRestoreIndex > installedDrainIndex) {
+  violations.push("producer_scheduled_tasks_not_armed_behind_database_hold");
+}
 for (const requiredBeforeMigration of [
   "Stop-DeskProducerServices",
   "Disable-DeskFrozenProducerServices",
@@ -435,7 +567,7 @@ if (!recoveryTest.includes('"audit,start,health,resume"') || !recoveryTest.inclu
 }
 if (process.platform === "win32") {
   const powerShell = resolve(process.env.SystemRoot || "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe");
-  for (const relative of ["deploy/windows/Test-DeskUpdateRecovery.ps1", "deploy/windows/Test-DeskGrainsCalendarHealth.ps1", "deploy/windows/database/Test-DeskDatabaseExternal.ps1"]) {
+  for (const relative of ["deploy/windows/Test-DeskUpdateRecovery.ps1", "deploy/windows/Test-DeskProducerScheduledTasks.ps1", "deploy/windows/Test-DeskNodeVersionCompatibility.ps1", "deploy/windows/Test-DeskGrainsCalendarHealth.ps1", "deploy/windows/database/Test-DeskDatabaseExternal.ps1"]) {
     const result = spawnSync(powerShell, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", resolve(root, relative)], {
       cwd: root,
       encoding: "utf8",

@@ -23,7 +23,12 @@ if (-not $Version) { $Version = (Get-Date).ToUniversalTime().ToString("yyyyMMdd.
 if ($Version -notmatch "^[a-zA-Z0-9._-]+$") { throw "Version contains unsupported characters." }
 
 $npm = Resolve-DeskExecutable -Name "npm.cmd"
+$node = Resolve-DeskExecutable -Name "node.exe"
 $git = Resolve-DeskExecutable -Name "git.exe"
+$nodeVersionText = (Invoke-DeskCapturedCommand -FilePath $node -Arguments @("--version")).Trim().TrimStart("v")
+if (-not (Test-DeskNodeVersionCompatibility -RuntimeVersion $nodeVersionText -MinimumVersion "22.0.0")) {
+    throw "Desk release build requires Node.js >= 22.0.0; found $nodeVersionText."
+}
 
 # Processes launched from WSL can inherit PATHEXT=.CPL; preserve existing values while restoring executable and command shim resolution for npm descendants.
 $pathExtensions = @(
@@ -203,7 +208,7 @@ $manifest = [ordered]@{
     created_at_utc = $buildTimestamp
     git_commit = $commit
     dirty = [bool]$dirty
-    node_minimum = "20.6.0"
+    node_minimum = "22.0.0"
     release_profile = $ReleaseProfile
     strategy_contract_lock = $strategyLock
     execution_policy_lock = $executionPolicyLock

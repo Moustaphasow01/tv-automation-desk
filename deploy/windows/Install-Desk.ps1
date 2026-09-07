@@ -13,6 +13,7 @@ param(
     [string]$MigrationDatabaseUrl = "",
     [string]$PostgresServiceName = "postgresql-x64-16",
     [switch]$KeepAiWorkersDisabled,
+    [switch]$ProducerTasksInitiallyDisabled,
     [switch]$SkipServices,
     [switch]$SkipMaintenanceTasks,
     [switch]$SkipDatabaseMigration,
@@ -264,7 +265,8 @@ Move this file to the encrypted recovery vault, then remove it from the VPS.
     }
     if (-not $SkipMaintenanceTasks) {
         & (Join-Path $PSScriptRoot "Register-DeskMaintenanceTasks.ps1") `
-            -InstallRoot $InstallRoot -DataRoot $DataRoot -PostgresBin $PostgresBin
+            -InstallRoot $InstallRoot -DataRoot $DataRoot -PostgresBin $PostgresBin `
+            -ProducerTasksInitiallyDisabled:$ProducerTasksInitiallyDisabled
     }
     Write-Host "Desk Futures release $version installed."
 } catch {

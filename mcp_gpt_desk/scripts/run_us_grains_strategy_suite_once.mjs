@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 import { createDeskStoreFromEnv } from "../src/store.js";
+import {
+  createDeploymentProducerClient,
+  runWithDeploymentProducerAdmission,
+} from "../src/persistence/postgres-deployment-producer-admission.js";
 import { isReadOnlyGrainRun, normalizeGrainRunArgs, runUsGrainsStrategySuiteOnce } from "../src/us-grains-strategy-suite-once-runner.js";
 
 main().catch((error) => {
@@ -9,13 +13,18 @@ main().catch((error) => {
 
 async function main() {
   const args = normalizeGrainRunArgs(parseArgs(process.argv.slice(2)));
-  const store = createDeskStoreFromEnv({ schemaMode: isReadOnlyGrainRun(args) ? "validate" : undefined });
-  try {
-    const result = await runUsGrainsStrategySuiteOnce({ store, args, nowUtc: new Date().toISOString() });
-    console.log(JSON.stringify(result, null, 2));
-  } finally {
-    await store.persistence.close?.();
-  }
+  const client = createDeploymentProducerClient({
+    connectionString: process.env.DATABASE_URL,
+    applicationName: "desk-us-grains-strategy-suite",
+  });
+  const outcome = await runWithDeploymentProducerAdmission(client, async () => {
+    process.env.DESK_DATABASE_APPLICATION_NAME = "desk-us-grains-strategy-suite-work";
+    const store = createDeskStoreFromEnv({ schemaMode: isReadOnlyGrainRun(args) ? "validate" : undefined });
+    try {
+      return await runUsGrainsStrategySuiteOnce({ store, args, nowUtc: new Date().toISOString() });
+    } finally { await store.persistence.close?.(); }
+  });
+  console.log(JSON.stringify(outcome.executed ? outcome.value : outcome, null, 2));
 }
 
 function parseArgs(values) {

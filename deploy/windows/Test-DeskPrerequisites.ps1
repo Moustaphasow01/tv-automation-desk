@@ -4,6 +4,8 @@ param(
     [switch]$RequireNinjaTrader
 )
 
+. (Join-Path $PSScriptRoot "DeskDeployment.Common.ps1")
+
 $ErrorActionPreference = "Stop"
 $results = @()
 $failures = @()
@@ -17,9 +19,9 @@ $node = Get-Command node.exe -ErrorAction SilentlyContinue
 $nodeVersion = if ($node) { (& $node.Source --version).TrimStart("v") } else { "" }
 $nodeOk = $false
 if ($nodeVersion) {
-    try { $nodeOk = [version]$nodeVersion -ge [version]"20.6.0" } catch { $nodeOk = $false }
+    $nodeOk = Test-DeskNodeVersionCompatibility -RuntimeVersion $nodeVersion -MinimumVersion "22.0.0"
 }
-Add-Check "Node.js >= 20.6" $nodeOk $nodeVersion
+Add-Check "Node.js >= 22" $nodeOk $nodeVersion
 
 $caddy = Get-Command caddy.exe -ErrorAction SilentlyContinue
 Add-Check "Caddy" ($null -ne $caddy) $(if ($caddy) { $caddy.Source } else { "missing" })

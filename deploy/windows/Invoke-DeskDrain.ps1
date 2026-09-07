@@ -19,7 +19,7 @@ if (-not $DeploymentId) {
     } else {
         $latest = (Invoke-DeskExternal -FilePath $psql -Arguments @(
             "--set", "ON_ERROR_STOP=1", "--tuples-only", "--no-align", "--dbname", $DatabaseUrl,
-            "--command", "SELECT deployment_id FROM desk_deployment_runs WHERE status IN ('draining','drained','switching','verifying','failed') ORDER BY started_at_utc DESC LIMIT 1;"
+            "--command", "SELECT data->>'deployment_id' FROM desk_documents WHERE collection='desk_deployment_controls' AND document_id='producer_hold';"
         ) -PassThru).Trim()
         if (-not $latest) { throw "No active deployment drain was found." }
         $DeploymentId = $latest
@@ -34,8 +34,57 @@ $completionSql = ConvertTo-DeskPsqlLiteral $CompletionStatus
 if ($Action -in @("Begin", "Pause")) {
     $beginSql = @"
 BEGIN;
+SET LOCAL lock_timeout = '$([Math]::Max(30, $TimeoutSeconds))s';
+SELECT pg_advisory_xact_lock(741912, 90);
+DO `$producer_hold`$
+DECLARE control jsonb;
+DECLARE producer_pid integer;
+BEGIN
+  SELECT data INTO control FROM desk_documents
+  WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold'
+  FOR UPDATE;
+  IF control IS NOT NULL THEN
+    IF COALESCE(
+      jsonb_typeof(control) = 'object'
+      AND control->>'schema_version' = 'desk_deployment_producer_hold_v1'
+      AND control->>'revision' ~ '^[1-9][0-9]*$'
+      AND (
+        (control->>'state' = 'OPEN' AND control->'held' = 'false'::jsonb AND control->'deployment_id' = 'null'::jsonb)
+        OR (control->>'state' = 'FROZEN' AND control->'held' = 'true'::jsonb
+            AND jsonb_typeof(control->'deployment_id') = 'string' AND NULLIF(control->>'deployment_id', '') IS NOT NULL)
+      ), false
+    ) IS NOT TRUE THEN
+      RAISE EXCEPTION 'DEPLOYMENT_PRODUCER_HOLD_NOT_AVAILABLE' USING ERRCODE = '55000';
+    END IF;
+  END IF;
+  FOR producer_pid IN
+    SELECT pid FROM pg_stat_activity
+    WHERE datname = current_database() AND pid <> pg_backend_pid()
+      AND application_name IN (
+        'desk-us-grains-strategy-suite-work',
+        'desk-strategy-signal-decision-pipeline-work',
+        'desk-grains-calendar-refresh'
+      )
+  LOOP
+    IF pg_terminate_backend(producer_pid, 10000) IS NOT TRUE THEN
+      RAISE EXCEPTION 'DEPLOYMENT_PRODUCER_CONNECTION_TERMINATION_FAILED' USING ERRCODE = '55000';
+    END IF;
+  END LOOP;
+  IF EXISTS (
+    SELECT 1 FROM pg_stat_activity
+    WHERE datname = current_database() AND pid <> pg_backend_pid()
+      AND application_name IN (
+        'desk-us-grains-strategy-suite-work',
+        'desk-strategy-signal-decision-pipeline-work',
+        'desk-grains-calendar-refresh'
+      )
+  ) THEN
+    RAISE EXCEPTION 'DEPLOYMENT_PRODUCER_CONNECTION_STILL_PRESENT' USING ERRCODE = '55000';
+  END IF;
+END
+`$producer_hold`$;
 INSERT INTO desk_deployment_runs (
-  deployment_id, release_version, status, previous_claim_controls, previous_execution_lock
+  deployment_id, release_version, status, previous_claim_controls, previous_execution_lock, details
 ) VALUES (
   '$deploymentSql',
   '$releaseSql',
@@ -50,8 +99,36 @@ INSERT INTO desk_deployment_runs (
     FROM broker_execution_locks
     WHERE scope_type = 'global' AND scope_value = '*'
     LIMIT 1
-  ) lock_row)
+  ) lock_row),
+  jsonb_build_object(
+    'previous_producer_hold', COALESCE((
+      SELECT data FROM desk_documents
+      WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold'
+    ), jsonb_build_object(
+      'schema_version', 'desk_deployment_producer_hold_v1',
+      'state', 'OPEN', 'held', false, 'deployment_id', NULL,
+      'revision', 1, 'reason', NULL, 'changed_by', 'deployment-bootstrap',
+      'updated_at_utc', now()
+    )),
+    'producer_hold_initialized', NOT EXISTS (
+      SELECT 1 FROM desk_documents
+      WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold'
+    )
+  )
 );
+INSERT INTO desk_documents(collection, document_id, data)
+VALUES ('desk_deployment_controls', 'producer_hold', jsonb_build_object(
+  'schema_version', 'desk_deployment_producer_hold_v1',
+  'state', 'DRAIN', 'held', true, 'deployment_id', '$deploymentSql',
+  'revision', COALESCE((
+    SELECT (data->>'revision')::bigint FROM desk_documents
+    WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold'
+  ), 1) + 1,
+  'reason', 'DEPLOYMENT_DRAIN', 'changed_by', 'deployment:$deploymentSql',
+  'updated_at_utc', now()
+))
+ON CONFLICT(collection, document_id) DO UPDATE
+SET data = EXCLUDED.data, updated_at = now();
 INSERT INTO desk_documents(collection, document_id, data)
 SELECT
   'desk_claim_lane_controls',
@@ -70,14 +147,19 @@ LEFT JOIN desk_documents existing
   ON existing.collection = 'desk_claim_lane_controls' AND existing.document_id = lane
 ON CONFLICT(collection, document_id) DO UPDATE
   SET data = EXCLUDED.data, updated_at = now();
-UPDATE broker_execution_locks
+INSERT INTO broker_execution_locks(
+  execution_lock_id, scope_type, scope_value, locked, reason, set_by, set_at, expires_at, metadata
+) VALUES (
+  'global_default_kill_switch', 'global', '*', true, 'Deployment drain $deploymentSql',
+  'deployment', now(), NULL, jsonb_build_object('deployment_id', '$deploymentSql', 'deployment_drain', true)
+)
+ON CONFLICT(scope_type, scope_value) DO UPDATE
 SET locked = true,
-    reason = 'Deployment drain $deploymentSql',
-    set_by = 'deployment',
-    set_at = now(),
+    reason = EXCLUDED.reason,
+    set_by = EXCLUDED.set_by,
+    set_at = EXCLUDED.set_at,
     expires_at = NULL,
-    metadata = metadata || jsonb_build_object('deployment_id', '$deploymentSql', 'deployment_drain', true)
-WHERE scope_type = 'global' AND scope_value = '*';
+    metadata = broker_execution_locks.metadata || EXCLUDED.metadata;
 COMMIT;
 "@
     Invoke-DeskExternal -FilePath $psql -Arguments @("--set", "ON_ERROR_STOP=1", "--dbname", $DatabaseUrl, "--command", $beginSql)
@@ -93,7 +175,19 @@ if ($Action -in @("Begin", "Wait")) {
     $active = -1
     do {
         $countSql = @"
-SELECT (
+SELECT CASE WHEN
+  EXISTS (
+    SELECT 1 FROM desk_documents
+    WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold'
+      AND data->>'schema_version' = 'desk_deployment_producer_hold_v1'
+      AND data->>'state' = 'DRAIN' AND data->>'held' = 'true'
+      AND data->>'deployment_id' = '$deploymentSql'
+  )
+  AND EXISTS (
+    SELECT 1 FROM desk_deployment_runs
+    WHERE deployment_id = '$deploymentSql' AND status = 'draining'
+  )
+THEN (
   (SELECT count(*) FROM desk_documents
    WHERE collection = 'desk_agent_work_items'
      AND data->>'status' = 'CLAIMED'
@@ -116,13 +210,16 @@ SELECT (
   (SELECT count(*) FROM broker_management_outbox
    WHERE status IN ('rendered','delivered')
       OR (status = 'leased' AND (lease_expires_at IS NULL OR lease_expires_at > now())))
-)::integer;
+)::integer ELSE -1 END;
 "@
         $activeText = (Invoke-DeskExternal -FilePath $psql -Arguments @(
             "--set", "ON_ERROR_STOP=1", "--tuples-only", "--no-align",
             "--dbname", $DatabaseUrl, "--command", $countSql
         ) -PassThru).Trim()
         $active = [int]$activeText
+        if ($active -lt 0) {
+            throw "Deployment drain ownership or active status changed while waiting."
+        }
         Write-Host "Drain $DeploymentId`: active work=$active"
         if ($active -eq 0) { break }
         Start-Sleep -Seconds ([Math]::Max(1, $PollSeconds))
@@ -130,7 +227,34 @@ SELECT (
     if ($active -ne 0) {
         throw "Deployment drain timed out with $active active item(s). Claims remain paused and broker execution remains locked."
     }
-    $drainedSql = "UPDATE desk_deployment_runs SET status='drained', drained_at_utc=now(), updated_at_utc=now(), drain_snapshot=jsonb_build_object('active_work',0) WHERE deployment_id='$deploymentSql';"
+    $drainedSql = @"
+BEGIN;
+SET LOCAL lock_timeout = '$([Math]::Max(30, $TimeoutSeconds))s';
+SELECT pg_advisory_xact_lock(741912, 90);
+DO `$producer_hold`$
+DECLARE control jsonb;
+BEGIN
+  SELECT data INTO control FROM desk_documents
+  WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold'
+  FOR UPDATE;
+  IF COALESCE(
+    control->>'schema_version' = 'desk_deployment_producer_hold_v1'
+    AND control->>'state' = 'DRAIN' AND control->'held' = 'true'::jsonb
+    AND control->>'deployment_id' = '$deploymentSql', false
+  ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'DEPLOYMENT_PRODUCER_HOLD_OWNER_MISMATCH' USING ERRCODE = '55000';
+  END IF;
+  UPDATE desk_deployment_runs
+  SET status='drained', drained_at_utc=now(), updated_at_utc=now(),
+      drain_snapshot=jsonb_build_object('active_work',0)
+  WHERE deployment_id='$deploymentSql' AND status='draining';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DEPLOYMENT_DRAIN_RUN_NOT_ACTIVE' USING ERRCODE = '55000';
+  END IF;
+END
+`$producer_hold`$;
+COMMIT;
+"@
     Invoke-DeskExternal -FilePath $psql -Arguments @("--set", "ON_ERROR_STOP=1", "--dbname", $DatabaseUrl, "--command", $drainedSql)
     Write-Output $DeploymentId
     return
@@ -139,25 +263,67 @@ SELECT (
 if ($Action -eq "Fail") {
     $failSql = @"
 BEGIN;
+SET LOCAL lock_timeout = '$([Math]::Max(30, $TimeoutSeconds))s';
+SELECT pg_advisory_xact_lock(741912, 90);
+DO `$producer_hold`$
+DECLARE control jsonb;
+BEGIN
+  SELECT data INTO control FROM desk_documents
+  WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold'
+  FOR UPDATE;
+  IF COALESCE(
+    jsonb_typeof(control) = 'object'
+    AND control->>'schema_version' = 'desk_deployment_producer_hold_v1'
+    AND control->>'revision' ~ '^[1-9][0-9]*$'
+    AND control->>'state' IN ('DRAIN', 'FROZEN', 'FAILED')
+    AND control->'held' = 'true'::jsonb
+    AND control->>'deployment_id' = '$deploymentSql', false
+  ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'DEPLOYMENT_PRODUCER_HOLD_OWNER_MISMATCH' USING ERRCODE = '55000';
+  END IF;
+  PERFORM 1 FROM desk_deployment_runs WHERE deployment_id = '$deploymentSql' FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DEPLOYMENT_RUN_NOT_FOUND' USING ERRCODE = '55000';
+  END IF;
+END
+`$producer_hold`$;
 UPDATE desk_documents
 SET data = data || jsonb_build_object(
-      'enabled', false,
-      'status', 'PAUSED',
+      'schema_version', 'desk_deployment_producer_hold_v1',
+      'state', 'FAILED', 'held', true, 'deployment_id', '$deploymentSql',
+      'revision', (data->>'revision')::bigint + 1,
       'reason', 'DEPLOYMENT_RECOVERY_FAILURE',
       'changed_by', 'deployment-fail:$deploymentSql',
       'updated_at_utc', now()
     ),
     updated_at = now()
-WHERE collection = 'desk_claim_lane_controls'
-  AND document_id IN ('live', 'replay');
-UPDATE broker_execution_locks
+WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold';
+INSERT INTO desk_documents(collection, document_id, data)
+SELECT 'desk_claim_lane_controls', lane,
+  COALESCE(existing.data, '{}'::jsonb) || jsonb_build_object(
+    'lane', lane, 'enabled', false, 'status', 'PAUSED',
+    'revision', COALESCE((existing.data->>'revision')::bigint, 0) + 1,
+    'reason', 'DEPLOYMENT_RECOVERY_FAILURE',
+    'changed_by', 'deployment-fail:$deploymentSql', 'updated_at_utc', now()
+  )
+FROM (VALUES ('live'), ('replay')) lanes(lane)
+LEFT JOIN desk_documents existing
+  ON existing.collection = 'desk_claim_lane_controls' AND existing.document_id = lane
+ON CONFLICT(collection, document_id) DO UPDATE
+SET data = EXCLUDED.data, updated_at = now();
+INSERT INTO broker_execution_locks(
+  execution_lock_id, scope_type, scope_value, locked, reason, set_by, set_at, expires_at, metadata
+) VALUES (
+  'global_default_kill_switch', 'global', '*', true, 'Deployment recovery failure $deploymentSql',
+  'deployment-fail', now(), NULL, jsonb_build_object('deployment_id', '$deploymentSql', 'deployment_failure', true)
+)
+ON CONFLICT(scope_type, scope_value) DO UPDATE
 SET locked = true,
-    reason = 'Deployment recovery failure $deploymentSql',
-    set_by = 'deployment-fail',
-    set_at = now(),
+    reason = EXCLUDED.reason,
+    set_by = EXCLUDED.set_by,
+    set_at = EXCLUDED.set_at,
     expires_at = NULL,
-    metadata = metadata || jsonb_build_object('deployment_id', '$deploymentSql', 'deployment_failure', true)
-WHERE scope_type = 'global' AND scope_value = '*';
+    metadata = broker_execution_locks.metadata || EXCLUDED.metadata;
 UPDATE desk_deployment_runs
 SET status = 'failed',
     details = details || jsonb_build_object('failure_reason', '$failureSql'),
@@ -173,28 +339,70 @@ COMMIT;
 if ($Action -eq "CompleteFrozen") {
     $frozenSql = @"
 BEGIN;
+SET LOCAL lock_timeout = '$([Math]::Max(30, $TimeoutSeconds))s';
+SELECT pg_advisory_xact_lock(741912, 90);
+DO `$producer_hold`$
+DECLARE control jsonb;
+BEGIN
+  SELECT data INTO control FROM desk_documents
+  WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold'
+  FOR UPDATE;
+  IF COALESCE(
+    jsonb_typeof(control) = 'object'
+    AND control->>'schema_version' = 'desk_deployment_producer_hold_v1'
+    AND control->>'revision' ~ '^[1-9][0-9]*$'
+    AND control->>'state' IN ('DRAIN', 'FAILED', 'FROZEN')
+    AND control->'held' = 'true'::jsonb
+    AND control->>'deployment_id' = '$deploymentSql', false
+  ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'DEPLOYMENT_PRODUCER_HOLD_OWNER_MISMATCH' USING ERRCODE = '55000';
+  END IF;
+  PERFORM 1 FROM desk_deployment_runs
+  WHERE deployment_id = '$deploymentSql' AND status IN ('drained', 'failed')
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DEPLOYMENT_RUN_NOT_FOUND' USING ERRCODE = '55000';
+  END IF;
+END
+`$producer_hold`$;
 UPDATE desk_documents
 SET data = data || jsonb_build_object(
-      'enabled', false,
-      'status', 'PAUSED',
+      'schema_version', 'desk_deployment_producer_hold_v1',
+      'state', 'FROZEN', 'held', true, 'deployment_id', '$deploymentSql',
+      'revision', (data->>'revision')::bigint + 1,
       'reason', 'ENGINE_V5_VALIDATION_HOLD',
       'changed_by', 'deployment-frozen:$deploymentSql',
       'updated_at_utc', now()
     ),
     updated_at = now()
-WHERE collection = 'desk_claim_lane_controls'
-  AND document_id IN ('live', 'replay');
-UPDATE broker_execution_locks
+WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold';
+INSERT INTO desk_documents(collection, document_id, data)
+SELECT 'desk_claim_lane_controls', lane,
+  COALESCE(existing.data, '{}'::jsonb) || jsonb_build_object(
+    'lane', lane, 'enabled', false, 'status', 'PAUSED',
+    'revision', COALESCE((existing.data->>'revision')::bigint, 0) + 1,
+    'reason', 'ENGINE_V5_VALIDATION_HOLD',
+    'changed_by', 'deployment-frozen:$deploymentSql', 'updated_at_utc', now()
+  )
+FROM (VALUES ('live'), ('replay')) lanes(lane)
+LEFT JOIN desk_documents existing
+  ON existing.collection = 'desk_claim_lane_controls' AND existing.document_id = lane
+ON CONFLICT(collection, document_id) DO UPDATE
+SET data = EXCLUDED.data, updated_at = now();
+INSERT INTO broker_execution_locks(
+  execution_lock_id, scope_type, scope_value, locked, reason, set_by, set_at, expires_at, metadata
+) VALUES (
+  'global_default_kill_switch', 'global', '*', true, 'ENGINE_V5_VALIDATION_HOLD',
+  'deployment-frozen', now(), NULL,
+  jsonb_build_object('deployment_id', '$deploymentSql', 'frozen_release', true)
+)
+ON CONFLICT(scope_type, scope_value) DO UPDATE
 SET locked = true,
-    reason = 'ENGINE_V5_VALIDATION_HOLD',
-    set_by = 'deployment-frozen',
-    set_at = now(),
+    reason = EXCLUDED.reason,
+    set_by = EXCLUDED.set_by,
+    set_at = EXCLUDED.set_at,
     expires_at = NULL,
-    metadata = metadata || jsonb_build_object(
-      'deployment_id', '$deploymentSql',
-      'frozen_release', true
-    )
-WHERE scope_type = 'global' AND scope_value = '*';
+    metadata = broker_execution_locks.metadata || EXCLUDED.metadata;
 UPDATE desk_deployment_runs
 SET status = '$completionSql',
     completed_at_utc = COALESCE(completed_at_utc, now()),
@@ -217,6 +425,96 @@ COMMIT;
 
 $resumeSql = @"
 BEGIN;
+SET LOCAL lock_timeout = '$([Math]::Max(30, $TimeoutSeconds))s';
+SELECT pg_advisory_xact_lock(741912, 90);
+DO `$producer_hold`$
+DECLARE control jsonb;
+DECLARE previous_control jsonb;
+DECLARE previous_lock jsonb;
+DECLARE deployment_status text;
+BEGIN
+  SELECT data INTO control FROM desk_documents
+  WHERE collection = 'desk_deployment_controls' AND document_id = 'producer_hold'
+  FOR UPDATE;
+  SELECT details->'previous_producer_hold', previous_execution_lock, status
+  INTO previous_control, previous_lock, deployment_status
+  FROM desk_deployment_runs WHERE deployment_id = '$deploymentSql' FOR UPDATE;
+  PERFORM 1 FROM desk_documents
+  WHERE collection = 'desk_claim_lane_controls' AND document_id IN ('live', 'replay')
+  FOR UPDATE;
+  PERFORM 1 FROM broker_execution_locks
+  WHERE scope_type = 'global' AND scope_value = '*'
+  FOR UPDATE;
+  IF COALESCE(
+    jsonb_typeof(control) = 'object'
+    AND control->>'schema_version' = 'desk_deployment_producer_hold_v1'
+    AND control->>'revision' ~ '^[1-9][0-9]*$'
+    AND control->>'state' IN ('DRAIN', 'FAILED')
+    AND control->'held' = 'true'::jsonb
+    AND control->>'deployment_id' = '$deploymentSql', false
+  ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'DEPLOYMENT_PRODUCER_HOLD_OWNER_MISMATCH' USING ERRCODE = '55000';
+  END IF;
+  IF deployment_status NOT IN ('drained', 'failed') THEN
+    RAISE EXCEPTION 'DEPLOYMENT_RUN_NOT_READY_TO_RESUME' USING ERRCODE = '55000';
+  END IF;
+  IF COALESCE(
+    jsonb_typeof(previous_control) = 'object'
+    AND previous_control->>'schema_version' = 'desk_deployment_producer_hold_v1'
+    AND previous_control->>'revision' ~ '^[1-9][0-9]*$'
+    AND (
+      (previous_control->>'state' = 'OPEN' AND previous_control->'held' = 'false'::jsonb
+       AND previous_control->'deployment_id' = 'null'::jsonb)
+      OR (previous_control->>'state' = 'FROZEN' AND previous_control->'held' = 'true'::jsonb
+          AND jsonb_typeof(previous_control->'deployment_id') = 'string'
+          AND NULLIF(previous_control->>'deployment_id', '') IS NOT NULL)
+    ), false
+  ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'DEPLOYMENT_PRODUCER_PREVIOUS_HOLD_INVALID' USING ERRCODE = '55000';
+  END IF;
+  IF (
+    SELECT count(*) FROM desk_documents
+    WHERE collection = 'desk_claim_lane_controls'
+      AND document_id IN ('live', 'replay')
+      AND data->>'enabled' = 'false'
+      AND data->>'status' = 'PAUSED'
+      AND data->>'changed_by' IN ('deployment:$deploymentSql', 'deployment-fail:$deploymentSql')
+  ) <> 2 THEN
+    RAISE EXCEPTION 'DEPLOYMENT_CLAIM_CONTROLS_OWNER_MISMATCH' USING ERRCODE = '55000';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM broker_execution_locks
+    WHERE scope_type = 'global' AND scope_value = '*' AND locked = true
+      AND metadata->>'deployment_id' = '$deploymentSql'
+      AND (
+        (set_by = 'deployment' AND reason = 'Deployment drain $deploymentSql'
+         AND metadata = COALESCE(previous_lock->'metadata', '{}'::jsonb)
+                        || jsonb_build_object('deployment_id', '$deploymentSql', 'deployment_drain', true))
+        OR (set_by = 'deployment-fail' AND reason = 'Deployment recovery failure $deploymentSql'
+            AND metadata IN (
+              COALESCE(previous_lock->'metadata', '{}'::jsonb)
+                || jsonb_build_object('deployment_id', '$deploymentSql', 'deployment_drain', true, 'deployment_failure', true),
+              COALESCE(previous_lock->'metadata', '{}'::jsonb)
+                || jsonb_build_object('deployment_id', '$deploymentSql', 'deployment_drain', true,
+                                      'frozen_release', true, 'deployment_failure', true)
+            ))
+      )
+  ) THEN
+    RAISE EXCEPTION 'DEPLOYMENT_EXECUTION_LOCK_OWNER_MISMATCH' USING ERRCODE = '55000';
+  END IF;
+END
+`$producer_hold`$;
+UPDATE desk_documents control
+SET data = (deployment.details->'previous_producer_hold') || jsonb_build_object(
+      'revision', (control.data->>'revision')::bigint + 1,
+      'changed_by', 'deployment-resume:$deploymentSql',
+      'updated_at_utc', now()
+    ),
+    updated_at = now()
+FROM desk_deployment_runs deployment
+WHERE deployment.deployment_id = '$deploymentSql'
+  AND control.collection = 'desk_deployment_controls'
+  AND control.document_id = 'producer_hold';
 WITH deployment AS (
   SELECT previous_claim_controls, previous_execution_lock
   FROM desk_deployment_runs WHERE deployment_id = '$deploymentSql' FOR UPDATE
@@ -225,9 +523,16 @@ UPDATE desk_documents current
 SET data = CASE
       WHEN deployment.previous_claim_controls ? current.document_id
         THEN (deployment.previous_claim_controls -> current.document_id)
-             || jsonb_build_object('updated_at_utc', now(), 'changed_by', 'deployment-resume:$deploymentSql')
+             || jsonb_build_object(
+                  'revision', COALESCE((current.data->>'revision')::bigint, 0) + 1,
+                  'updated_at_utc', now(), 'changed_by', 'deployment-resume:$deploymentSql'
+                )
       ELSE current.data
-           || jsonb_build_object('enabled', true, 'status', 'RUNNING', 'reason', NULL, 'updated_at_utc', now(), 'changed_by', 'deployment-resume:$deploymentSql')
+           || jsonb_build_object(
+                'enabled', true, 'status', 'RUNNING', 'reason', NULL,
+                'revision', COALESCE((current.data->>'revision')::bigint, 0) + 1,
+                'updated_at_utc', now(), 'changed_by', 'deployment-resume:$deploymentSql'
+              )
     END,
     updated_at = now()
 FROM deployment
