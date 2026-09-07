@@ -12,7 +12,7 @@ import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
 import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
 import { LiveFocusJournal } from "@/features/live-trading/LiveFocusJournal";
-import { LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
+import { catalystMilestoneLabel, LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
 import { buildFocusQueueItems, buildFocusSignalFlowItems, filterFocusQueueItems } from "@/features/live-trading/focusJournalModel";
 import { focusTradePlanFromCard } from "@/features/live-trading/focusTradePlan";
 import { commandForCurrentGate, commandLocksGateActions } from "@/features/live-trading/LiveHumanGate";
@@ -349,6 +349,50 @@ describe("Live Trading cockpit components", () => {
 
     expect(markup).toContain("Contexte de marché indisponible");
     expect(markup).not.toContain("Market context unavailable");
+  });
+
+  it("presents a catalyst with its date and temporal state", () => {
+    expect(catalystMilestoneLabel("2026-09-01T14:45:00.000Z", "2026-09-01T14:30:00.000Z"))
+      .toMatch(/^À venir · .*1 sept\..*16:45$/);
+    expect(catalystMilestoneLabel("2026-09-01T14:15:00.000Z", "2026-09-01T14:30:00.000Z"))
+      .toMatch(/^Passé · .*1 sept\..*16:15$/);
+  });
+
+  it("keeps terminal ticket actions truthful and all Focus reasons in French", () => {
+    const focus = {
+      ...focusView(),
+      tradeCards: [focusTradeCard()],
+      whyNoTrade: {
+        ...focusView().whyNoTrade,
+        topReasons: ["NO_HUMAN_ACTION_REQUIRED"],
+        nextRelevantEventAt: "2026-09-01T14:45:00.000Z",
+      },
+    } satisfies LiveFocusView;
+    const markup = render(
+      <LiveFocusMode
+        model={withOrderIntent(cockpitModel())}
+        focus={focus}
+        busy={false}
+        error={null}
+        requestedScope={{ instrument: "ZW", timeframe: "15" }}
+        dashboardPeriod="TODAY"
+        chartLoading={false}
+        chartError={null}
+        onExit={() => undefined}
+        onScopeChange={() => undefined}
+        onDashboardPeriodChange={() => undefined}
+        onSelectDecision={() => undefined}
+        onSubmitGate={noopSubmit}
+        onSubmitManual={noopSubmit}
+      />,
+    );
+
+    expect(markup).toContain("Aucune action humaine requise");
+    expect(markup).toContain("Calendrier · catalyseur de référence");
+    expect(markup).toContain("À venir ·");
+    expect(markup).toContain("Voir le dossier");
+    expect(markup).not.toContain("No human action required");
+    expect(markup).not.toContain("Valider / refuser");
   });
 
   it.each(["intent-cockpit", "intent-other", ""])("binds the gate action to selected ticket %s", (selectedId) => {

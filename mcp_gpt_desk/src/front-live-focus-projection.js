@@ -74,7 +74,7 @@ function buildTradeCards(live, nowIso) {
       tradeId: theoretical?.tradeId || null,
       instrument: intent.instrument,
       side: intent.side,
-      strategyName: signal?.strategyName || signal?.strategy || "Strategy",
+      strategyName: strategyIdentity(signal, intent),
       setup: signal?.setup || signal?.setupType || null,
       createdAt: intent.createdAt || signal?.createdAt || nowIso,
       expiresAt,
@@ -135,7 +135,7 @@ function buildObservedOpportunities(live, tradeCards, nowIso) {
       signalId: signal.signalId,
       instrument: signal.symbol || signal.instrument,
       side: signal.direction || signal.side,
-      strategyName: signal.strategyName || signal.strategy || "Strategy",
+      strategyName: strategyIdentity(signal),
       status,
       statusLabel: lifecycleLabel(status, null),
       terminal: TERMINAL_SIGNAL_STATES.has(status),
@@ -275,6 +275,18 @@ function operatorNextActions({ tradeCards, whyNoTrade }) { const card = tradeCar
 function nextRelevantEvent(brief) { return rows(brief?.nextExpectedEvents).map((item) => item.eventTimestamp || item.event_timestamp_utc || item.at).filter(Boolean).sort()[0] || null; }
 function journey(stage, rawStatus, sourceObjectType, sourceObjectId, asOf, reasonCodes) { return { stage, rawStatus, sourceObjectType, sourceObjectId, asOf, reasonCodes }; }
 function reasonSource(code) { return code.startsWith("MARKET_") ? "market-context" : code.includes("HUMAN") ? "human-gate" : "strategy-runtime"; }
+function strategyIdentity(signal, intent = null) {
+  const candidates = [
+    signal?.strategyName,
+    signal?.strategy,
+    signal?.strategyDefinitionId,
+    signal?.strategyId,
+    signal?.strategyInstanceId,
+    intent?.strategyInstanceId,
+  ];
+  const identity = candidates.find((value) => typeof value === "string" && meaningful(value.trim()));
+  return identity?.trim() || "Stratégie non publiée";
+}
 function rows(value) { return Array.isArray(value) ? value : []; }
 function upper(value) { return String(value || "UNKNOWN").toUpperCase(); }
 function meaningful(value) { return Boolean(value && !["unavailable", "unknown", "null"].includes(String(value).toLowerCase())); }

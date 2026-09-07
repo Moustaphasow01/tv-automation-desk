@@ -86,7 +86,7 @@ function JournalTicket({ item, selected, onSelectDecision, onOpenTrade, onOpenCh
     </details>
     <footer>
       {item.card ? <button type="button" onClick={() => onOpenTrade(item.card!)}><FaFolderOpen aria-hidden="true" />Aperçu</button> : null}
-      {item.route ? <Link to={item.route}><FaFolderOpen aria-hidden="true" />{item.card ? "Valider / refuser" : "Détail du signal"}</Link> : null}
+      {item.route ? <Link to={item.route}><FaFolderOpen aria-hidden="true" />{item.card ? "Voir le dossier" : "Détail du signal"}</Link> : null}
       <button type="button" disabled={!item.signalId} onClick={() => { if (item.signalId) onSelectDecision(item.signalId); onOpenChart(); }}><FaChartLine aria-hidden="true" />Graphique</button>
     </footer>
   </article>;

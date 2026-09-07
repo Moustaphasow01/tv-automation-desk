@@ -236,10 +236,10 @@ function FocusBrief({ focus, onOpen }: { focus: LiveFocusView; onOpen(): void })
   const brief = focus.marketDeskBrief;
   const context = brief.operatorSummary;
   const preferred = brief.whatDeskWants?.map((item) => operatorCopy(item)) ?? [];
-  const vigilance = [...(brief.whatDeskAvoids ?? []), ...focus.whyNoTrade.topReasons].map((reason) => operatorReason(reason));
+  const vigilance = [...(brief.whatDeskAvoids ?? []), ...focus.whyNoTrade.topReasons].map(focusReason);
   const contextStatus = presentMarketContextStatus(brief.status);
   return <div className="live-focus__brief-grid" data-status={brief.status}>
-    <article className="live-focus__calendar"><small>Calendrier · prochain catalyseur</small><p>{focus.whyNoTrade.nextRelevantEventAt ? displayTime(focus.whyNoTrade.nextRelevantEventAt) : "Aucun catalyseur couvert n’est publié."}</p></article>
+    <article className="live-focus__calendar"><small>Calendrier · catalyseur de référence</small><p>{focus.whyNoTrade.nextRelevantEventAt ? catalystMilestoneLabel(focus.whyNoTrade.nextRelevantEventAt, focus.asOf) : "Aucun catalyseur couvert n’est publié."}</p></article>
     <article className="live-focus__brief-headline"><small>Résumé du brief</small><strong title={formatOperatorParagraph(brief.headline)}>{formatOperatorParagraph(brief.headline)}</strong><p>{formatOperatorParagraph(context)}</p><span data-tone={contextStatus.tone}>{contextStatus.label}</span></article>
     <article><small>État du marché</small><p>{formatOperatorParagraph(focus.marketContext.marketRegime || "Régime non publié")} · {formatOperatorParagraph(focus.marketContext.volatilityRegime || "Volatilité non publiée")} · {formatOperatorParagraph(focus.marketContext.globalBias || "Biais non publié")}</p></article>
     <article><small>Ce que le desk recherche</small><p>{preferred.length ? `Le desk privilégie ${preferred.join(", ")}.` : "Aucune famille de stratégie n’est privilégiée dans l’état publié."}</p></article>
@@ -257,7 +257,7 @@ function FocusMissionRibbon({ model, focus, state, timingLabel }: { model: LiveT
     ?? null;
   const ticketLabel = selectedTicket ? `${selectedTicket.instrument} · ${operatorCode(selectedTicket.side)}` : "Aucun ticket prêt";
   const freshness = displayTime(focus.technical.sourceDataCutoff || focus.asOf);
-  const nextAction = activeTradeCount > 0 ? "Décision opérateur à vérifier" : focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Surveillance active";
+  const nextAction = activeTradeCount > 0 ? "Décision opérateur à vérifier" : focus.whyNoTrade.topReasons.map(focusReason).join(" · ") || "Surveillance active";
   return <section className="live-focus__mission-ribbon" aria-label="Résumé instantané du mode Focus">
     <div className="live-focus__mission-status">
       <small>ÉTAT IMMÉDIAT</small>
@@ -331,7 +331,7 @@ function FocusBriefDrawer({ focus, onClose }: { focus: LiveFocusView; onClose():
   return <FocusDrawer title="Brief marché & Desk" subtitle={`${contextStatus.label} · ${displayTime(focus.technical.sourceDataCutoff)}`} onClose={onClose}>
     <section><h3>Lecture opérateur</h3><p>{formatOperatorParagraph(brief.operatorSummary)}</p><p>{formatOperatorParagraph(valueText(brief.marketInterpretation, "Interprétation non publiée"))}</p></section>
     <section><h3>Intention du Desk</h3><p>{formatOperatorParagraph(valueText(brief.deskIntent, "Intention non publiée"))}</p><TagList values={stringRows(brief.whatDeskWants)} empty="Aucune famille privilégiée" /></section>
-    <section><h3>Pourquoi aucun trade ?</h3><TagList values={focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason))} empty="Aucun blocage publié" /></section>
+    <section><h3>Pourquoi aucun trade ?</h3><TagList values={focus.whyNoTrade.topReasons.map(focusReason)} empty="Aucun blocage publié" /></section>
     <section className="live-focus-drawer__columns"><div><h3>Zones d’opportunité</h3><ZoneList zones={currentZones} /></div><div><h3>Zones à éviter</h3><ZoneList zones={noTradeZones} /></div></section>
     <section><h3>Sources et fraîcheur</h3><div className="live-focus-drawer__source-grid">{focus.sourceStates.map((source, index) => <article key={valueText(source.sourceId, String(index))}><strong>{valueText(source.sourceId, "Source")}</strong><span>{operatorCode(valueText(source.status, "UNKNOWN"))}</span><small>{displayTime(valueText(source.dataCutoff ?? source.asOf, null))}</small></article>)}</div></section>
     <section><h3>Analyste contextuel</h3><dl className="live-focus-drawer__facts"><Fact label="Tâches" value={String(focus.contextWorker.taskCount)} /><Fact label="Succès" value={String(focus.contextWorker.successCount)} /><Fact label="Échecs" value={String(focus.contextWorker.failureCount)} /><Fact label="Relances" value={String(focus.contextWorker.retryCount)} /><Fact label="Latence moyenne" value={focus.contextWorker.averageLatencyMs === null ? "Non mesurée" : `${Math.round(focus.contextWorker.averageLatencyMs)} ms`} /><Fact label="Tokens" value={String(focus.contextWorker.totalTokens)} /></dl></section>
@@ -429,8 +429,8 @@ function resolveBackendFocusState(focus: LiveFocusView, model: LiveTradingModel)
   const stage = focus.operatorJourneyState.stage;
   const code = ["A", "B", "C", "D", "E", "F"].includes(stage) ? stage : "B";
   const labels: Record<string, { label: string; headline: string; instruction: string; tone: "neutral" | "info" | "warning" | "success" }> = {
-    A: { label: "MARCHÉ HORS SESSION", headline: "Le Desk attend la prochaine fenêtre CBOT", instruction: focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Aucune action requise.", tone: "neutral" },
-    B: { label: "SURVEILLANCE", headline: "Le Desk cherche un setup qualifié", instruction: focus.whyNoTrade.topReasons.map((reason) => operatorReason(reason)).join(" · ") || "Les moteurs déterministes évaluent le marché.", tone: "info" },
+    A: { label: "MARCHÉ HORS SESSION", headline: "Le Desk attend la prochaine fenêtre CBOT", instruction: focus.whyNoTrade.topReasons.map(focusReason).join(" · ") || "Aucune action requise.", tone: "neutral" },
+    B: { label: "SURVEILLANCE", headline: "Le Desk cherche un setup qualifié", instruction: focus.whyNoTrade.topReasons.map(focusReason).join(" · ") || "Les moteurs déterministes évaluent le marché.", tone: "info" },
     C: { label: "OPPORTUNITÉ OBSERVÉE", headline: "Un signal traverse les filtres", instruction: "Cette opportunité reste diagnostique tant qu’elle n’a pas produit une position cible, un ordre proposé et une validation humaine.", tone: "warning" },
     D: { label: "ARBITRAGE", headline: "Portfolio et Risk évaluent le dossier", instruction: "Aucune action opérateur avant publication du plan autorisé.", tone: "warning" },
     E: { label: "DOSSIER QUALIFIÉ", headline: "Le dossier canonique est prêt", instruction: "Contrôlez les termes immuables et l’autorité de validation humaine.", tone: "success" },
@@ -587,6 +587,28 @@ function FocusHelpDialog({ profile, onChange, onClose }: { profile: LiveFocusSou
 }
 
 function QuestionNumber({ value }: { value: string }) { return <span className="live-focus__question" aria-hidden="true">{value}</span>; }
+export function catalystMilestoneLabel(eventAt: string, asOf: string): string {
+  const event = new Date(eventAt);
+  const reference = new Date(asOf);
+  if (Number.isNaN(event.getTime())) return "Horodatage du catalyseur non publié";
+  const temporalState = !Number.isNaN(reference.getTime()) && event.getTime() < reference.getTime() ? "Passé" : "À venir";
+  const dateTime = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris",
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(event);
+  return `${temporalState} · ${dateTime}`;
+}
+
+function focusReason(value: unknown): string {
+  return String(value ?? "").trim().toUpperCase() === "NO_HUMAN_ACTION_REQUIRED"
+    ? "Aucune action humaine requise"
+    : operatorReason(value);
+}
+
 function formatEtClock(date: Date) { return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date); }
 function useFocusPerception({ model, stateCode, stateLabel, timingLabel, timingUrgency, soundProfile }: { model: LiveTradingModel; stateCode: string; stateLabel: string; timingLabel: string; timingUrgency: string; soundProfile: LiveFocusSoundProfile }) {
   const originalTitle = useRef<string | null>(null);

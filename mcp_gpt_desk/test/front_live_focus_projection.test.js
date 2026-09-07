@@ -57,6 +57,25 @@ test("Live Focus creates a qualified trade card only with TargetPosition, OrderI
   assert.equal(projection.operatorJourneyState.sourceObjectType, "OrderIntent");
 });
 
+test("Live Focus publishes the canonical strategy identity instead of a generic label", () => {
+  const live = liveFixture();
+  delete live.signals[0].strategyName;
+  live.signals[0].strategy = { family: "PULLBACK" };
+  live.signals[0].strategyDefinitionId = "us-grains-zw-pullback";
+
+  const observed = buildLiveFocusProjection({ live, marketContext: null, health: healthFixture(), nowIso: NOW });
+  assert.equal(observed.observedOpportunities[0].strategyName, "us-grains-zw-pullback");
+
+  live.portfolioOrderIntents = [intentFixture("identified", {
+    signalId: "signal-1",
+    humanGate: { gateId: "gate-identified", status: "EXPIRED" },
+    allowedActions: { allowedActions: [], revision: 1 },
+  })];
+  const qualified = buildLiveFocusProjection({ live, marketContext: null, health: healthFixture(), nowIso: NOW });
+  assert.equal(qualified.tradeCards[0].strategyName, "us-grains-zw-pullback");
+  assert.notEqual(qualified.tradeCards[0].strategyName, "Strategy");
+});
+
 test("Live Focus session comes only from canonical grain readiness and never invents an equity session", () => {
   const projection = buildLiveFocusProjection({
     live: liveFixture(),
