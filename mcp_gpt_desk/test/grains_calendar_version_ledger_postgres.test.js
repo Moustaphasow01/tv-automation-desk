@@ -304,7 +304,7 @@ test("ledger requalifies V2 secondary provenance and receipts without historical
 }, async (t) => {
   const database = await createTheoreticalTestDatabase();
   t.after(() => database.close());
-  const knownAtUtc = "2026-09-04T15:00:00Z";
+  const knownAtUtc = "2026-09-04T15:00:00.534Z";
   const input = version({
     hash: "4", knownAtUtc,
     sourceIds: [
@@ -327,6 +327,9 @@ test("ledger requalifies V2 secondary provenance and receipts without historical
   };
   const dorman = input.sources.find((source) => source.sourceId === "dorman_export_sales_schedule");
   dorman.sourceUrl = "https://www.dormantrading.com/trading-resources/market-calendar/";
+  dorman.retrievedAtUtc = "2026-09-04T15:00:00.212Z";
+  input.coverageStart = "2026-08-01T00:00:00.123Z";
+  input.coverageEnd = "2026-09-29T23:59:59.987Z";
   dorman.metadata = {
     ...dorman.metadata,
     authority_class: "SECONDARY_PUBLISHER",
@@ -336,13 +339,36 @@ test("ledger requalifies V2 secondary provenance and receipts without historical
     document_receipts: ["market-calendar/", "calendar.pdf"].map((name, index) => ({
       source_url: `https://www.dormantrading.com/${name}`,
       document_sha256: `sha256:${String(index + 1).repeat(64)}`,
-      received_at_utc: knownAtUtc,
+      received_at_utc: index === 0 ? "2026-09-04T15:00:00.111Z" : dorman.retrievedAtUtc,
       archive_receipt: `receipts/${index}.json`,
     })),
   };
-  await appendGrainsCalendarVersion(database.pool, input);
+  const appended = await appendGrainsCalendarVersion(database.pool, input);
+  const beforeKnown = await load(database.pool, "2026-09-04T15:00:00.533Z");
+  assert.deepEqual(beforeKnown, { agriEvents: [], agriCalendarCoverage: [] });
   const loaded = await load(database.pool, knownAtUtc);
   assert.equal(loaded.agriCalendarCoverage[0].status, "AVAILABLE");
+  assert.equal(loaded.agriCalendarCoverage[0].asOf, knownAtUtc);
+  assert.equal(loaded.agriCalendarCoverage[0].coverageStart, input.coverageStart);
+  assert.equal(loaded.agriCalendarCoverage[0].coverageEnd, input.coverageEnd);
+  const persistedVersion = await database.pool.query(
+    `SELECT known_at_utc,coverage_start_utc,coverage_end_utc
+       FROM market_agri_calendar_versions WHERE market_agri_calendar_version_id=$1`,
+    [appended.version.marketAgriCalendarVersionId],
+  );
+  assert.equal(persistedVersion.rows[0].known_at_utc.toISOString(), knownAtUtc);
+  assert.equal(persistedVersion.rows[0].coverage_start_utc.toISOString(), input.coverageStart);
+  assert.equal(persistedVersion.rows[0].coverage_end_utc.toISOString(), input.coverageEnd);
+  const persistedDorman = await database.pool.query(
+    `SELECT retrieved_at_utc,metadata FROM market_agri_calendar_version_sources
+      WHERE market_agri_calendar_version_id=$1 AND source_id=$2`,
+    [appended.version.marketAgriCalendarVersionId, dorman.sourceId],
+  );
+  assert.equal(persistedDorman.rows[0].retrieved_at_utc.toISOString(), dorman.retrievedAtUtc);
+  assert.deepEqual(
+    persistedDorman.rows[0].metadata.document_receipts,
+    dorman.metadata.document_receipts,
+  );
 
   await assert.rejects(() => appendGrainsCalendarVersion(database.pool, {
     ...input,

@@ -320,9 +320,9 @@ function mapQualifiedCoverage(version, sources) {
   const policyId = object(version.metadata).source_policy_id || GRAINS_CALENDAR_POLICY_V1;
   const evidence = qualifyGrainsCalendarEvidence({
     sources: sources.map(mapStoredSource),
-    knownAtUtc: version.known_at_utc,
-    coverageStart: version.coverage_start_utc,
-    coverageEnd: version.coverage_end_utc,
+    knownAtUtc: isoOrNull(version.known_at_utc),
+    coverageStart: isoOrNull(version.coverage_start_utc),
+    coverageEnd: isoOrNull(version.coverage_end_utc),
     policyId,
     fallbackEvidence: object(version.metadata).fas_failure_evidence,
   });
@@ -425,7 +425,7 @@ function mapVersionIdentity(row) {
 function mapStoredSource(source) {
   return {
     sourceId: source.source_id, sourceUrl: source.source_url, sourceDocumentSha256: source.source_document_sha256,
-    retrievedAtUtc: source.retrieved_at_utc, knowledgeStatus: source.knowledge_status,
+    retrievedAtUtc: isoOrNull(source.retrieved_at_utc), knowledgeStatus: source.knowledge_status,
     historicalKnowledgeStatus: source.historical_knowledge_status, metadata: source.metadata,
   };
 }
