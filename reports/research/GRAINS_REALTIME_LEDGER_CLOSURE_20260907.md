@@ -255,3 +255,34 @@ Sur les dix sondes, l'enrichissement `agri-calendar` de `market-context` a été
 Un premier déploiement a été arrêté **avant bascule** faute d'espace pour `pg_dump`. Seuls le dump partiel, les zones temporaires et d'anciennes paires de sauvegardes déjà validées ont été nettoyés ; la dernière sauvegarde valide a été préservée. PostgreSQL et les services arrêtés par l'incident disque ont été relancés et revérifiés avant un nouveau cycle complet avec sauvegardes fraîches. Aucun rollback produit ni ordre n'a été déclenché.
 
 Preuves navigateur : `output/playwright/td2-416-435/network-realistic-final/network-recovery-audit.json` et `output/playwright/td2-416-435/layout-final-v2/live-focus-layout-audit.json`. Le 7 septembre est férié sur les grains ; la recette certifie la résilience BFF et réseau, pas la production d'un événement de marché live pendant une séance fermée.
+
+## TD2-436 — Réveils contextuels sur faits nouveaux uniquement
+
+### Cause et politique corrigée
+
+Le scheduler traitait une condition de volatilité encore vraie comme un nouvel événement à chaque cycle. Pendant la tenue du marché, la même bougie ZW clôturée à `2026-09-04T18:20:00Z` a ainsi produit plusieurs réveils `EVENT` avec le même motif `VOLATILITY_SHOCK_ZW_5`. Le détecteur ne comparait ni l'identité de la dernière bougie fermée, ni le front montant/descendant de la condition, et le calendrier canonique en camelCase n'était pas entièrement reconnu.
+
+La politique `market_context_event_facts_v1` persiste désormais les faits ayant conduit à la dernière décision : cutoff marché, séance, fraîcheur des sources, dernière bougie fermée par série, état volatilité, direction de rupture et identifiants des événements agricoles proches. Un réveil événementiel exige une information plus récente ou une transition réelle. Une condition encore active sur la même bougie ne réveille plus le worker. La cadence normale demeure indépendante de cette déduplication. Les champs calendaires canoniques camelCase et historiques snake_case sont tous deux compris.
+
+### Validation
+
+| Contrôle | Résultat |
+| --- | --- |
+| Tests ciblés | **20 tests**, 19 réussis, 1 test PostgreSQL ignoré dans ce passage, 0 échec |
+| Supersession PostgreSQL réelle | **2/2** |
+| Backend complet | **1 614 tests**, 1 565 réussis, 49 ignorés, 0 échec |
+| Guards | architecture, exceptions, runtime-safety, sécurité, migrations SQL, compatibilité API, gouvernance PR, déploiement Windows, Problem Details, MCP, autorité Jarvis et registre de prompts verts |
+| Qualité statique | dette antérieure toujours au-dessus du budget global ; le slice n'ajoute aucun fichier surdimensionné et réduit le compteur de complexité de 722 à 721 |
+
+### Preuve runtime et release
+
+- Commit : `0c4b3abbc9c46b7a268efcf6761a8f0b3d9ce86a`.
+- Release active : `grains-context-event-edge-20260907.1`.
+- Archive SHA256 : `882957c42135b76142fd845d145bdaf79291c5562ffd8c580805286a72efe9e2`.
+- Avant la release : réveils `EVENT` répétés à 22:00, 22:23, 22:37, 23:08, 23:24, 23:54 et 00:00, tous sur le même cutoff `2026-09-04T18:20:00Z` et le même motif.
+- Après la release : **2 dispatchs CADENCE, 0 EVENT**, même cutoff marché, aucun motif ; aucun nouveau dispatch pendant les cycles d'observation suivants.
+- Onze services sur onze `Running` et `Automatic`; `/healthz`, `/readyz`, `/status` et `/front-api/v1/capabilities` répondent HTTP 200.
+- Sauvegardes fraîches : `desk-native-20260907T220820Z.dump` (`6f0c4b491ce37b6ec201c4d321858672ae55d8a666e0fade8ba69e6bb78b4956`) et `desk-objects-20260907T221533Z.tar.gz` (`46cc0b3727a333434583e6c7f9c21a48b9965a44f008404d8a53cd4aa1538110`).
+- AUTO et LIVE physiques restent désactivés. Les plafonds 500 USD/position, 2 000 USD/jour et 4 000 USD/semaine sont conservés.
+
+La prochaine séance apportant de nouvelles bougies permettra une observation complémentaire du premier vrai front d'événement, mais la déduplication d'une barre tenue est certifiée par les tests déterministes, PostgreSQL et le runtime VPS.
