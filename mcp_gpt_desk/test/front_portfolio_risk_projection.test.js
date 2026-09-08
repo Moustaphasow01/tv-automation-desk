@@ -88,6 +88,40 @@ test("administrative no-real-exposure resolution removes a legacy theoretical tr
   assert.deepEqual(view.portfolio_state.positions, []);
 });
 
+test("portfolio risk projection keeps historical targets and shadow parity outside current operational state", () => {
+  const view = buildPortfolioRiskOverview({
+    generatedAt: "2026-09-08T12:00:00.000Z",
+    execution: executionOverview({
+      safety: {
+        submissionPossible: false,
+        executionEnabled: false,
+        liveAccountAllowed: false,
+        killSwitchEnv: true,
+        riskPercent: 0.25,
+        maxContracts: 0,
+      },
+      trades: [],
+      intents: [],
+      orders: [],
+      locks: [{ execution_lock_id: "global_default_kill_switch", scope_value: "*", reason: "Physical execution disabled" }],
+      portfolioOrderIntents: [{ ...portfolioOrderIntent(), status: "EXPIRED" }],
+      humanExecutionGates: [],
+      reconciliations: [{ reconciliation_run_id: "old-match", broker_account_id: "sim101", status: "matched", completed_at: "2026-08-01T12:00:00.000Z" }],
+      adapterParityRuns: [{ adapter_parity_run_id: "old-shadow-divergence", broker_account_id: "sim101", status: "diverged", compared_at: "2026-08-02T12:00:00.000Z", metadata: { shadow_only: true } }],
+    }),
+    strategy: strategyOverview(),
+    performance: { ok: true, items: [] },
+  });
+
+  assert.equal(view.summary.status, "BROKER_SUBMIT_BLOCKED");
+  assert.equal(view.summary.pendingTargetPositions, 0);
+  assert.equal(view.summary.reconciliationDivergences, 0);
+  assert.equal(view.summary.historicalReconciliationDivergences, 1);
+  assert.equal(view.portfolio_state.pendingTargetPositions.length, 0);
+  assert.equal(view.controls.some((item) => item.code === "ADAPTER_PARITY_DIVERGED"), false);
+  assert.equal(view.controls.some((item) => item.code === "PHYSICAL_EXECUTION_DISABLED_BY_POLICY" && item.severity === "info"), true);
+});
+
 function executionOverview(overrides = {}) {
   return {
     safety: { submissionPossible: true, liveAccountAllowed: false, riskPercent: 0.25, maxContracts: 5 },

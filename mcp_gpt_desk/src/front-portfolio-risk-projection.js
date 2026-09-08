@@ -48,21 +48,23 @@ export function buildPortfolioRiskOverview({ generatedAt, execution, strategy, p
 function buildSummary({ execution, strategy, errors }) {
   const safety = execution?.safety || {};
   const canonicalIntents = nominalPortfolioIntents(execution);
+  const activeCanonicalIntents = canonicalIntents.filter(isActivePortfolioIntent);
+  const operationalDivergences = currentOperationalDivergences(execution, safety);
   const counts = {
     accounts: safeArray(execution?.accounts).length,
     openTrades: safeArray(execution?.trades).filter(isOpenTrade).length,
     pendingIntents: safeArray(execution?.intents).filter(isActiveIntent).length + canonicalIntents.filter(isActivePortfolioIntent).length,
     activeOrders: safeArray(execution?.orders).filter(isActiveOrder).length,
     activeLocks: safeArray(execution?.locks).length,
-    reconciliationDivergences: safeArray(execution?.adapterParityRuns).filter((item) => item.status === "diverged").length
-      + safeArray(execution?.reconciliations).filter((item) => item.status === "diverged").length,
+    reconciliationDivergences: operationalDivergences.length,
+    historicalReconciliationDivergences: historicalDivergenceCount(execution),
     liveInstances: safeArray(strategy?.instances).filter((item) => item.execution_mode === "LIVE").length,
     paperInstances: safeArray(strategy?.instances).filter((item) => item.execution_mode === "PAPER").length,
-    pendingTargetPositions: unique(canonicalIntents.map((item) => item.target_position_id).filter(Boolean)).length,
+    pendingTargetPositions: unique(activeCanonicalIntents.map((item) => item.target_position_id).filter(Boolean)).length,
     pendingHumanGates: nominalHumanGates(execution, canonicalIntents).filter((item) => String(item.status || "").toUpperCase() === "AWAITING_MANUAL_CONFIRMATION").length,
   };
   return {
-    status: portfolioStatus({ counts, errors, submissionPossible: safety.submissionPossible }),
+    status: portfolioStatus({ counts, errors, submissionPossible: safety.submissionPossible, executionEnabled: safety.executionEnabled }),
     portfolio_table_status: "execution_projection",
     submission_possible: Boolean(safety.submissionPossible),
     live_account_allowed: Boolean(safety.liveAccountAllowed),
@@ -72,10 +74,10 @@ function buildSummary({ execution, strategy, errors }) {
   };
 }
 
-function portfolioStatus({ counts, errors, submissionPossible }) {
+function portfolioStatus({ counts, errors, submissionPossible, executionEnabled }) {
   if (errors.length >= 3) return "DATA_UNAVAILABLE";
   if (errors.length > 0) return "ACTION_REQUIRED";
-  if (counts.activeLocks || counts.reconciliationDivergences) return "ACTION_REQUIRED";
+  if (executionEnabled !== false && (counts.activeLocks || counts.reconciliationDivergences)) return "ACTION_REQUIRED";
   if (!submissionPossible) return "BROKER_SUBMIT_BLOCKED";
   return "CONTROLLED";
 }
@@ -340,13 +342,46 @@ function exposureDetail(row) {
 }
 
 function buildControls({ execution, strategy, errors }) {
+  const physicalExecutionDisabled = execution?.safety?.executionEnabled === false;
+  const operationalDivergences = currentOperationalDivergences(execution, execution?.safety || {});
   return [
     ...errors.map((error) => control(`source:${error.source}`, "critical", "SOURCE_UNAVAILABLE", error.source, error.message)),
-    ...safeArray(execution?.locks).map((lock) => control(lock.execution_lock_id, "critical", "EXECUTION_LOCK", lock.scope_value, lock.reason)),
-    ...safeArray(execution?.reconciliations).filter((item) => item.status === "diverged").map((item) => control(item.reconciliation_run_id, "critical", "BROKER_DIVERGENCE", `${item.mismatch_count} écart(s)`, "Réconciliation broker/PostgreSQL requise.")),
-    ...safeArray(execution?.adapterParityRuns).filter((item) => item.status === "diverged").map((item) => control(item.adapter_parity_run_id, "warning", "ADAPTER_PARITY_DIVERGED", `${item.mismatch_count} écart(s)`, "Écart ATI/AddOn à vérifier.")),
+    ...safeArray(execution?.locks).map((lock) => physicalExecutionDisabled
+      ? control(lock.execution_lock_id, "info", "PHYSICAL_EXECUTION_DISABLED_BY_POLICY", lock.scope_value, lock.reason)
+      : control(lock.execution_lock_id, "critical", "EXECUTION_LOCK", lock.scope_value, lock.reason)),
+    ...operationalDivergences.map(({ kind, item }) => kind === "broker"
+      ? control(item.reconciliation_run_id, "critical", "BROKER_DIVERGENCE", `${item.mismatch_count} écart(s)`, "Réconciliation broker/PostgreSQL requise.")
+      : control(item.adapter_parity_run_id, "warning", "ADAPTER_PARITY_DIVERGED", `${item.mismatch_count} écart(s)`, "Écart ATI/AddOn à vérifier.")),
     ...strategyMissingControls(strategy),
   ];
+}
+
+function currentOperationalDivergences(execution, safety = {}) {
+  if (safety.executionEnabled === false) return [];
+  return [
+    ...latestPerAccount(execution?.reconciliations).map((item) => ({ kind: "broker", item })),
+    ...latestPerAccount(execution?.adapterParityRuns).map((item) => ({ kind: "adapter", item })),
+  ].filter(({ item }) => String(item?.status || "").toLowerCase() === "diverged");
+}
+
+function historicalDivergenceCount(execution) {
+  return safeArray(execution?.adapterParityRuns).filter(isDiverged).length
+    + safeArray(execution?.reconciliations).filter(isDiverged).length;
+}
+
+function latestPerAccount(items) {
+  const latest = new Map();
+  for (const item of safeArray(items)) {
+    const account = String(item?.broker_account_id || "global");
+    const timestamp = Date.parse(item?.compared_at || item?.completed_at || item?.started_at || 0);
+    const existing = latest.get(account);
+    if (!existing || timestamp > existing.timestamp) latest.set(account, { item, timestamp });
+  }
+  return [...latest.values()].map((entry) => entry.item);
+}
+
+function isDiverged(item) {
+  return String(item?.status || "").toLowerCase() === "diverged";
 }
 
 function strategyMissingControls(strategy) {
