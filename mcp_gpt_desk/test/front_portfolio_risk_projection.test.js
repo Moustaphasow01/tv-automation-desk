@@ -118,6 +118,14 @@ test("portfolio risk projection keeps historical targets and shadow parity outsi
   assert.equal(view.summary.reconciliationDivergences, 0);
   assert.equal(view.summary.historicalReconciliationDivergences, 1);
   assert.equal(view.portfolio_state.pendingTargetPositions.length, 0);
+  assert.deepEqual(view.portfolio_state.openRisk, { availability: "KNOWN", value: 0, currency: "USD" });
+  assert.equal(view.risk_center.availability, "KNOWN");
+  assert.equal(view.risk_center.globalStatus, "CONTROLLED");
+  assert.deepEqual(view.risk_center.openRisk, { availability: "KNOWN", value: 0, currency: "USD" });
+  assert.equal(view.risk_center.pendingOrderIntents, 0);
+  assert.equal(view.risk_center.pendingTargetPositions, 0);
+  assert.equal(view.risk_center.limits.length, 0);
+  assert.equal(view.risk_center.historicalRiskDecisionCount, 1);
   assert.equal(view.controls.some((item) => item.code === "ADAPTER_PARITY_DIVERGED"), false);
   assert.equal(view.controls.some((item) => item.code === "PHYSICAL_EXECUTION_DISABLED_BY_POLICY" && item.severity === "info"), true);
 });

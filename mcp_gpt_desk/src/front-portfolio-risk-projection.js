@@ -232,7 +232,7 @@ function portfolioState({ execution, generatedAt }) {
       deltaSize: finite(item.delta_size),
       riskApprovedNetSize: finite(item.risk_approved_net_size),
     })),
-    openRisk: aggregateMoney(pendingRisk.map((item) => item.riskAmount)),
+    openRisk: aggregateMoney(pendingRisk.map((item) => item.riskAmount), { knownEmpty: Boolean(execution) }),
     pnl: availabilityNode("UNAVAILABLE", "PNL_SOURCE_UNAVAILABLE"),
     concentration: availabilityNode("UNAVAILABLE", "CONCENTRATION_NOT_IMPLEMENTED"),
     correlation: availabilityNode("NOT_IMPLEMENTED", "CORRELATION_NOT_IMPLEMENTED"),
@@ -241,8 +241,10 @@ function portfolioState({ execution, generatedAt }) {
 
 function riskCenterState({ execution, generatedAt, controls }) {
   const canonicalIntents = nominalPortfolioIntents(execution);
-  const riskDecisions = canonicalIntents.flatMap((item) => safeArray(item.risk_decisions));
-  const riskSnapshots = canonicalIntents.map(riskSnapshot).filter((item) => item.availability !== "UNAVAILABLE");
+  const activeCanonicalIntents = canonicalIntents.filter(isActivePortfolioIntent);
+  const riskDecisions = activeCanonicalIntents.flatMap((item) => safeArray(item.risk_decisions));
+  const historicalRiskDecisionCount = canonicalIntents.flatMap((item) => safeArray(item.risk_decisions)).length - riskDecisions.length;
+  const riskSnapshots = activeCanonicalIntents.map(riskSnapshot).filter((item) => item.availability !== "UNAVAILABLE");
   const breaches = riskDecisions.flatMap((item) => safeArray(item.breaches));
   const limits = riskDecisions.flatMap((item) => safeArray(item.limits));
   const nearestLimits = riskDecisions.map((item) => item.nearest_limit).filter(Boolean);
@@ -251,9 +253,9 @@ function riskCenterState({ execution, generatedAt, controls }) {
     schemaVersion: "global_risk_center_v1",
     asOf: generatedAt || null,
     source: "portfolio_risk_decisions",
-    availability: riskDecisions.length ? "KNOWN" : "UNAVAILABLE",
-    globalStatus: controls.some((item) => item.severity === "critical") ? "BLOCKED" : riskDecisions.length ? "CONTROLLED" : "DATA_UNAVAILABLE",
-    openRisk: aggregateMoney(riskSnapshots.map((item) => item.riskAmount)),
+    availability: execution ? "KNOWN" : "UNAVAILABLE",
+    globalStatus: controls.some((item) => item.severity === "critical") ? "BLOCKED" : execution ? "CONTROLLED" : "DATA_UNAVAILABLE",
+    openRisk: aggregateMoney(riskSnapshots.map((item) => item.riskAmount), { knownEmpty: Boolean(execution) }),
     limits,
     breaches,
     nearestLimits,
@@ -271,9 +273,10 @@ function riskCenterState({ execution, generatedAt, controls }) {
       reasonCodes: locks.map((item) => item.reason || item.scope_value).filter(Boolean),
     },
     providerCircuitState: availabilityNode("UNAVAILABLE", "PROVIDER_CIRCUIT_STATE_UNAVAILABLE"),
-    pendingOrderIntents: canonicalIntents.filter(isActivePortfolioIntent).length,
-    pendingTargetPositions: unique(canonicalIntents.map((item) => item.target_position_id).filter(Boolean)).length,
+    pendingOrderIntents: activeCanonicalIntents.length,
+    pendingTargetPositions: unique(activeCanonicalIntents.map((item) => item.target_position_id).filter(Boolean)).length,
     policyVersions: unique(riskDecisions.map((item) => item.risk_rule_set_version).filter(Boolean)),
+    historicalRiskDecisionCount,
   };
 }
 
@@ -545,9 +548,11 @@ function availabilityNode(availability, reasonCode) {
   return { availability, value: null, reasonCode };
 }
 
-function aggregateMoney(values) {
+function aggregateMoney(values, { knownEmpty = false } = {}) {
   const finiteValues = values.filter((value) => value !== null && value !== undefined && Number.isFinite(Number(value)));
   return finiteValues.length
     ? { availability: "KNOWN", value: Math.round(finiteValues.reduce((sum, value) => sum + Number(value), 0) * 100) / 100, currency: "USD" }
+    : knownEmpty
+      ? { availability: "KNOWN", value: 0, currency: "USD" }
     : { availability: "UNAVAILABLE", value: null, currency: "UNAVAILABLE", reasonCode: "MONEY_VALUES_UNAVAILABLE" };
 }
