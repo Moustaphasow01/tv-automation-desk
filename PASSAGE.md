@@ -25,7 +25,7 @@ des preuves runtime, puis vérifier l'état courant avant toute mutation.
 |---|---|
 | Dépôt actif | `https://github.com/Moustaphasow01/tv-automation-desk.git` |
 | Branche active | `main` |
-| HEAD distant de passage | `f6a603aa7d99be35ed044e40a13fbb1b42faa100` |
+| Baseline distante contrôlée avant ce document | `f6a603aa7d99be35ed044e40a13fbb1b42faa100` |
 | Branche de documentation/reprise | `codex/workstation-recovery-handoff` |
 | VPS | `https://vps-6d6969db.vps.ovh.net` |
 | Release VPS servie | `portfolio-risk-truth-20260908.2` |
