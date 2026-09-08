@@ -179,11 +179,12 @@ export class StrategySignalDecisionPipelineService {
   }
 }
 
-export function createStrategySignalDecisionPipelineService({ store } = {}) {
+export function createStrategySignalDecisionPipelineService({ store, dataPolicy } = {}) {
   const signalBusRepository = createStrategySignalBusRepository(store.persistence);
   return new StrategySignalDecisionPipelineService({
     signalBusRepository,
     contextPrefilter: new MarketContextPrefilterService({
+      dataPolicy,
       repository: store.marketContext,
       pool: store.persistence?.pool,
       eventOutbox: store.domainEvents,

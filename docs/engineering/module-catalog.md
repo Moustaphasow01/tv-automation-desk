@@ -33,6 +33,7 @@
 - `front-control-plane` consomme exclusivement `/front-api/v1`, ne lit aucune base/MCP/broker directement et ne recalcule jamais risque, exposition, sizing ou PnL officiel.
 - `front-control-plane` reste isolé du frontend legacy jusqu'au cutover ; tout import croisé est interdit par guard.
 - Les adapters NinjaTrader, PickMyTrade, Codex, TradingView, Telegram et stockage restent hors domaine.
+- `market-data` porte la continuité grains `M1_M5_STRICT` / `M5_FALLBACK` via l'API publique `desk-domain` (ADR-0035). `live-runtime` consomme cette politique pour les seules familles M5 SHADOW compatibles ; `agents` conserve un contexte consultatif et `operations` livre le flag audité, OFF par défaut.
 
 ## Extraction progressive depuis l'existant
 

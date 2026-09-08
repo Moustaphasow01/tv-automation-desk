@@ -1,4 +1,4 @@
-import { canonicalSha256 } from "@tv-automation/desk-domain";
+import { canonicalSha256, GRAINS_DATA_POLICIES, normalizeGrainsDataPolicy, requiredGrainsTimeframes } from "@tv-automation/desk-domain";
 import { SystemClock } from "@tv-automation/desk-time";
 import {
   buildMarketContextEventFacts,
@@ -159,6 +159,7 @@ export class MarketContextTaskScheduler {
 
   async #refreshFeedCoverage(nowUtc, session) {
     const states = [];
+    const requiredTimeframes = requiredGrainsTimeframes({ policy: session.dataPolicy, instruments: ["ZC", "ZW"] });
     for (const [instrument, timeframe, feedId] of REQUIRED_FEEDS) {
       const eligibleBarOpenUtc = eligibleBarOpenCutoffUtc(nowUtc, timeframe);
       const result = await this.pool.query(`SELECT min(timestamp_utc) AS coverage_start,
@@ -178,7 +179,8 @@ export class MarketContextTaskScheduler {
         lastExpectedCoreClosesUtc: session.lastExpectedCoreClosesUtc });
       const state = await this.store.marketContext.upsertSourceCoverage({
         sourceId: `${instrument}_${timeframe}`, sourceType: "OHLCV", status: !available ? "UNAVAILABLE" : freshness.stale ? "STALE" : "AVAILABLE",
-        requiredFor: ["MARKET_CONTEXT_SNAPSHOT", "CONTEXT_PREFILTER"], dataCutoff: coverageEnd || nowUtc,
+        requiredFor: requiredTimeframes.includes(timeframe) ? ["MARKET_CONTEXT_SNAPSHOT", "CONTEXT_PREFILTER"] : [],
+        dataCutoff: coverageEnd || nowUtc,
         coverageStart: row.coverage_start, coverageEnd, asOf: nowUtc,
         lastSuccessfulAt: coverageEnd, provider: "TRADINGVIEW_WEBHOOK", datasetVersion: "market_candles_v1",
         missingness: available ? 0 : 1,
@@ -186,6 +188,7 @@ export class MarketContextTaskScheduler {
           expectedMarketDateMismatch: freshness.expectedMarketDateMismatch,
           expectedMarketCloseMismatch: freshness.expectedMarketCloseMismatch, marketState: session.marketState }),
         metadata: { feed_id: feedId, row_count: Number(row.row_count || 0), age_ms: Number.isFinite(ageMs) ? ageMs : null,
+          data_policy: session.dataPolicy,
           freshness_threshold_ms: freshnessMs, latest_market_date: row.latest_market_date || null,
           last_expected_market_date: session.lastExpectedMarketDate,
           last_expected_core_close_utc: freshness.lastExpectedCloseUtc,
@@ -217,7 +220,8 @@ export class MarketContextTaskScheduler {
   }
 
   async #buildBundle({ nowUtc, session, sourceStates }) {
-    const latestCutoffs = sourceStates.filter((source) => source.sourceType === "OHLCV" && source.coverageEnd).map((source) => Date.parse(source.coverageEnd));
+    const latestCutoffs = sourceStates.filter((source) => source.sourceType === "OHLCV"
+      && source.requiredFor.includes("MARKET_CONTEXT_SNAPSHOT") && source.coverageEnd).map((source) => Date.parse(source.coverageEnd));
     const marketDataCutoffUtc = latestCutoffs.length ? new Date(Math.min(...latestCutoffs)).toISOString() : nowUtc;
     const series = {};
     for (const [instrument, timeframe, feedId] of REQUIRED_FEEDS) {
@@ -246,6 +250,7 @@ export class MarketContextTaskScheduler {
       schemaVersion: "us_grains_market_context_bundle_v1",
       timeContractVersion: MARKET_CONTEXT_TIME_CONTRACT_VERSION,
       universe: "US_GRAINS_CBOT",
+      dataPolicy: session.dataPolicy,
       analysisAsOfUtc: nowUtc,
       marketDataCutoffUtc,
       sourceDataCutoff: nowUtc,
@@ -266,9 +271,11 @@ export class MarketContextTaskScheduler {
 }
 
 function canonicalSession(health, nowUtc) {
-  const source = health?.data_readiness?.market_session || {};
+  const readiness = health?.data_readiness || {};
+  const source = readiness.market_session || {};
   const state = normalizedMarketState(source.state);
   return {
+    dataPolicy: normalizeGrainsDataPolicy(readiness.readiness_scope?.data_policy),
     marketState: state,
     marketSession: source.active_session || source.session || "CBOT_GRAINS_UNKNOWN",
     exchangeTimezone: source.timezone || "America/Chicago",
@@ -279,7 +286,7 @@ function canonicalSession(health, nowUtc) {
     lastExpectedMarketDate: source.last_expected_market_date || null,
     lastExpectedCoreClosesUtc: source.last_expected_core_close_utc_by_timeframe || null,
     asOf: source.as_of_utc || nowUtc,
-    freshnessPolicy: health?.data_readiness?.freshness_policy || null,
+    freshnessPolicy: readiness.freshness_policy || null,
     source: "data_readiness.market_session",
   };
 }
@@ -305,7 +312,11 @@ function summarizeSeries(rows, timeframe) {
 async function safeRows(pool, sql, params) { try { return (await pool.query(sql, params)).rows; } catch { return []; } }
 function floorUtc(value, minutes) { const date = new Date(value); date.setUTCSeconds(0, 0); date.setUTCMinutes(Math.floor(date.getUTCMinutes() / minutes) * minutes); return date.toISOString(); }
 function sourceSignature(source) { return marketContextSourceReasonSignature(source); }
-export function marketContextSourceReasonSignature(source) { return { sourceId: source.sourceId, status: source.status, datasetVersion: source.datasetVersion }; }
+export function marketContextSourceReasonSignature(source) {
+  return { sourceId: source.sourceId, status: source.status, datasetVersion: source.datasetVersion,
+    ...(source.metadata?.data_policy === GRAINS_DATA_POLICIES.M5_FALLBACK
+      ? { dataPolicy: source.metadata.data_policy, requiredFor: source.requiredFor } : {}) };
+}
 export function marketContextFreshnessThresholdMs({ timeframe, readinessPolicy = null } = {}) {
   const fallbackMs = String(timeframe) === "1" ? 150_000 : 420_000;
   const readinessMs = Number(readinessPolicy?.max_age_seconds) * 1000;

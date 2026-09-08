@@ -8,6 +8,9 @@ import { StrategySignalBusService } from "../src/strategy-signal-bus-service.js"
 import { PostgresStrategySignalBusRepository } from "../src/strategy-signal-bus-repository.js";
 import { createStrategySignalDecisionPipelineService } from "../src/strategy-signal-decision-pipeline-service.js";
 import { grainSignal } from "./support/causal-grain-signal-fixture.js";
+import { grainStrategyIdentity } from "../src/us-grains-strategy-catalog.js";
+import { evaluateUsGrainsDataQuality } from "../src/us-grains-data-quality.js";
+import { buildPostgresDataHealth } from "../src/persistence/postgres-data-health.js";
 
 const NOW = "2026-09-04T15:00:00.000Z";
 
@@ -190,12 +193,46 @@ test("competing canonical bus proposals retain one complete plan through Risk an
   assert.equal((await bus.pollPendingSignals({ now_utc: NOW })).count, 0);
 });
 
-async function seedStrategy(pool) {
-  const ids = {
+test("M5-only SHADOW traverses PostgreSQL bus, context, Risk and HumanGate without provider execution", {
+  skip: process.env.RUN_POSTGRES_TESTS !== "1",
+}, async (t) => {
+  const database = await createTheoreticalTestDatabase();
+  t.after(() => database.close());
+  const store = await createStore(database.pool);
+  const ids = await seedStrategy(database.pool, grainStrategyIdentity("VWAP_PULLBACK", "ZW"));
+  await database.pool.query("UPDATE strategy_instances SET metadata = jsonb_build_object('catalog_version','us_grains_strategy_catalog_v1') WHERE strategy_instance_id=$1", [ids.strategy_instance_id]);
+  const options = { nowUtc: NOW, dataPolicy: "M5_FALLBACK" };
+  assert.deepEqual((await buildPostgresDataHealth(database.pool, options)).readiness_scope.timeframes, ["5"]);
+  await database.pool.query("UPDATE strategy_instances SET metadata='{}' WHERE strategy_instance_id=$1", [ids.strategy_instance_id]);
+  assert.deepEqual((await buildPostgresDataHealth(database.pool, options)).readiness_scope.timeframes, ["1", "5"]);
+  await database.pool.query("UPDATE strategy_instances SET metadata = jsonb_build_object('catalog_version','us_grains_strategy_catalog_v1') WHERE strategy_instance_id=$1", [ids.strategy_instance_id]);
+  const signal = grainSignal({ ...ids, direction: "LONG" });
+  signal.setup.context.data_quality = evaluateUsGrainsDataQuality({ instrument: "ZW", dataPolicy: "M5_FALLBACK", asOfUtc: NOW,
+    m5Rows: Array.from({ length: 18 }, (_, i) => ({ timestamp_utc: new Date(Date.parse("2026-09-04T13:30Z") + i * 300_000).toISOString(),
+      open: 500, high: 501, low: 499, close: 500.5, volume: 10 })) });
+  const bus = new StrategySignalBusService({ repository: new PostgresStrategySignalBusRepository(store.persistence), clock: store.clock });
+  await bus.publishSignal(signal, {}, { requireRunningInstance: true });
+  const input = { now_utc: NOW, account_id: "causal-shadow", prefer_embedded_context_gate_decision: true };
+  const strict = await createStrategySignalDecisionPipelineService({ store }).runOnce(input);
+  assert.equal(strict.human_gate_count, 0);
+  assert.equal((await bus.pollPendingSignals({ now_utc: NOW })).count, 1);
+  const enabled = await createStrategySignalDecisionPipelineService({ store, dataPolicy: "M5_FALLBACK" }).runOnce(input);
+  assert.equal(enabled.context_prefilter.admissible, 1);
+  assert.equal(enabled.human_gate_count, 1);
+  assert.equal(enabled.risk_decision_count, 1);
+  assert.equal(enabled.provider_counts.unchanged, true);
+  assert.equal((await database.pool.query("SELECT count(*)::int AS n FROM broker_provider_commands")).rows[0].n, 0);
+  assert.equal((await database.pool.query("SELECT count(*)::int AS n FROM broker_provider_events")).rows[0].n, 0);
+  const persisted = (await database.pool.query("SELECT setup FROM strategy_signal_outbox WHERE signal_id=$1", [signal.signal_id])).rows[0];
+  assert.equal(persisted.setup.context.data_quality.timeframes.M1.row_count, 0);
+  assert.equal(persisted.setup.context.data_quality.data_mode, "M5_FALLBACK");
+});
+
+async function seedStrategy(pool, ids = {
     strategy_definition_id: randomUUID(),
     strategy_version_id: randomUUID(),
     strategy_instance_id: randomUUID(),
-  };
+  }) {
   await pool.query(
     `INSERT INTO strategy_definitions (strategy_definition_id,external_key,name,owner)
     VALUES ($1,'causal-pipeline-test','Causal grains test','test')`,

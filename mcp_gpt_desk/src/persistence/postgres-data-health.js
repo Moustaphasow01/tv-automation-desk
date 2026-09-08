@@ -5,13 +5,22 @@ import {
 import { grainsTradingSessionState } from "../us-grains-data-quality.js";
 import { coreFeedHealthSql } from "./postgres-data-health-query.js";
 import { marketFeedIngestionTiming } from "./postgres-data-health-timing.js";
+import { GRAINS_DATA_POLICIES, normalizeGrainsDataPolicy, requiredGrainsTimeframes } from "@tv-automation/desk-domain";
+import { grainStrategyIdentity, usGrainsStrategyFamilies } from "../us-grains-strategy-catalog.js";
+import { grainsDataPolicyFromEnvironment } from "../runtime-config.js";
 
 const FALLBACK_INSTRUMENTS = Object.freeze(["MNQ", "MES"]);
 const REQUIRED_TIMEFRAMES = Object.freeze(["1", "5"]);
 const GRAIN_INSTRUMENTS = new Set(["ZC", "ZW"]);
 
-export async function buildPostgresDataHealth(pool, { nowUtc = new Date().toISOString() } = {}) {
-  const activeScopeResult = await pool.query(activeRuntimeInstrumentScopeSql());
+export async function buildPostgresDataHealth(pool, {
+  nowUtc = new Date().toISOString(), dataPolicy = grainsDataPolicyFromEnvironment(),
+} = {}) {
+  const compatibleIds = usGrainsStrategyFamilies().flatMap((family) =>
+    [...GRAIN_INSTRUMENTS].map((instrument) => grainStrategyIdentity(family, instrument).strategy_instance_id));
+  const activeScopeResult = await pool.query(activeRuntimeInstrumentScopeSql(), [compatibleIds]);
+  const scopedPolicy = activeScopeResult.rows[0]?.m5_fallback_eligible === true
+    ? normalizeGrainsDataPolicy(dataPolicy) : GRAINS_DATA_POLICIES.STRICT;
   const activeInstruments = normalizeInstruments(activeScopeResult.rows[0]?.instruments);
   const requiredInstruments = activeInstruments.length ? activeInstruments : [...FALLBACK_INSTRUMENTS];
   const [marketResult, schedulerResult] = await Promise.all([
@@ -23,11 +32,12 @@ export async function buildPostgresDataHealth(pool, { nowUtc = new Date().toISOS
     feedRows: marketResult.rows,
     scheduler: schedulerResult.rows[0] || null,
     requiredInstruments,
+    dataPolicy: scopedPolicy,
     scopeSource: activeInstruments.length ? "active_strategy_instances" : "fallback_default",
   });
 }
 
-function projectDataHealth({ nowUtc, feedRows, scheduler, requiredInstruments, scopeSource }) {
+function healthFrame({ nowUtc, feedRows, requiredInstruments, dataPolicy }) {
   const timestampMs = Date.parse(nowUtc);
   const grainScope = requiredInstruments.length > 0 && requiredInstruments.every((instrument) => GRAIN_INSTRUMENTS.has(instrument));
   const marketSession = grainScope ? grainsTradingSessionState(nowUtc) : parisMarketSessionState(new Date(timestampMs));
@@ -36,20 +46,39 @@ function projectDataHealth({ nowUtc, feedRows, scheduler, requiredInstruments, s
   const feeds = selectRequiredFeeds(feedRows.map((row) => feedFromRow(row, exchangeTimezone)), requiredInstruments)
     .map((feed) => ({ ...feed, closed_candle_age_seconds: nullableClosedCandleAgeSeconds(feed, timestampMs) }));
   feeds.forEach((feed) => { feed.provenance = marketFeedProvenance(feed); });
-  const requiredFeedKeys = requiredFeedKeysForScope(requiredInstruments);
-  const freshness = coreFreshness({
+  const requiredTimeframes = requiredGrainsTimeframes({ policy: dataPolicy, instruments: requiredInstruments });
+  const requiredFeedKeys = requiredFeedKeysForScope(requiredInstruments, requiredTimeframes);
+  const freshnessInput = {
     feeds,
-    requiredFeedKeys,
     timestampMs,
     freshnessPolicy,
     tradingDate: marketSession.trading_date,
     lastExpectedMarketDate: marketSession.last_expected_market_date,
     lastExpectedCoreClosesUtc:
       marketSession.last_expected_core_close_utc_by_timeframe,
+  };
+  const freshness = coreFreshness({ ...freshnessInput, requiredFeedKeys });
+  const strictFreshness = coreFreshness({ ...freshnessInput, requiredFeedKeys: requiredFeedKeysForScope(requiredInstruments) });
+  if (dataPolicy === GRAINS_DATA_POLICIES.M5_FALLBACK) feeds.forEach((feed) => {
+    feed.required = requiredTimeframes.includes(feed.timeframe);
+    feed.stale = !coreFreshness({ ...freshnessInput, requiredFeedKeys: [feedKey(feed)] }).coreFreshEnough;
   });
+  return { feeds, requiredFeedKeys, requiredTimeframes, freshness, strictFreshness, marketSession, freshnessPolicy, exchangeTimezone };
+}
+
+function projectDataHealth(input) {
+  const { scheduler, requiredInstruments, scopeSource, dataPolicy } = input;
+  const { feeds, requiredFeedKeys, requiredTimeframes, freshness, strictFreshness,
+    marketSession, freshnessPolicy, exchangeTimezone } = healthFrame(input);
+  const ok = marketSession.market_closed === true ? freshness.coreFreshEnough : freshness.currentTradingDayReady;
+  const fallback = dataPolicy === GRAINS_DATA_POLICIES.M5_FALLBACK;
+  const degraded = fallback && ok && !strictFreshness.coreFreshEnough;
   return {
-    ok: marketSession.market_closed === true ? freshness.coreFreshEnough : freshness.currentTradingDayReady,
-    state: dataHealthState({ marketClosed: marketSession.market_closed === true, ...freshness, marketSession }),
+    ok,
+    state: degraded && !marketSession.market_closed ? "degraded"
+      : dataHealthState({ marketClosed: marketSession.market_closed === true, ...freshness, marketSession }),
+    ...(fallback ? { data_mode: !ok ? "BLOCKED" : degraded ? "M5_FALLBACK" : "M1_M5",
+      reason_codes: degraded ? ["US_GRAINS_M1_UNAVAILABLE_M5_FALLBACK"] : [] } : {}),
     market_closed: marketSession.market_closed === true,
     market_session: marketSession,
     freshness_policy: freshnessPolicy,
@@ -58,7 +87,8 @@ function projectDataHealth({ nowUtc, feedRows, scheduler, requiredInstruments, s
     readiness_scope: {
       source: scopeSource,
       instruments: requiredInstruments,
-      timeframes: [...REQUIRED_TIMEFRAMES],
+      timeframes: requiredTimeframes,
+      ...(fallback ? { data_policy: dataPolicy, optional_timeframes: ["1"], execution_mode: "SHADOW" } : {}),
     },
     active_session: marketSession.active_session || marketSession.state,
     exchange_timezone: exchangeTimezone,
@@ -72,7 +102,10 @@ function projectDataHealth({ nowUtc, feedRows, scheduler, requiredInstruments, s
 
 function activeRuntimeInstrumentScopeSql() {
   return `SELECT COALESCE(array_agg(DISTINCT upper(trim(scope.instrument)))
-                          FILTER (WHERE trim(scope.instrument) <> ''), ARRAY[]::text[]) AS instruments
+                          FILTER (WHERE trim(scope.instrument) <> ''), ARRAY[]::text[]) AS instruments,
+                   bool_and(COALESCE(si.strategy_instance_id = ANY($1::uuid[])
+                     AND si.execution_mode = 'shadow'
+                     AND si.metadata->>'catalog_version' = 'us_grains_strategy_catalog_v1', false)) AS m5_fallback_eligible
             FROM strategy_instances si
             CROSS JOIN LATERAL unnest(si.instrument_scope) AS scope(instrument)
            WHERE si.runtime_state = 'running'
@@ -199,8 +232,8 @@ function closeAtUtc(timestampUtc, timeframe) {
   return new Date(timestampMs + (timeframeSeconds(timeframe) * 1000)).toISOString();
 }
 
-function requiredFeedKeysForScope(instruments) {
-  return instruments.flatMap((instrument) => REQUIRED_TIMEFRAMES.map((timeframe) => `${instrument}|${timeframe}`));
+function requiredFeedKeysForScope(instruments, timeframes = REQUIRED_TIMEFRAMES) {
+  return instruments.flatMap((instrument) => timeframes.map((timeframe) => `${instrument}|${timeframe}`));
 }
 
 function selectRequiredFeeds(feeds, requiredInstruments) {

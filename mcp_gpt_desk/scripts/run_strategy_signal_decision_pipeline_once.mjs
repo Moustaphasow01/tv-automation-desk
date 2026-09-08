@@ -5,6 +5,7 @@ import {
   runWithDeploymentProducerAdmission,
 } from "../src/persistence/postgres-deployment-producer-admission.js";
 import { createStrategySignalDecisionPipelineService } from "../src/strategy-signal-decision-pipeline-service.js";
+import { grainsDataPolicyFromEnvironment } from "../src/runtime-config.js";
 
 const input = parseArgs(process.argv.slice(2));
 const client = createDeploymentProducerClient({
@@ -16,7 +17,7 @@ const outcome = await runWithDeploymentProducerAdmission(client, async () => {
   const store = createDeskStoreFromEnv();
   try {
     await store.persistence.initialized;
-    const service = createStrategySignalDecisionPipelineService({ store });
+    const service = createStrategySignalDecisionPipelineService({ store, dataPolicy: grainsDataPolicyFromEnvironment() });
     return await service.runOnce({
       now_utc: input.asOf || input.as_of || input.nowUtc || input.now_utc || new Date().toISOString(),
       limit: input.limit ? Number(input.limit) : 100,

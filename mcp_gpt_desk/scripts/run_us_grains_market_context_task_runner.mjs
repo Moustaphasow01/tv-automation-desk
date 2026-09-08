@@ -3,6 +3,8 @@ import process from "node:process";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { GRAINS_DATA_POLICIES, normalizeGrainsDataPolicy, requiredGrainsTimeframes } from "@tv-automation/desk-domain";
+import { grainsDataPolicyFromEnvironment } from "../src/runtime-config.js";
 
 async function runTask({ store, input }) {
   const { task, bundle, timeContract } = validateRunnerInput(input);
@@ -41,6 +43,9 @@ function validateRunnerInput(input) {
   if (task.task_type !== "LIVE_US_GRAINS_MARKET_CONTEXT_REFRESH")
     throw coded("US_GRAINS_CONTEXT_TASK_TYPE_UNSUPPORTED", false);
   const bundle = task.payload?.bundle;
+  if (normalizeGrainsDataPolicy(bundle?.dataPolicy) === GRAINS_DATA_POLICIES.M5_FALLBACK
+    && grainsDataPolicyFromEnvironment() !== GRAINS_DATA_POLICIES.M5_FALLBACK)
+    throw coded("GRAIN_M5_FALLBACK_DISABLED", false);
   return { task, bundle, timeContract: assertBundle(bundle) };
 }
 
@@ -59,13 +64,14 @@ async function persistOutput({ store, input, bundle, timeContract, output, canon
     publishedAtUtc: validFrom, output });
   const requiredReady = requiredSourcesReady(bundle.sourceStates, {
     ...timeContract,
+    dataPolicy: bundle.dataPolicy,
     marketState: bundle.canonicalMarketSession.marketState,
   });
   const status = requiredReady ? "AVAILABLE" : "PARTIAL";
-  const enforcedReasons = marketTimeReasonCodes({
+  const enforcedReasons = [...marketTimeReasonCodes({
     ...timeContract,
     marketState: bundle.canonicalMarketSession.marketState,
-  });
+  }), ...(bundle.dataPolicy === GRAINS_DATA_POLICIES.M5_FALLBACK ? ["US_GRAINS_M5_FALLBACK_POLICY_ACTIVE"] : [])];
   const snapshotId = `market-context-${digest.slice(0, 24)}`;
   const snapshot = {
     marketContextSnapshotId: snapshotId,
@@ -151,13 +157,18 @@ export function buildPrompt(bundle, timeContract) {
     "When the canonical market is not OPEN, include the exact UTC date and time of marketDataCutoffUtc in the headline, operator summary, or market interpretation so the last-known price date is explicit.",
     "Produce strict JSON matching the schema. Keep ZC and ZW instrument views distinct. Opportunity zones are context framing, not orders.",
     "If sources are incomplete, say so in reasonCodes and narrative; never invent availability, news, weather, macro facts or prices.",
+    ...(bundle.dataPolicy === GRAINS_DATA_POLICIES.M5_FALLBACK ? [
+      "M5_FALLBACK policy is active for the four existing deterministic grain families in SHADOW only. M1 is diagnostic and optional; M5, agri calendar and canonical session remain required. Never infer or reconstruct M1 bars. Explain in French that M5 continuity does not repair a stale M1 feed or remove TradingView's subscription delay. Missing or stale M1 alone is not a global no-trade reason for these M5 families; report it as degraded data quality.",
+    ] : []),
     JSON.stringify(bundle),
   ].join("\n\n");
 }
 
 export function requiredSourcesReady(states, timeInput) {
   const time = normalizeTimeInput(timeInput);
-  const required = ["ZC_1", "ZC_5", "ZW_1", "ZW_5", "market_agri_events", "canonical_grains_session"];
+  const timeframes = requiredGrainsTimeframes({ policy: time.dataPolicy, instruments: ["ZC", "ZW"] });
+  const required = [...["ZC", "ZW"].flatMap((instrument) => timeframes.map((timeframe) => `${instrument}_${timeframe}`)),
+    "market_agri_events", "canonical_grains_session"];
   return required.every((id) => {
     const source = states.find((item) => item.sourceId === id);
     if (!source || source.status !== "AVAILABLE") return false;

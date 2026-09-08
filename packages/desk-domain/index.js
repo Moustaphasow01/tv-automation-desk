@@ -1,3 +1,4 @@
+export { GRAINS_DATA_POLICIES, normalizeGrainsDataPolicy, requiredGrainsTimeframes, evaluateGrainsDataContinuity } from "./src/grains-data-continuity-v1.js";
 export {
   DECISION_MODEL_VERSION,
   DECISION_SCHEMA_VERSION,

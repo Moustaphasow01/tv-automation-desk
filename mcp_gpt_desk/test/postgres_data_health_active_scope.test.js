@@ -243,11 +243,37 @@ test("data timing prefers the computed candle close and keeps sub-second negativ
   assert.equal(m1.ingestion_timing.close_to_received.status, "negative_clock_skew");
 });
 
-function grainHealthPool({ rows, calls = [] }) {
+test("M5 readiness is opt-in, limited to eligible SHADOW scope and keeps M1 stale", async () => {
+  const rows = grainFeedRowsAt({ m1: "2026-09-04T03:33:00.000Z", m5: "2026-09-04T14:30:00.000Z" });
+  const calls = [];
+  const pool = grainHealthPool({ rows, calls, eligible: true });
+  const options = { nowUtc: "2026-09-04T14:36:00.000Z", dataPolicy: "M5_FALLBACK" };
+  const result = await buildPostgresDataHealth(pool, options);
+  assert.equal(result.ok, true);
+  assert.equal(result.state, "degraded");
+  assert.equal(result.data_mode, "M5_FALLBACK");
+  assert.deepEqual(result.readiness_scope.timeframes, ["5"]);
+  assert.equal(result.source_health.total_count, 2);
+  assert.equal(result.source_health.durable, true);
+  assert.ok(result.core_feeds.filter((f) => f.timeframe === "1").every((f) => f.required === false && f.stale === true));
+  assert.equal((await buildPostgresDataHealth(pool, { ...options, dataPolicy: "M1_M5_STRICT" })).ok, false);
+  assert.equal((await buildPostgresDataHealth(grainHealthPool({ rows }), options)).ok, false);
+  assert.equal((await buildPostgresDataHealth(grainHealthPool({ rows, eligible: false }), options)).ok, false);
+  const sql = calls.find((call) => call.sql.includes("FROM strategy_instances"));
+  assert.match(sql.sql, /bool_and.*COALESCE/s);
+  assert.match(sql.sql, /si.execution_mode = 'shadow'/);
+  assert.equal(sql.params[0].length, 8);
+  for (const missing of [rows.filter((f) => f.timeframe !== "5"),
+    grainFeedRowsAt({ m1: "2026-09-04T03:33Z", m5: "2026-09-04T13:30Z" })]) {
+    assert.equal((await buildPostgresDataHealth(grainHealthPool({ rows: missing, eligible: true }), options)).ok, false);
+  }
+});
+
+function grainHealthPool({ rows, calls = [], eligible }) {
   return {
     async query(sql, params = []) {
       calls.push({ sql, params });
-      if (sql.includes("FROM strategy_instances")) return { rows: [{ instruments: ["ZC", "ZW"] }] };
+      if (sql.includes("FROM strategy_instances")) return { rows: [{ instruments: ["ZC", "ZW"], m5_fallback_eligible: eligible }] };
       if (sql.includes("FROM market_feeds")) return { rows };
       if (sql.includes("desk_service_heartbeats")) return { rows: [{ status: "healthy", details: {}, heartbeat_at_utc: "2026-09-04T14:36:00.000Z", release_version: "test" }] };
       throw new Error(`unexpected_sql:${sql}`);

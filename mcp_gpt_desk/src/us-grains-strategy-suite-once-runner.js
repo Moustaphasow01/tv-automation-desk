@@ -2,6 +2,7 @@ import { grainChicagoDate, grainsRuntimeEvaluationDisposition, grainsTradingSess
 import { detectUsGrainsStrategySignals, US_GRAINS_STRATEGY_SUITE_VERSION } from "./us-grains-strategy-suite.js";
 import { publishActionableGrainSignals, selectActionableGrainSignals } from "./us-grains-live-signal-publisher.js";
 import { loadGrainRuntimeMarketInputs } from "./persistence/postgres-grains-runtime-inputs.js";
+import { normalizeGrainsDataPolicy } from "@tv-automation/desk-domain";
 
 export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, detectSignals = detectUsGrainsStrategySignals } = {}) {
   if (!store?.persistence?.pool) throw new Error("US_GRAINS_RUNTIME_STORE_REQUIRED");
@@ -16,7 +17,8 @@ export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, d
   const catalogInstances = await loadGrainCatalogInstances(store, instruments);
   const runningCatalogInstances = selectRunningGrainCatalogInstances(catalogInstances);
   const marketInputs = await loadGrainRuntimeMarketInputs(store.persistence.pool, { tradingDate, asOfUtc });
-  const replay = detectSignals({ ...marketInputs, instruments, startDate: tradingDate, endDate: tradingDate, asOfUtc });
+  const dataPolicy = normalizeGrainsDataPolicy(normalizedArgs["data-policy"]);
+  const replay = detectSignals({ ...marketInputs, instruments, startDate: tradingDate, endDate: tradingDate, asOfUtc, dataPolicy });
   const selectedActionable = tradingSession.state === "OPEN" ? selectActionableGrainSignals({
     replay, asOfUtc, includeExpired: normalizedArgs["include-expired"] === true,
   }) : [];
@@ -24,7 +26,7 @@ export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, d
 
   if (dryRunMode) {
     return summary({
-      asOfUtc, tradingDate, instruments, replay, actionable: snapshotActionable,
+      asOfUtc, tradingDate, instruments, dataPolicy, replay, actionable: snapshotActionable,
       publish: dryRun(snapshotActionable, normalizedArgs), dryRunMode,
       runtimeHeartbeat: readOnlyHeartbeat(runningCatalogInstances, asOfUtc),
       runtimeEvaluations: readOnlyEvaluations(runningCatalogInstances), tradingSession,
@@ -45,7 +47,7 @@ export async function runUsGrainsStrategySuiteOnce({ store, args = {}, nowUtc, d
     store, signals: actionable, sourceClass: normalizedArgs["source-class"] || "SHADOW",
     certificationRunId: normalizedArgs["certification-run-id"] || null, requireRunningInstance: true,
   });
-  return summary({ asOfUtc, tradingDate, instruments, replay, actionable, publish, dryRunMode, runtimeHeartbeat, runtimeEvaluations, tradingSession });
+  return summary({ asOfUtc, tradingDate, instruments, dataPolicy, replay, actionable, publish, dryRunMode, runtimeHeartbeat, runtimeEvaluations, tradingSession });
 }
 
 export function isReadOnlyGrainRun(args = {}) {
@@ -216,13 +218,14 @@ function dryRun(signals, args) {
   return { schema_version: "us_grains_signal_publish_result_v1", source_class: args["source-class"] || "SHADOW", selected_count: signals.length, published_count: 0, dry_run: true, published: [] };
 }
 
-function summary({ asOfUtc, tradingDate, instruments, replay, actionable, publish, dryRunMode, runtimeHeartbeat, runtimeEvaluations, tradingSession }) {
+function summary({ asOfUtc, tradingDate, instruments, dataPolicy, replay, actionable, publish, dryRunMode, runtimeHeartbeat, runtimeEvaluations, tradingSession }) {
   return {
     schema_version: "us_grains_strategy_suite_once_result_v1", as_of_utc: asOfUtc, trading_date: tradingDate, instruments,
     trading_session: tradingSession || null, dry_run: dryRunMode, runtime_heartbeat: runtimeHeartbeat || null,
     runtime_evaluations: runtimeEvaluations || null, raw_signal_count: replay.raw_signal_count,
     context_accepted_count: null, selected_signal_count: null,
     detection_version: replay.suite_version || US_GRAINS_STRATEGY_SUITE_VERSION,
+    data_policy: dataPolicy,
     qualification_stage: "RAW_SIGNAL_BUS_PENDING", execution_simulated: false,
     actionable_signal_count: actionable.length, publish,
   };

@@ -3,16 +3,19 @@ import {
   US_GRAINS_STRATEGY_SUITE_VERSION,
 } from "./us-grains-strategy-suite.js";
 import { evaluateGrainsCalendarCoverage } from "./grains-calendar-coverage.js";
+import { evaluateGrainsDataContinuity, GRAINS_DATA_POLICIES, normalizeGrainsDataPolicy } from "@tv-automation/desk-domain";
+import { grainStrategyIdentity, usGrainsStrategyFamilies } from "./us-grains-strategy-catalog.js";
 
 // This policy runs AFTER raw publication. Detectors never consume its result.
-export function evaluateCausalGrainContextAtBus({ signal, nowUtc }) {
+export function evaluateCausalGrainContextAtBus({ signal, nowUtc, dataPolicy }) {
   if (
     signal.signal_quality?.strategy_suite_version !==
     US_GRAINS_STRATEGY_SUITE_VERSION
   )
     return null;
   const context = signal.setup?.context;
-  const reason = invalidContextReason({ signal, context, nowUtc });
+  const reason = fallbackPolicyReason({ signal, context, dataPolicy })
+    || invalidContextReason({ signal, context, nowUtc });
   if (reason)
     return {
       signal,
@@ -50,6 +53,33 @@ export function evaluateCausalGrainContextAtBus({ signal, nowUtc }) {
     contextSource: "CAUSAL_SIGNAL_PREFIX",
     contextGate,
   };
+}
+
+function fallbackPolicyReason({ signal, context, dataPolicy }) {
+  const quality = context?.data_quality;
+  if (!quality?.data_policy) return null;
+  if (quality.data_policy !== GRAINS_DATA_POLICIES.M5_FALLBACK)
+    return "GRAIN_DATA_POLICY_UNSUPPORTED";
+  if (normalizeGrainsDataPolicy(dataPolicy) !== GRAINS_DATA_POLICIES.M5_FALLBACK)
+    return "GRAIN_M5_FALLBACK_DISABLED";
+  if (!fallbackSignalScopeValid(signal)) return "GRAIN_M5_FALLBACK_SCOPE_UNSUPPORTED";
+  const continuity = evaluateGrainsDataContinuity({
+    policy: dataPolicy, instrument: signal.instrument, timeframes: quality.timeframes,
+  });
+  if (!continuity.tradeable || quality.data_mode !== continuity.data_mode
+    || Date.parse(quality.as_of_utc) !== Date.parse(signal.source_data_cutoff_utc))
+    return "GRAIN_M5_FALLBACK_EVIDENCE_INVALID";
+  return null;
+}
+
+function fallbackSignalScopeValid(signal) {
+  const family = signal.setup?.setup_kind;
+  if (signal.execution_mode_origin !== "SHADOW" || signal.timeframe !== "M5"
+    || !["ZC", "ZW"].includes(signal.instrument) || !usGrainsStrategyFamilies().includes(family))
+    return false;
+  const identity = grainStrategyIdentity(family, signal.instrument);
+  return signal.strategy_instance_id === identity.strategy_instance_id
+    && signal.strategy_version_id === identity.strategy_version_id;
 }
 
 function invalidContextReason({ signal, context, nowUtc }) {

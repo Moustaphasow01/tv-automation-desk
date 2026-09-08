@@ -230,6 +230,23 @@ test("closed-market scheduling reads current calendar knowledge and only include
     "CLOSED_BARS_LAST_KNOWN_MARKET_NOT_OPEN");
   assert.equal(observed.aggregateCutoffs.get("prod__tradingview__ZC1!__1"), "2026-09-07T14:59:00.000Z");
   assert.equal(observed.aggregateCutoffs.get("prod__tradingview__ZC1!__5"), "2026-09-07T14:55:00.000Z");
+
+  const health = await store.health();
+  health.data_readiness.readiness_scope = { data_policy: "M5_FALLBACK" };
+  store.health = async () => health;
+  for (const id of ["prod__tradingview__ZC1!__1", "prod__tradingview__ZW1!__1"])
+    rowsByFeed.set(id, { first: "2026-09-03T13:30Z", last: "2026-09-03T13:31Z", marketDate: "2026-09-03" });
+  await new MarketContextTaskScheduler({ store }).runCycle({ now_utc: ANALYSIS_AS_OF });
+  const fallbackBundle = observed.taskPayload.bundle;
+  assert.equal(fallbackBundle.marketDataCutoffUtc, MARKET_DATA_CUTOFF);
+  assert.equal(fallbackBundle.dataPolicy, "M5_FALLBACK");
+  assert.equal(fallbackBundle.sourceStates.find((s) => s.sourceId === "ZC_1").status, "STALE");
+  assert.deepEqual(fallbackBundle.sourceStates.find((s) => s.sourceId === "ZC_1").requiredFor, []);
+  assert.equal(requiredSourcesReady(fallbackBundle.sourceStates, fallbackBundle), true);
+  assert.equal(requiredSourcesReady(fallbackBundle.sourceStates, { ...fallbackBundle, dataPolicy: "M1_M5_STRICT" }), false);
+  assert.match(buildPrompt(fallbackBundle, fallbackBundle), /M1 is diagnostic and optional/);
+  for (const id of ["ZC_5", "ZW_5", "market_agri_events", "canonical_grains_session"])
+    assert.equal(requiredSourcesReady(fallbackBundle.sourceStates.filter((s) => s.sourceId !== id), fallbackBundle), false);
 });
 
 function requiredSourceStates() {

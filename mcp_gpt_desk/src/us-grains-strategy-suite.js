@@ -1,3 +1,4 @@
+import { normalizeGrainsDataPolicy } from "@tv-automation/desk-domain";
 import {
   evaluateUsGrainsDataQuality,
   grainChicagoDate,
@@ -148,6 +149,7 @@ function detectInstrument({
         peerRows: peerDays[tradingDate] || [],
         events,
         agriCalendarCoverage,
+        dataPolicy: config.dataPolicy,
       });
       framesByCutoff.set(cutoff, frame);
       return frame;
@@ -174,6 +176,7 @@ function buildFrameAtClose(input) {
     peerM5Rows: closedBy(input.peerRows, cutoff, 5),
     events: input.events,
     agriCalendarCoverage: input.agriCalendarCoverage,
+    dataPolicy: input.dataPolicy,
   });
 }
 
@@ -188,6 +191,7 @@ export function buildGrainDayFrame(input = {}) {
     asOfUtc: cutoff,
     m1Rows: closedBy(input.m1Rows || [], cutoff, 1),
     m5Rows: rows,
+    dataPolicy: input.dataPolicy,
   });
   const context = buildCausalGrainContext({
     instrument: input.instrument,
@@ -198,11 +202,7 @@ export function buildGrainDayFrame(input = {}) {
     peerRows: closedBy(input.peerM5Rows || [], cutoff, 5),
     events: input.events || [],
     agriCalendarCoverage: input.agriCalendarCoverage,
-    dataQuality: {
-      tradeable: quality.tradeable,
-      status: quality.status,
-      issues: quality.issues,
-    },
+    dataQuality: contextDataQuality(quality),
   });
   const issues = [
     ...(opening.high === null ? ["OPENING_RANGE_MISSING"] : []),
@@ -234,6 +234,12 @@ export function buildGrainMarketContext(input = {}) {
     rows: closedBy(input.rows || [], cutoff, 5),
     peerRows: closedBy(input.peerRows || [], cutoff, 5),
   });
+}
+
+function contextDataQuality(quality) {
+  return quality.data_policy ? quality : {
+    tradeable: quality.tradeable, status: quality.status, issues: quality.issues,
+  };
 }
 export function adjudicateGrainSignal({ signal, frame } = {}) {
   return adjudicateCausalGrainSignal({ signal, context: frame?.context });
@@ -491,6 +497,7 @@ function normalizeRowsBySymbol(source) {
 }
 function configFor(input) {
   return {
+    dataPolicy: normalizeGrainsDataPolicy(input.dataPolicy),
     instruments: array(input.instruments || input.instrument || ["ZW"])
       .flatMap((value) => String(value).split(","))
       .map(upper)

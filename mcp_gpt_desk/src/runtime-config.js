@@ -1,3 +1,5 @@
+import { GRAINS_DATA_POLICIES } from "@tv-automation/desk-domain";
+
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 const INSECURE_EXACT_VALUES = new Set([
@@ -71,6 +73,11 @@ export function validateRuntimeConfiguration(env = process.env) {
 
 export function booleanEnv(value) {
   return TRUE_VALUES.has(String(value || "").trim().toLowerCase());
+}
+
+export function grainsDataPolicyFromEnvironment(env = process.env) {
+  return booleanEnv(env.DESK_US_GRAINS_M5_FALLBACK_ENABLED)
+    ? GRAINS_DATA_POLICIES.M5_FALLBACK : GRAINS_DATA_POLICIES.STRICT;
 }
 
 function requireSecret(value, name, minimumLength, errors) {

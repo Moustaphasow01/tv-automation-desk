@@ -1,3 +1,4 @@
+export * from "./src/grains-data-continuity-v1.js";
 export type DomainStatus = "accepted" | "rejected" | "review_required";
 export type DomainResult = { ok: boolean; status: DomainStatus; reasons: string[]; flags: string[]; evidence: Record<string, unknown>; };
 

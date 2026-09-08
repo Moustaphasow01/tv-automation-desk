@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createDeskStoreFromEnv } from "../src/store.js";
+import { grainsDataPolicyFromEnvironment } from "../src/runtime-config.js";
 import {
   createDeploymentProducerClient,
   runWithDeploymentProducerAdmission,
@@ -13,6 +14,7 @@ main().catch((error) => {
 
 async function main() {
   const args = normalizeGrainRunArgs(parseArgs(process.argv.slice(2)));
+  args["data-policy"] ||= grainsDataPolicyFromEnvironment();
   const client = createDeploymentProducerClient({
     connectionString: process.env.DATABASE_URL,
     applicationName: "desk-us-grains-strategy-suite",

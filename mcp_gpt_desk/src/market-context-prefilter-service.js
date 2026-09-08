@@ -1,13 +1,14 @@
-import { canonicalSha256, evaluateMarketContextPrefilterV1 } from "@tv-automation/desk-domain";
+import { canonicalSha256, evaluateMarketContextPrefilterV1, GRAINS_DATA_POLICIES, normalizeGrainsDataPolicy } from "@tv-automation/desk-domain";
 import { evaluateCausalGrainContextAtBus } from "./grains-causal-context-prefilter.js";
 
 const GRAIN_INSTRUMENTS = new Set(["ZC", "ZW", "ZC1!", "ZW1!"]);
 
 export class MarketContextPrefilterService {
-  constructor({ repository, pool, eventOutbox = null } = {}) {
+  constructor({ repository, pool, eventOutbox = null, dataPolicy } = {}) {
     this.repository = repository;
     this.pool = pool;
     this.eventOutbox = eventOutbox;
+    this.dataPolicy = normalizeGrainsDataPolicy(dataPolicy);
   }
 
   async evaluate(signals, nowUtc, options = {}) {
@@ -19,7 +20,8 @@ export class MarketContextPrefilterService {
     const preferEmbedded = options.preferEmbeddedContextGateDecision === true
       || options.prefer_embedded_context_gate_decision === true;
     const current = await this.repository?.current("US_GRAINS_CBOT", nowUtc);
-    const evaluated = grains.map((signal) => evaluateGrainContext({ signal, nowUtc, preferEmbedded, snapshot: current?.snapshot || null }));
+    const evaluated = grains.map((signal) => evaluateGrainContext({ signal, nowUtc, preferEmbedded,
+      dataPolicy: this.dataPolicy, snapshot: current?.snapshot || null }));
     await this.#persist(evaluated, nowUtc);
     return [...passthrough, ...evaluated];
   }
@@ -66,9 +68,13 @@ export class MarketContextPrefilterService {
   }
 }
 
-function evaluateGrainContext({ signal, nowUtc, preferEmbedded, snapshot }) {
-  const causal = preferEmbedded ? evaluateCausalGrainContextAtBus({ signal, nowUtc }) : null;
+function evaluateGrainContext({ signal, nowUtc, preferEmbedded, snapshot, dataPolicy }) {
+  const fallback = fallbackContextScope({ signal, snapshot });
+  const causal = preferEmbedded || fallback.signal ? evaluateCausalGrainContextAtBus({ signal, nowUtc, dataPolicy }) : null;
   if (causal) return causal;
+  if (fallback.signal || fallback.snapshot)
+    return { signal, decision: "WAIT", admissible: false, reasonCodes: ["GRAIN_M5_FALLBACK_CAUSAL_SIGNAL_REQUIRED"],
+      marketContextSnapshotId: null, contextSource: "M5_FALLBACK_SCOPE_GUARD" };
   const embedded = preferEmbedded ? embeddedGrainContextDecision(signal) : null;
   if (embedded) return { signal, ...embedded, marketContextSnapshotId: null, contextSource: "LEGACY_SIGNAL_EMBEDDED" };
   const lookaheadReason = contextLookaheadReason(snapshot, nowUtc);
@@ -80,6 +86,13 @@ function evaluateGrainContext({ signal, nowUtc, preferEmbedded, snapshot }) {
     });
   return { signal, ...decision, contextSource: "MARKET_CONTEXT_SNAPSHOT",
     marketContextSnapshotId: snapshot?.marketContextSnapshotId || snapshot?.market_context_snapshot_id || null };
+}
+
+function fallbackContextScope({ signal, snapshot }) {
+  return {
+    signal: signal.setup?.context?.data_quality?.data_policy === GRAINS_DATA_POLICIES.M5_FALLBACK,
+    snapshot: snapshot?.sourceStates?.some((source) => source.metadata?.data_policy === GRAINS_DATA_POLICIES.M5_FALLBACK),
+  };
 }
 
 function contextSignalIdentity(signal) {

@@ -45,6 +45,7 @@ export function buildCausalGrainContext(input = {}) {
     risk_multiplier: bias === "NEUTRAL" ? 0.65 : 0.85,
     reason_codes: [
       bias,
+      ...array(input.dataQuality?.reason_codes),
       ...calendarCoverage.reasonCodes,
       !calendarCoverage.admissible
         ? "AGRI_EVENT_COVERAGE_UNKNOWN"
@@ -114,6 +115,7 @@ function gateReasons({ facts, context }) {
     facts.blackout ? "AGRI_REPORT_BLACKOUT" : "",
     facts.qualityBlocked ? "DATA_QUALITY_BLOCKED" : "",
     facts.calendarBlocked ? "AGRI_CALENDAR_COVERAGE_UNPROVEN" : "",
+    ...(context.data_quality?.reason_codes || []),
     context.instrument_bias,
   ].filter(Boolean);
 }

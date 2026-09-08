@@ -1,5 +1,6 @@
 import { chicagoPartsAtUtc } from "./us-grains-chicago-time.js";
 import { cbotGrainsRthSessionState } from "./cbot-grains-rth-calendar.js";
+import { evaluateGrainsDataContinuity, GRAINS_DATA_POLICIES, normalizeGrainsDataPolicy } from "@tv-automation/desk-domain";
 
 export const US_GRAINS_DATA_QUALITY_VERSION = "us_grains_data_quality_v2";
 
@@ -19,15 +20,19 @@ export function evaluateUsGrainsDataQuality(input = {}) {
   const instrument = upper(input.instrument || "ZW");
   const tradingDate = String(input.tradingDate || input.trading_date || "");
   const asOfUtc = iso(input.asOfUtc || input.as_of_utc || null);
+  const dataPolicy = normalizeGrainsDataPolicy(input.dataPolicy);
+  const continuityPolicy = { dataPolicy, tradingDate };
   const m1 = qualityForTimeframe(input.m1Rows || input.m1_rows || [], "1", {
     ...timeframePolicy("1", asOfUtc),
     asOfUtc,
     maxGapMinutes: MAX_GAP_MINUTES_M1,
+    ...continuityPolicy,
   });
   const m5 = qualityForTimeframe(input.m5Rows || input.m5_rows || [], "5", {
     ...timeframePolicy("5", asOfUtc),
     asOfUtc,
     maxGapMinutes: MAX_GAP_MINUTES_M5,
+    ...continuityPolicy,
   });
   const issues = [
     ...m1.issues.map((code) => `M1_${code}`),
@@ -46,6 +51,8 @@ export function evaluateUsGrainsDataQuality(input = {}) {
     tradeable: !issues.some((code) => code.includes("BLOCKING")),
     issues,
     timeframes: { M1: m1, M5: m5 },
+    ...(dataPolicy === GRAINS_DATA_POLICIES.M5_FALLBACK
+      ? evaluateGrainsDataContinuity({ policy: dataPolicy, instrument, timeframes: { M1: m1, M5: m5 } }) : {}),
   };
 }
 
@@ -148,9 +155,7 @@ export function grainsRuntimeEvaluationDisposition({
 
 function qualityForTimeframe(rows, timeframe, policy) {
   const stepMinutes = timeframe === "1" ? 1 : 5;
-  const rthRows = normalizeGrainRows(rows).filter((row) =>
-    isClosedRthRow(row, stepMinutes, policy.asOfUtc),
-  );
+  const rthRows = closedPolicyRows({ rows, stepMinutes, policy });
   const gaps = gapCount(
     rthRows,
     timeframe === "1" ? 1 : 5,
@@ -166,6 +171,7 @@ function qualityForTimeframe(rows, timeframe, policy) {
     ...(volumeSum <= 0 ? ["VOLUME_ZERO_BLOCKING"] : []),
     ...(range !== null && range <= 0 ? ["RANGE_ZERO_BLOCKING"] : []),
     ...(gaps > 0 ? ["GAPS_DEGRADED"] : []),
+    ...continuityIssues({ rows: rthRows, stepMinutes, policy }),
   ];
   return {
     timeframe,
@@ -186,6 +192,28 @@ function qualityForTimeframe(rows, timeframe, policy) {
         : "READY",
     issues,
   };
+}
+
+function closedPolicyRows({ rows, stepMinutes, policy }) {
+  const expectedDate = policy.tradingDate || (policy.asOfUtc && grainChicagoDate(policy.asOfUtc));
+  return normalizeGrainRows(rows).filter((row) =>
+    isClosedRthRow(row, stepMinutes, policy.asOfUtc)
+      && (policy.dataPolicy !== GRAINS_DATA_POLICIES.M5_FALLBACK || !expectedDate
+        || grainChicagoDate(row.timestamp_utc) === expectedDate));
+}
+
+function continuityIssues({ rows, stepMinutes, policy }) {
+  if (policy.dataPolicy !== GRAINS_DATA_POLICIES.M5_FALLBACK) return [];
+  if (!policy.asOfUtc) return ["CUTOFF_UNAVAILABLE_BLOCKING"];
+  const latestClose = rows.length
+    ? Date.parse(rows.at(-1).timestamp_utc) + stepMinutes * 60_000 : NaN;
+  const stale = !Number.isFinite(latestClose)
+    || Date.parse(policy.asOfUtc) - latestClose > stepMinutes * 60_000;
+  const duplicate = new Set(rows.map((row) => row.timestamp_utc)).size !== rows.length;
+  return [
+    ...(stale ? ["LATEST_BAR_STALE_BLOCKING"] : []),
+    ...(duplicate ? ["DUPLICATE_TIMESTAMP_BLOCKING"] : []),
+  ];
 }
 
 function isClosedRthRow(row, stepMinutes, asOfUtc) {
