@@ -1,4 +1,11 @@
-# TV Automation — préproduction locale
+# TV Automation — Trading Desk VNext
+
+Le code canonique est publié sur
+[`Moustaphasow01/tv-automation-desk`](https://github.com/Moustaphasow01/tv-automation-desk).
+Le Desk est déployé sur un VPS Windows OVH en mode SHADOW / semi-manuel ;
+l'exécution physique broker reste désactivée par défaut. Pour reprendre le
+développement depuis un poste neuf, commencer par le
+[guide de reprise du poste](docs/WORKSTATION_RECOVERY_HANDOFF_2026-09-08.md).
 
 Cette copie est un projet indépendant du dépôt Firebase/Google Cloud d'origine. Son runtime cible est entièrement local :
 
@@ -11,9 +18,9 @@ Cette copie est un projet indépendant du dépôt Firebase/Google Cloud d'origin
 Aucune commande de déploiement Firebase, Firestore, Cloud Run ou GCloud n'est incluse dans le démarrage local.
 Le frontend utilise toujours l'API locale : aucun mode mock n'est compilé dans le bundle de production.
 
-Le dépôt contient également le kit prêt à installer sur un futur VPS Windows :
+Le dépôt contient le kit utilisé pour installer et mettre à jour le VPS Windows :
 PostgreSQL natif, Caddy, services Node.js, sauvegardes, rollback et NinjaTrader
-Sim101. Rien n'est déployé à distance à ce stade. Voir
+Sim101. Voir
 [la readiness pré-VPS](docs/VPS_WINDOWS_READINESS_2026-07-23.md) et
 [le runbook de cutover](docs/VPS_WINDOWS_CUTOVER_RUNBOOK_2026-07-23.md).
 
