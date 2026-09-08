@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { MarketContextRepository } from "../src/market-context-repository.js";
 import { createTheoreticalTestDatabase } from "./support/theoretical-postgres-fixtures.js";
+import { MarketContextPrefilterService } from "../src/market-context-prefilter-service.js";
+import { marketContextSourceReasonSignature } from "../src/market-context-task-scheduler.js";
 
 test("context PostgreSQL round trip preserves separate clocks and millisecond expiry without provider effects",
   { skip: process.env.RUN_POSTGRES_TESTS !== "1" }, async (t) => {
@@ -41,6 +43,37 @@ test("context PostgreSQL round trip preserves separate clocks and millisecond ex
 async function providerCount(pool) {
   return Number((await pool.query("SELECT count(*)::int AS count FROM broker_provider_commands")).rows[0].count);
 }
+
+test("M5 policy identity survives normalized PostgreSQL manifests and snapshots and blocks legacy bypass", {
+  skip: process.env.RUN_POSTGRES_TESTS !== "1",
+}, async (t) => {
+  const database = await createTheoreticalTestDatabase();
+  t.after(() => database.close());
+  const repository = new MarketContextRepository({ pool: database.pool, initialized: Promise.resolve() });
+  const snapshot = testContext();
+  const marker = "US_GRAINS_M5_FALLBACK_POLICY_ACTIVE";
+  snapshot.reasonCodes = [marker];
+  const optionalM1 = { ...snapshot.sourceStates[0], status: "STALE", requiredFor: [], reasonCodes: [marker],
+    dataCutoff: snapshot.marketDataCutoffUtc, metadata: { data_policy: "M5_FALLBACK" } };
+  const manifest = await repository.upsertSourceCoverage(optionalM1);
+  assert.equal(manifest.metadata, undefined);
+  assert.equal(marketContextSourceReasonSignature(manifest).dataPolicy, "M5_FALLBACK");
+  assert.notDeepEqual(marketContextSourceReasonSignature(manifest), marketContextSourceReasonSignature({ ...manifest, reasonCodes: [] }));
+  snapshot.sourceStates[0] = manifest;
+  await repository.persistAnalysis({ snapshot, brief: { ...snapshot, marketDeskBriefId: "brief-m5-policy-test",
+    headline: "Repli M5 de test", operatorSummary: "Fixture isolée sans exécution." } });
+  const result = await repository.current("US_GRAINS_CBOT", "2026-09-07T15:05:00.000Z");
+  assert.equal(result.snapshot.status, "AVAILABLE");
+  assert.ok(result.snapshot.reasonCodes.includes(marker));
+  for (const dataPolicy of ["M1_M5_STRICT", "M5_FALLBACK"]) {
+    const service = new MarketContextPrefilterService({ repository, dataPolicy });
+    const [decision] = await service.evaluate([{ signal_id: "legacy", instrument: "ZW", direction: "LONG",
+      signal_quality: { context_gate: { recommendation: "TAKE" } } }], "2026-09-07T15:05:00.000Z", { preferEmbeddedContextGateDecision: true });
+    assert.equal(decision.admissible, false);
+    assert.deepEqual(decision.reasonCodes, ["GRAIN_M5_FALLBACK_CAUSAL_SIGNAL_REQUIRED"]);
+  }
+  assert.equal(await providerCount(database.pool), 0);
+});
 
 function testContext() {
   const analysis = "2026-09-07T15:00:00.534Z";

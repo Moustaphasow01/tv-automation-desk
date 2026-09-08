@@ -90,6 +90,7 @@ export class MarketContextTaskScheduler {
     const reasonHash = canonicalSha256({ triggerType, eventReasons, cutoffBucket,
       eventFacts: eventReasons.length ? eventFacts : null,
       timeContractVersion: MARKET_CONTEXT_TIME_CONTRACT_VERSION,
+      ...(session.dataPolicy === GRAINS_DATA_POLICIES.M5_FALLBACK ? { dataPolicy: session.dataPolicy } : {}),
       session: session.marketSession, sourceStates: sourceStates.map(sourceSignature) }).slice(0, 24);
     const existing = await this.pool.query(`SELECT dispatch_id, agent_task_id FROM market_context_task_dispatches
       WHERE universe=$1 AND source_data_cutoff_utc=$2 AND reason_hash=$3`, [MARKET_CONTEXT_UNIVERSE, cutoffBucket, reasonHash]);
@@ -184,9 +185,10 @@ export class MarketContextTaskScheduler {
         coverageStart: row.coverage_start, coverageEnd, asOf: nowUtc,
         lastSuccessfulAt: coverageEnd, provider: "TRADINGVIEW_WEBHOOK", datasetVersion: "market_candles_v1",
         missingness: available ? 0 : 1,
-        reasonCodes: marketBarReasonCodes({ available, stale: freshness.stale,
+        reasonCodes: [...marketBarReasonCodes({ available, stale: freshness.stale,
           expectedMarketDateMismatch: freshness.expectedMarketDateMismatch,
           expectedMarketCloseMismatch: freshness.expectedMarketCloseMismatch, marketState: session.marketState }),
+          ...(session.dataPolicy === GRAINS_DATA_POLICIES.M5_FALLBACK ? ["US_GRAINS_M5_FALLBACK_POLICY_ACTIVE"] : [])],
         metadata: { feed_id: feedId, row_count: Number(row.row_count || 0), age_ms: Number.isFinite(ageMs) ? ageMs : null,
           data_policy: session.dataPolicy,
           freshness_threshold_ms: freshnessMs, latest_market_date: row.latest_market_date || null,
@@ -314,8 +316,8 @@ function floorUtc(value, minutes) { const date = new Date(value); date.setUTCSec
 function sourceSignature(source) { return marketContextSourceReasonSignature(source); }
 export function marketContextSourceReasonSignature(source) {
   return { sourceId: source.sourceId, status: source.status, datasetVersion: source.datasetVersion,
-    ...(source.metadata?.data_policy === GRAINS_DATA_POLICIES.M5_FALLBACK
-      ? { dataPolicy: source.metadata.data_policy, requiredFor: source.requiredFor } : {}) };
+    ...(source.reasonCodes?.includes("US_GRAINS_M5_FALLBACK_POLICY_ACTIVE")
+      ? { dataPolicy: GRAINS_DATA_POLICIES.M5_FALLBACK, requiredFor: source.requiredFor } : {}) };
 }
 export function marketContextFreshnessThresholdMs({ timeframe, readinessPolicy = null } = {}) {
   const fallbackMs = String(timeframe) === "1" ? 150_000 : 420_000;

@@ -17,12 +17,12 @@ Le module propriétaire est `market-data` : politique pure dans `packages/desk-d
 ## Validation avant livraison
 
 - Backend complet : 1 587 tests réussis, zéro échec, 50 tests conditionnels ignorés dans cette invocation.
-- PostgreSQL isolé : six tests réels réussis après correction d'une fixture non valide ; bus → contexte → Risk → HumanGate, zéro ProviderCommand/ProviderEvent.
+- PostgreSQL isolé : chaîne réelle bus → contexte → Risk → HumanGate, zéro ProviderCommand/ProviderEvent. Une preuve supplémentaire couvre le marqueur de repli après normalisation et aller-retour SQL : la politique ne dépend pas de métadonnées supprimées par le contrat de lecture.
 - Domaine : gate de couverture 98,70 % des lignes et 96,94 % des fonctions ; seuils 90 % respectés.
 - Tests ciblés : M1 absent/figé/partiel/sans volume, récupération M1, M5 manquant/vieux/dupliqué/hors date/avec trous/sans volume, calendrier, expiration, scope, rollback, cutoff et invariance causale.
 - Relecture en lecture seule des bougies du 8 septembre, avec la version du calendrier connue à chaque clôture : 24 candidats inchangés (16 ZC, 8 ZW). Qualité admise : 0 en strict, 24 avec repli ; préfiltre : 23 admissibles, 1 refus directionnel. Ce n'est ni un backtest de rentabilité, ni une preuve de livraison d'alertes, ni une reconstitution des latences réelles. Aucun candidat historique n'est republié.
 - Architecture, exceptions, sécurité supply-chain, runtime-safety, contrats stratégies, déploiement Windows et compatibilité API passent. Le guard static-quality reste rouge sur la dette préexistante ; les budgets ne sont pas relevés et aucune nouvelle fonction ne dépasse le seuil de complexité.
-- Le test local d'écriture de configuration a révélé que la session Windows locale n'est pas élevée. Le script exige désormais explicitement un administrateur avant toute création de fichier privé. Le test complet Preview/Apply/conflit/rollback doit être exécuté dans un répertoire isolé sur le VPS administrateur avant activation réelle.
+- Le test local d'écriture de configuration a révélé que la session Windows locale n'est pas élevée. Le script exige désormais explicitement un administrateur avant toute création de fichier privé. Le test complet Preview/Apply/conflit/rollback a réussi dans un répertoire isolé du VPS administrateur, sans modifier sa configuration de production.
 
 ## Retour arrière et limites
 

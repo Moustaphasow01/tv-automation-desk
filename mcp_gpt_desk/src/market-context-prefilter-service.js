@@ -91,7 +91,8 @@ function evaluateGrainContext({ signal, nowUtc, preferEmbedded, snapshot, dataPo
 function fallbackContextScope({ signal, snapshot }) {
   return {
     signal: signal.setup?.context?.data_quality?.data_policy === GRAINS_DATA_POLICIES.M5_FALLBACK,
-    snapshot: snapshot?.sourceStates?.some((source) => source.metadata?.data_policy === GRAINS_DATA_POLICIES.M5_FALLBACK),
+    snapshot: array(snapshot?.reasonCodes).includes("US_GRAINS_M5_FALLBACK_POLICY_ACTIVE")
+      || array(snapshot?.sourceStates).some((source) => array(source.reasonCodes).includes("US_GRAINS_M5_FALLBACK_POLICY_ACTIVE")),
   };
 }
 
