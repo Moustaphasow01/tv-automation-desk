@@ -25,6 +25,20 @@ La release VPS `.2` contient le correctif fonctionnel `eeeb530`. Le commit
 `2ee9a72` ajoute sa preuve de certification. Les commits postérieurs purement
 documentaires ne signifient pas qu'une nouvelle release a été déployée.
 
+## Archive de l'ancien espace de travail
+
+Les sources utiles qui existaient encore uniquement dans l'ancien dépôt ont
+été conservées séparément, sans les mélanger à VNext :
+
+- dépôt : `https://github.com/Moustaphasow01/TV_Automation.git` ;
+- branche : `codex/workspace-recovery-archive-20260908` ;
+- commit certifié : `d512ad523e3750178f5998f0f2dd7421fdc76741`.
+
+Cette branche sert uniquement à l'archéologie et à la récupération sélective.
+Elle ne doit jamais être fusionnée intégralement dans VNext. Les exports
+générés et snapshots runtime locaux n'y sont volontairement pas stockés : la
+base PostgreSQL et les sauvegardes du VPS restent la vérité opérationnelle.
+
 ## Prérequis du nouveau poste
 
 - Git ;
