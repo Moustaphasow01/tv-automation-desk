@@ -9,11 +9,13 @@ import type { WorkspacePreferencesController } from "./useWorkspacePreferences";
 import { createChartCursorLink, type ChartEvent } from "./chartAnnotations";
 import { useWorkspaceViewport } from "./useWorkspaceViewport";
 import { MobileMarketPicker } from "./MobileMarketPicker";
+import type { ObservedMarketCatalog } from "./useObservedMarketCatalog";
 
 type Props = {
   model: LiveTradingModel; instrument: string; timeframe: string; overlay: TradeOverlay | null;
   preferred: readonly string[]; settings: WorkspacePreferencesController; events: readonly ChartEvent[];
   pausedSlots?: readonly string[];
+  catalog?: ObservedMarketCatalog;
   onScopeChange(scope: { instrument?: string; timeframe?: string }): void;
   onPauseChange(instrument: string, paused: boolean): void;
 };
@@ -22,8 +24,8 @@ export function MarketBoard(props: Props) {
   const { model, instrument, timeframe, overlay, preferred, settings, events, onScopeChange, onPauseChange } = props;
   const { preferences, update } = settings;
   const mobile = useWorkspaceViewport();
-  const supported = model.marketSeries.supportedInstruments;
-  const units = model.marketSeries.supportedTimeframes;
+  const supported = props.catalog?.instruments ?? model.marketSeries.supportedInstruments;
+  const unitsFor = (symbol: string) => props.catalog?.cryptoInstruments.includes(symbol) ? props.catalog.cryptoTimeframes : model.marketSeries.supportedTimeframes;
   const [expanded, setExpanded] = useState<number | null>(null);
   const [resumeGeneration, setResumeGeneration] = useState(0);
   const cursor = useMemo(() => createChartCursorLink(), []);
@@ -31,8 +33,8 @@ export function MarketBoard(props: Props) {
     const defaults = [...new Set([instrument, ...preferred, ...supported])].filter((symbol) => supported.includes(symbol));
     return Array.from({ length: Math.min(preferences.chartCount, supported.length || 1) }, (_, index) => index === 0 ? instrument : supported.includes(preferences.secondary[index - 1]) ? preferences.secondary[index - 1] : defaults[index] ?? instrument);
   }, [instrument, preferred, supported, preferences.chartCount, preferences.secondary]);
-  const watchSymbols = [...new Set([...preferred, ...instruments])];
-  const watchProps = { model, symbols: watchSymbols, timeframe, selected: instrument, settings, onSelect: (symbol: string) => onScopeChange({ instrument: symbol }) };
+  const watchSymbols = [...new Set([...preferred, ...instruments, ...(props.catalog?.cryptoInstruments ?? [])])];
+  const watchProps = { model, supported, symbols: watchSymbols, timeframe, selected: instrument, settings, onSelect: (symbol: string) => onScopeChange({ instrument: symbol, ...(unitsFor(symbol).includes(timeframe) ? {} : { timeframe: "5" }) }) };
   return <section className="tw-market-board" data-watchlist={!mobile && preferences.watchlistVisible} data-mobile={mobile} aria-label="Espace marchés">
     {mobile ? <MobileMarketPicker {...watchProps} /> : preferences.watchlistVisible ? <WatchlistDisclosure><Watchlist {...watchProps} /></WatchlistDisclosure> : null}
     {mobile && props.pausedSlots?.some((id) => id !== "chart-0") ? <div className="tw-hidden-pauses" role="status"><span>Une lecture figée est conservée sur un graphique masqué.</span><button onClick={() => setResumeGeneration((value) => value + 1)}>Reprendre toutes les lectures</button></div> : null}
@@ -45,11 +47,13 @@ export function MarketBoard(props: Props) {
       {preferences.linkedCursor && !mobile ? <p className="tw-chart-link-note">Même horodatage, uniquement si une bougie existe dans chaque graphique. Aucun prix interpolé.</p> : null}
       <div className="tw-chart-grid" data-count={mobile || expanded !== null ? 1 : instruments.length}>
         {instruments.map((symbol, index) => {
-          const unit = index === 0 ? timeframe : units.includes(preferences.timeframes[index]) ? preferences.timeframes[index] : timeframe;
+          const units = unitsFor(symbol);
+          const requested = index === 0 ? timeframe : preferences.timeframes[index] || timeframe;
+          const unit = units.includes(requested) ? requested : units.includes("5") ? "5" : units[0] ?? timeframe;
           const hidden = mobile ? index !== 0 : expanded !== null && expanded !== index;
           return <div className="tw-chart-slot" key={index} hidden={hidden}>
             <div className="tw-chart-slot-controls"><label className="tw-chart-select"><span>Graphique {index + 1}</span><select aria-label={"Actif du graphique " + (index + 1)} value={symbol} onChange={(event) => {
-              if (index === 0) onScopeChange({ instrument: event.target.value });
+              if (index === 0) watchProps.onSelect(event.target.value);
               else update({ secondary: instruments.slice(1).map((item, position) => position === index - 1 ? event.target.value : item) });
             }}>{supported.map((value) => <option key={value} value={value}>{value} · {marketName(value)}</option>)}</select></label>
               <label><span className="tw-sr-only">Unité du graphique {index + 1}</span><select aria-label={"Unité du graphique " + (index + 1)} value={unit} onChange={(event) => {

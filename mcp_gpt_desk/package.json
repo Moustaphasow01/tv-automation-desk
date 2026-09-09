@@ -71,6 +71,7 @@
     "@tv-automation/desk-audit": "file:../packages/desk-audit",
     "@tv-automation/desk-contracts": "file:../packages/desk-contracts",
     "@tv-automation/desk-domain": "file:../packages/desk-domain",
+    "@tv-automation/desk-market-data": "file:../packages/desk-market-data",
     "@tv-automation/desk-replay-engine": "file:../packages/desk-replay-engine",
     "@tv-automation/desk-time": "file:../packages/desk-time",
     "ajv": "^8.17.1",

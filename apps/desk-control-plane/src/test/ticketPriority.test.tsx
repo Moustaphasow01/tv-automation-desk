@@ -54,7 +54,7 @@ beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   focus.mockReset(); element = document.createElement("div"); document.body.append(element); root = createRoot(element);
 });
-afterEach(async () => { await act(async () => root.unmount()); element.remove(); document.querySelectorAll("dialog,input").forEach((item) => item.remove()); vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); element.remove(); document.querySelectorAll("dialog,input,select").forEach((item) => item.remove()); vi.restoreAllMocks(); });
 
 describe("Automatic chart pivot lifecycle", () => {
   it("keeps ZW without a ticket, pivots to ZC on arrival, and does not hijack a later manual chart choice", async () => {
@@ -84,6 +84,13 @@ describe("Automatic chart pivot lifecycle", () => {
   it("retains a manual opt-out while offering explicit navigation", async () => {
     await render({ ...initial(), automatic: false, tickets: tickets() }); expect(focus).not.toHaveBeenCalled();
     await act(async () => api.showNext()); expect(focus).toHaveBeenCalledTimes(1);
+  });
+  it("can prioritize an arriving ticket after a market dropdown selection without requiring an extra tap", async () => {
+    const select = document.createElement("select"); document.body.append(select); select.focus();
+    await render(initial()); expect(focus).not.toHaveBeenCalled();
+    await render({ ...initial(), tickets: tickets() });
+    expect(focus).toHaveBeenCalledWith(expect.objectContaining({ instrument: "ZC" }));
+    expect(document.activeElement).toBe(select);
   });
   it("never switches through multiple tickets in a burst", async () => {
     const items = [...tickets(), { ...tickets()[0], key: "trade:second", instrument: "ZW" }];

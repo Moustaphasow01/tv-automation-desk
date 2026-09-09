@@ -6,7 +6,7 @@ import { marketName } from "./workspaceModel";
 
 export function MobileMarketPicker(props: ComponentProps<typeof Watchlist>) {
   const [open, setOpen] = useState(false);
-  const symbols = [...new Set([...props.settings.preferences.favorites, ...props.symbols])].filter((symbol) => props.model.marketSeries.supportedInstruments.includes(symbol));
+  const symbols = [...new Set([...props.settings.preferences.favorites, ...props.symbols])].filter((symbol) => (props.supported ?? props.model.marketSeries.supportedInstruments).includes(symbol));
   return <>
     <nav className="tw-mobile-markets" aria-label="Accès rapide aux marchés">
       <div className="tw-mobile-markets__shortcuts">{symbols.map((symbol) => <button key={symbol} aria-pressed={props.selected === symbol} title={marketName(symbol)} onClick={() => props.onSelect(symbol)}>{symbol}</button>)}</div>

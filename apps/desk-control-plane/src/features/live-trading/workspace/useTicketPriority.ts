@@ -40,6 +40,8 @@ export function useTicketPriority(input: Input) {
 }
 
 function attentionOccupied() {
+  // A chart selector may keep focus after its native picker closes. It is navigation,
+  // not order entry; order form controls are already protected by their open dialog.
   return document.visibilityState === "hidden" || Boolean(document.querySelector("dialog[open]"))
-    || Boolean(document.activeElement?.matches("input, textarea, select, [contenteditable='true']"));
+    || Boolean(document.activeElement?.matches("input, textarea, [contenteditable='true']"));
 }

@@ -66,7 +66,7 @@ export function sideLabel(value: string): string {
 }
 
 export function marketName(symbol: string): string {
-  return ({ ZC: "Maïs", ZW: "Blé", ZS: "Soja", ES: "S&P 500", MES: "Micro S&P 500", NQ: "Nasdaq 100", MNQ: "Micro Nasdaq 100" } as Record<string, string>)[symbol] ?? symbol;
+  return ({ ZC: "Maïs", ZW: "Blé", ZS: "Soja", ES: "S&P 500", MES: "Micro S&P 500", NQ: "Nasdaq 100", MNQ: "Micro Nasdaq 100", BTCUSD: "Bitcoin", SOLUSD: "Solana", DOGEUSD: "Dogecoin" } as Record<string, string>)[symbol] ?? symbol;
 }
 
 export function workspaceCopy(value: string | null | undefined): string {

@@ -7,7 +7,7 @@ import { useChartAnnotations, type ChartAnnotations } from "./useChartAnnotation
 
 type ChartHandle = { chart: IChartApi; candles: ISeriesApi<"Candlestick">; volume: ISeriesApi<"Histogram">; vwap: ISeriesApi<"Line">; lines: IPriceLine[]; disposed: boolean };
 
-export function useFinancialChart(bars: readonly ChartBar[], overlay: TradeOverlay | null, showVwap: boolean, annotations: ChartAnnotations) {
+export function useFinancialChart({ bars, overlay, vwap, annotations, pricePrecision }: { bars: readonly ChartBar[]; overlay: TradeOverlay | null; vwap: "shown" | "hidden"; annotations: ChartAnnotations; pricePrecision: number }) {
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<ChartHandle | null>(null);
   const initialized = useRef(false);
@@ -38,7 +38,8 @@ export function useFinancialChart(bars: readonly ChartBar[], overlay: TradeOverl
       instance.chart.timeScale().setVisibleLogicalRange({ from: viewport.from + shift, to: viewport.to + shift });
     }
   }, [bars]);
-  useEffect(() => { handle.current?.vwap.applyOptions({ visible: showVwap }); }, [showVwap]);
+  useEffect(() => { handle.current?.vwap.applyOptions({ visible: vwap === "shown" }); }, [vwap]);
+  useEffect(() => { handle.current?.candles.applyOptions({ priceFormat: { type: "price", precision: pricePrecision, minMove: 10 ** -pricePrecision } }); }, [pricePrecision]);
   useEffect(() => {
     const instance = handle.current;
     if (!instance) return;

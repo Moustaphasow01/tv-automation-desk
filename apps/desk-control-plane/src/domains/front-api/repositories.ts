@@ -4,6 +4,7 @@ import { DeskConfigContext } from "@/app/AppProviders";
 import { createDeskTransport, type DeskTransport, type OperatorLoginCredentials } from "@/shared/transport";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import { assertViewEnvelope, type FrontViewName, type ViewEnvelope } from "@/shared/contracts";
+import { isCryptoMarketView } from "./cryptoMarketContract";
 import {
   isAdminAccessView,
   isAuthSessionView,
@@ -67,6 +68,7 @@ const validators: ViewValidators = {
   "strategy-detail": isStrategyDetailView,
   "strategy-compare": isStrategyCompareView,
   "live-trading": isLiveTradingView,
+  "crypto-market": isCryptoMarketView,
   "live-focus": isLiveFocusView,
   "live-plan": isLivePlanView,
   "live-news": isLiveNewsView,

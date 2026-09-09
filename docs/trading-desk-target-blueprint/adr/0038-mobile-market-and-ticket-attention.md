@@ -15,6 +15,8 @@ Le poste livré par l’ADR 0037 conserve une bonne lecture bureau mais empile s
 5. La sélection manuelle du graphique reste indépendante de celle du ticket (ADR 0029). L’exception de navigation du point 2 est nommée et testée séparément. Le dossier, le compte, la révision et la prélecture avant commande restent inchangés.
 6. Live reste la vue d’ensemble : marché observé, état de séance, activité, dossiers et contexte à la demande. Focus demeure le poste de décision. Le rendu financier existant est réutilisé ; la lecture historique détaillée reste accessible.
 
+Un sélecteur de marché est un contrôle de navigation, pas une saisie d’ordre : son focus persistant après fermeture du menu natif ne bloque pas les tickets suivants et n’est pas retiré artificiellement. Les contrôles d’un formulaire de décision restent protégés par le dialogue et l’état de commande.
+
 ## Propriété et alternatives
 
 Propriétaire `front-control-plane`, couche présentation/état, feature `live-trading`. Les données et permissions restent publiées par `/front-api/v1`. Les consommateurs sont `/live` et `/live?focus=1`.

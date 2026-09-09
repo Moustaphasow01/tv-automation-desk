@@ -1,0 +1,9 @@
+.tw-crypto__status { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; padding: 8px 14px; border-bottom: 1px solid var(--tw-line, #354350); color: #b7c4d1; font-size: 12px; }
+.tw-crypto__status [data-live="true"] { color: #7cc9a6; }
+.tw-crypto__status [data-live="false"] { color: #e8c283; }
+.tw-crypto__spread { display: flex; gap: 10px 22px; flex-wrap: wrap; margin: 0; padding: 8px 14px; font-size: 12px; }
+.tw-crypto__spread div { display: flex; gap: 6px; }
+.tw-crypto__spread dt { color: #a6b5c3; }
+.tw-crypto__spread dd { margin: 0; color: #e0e8ef; font-variant-numeric: tabular-nums; }
+.tw-crypto .tw-chart__price { font-size: clamp(19px, 4.8vw, 28px); }
+@media (max-width: 599px) { .tw-crypto__spread { gap: 6px 12px; } .tw-crypto .tw-chart__footer { align-items: flex-start; } }

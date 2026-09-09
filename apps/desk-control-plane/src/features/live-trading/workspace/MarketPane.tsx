@@ -5,10 +5,18 @@ import { FinancialChart } from "./FinancialChart";
 import { ageLabel, marketName, numberLabel, parisTime, timeframeLabel } from "./workspaceModel";
 import type { TradeOverlay } from "../chart/tradePlanOverlay";
 import type { ChartAnnotations } from "./useChartAnnotations";
+import { isCryptoInstrument } from "@/domains/front-api/cryptoMarketContract";
+import { CryptoMarketPane } from "./CryptoMarketPane";
 
-export function MarketPane({ instrument, timeframe, overlay, onPauseChange, annotations, activity = "foreground", resumeGeneration = 0 }: {
+export type MarketPaneProps = {
   instrument: string; timeframe: string; activity?: "foreground" | "background"; resumeGeneration?: number; overlay: TradeOverlay | null; annotations: ChartAnnotations; onPauseChange(instrument: string, paused: boolean): void;
-}) {
+};
+
+export function MarketPane(props: MarketPaneProps) {
+  return isCryptoInstrument(props.instrument) ? <CryptoMarketPane {...props} /> : <DeskMarketPane {...props} />;
+}
+
+function DeskMarketPane({ instrument, timeframe, overlay, onPauseChange, annotations, activity = "foreground", resumeGeneration = 0 }: MarketPaneProps) {
   const { query, series, normalized, matches } = useWorkspaceMarket(instrument, timeframe, activity);
   const visibleEvents = useMemo(() => annotations.events.filter((event) => !event.instrument || event.instrument === instrument), [annotations.events, instrument]);
   const [frozen, setFrozen] = useState<{ bars: ChartBar[]; asOf: string } | null>(null);

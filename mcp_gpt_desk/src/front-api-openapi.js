@@ -1,4 +1,5 @@
 import { researchOpenApiPaths } from "./front-api-openapi-research.js";
+import { cryptoObservationOpenApiPaths } from "./front-api-openapi-crypto.js";
 export const FRONT_OPENAPI_PATH = "/api/v1/openapi.json";
 
 const jsonContent = (schema) => ({
@@ -130,6 +131,7 @@ export function frontApiOpenApiDocument() {
     ],
     security: [{ BearerAuth: [] }, { DeskApiKey: [] }, {}],
     paths: {
+      ...cryptoObservationOpenApiPaths(),
       "/openapi.json": {
         get: getOperation({ operationId: "getFrontOpenApi", summary: "Get the BFF OpenAPI document", schemaRef: "#/components/schemas/OpenApiDocument", parameters: [] }),
       },

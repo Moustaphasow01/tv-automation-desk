@@ -5,16 +5,21 @@ import { marketName, numberLabel, parisTime } from "./workspaceModel";
 import { groupSymbols, normalizedSearch } from "./workspacePreferences";
 import type { WorkspacePreferencesController } from "./useWorkspacePreferences";
 import { WatchlistEditor } from "./WatchlistEditor";
+import { isCryptoInstrument } from "@/domains/front-api/cryptoMarketContract";
+import { useCryptoMarket } from "@/domains/front-api/cryptoMarketRepository";
+import { CryptoWatchQuote } from "./CryptoWatchQuote";
 
-type Props = { model: LiveTradingModel; symbols: readonly string[]; timeframe: string; selected: string; settings: WorkspacePreferencesController; onSelect(symbol: string): void };
+type Props = { model: LiveTradingModel; supported?: readonly string[]; symbols: readonly string[]; timeframe: string; selected: string; settings: WorkspacePreferencesController; onSelect(symbol: string): void };
 
-export function Watchlist({ model, symbols: desk, timeframe, selected, settings, onSelect }: Props) {
+export function Watchlist({ model, supported = model.marketSeries.supportedInstruments, symbols: desk, timeframe, selected, settings, onSelect }: Props) {
   const [ranking, setRanking] = useState<string[] | null>(null);
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState(false);
   const { preferences, update } = settings;
-  const pinned = groupSymbols(preferences, desk, model.marketSeries.supportedInstruments);
-  const quotes = model.watchlist.filter((quote) => pinned.includes(quote.symbol) && Number.isFinite(quote.changePct)
+  const pinned = groupSymbols(preferences, desk, supported);
+  const crypto = useCryptoMarket({ mode: "quotes", activity: pinned.some(isCryptoInstrument) ? "foreground" : "background" });
+  const cryptoQuotes = crypto.isError ? [] : crypto.data?.data.quotes.map((quote) => ({ symbol: quote.instrument, changePct: quote.changePct, availability: quote.state })) ?? [];
+  const quotes = [...model.watchlist, ...cryptoQuotes].filter((quote) => pinned.includes(quote.symbol) && Number.isFinite(quote.changePct)
     && ["AVAILABLE", "KNOWN", "LIVE"].includes(quote.availability));
   const ordered = ranking ? [...ranking.filter((symbol) => pinned.includes(symbol)), ...pinned.filter((symbol) => !ranking.includes(symbol))] : pinned;
   const symbols = ordered.filter((symbol) => normalizedSearch(symbol + " " + marketName(symbol)).includes(normalizedSearch(filter)));
@@ -28,14 +33,14 @@ export function Watchlist({ model, symbols: desk, timeframe, selected, settings,
     <label className="tw-watch-filter"><span className="tw-sr-only">Filtrer les marchés</span><input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Chercher un actif…" /></label>
     <div className="tw-watchlist__columns" aria-hidden="true"><span>Actif</span><span>Prix reçu</span></div>
     <div className="tw-watchlist__rows">{symbols.map((symbol) => <div className="tw-watch-item" key={symbol}>
-      <WatchQuote symbol={symbol} timeframe={timeframe} selected={selected === symbol} onSelect={() => onSelect(symbol)} />
+      {isCryptoInstrument(symbol) ? <CryptoWatchQuote symbol={symbol} quote={crypto.data?.data.quotes.find((quote) => quote.instrument === symbol)} degraded={crypto.isError} selected={selected === symbol} onSelect={() => onSelect(symbol)} /> : <WatchQuote symbol={symbol} timeframe={timeframe} selected={selected === symbol} onSelect={() => onSelect(symbol)} />}
       <button className="tw-favorite" aria-label={(preferences.favorites.includes(symbol) ? "Retirer " : "Ajouter ") + symbol + " des favoris"} aria-pressed={preferences.favorites.includes(symbol)} onClick={() => update({ favorites: preferences.favorites.includes(symbol) ? preferences.favorites.filter((value) => value !== symbol) : [...preferences.favorites, symbol] })}>{preferences.favorites.includes(symbol) ? "★" : "☆"}</button>
     </div>)}</div>
     {!symbols.length ? <p className="tw-watchlist__note">{filter ? "Aucun marché ne correspond au filtre." : "Cette liste est vide. Ajoutez des actifs dans Mes listes ou avec l’étoile."}</p> : null}
     <button className="tw-rank-refresh" disabled={!quotes.length && !ranking} onClick={ranking ? () => setRanking(null) : rank}>{ranking ? "Ordre de ma liste" : "Classer par variation"}</button>
     {ranking ? <button className="tw-rank-refresh" onClick={rank}>Reclasser maintenant</button> : null}
     <p className="tw-watchlist__note">{ranking ? "Classement figé pour garder vos repères." : "Le prix indique sa nature et son horodatage."} Variations publiées uniquement.</p>
-    {editing ? <WatchlistEditor settings={settings} supported={model.marketSeries.supportedInstruments} initialSymbols={pinned} onClose={() => setEditing(false)} /> : null}
+    {editing ? <WatchlistEditor settings={settings} supported={supported} initialSymbols={pinned} onClose={() => setEditing(false)} /> : null}
   </aside>;
 }
 

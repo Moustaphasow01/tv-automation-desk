@@ -10,6 +10,7 @@ import { MarketPane } from "./workspace/MarketPane";
 import { WorkspaceSafetyNotice } from "./workspace/WorkspaceSafetyNotice";
 import { ageLabel, marketName, parisTime, timeframeLabel, workspaceCopy } from "./workspace/workspaceModel";
 import { tradePlanOverlayFromTheoretical } from "./chart/tradePlanOverlay";
+import { useObservedMarketCatalog } from "./workspace/useObservedMarketCatalog";
 import "./workspace/workspace.tokens.css";
 import "./workspace/workspace.css";
 import "./workspace/workspace.extensions.css";
@@ -80,12 +81,15 @@ function OverviewSession({ model }: { model: LiveTradingModel }) {
 
 function OverviewMarket(props: Props) {
   const { model, requestedScope, onScopeChange } = props;
+  const catalog = useObservedMarketCatalog(model.marketSeries);
   const instrument = requestedScope.instrument ?? model.marketSeries.instrument ?? "";
-  const timeframe = requestedScope.timeframe ?? model.marketSeries.timeframe ?? "5";
+  const units = catalog.cryptoInstruments.includes(instrument) ? catalog.cryptoTimeframes : model.marketSeries.supportedTimeframes;
+  const requested = requestedScope.timeframe ?? model.marketSeries.timeframe ?? "5";
+  const timeframe = units.includes(requested) ? requested : units.includes("5") ? "5" : units[0] ?? requested;
   const overlay = useMemo(() => model.selectedTheoreticalExecution ? tradePlanOverlayFromTheoretical(model.selectedTheoreticalExecution) : null, [model.selectedTheoreticalExecution]);
   return <>
-    <header className="lt-overview__market-controls"><label><span>Marché</span><select aria-label="Instrument du cockpit" value={instrument} onChange={(event) => onScopeChange({ instrument: event.target.value })}>{model.marketSeries.supportedInstruments.map((symbol) => <option key={symbol} value={symbol}>{symbol} · {marketName(symbol)}</option>)}</select></label>
-      <label><span>Unité</span><select aria-label="Unité du cockpit" value={timeframe} onChange={(event) => onScopeChange({ timeframe: event.target.value })}>{model.marketSeries.supportedTimeframes.map((unit) => <option key={unit} value={unit}>{timeframeLabel(unit)}</option>)}</select></label>
+    <header className="lt-overview__market-controls"><label><span>Marché</span><select aria-label="Instrument du cockpit" value={instrument} onChange={(event) => onScopeChange({ instrument: event.target.value, timeframe: "5" })}>{catalog.instruments.map((symbol) => <option key={symbol} value={symbol}>{symbol} · {marketName(symbol)}</option>)}</select></label>
+      <label><span>Unité</span><select aria-label="Unité du cockpit" value={timeframe} onChange={(event) => onScopeChange({ timeframe: event.target.value })}>{units.map((unit) => <option key={unit} value={unit}>{timeframeLabel(unit)}</option>)}</select></label>
     </header>
     <MarketPane key={instrument + ":" + timeframe} instrument={instrument} timeframe={timeframe} overlay={overlay} annotations={{ id: "overview-chart", timeframe, events: [], cursor: null }} onPauseChange={props.onPauseChange} />
   </>;

@@ -1,0 +1,9 @@
+{
+  "name": "@tv-automation/desk-market-data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only public market observations, isolated from canonical trading authorities.",
+  "engines": { "node": ">=22" },
+  "exports": { ".": "./index.js" }
+}

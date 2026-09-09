@@ -1,3 +1,5 @@
+import type { CryptoMarketView } from "./cryptoMarketContract";
+
 export type PortfolioPosition = {
   positionId: string;
   strategyInstanceId: string;
@@ -3577,6 +3579,7 @@ export type ControlPlaneViews = {
   "strategy-detail": StrategyDetailView;
   "strategy-compare": StrategyCompareView;
   "live-trading": LiveTradingView;
+  "crypto-market": CryptoMarketView;
   "live-focus": LiveFocusView;
   "live-signal-detail": LiveSignalDetailView;
   "order-detail": OrderDetailView;

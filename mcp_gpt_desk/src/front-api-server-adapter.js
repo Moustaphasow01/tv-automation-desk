@@ -13,6 +13,7 @@ import {
   frontEventSseFrame,
   shouldEmitFrontEvent,
 } from "./front-events-contract-v1.js";
+import { loadFrontPublicCryptoMarket } from "./front-public-crypto-market.js";
 
 export {
   isFrontControlPlaneMethodAllowed,
@@ -34,6 +35,11 @@ export async function handleFrontControlPlaneHttp({
   sendFrontResource,
   clientIp = null,
 }) {
+  if (pathname === "/front-api/v1/views/crypto-market") {
+    if (req.method !== "GET") throw Object.assign(new Error("Read-only market view"), { code: "METHOD_NOT_ALLOWED", statusCode: 405 });
+    sendJson(res, 200, await loadFrontPublicCryptoMarket(query), { ...corsHeaders, "cache-control": "no-store" });
+    return;
+  }
   if (pathname === FRONT_CONTROL_PLANE_EVENTS_PATH) {
     writeFrontControlPlaneEvents(store, req, res, query, corsHeaders);
     return;

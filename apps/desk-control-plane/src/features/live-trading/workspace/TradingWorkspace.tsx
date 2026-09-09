@@ -35,6 +35,7 @@ import { WorkspaceSafetyNotice } from "./WorkspaceSafetyNotice";
 import { useWorkspaceViewport } from "./useWorkspaceViewport";
 import { useTicketPriority } from "./useTicketPriority";
 import { TicketPriorityBar } from "./TicketPriorityBar";
+import { useObservedMarketCatalog } from "./useObservedMarketCatalog";
 import "./workspace.tokens.css";
 import "./workspace.css";
 import "./workspace.extensions.css";
@@ -57,6 +58,7 @@ function WorkspaceSession(props: Props) {
   const settings = useWorkspacePreferences();
   const [dialog, setDialog] = useState<"brief" | "sources" | "alerts" | "settings" | null>(null);
   const { model, focus } = props;
+  const observedMarkets = useObservedMarketCatalog(model.marketSeries);
   const health = { connected: state.realtime?.connectionStatus === "OPEN" && !state.realtime.resyncing, paused: state.paused.length > 0, failed: props.projectionError, meta: props.focusMeta };
   const readOnly = readOnlyReason(health, state.realtime?.now.getTime() ?? Date.now());
   const command = useWorkspaceCommand(health, state.selected?.key ?? null, state.refresh);
@@ -81,7 +83,7 @@ function WorkspaceSession(props: Props) {
     {state.panel === "review" ? <WorkspaceReview focus={focus} period={props.dashboardPeriod} onPeriodChange={props.onDashboardPeriodChange}><WorkspaceJournal items={state.tickets} model={model} onSelect={openTicket} /></WorkspaceReview> : null}
     <div className="tw-workspace-grid" hidden={state.panel === "review"} data-has-ticket={Boolean(state.selected)}>
       <div className="tw-workspace-main">
-        <div className="tw-market-region" hidden={state.panel === "tracking"}><MarketBoard model={model} preferred={preferred} instrument={state.instrument} timeframe={state.timeframe} overlay={overlay} settings={settings} events={events} pausedSlots={state.paused} onScopeChange={props.onScopeChange} onPauseChange={state.onPauseChange} /></div>
+        <div className="tw-market-region" hidden={state.panel === "tracking"}><MarketBoard model={model} catalog={observedMarkets} preferred={preferred} instrument={state.instrument} timeframe={state.timeframe} overlay={overlay} settings={settings} events={events} pausedSlots={state.paused} onScopeChange={props.onScopeChange} onPauseChange={state.onPauseChange} /></div>
         {state.panel === "tracking" ? <WorkspaceTracking items={state.tickets} model={model} onSelect={openTicket} /> : null}
         <div className="tw-ticket-region" hidden={state.panel === "tracking"}><TicketBlotter items={state.tickets} selectedId={state.selected?.key ?? null} onSelect={state.select} /></div>
       </div>
