@@ -2,7 +2,7 @@ import { createPublicCryptoObservation } from "@tv-automation/desk-market-data";
 import { SystemClock } from "@tv-automation/desk-time";
 
 const clock = new SystemClock();
-// One public stream per API process, shared across authenticated readers.
+// One public stream per API process, shared under the host's existing read policy.
 let observation;
 
 export async function loadFrontPublicCryptoMarket(query = {}) {

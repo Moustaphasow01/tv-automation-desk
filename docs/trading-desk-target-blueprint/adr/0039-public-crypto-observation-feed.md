@@ -4,7 +4,7 @@ Date : 2026-09-09. Statut : accepté pour le raccordement de données demandé e
 
 ## Décision et frontière
 
-Créer `@tv-automation/desk-market-data`, propriétaire `market-data`, avec domaine de validation, cache applicatif d’observation et adapter public Kraken. Le host existant assemble l’adapter via son export public. Une vue authentifiée `/front-api/v1/views/crypto-market` expose les seules observations ; le navigateur ne contacte aucun fournisseur directement.
+Créer `@tv-automation/desk-market-data`, propriétaire `market-data`, avec domaine de validation, cache applicatif d’observation et adapter public Kraken. Le host existant assemble l’adapter via son export public. La vue `/front-api/v1/views/crypto-market` suit la politique `desk.read` du host et expose les seules observations publiques ; le navigateur ne contacte aucun fournisseur directement. La politique existante autorise cette lecture anonyme, même si l'interface opérateur demande une connexion. Aucune donnée de compte n'est publiée ici. Une authentification obligatoire côté API serait une décision de plateforme distincte, pas une propriété acquise de cette vue.
 
 Périmètre initial : Bitcoin, Solana et Dogecoin au comptant en USD sur Kraken. Le WebSocket public v2 fournit les cotations et les bougies ; REST amorce l’historique, limité par la source aux 720 entrées récentes. Ce choix évite clé privée, compte courtier, conversion implicite USDT/USD et agrégation de prix de places différentes. Binance propose aussi des endpoints de données seuls ; une seconde place n’est pas utilisée comme substitution silencieuse.
 
