@@ -1,23 +1,25 @@
-import { Link, useParams } from "react-router-dom";
-import { Card, KpiCard, StatusBadge } from "@/design-system/primitives";
-import { MetricBox, OperatorPageHeader } from "@/design-system/workspace";
-import { ViewTruthBanner } from "@/design-system/states";
+import { useParams } from "react-router-dom";
 import { useFrontView } from "@/domains/front-api/repositories";
+import { operatorCode } from "@/design-system/operatorVocabulary";
+import { JourneyBackLink } from "@/features/trading-journey/JourneyNavigation";
+import { JourneyFreshness, JourneyMessage, JourneyProvenance, useJourneySurface } from "@/features/trading-journey/JourneySurface";
+import { PositionReading } from "@/features/trading-journey/PositionReading";
 
 export function PositionDetailPage() {
+  useJourneySurface();
   const { positionId } = useParams();
   const query = useFrontView("position-detail", { positionId });
-  if (query.isLoading) return <div className="operator-page"><Card state="loading" density="compact"><p>Chargement de la position…</p></Card></div>;
-  if (query.isError || !query.data) return <div className="operator-page"><Card title="Position indisponible" eyebrow="ERREUR CONTRAT" tone="danger" density="compact"><p>{query.error instanceof Error ? query.error.message : "Projection absente"}</p><Link to="/execution/portfolio">Retour au portefeuille</Link></Card></div>;
-  const { data, meta } = query.data;
-  return <div className="operator-page position-detail-page">
-    <ViewTruthBanner meta={meta} />
-    <OperatorPageHeader title={`${data.position.symbol} ${data.position.side} · ${data.summary.state}`} description={`${data.identity.positionId} · ${data.identity.strategyInstanceId} · projection ${meta.latencyMs} ms.`} actions={<><Link to="/execution/portfolio">Retour portefeuille</Link><Link to="/execution/orders">Ordres</Link></>} />
-    <section className="operator-kpi-strip" aria-label="Indicateurs position"><KpiCard label="ÉTAT" value={data.summary.state} delta={data.position.side} tone="info" /><KpiCard label="QUANTITÉ" value={`${data.summary.quantity}`} delta={data.position.symbol} /><KpiCard label="PNL" value={`${signed(data.summary.pnlR)} R`} delta="résultat déterministe" tone={data.summary.pnlR >= 0 ? "success" : "danger"} /><KpiCard label="RISQUE" value={`${data.summary.riskR.toFixed(2)} R`} delta="risque initial" tone="warning" /><KpiCard label="PROTECTION" value={data.summary.protectionStatus} delta="stop/target backend" tone={data.summary.protectionStatus === "PROTECTED" ? "success" : "warning"} /><KpiCard label="ORDRES LIÉS" value={`${data.orders.length}`} delta="même signal/instance" /></section>
-    <section className="operator-grid operator-grid--top" aria-label="Prix, identité et relations"><Card title="Prix & protection" density="compact"><div className="reconciliation-grid"><MetricBox label="Entrée moyenne" value={price(data.position.averagePrice)} /><MetricBox label="Stop" value={price(data.position.stopPrice)} /><MetricBox label="Cible" value={price(data.position.targetPrice)} /><MetricBox label="Ouverte" value={date(data.position.openedAt)} /><MetricBox label="Clôturée" value={data.position.closedAt ? date(data.position.closedAt) : "Position ouverte"} /><MetricBox label="État protection" value={data.position.protectionStatus} /></div></Card><Card title="Identité" density="compact"><div className="reconciliation-grid"><MetricBox label="Position" value={data.identity.positionId} /><MetricBox label="Signal" value={data.identity.signalId} /><MetricBox label="Stratégie" value={data.identity.strategyInstanceId} /><MetricBox label="Corrélation" value={data.identity.correlationId} /></div></Card><Card title="Relations" density="compact"><div className="zoom-link-list">{data.relations.filter((item) => item.id !== "unavailable").map((item) => <Link key={`${item.label}-${item.id}`} to={item.route}><strong>{item.label}</strong><small>{item.id}</small></Link>)}</div></Card></section>
-    <section className="operator-grid operator-grid--bottom" aria-label="Ordres et cycle de vie"><Card title="Ordres liés" density="compact">{data.orders.length ? data.orders.map((order) => <Link className="detail-list-row" key={order.orderId} to={`/execution/orders/${encodeURIComponent(order.orderId)}`}><div><strong>{order.instrument} {order.side}</strong><small>{order.orderId}</small></div><span>{order.quantity}</span><StatusBadge tone={order.state === "FILLED" ? "success" : order.state === "REJECTED" ? "danger" : "warning"}>{order.state}</StatusBadge></Link>) : <p className="empty-state">Aucun ordre lié publié.</p>}</Card><Card title="Cycle de vie" density="compact">{data.lifecycle.length ? <ol className="timeline">{data.lifecycle.map((event) => <li className="timeline__item" key={event.eventId}><span>{date(event.at)}</span><strong>{event.state}</strong><small>{event.detail}</small></li>)}</ol> : <p className="empty-state">Événements de position non publiés.</p>}</Card><Card title="Autorité" density="compact"><p>Cette vue est strictement en lecture. Toute action d’exécution doit passer par une capability backend publiée et une commande auditée.</p></Card></section>
+  const envelope = query.data;
+  const matches = envelope && envelope.data.identity.positionId === positionId && envelope.data.position.positionId === positionId;
+  return <div className="desk-journey position-detail-page" data-testid="position-journey">
+    <JourneyBackLink fallback="/portfolio" />
+    {query.isLoading ? <div className="dj-loading" role="status">Chargement de la position…</div> : null}
+    {query.isError || (!query.isLoading && !matches) ? <JourneyMessage title="Position indisponible" retry={() => void query.refetch()}>Le desk n’a pas fourni la position demandée. Aucune position de remplacement n’est affichée.</JourneyMessage> : null}
+    {!query.isError && envelope && matches ? <>
+      <header className="dj-header"><div><h1>{envelope.data.position.symbol} · {operatorCode(envelope.data.position.side)}</h1><p>Suivi de position · {operatorCode(envelope.data.summary.state)}</p></div><div className="dj-header-actions"><button type="button" onClick={() => void query.refetch()} disabled={query.isFetching}>Actualiser la position</button></div></header>
+      <JourneyFreshness meta={envelope.meta} />
+      <PositionReading data={envelope.data} />
+      <JourneyProvenance meta={envelope.meta} />
+    </> : null}
   </div>;
 }
-function signed(value: number) { return `${value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(2)}`; }
-function price(value?: number) { return typeof value === "number" ? new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 4 }).format(value) : "Indisponible"; }
-function date(value: string) { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? "Indisponible" : new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "medium" }).format(parsed); }

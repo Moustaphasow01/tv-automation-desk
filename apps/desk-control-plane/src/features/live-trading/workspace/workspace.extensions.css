@@ -185,3 +185,8 @@
   .tw-journal-row dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tw-followup > header { flex-wrap: wrap; }
 }
+.tw-dossier-link { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 6px; border: 1px solid var(--tw-line); border-radius: 4px; text-decoration: none; }
+.tw-dossier-link:hover { background: var(--tw-raised); }
+.tw-followup-state { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 12px 0; color: var(--tw-muted); font-size: 12px; }
+.tw-followup > details > summary { min-height: 44px; }
+.tw-tracking-more { margin-block: 16px; min-height: 44px; }

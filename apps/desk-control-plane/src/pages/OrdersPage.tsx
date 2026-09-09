@@ -1,5 +1,5 @@
 import { useContext, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { JourneyLink as Link } from "@/features/trading-journey/JourneyNavigation";
 import { routeDisplayName } from "@/app/routes";
 import { FaFingerprint } from "react-icons/fa";
 import { ReasonInput } from "@/design-system/actions";

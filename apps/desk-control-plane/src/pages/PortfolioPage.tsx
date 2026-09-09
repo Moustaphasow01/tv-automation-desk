@@ -1,5 +1,5 @@
 import { Fragment, useContext, useState, type CSSProperties } from "react";
-import { Link } from "react-router-dom";
+import { JourneyLink as Link } from "@/features/trading-journey/JourneyNavigation";
 import { routeDisplayName } from "@/app/routes";
 import { ProgressBar, StatusBadge } from "@/design-system/primitives";
 import { operatorCode } from "@/design-system/operatorVocabulary";

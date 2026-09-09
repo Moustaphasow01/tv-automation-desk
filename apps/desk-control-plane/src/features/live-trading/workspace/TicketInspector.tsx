@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { JourneyLink } from "@/features/trading-journey/JourneyNavigation";
 import { FiX } from "react-icons/fi";
 import { useFrontView } from "@/domains/front-api/repositories";
 import { operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";
@@ -39,6 +39,7 @@ function SelectedTicket({ item, model, readOnly, command, onShowMarket }: Props 
     <div className="tw-inspector-tabs" aria-label="Informations du ticket">{[{ id: "plan", label: "Plan" }, { id: "context", label: "Contexte" }, { id: "journey", label: "Parcours" }].map(({ id, label }) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}</div>
     {tab === "plan" ? <TicketPlan item={item} account={knownLabel(dossier?.targetPosition.account)} /> : tab === "context" ? <TicketContext item={item} /> : <><TicketJourney item={item} /><ExecutionDetail item={item} model={model} /></>}
     <button className="tw-show-market" onClick={() => onShowMarket(item.instrument)}>Afficher {item.instrument} sur le graphique principal</button>
+    {item.route?.startsWith("/") && !item.route.startsWith("//") ? <JourneyLink className="tw-dossier-link" to={item.route}>Ouvrir le dossier d’exécution</JourneyLink> : null}
     <div className="tw-decision-actions">
       {readOnly ? <p className="tw-inline-warning" role="status">{readOnly}</p> : null}
       {query.isLoading ? <p role="status">Vérification du dossier…</p> : query.isError ? <p role="status">Dossier indisponible. Aucune décision possible. <button onClick={() => void query.refetch()}>Réessayer</button></p> : null}
@@ -46,7 +47,7 @@ function SelectedTicket({ item, model, readOnly, command, onShowMarket }: Props 
       {actions.map((action) => <button key={action.action.actionId} className={action.action.action === "CONFIRM" ? "tw-primary" : ""} disabled={command.busy} onClick={() => setPending({ action, item, account: knownLabel(dossier?.targetPosition.account) })}>{actionLabel(action)}</button>)}
       <small>Validation humaine requise. Aucune exécution automatique depuis cet écran.</small>
     </div>
-    <details className="tw-ticket-reference"><summary>Source et références</summary><p>{item.source || "Source non publiée"} · {parisTime(item.asOf, true)} Paris</p><p>{item.card?.orderIntentId}</p>{item.route?.startsWith("/") && !item.route.startsWith("//") ? <Link to={item.route}>Ouvrir le dossier complet</Link> : null}</details>
+    <details className="tw-ticket-reference"><summary>Source et références</summary><p>{item.source || "Source non publiée"} · {parisTime(item.asOf, true)} Paris</p><p>{item.card?.orderIntentId}</p></details>
     {pending ? <ActionConfirmation action={pending.action} item={pending.item} account={pending.account} command={command} valid={pendingValid} onClose={() => setPending(null)} /> : null}
   </div>;
 }

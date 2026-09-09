@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
+import { JourneyLink as Link } from "@/features/trading-journey/JourneyNavigation";
 import { FaBullseye, FaChartLine, FaClock, FaFilter, FaSearch } from "react-icons/fa";
 import { StatusBadge } from "@/design-system/primitives";
 import { presentDataAbsence, presentGeneric } from "@/design-system/labels";

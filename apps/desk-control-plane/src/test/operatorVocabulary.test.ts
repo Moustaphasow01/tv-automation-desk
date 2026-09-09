@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { operatorCode, operatorCopy, operatorDuration, operatorReason, operatorTerm } from "@/design-system/operatorVocabulary";
 
 describe("operator vocabulary", () => {
+  it.each([
+    ["THEORETICAL_EXECUTION", "Suivi théorique"],
+    ["PENDING_OUTCOME", "Résultat théorique en attente"],
+    ["AVOIDED_LOSS", "Perte théorique évitée"],
+  ])("labels %s without implying a broker execution", (code, label) => {
+    expect(operatorCopy(code)).toBe(label);
+    expect(operatorCode(code)).toBe(label);
+  });
+
+  it("translates activity codes inside a detail without changing its published result", () => {
+    const source = "THEORETICAL_EXECUTION · AVOIDED_LOSS · -1.00R · PENDING_OUTCOME";
+    expect(operatorCopy(source)).toBe("Suivi théorique · Perte théorique évitée · -1.00R · Résultat théorique en attente");
+    expect(source).toContain("AVOIDED_LOSS");
+    expect(operatorCopy("CUSTOM_PENDING_OUTCOME_REASON")).toBe("CUSTOM_PENDING_OUTCOME_REASON");
+  });
+
   it("translates platform terms and backend codes into operator language", () => {
     expect(operatorTerm("ORDER_INTENT")).toBe("Ordre proposé");
     expect(operatorTerm("HUMAN_GATE")).toBe("Votre validation");

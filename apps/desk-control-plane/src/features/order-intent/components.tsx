@@ -15,6 +15,7 @@ import type {
   ReconciliationComparison,
 } from "@/features/order-intent/model";
 import { presentBackendStatus } from "@/features/order-intent/statusRegistry";
+import { positionDate } from "@/features/trading-journey/positionPresentation";
 
 export function ExecutionAuthorityPanel({ dossier }: { dossier: OrderIntentDossier }) {
   return (
@@ -55,27 +56,25 @@ export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier })
     }
   };
   return (
-    <Card title="Position cible et plan d'exécution" eyebrow="LECTURE SEULE APRÈS CONTRÔLE DU RISQUE" density="compact" state="readonly" actions={<DeskButton variant="ghost" onClick={() => void copyTicket()}>{copyState === "copied" ? "Ticket copié" : copyState === "failed" ? "Copie indisponible" : "Copier le ticket"}</DeskButton>}>
-      <div className="order-dossier__immutable-banner" role="note">
-        Ces termes sont affichés uniquement. Toute modification exige le rejet puis un nouveau contrôle du risque.
-      </div>
+    <Card title="Plan d’exécution" density="compact" state="readonly" actions={<DeskButton variant="ghost" onClick={() => void copyTicket()}>{copyState === "copied" ? "Ticket copié" : copyState === "failed" ? "Copie indisponible" : "Copier le ticket"}</DeskButton>}>
       <dl className="order-dossier__terms" aria-label="Termes immuables de l'ordre">
-        <ReadonlyTerm label="Instrument" value={dossier.signal.instrument} />
-        <ReadonlyTerm label="Sens" value={translatedValue(dossier.signal.side)} />
-        <ReadonlyTerm label="Compte" value={dossier.targetPosition.account} />
-        <ReadonlyTerm label="Quantité autorisée" value={dossier.targetPosition.authorizedQuantity} copyable />
-        <ReadonlyTerm label="Type" value={dossier.executionPlan.orderType} />
-        <ReadonlyTerm label="TIF" value={dossier.executionPlan.timeInForce} />
         <ReadonlyTerm label="Entrée" value={dossier.executionPlan.entry} format="price" copyable />
         <ReadonlyTerm label="Stop" value={dossier.executionPlan.stop} format="price" copyable />
         {dossier.executionPlan.targets.map((target, index) => <ReadonlyTerm key={index} label={`Cible ${index + 1}`} value={target} format="price" copyable />)}
+        <ReadonlyTerm label="Quantité autorisée" value={dossier.targetPosition.authorizedQuantity} copyable />
         <ReadonlyTerm label="R attendu" value={dossier.executionPlan.expectedR} format="r" />
+        <ReadonlyTerm label="Instrument" value={dossier.signal.instrument} />
+        <ReadonlyTerm label="Sens" value={translatedValue(dossier.signal.side)} />
       </dl>
+      <div className="order-dossier__immutable-banner" role="note">
+        Ces termes sont affichés uniquement. Toute modification exige le rejet puis un nouveau contrôle du risque.
+      </div>
+      <details className="dj-disclosure"><summary>Compte et conditions de l’ordre</summary><dl className="order-dossier__terms"><ReadonlyTerm label="Compte" value={dossier.targetPosition.account} /><ReadonlyTerm label="Type d’ordre" value={dossier.executionPlan.orderType} /><ReadonlyTerm label="Durée de validité" value={dossier.executionPlan.timeInForce} /></dl></details>
       <div className={`order-dossier__market-context${dossier.marketContext.outsideTradeZone === true ? " is-outside" : ""}`} role={dossier.marketContext.outsideTradeZone === true ? "alert" : "status"}>
         <div>
           <small>Dernier prix connu</small>
           <DataMetric label="Marché" value={dossier.marketContext.lastPrice} />
-          <DataValueLine label="Cotation à" value={dossier.marketContext.asOf} />
+          <DataValueLine label="Cotation à" value={quoteTime(dossier.marketContext.asOf)} />
         </div>
         <div>
           <small>Écart à l'entrée</small>
@@ -86,6 +85,10 @@ export function ReadonlyTradeTerms({ dossier }: { dossier: OrderIntentDossier })
       </div>
     </Card>
   );
+}
+
+function quoteTime(value: DataValue<string>): DataValue<string> {
+  return value.state === "KNOWN" || value.state === "STALE" ? { ...value, value: positionDate(value.value) } : value;
 }
 
 export function marketContextSummary(dossier: OrderIntentDossier): string {

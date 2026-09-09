@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { JourneyLink as Link } from "@/features/trading-journey/JourneyNavigation";
 import type { CommandAccepted, CommandStatus } from "@/domains/realtime/commandRuntime";
 import { presentAvailability, presentGeneric } from "@/design-system/labels";
 import { operatorCode, operatorCopy, operatorReason } from "@/design-system/operatorVocabulary";

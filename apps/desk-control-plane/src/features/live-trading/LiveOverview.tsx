@@ -1,5 +1,4 @@
 import { useContext, useEffect, useMemo, type ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { FiArrowUpRight, FiRefreshCw } from "react-icons/fi";
 import { RealtimeContext } from "@/domains/realtime/RealtimeProvider";
 import { presentExecutionMode } from "@/design-system/labels";
@@ -11,6 +10,7 @@ import { WorkspaceSafetyNotice } from "./workspace/WorkspaceSafetyNotice";
 import { ageLabel, marketName, parisTime, timeframeLabel, workspaceCopy } from "./workspace/workspaceModel";
 import { tradePlanOverlayFromTheoretical } from "./chart/tradePlanOverlay";
 import { useObservedMarketCatalog } from "./workspace/useObservedMarketCatalog";
+import { LiveSessionNavigation, useLiveSessionPanel } from "./LiveSessionNavigation";
 import "./workspace/workspace.tokens.css";
 import "./workspace/workspace.css";
 import "./workspace/workspace.extensions.css";
@@ -27,14 +27,16 @@ type Props = {
 /** Session observation stays separate from Focus's ticket workbench. */
 export function LiveOverview(props: Props) {
   const { model } = props;
+  const navigation = useLiveSessionPanel();
   useEffect(() => {
     document.documentElement.classList.add("tw-document"); document.body.classList.add("tw-document");
     return () => { document.documentElement.classList.remove("tw-document"); document.body.classList.remove("tw-document"); };
   }, []);
-  return <div className="lt-page lt-overview trading-workspace" data-testid="live-trading-golden-master" data-operator-state={model.operator.status}>
+  return <div className="lt-page lt-overview trading-workspace" data-testid="live-trading-golden-master" data-operator-state={model.operator.status} data-live-panel={navigation.panel}>
     <OverviewHeader model={model} refreshing={props.refreshing} onRefresh={props.onRefresh} onEnterFocus={props.onEnterFocus} />
     <WorkspaceSafetyNotice model={model} />
     <OverviewSession model={model} />
+    <LiveSessionNavigation panel={navigation.panel} onSelect={navigation.select} />
     <div className="lt-overview__grid">
       <section className="lt-overview__market" aria-label="Marché observé">
         <OverviewMarket {...props} />
@@ -42,11 +44,11 @@ export function LiveOverview(props: Props) {
       </section>
       <section className="lt-overview__activity" aria-label="Activité du desk">{props.activity}</section>
     </div>
-    <details className="lt-overview__disclosure" key={`decision-${props.selectedSignalId ?? "none"}`} open={Boolean(props.selectedSignalId || model.signalFunnel.pendingHumanGates)}>
+    <details className="lt-overview__disclosure lt-overview__decision" key={`decision-${props.selectedSignalId ?? "none"}-${navigation.panel}`} open={navigation.panel === "decision" || Boolean(props.selectedSignalId || model.signalFunnel.pendingHumanGates)}>
       <summary>Dossier de décision{props.selectedSignalId ? ` · ${model.latestSignal?.symbol ?? "signal sélectionné"}` : " · ouvrir le détail"}</summary>{props.decision}
     </details>
-    <details className="lt-overview__disclosure"><summary>Contexte de séance, stratégies et qualité des marchés</summary><LiveMarketLens model={model} /></details>
-    <footer className="tw-footer"><span>Live · vue d’ensemble de la séance</span><Link to="/live?focus=1">Examiner les tickets dans Focus</Link></footer>
+    <details className="lt-overview__disclosure lt-overview__context"><summary>Contexte de séance, stratégies et qualité des marchés</summary><LiveMarketLens model={model} /></details>
+    <footer className="tw-footer"><span>Live · vue d’ensemble de la séance</span><button type="button" onClick={props.onEnterFocus}>Examiner les tickets dans Focus</button></footer>
   </div>;
 }
 

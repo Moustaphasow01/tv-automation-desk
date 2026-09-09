@@ -115,7 +115,8 @@ describe("OrderIntent dossier semi-manual contract", () => {
   it("renders post-Risk trade terms as definitions without editable controls", () => {
     const html = renderToStaticMarkup(<ReadonlyTradeTerms dossier={buildOrderIntentDossier(orderDetailEnvelope())} />);
 
-    expect(html).toContain("LECTURE SEULE APRÈS CONTRÔLE DU RISQUE");
+    expect(html).toContain("Plan d’exécution");
+    expect(html).toContain("Toute modification exige le rejet puis un nouveau contrôle du risque.");
     expect(html).toContain("Instrument");
     expect(html).toContain("Quantité autorisée");
     expect(html).toContain("Entrée");
@@ -124,6 +125,13 @@ describe("OrderIntent dossier semi-manual contract", () => {
     expect(html).toContain("Copier le ticket");
     expect(html).not.toMatch(/<(input|select|textarea)\b/i);
     expect(html).not.toContain("contenteditable");
+  });
+
+  it("presents entry, stop and target before repeated identity and detailed explanations", () => {
+    const html = renderToStaticMarkup(<ReadonlyTradeTerms dossier={buildOrderIntentDossier(orderDetailEnvelope())} />);
+    const labels = [...html.matchAll(/<dt>([^<]+)<\/dt>/g)].map((match) => match[1]);
+    expect(labels.slice(0, 3)).toEqual(["Entrée", "Stop", "Cible 1"]);
+    expect(html.indexOf("Cible 1")).toBeLessThan(html.indexOf("Toute modification exige"));
   });
 
   it("builds a stable semi-manual broker ticket from post-Risk terms", () => {

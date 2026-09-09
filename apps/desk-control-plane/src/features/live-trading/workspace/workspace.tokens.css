@@ -1,5 +1,5 @@
 /* Local semantic theme. The shell inherits it only while the pilot is mounted. */
-.tw-document, .trading-workspace, .tw-dialog {
+.tw-document, .trading-workspace, .tw-dialog, .journey-document, .desk-journey {
   --tw-bg: #111820;
   --tw-surface: #17212b;
   --tw-raised: #202c38;

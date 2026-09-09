@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { JourneyLink as Link } from "@/features/trading-journey/JourneyNavigation";
 import {
   FaBalanceScale,
   FaBolt,
@@ -11,16 +11,16 @@ import {
   FaFingerprint,
   FaProjectDiagram,
   FaRoute,
-  FaShieldAlt,
 } from "react-icons/fa";
-import { DeskButton, TrackedCommandReceipt } from "@/design-system/actions";
+import { SignalCommandPanel } from "./SignalCommandPanel";
+import { SignalRelatedRecords } from "./SignalRelatedRecords";
+import { positionR } from "@/features/trading-journey/positionPresentation";
 import { StatusBadge } from "@/design-system/primitives";
 import {
   presentArbitrationDecision,
   presentEventLane,
   presentFreshness,
   presentGateState,
-  presentPermission,
   presentQueueStatus,
   presentStrategyPredicate,
   presentTradeDecision,
@@ -63,23 +63,26 @@ export function LiveSignalDetailWorkspace({
   return (
     <>
       <SignalHero data={data} temporal={temporal} remainingSec={remainingSec} chartRoute={chartRoute} />
-      <SignalLifecycle stages={lifecycle} />
 
       <div className="signal-dossier-layout">
-        <main className="signal-dossier-main">
-          <DossierSection eyebrow="Plan proposé" title="Niveaux de la stratégie" icon={<FaBolt aria-hidden="true" />} action={<Link to={chartRoute}><FaChartLine aria-hidden="true" /> Revoir sur le graphique</Link>}>
+        <div className="signal-dossier-main">
+          <DossierSection eyebrow="Plan proposé" title="Niveaux de la stratégie" icon={<FaBolt aria-hidden="true" />}>
             <div className="signal-trade-plan" aria-label="Plan de trade proposé par la stratégie">
               <TradeMetric label="Zone d’entrée" value={formatEntryZone(data.signal.entryZoneLow, data.signal.entryZoneHigh)} />
               <TradeMetric label="Stop" value={formatPublishedPrice(data.signal.stopPrice)} tone="danger" />
               <TradeMetric label="Cible" value={formatPublishedPrice(data.signal.targetPrice)} tone="success" />
               <TradeMetric label="Ratio rendement / risque" value={formatRatio(data.signal.rewardRisk)} />
-              <TradeMetric label="Expectancy" value={formatSignedR(data.signal.expectancyR)} />
+              <TradeMetric label="Espérance de gain" value={formatSignedR(data.signal.expectancyR)} />
               <TradeMetric label="Quantité cible" value={publishedQuantity(data.summary.targetQuantity)} />
             </div>
-            <p className="signal-section-note">Ces niveaux sont ceux du signal. Ils ne deviennent un plan autorisé qu’après publication explicite des décisions Portfolio et Risk.</p>
+            <p className="signal-section-note">Niveaux du signal en lecture seule. Un plan autorisé exige les décisions publiées d’arbitrage du portefeuille et de contrôle du risque.</p>
           </DossierSection>
 
-          <DossierSection eyebrow="Preuves" title="Pourquoi le moteur a publié ce signal" icon={<FaCheckCircle aria-hidden="true" />} badge={`${predicates.length} règle${predicates.length > 1 ? "s" : ""}`}>
+          <DossierSection presentation="disclosure" eyebrow="Progression" title="Progression du dossier" icon={<FaRoute aria-hidden="true" />}>
+            <SignalLifecycle stages={lifecycle} />
+          </DossierSection>
+
+          <DossierSection presentation="disclosure" eyebrow="Preuves" title="Pourquoi ce signal a été publié" icon={<FaCheckCircle aria-hidden="true" />} badge={`${predicates.length} règle${predicates.length > 1 ? "s" : ""}`}>
             {predicates.length ? (
               <div className="signal-evidence-list">
                 {predicates.map((predicate, index) => (
@@ -94,7 +97,7 @@ export function LiveSignalDetailWorkspace({
             <FeatureSnapshot data={data} />
           </DossierSection>
 
-          <DossierSection eyebrow="Autorités" title="Décisions après le signal" icon={<FaRoute aria-hidden="true" />}>
+          <DossierSection presentation="disclosure" eyebrow="Autorités" title="Décisions après le signal" icon={<FaRoute aria-hidden="true" />}>
             <div className="signal-authority-grid">
               <AuthorityCard
                 index="01"
@@ -131,7 +134,7 @@ export function LiveSignalDetailWorkspace({
             </div>
           </DossierSection>
 
-          <DossierSection eyebrow="Filiation" title="Chronologie vérifiable" icon={<FaClock aria-hidden="true" />} badge={`${data.auditTrail.length} événement${data.auditTrail.length > 1 ? "s" : ""}`}>
+          <DossierSection presentation="disclosure" eyebrow="Filiation" title="Chronologie vérifiable" icon={<FaClock aria-hidden="true" />} badge={`${data.auditTrail.length} événement${data.auditTrail.length > 1 ? "s" : ""}`}>
             <ol className="signal-audit-timeline">
               <TimelineItem at={data.signal.generatedAt} title="Signal publié" detail={`${data.signal.symbol} · ${operatorCode(data.signal.direction)}`} tone="authoritative" />
               {data.auditTrail.map((event, index) => (
@@ -140,10 +143,10 @@ export function LiveSignalDetailWorkspace({
               <TimelineItem at={data.signal.expiresAt} title="Fin de validité contractuelle" detail={temporal.effectiveState === "EXPIRED" ? "Échéance dépassée" : "Échéance future"} tone={temporal.effectiveState === "EXPIRED" ? "expired" : "pending"} />
             </ol>
           </DossierSection>
-        </main>
+        </div>
 
         <aside className="signal-dossier-sidebar" aria-label="Contexte et actions du dossier">
-          <DossierSection eyebrow="Origine" title="Traçabilité" icon={<FaFingerprint aria-hidden="true" />} compact>
+          <DossierSection presentation="disclosure" eyebrow="Origine" title="Traçabilité" icon={<FaFingerprint aria-hidden="true" />} compact>
             <dl className="signal-identity-list">
               <IdentityRow label="Signal" value={data.identity.signalId} />
               <IdentityRow label="Stratégie" value={data.identity.strategyId} />
@@ -160,29 +163,10 @@ export function LiveSignalDetailWorkspace({
           </DossierSection>
 
           <DossierSection eyebrow="Conséquences" title="Positions et ordres liés" icon={<FaDatabase aria-hidden="true" />} compact>
-            <RelatedRecords data={data} />
+            <SignalRelatedRecords data={data} />
           </DossierSection>
 
-          <DossierSection eyebrow="Action" title="Décision opérateur" icon={<FaShieldAlt aria-hidden="true" />} compact>
-            <div className="signal-command-state">
-              <FaFingerprint aria-hidden="true" />
-              <div><small>Dernière commande</small><strong>{command ? `Acceptée · ${command.commandId}` : "Aucune commande confirmée"}</strong></div>
-            </div>
-            {commandError ? <p className="signal-command-error" role="alert">{commandError}</p> : null}
-            <label className="signal-command-reason"><span>Motif obligatoire</span><textarea value={reason} onChange={(event) => onReason(event.target.value)} /></label>
-            <TrackedCommandReceipt command={command} />
-            <div className="signal-command-actions">
-              {data.commandActions.length ? data.commandActions.map((action, index) => (
-                <article key={`${action.actionId}-${index}`}>
-                  <div title={`Droit requis : ${action.capability}`}><strong>{operatorCopy(action.label)}</strong><small>Action contrôlée par le desk</small></div>
-                  <StatusBadge tone={permissionTone(action.permission)}>{presentPermission(action.permission).label}</StatusBadge>
-                  <DeskButton variant="primary" disabled={action.permission !== "ALLOWED" || !reason.trim() || submittingActionId === action.actionId} onClick={() => onConfirm(action)}>
-                    {submittingActionId === action.actionId ? "Envoi…" : "Confirmer"}
-                  </DeskButton>
-                </article>
-              )) : <EvidenceEmpty title="Aucune action autorisée" detail="Le desk ne publie aucune action possible pour ce signal." />}
-            </div>
-          </DossierSection>
+          <SignalCommandPanel actions={data.commandActions} reason={reason} command={command} error={commandError} submittingActionId={submittingActionId} onReason={onReason} onConfirm={onConfirm} />
         </aside>
       </div>
     </>
@@ -219,8 +203,9 @@ function SignalLifecycle({ stages }: { stages: readonly { label: string; state: 
   return <ol className="signal-lifecycle" aria-label="Progression du signal">{stages.map((stage, index) => <li key={stage.label} data-state={stage.state}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{stage.label}</strong><small>{stage.detail}</small></div></li>)}</ol>;
 }
 
-function DossierSection({ eyebrow, title, icon, action, badge, compact = false, children }: { eyebrow: string; title: string; icon: ReactNode; action?: ReactNode; badge?: string; compact?: boolean; children: ReactNode }) {
-  return <section className={`signal-dossier-section${compact ? " signal-dossier-section--compact" : ""}`}><header><span className="signal-dossier-section__icon">{icon}</span><div><p>{eyebrow}</p><h2>{title}</h2></div>{badge ? <small>{badge}</small> : null}{action ? <div className="signal-dossier-section__action">{action}</div> : null}</header><div className="signal-dossier-section__body">{children}</div></section>;
+function DossierSection({ title, icon, action, badge, compact = false, presentation = "section", children }: { eyebrow: string; title: string; icon: ReactNode; action?: ReactNode; badge?: string; compact?: boolean; presentation?: "section" | "disclosure"; children: ReactNode }) {
+  if (presentation === "disclosure") return <details className="dj-disclosure signal-disclosure"><summary>{title}{badge ? <small> · {badge}</small> : null}</summary><div>{children}</div></details>;
+  return <section className={`signal-dossier-section${compact ? " signal-dossier-section--compact" : ""}`}><header><span className="signal-dossier-section__icon">{icon}</span><h2>{title}</h2>{badge ? <small>{badge}</small> : null}{action ? <div className="signal-dossier-section__action">{action}</div> : null}</header><div className="signal-dossier-section__body">{children}</div></section>;
 }
 
 function TradeMetric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "danger" | "success" }) { return <div data-tone={tone}><small>{label}</small><strong>{value}</strong></div>; }
@@ -229,10 +214,6 @@ function AuthorityCard({ index, title, status, tone, rows, empty }: { index: str
 function TimelineItem({ at, title, detail, tone, route, badge }: { at: string; title: string; detail: string; tone: "authoritative" | "advisory" | "expired" | "pending"; route?: string; badge?: string }) { const content = <><time dateTime={at}>{formatDateTime(at)}</time><span className="signal-audit-timeline__dot" /><div><strong>{title}</strong><small>{detail}</small></div>{badge ? <em>{badge}</em> : null}</>; return <li data-tone={tone}>{route ? <Link to={route}>{content}</Link> : <div>{content}</div>}</li>; }
 function IdentityRow({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd title={value}>{compactId(value)}</dd></div>; }
 function EvidenceEmpty({ title, detail }: { title: string; detail: string }) { return <div className="signal-evidence-empty" role="status"><strong>{title}</strong><span>{detail}</span></div>; }
-
-function RelatedRecords({ data }: { data: LiveSignalDetailView }) {
-  return <div className="signal-related-records"><section><h3>Ordres proposés après contrôle du risque</h3>{data.linkedOrderIntents.length ? data.linkedOrderIntents.map((intent) => <Link className="signal-related-records__link" key={intent.portfolioOrderIntentId} to={intent.route} title={intent.portfolioOrderIntentId}><div><strong>{intent.instrument} · {operatorCode(intent.side)} · {publishedQuantity(intent.quantity)}</strong><small>Ouvrir le dossier</small></div><StatusBadge tone="info">{presentBackendStatus(intent.state).label}</StatusBadge></Link>) : <EvidenceEmpty title="Aucun ordre proposé lié" detail="Aucun dossier après contrôle du risque n’est relié à ce signal." />}</section><section><h3>Positions théoriques et courtier</h3>{data.existingPositions.length ? data.existingPositions.map((position) => <article key={position.positionId} title={position.positionId}><div><strong>{position.symbol} · {operatorCode(position.side)}</strong><small>Position liée</small></div><span>{publishedQuantity(position.quantity)} · {formatSignedR(position.pnlR)}</span></article>) : <EvidenceEmpty title="Aucune position liée" detail="État vide confirmé pour ce signal." />}</section><section><h3>Ordres chez le courtier</h3>{data.linkedOrders.length ? data.linkedOrders.map((order) => <article key={order.orderId} title={order.orderId}><div><strong>{operatorCode(order.side)} · {publishedQuantity(order.quantity)} · {operatorCode(order.type)}</strong><small>Ordre lié</small></div><StatusBadge tone={order.state === "FILLED" || order.state === "ACKED" ? "success" : order.state === "REJECTED" ? "danger" : "warning"}>{presentBackendStatus(order.state).label}</StatusBadge></article>) : <EvidenceEmpty title="Aucun ordre chez le courtier" detail="Aucun ordre physique n’est supposé tant que l’exécution reste fermée." />}</section></div>;
-}
 
 function lifecycleStages(data: LiveSignalDetailView, arbitrationPublished: boolean, riskPublished: boolean) {
   return [
@@ -248,11 +229,10 @@ function lifecycleStages(data: LiveSignalDetailView, arbitrationPublished: boole
 function signalChartRoute(data: LiveSignalDetailView): string { const params = new URLSearchParams({ instrument: data.signal.symbol, signalId: data.identity.signalId, chartAt: data.featureSnapshot.cutoffAt || data.signal.generatedAt }); return `/live?${params.toString()}`; }
 function isUnavailable(value: string): boolean { return !value || ["UNAVAILABLE", "UNKNOWN", "NONE"].includes(value.trim().toUpperCase()); }
 function formatEntryZone(low: number | null, high: number | null): string { const left = formatPublishedPrice(low); const right = formatPublishedPrice(high); if (left === "Non publié" && right === "Non publié") return left; return left === right ? left : `${left} – ${right}`; }
-function formatPublishedPrice(value: number | null): string { return Number.isFinite(value) && Number(value) > 0 ? new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value)) : "Non publié"; }
+function formatPublishedPrice(value: number | null): string { return Number.isFinite(value) && Number(value) > 0 ? new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 8 }).format(Number(value)) : "Non publié"; }
 function publishedQuantity(value: number): string { return Number.isFinite(value) && value > 0 ? `${value} contrat${value > 1 ? "s" : ""}` : "Non publié"; }
 function formatRatio(value: number | null): string { return Number.isFinite(value) && Number(value) > 0 ? `${Number(value).toFixed(2)} : 1` : "Non publié"; }
-function formatSignedR(value: number | null): string { return Number.isFinite(value) && Number(value) !== 0 ? `${Number(value) > 0 ? "+" : "−"}${Math.abs(Number(value)).toFixed(2).replace(".", ",")} R` : "Non publié"; }
+function formatSignedR(value: number | null): string { return positionR(value); }
 function formatDuration(seconds: number): string { const minutes = Math.floor(seconds / 60); const rest = seconds % 60; return `${minutes}m ${String(rest).padStart(2, "0")}s`; }
 function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "Non publié" : new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date); }
 function compactId(value: string): string { return value.length > 34 ? `${value.slice(0, 16)}…${value.slice(-12)}` : value; }
-function permissionTone(permission: SignalAction["permission"]) { if (permission === "ALLOWED") return "success"; if (permission === "STEP_UP_REQUIRED") return "warning"; return "danger"; }

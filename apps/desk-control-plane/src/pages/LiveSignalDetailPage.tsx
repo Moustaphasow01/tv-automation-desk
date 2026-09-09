@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { Card } from "@/design-system/primitives";
-import { OperatorPageHeader } from "@/design-system/workspace";
-import { ViewTruthBanner } from "@/design-system/states";
+import { useParams } from "react-router-dom";
+import { JourneyBackLink, JourneyLink } from "@/features/trading-journey/JourneyNavigation";
+import { JourneyFreshness, JourneyMessage, JourneyProvenance, useJourneySurface } from "@/features/trading-journey/JourneySurface";
 import { useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { CommandAccepted, SubmitDeskCommandInput } from "@/domains/realtime/commandRuntime";
 import type { LiveSignalDetailView } from "@/domains/front-api/viewModels";
@@ -10,21 +9,27 @@ import { LiveSignalDetailWorkspace } from "@/features/live-trading/LiveSignalDet
 import { resolveSignalTemporalState } from "@/features/live-trading/signalTemporalState";
 import { operatorCode } from "@/design-system/operatorVocabulary";
 import "@/features/live-trading/signal-detail.css";
+import "@/features/live-trading/signal-journey.css";
 
 type SignalAction = LiveSignalDetailView["commandActions"][number];
 
 export function LiveSignalDetailPage() {
   const { signalId } = useParams();
+  return <SignalDossierReading key={signalId} signalId={signalId} />;
+}
+
+function SignalDossierReading({ signalId }: { signalId: string | undefined }) {
+  useJourneySurface();
   const query = useFrontView("live-signal-detail", { signalId });
   const repository = useFrontViewRepository();
   const [reason, setReason] = useState("Contrôle opérateur : confirmer la décision affichée par le backend.");
   const [command, setCommand] = useState<CommandAccepted | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
-  const nowMs = useAnchoredClock(query.data?.meta.asOf ?? "2026-08-10T09:40:00.000Z");
+  const nowMs = useAnchoredClock(query.data?.meta.asOf ?? "");
 
   if (query.isLoading) return <LiveSignalLoading />;
-  if (query.isError) return <LiveSignalError message={(query.error as Error).message} />;
+  if (query.isError) return <LiveSignalError retry={() => void query.refetch()} />;
   if (!query.data) return <LiveSignalEmpty />;
 
   const { data, meta } = query.data;
@@ -36,6 +41,7 @@ export function LiveSignalDetailPage() {
   const idMismatch = requestedSignalId !== data.identity.signalId;
 
   const confirmAction = async (action: SignalAction) => {
+    if (idMismatch) return;
     setSubmittingActionId(action.actionId);
     setCommandError(null);
     try {
@@ -49,20 +55,12 @@ export function LiveSignalDetailPage() {
   };
 
   return (
-    <div className="operator-page live-signal-page signal-dossier-page">
-      <ViewTruthBanner meta={meta} />
-      <OperatorPageHeader
-        title={`Dossier signal · ${data.signal.symbol} ${operatorCode(data.signal.direction)}`}
-        description={`Données arrêtées à ${formatDateTime(data.featureSnapshot.cutoffAt)}. L’identifiant technique reste disponible dans la section Traçabilité.`}
-        actions={(
-          <>
-            <Link to={`/live?signalId=${encodeURIComponent(data.identity.signalId)}`}>Retour au Live</Link>
-            <Link className="operator-primary-action" to={signalChartRoute(data)}>Voir le graphique</Link>
-          </>
-        )}
-      />
+    <div className="desk-journey live-signal-page signal-dossier-page">
+      <JourneyBackLink />
+      <header className="dj-header"><div><h1>{data.signal.symbol} · {operatorCode(data.signal.direction)}</h1><p>Dossier signal · données au {formatDateTime(data.featureSnapshot.cutoffAt)}</p></div><div className="dj-header-actions"><JourneyLink to={signalChartRoute(data)}>Voir le graphique</JourneyLink></div></header>
+      <JourneyFreshness meta={meta} />
       {idMismatch ? <div className="signal-contract-warning" role="alert" title={`Demandé : ${requestedSignalId} · reçu : ${data.identity.signalId}`}><strong>Incohérence d’identité</strong><span>Le service du desk a retourné un autre signal que celui demandé. Aucune action n’est autorisée.</span></div> : null}
-      <LiveSignalDetailWorkspace
+      {!idMismatch ? <LiveSignalDetailWorkspace
         data={data}
         temporal={temporal}
         remainingSec={remainingSec}
@@ -72,7 +70,8 @@ export function LiveSignalDetailPage() {
         submittingActionId={submittingActionId}
         onReason={setReason}
         onConfirm={(action) => { void confirmAction(action); }}
-      />
+      /> : null}
+      <JourneyProvenance meta={meta} />
     </div>
   );
 }
@@ -102,9 +101,9 @@ export function buildLiveSignalCommand(action: SignalAction, data: LiveSignalDet
   };
 }
 
-function LiveSignalLoading() { return <div className="operator-page signal-dossier-page" aria-busy="true" aria-live="polite"><div className="signal-dossier-skeleton" /><div className="signal-dossier-skeleton signal-dossier-skeleton--tall" /></div>; }
-function LiveSignalError({ message }: { message: string }) { return <Card title="Signal indisponible" eyebrow="Erreur de contrat" tone="danger" density="compact"><p>{message}</p></Card>; }
-function LiveSignalEmpty() { return <Card title="Aucun signal" eyebrow="État vide" state="empty" density="compact"><p>Le service du desk ne retourne pas de projection pour cet identifiant.</p></Card>; }
+function LiveSignalLoading() { return <div className="desk-journey"><JourneyBackLink /><div className="dj-loading" role="status">Chargement du signal…</div></div>; }
+function LiveSignalError({ retry }: { retry(): void }) { return <div className="desk-journey"><JourneyBackLink /><JourneyMessage title="Signal indisponible" retry={retry}>Le desk n’a pas pu fournir le signal demandé. Revenez à votre séance ou réessayez.</JourneyMessage></div>; }
+function LiveSignalEmpty() { return <div className="desk-journey"><JourneyBackLink /><JourneyMessage title="Signal non publié">Aucun dossier n’est disponible pour cet identifiant.</JourneyMessage></div>; }
 
 function useAnchoredClock(anchorIso: string) {
   const anchorMs = Date.parse(anchorIso);

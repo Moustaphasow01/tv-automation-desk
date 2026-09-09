@@ -4,18 +4,21 @@ import { canonicalEvidence, manualExecutionLabel, manualStopLabel, publishedText
 import { numberLabel, parisTime, sideLabel, workspaceCopy } from "./workspaceModel";
 import { normalizedSearch } from "./workspacePreferences";
 import { useWorkspaceFilter } from "./useWorkspaceFilter";
+import { useProgressiveRows } from "@/features/trading-journey/useProgressiveRows";
 
 export function WorkspaceTracking({ items, model, onSelect }: { items: readonly FocusQueueItem[]; model: LiveTradingModel; onSelect(item: FocusQueueItem): void }) {
   const [filter, setFilter] = useWorkspaceFilter("trackingScope", "open", ["open", "all"]);
   const [search, setSearch] = useWorkspaceFilter("trackingSearch", "");
   const rows = items.filter((item) => (filter === "all" || !item.terminal) && normalizedSearch(item.searchText).includes(normalizedSearch(search)));
+  const page = useProgressiveRows(rows, filter + ":" + search);
   return <section className="tw-tracking" aria-label="Suivi des tickets et positions">
     <header className="tw-section-header"><div><h2>Suivi des tickets et positions</h2><span>Du plan autorisé à l’exécution publiée</span></div></header>
     <div className="tw-filter-bar"><label>Afficher<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="open">Dossiers en cours</option><option value="all">Tous les dossiers reçus</option></select></label><label>Rechercher<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Actif ou stratégie" /></label></div>
     <p className="tw-tracking__notice">Théorie, déclaration opérateur et exécution courtier restent distinctes. Un ordre envoyé ou accepté ne prouve pas un remplissage.</p>
-    <div className="tw-tracking-list">{rows.map((item) => <article key={item.key} className="tw-followup"><header><div><strong>{item.instrument} · {sideLabel(item.side)}</strong><p>{item.title}</p></div><button onClick={() => onSelect(item)}>Ouvrir le ticket</button></header><ExecutionDetail item={item} model={model} /></article>)}</div>
+    <div className="tw-tracking-list">{page.visible.map((item) => <article key={item.key} className="tw-followup"><header><div><strong>{item.instrument} · {sideLabel(item.side)}</strong><p>{item.title}</p></div><button onClick={() => onSelect(item)}>Ouvrir le ticket</button></header><p className="tw-followup-state"><span className="tw-ticket-state" data-tone={item.statusTone}>{item.status}</span><span>Reçu · {parisTime(item.createdAt, true)} Paris</span></p><details><summary>Plan, suivi et preuves d’exécution</summary><ExecutionDetail item={item} model={model} /></details></article>)}</div>
     {!rows.length ? <div className="tw-empty"><strong>Aucun dossier ne correspond à cette vue</strong><p>Cette liste porte uniquement sur les dossiers reçus. Elle ne prouve pas l’absence d’exposition sur un compte courtier.</p><button onClick={() => { setFilter("all"); setSearch(""); }}>Voir les dossiers reçus</button></div> : null}
-    <footer>{rows.length} dossier(s) affiché(s) · {parisTime(model.meta.generatedAt, true)} Paris · historique potentiellement partiel</footer>
+    {page.hasMore ? <button type="button" className="tw-tracking-more" onClick={page.showMore}>Afficher 12 dossiers de plus</button> : null}
+    <footer>{page.visible.length} sur {rows.length} dossier(s) reçu(s) · {parisTime(model.meta.generatedAt, true)} Paris · historique potentiellement partiel</footer>
   </section>;
 }
 

@@ -34,6 +34,7 @@ const CODES: Readonly<Record<string, string>> = {
   APPROVED: "Approuvé",
   ASIA_OPEN: "Ouverture Asie",
   AWAITING_MANUAL_CONFIRMATION: "En attente de votre validation",
+  AVOIDED_LOSS: "Perte théorique évitée",
   BASELINE: "Référence",
   BLOCKED: "Bloqué",
   BUY: "Achat",
@@ -88,6 +89,7 @@ const CODES: Readonly<Record<string, string>> = {
   PARTIALLY_FILLED: "Partiellement exécuté",
   PASSED: "Validé",
   PENDING: "En attente",
+  PENDING_OUTCOME: "Résultat théorique en attente",
   PLATFORM_OPS: "Exploitation plateforme",
   PRIMARY: "Principal",
   PROMOTED: "Promu",
@@ -113,6 +115,7 @@ const CODES: Readonly<Record<string, string>> = {
   TASK_COMPLETED: "Tâche terminée",
   TAKE: "Retenu",
   TAKE_REDUCED: "Retenu avec risque réduit",
+  THEORETICAL_EXECUTION: "Suivi théorique",
   VALIDATED: "Validé",
   WAIT: "En attente",
   WAITING: "En attente",
@@ -246,7 +249,8 @@ export function operatorCopy(raw: unknown, fallback = "Non publié"): string {
   if (!value || /^(unavailable|undefined|unknown|null|nan|none)$/i.test(value)) return fallback;
   const exact = normalizeCode(value);
   if (CODES[exact] || REASON_CODES[exact]) return operatorCode(exact, fallback);
-  return PHRASES.reduce((copy, [pattern, replacement]) => copy.replace(pattern, replacement), value);
+  const translated = PHRASES.reduce((copy, [pattern, replacement]) => copy.replace(pattern, replacement), value);
+  return translated.replace(/\b(?:THEORETICAL_EXECUTION|PENDING_OUTCOME|AVOIDED_LOSS)\b/g, (code) => CODES[code]);
 }
 
 export function operatorDuration(totalSeconds: number | null | undefined): string {

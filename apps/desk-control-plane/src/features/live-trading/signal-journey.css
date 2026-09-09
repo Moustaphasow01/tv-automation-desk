@@ -1,0 +1,47 @@
+.desk-journey.signal-dossier-page { --signal-bg: var(--tw-bg); --signal-surface: var(--tw-surface); --signal-surface-raised: var(--tw-raised); --signal-line: var(--tw-line); --signal-line-strong: var(--tw-line); --signal-text: var(--tw-text); --signal-secondary: var(--tw-muted); --signal-muted: var(--tw-muted); --signal-cyan: var(--tw-accent); display: block; background: var(--tw-bg); }
+.desk-journey .signal-hero { margin-block: 16px; min-height: 0; padding: 16px; background: var(--tw-surface); border-color: var(--tw-line); }
+.desk-journey .signal-hero__identity h2 { font-size: 26px; font-family: inherit; letter-spacing: -.02em; }
+.desk-journey .signal-hero__identity p { display: none; }
+.desk-journey .signal-hero__direction { color: var(--tw-accent); background: var(--tw-surface); font-size: 12px; letter-spacing: normal; font-family: inherit; }
+.desk-journey .status-badge--neutral { color: var(--tw-text); background: var(--tw-raised); }
+.desk-journey .signal-hero > div:not(.signal-hero__warning) { padding: 0; }
+.desk-journey .signal-hero__validity > strong { font-size: 16px; font-family: inherit; font-weight: 500; }
+.desk-journey :is(.signal-hero__clock small, .signal-hero__clock strong, .signal-hero__validity > small) { font-size: 12px; text-transform: none; letter-spacing: normal; }
+.desk-journey .signal-lifecycle { margin-block: 16px 24px; background: var(--tw-surface); }
+.desk-journey .signal-lifecycle li { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+.desk-journey .signal-lifecycle li > span { display: none; }
+.desk-journey .signal-lifecycle small { display: block; font-size: 12px; white-space: normal; }
+.desk-journey .signal-lifecycle strong { font-size: 13px; }
+.desk-journey .signal-dossier-layout { gap: 24px; }
+.desk-journey .signal-dossier-main, .desk-journey .signal-dossier-sidebar { gap: 16px; }
+.desk-journey .signal-dossier-sidebar { position: static; }
+.desk-journey .signal-dossier-section > header { display: flex; flex-wrap: wrap; min-height: 56px; background: none; padding: 16px; }
+.desk-journey .signal-dossier-section > header h2 { font-size: 15px; }
+.desk-journey .signal-dossier-section__icon { display: none; }
+.desk-journey .signal-dossier-section__body { padding: 16px; gap: 16px; }
+.desk-journey .signal-disclosure { margin-top: 0; }
+.desk-journey .signal-disclosure > div { display: grid; gap: 16px; }
+.desk-journey .signal-trade-plan { background: var(--tw-surface); gap: 1px; }
+.desk-journey .signal-trade-plan > div { background: var(--tw-surface); padding: 12px 10px; }
+.desk-journey .signal-trade-plan small { font-size: 12px; letter-spacing: normal; text-transform: none; font-weight: 400; }
+.desk-journey .signal-trade-plan strong { font: 500 18px/1.5 "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.desk-journey .signal-section-note { font-size: 13px; }
+.desk-journey :is(.signal-evidence-empty, .signal-related-records section) { padding: 10px 0; background: transparent; }
+.desk-journey :is(.signal-evidence-empty strong, .signal-evidence-empty span, .signal-related-records h3, .signal-related-records__link strong, .signal-related-records article strong, .signal-command-state strong) { font-size: 13px; }
+.desk-journey :is(.signal-related-records__link small, .signal-related-records article > span, .signal-authority-card dt, .signal-authority-card dd, .signal-authority-card > p, .signal-identity-list dt, .signal-identity-list dd, .signal-audit-timeline small, .signal-audit-timeline time) { font-size: 12px; }
+.desk-journey .signal-identity-list dd { white-space: normal; overflow-wrap: anywhere; }
+.desk-journey :is(.signal-hero__actions a, .signal-dossier-section__action a, .signal-related-links a) { min-height: 44px; font-size: 12px; white-space: normal; background: var(--tw-bg); }
+@media (max-width: 900px) {
+  .desk-journey .signal-dossier-layout { grid-template-columns: minmax(0, 1fr); }
+  .desk-journey .signal-hero { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 12px 16px; margin-block: 8px 16px; }
+  .desk-journey .signal-hero > .signal-hero__validity { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  .desk-journey .signal-hero__validity > small { flex-basis: 100%; }
+  .desk-journey .signal-hero > .signal-hero__identity { display: none; }
+  .desk-journey .signal-hero > .signal-hero__clock { display: none; }
+  .desk-journey .signal-lifecycle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .desk-journey .signal-hero > .signal-hero__actions { display: none; }
+  .desk-journey .signal-lifecycle li::after { display: none; }
+  .desk-journey .signal-trade-plan { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .desk-journey .signal-trade-plan > div:first-child { grid-column: 1 / -1; }
+  .desk-journey .signal-dossier-section__action { width: 100%; }
+}

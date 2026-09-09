@@ -205,7 +205,8 @@ function RecordTable({ record }: { record: Record<string, unknown> }) {
 }
 
 export function AuditTimelinePanel({ model }: { model: LiveTradingModel }) {
-  return <LivePanel title="Chronologie événements / Flux d'audit" className="lt-panel--timeline" action={<Link to="/events">Tous les événements</Link>}><ol>{model.timeline.slice(0, 8).map((event) => <li key={event.eventId}><time dateTime={event.at}>{displayTime(event.at)}</time><i className={`lt-tone--${liveTone(event.tone)}`} aria-hidden="true" /><span><strong>{event.title}</strong><small>{event.step} · {event.detail}</small></span></li>)}</ol><TruthEmpty when={!model.timeline.length} label="Aucun événement Live autoritaire dans la projection." /></LivePanel>;
+  const events = model.timeline.slice(0, 8);
+  return <LivePanel title="Derniers événements" className="lt-panel--timeline" action={<Link to="/events">Tous les événements</Link>}><ol>{events.map((event) => <li key={event.eventId}><time dateTime={event.at}>{displayTime(event.at)}</time><i className={`lt-tone--${liveTone(event.tone)}`} aria-hidden="true" /><span><strong>{operatorCopy(event.title)}</strong><small>{operatorCopy(event.step)} · {operatorCopy(event.detail)}</small></span></li>)}</ol>{events.length ? <details className="lt-activity-trace"><summary>Codes des événements</summary><dl>{events.map((event) => <div key={event.eventId}><dt>{displayTime(event.at)} · {operatorCopy(event.title)}</dt><dd><code>{event.step} · {event.detail}</code></dd></div>)}</dl></details> : null}<TruthEmpty when={!model.timeline.length} label="Aucun événement publié dans cette vue Live." /></LivePanel>;
 }
 
 export function PerformancePanel({ model }: { model: LiveTradingModel }) {

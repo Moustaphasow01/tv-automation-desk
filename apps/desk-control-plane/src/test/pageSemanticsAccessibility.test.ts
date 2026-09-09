@@ -8,13 +8,17 @@ const readSource = (path: string) => readFileSync(resolve(sourceRoot, path), "ut
 describe("page semantic accessibility regressions", () => {
   it("keeps one application main landmark and exposes the Command Center workspace as a region", () => {
     const shell = readSource("shell/DeskShell.tsx");
-    const commandCenter = readSource("pages/CommandCenterPage.tsx");
+    const commandCenter = readSource("features/command-center/CommandCenterSupervision.tsx");
+    const home = readSource("features/command-center/DeskHome.tsx");
     const app = readSource("app/App.tsx");
     const explorers = readSource("pages/ExplorerPages.tsx");
 
     expect(shell).toContain('<main className="desk-content" id="main-content"');
     expect(commandCenter).not.toContain('<main className="cc-workspace"');
     expect(commandCenter).toContain('<div className="cc-workspace" role="region" aria-label="Synthèse du Trading Desk">');
+    expect(home).not.toContain("<main");
+    expect(home).toContain("<h1>Accueil</h1>");
+    expect(home).toContain('aria-label="Priorités de séance"');
     expect(app).not.toContain('<main className="route-loading"');
     expect(explorers).not.toContain('<main className="route-loading"');
   });

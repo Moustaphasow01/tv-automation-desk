@@ -1,0 +1,44 @@
+.dh-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 4px; border-block: 1px solid var(--tw-line); }
+.dh-summary > a { display: grid; grid-template-columns: minmax(0, 1fr) 16px; gap: 4px; padding: 16px 20px; border-right: 1px solid var(--tw-line-soft); text-decoration: none; }
+.dh-summary > a:first-child { padding-left: 0; }
+.dh-summary > a:last-child { border-right: 0; }
+.dh-summary > a > span { color: var(--tw-muted); font-size: 12px; grid-column: 1 / -1; }
+.dh-summary strong { font-size: 23px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--tw-text); }
+.dh-summary > a[data-tone="danger"] strong { color: var(--tw-down); }
+.dh-summary > a[data-tone="warning"] strong { color: var(--tw-warn); }
+.dh-summary > a > svg { align-self: center; color: var(--tw-muted); }
+.dh-summary > a:hover { background: var(--tw-surface); }
+.dh-main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px; }
+.dh-decision { padding: 18px; background: var(--tw-surface); border-radius: 6px; }
+.dh-decision p { margin-top: 8px; color: var(--tw-muted); }
+.dh-attention-row { display: grid; grid-template-columns: minmax(0, 1fr) 18px; gap: 4px 14px; padding-block: 16px; border-bottom: 1px solid var(--tw-line-soft); text-decoration: none; }
+.dh-attention-row strong { grid-column: 1; color: var(--tw-text); font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.dh-attention-row > span { grid-column: 1; color: var(--tw-muted); font-size: 12px; overflow-wrap: anywhere; }
+.dh-attention-row > svg { grid-column: 2; grid-row: 2; }
+.dh-attention-row:hover strong { color: var(--tw-accent); }
+.dh-more { display: inline-flex; min-height: 44px; align-items: center; }
+.dh-source-note { color: var(--tw-muted); font-size: 13px; margin-bottom: 12px !important; }
+.dh-market-row { display: grid; grid-template-columns: 50px 48px minmax(70px, 1fr) minmax(80px, 1fr) 16px; align-items: center; gap: 8px; min-height: 60px; border-bottom: 1px solid var(--tw-line-soft); color: var(--tw-muted) !important; text-decoration: none; font-size: 12px; font-variant-numeric: tabular-nums; }
+.dh-market-row strong { color: var(--tw-text); font-size: 16px; }
+.dh-market-row:hover { background: var(--tw-surface); }
+.dh-recent { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+.dh-recent > a { display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: center; gap: 12px; padding-block: 14px; border-bottom: 1px solid var(--tw-line-soft); text-decoration: none; }
+.dh-recent strong { color: var(--tw-text); font-weight: 500; }
+.dh-recent small { display: block; margin-top: 3px; }
+.dh-recent > a > span + span { text-align: right; font-size: 12px; color: var(--tw-muted); }
+.dh-destinations { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 40px; border-top: 1px solid var(--tw-line); }
+.dh-destinations > a { display: grid; grid-template-columns: minmax(0, 1fr) 16px; gap: 8px; padding-block: 20px; text-decoration: none; }
+.dh-destinations span { grid-column: 1; font-size: 12px; color: var(--tw-muted); }
+.dh-destinations svg { grid-column: 2; grid-row: 1; }
+@media (max-width: 1100px) { .dh-main { gap: 24px; } .dh-market-row { grid-template-columns: 44px 40px minmax(0, 1fr) 16px; } .dh-market-row > span:nth-of-type(2) { grid-column: 3; grid-row: 2; margin-top: -18px; } .dh-market-row > time { align-self: start; margin-top: 10px; } .dh-market-row > svg { grid-column: 4; grid-row: 1; } }
+@media (max-width: 850px) { .dh-main { grid-template-columns: minmax(0, 1fr); gap: 0; } .dh-recent { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) {
+  .dh-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dh-summary > a { padding: 12px; border-bottom: 1px solid var(--tw-line-soft); }
+  .dh-summary > a:nth-child(odd) { padding-left: 0; }
+  .dh-summary > a:nth-child(even) { border-right: 0; }
+  .dh-summary strong { font-size: 21px; }
+  .dh-destinations { grid-template-columns: minmax(0, 1fr); gap: 0; margin-top: 28px; }
+  .dh-destinations > a + a { border-top: 1px solid var(--tw-line-soft); }
+  .dh-market-row { grid-template-columns: 50px 44px minmax(0, 1fr) 16px; }
+}

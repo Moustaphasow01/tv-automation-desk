@@ -39,6 +39,17 @@
 .lt-overview .lt-activity-dock__tabs button[aria-selected="true"] { color: var(--tw-accent); background: var(--tw-selected); }
 .lt-overview .lt-activity-dock__content { height: auto; max-height: none; min-height: 250px; overflow: visible; padding: 8px; }
 .lt-overview .lt-panel, .lt-overview .lt-panel__body { height: auto; max-height: none; overflow: visible; }
+.lt-overview .lt-panel--timeline { min-height: 0; }
+.lt-overview .lt-panel--timeline > header { height: auto; flex-wrap: wrap; padding: 12px 8px; gap: 8px; }
+.lt-overview .lt-panel--timeline > header h2 { white-space: normal; text-transform: none; letter-spacing: normal; }
+.lt-overview .lt-panel--timeline ol { height: auto; max-height: none; overflow: visible; }
+.lt-overview .lt-panel--timeline li { height: auto; min-height: 64px; padding-block: 12px; align-items: start; }
+.lt-overview .lt-panel--timeline li :is(strong, small) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.lt-overview .lt-activity-trace { border-top: 1px solid var(--tw-line); color: var(--tw-muted); }
+.lt-overview .lt-activity-trace > summary { min-height: 44px; padding: 12px 0; cursor: pointer; color: var(--tw-accent); }
+.lt-overview .lt-activity-trace dl > div { padding-block: 12px; }
+.lt-overview .lt-activity-trace dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.lt-overview .lt-activity-dock__content { min-height: 0; }
 .lt-overview .lt-panel { background: var(--tw-surface); border-color: var(--tw-line); }
 .lt-overview .lt-decision-stack { height: auto; max-height: none; overflow: visible; }
 .lt-overview .lt-decision-stack__flow { max-height: none; }
@@ -68,4 +79,12 @@
   .lt-overview .tw-chart__canvas { height: 280px; }
   .lt-overview :is(button, select, summary) { min-height: 44px; }
   .lt-overview .lt-activity-dock__summary > span { min-width: 55px; }
+}
+.lt-session-navigation { display: none; }
+@media (max-width: 899px) {
+  .lt-session-navigation { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-block: 12px; }
+  .lt-session-navigation button { min-height: 44px; }
+  .lt-overview[data-live-panel="market"] :is(.lt-overview__activity, .lt-overview__decision, .lt-overview__context),
+  .lt-overview[data-live-panel="activity"] :is(.lt-overview__market, .lt-overview__decision),
+  .lt-overview[data-live-panel="decision"] :is(.lt-overview__grid, .lt-overview__context) { display: none; }
 }
