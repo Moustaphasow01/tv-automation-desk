@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useCryptoMarket } from "@/domains/front-api/cryptoMarketRepository";
 import { chartBars } from "./chartData";
 import { FinancialChart } from "./FinancialChart";
-import { CryptoMarketHeader, CryptoMarketSource } from "./CryptoMarketReading";
+import { CryptoMarketHeader, CryptoMarketSource, cryptoReadingState } from "./CryptoMarketReading";
 import { useFrozenReading } from "./useFrozenReading";
 import type { MarketPaneProps } from "./MarketPane";
 import "./crypto-market.css";
@@ -22,8 +22,7 @@ export function CryptoMarketPane({ instrument, timeframe, activity, resumeGenera
   const quote = reading.value.quote;
   const market = data?.markets.find((market) => market.instrument === instrument);
   const precision = market?.pricePrecision ?? 7;
-  const healthy = !live.isError && quote?.state === "LIVE" && Date.now() - Date.parse(quote.asOf ?? "") <= 30_000;
-  const state = reading.paused ? "PAUSED" : healthy ? "LIVE" : quote?.last ? "STALE" : "CONNECTING";
+  const state = cryptoReadingState({ reading: reading.paused ? "paused" : "following", transport: live.isError ? "failed" : "available", quote, now: Date.now() });
   return <article className="tw-chart tw-crypto" data-instrument={instrument} aria-label={`Marché ${instrument}`}>
     <CryptoMarketHeader instrument={instrument} timeframe={timeframe} quote={quote} precision={precision} state={state} />
     {live.isError || history.isError || data?.history?.state === "ERROR" ? <p className="tw-inline-warning" role="status">Actualisation partiellement indisponible. Dernières valeurs conservées avec leur date. <button onClick={() => { void history.refetch(); void live.refetch(); }}>Réessayer</button></p> : null}

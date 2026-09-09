@@ -4,6 +4,12 @@ import { ageLabel, marketName, numberLabel, parisTime, timeframeLabel } from "./
 export type CryptoReadingState = "PAUSED" | "LIVE" | "STALE" | "CONNECTING";
 const stateLabels = { PAUSED: "Lecture figée", LIVE: "En direct", STALE: "Prix ancien · flux à vérifier", CONNECTING: "Connexion au marché…" };
 
+export function cryptoReadingState({ reading, transport, quote, now }: { reading: "paused" | "following"; transport: "failed" | "available"; quote?: CryptoQuote; now: number }): CryptoReadingState {
+  if (reading === "paused") return "PAUSED";
+  if (transport === "available" && quote?.state === "LIVE" && now - Date.parse(quote.asOf ?? "") <= 30_000) return "LIVE";
+  return quote?.last ? "STALE" : "CONNECTING";
+}
+
 export function CryptoMarketHeader({ instrument, timeframe, quote, precision, state }: {
   instrument: string; timeframe: string; quote?: CryptoQuote; precision: number; state: CryptoReadingState;
 }) {
