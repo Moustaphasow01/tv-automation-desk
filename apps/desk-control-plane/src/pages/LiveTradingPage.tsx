@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { presentExecutionMode } from "@/design-system/labels";
-import { useCommandStatus, useFrontView, useFrontViewRepository } from "@/domains/front-api/repositories";
+import { useCommandStatus, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { LiveManualExecutionAction } from "@/domains/front-api/viewModels";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
 import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
@@ -17,12 +17,14 @@ import { commandForCurrentGate, type GateCommandBinding } from "@/features/live-
 import { LiveMarketLens } from "@/features/live-trading/LiveMarketLens";
 import { LiveTradingHeader } from "@/features/live-trading/LiveTradingHeader";
 import { InstrumentChartPanel } from "@/features/live-trading/chart/LiveMarketChart";
-import { toLiveTradingModel } from "@/features/live-trading/mapper";
+import { useLiveTradingProjection } from "@/features/live-trading/useLiveTradingProjection";
 import { operatorStateForSignal } from "@/features/live-trading/signalOperatorState";
 import "@/features/live-trading/live-trading.css";
 import "@/features/live-trading/live-cockpit.css";
 import "@/features/live-trading/live-continuity.css";
 import "@/features/live-trading/live-operator-experience.css";
+
+const TradingWorkspace = lazy(() => import("@/features/live-trading/workspace/TradingWorkspace"));
 
 export function LiveTradingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -36,18 +38,7 @@ export function LiveTradingPage() {
   const chartAt = searchParams.get("chartAt");
   const chartSurfaceRef = useRef<HTMLElement>(null);
   const decisionSurfaceRef = useRef<HTMLElement>(null);
-  const deskQuery = useFrontView("live-trading");
-  const chartQuery = useFrontView("live-trading", marketScope, {
-    preservePreviousData: true,
-    queryScope: "market-series",
-    refetchInterval: 60_000,
-  });
-  const focusQuery = useFrontView("live-focus", marketScope, {
-    preservePreviousData: true,
-    queryScope: "live-focus",
-    refetchInterval: 60_000,
-    enabled: focusMode,
-  });
+  const { deskQuery, chartQuery, focusQuery, model } = useLiveTradingProjection(marketScope, selectedSignalId, focusMode);
   const repository = useFrontViewRepository();
   const [commandBinding, setCommandBinding] = useState<GateCommandBinding | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
@@ -55,17 +46,6 @@ export function LiveTradingPage() {
   const initialChartAlignmentDone = useRef(false);
   const focusRestoreScroll = useRef<number | null>(null);
   const autoOpenedDecision = useRef<string | null>(null);
-  const model = useMemo(() => {
-    if (!deskQuery.data) return null;
-    const deskModel = toLiveTradingModel(deskQuery.data, { signalId: selectedSignalId });
-    if (!chartQuery.data) return deskModel;
-    const chartModel = toLiveTradingModel(chartQuery.data, { signalId: selectedSignalId });
-    const chartTheoretical = chartModel.selectedTheoreticalExecution;
-    const selectedTheoreticalExecution = chartTheoretical?.portfolioOrderIntentId === deskModel.selectedTheoreticalExecution?.portfolioOrderIntentId
-      ? chartTheoretical
-      : deskModel.selectedTheoreticalExecution;
-    return { ...deskModel, marketSeries: chartModel.marketSeries, selectedTheoreticalExecution };
-  }, [chartQuery.data, deskQuery.data, selectedSignalId]);
   const currentOrderIntentId = model?.orderIntent?.portfolioOrderIntentId ?? null;
   const actionable = Boolean(model && [...model.source.signals, ...model.source.canonicalRuntime.latestSignals]
     .some((signal) => operatorStateForSignal(model, signal).code === "ACTIONABLE"));
@@ -220,6 +200,11 @@ export function LiveTradingPage() {
   if (focusMode) {
     if (focusQuery.isError && !focusQuery.data) return <LiveTradingFailure message={(focusQuery.error as Error).message} retry={() => focusQuery.refetch()} />;
     if (focusQuery.isLoading || !focusQuery.data) return <LiveTradingLoading />;
+    if (searchParams.get("workspace") !== "classic") return <Suspense fallback={<LiveTradingLoading />}><TradingWorkspace
+      model={model} focus={focusQuery.data.data} focusMeta={focusQuery.data.meta}
+      projectionError={focusQuery.isError || deskQuery.isError} refreshing={focusQuery.isFetching || deskQuery.isFetching}
+      dashboardPeriod={focusDashboardPeriod} onExit={exitFocus} onScopeChange={updateMarketScope} onDashboardPeriodChange={updateFocusDashboardPeriod}
+    /></Suspense>;
     return <LiveFocusMode
       model={model}
       focus={focusQuery.data.data}

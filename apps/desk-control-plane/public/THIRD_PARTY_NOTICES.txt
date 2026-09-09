@@ -1,0 +1,8 @@
+TradingView Lightweight Charts™
+Copyright (с) 2025 TradingView, Inc. https://www.tradingview.com/
+
+This application uses Lightweight Charts 5.2.1 under the Apache License 2.0.
+https://www.apache.org/licenses/LICENSE-2.0
+https://github.com/tradingview/lightweight-charts/tree/v5.2.1
+
+TradingView provides the chart renderer, not this desk's market data or trading decisions.

@@ -1,0 +1,23 @@
+/* Local semantic theme. The shell inherits it only while the pilot is mounted. */
+.tw-document, .trading-workspace, .tw-dialog {
+  --tw-bg: #111820;
+  --tw-surface: #17212b;
+  --tw-raised: #202c38;
+  --tw-line: #354350;
+  --tw-line-soft: #263440;
+  --tw-text: #edf2f6;
+  --tw-muted: #a6b5c3;
+  --tw-accent: #91b8f8;
+  --tw-accent-hover: #b8d1fa;
+  --tw-up: #7cc9a6;
+  --tw-down: #ed999a;
+  --tw-warn: #e8c283;
+  --tw-selected: #23344b;
+  --tw-selected-line: #6481a9;
+  --tw-selected-market: #1e2c3c;
+  --tw-warning-surface: #302c25;
+  --tw-warning-text: #f1d8a7;
+  --tw-scroll: #506171;
+  --tw-shadow: #0007;
+  --tw-backdrop: #080e16bc;
+}
