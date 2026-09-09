@@ -2,8 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { handleFrontControlPlaneHttp, isFrontControlPlaneMethodAllowed, isFrontControlPlaneWriteRequest } from "../src/front-api-server-adapter.js";
 import { cryptoObservationOpenApiPaths } from "../src/front-api-openapi-crypto.js";
+import { cachedReadResponse, errorResponses } from "../src/front-api-openapi-responses.js";
 
 const pathname = "/front-api/v1/views/crypto-market";
+test("extracted response documentation preserves legacy references and cache semantics", () => {
+  assert.deepEqual(cachedReadResponse("#/components/schemas/Example"), {
+    description: "Successful response", headers: { ETag: { $ref: "#/components/headers/ETag" }, "Cache-Control": { $ref: "#/components/headers/CacheControl" } },
+    content: { "application/json": { schema: { $ref: "#/components/schemas/Example" } } },
+  });
+  assert.deepEqual(Object.keys(errorResponses), ["400", "401", "403", "404", "500"]);
+});
 test("public observations are a GET-only view with no command permission or request body", async () => {
   assert.equal(isFrontControlPlaneWriteRequest(pathname, "GET"), false);
   assert.equal(isFrontControlPlaneMethodAllowed(pathname, "POST"), false);

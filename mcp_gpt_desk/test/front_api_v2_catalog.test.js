@@ -36,6 +36,14 @@ test("Front API v2 catalog exposes business names before technical identifiers",
   assert.ok(catalog.operations.some((operation) => operation.path === "/replays" && operation.method === "POST" && operation.operatorScopes.requiredScopes.includes("desk.automation.write")));
 });
 
+test("public crypto observations are classified as a read-only market view", () => {
+  const operation = buildFrontApiV2Catalog().operations.find((item) => item.path === "/front-api/v1/views/crypto-market");
+  assert.equal(operation.domain, "today");
+  assert.equal(operation.access, "desk.read");
+  assert.equal(operation.method, "GET");
+  assert.equal(operation.writePolicy, "read_only_cacheable_when_declared");
+});
+
 test("Front API v2 catalog declares compatibility and write policies deterministically", () => {
   const first = buildFrontApiV2Catalog();
   const second = buildFrontApiV2Catalog();

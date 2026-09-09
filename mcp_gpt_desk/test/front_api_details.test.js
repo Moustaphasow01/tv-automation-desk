@@ -148,6 +148,7 @@ test("a detail ID outside the current canonical scope returns a deterministic 40
 test("OpenAPI publishes every current BFF route with resolvable component references", () => {
   const document = frontApiOpenApiDocument();
   const expectedPaths = [
+    "/front-api/v1/views/crypto-market",
     "/live-desk/current", "/sessions", "/sessions/{strategyId}/{date}/overview", "/sessions/{strategyId}/{date}/timeline",
     "/masters/{masterId}", "/monitors/{monitorId}", "/theses/{thesisId}", "/theses/{thesisId}/conditions",
     "/setups/{setupId}", "/positions/current", "/market/snapshot", "/macro/calendar", "/news/headlines",

@@ -6,7 +6,7 @@ export const FRONT_API_V2_CATALOG_PATH = "/api/v2/catalog.json";
 export const FRONT_API_V2_CATALOG_VERSION = "2.0.0";
 
 const DOMAIN_RULES = [
-  { id: "today", label: "Aujourd'hui", order: 10, match: (path) => /^\/(?:live-desk|sessions|masters|monitors|theses|setups|positions|market|macro|news|desk|alerts|audit|performance\/(?:calendar|day))/.test(path) },
+  { id: "today", label: "Aujourd'hui", order: 10, match: (path) => /^\/(?:front-api\/v1\/views\/crypto-market$|live-desk|sessions|masters|monitors|theses|setups|positions|market|macro|news|desk|alerts|audit|performance\/(?:calendar|day))/.test(path) },
   { id: "operations", label: "Opérations", order: 20, match: (path) => /^\/(?:operations|workflows|replays|gpt-processes|observability|incidents|notifications|runbooks|history|events)/.test(path) },
   { id: "performance", label: "Performance", order: 30, match: (path) => /^\/(?:performance\/overview|simulation-runs)/.test(path) },
   { id: "strategy", label: "Stratégies", order: 40, match: (path) => /^\/(?:strategies|strategy-v2)/.test(path) },

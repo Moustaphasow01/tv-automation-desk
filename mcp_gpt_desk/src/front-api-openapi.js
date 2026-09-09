@@ -1,27 +1,7 @@
 import { researchOpenApiPaths } from "./front-api-openapi-research.js";
 import { cryptoObservationOpenApiPaths } from "./front-api-openapi-crypto.js";
+import { jsonContent, cachedReadResponse as response, errorResponses } from "./front-api-openapi-responses.js";
 export const FRONT_OPENAPI_PATH = "/api/v1/openapi.json";
-
-const jsonContent = (schema) => ({
-  "application/json": { schema },
-});
-
-const response = (schemaRef, description = "Successful response") => ({
-  description,
-  headers: {
-    ETag: { $ref: "#/components/headers/ETag" },
-    "Cache-Control": { $ref: "#/components/headers/CacheControl" },
-  },
-  content: jsonContent({ $ref: schemaRef }),
-});
-
-const errorResponses = {
-  "400": { description: "Invalid path or query", content: jsonContent({ $ref: "#/components/schemas/Error" }) },
-  "401": { description: "Authentication failed", content: jsonContent({ $ref: "#/components/schemas/Error" }) },
-  "403": { description: "Operator scope or role forbidden", content: jsonContent({ $ref: "#/components/schemas/Error" }) },
-  "404": { description: "Scoped resource not found", content: jsonContent({ $ref: "#/components/schemas/Error" }) },
-  "500": { description: "Backend read failed", content: jsonContent({ $ref: "#/components/schemas/Error" }) },
-};
 
 const scopeParameters = [
   { $ref: "#/components/parameters/Session" },

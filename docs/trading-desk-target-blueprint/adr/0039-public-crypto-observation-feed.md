@@ -24,6 +24,8 @@ Cycle observable : `IDLE → CONNECTING → CONNECTED → RECONNECTING → CONNE
 
 Tests de normalisation, contrat, précision DOGE, messages anciens, horloges, panne/reconnexion, bornes et absence de commande. Vérification réelle de REST et WebSocket depuis le poste et le VPS, puis recette mobile dans Live et Focus.
 
+Le catalogue API classe explicitement cette nouvelle lecture dans les marchés du jour, sans élargir les droits d'exécution. Les réponses OpenAPI communes sont extraites du grand document legacy, avec test de parité ; l'ajout de cette vue ne gonfle pas ce fichier au-delà de sa baseline.
+
 Écartés : appeler Kraken depuis React, ajouter de fausses bougies dans le dataset canonique, assimiler le comptant à un future/perpétuel, modifier les instruments exécutables, activer une stratégie crypto, introduire un service autonome ou une dépendance WebSocket supplémentaire alors que le runtime fournit cette capacité.
 
 Retour arrière : release précédente ; aucun schéma SQL ni compte externe à rétablir. Les règles de risque, stratégies et autorisations d’exécution existantes restent inchangées, mais le code serveur évolue pour la nouvelle source de données.
