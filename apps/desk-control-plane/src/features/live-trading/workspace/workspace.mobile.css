@@ -1,6 +1,7 @@
 .tw-market-board[data-mobile="true"] { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .tw-market-board[data-mobile="true"] .tw-section-header { display: none; }
-.tw-market-board[data-mobile="true"] .tw-chart-slot-controls { grid-template-columns: minmax(0, 1fr) minmax(96px, auto); }
+.tw-market-board[data-mobile="true"] .tw-chart-slot-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(96px, auto); }
+.tw-market-board[data-mobile="true"] .tw-chart-slot-controls > label:last-child select { width: 100%; }
 .tw-market-board[data-mobile="true"] .tw-chart-select > span { display: none; }
 .tw-market-board[data-mobile="true"] .tw-chart-select select { max-width: 100%; width: 100%; }
 .tw-mobile-markets { display: flex; gap: 8px; min-width: 0; }

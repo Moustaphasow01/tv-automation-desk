@@ -72,14 +72,16 @@ export class KrakenStream {
     if (message.success === false) { this.fail(socket); return; }
     if (message.channel === "status") this.exchange = message.data?.[0]?.system || null;
     if (!Array.isArray(message.data)) return;
-    for (const raw of message.data) {
-      if (!raw || typeof raw !== "object") continue;
-      if (message.channel === "ticker") {
-        const quote = krakenQuote(raw, this.now());
-        if (quote) { this.cache.acceptQuote(quote); this.attempts = 0; }
-      }
-      if (message.channel === "ohlc") this.acceptCandle(raw);
+    for (const raw of message.data) this.acceptObservation(message.channel, raw);
+  }
+
+  acceptObservation(channel, raw) {
+    if (!raw || typeof raw !== "object") return;
+    if (channel === "ticker") {
+      const quote = krakenQuote(raw, this.now());
+      if (quote) { this.cache.acceptQuote(quote); this.attempts = 0; }
     }
+    if (channel === "ohlc") this.acceptCandle(raw);
   }
 
   acceptCandle(raw) {
