@@ -4,6 +4,9 @@ export function WorkspaceSettings({ settings, sound }: { settings: WorkspacePref
   const { preferences, update, reset } = settings;
   return <section className="tw-preferences" aria-label="Préférences du poste">
     <p>{settings.persistence}</p>
+    <p>Sur mobile, un seul graphique est affiché. Le choix de 1, 2 ou 4 graphiques ci-dessous est conservé pour le grand écran.</p>
+    <label className="tw-check"><input type="checkbox" checked={preferences.followTickets} onChange={(event) => update({ followTickets: event.target.checked })} />Mettre automatiquement en avant le marché d’un nouveau ticket</label>
+    <small>Une fiche ouverte, une saisie et une lecture figée sont préservées. Ce réglage change l’affichage, jamais votre autorisation de trading.</small>
     <fieldset><legend>Disposition rapide</legend><div className="tw-layout-presets"><button onClick={() => update({ chartCount: 1, inspectorWidth: 380, watchlistVisible: true })}>Décision · 1 graphique</button><button onClick={() => update({ chartCount: 2, inspectorWidth: 344, watchlistVisible: true })}>Surveillance · 2 graphiques</button><button onClick={() => update({ chartCount: 4, inspectorWidth: 320, watchlistVisible: false })}>Analyse · 4 graphiques</button></div></fieldset>
     <label>Densité de lecture<select value={preferences.density} onChange={(event) => update({ density: event.target.value === "compact" ? "compact" : "comfortable" })}><option value="comfortable">Confortable</option><option value="compact">Compacte sur grand écran</option></select></label>
     <label>Largeur de la fiche sur grand écran · {preferences.inspectorWidth} px<input type="range" min={300} max={480} step={4} value={preferences.inspectorWidth} onChange={(event) => update({ inspectorWidth: Number(event.target.value) })} /></label>

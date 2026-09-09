@@ -11,6 +11,7 @@ export type WorkspacePreferences = {
   watchlistVisible: boolean;
   linkedCursor: boolean;
   sound: boolean;
+  followTickets: boolean;
   favorites: string[];
   groups: WatchGroup[];
   activeGroup: string;
@@ -18,7 +19,7 @@ export type WorkspacePreferences = {
 
 export const defaultWorkspacePreferences: WorkspacePreferences = {
   version: 1, chartCount: 2, secondary: [], timeframes: [], density: "comfortable",
-  inspectorWidth: 344, watchlistVisible: true, linkedCursor: false, sound: false,
+  inspectorWidth: 344, watchlistVisible: true, linkedCursor: false, sound: false, followTickets: true,
   favorites: [], groups: [], activeGroup: "desk",
 };
 
@@ -49,6 +50,7 @@ export function parseWorkspacePreferences(raw: string | null): WorkspacePreferen
       inspectorWidth: typeof input.inspectorWidth === "number" && Number.isFinite(input.inspectorWidth) ? Math.max(300, Math.min(480, Math.round(input.inspectorWidth))) : 344,
       watchlistVisible: input.watchlistVisible !== false,
       linkedCursor: input.linkedCursor === true, sound: input.sound === true,
+      followTickets: input.followTickets !== false,
       favorites: stringList(input.favorites, 30), groups, activeGroup,
     };
   } catch { return { ...defaultWorkspacePreferences }; }

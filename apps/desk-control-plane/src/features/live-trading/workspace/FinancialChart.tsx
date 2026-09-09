@@ -14,7 +14,7 @@ export function FinancialChart({ bars, instrument, overlay, annotations }: { bar
   const { container, navigate } = useFinancialChart(bars, visiblePlan.overlay, vwap, annotations);
   const last = bars.at(-1);
   return <>
-    <div className="tw-chart__ohlc" aria-label={`Dernière bougie ${instrument}`}>
+    <div className="tw-chart__ohlc" role="group" tabIndex={0} aria-label={`Dernière bougie ${instrument}`}>
       {([['O', last?.open], ['H', last?.high], ['B', last?.low], ['C', last?.close]] as const).map(([label, value]) => <span key={label}>{label} <b>{numberLabel(value)}</b></span>)}
       <span>Vol. <b>{numberLabel(last?.volume, 0)}</b></span>
     </div>

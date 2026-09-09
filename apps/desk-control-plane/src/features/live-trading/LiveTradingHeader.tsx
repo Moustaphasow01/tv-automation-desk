@@ -72,7 +72,7 @@ function PolicyChip({ tone, title, children }: { tone: "info" | "success" | "war
   return <span className={`lt-policy-chip lt-policy-chip--${tone}`} title={title}>{children}</span>;
 }
 
-function capabilityPresentation(capability: string, status: string): string {
+export function capabilityPresentation(capability: string, status: string): string {
   const known = ({
     SIGNAL_DETECTION: { READY: "Détection active", BLOCKED: "Détection bloquée", DISABLED_BY_POLICY: "Détection désactivée" },
     THEORETICAL_TRACKING: { READY: "Suivi théorique actif", BLOCKED: "Suivi théorique bloqué", DISABLED_BY_POLICY: "Suivi théorique désactivé" },

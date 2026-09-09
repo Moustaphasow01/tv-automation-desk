@@ -1,0 +1,71 @@
+.lt-page.lt-overview { --lt-text: var(--tw-text); --lt-muted: var(--tw-muted); --lt-secondary: var(--tw-muted); --lt-border: var(--tw-line); --lt-border-soft: var(--tw-line-soft); --lt-surface-1: var(--tw-surface); --lt-surface-2: var(--tw-raised); --lt-blue: var(--tw-accent); --lt-green: var(--tw-up); --lt-red: var(--tw-down); --lt-amber: var(--tw-warn); height: auto; overflow: visible; padding: 0 20px 20px; background: var(--tw-bg); }
+.lt-overview__header { display: flex; gap: 12px; align-items: center; min-height: 64px; border-bottom: 1px solid var(--tw-line); }
+.lt-overview__header > div { display: flex; align-items: baseline; gap: 12px; margin-right: auto; }
+.lt-overview__header h1 { font-size: 20px; letter-spacing: 0; }
+.lt-overview__header > div span, .lt-overview__connection { color: var(--tw-muted); }
+.lt-overview__header button { min-height: 44px; min-width: 44px; }
+.lt-overview__connection { font-size: 12px; }
+.lt-overview__connection[data-connected="true"] { color: var(--tw-up); }
+.lt-overview__focus { display: flex; align-items: center; gap: 8px; color: var(--tw-accent); }
+.lt-overview__policy { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 6px 0; color: var(--tw-muted); font-size: 12px; }
+.lt-overview__policy > span:first-child { color: var(--tw-text); font-weight: 600; }
+.lt-overview__policy > div { display: flex; gap: 12px; align-items: center; }
+.lt-overview__policy strong { color: var(--tw-text); }
+.lt-overview__policy details { margin-left: auto; }
+.lt-overview__policy details[open] { flex-basis: 100%; }
+.lt-overview__session { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 28px; padding: 12px 0; border-block: 1px solid var(--tw-line); }
+.lt-overview__session > div { display: grid; gap: 4px; }
+.lt-overview__session span { display: block; color: var(--tw-muted); font-size: 12px; }
+.lt-overview__session dl { display: flex; flex-wrap: wrap; gap: 12px 28px; }
+.lt-overview__session dd { font-size: 18px; font-variant-numeric: tabular-nums; }
+.lt-overview__session > p { margin-left: auto; font-size: 12px; color: var(--tw-muted); }
+.lt-overview__grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1.25fr) minmax(350px, 1fr); align-items: start; padding-top: 16px; }
+.lt-overview__grid > section { min-width: 0; }
+.lt-overview__market { border: 1px solid var(--tw-line); border-radius: 4px; }
+.lt-overview__market-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(88px, auto); gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--tw-line); background: var(--tw-surface); }
+.lt-overview__market-controls label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lt-overview__market-controls select { width: 100%; min-height: 44px; font-size: 16px; }
+.lt-overview__market-controls label > span { color: var(--tw-muted); font-size: 12px; }
+.lt-overview .tw-chart__canvas { height: clamp(300px, 43svh, 480px); }
+.lt-overview__disclosure { border-bottom: 1px solid var(--tw-line); margin-top: 12px; }
+.lt-overview__disclosure > summary { padding: 12px; min-height: 44px; }
+.lt-overview__disclosure > :not(summary) { margin: 0 0 12px; }
+.lt-overview .lt-activity-dock { display: block; height: auto; min-height: 0; max-height: none; overflow: visible; background: var(--tw-surface); border-color: var(--tw-line); border-radius: 4px; }
+.lt-overview .lt-activity-dock__header { height: auto; flex-wrap: wrap; padding: 12px; }
+.lt-overview .lt-activity-dock__header p { display: none; }
+.lt-overview .lt-activity-dock__summary { flex-wrap: wrap; justify-content: start; padding-top: 8px; }
+.lt-overview .lt-activity-dock__tabs { display: flex; flex-direction: row; flex-wrap: wrap; width: auto; padding: 6px; border-block: 1px solid var(--tw-line); }
+.lt-overview .lt-activity-dock__tabs button { flex: 1 0 auto; min-height: 44px; padding: 8px; color: var(--tw-muted); }
+.lt-overview .lt-activity-dock__tabs button[aria-selected="true"] { color: var(--tw-accent); background: var(--tw-selected); }
+.lt-overview .lt-activity-dock__content { height: auto; max-height: none; min-height: 250px; overflow: visible; padding: 8px; }
+.lt-overview .lt-panel, .lt-overview .lt-panel__body { height: auto; max-height: none; overflow: visible; }
+.lt-overview .lt-panel { background: var(--tw-surface); border-color: var(--tw-line); }
+.lt-overview .lt-decision-stack { height: auto; max-height: none; overflow: visible; }
+.lt-overview .lt-decision-stack__flow { max-height: none; }
+.lt-overview .lt-activity-dock--fullscreen { position: fixed; overflow: auto; height: auto; }
+.lt-overview__disclosure .lt-chart-frame { min-height: 360px; }
+@media (max-width: 1180px) {
+  .lt-overview__grid { grid-template-columns: minmax(0, 1fr); }
+  .lt-overview__session > p { margin-left: 0; }
+}
+@media (max-width: 599px) {
+  .lt-page.lt-overview { padding: 0 10px 80px; }
+  .lt-overview__header { gap: 8px; }
+  .lt-overview__header > div span { display: none; }
+  .lt-overview__policy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; }
+  .lt-overview__policy > div { gap: 8px; }
+  .lt-overview__physical { grid-column: 1; }
+  .lt-overview__policy details { margin-left: 0; grid-column: 2; grid-row: 1 / 3; }
+  .lt-overview__policy details[open] { grid-column: 1 / -1; grid-row: auto; }
+  .lt-overview__session { gap: 8px 16px; }
+  .lt-overview__session > div { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+  .lt-overview__session dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: 100%; gap: 8px; }
+  .lt-overview__session dl > div { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  .lt-overview__session dt { max-width: 145px; }
+  .lt-overview__market-controls { padding: 6px; }
+  .lt-overview__market-controls label > span { display: none; }
+  .lt-overview .tw-chart__identity { display: none; }
+  .lt-overview .tw-chart__canvas { height: 280px; }
+  .lt-overview :is(button, select, summary) { min-height: 44px; }
+  .lt-overview .lt-activity-dock__summary > span { min-width: 55px; }
+}

@@ -6,13 +6,14 @@ import { ageLabel, marketName, numberLabel, parisTime, timeframeLabel } from "./
 import type { TradeOverlay } from "../chart/tradePlanOverlay";
 import type { ChartAnnotations } from "./useChartAnnotations";
 
-export function MarketPane({ instrument, timeframe, overlay, onPauseChange, annotations }: {
-  instrument: string; timeframe: string; overlay: TradeOverlay | null; annotations: ChartAnnotations; onPauseChange(instrument: string, paused: boolean): void;
+export function MarketPane({ instrument, timeframe, overlay, onPauseChange, annotations, activity = "foreground", resumeGeneration = 0 }: {
+  instrument: string; timeframe: string; activity?: "foreground" | "background"; resumeGeneration?: number; overlay: TradeOverlay | null; annotations: ChartAnnotations; onPauseChange(instrument: string, paused: boolean): void;
 }) {
-  const { query, series, normalized, matches } = useWorkspaceMarket(instrument, timeframe);
+  const { query, series, normalized, matches } = useWorkspaceMarket(instrument, timeframe, activity);
   const visibleEvents = useMemo(() => annotations.events.filter((event) => !event.instrument || event.instrument === instrument), [annotations.events, instrument]);
   const [frozen, setFrozen] = useState<{ bars: ChartBar[]; asOf: string } | null>(null);
   useEffect(() => () => onPauseChange(annotations.id, false), [annotations.id, onPauseChange]);
+  useEffect(() => { if (resumeGeneration > 0) { setFrozen(null); onPauseChange(annotations.id, false); } }, [resumeGeneration, annotations.id, onPauseChange]);
   const bars = frozen?.bars ?? normalized.bars;
   const pending = frozen ? changedBarCount(frozen.bars, normalized.bars) : 0;
   const latestTime = normalized.bars.at(-1)?.time;

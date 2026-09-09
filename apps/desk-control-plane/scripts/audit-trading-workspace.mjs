@@ -137,6 +137,7 @@ async function checkDesktop(page) {
 
 async function checkMobile(page) {
   await page.setViewportSize({ width: 390, height: 844 });
+  if (await page.getByRole("dialog").isVisible()) await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Tickets", exact: true }).click();
   await page.getByRole("button", { name: /^Historique/ }).click();
   await page.locator(".tw-ticket-row").first().click();

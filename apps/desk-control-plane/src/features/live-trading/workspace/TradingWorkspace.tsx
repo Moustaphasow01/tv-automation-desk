@@ -32,9 +32,13 @@ import { WorkspaceSettings } from "./WorkspaceSettings";
 import { useWorkspaceAlerts, useWorkspaceAlertSound } from "./useWorkspaceAlerts";
 import { useFrontView } from "@/domains/front-api/repositories";
 import { WorkspaceSafetyNotice } from "./WorkspaceSafetyNotice";
+import { useWorkspaceViewport } from "./useWorkspaceViewport";
+import { useTicketPriority } from "./useTicketPriority";
+import { TicketPriorityBar } from "./TicketPriorityBar";
 import "./workspace.tokens.css";
 import "./workspace.css";
 import "./workspace.extensions.css";
+import "./workspace.mobile.css";
 
 type Props = {
   model: LiveTradingModel; focus: LiveFocusView; focusMeta: ViewMeta; projectionError: boolean; refreshing: boolean;
@@ -56,6 +60,10 @@ function WorkspaceSession(props: Props) {
   const health = { connected: state.realtime?.connectionStatus === "OPEN" && !state.realtime.resyncing, paused: state.paused.length > 0, failed: props.projectionError, meta: props.focusMeta };
   const readOnly = readOnlyReason(health, state.realtime?.now.getTime() ?? Date.now());
   const command = useWorkspaceCommand(health, state.selected?.key ?? null, state.refresh);
+  const suspended = state.inspect || command.busy || dialog !== null || state.panel !== "markets" || state.paused.length > 0;
+  const priorityAvailable = !readOnlyReason({ ...health, paused: false }, state.realtime?.now.getTime() ?? Date.now());
+  const priority = useTicketPriority({ tickets: state.tickets, now: state.realtime?.now.getTime() ?? Date.now(), available: priorityAvailable,
+    suspended, automatic: settings.preferences.followTickets, supported: model.marketSeries.supportedInstruments, instrument: state.instrument, onFocus: state.focusTicket });
   const notifications = useWorkspaceAlerts(state.tickets, state.realtime?.now.getTime() ?? Date.now());
   const sound = useWorkspaceAlertSound(notifications.unread, settings.preferences.sound);
   const theoretical = model.selectedTheoreticalExecution;
@@ -64,15 +72,16 @@ function WorkspaceSession(props: Props) {
   const events = useMemo(() => chartEvents(focus, state.selected, model.theoreticalExecution?.rows ?? []), [focus, state.selected, model.theoreticalExecution]);
   const openTicket = (item: FocusQueueItem) => { setDialog(null); state.setPanel("tickets"); state.select(item); };
   const inspector = <TicketInspector item={state.selected} model={model} embedded={state.mobile} readOnly={readOnly} command={command} onClose={state.deselect} onShowMarket={(instrument) => { props.onScopeChange({ instrument }); state.setPanel("markets"); state.setInspect(false); }} />;
-  return <div className="trading-workspace" data-testid="trading-workspace" data-panel={state.panel} data-density={settings.preferences.density} style={{ "--tw-inspector-width": settings.preferences.inspectorWidth + "px" } as CSSProperties}>
+  return <div className="trading-workspace" data-testid="trading-workspace" data-panel={state.panel} data-mobile={state.mobile} data-density={settings.preferences.density} style={{ "--tw-inspector-width": settings.preferences.inspectorWidth + "px" } as CSSProperties}>
     <WorkspaceChrome focus={focus} realtime={state.realtime} panel={state.panel} decisionCount={state.tickets.filter((item) => item.actionable).length} alertCount={notifications.unread} readOnly={readOnly} refreshing={props.refreshing} onExit={props.onExit} onLegacy={state.legacy} onRefresh={state.refresh} onPanel={state.setPanel} onBrief={() => setDialog("brief")} onAlerts={() => setDialog("alerts")} onSettings={() => setDialog("settings")} />
     <WorkspaceSafetyNotice model={model} />
     <WorkspaceNow focus={focus} model={model} tickets={state.tickets} realtime={state.realtime} compact={state.mobile} onSelect={openTicket} onSources={() => setDialog("sources")} />
     <CommandReceipt command={command} />
+    <TicketPriorityBar priority={priority} automatic={settings.preferences.followTickets} suspended={suspended} available={priorityAvailable} selected={state.selected} onAutomatic={() => settings.update({ followTickets: !settings.preferences.followTickets })} onInspect={state.select} onReturn={(instrument) => props.onScopeChange({ instrument })} />
     {state.panel === "review" ? <WorkspaceReview focus={focus} period={props.dashboardPeriod} onPeriodChange={props.onDashboardPeriodChange}><WorkspaceJournal items={state.tickets} model={model} onSelect={openTicket} /></WorkspaceReview> : null}
     <div className="tw-workspace-grid" hidden={state.panel === "review"} data-has-ticket={Boolean(state.selected)}>
       <div className="tw-workspace-main">
-        <div className="tw-market-region" hidden={state.panel === "tracking"}><MarketBoard model={model} preferred={preferred} instrument={state.instrument} timeframe={state.timeframe} overlay={overlay} settings={settings} events={events} onScopeChange={props.onScopeChange} onPauseChange={state.onPauseChange} /></div>
+        <div className="tw-market-region" hidden={state.panel === "tracking"}><MarketBoard model={model} preferred={preferred} instrument={state.instrument} timeframe={state.timeframe} overlay={overlay} settings={settings} events={events} pausedSlots={state.paused} onScopeChange={props.onScopeChange} onPauseChange={state.onPauseChange} /></div>
         {state.panel === "tracking" ? <WorkspaceTracking items={state.tickets} model={model} onSelect={openTicket} /> : null}
         <div className="tw-ticket-region" hidden={state.panel === "tracking"}><TicketBlotter items={state.tickets} selectedId={state.selected?.key ?? null} onSelect={state.select} /></div>
       </div>
@@ -95,7 +104,7 @@ function useWorkspaceState(props: Props) {
   const [panelValue, setPanelValue] = useWorkspaceFilter("panel", "markets", ["markets", "tickets", "tracking", "review"]);
   const panel = panelValue as WorkspacePanel;
   const setPanel = (value: WorkspacePanel) => setPanelValue(value);
-  const [inspect, setInspect] = useState(false);
+  const [inspect, setInspect] = useState(() => Boolean(search.get("ticketId") && search.get("ticketId") !== "none"));
   const [paused, setPaused] = useState<string[]>([]);
   const tickets = useMemo(() => workspaceTickets(props.focus).map((item) => {
     const title = strategyTitle(item, props.model.strategyInstances, strategyCatalog.data?.meta.availability === "AVAILABLE" && !strategyCatalog.data.meta.stale ? strategyCatalog.data.data.strategies : []);
@@ -112,8 +121,16 @@ function useWorkspaceState(props: Props) {
   }), []);
   const select = (item: FocusQueueItem) => {
     setSearch((current) => { const next = new URLSearchParams(current); next.set("ticketId", item.key); if (item.signalId) next.set("signalId", item.signalId); else next.delete("signalId"); return next; }, { replace: true });
-    setInspect(mobile);
+    setInspect(true);
   };
+  const focusTicket = useCallback((item: FocusQueueItem) => {
+    setSearch((current) => {
+      const next = new URLSearchParams(current);
+      next.set("ticketId", item.key); next.set("instrument", item.instrument); next.set("panel", "markets"); next.delete("chartAt");
+      if (item.signalId) next.set("signalId", item.signalId); else next.delete("signalId");
+      return next;
+    }, { replace: true });
+  }, [setSearch]);
   const deselect = () => { setSearch((current) => { const next = new URLSearchParams(current); next.set("ticketId", "none"); next.delete("signalId"); return next; }, { replace: true }); setInspect(false); };
   const legacy = () => { setSearch((current) => { const next = new URLSearchParams(current); next.set("workspace", "classic"); next.delete("ticketId"); return next; }, { replace: true }); };
   useEffect(() => {
@@ -129,17 +146,14 @@ function useWorkspaceState(props: Props) {
     if (search.has("ticketId") || !selected) return;
     setSearch((current) => { const next = new URLSearchParams(current); next.set("ticketId", selected.key); if (selected.signalId) next.set("signalId", selected.signalId); return next; }, { replace: true });
   }, [search, selected, setSearch]);
-  return { realtime, mobile, panel, setPanel, inspect, setInspect, paused, tickets, selected, instrument, timeframe, refresh, onPauseChange, select, deselect, legacy };
+  return { realtime, mobile, panel, setPanel, inspect, setInspect, paused, tickets, selected, instrument, timeframe, refresh, onPauseChange, select, focusTicket, deselect, legacy };
 }
 
 function useWorkspaceDocument() {
-  const [mobile, setMobile] = useState(() => window.matchMedia("(max-width: 899px)").matches);
+  const mobile = useWorkspaceViewport();
   useEffect(() => {
     document.documentElement.classList.add("tw-document"); document.body.classList.add("tw-document");
-    const query = window.matchMedia("(max-width: 899px)");
-    const change = () => setMobile(query.matches);
-    query.addEventListener("change", change);
-    return () => { query.removeEventListener("change", change); document.documentElement.classList.remove("tw-document"); document.body.classList.remove("tw-document"); };
+    return () => { document.documentElement.classList.remove("tw-document"); document.body.classList.remove("tw-document"); };
   }, []);
   return mobile;
 }

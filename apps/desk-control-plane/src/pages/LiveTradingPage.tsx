@@ -1,24 +1,19 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { presentExecutionMode } from "@/design-system/labels";
 import { useCommandStatus, useFrontViewRepository } from "@/domains/front-api/repositories";
 import type { LiveManualExecutionAction } from "@/domains/front-api/viewModels";
 import { buildHumanGateCommand, type HumanGateAction } from "@/features/order-intent/model";
 import { LiveActivityDock } from "@/features/live-trading/LiveActivityDock";
-import { LiveAttentionCenter } from "@/features/live-trading/LiveAttentionCenter";
 import type { LiveSignalNavigationTarget } from "@/features/live-trading/LiveSignalInbox";
-import { LiveCockpitStatusBar } from "@/features/live-trading/LiveCockpitStatusBar";
 import { LiveDecisionStack } from "@/features/live-trading/LiveDecisionStack";
 import { LiveFocusMode } from "@/features/live-trading/LiveFocusMode";
 import { normalizeFocusDashboardPeriod, type LiveFocusDashboardPeriod } from "@/features/live-trading/focusDashboardModel";
 import { buildManualExecutionCommand } from "@/features/live-trading/focusModel";
 import { readLiveFocusPreference, writeLiveFocusPreference } from "@/features/live-trading/focusPreferences";
 import { commandForCurrentGate, type GateCommandBinding } from "@/features/live-trading/LiveHumanGate";
-import { LiveMarketLens } from "@/features/live-trading/LiveMarketLens";
-import { LiveTradingHeader } from "@/features/live-trading/LiveTradingHeader";
+import { LiveOverview } from "@/features/live-trading/LiveOverview";
 import { InstrumentChartPanel } from "@/features/live-trading/chart/LiveMarketChart";
 import { useLiveTradingProjection } from "@/features/live-trading/useLiveTradingProjection";
-import { operatorStateForSignal } from "@/features/live-trading/signalOperatorState";
 import "@/features/live-trading/live-trading.css";
 import "@/features/live-trading/live-cockpit.css";
 import "@/features/live-trading/live-continuity.css";
@@ -43,12 +38,12 @@ export function LiveTradingPage() {
   const [commandBinding, setCommandBinding] = useState<GateCommandBinding | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [submittingActionId, setSubmittingActionId] = useState<string | null>(null);
+  const [chartPaused, setChartPaused] = useState(false);
+  const onChartPauseChange = useCallback((_instrument: string, paused: boolean) => setChartPaused(paused), []);
   const initialChartAlignmentDone = useRef(false);
   const focusRestoreScroll = useRef<number | null>(null);
   const autoOpenedDecision = useRef<string | null>(null);
   const currentOrderIntentId = model?.orderIntent?.portfolioOrderIntentId ?? null;
-  const actionable = Boolean(model && [...model.source.signals, ...model.source.canonicalRuntime.latestSignals]
-    .some((signal) => operatorStateForSignal(model, signal).code === "ACTIONABLE"));
   const command = commandForCurrentGate(commandBinding, currentOrderIntentId, model?.gateActions ?? []);
   const commandStatus = useCommandStatus(command?.commandId ?? null);
 
@@ -139,6 +134,7 @@ export function LiveTradingPage() {
   };
 
   const submitGateAction = async (action: HumanGateAction, reason: string) => {
+    if (chartPaused) { setCommandError("Reprenez la lecture du graphique avant de décider."); return; }
     const orderIntentId = model?.orderIntent?.portfolioOrderIntentId;
     if (!orderIntentId) {
       setCommandError("HUMAN_GATE_ORDER_INTENT_MISSING");
@@ -231,54 +227,16 @@ export function LiveTradingPage() {
     />;
   }
 
-  return (
-    <div
-      className="lt-page lt-cockpit"
-      data-testid="live-trading-golden-master"
-      data-operator-state={model.operator.status}
-      data-actionable={actionable ? "true" : "false"}
-      data-design-seed="c87167ea"
-    >
-      <LiveTradingHeader model={model} onRefresh={() => { void deskQuery.refetch(); void chartQuery.refetch(); }} refreshing={deskQuery.isFetching || chartQuery.isFetching} onEnterFocus={enterFocus} />
-      <LiveCockpitStatusBar model={model} requestedScope={marketScope} scopeUpdating={chartQuery.isFetching} onScopeChange={updateMarketScope} />
-      <LiveAttentionCenter model={model} />
-      <div className="lt-cockpit__workspace" aria-label="Cockpit Live Trading semi-manuel">
-        <aside className="lt-cockpit__market" aria-label="Lecture du marché">
-          <LiveMarketLens model={model} />
-        </aside>
-        <section ref={chartSurfaceRef} className="lt-cockpit__canvas" aria-label="Graphique de marché et plan de trade" tabIndex={-1}>
-          <InstrumentChartPanel
-            model={model}
-            onScopeChange={updateMarketScope}
-            showScopeControls={false}
-            requestedScope={marketScope}
-            loading={chartQuery.isFetching}
-            error={chartQuery.isError ? (chartQuery.error as Error).message : null}
-            focusAt={chartAt}
-          />
-        </section>
-        <aside ref={decisionSurfaceRef} className="lt-cockpit__decision" aria-label="Dossier de décision courant" tabIndex={-1}>
-          <LiveDecisionStack
-            model={model}
-            onSubmit={submitGateAction}
-            submittingActionId={submittingActionId}
-            command={command}
-            commandStatus={commandStatus.data?.status ?? command?.status ?? null}
-            error={commandError}
-            onScopeChange={updateMarketScope}
-          />
-        </aside>
-        <LiveActivityDock
-          model={model}
-          selectedSignalId={selectedSignalId}
-          onSelectSignal={selectSignal}
-          onClearSignal={clearSignal}
-          onShowOnChart={showSignalOnChart}
-        />
-      </div>
-      <div className="lt-accessible-status" aria-live="polite">Projection {model.truth.label}. Mode {presentExecutionMode(model.mode.executionMode).label}. Validation opérateur {model.mode.humanGateRequired ? "requise" : "non requise"}.</div>
-    </div>
-  );
+  return <LiveOverview model={model} requestedScope={marketScope} refreshing={deskQuery.isFetching || chartQuery.isFetching}
+    selectedSignalId={selectedSignalId} onEnterFocus={enterFocus} onScopeChange={updateMarketScope} onPauseChange={onChartPauseChange}
+    onRefresh={() => { void deskQuery.refetch(); void chartQuery.refetch(); }}
+    chartDetail={<section ref={chartSurfaceRef} aria-label="Graphique de marché et plan de trade" tabIndex={-1}><InstrumentChartPanel model={model} onScopeChange={updateMarketScope} showScopeControls={false} requestedScope={marketScope} loading={chartQuery.isFetching} error={chartQuery.isError ? (chartQuery.error as Error).message : null} focusAt={chartAt} /></section>}
+    decision={<section ref={decisionSurfaceRef} aria-label="Dossier de décision courant" tabIndex={-1}>
+      {chartPaused ? <p className="tw-inline-warning" role="status">Lecture figée. Reprenez le graphique avant de décider.</p> : null}
+      <LiveDecisionStack model={model} onSubmit={submitGateAction} submittingActionId={submittingActionId} command={command} commandStatus={commandStatus.data?.status ?? command?.status ?? null} error={commandError} onScopeChange={updateMarketScope} />
+    </section>}
+    activity={<LiveActivityDock model={model} selectedSignalId={selectedSignalId} onSelectSignal={selectSignal} onClearSignal={clearSignal} onShowOnChart={showSignalOnChart} />}
+  />;
 }
 
 function focusSurface(element: HTMLElement | null) {
