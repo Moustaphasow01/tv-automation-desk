@@ -9,7 +9,7 @@
 .tw-now__attention button { color: var(--tw-accent); }
 .tw-now__event > span { display: block; margin-bottom: 6px; }
 .tw-now__source { font-size: 12px; text-align: left; }
-.tw-now-mobile { padding-block: 4px; border-bottom: 1px solid var(--tw-line); }
+.tw-now-mobile { padding: 10px 12px; margin-block: 10px; border: 1px solid var(--tw-line-soft); border-radius: 8px; background: var(--tw-surface); }
 .tw-now-mobile > div { display: flex; align-items: start; gap: 8px; }
 .tw-now-mobile details { font-size: 12px; flex: 1; min-width: 0; }
 .tw-now-mobile summary { line-height: 18px; }
@@ -34,7 +34,11 @@
 .tw-watch-item .tw-favorite[aria-pressed="true"] { color: var(--tw-warn); background: transparent; }
 .tw-quote-kind { grid-column: 1 / -1; }
 .tw-watchlist .tw-rank-refresh { margin-top: 8px; }
-.tw-chart-slot-controls { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 6px 10px; align-items: center; background: var(--tw-surface); border-bottom: 1px solid var(--tw-line); }
+.tw-chart-slot-controls { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 8px 10px; align-items: center; background: var(--tw-raised); border-bottom: 1px solid var(--tw-line); border-radius: 8px 8px 0 0; }
+.tw-chart-slot { border-radius: 8px; }
+.tw-chart__header { padding-block: 12px; }
+.tw-chart__footer { gap: 10px; }
+.tw-health, .tw-command-receipt { border-radius: 7px; }
 .tw-chart-slot-controls .tw-chart-select { flex: 1 1 150px; padding: 0; }
 .tw-chart-slot-controls .tw-chart-select > span { white-space: nowrap; }
 .tw-chart-slot-controls .tw-chart-select select { max-width: 65%; }
@@ -165,9 +169,9 @@
 }
 @media (max-width: 599px) {
   .tw-brand { flex: 1; gap: 2px; }
-  .tw-brand h1 { font-size: 16px; }
+  .tw-brand h1 { font-size: 20px; }
   .tw-topbar { gap: 5px; flex-wrap: nowrap; }
-  .tw-brand button { min-width: 36px; }
+  .tw-brand button { min-width: 44px; }
   .tw-refresh-main, .tw-alert-toggle > span { display: none; }
   .tw-alert-toggle > svg { display: block; }
   .tw-alert-toggle { min-width: 44px; position: relative; justify-content: center; }

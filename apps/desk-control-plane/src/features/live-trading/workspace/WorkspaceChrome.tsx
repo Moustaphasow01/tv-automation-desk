@@ -12,9 +12,9 @@ export function WorkspaceChrome(props: Props) {
   const connected = realtime?.connectionStatus === "OPEN" && !realtime.resyncing;
   const session = ({ OPEN: "Séance ouverte", PREOPEN: "Avant séance", PRE_OPEN: "Avant séance", CLOSED: "Marché fermé", BREAK: "Interruption de séance" } as Record<string, string>)[focus.session.marketState] ?? "État de séance à vérifier";
   return <>
-    <header className="tw-topbar"><div className="tw-brand"><button onClick={props.onExit} aria-label="Retour au desk"><FiArrowLeft /></button><h1>Séance<span>Poste de trading</span></h1></div>
+    <header className="tw-topbar"><div className="tw-brand"><button onClick={props.onExit} aria-label="Retour au desk"><FiArrowLeft aria-hidden="true" /></button><h1>Focus<span>Poste de séance</span></h1></div>
       <nav className="tw-desktop-nav" aria-label="Espaces du desk"><button aria-pressed={props.panel === "markets" || props.panel === "tickets"} onClick={() => props.onPanel("markets")}>Marchés & tickets</button><button aria-pressed={props.panel === "tracking"} onClick={() => props.onPanel("tracking")}>Suivi</button><button aria-pressed={props.panel === "review"} onClick={() => props.onPanel("review")}>Bilan</button></nav>
-      <div className="tw-connection" data-connected={connected}><i aria-hidden="true" /><span>{connected ? "Desk connecté" : realtime?.resyncing ? "Synchronisation…" : "Connexion interrompue"}</span></div>
+      <div className="tw-connection" data-connected={connected} role="status" aria-label={connected ? "Desk connecté" : realtime?.resyncing ? "Synchronisation en cours" : "Connexion interrompue"}><i aria-hidden="true" /><span>{connected ? "Desk connecté" : realtime?.resyncing ? "Synchronisation…" : "Connexion interrompue"}</span></div>
       <time className="tw-clock" dateTime={realtime?.now.toISOString()}>{parisTime(realtime?.now.toISOString())}<small>Paris</small></time>
       <button className="tw-refresh-main" disabled={props.refreshing} onClick={props.onRefresh} aria-label="Actualiser la séance"><FiRefreshCw aria-hidden="true" /></button>
       <button className="tw-alert-toggle" aria-label={"Alertes" + (props.alertCount ? " · " + props.alertCount + " non lues" : "")} onClick={props.onAlerts}><FiBell aria-hidden="true" /><span>Alertes</span>{props.alertCount ? <b>{props.alertCount}</b> : null}</button>

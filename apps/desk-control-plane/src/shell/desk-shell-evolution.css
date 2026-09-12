@@ -127,3 +127,21 @@
   .desk-bottom-nav .bottom-nav-link.active { border: 2px solid Highlight; }
   .desk-sidebar .nav-link.active::after { background: Highlight; }
 }
+
+/* The session and its home share the same restrained navigation treatment. */
+@media (max-width: 1023px) {
+  :is(.journey-document, .tw-document) .desk-bottom-nav {
+    inset: auto 0 0;
+    gap: 2px;
+    padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    border: 0;
+    border-top: 1px solid var(--tw-line);
+    border-radius: 0;
+    background: var(--tw-surface);
+    backdrop-filter: none;
+  }
+  :is(.journey-document, .tw-document) .desk-bottom-nav .bottom-nav-link { border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--tw-muted); text-decoration: none; }
+  :is(.journey-document, .tw-document) .desk-bottom-nav .bottom-nav-link.active { box-shadow: none; background: var(--tw-selected); color: var(--tw-text); border-color: var(--tw-selected-line); }
+  :is(.journey-document, .tw-document) .desk-bottom-nav .bottom-nav-link:focus-visible { outline: 2px solid var(--tw-accent); outline-offset: -2px; }
+  :is(.journey-document, .tw-document) .desk-shortcut-help-trigger { left: auto; right: 14px; bottom: calc(80px + env(safe-area-inset-bottom)); color: var(--tw-muted); background: var(--tw-surface); border-color: var(--tw-line); box-shadow: none; }
+}

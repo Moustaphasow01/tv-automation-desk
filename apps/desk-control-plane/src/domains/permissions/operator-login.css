@@ -1,0 +1,65 @@
+.operator-login-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100svh;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: var(--tw-bg);
+  color: var(--tw-text);
+  font: 15px/1.5 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+.operator-login-gate__brand, .operator-login-gate__footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 1120px;
+}
+.operator-login-gate__brand { min-height: 48px; font-weight: 600; }
+.operator-login-gate__brand > svg { width: 20px; height: 20px; color: var(--tw-accent); }
+.operator-login-gate__brand > span:last-child { margin-left: auto; color: var(--tw-muted); font-size: 13px; font-weight: 400; }
+.operator-login-gate__card {
+  width: min(100%, 424px);
+  min-width: 0;
+  margin-block: auto;
+  padding-block: 48px;
+}
+.operator-login-gate h1 { margin: 0; font-size: 28px; line-height: 1.25; letter-spacing: -.025em; font-weight: 600; text-wrap: balance; }
+.operator-login-gate p { margin: 0; }
+.operator-login-gate .operator-login-gate__intro { color: var(--tw-muted); margin-top: 10px; }
+.operator-login-gate__form { display: grid; gap: 10px; margin-top: 32px; }
+.operator-login-gate__form > label { font-weight: 500; font-size: 14px; }
+.operator-login-gate__form > label:not(:first-child) { margin-top: 10px; }
+.operator-login-gate :is(input, button) { min-width: 0; min-height: 48px; border-radius: 7px; font: inherit; }
+.operator-login-gate input { width: 100%; padding: 12px 14px; border: 1px solid var(--tw-line); color: var(--tw-text); background: var(--tw-surface); font-size: 16px; caret-color: var(--tw-accent); }
+.operator-login-gate button { padding: 12px 16px; border: 1px solid var(--tw-line); color: var(--tw-text); background: var(--tw-surface); cursor: pointer; }
+.operator-login-gate button:hover:not(:disabled) { background: var(--tw-raised); }
+.operator-login-gate button:disabled { opacity: .55; cursor: not-allowed; }
+.operator-login-gate :is(input, button):focus-visible { outline: 2px solid var(--tw-accent); outline-offset: 3px; }
+.operator-login-gate input:disabled { opacity: .7; }
+.operator-login-gate__password { display: grid; grid-template-columns: minmax(0, 1fr) 48px; border: 1px solid var(--tw-line); border-radius: 7px; background: var(--tw-surface); }
+.operator-login-gate__password input { border: 0; background: transparent; }
+.operator-login-gate__password button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--tw-muted); }
+.operator-login-gate__password svg { width: 19px; height: 19px; }
+.operator-login-gate .operator-login-gate__submit { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 14px; background: var(--tw-accent); color: var(--tw-bg); border-color: transparent; font-weight: 600; }
+.operator-login-gate .operator-login-gate__submit:hover:not(:disabled) { background: var(--tw-accent-hover); }
+.operator-login-gate .operator-login-gate__hint { display: flex; align-items: flex-start; gap: 9px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--tw-line-soft); color: var(--tw-muted); font-size: 13px; }
+.operator-login-gate__hint svg { flex: 0 0 15px; margin-top: 3px; }
+.operator-login-gate .operator-login-gate__error { padding: 12px; margin-top: 6px; border: 1px solid var(--tw-down); border-radius: 7px; color: var(--tw-down); overflow-wrap: anywhere; }
+.operator-login-gate__recovery { display: grid; gap: 20px; margin-top: 32px; }
+.operator-login-gate__loading { display: grid; gap: 16px; margin-top: 32px; color: var(--tw-muted); }
+.operator-login-gate__loading > span { min-height: 48px; border: 1px solid var(--tw-line); border-radius: 7px; background: var(--tw-surface); }
+.operator-login-gate__footer { justify-content: space-between; padding-top: 16px; color: var(--tw-muted); font-size: 12px; border-top: 1px solid var(--tw-line-soft); }
+.operator-login-gate ::selection { background: var(--tw-selected); color: var(--tw-text); }
+@media (max-width: 599px) {
+  .operator-login-gate__card { padding-block: 40px; }
+  .operator-login-gate h1 { font-size: 26px; }
+  .operator-login-gate__brand > span:last-child { font-size: 12px; }
+}
+@media (max-height: 600px) {
+  .operator-login-gate__card { margin-block: 0; padding-block: 24px; }
+}
+@media (forced-colors: active) {
+  .operator-login-gate .operator-login-gate__submit { border-color: ButtonText; }
+}

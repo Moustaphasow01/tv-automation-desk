@@ -20,8 +20,8 @@ export function DeskHome() {
     {query.isLoading ? <div className="dj-loading" role="status" aria-busy="true">Chargement de votre séance…</div> : null}
     {query.isError ? <JourneyMessage title="Accueil momentanément indisponible" retry={() => void query.refetch()}>Les dernières informations n’ont pas pu être vérifiées. Le Live et les dossiers restent accessibles depuis la navigation.</JourneyMessage> : null}
     {envelope && !query.isError ? <>
-      <div className="dj-policy"><strong>{operatorCode(envelope.data.mode.environment)}</strong><span>{operatorCode(envelope.data.mode.executionMode)}</span><span>{envelope.data.mode.liveBroker === "OFF" ? "Exécution réelle désactivée" : envelope.data.mode.liveBroker === "ON" ? "Exécution réelle activée" : "Exécution réelle · état non publié"}</span></div>
-      <JourneyFreshness meta={envelope.meta} />
+      <section className="dh-session" aria-label="État de votre séance"><div className="dj-policy"><strong>{operatorCode(envelope.data.mode.environment)}</strong><span>{operatorCode(envelope.data.mode.executionMode)}</span><span>{envelope.data.mode.liveBroker === "OFF" ? "Exécution réelle désactivée" : envelope.data.mode.liveBroker === "ON" ? "Exécution réelle activée" : "Exécution réelle · état non publié"}</span></div>
+      <JourneyFreshness meta={envelope.meta} /></section>
       <nav className="dh-summary" aria-label="Priorités de séance">{homeSummary(envelope).map((metric) => <JourneyLink key={metric.label} to={metric.to} data-tone={metric.tone}><span>{metric.label}</span><strong>{metric.value}</strong><FiArrowUpRight aria-hidden="true" /></JourneyLink>)}</nav>
       <div className="dh-main"><HomeAttention data={envelope.data} current={!query.isError && !envelope.meta.stale && envelope.meta.availability === "AVAILABLE"} /><HomeMarkets market={envelope.data.market} /></div>
       <HomeActivity data={envelope.data} />

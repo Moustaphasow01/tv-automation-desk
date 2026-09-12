@@ -58,7 +58,7 @@ function OverviewHeader({ model, refreshing, onRefresh, onEnterFocus }: Pick<Pro
   const capabilities = model.source.launchGate.capabilityStates ?? [];
   const physical = capabilities.find((item) => item.capability === "PHYSICAL_EXECUTION");
   return <>
-    <header className="lt-overview__header"><div><h1>Live</h1><span>Vue d’ensemble</span></div>
+    <header className="lt-overview__header"><div><h1>Live</h1><span>Vue d’ensemble de la séance</span></div>
       <span className="lt-overview__connection" data-connected={connected} role="status">{connected ? "Synchronisé" : "Connexion à vérifier"}</span>
       <button onClick={onRefresh} disabled={refreshing} aria-label="Actualiser la séance"><FiRefreshCw aria-hidden="true" /></button>
       <button className="lt-overview__focus" onClick={onEnterFocus}>Focus <FiArrowUpRight aria-hidden="true" /></button>
