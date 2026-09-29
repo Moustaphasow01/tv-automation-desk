@@ -34,6 +34,9 @@
 
 ## Conventions
 
+- `OosDayWorkflow` : transport technique pré-market → plan externe figé → replay TradingView. Ne désigne pas un analyste ou un moteur de scénario.
+- `OosBatchCommand` : commande persistante de cette orchestration, jamais un ordre broker.
+
 - commands : verbe d'intention, ex. `PublishStrategyVersion` ;
 - queries : résultat demandé, ex. `GetPortfolioExposure` ;
 - events : fait passé, ex. `StrategySignalGenerated` ;

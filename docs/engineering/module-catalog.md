@@ -19,6 +19,8 @@
 
 ## Règles
 
+- `simulation` possède `desk-oos-batch` (ADR-0049) : orchestration technique de plans externes et du replay TradingView ; tables `oos_batch_*`, archives isolées, aucune dépendance au moteur de stratégie du desk. Exception intentionnelle à la mutualisation du kernel, exigée par la mission OOS.
+
 - Un module possède ses invariants et tables ; `reporting` ne devient jamais propriétaire des transactions.
 - `features` consomme les datasets publics de `market-data`, sans accéder à son adapter d'ingestion.
 - `simulation` et `live-runtime` consomment le même API public `strategy` et les mêmes features.
