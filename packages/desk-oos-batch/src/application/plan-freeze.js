@@ -16,7 +16,8 @@ export class PlanFreeze {
       manifest: input.manifest, manifest_sha256: input.manifest_sha256, images: input.images });
     if (response.status === "PENDING") return null;
     requireFact(response.status === "READY" && typeof response.plan_text === "string"
-      && response.plan_text.length > 0 && response.plan_text.length <= 2_000_000, "SCENARIO_RESPONSE_INVALID");
+      && response.plan_text.length > 0 && response.plan_text.length <= 2_000_000
+      && response.plan_text.isWellFormed(), "SCENARIO_RESPONSE_INVALID");
     requireFact(typeof response.generated_by === "string" && response.generated_by.length > 0
       && Number.isFinite(Date.parse(response.generated_at)), "SCENARIO_PROVENANCE_REQUIRED");
     const candidate = { plan_text: response.plan_text, generated_by: response.generated_by,

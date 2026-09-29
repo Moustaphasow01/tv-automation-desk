@@ -1,4 +1,5 @@
 import { requireFact } from "../domain/batch-contract.js";
+import { isDeepStrictEqual } from "node:util";
 
 export class ReplayWorkflow {
   constructor({ archive, tradingView, freeze, fingerprint, decodeImage, clock }) {
@@ -52,7 +53,7 @@ export class ReplayWorkflow {
   async verifyResults(day, pinned) {
     const frozen = await this.freeze.verify(day);
     const meta = await this.archive.readJson(day, "replay/run_meta.json");
-    requireFact(JSON.stringify(meta) === JSON.stringify(pinned)
+    requireFact(isDeepStrictEqual(meta, pinned)
       && meta.plan_sha256 === frozen.meta.plan_sha256, "RESULT_REGISTRY_MISMATCH");
     for (const artifact of meta.artifacts) {
       requireFact(this.fingerprint(await this.archive.read(day, artifact.path)) === artifact.sha256, "RESULT_HASH_MISMATCH");

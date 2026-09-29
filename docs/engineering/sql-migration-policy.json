@@ -54,7 +54,8 @@
     {
       "owner": "simulation",
       "patterns": [
-        "^simulation_"
+        "^simulation_",
+        "^oos_batch_"
       ]
     },
     {
