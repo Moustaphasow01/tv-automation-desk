@@ -25,6 +25,8 @@ export type VNextRoute = {
 };
 
 const implementedRoutes: readonly VNextRoute[] = [
+  { path: "replay/oos", label: "Batchs OOS", title: "Batchs hors échantillon", description: "Captures, plans externes figés et résultats de replay.",
+    navGroup: "replay", capability: "replay.read", journey: "oos-batch-transport", status: "foundation", viewEndpoint: "/oos-batch/days" },
   {
     path: "auth",
     label: "Accès",

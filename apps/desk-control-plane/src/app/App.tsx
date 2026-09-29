@@ -49,6 +49,7 @@ const pages: Record<string, LazyExoticComponent<PageComponent>> = {
   "execution/reconciliation": page(() => import("@/pages/OperationalP0Pages"), "ExecutionReconciliationPage"),
   "operations/observability": page(() => import("@/pages/OperationalP0Pages"), "OperationsObservabilityPage"),
   replay: page(() => import("@/pages/ReplayPage"), "ReplayPage"),
+  "replay/oos": page(() => import("@/pages/OosBatchPage"), "OosBatchPage"),
   "replay/runs": page(() => import("@/pages/ExplorerPages"), "ReplayRunsPage"),
   "replay/runs/:runId": page(() => import("@/pages/ExplorerPages"), "ReplayRunDetailPage"),
   "replay/compare": page(() => import("@/pages/ExplorerPages"), "ReplayComparePage"),

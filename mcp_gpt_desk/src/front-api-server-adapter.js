@@ -1,9 +1,9 @@
 import {
   FRONT_CONTROL_PLANE_EVENTS_PATH,
   handleFrontControlPlane,
-  isFrontControlPlaneMethodAllowed,
-  isFrontControlPlanePath,
-  isFrontControlPlaneWriteRequest,
+  isFrontControlPlaneMethodAllowed as legacyMethodAllowed,
+  isFrontControlPlanePath as legacyPath,
+  isFrontControlPlaneWriteRequest as legacyWrite,
   writeFrontControlPlaneEvents,
 } from "./front-control-plane-api.js";
 import {
@@ -14,12 +14,11 @@ import {
   shouldEmitFrontEvent,
 } from "./front-events-contract-v1.js";
 import { loadFrontPublicCryptoMarket } from "./front-public-crypto-market.js";
+import { isOosPath, isOosMethod, isOosWrite, handleOosHttp } from "./front-oos-batch.js";
 
-export {
-  isFrontControlPlaneMethodAllowed,
-  isFrontControlPlanePath,
-  isFrontControlPlaneWriteRequest,
-};
+export const isFrontControlPlanePath = pathname => isOosPath(pathname) || legacyPath(pathname);
+export const isFrontControlPlaneMethodAllowed = (pathname, method) => isOosPath(pathname) ? isOosMethod(pathname, method) : legacyMethodAllowed(pathname, method);
+export const isFrontControlPlaneWriteRequest = (pathname, method) => isOosWrite(pathname, method) || legacyWrite(pathname, method);
 
 export async function handleFrontControlPlaneHttp({
   store,
@@ -35,6 +34,7 @@ export async function handleFrontControlPlaneHttp({
   sendFrontResource,
   clientIp = null,
 }) {
+  if (isOosPath(pathname)) return handleOosHttp({ store, req, res, pathname, query, corsHeaders, auth, readJsonBody, sendJson });
   if (pathname === "/front-api/v1/views/crypto-market") {
     if (req.method !== "GET") throw Object.assign(new Error("Read-only market view"), { code: "METHOD_NOT_ALLOWED", statusCode: 405 });
     sendJson(res, 200, await loadFrontPublicCryptoMarket(query), { ...corsHeaders, "cache-control": "no-store" });

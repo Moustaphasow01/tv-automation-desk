@@ -33,6 +33,7 @@ const primaryNavigationSeed: readonly DeskNavigationSeed[] = [
   { path: "strategies", section: "Améliorer", icon: "strategies" },
   { path: "research", section: "Améliorer", icon: "research" },
   { path: "replay", section: "Améliorer", icon: "replay" },
+  { path: "replay/oos", section: "Améliorer", icon: "replay" },
   { path: "performance", section: "Améliorer", icon: "performance" },
   { path: "execution/providers", section: "Exploiter", icon: "providers" },
   { path: "execution/incidents", section: "Exploiter", icon: "incidents", mobile: true },
