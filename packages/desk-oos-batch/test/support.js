@@ -18,6 +18,7 @@ export class MemoryRegistry {
     try { return await fn(); } finally { this.locked = false; }
   }
   async withChartLock(fn) { return fn(); }
+  async get() { return structuredClone(this.row); }
   async ensureDay(day) {
     this.row ||= { definition: day, batch_id: day.batch_id, day: day.date, state: "NEW", checkpoint: "NEW",
       revision: 0, candidate_attempt: 1, capture_count: 0, error: null };

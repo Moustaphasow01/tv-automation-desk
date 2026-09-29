@@ -14,16 +14,16 @@ export class ArtifactArchive {
     return `${day.batch_id}/${day.date.slice(0, 7)}/${day.date}/${name}`;
   }
 
-  async target(day, name) {
+  async target(day, name, { create = false } = {}) {
     const relative = this.relative(day, name);
     requireFact(!relative.includes("\\") && relative.split("/").every(part =>
       /^[A-Za-z0-9_.-]+$/.test(part) && part !== "." && part !== ".."), "ARTIFACT_PATH_INVALID");
-    await mkdir(this.root, { recursive: true });
+    if (create) await mkdir(this.root, { recursive: true });
     let current = this.root;
     requireFact(!(await lstat(current)).isSymbolicLink(), "ARTIFACT_SYMLINK_FORBIDDEN");
     for (const part of relative.split("/").slice(0, -1)) {
       current = path.join(current, part);
-      await mkdir(current).catch(error => { if (error.code !== "EEXIST") throw error; });
+      if (create) await mkdir(current).catch(error => { if (error.code !== "EEXIST") throw error; });
       requireFact((await lstat(current)).isDirectory() && !(await lstat(current)).isSymbolicLink(), "ARTIFACT_SYMLINK_FORBIDDEN");
     }
     const result = path.join(this.root, relative);
@@ -39,7 +39,7 @@ export class ArtifactArchive {
   }
 
   async put(day, name, bytes) {
-    const target = await this.target(day, name);
+    const target = await this.target(day, name, { create: true });
     const temporary = `${target}.${randomUUID()}.pending`;
     const handle = await open(temporary, "wx", 0o600);
     try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }

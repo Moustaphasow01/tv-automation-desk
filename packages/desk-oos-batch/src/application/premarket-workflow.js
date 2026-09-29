@@ -6,10 +6,13 @@ export class PremarketWorkflow {
     Object.assign(this, { archive, tradingView, fingerprint, encodeJson, decodeImage });
   }
 
-  async capture(day) {
+  async capture(day, onCapture = async () => {}) {
     await this.tradingView.preparePremarket(day);
     const captures = [];
-    for (const view of VIEWS) captures.push(await this.captureView(day, view));
+    for (const view of VIEWS) {
+      captures.push(await this.captureView(day, view));
+      await onCapture(captures.length);
+    }
     const manifest = { schema_version: "oos-premarket/1", date: day.date, symbol: day.symbol,
       timezone: day.timezone, cutoff: day.cutoff, captures, status: "PREMARKET_READY" };
     validateManifest(manifest, day);

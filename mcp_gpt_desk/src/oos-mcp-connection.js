@@ -17,19 +17,7 @@ export class OosMcpConnection {
   async open() {
     const config = this.config;
     if (!config?.tools) throw failed("OOS_MCP_CONFIGURATION_REQUIRED");
-    let transport;
-    if (config.transport === "stdio" && config.command) {
-      transport = new StdioClientTransport({ command: config.command, args: config.args || [],
-        cwd: config.cwd, stderr: "ignore" });
-    } else if (config.transport === "http" && config.url) {
-      const url = new URL(config.url);
-      if (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) {
-        throw failed("OOS_MCP_HTTPS_REQUIRED");
-      }
-      const token = config.token_env ? process.env[config.token_env] : null;
-      if (config.token_env && !token) throw failed("OOS_MCP_TOKEN_MISSING");
-      transport = new StreamableHTTPClientTransport(url, { requestInit: { headers: token ? { Authorization: `Bearer ${token}` } : {} } });
-    } else throw failed("OOS_MCP_CONFIGURATION_REQUIRED");
+    const transport = createTransport(config);
     const client = new Client({ name: "oos-batch-technical-client", version: "1.0.0" }, { capabilities: {} });
     try {
       await client.connect(transport, { timeout: 30000 });
@@ -46,10 +34,36 @@ export class OosMcpConnection {
     try { result = await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 }); }
     catch { throw failed("OOS_MCP_CALL_FAILED"); }
     if (result.isError) throw failed("OOS_MCP_TOOL_FAILED");
-    if (result.structuredContent) return result.structuredContent;
-    const content = result.content?.find(item => item.type === "text");
-    try { return JSON.parse(content?.text); } catch { throw failed("OOS_MCP_RESULT_INVALID"); }
+    return parseOosMcpResult(result, operation);
   }
 
   async close() { await this.client?.close(); this.client = null; }
+}
+
+function createTransport(config) {
+  if (config.transport === "stdio" && config.command) return new StdioClientTransport({
+    command: config.command, args: config.args || [], cwd: config.cwd, stderr: "ignore" });
+  if (config.transport !== "http" || !config.url) throw failed("OOS_MCP_CONFIGURATION_REQUIRED");
+  const url = new URL(config.url);
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) throw failed("OOS_MCP_HTTPS_REQUIRED");
+  const token = config.token_env ? process.env[config.token_env] : null;
+  if (config.token_env && !token) throw failed("OOS_MCP_TOKEN_MISSING");
+  return new StreamableHTTPClientTransport(url, { requestInit: { headers: token ? { Authorization: `Bearer ${token}` } : {} } });
+}
+
+export function parseOosMcpResult(result, operation) {
+  let value;
+  try { value = result.structuredContent || JSON.parse(result.content?.find(item => item.type === "text")?.text); }
+  catch { throw failed("OOS_MCP_RESULT_INVALID"); }
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw failed("OOS_MCP_RESULT_INVALID");
+  const images = result.content?.filter(item => item.type === "image") || [];
+  if (operation === "capture" && images.length) return attachImage(value, images);
+  return value;
+}
+
+function attachImage(value, images) {
+  if (images.length !== 1 || images[0].mimeType !== "image/png") throw failed("OOS_MCP_IMAGE_INVALID");
+  if (value.image_base64 && value.image_base64 !== images[0].data) throw failed("OOS_MCP_IMAGE_CONFLICT");
+  return { ...value, image_base64: images[0].data };
 }

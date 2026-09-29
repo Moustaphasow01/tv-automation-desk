@@ -33,10 +33,7 @@ export class ReplayWorkflow {
     const end = await this.archive.readJson(day, "evidence/replay-completed.json");
     const existing = await this.archive.optionalJson(day, "evidence/results.json");
     const result = existing || await this.tradingView.collectResults({ ...day, end: end.at, plan_sha256: meta.plan_sha256 });
-    requireFact(result.plan_sha256 === meta.plan_sha256 && result.symbol === day.symbol
-      && result.at === end.at && result.engine_version === day.engine_version
-      && result.book_mode === day.book_mode, "RESULT_SCOPE_MISMATCH");
-    requireFact(result.audit && typeof result.audit === "object" && !Array.isArray(result.audit), "AUDIT_REQUIRED");
+    validateResult(result, { ...day, plan_sha256: meta.plan_sha256, at: end.at });
     const names = ["dashboard_final.png", "5m_final.png", "15m_final.png"];
     for (const name of names) this.decodeImage(result.images?.[name]);
     if (!existing) await this.archive.putJson(day, "evidence/results.json", result);
@@ -45,7 +42,8 @@ export class ReplayWorkflow {
     artifacts.push(await this.archive.putJson(day, "replay/audit.json", result.audit));
     if (typeof result.logs === "string") artifacts.push(await this.archive.put(day, "replay/logs.txt", result.logs));
     const runMeta = { ...day, plan_sha256: meta.plan_sha256, premarket_manifest_sha256: meta.premarket_manifest_sha256,
-      completed_at: end.completed_at, replay_end: end.at, artifacts, audit_source: result.source ?? null };
+      completed_at: end.completed_at, replay_end: end.at, artifacts, audit_source: result.source ?? null,
+      capture_provenance: result.capture_provenance ?? null };
     await this.archive.putJson(day, "replay/run_meta.json", runMeta);
     return { run_meta: runMeta, audit: result.audit };
   }
@@ -59,4 +57,11 @@ export class ReplayWorkflow {
       requireFact(this.fingerprint(await this.archive.read(day, artifact.path)) === artifact.sha256, "RESULT_HASH_MISMATCH");
     }
   }
+}
+
+function validateResult(result, expected) {
+  for (const key of ["plan_sha256", "symbol", "at", "engine_version", "book_mode"]) {
+    requireFact(result[key] === expected[key], "RESULT_SCOPE_MISMATCH");
+  }
+  requireFact(result.audit && typeof result.audit === "object" && !Array.isArray(result.audit), "AUDIT_REQUIRED");
 }

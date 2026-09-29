@@ -27,6 +27,7 @@ export function validateDay(input) {
 }
 
 export function batchDays(input) {
+  validateBatchRequest(input);
   const start = input.date || input.from || `${input.month}-01`;
   const end = input.date || input.to || new Date(Date.UTC(2026, Number(input.month?.slice(5)), 0)).toISOString().slice(0, 10);
   requireFact(/^\d{2}:\d{2}$/.test(input.cutoff_time || ""), "CUTOFF_TIME_REQUIRED");
@@ -39,4 +40,11 @@ export function batchDays(input) {
   }
   requireFact(days.length > 0 && days[0].date === start && days.at(-1).date === end, "RANGE_INVALID");
   return days;
+}
+
+function validateBatchRequest(input) {
+  const allowed = new Set(["batch_id", "symbol", "cutoff_time", "action", "date", "month", "from", "to", "command_id"]);
+  requireFact(input && typeof input === "object" && Object.keys(input).every(key => allowed.has(key)), "BATCH_FIELDS_INVALID");
+  const selectors = [!!input.date, !!input.month, !!(input.from || input.to)];
+  requireFact(selectors.filter(Boolean).length === 1 && !!input.from === !!input.to, "PERIOD_SELECTOR_INVALID");
 }

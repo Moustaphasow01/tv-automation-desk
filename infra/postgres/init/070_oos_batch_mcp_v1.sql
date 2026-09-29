@@ -55,4 +55,6 @@ CREATE TABLE IF NOT EXISTS oos_batch_commands (
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
+CREATE INDEX IF NOT EXISTS oos_batch_commands_pending ON oos_batch_commands(created_at,command_id)
+  WHERE status IN ('QUEUED','RUNNING');
 COMMIT;

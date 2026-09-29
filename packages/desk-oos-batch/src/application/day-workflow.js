@@ -21,6 +21,7 @@ export class OosDayWorkflow {
           row = next;
         }
       } catch (error) {
+        row = await this.repository.get(day);
         const failed = error.code?.startsWith("PLAN_") && row.checkpoint === "VALIDATING_PLAN"
           ? "FAILED_PLAN_VALIDATION" : "FAILED_TECHNICAL";
         row = await this.repository.save(row, { state: failed, error: { code: error.code || "EXTERNAL_FAILURE", details: error.details || {} } }, this.clock());
@@ -48,7 +49,9 @@ export class OosDayWorkflow {
     const state = row.checkpoint;
     let result = {};
     if (state === "CAPTURING") {
-      const bundle = await this.repository.withChartLock(() => this.premarket.capture(day));
+      const bundle = await this.repository.withChartLock(() => this.premarket.capture(day, async count => {
+        if (count > row.capture_count) row = await this.repository.save(row, { capture_count: count }, this.clock());
+      }));
       result = { manifest_sha256: bundle.manifest_sha256, capture_count: bundle.manifest.captures.length };
     }
     if (state === "WAITING_SCENARIO") {

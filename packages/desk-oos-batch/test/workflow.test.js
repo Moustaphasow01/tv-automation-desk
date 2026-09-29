@@ -71,7 +71,9 @@ test("capture technical retry reuses proven images and scenario pending resumes 
     if (input.name === "15m_global.png" && fail) { fail = false; throw new Error("temporary"); }
     return original(input);
   };
-  assert.equal((await f.workflow.execute(DAY)).state, "FAILED_TECHNICAL");
+  const failed = await f.workflow.execute(DAY);
+  assert.equal(failed.state, "FAILED_TECHNICAL");
+  assert.equal(failed.capture_count, 2);
   assert.equal((await f.workflow.execute(DAY, "retry")).state, "COMPLETED");
   assert.equal(f.calls.filter(call => call === "5m_global.png").length, 1);
   const pending = await fixture();
