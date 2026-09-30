@@ -8,7 +8,7 @@ export class PostgresOosCommands {
   async enqueue(input, commandId) {
     requireFact(/^[A-Za-z0-9_-]{1,100}$/.test(commandId || ""), "COMMAND_ID_REQUIRED");
     const action = input.action || "run", days = batchDays(input);
-    requireFact(["capture", "scenario", "replay", "run", "retry", "new-plan"].includes(action), "ACTION_INVALID");
+    requireFact(["capture", "retry-capture", "scenario", "replay", "run", "retry", "new-plan"].includes(action), "ACTION_INVALID");
     const payload = { days, action }, hash = sha256(jsonBytes(payload));
     return this.repository.withLock(`oos:command:${commandId}`, async () => {
       const prior = await this.pool.query(`SELECT ${COLUMNS} FROM oos_batch_commands WHERE command_id=$1`, [commandId]);

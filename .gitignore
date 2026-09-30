@@ -41,6 +41,7 @@ node_modules/
 .next/
 *.tsbuildinfo
 dist/
+dist-oos/
 build/
 .playwright-cli/
 output/playwright/

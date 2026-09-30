@@ -7,13 +7,13 @@ export class OosDayWorkflow {
 
   async execute(input, action = "run") {
     const day = validateDay(input);
-    requireFact(["capture", "scenario", "replay", "run", "retry", "new-plan"].includes(action), "ACTION_INVALID");
+    requireFact(["capture", "retry-capture", "scenario", "replay", "run", "retry", "new-plan"].includes(action), "ACTION_INVALID");
     return this.repository.withDayLock(day, async () => {
       let row = await this.repository.ensureDay(day);
       if (row.state === "COMPLETED") return row;
       row = await this.recover(row, action);
       if (action === "replay") requireFact(STAGES.indexOf(row.checkpoint) >= STAGES.indexOf("FROZEN"), "PLAN_NOT_FROZEN");
-      const terminal = action === "capture" ? "PREMARKET_READY" : action === "scenario" || action === "new-plan" ? "FROZEN" : "COMPLETED";
+      const terminal = ["capture", "retry-capture"].includes(action) ? "PREMARKET_READY" : action === "scenario" || action === "new-plan" ? "FROZEN" : "COMPLETED";
       try {
         while (STAGES.indexOf(row.checkpoint) < STAGES.indexOf(terminal)) {
           const next = await this.advance(row);
@@ -37,7 +37,8 @@ export class OosDayWorkflow {
         candidate_attempt: row.candidate_attempt + 1, error: null }, this.clock());
     }
     if (row.state === "FAILED_TECHNICAL") {
-      requireFact(action === "retry", "TECHNICAL_RETRY_REQUIRED");
+      requireFact(["retry", "retry-capture"].includes(action), "TECHNICAL_RETRY_REQUIRED");
+      if (action === "retry-capture") requireFact(STAGES.indexOf(row.checkpoint) <= STAGES.indexOf("PREMARKET_READY"), "CAPTURE_RETRY_SCOPE_REJECTED");
       return this.repository.save(row, { state: row.checkpoint, error: null }, this.clock());
     }
     requireFact(action !== "new-plan", "PLAN_REPLACEMENT_FORBIDDEN");

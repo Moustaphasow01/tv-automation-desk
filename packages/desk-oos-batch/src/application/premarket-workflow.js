@@ -13,8 +13,11 @@ export class PremarketWorkflow {
       captures.push(await this.captureView(day, view));
       await onCapture(captures.length);
     }
-    const manifest = { schema_version: "oos-premarket/1", date: day.date, symbol: day.symbol,
-      timezone: day.timezone, cutoff: day.cutoff, captures, status: "PREMARKET_READY" };
+    const content = { schema_version: "oos-premarket/2", date: day.date, symbol: day.symbol,
+      timezone: day.timezone, cutoff: day.cutoff, engine_version: day.engine_version,
+      book_mode: day.book_mode, hash_format: "sha256-json-utf8-lf-excluding-manifest_sha256",
+      captures, status: "PREMARKET_READY" };
+    const manifest = { ...content, manifest_sha256: this.fingerprint(JSON.stringify(content, null, 2) + "\n") };
     validateManifest(manifest, day);
     await this.archive.putJson(day, "premarket/manifest.json", manifest);
     return this.verify(day);
@@ -41,6 +44,10 @@ export class PremarketWorkflow {
     const bytes = await this.archive.read(day, "premarket/manifest.json");
     const manifest = JSON.parse(bytes.toString("utf8"));
     validateManifest(manifest, day);
+    if (manifest.schema_version === "oos-premarket/2") {
+      const { manifest_sha256, ...content } = manifest;
+      requireFact(manifest_sha256 === this.fingerprint(JSON.stringify(content, null, 2) + "\n"), "MANIFEST_HASH_MISMATCH");
+    }
     const images = [];
     for (const capture of manifest.captures) {
       const png = await this.archive.read(day, `premarket/${capture.path}`);
@@ -48,6 +55,7 @@ export class PremarketWorkflow {
       this.decodeImage(png.toString("base64"));
       images.push({ name: capture.path, mime_type: "image/png", sha256: capture.sha256, data: png.toString("base64") });
     }
-    return { manifest, manifest_sha256: this.fingerprint(bytes), images };
+    return { manifest, manifest_sha256: manifest.manifest_sha256 || this.fingerprint(bytes),
+      manifest_file_sha256: this.fingerprint(bytes), images };
   }
 }

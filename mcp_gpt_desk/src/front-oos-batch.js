@@ -44,18 +44,29 @@ async function readView(runtime, view, query) {
   }
   if (view === "days") {
     const rows = await runtime.repository.list(query.batch_id);
-    return { days: rows.map(projectDay), stats: aggregateBatch(rows), observed_at: new Date().toISOString() };
+    return { days: rows.map(row => projectVisibleDay(runtime, row)),
+      stats: aggregateBatch(rows.map(row => row.plan_sha256 ? row : { ...row, audit: null })), observed_at: new Date().toISOString() };
   }
   const row = await runtime.repository.get({ batch_id: query.batch_id, date: query.date });
-  const artifacts = await artifactIndex(runtime, row.definition);
+  const artifacts = await artifactIndex(runtime, row);
   const plan = artifacts.includes("plan/PLAN_SMC3.txt") ? (await runtime.archive.read(row.definition, "plan/PLAN_SMC3.txt")).toString("utf8") : null;
-  return { day: projectDay(row), artifacts, plan_text: plan, timeline: await runtime.repository.timeline(row.definition) };
+  return { day: projectVisibleDay(runtime, row), artifacts, plan_text: plan, timeline: await runtime.repository.timeline(row.definition) };
 }
 
-async function artifactIndex(runtime, day) {
+function projectVisibleDay(runtime, row) {
+  const projected = projectDay(row.plan_sha256 ? row : { ...row, audit: null, run_meta: null });
+  if (runtime.allowedActions?.includes("retry-capture") && row.state === "FAILED_TECHNICAL"
+    && ["NEW", "CAPTURING", "PREMARKET_READY"].includes(row.checkpoint)) projected.allowed_actions.unshift("retry-capture");
+  if (runtime.allowedActions) projected.allowed_actions = projected.allowed_actions.filter(action => runtime.allowedActions.includes(action));
+  return projected;
+}
+
+async function artifactIndex(runtime, row) {
+  const day = row.definition;
   const manifest = await runtime.archive.optionalJson(day, "premarket/manifest.json");
   const plan = await runtime.archive.optionalJson(day, "plan/plan_meta.json");
-  const result = await runtime.archive.optionalJson(day, "replay/run_meta.json");
+  const result = row.plan_sha256 && plan?.status === "FROZEN" && plan.plan_sha256 === row.plan_sha256
+    ? await runtime.archive.optionalJson(day, "replay/run_meta.json") : null;
   return [...(manifest ? ["premarket/manifest.json", ...manifest.captures.map(item => `premarket/${item.path}`)] : []),
     ...(plan ? ["plan/PLAN_SMC3.txt", "plan/plan_meta.json"] : []),
     ...(result ? ["replay/run_meta.json", ...result.artifacts.map(item => item.path)] : [])];
@@ -63,7 +74,7 @@ async function artifactIndex(runtime, day) {
 
 async function readArtifact(runtime, query) {
   const row = await runtime.repository.get({ batch_id: query.batch_id, date: query.date });
-  const allowed = await artifactIndex(runtime, row.definition);
+  const allowed = await artifactIndex(runtime, row);
   if (!allowed.includes(query.name)) throw fail("ARTIFACT_NOT_FOUND", 404);
   const bytes = await runtime.archive.read(row.definition, query.name);
   return { bytes, mime: query.name.endsWith(".png") ? "image/png" : query.name.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8" };

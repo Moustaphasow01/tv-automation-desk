@@ -3,7 +3,7 @@ export const states: Record<string, string> = { NEW: "À capturer", CAPTURING: "
   WAITING_SCENARIO: "En attente du plan", PLAN_RECEIVED: "Plan reçu", VALIDATING_PLAN: "Vérification technique",
   FROZEN: "Plan figé", REPLAYING: "Rejeu en cours", CAPTURING_RESULTS: "Archivage des résultats", COMPLETED: "Terminé",
   FAILED_TECHNICAL: "Incident technique", FAILED_PLAN_VALIDATION: "Plan refusé" };
-export const actions: Record<OosAction, string> = { capture: "Capturer", scenario: "Demander le plan", replay: "Rejouer", retry: "Réessayer", "new-plan": "Demander un nouveau plan", run: "Lancer le parcours" };
+export const actions: Record<OosAction, string> = { capture: "Capturer", "retry-capture": "Reprendre les captures", scenario: "Demander le plan", replay: "Rejouer", retry: "Réessayer", "new-plan": "Demander un nouveau plan", run: "Lancer le parcours" };
 export const valueLabel = (v: number | null | undefined) => v == null ? "Non fourni" : v.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
 export const dateLabel = (v: string) => new Date(v.length === 10 ? `${v}T12:00:00Z` : v).toLocaleString("fr-FR", { timeZone: "Europe/Paris", dateStyle: "medium", ...(v.length === 10 ? {} : { timeStyle: "short" }) });
 export function dayRequest(day: OosDay, action: OosAction): OosRequest {

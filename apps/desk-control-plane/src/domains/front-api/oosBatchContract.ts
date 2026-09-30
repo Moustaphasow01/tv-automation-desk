@@ -1,4 +1,4 @@
-export type OosAction = "capture" | "scenario" | "replay" | "retry" | "new-plan" | "run";
+export type OosAction = "capture" | "retry-capture" | "scenario" | "replay" | "retry" | "new-plan" | "run";
 export type OosDay = {
   batch_id: string; day: string; state: string; checkpoint: string; capture_count: number;
   definition: { symbol: string; cutoff: string; date: string }; updated_at: string;
@@ -19,7 +19,7 @@ export function isOosDay(v: unknown): v is OosDay {
   return record(v) && text(v.batch_id) && text(v.day) && text(v.state) && STATES.has(v.state)
     && text(v.checkpoint) && number(v.capture_count) && number(v.candidate_attempt) && text(v.updated_at)
     && record(v.definition) && text(v.definition.symbol) && text(v.definition.cutoff) && text(v.definition.date)
-    && Array.isArray(v.allowed_actions) && v.allowed_actions.every(a => ["capture", "scenario", "replay", "retry", "new-plan"].includes(a))
+    && Array.isArray(v.allowed_actions) && v.allowed_actions.every(a => ["capture", "retry-capture", "scenario", "replay", "retry", "new-plan"].includes(a))
     && record(v.metrics) && Object.values(v.metrics).every(n => n === null || number(n))
     && [v.plan_sha256, v.manifest_sha256].every(h => h === null || (text(h) && /^[a-f0-9]{64}$/.test(h)))
     && (v.error === null || (record(v.error) && text(v.error.code))) && (v.audit === null || record(v.audit));

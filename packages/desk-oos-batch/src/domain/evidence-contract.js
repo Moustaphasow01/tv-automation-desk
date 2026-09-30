@@ -12,6 +12,12 @@ export function validateCapture(capture, expected) {
 }
 
 export function validateManifest(manifest, day) {
+  requireFact(["oos-premarket/1", "oos-premarket/2"].includes(manifest.schema_version), "MANIFEST_VERSION_UNSUPPORTED");
+  if (manifest.schema_version === "oos-premarket/2") {
+    requireFact(manifest.engine_version === day.engine_version && manifest.book_mode === day.book_mode,
+      "MANIFEST_ENGINE_MISMATCH");
+    requireFact(/^[a-f0-9]{64}$/.test(manifest.manifest_sha256), "MANIFEST_HASH_INVALID");
+  }
   requireFact(manifest.status === "PREMARKET_READY" && manifest.date === day.date
     && manifest.symbol === day.symbol && manifest.cutoff === day.cutoff
     && manifest.timezone === day.timezone, "MANIFEST_SCOPE_MISMATCH");

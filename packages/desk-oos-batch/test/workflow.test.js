@@ -29,6 +29,14 @@ test("explicit replay request before freeze performs no capture or provider muta
   await assert.rejects(f.workflow.execute(DAY, "replay"), /PLAN_NOT_FROZEN/);
   assert.deepEqual(f.calls, []);
 });
+test("capture-only retry never contacts Scenario Builder or starts replay", async () => {
+  const f = await fixture(); const original = f.tradingView.capturePremarket;
+  f.tradingView.capturePremarket = async () => { throw new Error("temporary"); };
+  assert.equal((await f.workflow.execute(DAY, "capture")).state, "FAILED_TECHNICAL");
+  f.tradingView.capturePremarket = original;
+  assert.equal((await f.workflow.execute(DAY, "retry-capture")).state, "PREMARKET_READY");
+  assert.equal(f.submissions.length, 0); assert.ok(!f.calls.includes("replay"));
+});
 test("future premarket image fails before builder, plan or replay", async () => {
   const f = await fixture();
   const original = f.tradingView.capturePremarket;

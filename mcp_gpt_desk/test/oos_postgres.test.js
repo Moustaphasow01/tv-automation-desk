@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { PostgresOosRegistry } from "../../packages/desk-oos-batch/src/adapter/postgres-registry.js";
 import { PostgresOosCommands } from "../../packages/desk-oos-batch/src/adapter/postgres-commands.js";
+import { PostgresOosProbe } from "../../packages/desk-oos-batch/src/adapter/postgres-probe.js";
 import { DAY } from "../../packages/desk-oos-batch/test/support.js";
 
 test("PostgreSQL migration, CAS, immutable identity, locks, durable queue and idempotence", { skip: !process.env.OOS_TEST_DATABASE_URL }, async () => {
@@ -15,6 +16,13 @@ test("PostgreSQL migration, CAS, immutable identity, locks, durable queue and id
   try {
     const migration = await readFile(new URL("../../infra/postgres/init/070_oos_batch_mcp_v1.sql", import.meta.url), "utf8");
     await pool.query(migration); await pool.query(migration);
+    const remoteMigration = await readFile(new URL("../../infra/postgres/init/071_oos_batch_remote_mcp.sql", import.meta.url), "utf8");
+    await pool.query(remoteMigration); await pool.query(remoteMigration);
+    const probe = new PostgresOosProbe(pool);
+    const probeWrite = await probe.write("SYNTHETIC_ISOLATED_PROBE");
+    assert.deepEqual(await probe.write("SYNTHETIC_ISOLATED_PROBE"), probeWrite);
+    assert.deepEqual(await probe.read(), probeWrite);
+    assert.equal((await pool.query("SELECT count(*) FROM oos_batch_write_probe")).rows[0].count, "1");
     const repository = new PostgresOosRegistry(pool), commands = new PostgresOosCommands(repository);
     const row = await repository.ensureDay(DAY);
     const saved = await repository.save(row, { state: "CAPTURING", checkpoint: "CAPTURING" }, new Date().toISOString());
