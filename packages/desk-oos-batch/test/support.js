@@ -54,7 +54,7 @@ export async function fixture() {
         capture_provenance: Object.fromEntries(["dashboard", "5m", "15m"].map(view => [`${view}_final.png`, {
           symbol: input.symbol, at: input.end, plan_sha256: input.plan_sha256, captured_at: clock(), source: "TEST_ONLY",
           timeframe: view === "dashboard" ? "15m" : view,
-          ...(view === "dashboard" ? { presentation: { dedicated_panel: true, maximized: true, complete_table: true,
+          ...(view === "dashboard" ? { presentation: { dedicated_panel: true, maximized: true, complete_table: true, native_table: true,
             view: "AUTO", title: "AUDIT FIN SESSION", pane_index: 1, bounds: { width: 1920, height: 1500 }, minimum_font_size: 14 } } : {})
         }])),
         audit: { event_count: 0, missing_metrics: ["net_r", "net_usd"] } };

@@ -29,7 +29,7 @@ function validateResultCaptures(result, expected) {
 }
 
 export function validateAuditPresentation(panel) {
-  requireFact(panel?.dedicated_panel === true && panel.maximized === true && panel.complete_table === true
+  requireFact(panel?.dedicated_panel === true && panel.maximized === true && panel.complete_table === true && panel.native_table === true
     && panel.view === "AUTO" && panel.title === "AUDIT FIN SESSION" && panel.pane_index > 0
     && panel.bounds?.height >= 900 && panel.minimum_font_size >= 12, "DEDICATED_AUDIT_REQUIRED");
 }

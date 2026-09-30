@@ -87,9 +87,33 @@ test("a dedicated audit capture fails if panel, final title or readability is un
     getClient() { throw new Error("CAPTURE_SHOULD_NOT_HAPPEN"); }
   } });
   const good = { dedicated_panel: true, maximized: true, view: "AUTO", title: "AUDIT FIN SESSION", minimum_font_size: 14,
-    bounds: { x: 0, y: 0, width: 1920, height: 1500 } };
-  for (const changed of [{ dedicated_panel: false }, { bounds: { height: 300 } }, { minimum_font_size: 8 }, { title: null }]) {
+    native_table: true, complete_table: true, bounds: { x: 0, y: 0, width: 3600, height: 1500 } };
+  for (const changed of [{ dedicated_panel: false }, { bounds: { height: 300 } }, { minimum_font_size: 8 },
+    { title: null }, { native_table: false }, { complete_table: false }]) {
     panel.proof = async () => ({ ...good, ...changed });
     await assert.rejects(panel.screenshot("dashboard_final.png"), /TV_(DEDICATED_PANEL|FINAL_AUDIT_VIEW)_UNPROVEN/);
   }
+});
+
+test("table proof requires a native renderer, complete geometry and untruncated text, not just table metadata", async () => {
+  let external = false, measured = 5;
+  const cells = [{ row: 0, column: 0, text: "AUDIT FIN SESSION", fontSize: 14 }];
+  const renderer = { _data: { table: { id: 1 }, cells: cells.map(cell => ({ cell })) },
+    _precalculated: { position: { x: 10, y: 10 }, totalWidth: 1900, totalHeight: 600,
+      cells: [[{ width: 100 }]] }, _cellWidth: () => measured };
+  const canvas = { width: 2000, height: 2000, getBoundingClientRect: () => ({ width: 1000, height: 1000 }) };
+  const element = { querySelector: () => canvas, getBoundingClientRect: () => ({ x: 0, y: 0, width: 1000, height: 1000 }) };
+  const table = { id: 1, rows: 1, columns: 1, cells };
+  const study = { paneIndex: () => 1, getInputValues: () => [{ id: "view", value: "AUTO" }],
+    _study: { _paneViews: [{ _renderers: [renderer] }], tables: () => ({
+      data: () => ({ value: () => [table] }), hasExternalViews: () => ({ value: () => external }) }) } };
+  const chart = { getPanes: () => [{}, { hasMainSeries: () => false, isMaximized: () => true }],
+    _chartWidget: { _paneWidgets: { value: () => [{}, { getElement: () => element }] } } };
+  const engine = { ids: { view: "view" }, evaluate: async body => vm.runInNewContext(`(function(){${body}})()`, { c: chart, s: study }) };
+  const panel = new OosTradingViewPanels({ engine, provider: {} });
+  assert.equal((await panel.proof()).complete_table, true);
+  external = true; assert.equal((await panel.proof()).complete_table, false);
+  external = false; measured = 60; assert.equal((await panel.proof()).complete_table, false);
+  measured = 5; renderer._precalculated.totalHeight = 2200;
+  assert.equal((await panel.proof()).complete_table, false);
 });
