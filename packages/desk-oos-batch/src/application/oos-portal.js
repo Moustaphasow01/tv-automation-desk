@@ -1,4 +1,4 @@
-import { batchDays, requireFact } from "../domain/batch-contract.js";
+import { batchDays, requireFact, STAGES } from "../domain/batch-contract.js";
 import { projectDay, aggregateBatch } from "./batch-projection.js";
 
 /** Date-scoped boundary shared by remote MCP and the dedicated OOS host. */
@@ -36,8 +36,9 @@ export class OosPortal {
     requireFact(row.plan_sha256, "PLAN_NOT_FROZEN");
     await this.runtime.freeze.verify(day);
     requireFact(row.state === "COMPLETED", "RESULT_NOT_READY");
-    await this.runtime.replay.verifyResults(day, row.run_meta);
-    return { date, sample_purpose: this.sample(row).sample_purpose, audit: row.audit, run_meta: row.run_meta };
+    const integrity = await this.runtime.replay.verifyResults(day, row.run_meta);
+    return { date, sample_purpose: this.sample(row).sample_purpose, audit: row.audit, run_meta: row.run_meta,
+      artifact_hashes: integrity.artifacts };
   }
   async month(month) {
     requireFact(/^2026-(07|08)$/.test(month), "MONTH_INVALID");
@@ -50,9 +51,12 @@ export class OosPortal {
   submit(date, text) { return this.runtime.submittedPlan.submit(this.day(date), text); }
   async requestReplay(date) {
     const day = this.day(date), row = await this.runtime.repository.get(day);
-    requireFact(row.state === "FROZEN" && row.plan_sha256, "PLAN_NOT_FROZEN");
+    const postFreeze = STAGES.indexOf(row.checkpoint) >= STAGES.indexOf("FROZEN");
+    requireFact(postFreeze && row.plan_sha256, "PLAN_NOT_FROZEN");
     await this.runtime.freeze.verify(day);
+    const retry = row.state === "FAILED_TECHNICAL";
     return this.runtime.commands.enqueue({ batch_id: this.batchId, symbol: this.symbol,
-      cutoff_time: this.cutoffTime, date, action: "replay" }, `replay-${this.batchId}-${date}-${row.plan_sha256.slice(0, 16)}`);
+      cutoff_time: this.cutoffTime, date, action: retry ? "retry" : "replay" },
+    `replay-${this.batchId}-${date}-${row.plan_sha256.slice(0, 16)}${retry ? `-retry-${row.revision}` : ""}`);
   }
 }

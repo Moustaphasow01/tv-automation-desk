@@ -36,21 +36,34 @@ export class TradingViewMcpAdapter {
   }
 
   async collectResults(input) {
-    await this.call("openDashboard", { replay_only: true });
-    const dashboard = await this.resultCapture(input, { name: "dashboard_final.png" });
-    const images = { "dashboard_final.png": dashboard.image_base64 };
-    const capture_provenance = { "dashboard_final.png": this.provenance(dashboard) };
-    for (const timeframe of ["5m", "15m"]) {
-      await this.call("setTimeframe", { timeframe });
-      const capture = await this.resultCapture(input, { timeframe, name: `${timeframe}_final.png` });
-      images[`${timeframe}_final.png`] = capture.image_base64;
-      capture_provenance[`${timeframe}_final.png`] = this.provenance(capture);
-    }
-    const audit = await this.call("collectVisibleAudit", { plan_sha256: input.plan_sha256, at: input.end, replay_only: true });
-    return { ...audit, images, capture_provenance };
+    try {
+      const panel = await this.call("openDashboard", { replay_only: true });
+      const dashboard = await this.resultCapture(input, { name: "dashboard_final.png" });
+      const images = { "dashboard_final.png": dashboard.image_base64 };
+      const capture_provenance = { "dashboard_final.png": this.provenance(dashboard) };
+      // Read the canonical 15m ENGINE before changing any display or chart timeframe.
+      if (panel.positions_distinct) {
+        await this.call("openPositions", { replay_only: true });
+        const positions = await this.resultCapture(input, { name: "positions_final.png" });
+        images["positions_final.png"] = positions.image_base64;
+        capture_provenance["positions_final.png"] = this.provenance(positions);
+      }
+      const audit = await this.call("collectVisibleAudit", { plan_sha256: input.plan_sha256, at: input.end, replay_only: true });
+      for (const timeframe of ["5m", "15m"]) {
+        await this.call("setTimeframe", { timeframe });
+        const capture = await this.resultCapture(input, { timeframe, name: `${timeframe}_final.png` });
+        images[`${timeframe}_final.png`] = capture.image_base64;
+        capture_provenance[`${timeframe}_final.png`] = this.provenance(capture);
+      }
+      return { ...audit, positions_distinct: panel.positions_distinct === true, images, capture_provenance };
+    } finally { await this.call("closeResultViews", { replay_only: true }); }
   }
 
-  provenance(capture) { const { symbol, at, timeframe, captured_at, source, plan_sha256 } = capture; return { symbol, at, timeframe: timeframe || null, captured_at, source, plan_sha256 }; }
+  provenance(capture) {
+    const { symbol, at, timeframe, captured_at, source, plan_sha256, presentation } = capture;
+    return { symbol, at, timeframe: timeframe || null, captured_at, source, plan_sha256,
+      ...(presentation ? { presentation } : {}) };
+  }
 
   async resultCapture(input, view) {
     const capture = await this.call("capture", { ...view, symbol: input.symbol, phase: "RESULT", at: input.end,
