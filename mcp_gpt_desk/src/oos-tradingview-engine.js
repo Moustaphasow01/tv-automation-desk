@@ -17,7 +17,7 @@ const DISPLAY_NAMES = new Set(["Vue", "Texte", "Largeur du tableau (%)", "Page (
 // Copy the native renderer's published cells instead; never inspect/serialize its cyclic layout cache.
 const PUBLISHED_TABLES = `function oosTables(){var external=s._study.tables().data().value();if(external.length)return external;
   var views=s._study._paneViews.filter(v=>Array.isArray(v._renderers)&&Array.isArray(v._data));
-  views.forEach(v=>v.renderer());return views.flatMap(v=>v._data).filter(d=>d.table&&d.cells)
+  views.forEach(v=>{if(v._invalidated)v.renderer()});return views.flatMap(v=>v._data).filter(d=>d.table&&d.cells)
     .map(d=>({id:d.table.id,rows:d.table.rows,columns:d.table.columns,cells:d.cells.filter(x=>!x.merged).map(x=>({
       row:x.cell.row,column:x.cell.column,rowSpan:x.cell.rowSpan,colSpan:x.cell.colSpan,
       text:x.cell.text,tooltip:x.cell.tooltip,fontSize:typeof x.cell.fontSize==='number'?x.cell.fontSize:

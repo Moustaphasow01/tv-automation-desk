@@ -28,13 +28,18 @@ export class OosTradingViewPanels {
       var text=t.flatMap(x=>x.cells.map(v=>v.text)).join(' | ');
       var canvas=w.getElement().querySelector('canvas'),cr=canvas.getBoundingClientRect(),sx=canvas.width/cr.width,
         sy=canvas.height/cr.height,views=s._study._paneViews.filter(v=>Array.isArray(v._renderers));
-      var rendered=views.flatMap(v=>v._renderers).map(r=>{var q=r._precalculated,d=r._data;
+      var rendered=views.flatMap(v=>v._renderers).map(r=>{var d=r._data,q=r._precalculated;
+        if(!q&&d&&typeof r._precalculateData==='function')q=r._precalculateData({
+          mediaSize:{width:cr.width,height:cr.height},bitmapSize:{width:canvas.width,height:canvas.height},
+          horizontalPixelRatio:sx,verticalPixelRatio:sy});
         if(!q||!d)return {complete:false};
         var clipped=d.cells.filter(v=>!v.merged&&v.cell.text&&
           r._cellWidth({mediaSize:{width:cr.width}},{...v,cell:{...v.cell,widthInPercentsOfPaneWidth:null}},d)
             >q.cells[v.cell.row][v.cell.column].width/sx+1).length;
         return {id:d.table.id,rows:q.cells.length,columns:q.cells[0]?.length,clipped_cells:clipped,
           width:q.totalWidth/sx,height:q.totalHeight/sy,
+          content_bounds:{x:cr.x+(q.position.x-2)/sx,y:cr.y+(q.position.y-2)/sy,
+            width:(q.totalWidth+4)/sx,height:(q.totalHeight+4)/sy},
           complete:q.position.x>=0&&q.position.y>=0&&q.position.x+q.totalWidth<=canvas.width
             &&q.position.y+q.totalHeight<=canvas.height&&clipped===0};});
       var native=!s._study.tables().hasExternalViews().value()&&t.length>0&&t.every(table=>
@@ -59,9 +64,19 @@ export class OosTradingViewPanels {
       throw oosTvError("TV_FINAL_AUDIT_VIEW_UNPROVEN");
     }
     const client = await this.client();
-    const { data } = await client.Page.captureScreenshot({ format: "png", clip: { ...panel.bounds, scale: 1 } });
+    const layout = await client.Page.getLayoutMetrics();
+    // Electron's browser zoom reports DOM CSS coordinates but screenshot clips use device-independent pixels.
+    const factor = layout.cssVisualViewport.zoom;
+    const scale = layout.layoutViewport.clientWidth / layout.cssLayoutViewport.clientWidth / factor;
+    if (!Number.isFinite(scale) || factor <= 0 || panel.minimum_font_size * factor * scale < 12) throw oosTvError("TV_CAPTURE_SCALE_UNPROVEN");
+    const tables = panel.rendered_tables.map(t => t.content_bounds);
+    const x = Math.min(...tables.map(t => t.x)), y = Math.min(...tables.map(t => t.y));
+    const bounds = { x, y, width: Math.max(...tables.map(t => t.x + t.width)) - x,
+      height: Math.max(...tables.map(t => t.y + t.height)) - y };
+    const clip = Object.fromEntries(Object.entries(bounds).map(([key, value]) => [key, value * factor]));
+    const { data } = await client.Page.captureScreenshot({ format: "png", clip: { ...clip, scale } });
     const { text, ...presentation } = panel;
-    return { image_base64: data, presentation };
+    return { image_base64: data, presentation: { ...presentation, browser_zoom: factor, capture_scale: scale, image_bounds: clip } };
   }
 
   async restorePrice() {

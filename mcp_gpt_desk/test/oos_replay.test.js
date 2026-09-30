@@ -124,8 +124,28 @@ test("native Pine table cells remain readable when TradingView disables its exte
   const native = { table: { id: 2, rows: 1, columns: 1 }, cells: [{
     cell: { row: 0, column: 0, rowSpan: 1, colSpan: 1, text: "Fills 0", fontSize: "normal" } }] };
   f.study._study.tables = () => ({ data: () => ({ value: () => [] }) });
-  f.study._study._paneViews = [{ _data: [native], _renderers: [], renderer() {} }];
+  let refreshed = 0;
+  f.study._study._paneViews = [{ _data: [native], _renderers: [], _invalidated: true,
+    renderer() { this._invalidated = false; refreshed++; } }];
   const tables = await f.engine.evaluate("return oosTables();");
   assert.equal(tables[0].cells[0].text, "Fills 0");
   assert.equal(tables[0].cells[0].fontSize, 14);
+  await f.engine.evaluate("return oosTables();");
+  assert.equal(refreshed, 1);
+});
+
+test("Electron zoom clips only the native audit table at native pixel density", async () => {
+  let clip;
+  const client = { Runtime: { evaluate: async () => ({ result: { value: "/chart/TEST_ONLY/" } }) },
+    Page: { getLayoutMetrics: async () => ({ layoutViewport: { clientWidth: 5400 },
+      cssLayoutViewport: { clientWidth: 4000 }, cssVisualViewport: { zoom: 0.9 } }),
+    captureScreenshot: async request => { clip = request.clip; return { data: "SYNTHETIC_TRANSPORT_ONLY" }; } } };
+  const panels = new OosTradingViewPanels({ engine: { capture: { chartId: "TEST_ONLY", assertChart: async () => {} } },
+    provider: { getClient: async () => client } });
+  panels.proof = async () => ({ dedicated_panel: true, maximized: true, view: "AUTO", title: "AUDIT FIN SESSION",
+    native_table: true, complete_table: true, minimum_font_size: 14, bounds: { height: 1200 },
+    rendered_tables: [{ content_bounds: { x: 10, y: 10, width: 900, height: 600 } }] });
+  const capture = await panels.screenshot("dashboard_final.png");
+  assert.deepEqual(clip, { x: 9, y: 9, width: 810, height: 540, scale: 1.5 });
+  assert.equal(capture.presentation.browser_zoom, 0.9);
 });
