@@ -24,7 +24,7 @@ export class OosTradingViewPanels {
 
   async proof() {
     return this.engine.evaluate(`var i=s.paneIndex(),p=c.getPanes()[i],w=c._chartWidget._paneWidgets.value()[i];
-      var rect=w.getElement().getBoundingClientRect(),t=s._study.tables().data().value();
+      var rect=w.getElement().getBoundingClientRect(),t=oosTables();
       var text=t.flatMap(x=>x.cells.map(v=>v.text)).join(' | ');
       var canvas=w.getElement().querySelector('canvas'),cr=canvas.getBoundingClientRect(),sx=canvas.width/cr.width,
         sy=canvas.height/cr.height,views=s._study._paneViews.filter(v=>Array.isArray(v._renderers));

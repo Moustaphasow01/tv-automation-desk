@@ -19,7 +19,7 @@ function engineFixture() {
   for (let i = 0; i < values.length; i++) { values[i].id = `in_${i}`; definitions[i][0] = `in_${i}`; }
   const context = vm.createContext({ window: { TradingViewApi: { _activeChartWidgetWV: { value: () => ({ getStudyById: () => study }) } } } });
   const capture = { engine: { id: "TEST_ONLY" }, evaluate: async expression => vm.runInContext(expression, context) };
-  return { engine: new OosTradingViewEngine(capture), writes, values };
+  return { engine: new OosTradingViewEngine(capture), writes, values, study };
 }
 
 test("replay allowlist adds stepping but no broker or replay-trading tools", async () => {
@@ -109,11 +109,23 @@ test("table proof requires a native renderer, complete geometry and untruncated 
       data: () => ({ value: () => [table] }), hasExternalViews: () => ({ value: () => external }) }) } };
   const chart = { getPanes: () => [{}, { hasMainSeries: () => false, isMaximized: () => true }],
     _chartWidget: { _paneWidgets: { value: () => [{}, { getElement: () => element }] } } };
-  const engine = { ids: { view: "view" }, evaluate: async body => vm.runInNewContext(`(function(){${body}})()`, { c: chart, s: study }) };
+  const engine = { ids: { view: "view" }, evaluate: async body => vm.runInNewContext(`(function(){${body}})()`,
+    { c: chart, s: study, oosTables: () => [table] }) };
   const panel = new OosTradingViewPanels({ engine, provider: {} });
   assert.equal((await panel.proof()).complete_table, true);
   external = true; assert.equal((await panel.proof()).complete_table, false);
   external = false; measured = 60; assert.equal((await panel.proof()).complete_table, false);
   measured = 5; renderer._precalculated.totalHeight = 2200;
   assert.equal((await panel.proof()).complete_table, false);
+});
+
+test("native Pine table cells remain readable when TradingView disables its external table stream", async () => {
+  const f = engineFixture(); await f.engine.initialize("V3.9.8");
+  const native = { table: { id: 2, rows: 1, columns: 1 }, cells: [{
+    cell: { row: 0, column: 0, rowSpan: 1, colSpan: 1, text: "Fills 0", fontSize: "normal" } }] };
+  f.study._study.tables = () => ({ data: () => ({ value: () => [] }) });
+  f.study._study._paneViews = [{ _data: [native], _renderers: [], renderer() {} }];
+  const tables = await f.engine.evaluate("return oosTables();");
+  assert.equal(tables[0].cells[0].text, "Fills 0");
+  assert.equal(tables[0].cells[0].fontSize, 14);
 });
