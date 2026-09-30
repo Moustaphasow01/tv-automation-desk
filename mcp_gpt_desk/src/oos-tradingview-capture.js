@@ -9,6 +9,14 @@ const fail = code => Object.assign(new Error(code), { code });
 const hash = value => createHash("sha256").update(value).digest("hex");
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+export function isProvenCutoff(obs, cutoff) {
+  const at = typeof obs.at === "number" ? obs.at * (obs.at < 1e12 ? 1000 : 1) : Date.parse(obs.at);
+  const expected = Date.parse(cutoff);
+  // TradingView selects an exclusive cutoff: 09:00 means visible through 08:59:59.
+  return obs.replay === true && obs.autoplay === false && [expected, expected - 1000].includes(at)
+    && Number.isFinite(obs.last_bar_time) && obs.last_bar_time * 1000 <= at;
+}
+
 export const OOS_TV_TOOLS = Object.freeze({ chart_set_symbol: "chart_set_symbol", chart_set_timeframe: "chart_set_timeframe",
   chart_set_visible_range: "chart_set_visible_range", replay_start: "replay_start", ui_evaluate: "ui_evaluate",
   capture_screenshot: "capture_screenshot", tv_health_check: "tv_health_check" });
@@ -88,8 +96,7 @@ export class OosTradingViewCapture {
     for (let attempt = 0; attempt < 20; attempt++) {
       const obs = await this.observation();
       const at = typeof obs.at === "number" ? obs.at * (obs.at < 1e12 ? 1000 : 1) : Date.parse(obs.at);
-      if (obs.replay === true && obs.autoplay === false && at === Date.parse(this.cutoff)
-        && Number.isFinite(obs.last_bar_time) && obs.last_bar_time * 1000 <= at) return { ...obs, visible_as_of: new Date(at).toISOString() };
+      if (isProvenCutoff(obs, this.cutoff)) return { ...obs, visible_as_of: new Date(at).toISOString() };
       await wait(500);
     }
     throw fail("TV_CUTOFF_NOT_PROVEN");

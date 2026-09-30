@@ -5,6 +5,12 @@ non-superuser role `desk_oos`. The existing Caddy gateway adds only `/oos/*`
 and the path-qualified OAuth discovery endpoints. No stable trading service
 is replaced. The OOS process has no broker credentials or broker tool.
 
+The available stable-desk PostgreSQL roles have neither CREATEDB nor CREATEROLE.
+For VPS isolation, run `Install-OosPostgres.ps1` first. It creates a separate
+`DeskOosPostgres` cluster on loopback 5434 with the already installed PG16
+binaries, a 32 MB shared-buffer allocation and a private bootstrap credential.
+It does not change authentication, roles, services or tables on port 5432.
+
 ## Release
 
 Use branch `feature/oos-batch-mcp-v1`; never merge automatically. Package
@@ -50,6 +56,17 @@ The manifest v2 digest is SHA-256 of pretty-printed UTF-8 JSON plus LF, omitting
 only `manifest_sha256`. A separate `manifest_file_sha256` covers the complete
 file. PNG bytes are independently hashed. Delayed source symbols are recorded
 explicitly, not relabelled as an undelayed feed.
+
+TradingView uses an exclusive cutoff: selecting 09:00 yields `currentDate`
+08:59:59 Paris. The bridge accepts exactly that one-second difference, not a
+generic stale-data tolerance, and rejects autoplay or any bar beyond the bound.
+
+Acceptance on 2026-09-30: the July 30 day reached `PREMARKET_READY`, 8/8 PNGs,
+no plan and no replay execution. Manifest digest:
+`c63804ccf650220c7bf749451b27192860ca8609002c33470ede84851e7997cc`.
+The real remote SDK received eight ImageContent blocks whose PNG SHA-256 values
+matched the persisted manifest. Authenticated mobile UI at 390×844 rendered
+all eight images, with no broken images or document-width overflow.
 
 ## Syntax provenance
 

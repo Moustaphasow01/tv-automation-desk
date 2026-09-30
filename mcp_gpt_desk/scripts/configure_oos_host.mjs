@@ -12,13 +12,17 @@ const parseEnv = text => Object.fromEntries(text.split(/\r?\n/).filter(line => /
 }));
 const maintenance = parseEnv(await readFile("C:/ProgramData/DeskFutures/config/maintenance.env", "utf8"));
 const desk = parseEnv(await readFile("C:/ProgramData/DeskFutures/config/desk.env", "utf8"));
+let bootstrap = {};
+try { bootstrap = parseEnv(await readFile(path.join(root, "config/bootstrap.env"), "utf8")); }
+catch (error) { if (error.code !== "ENOENT") throw error; }
 await mkdir(path.join(root, "config"), { recursive: true });
 const envPath = path.join(root, "config/oos.env");
 let existing = null;
 try { existing = parseEnv(await readFile(envPath, "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; }
 const password = existing ? decodeURIComponent(new URL(existing.OOS_DATABASE_URL).password) : randomBytes(32).toString("hex");
 if (!/^[a-f0-9]{64}$/.test(password)) throw new Error("OOS_PASSWORD_FORMAT_INVALID");
-const admin = new pg.Pool({ connectionString: maintenance.DESK_DB_RESTORE_URL || maintenance.DESK_DB_MIGRATION_URL, max: 1 });
+const adminUrl = bootstrap.OOS_BOOTSTRAP_DATABASE_URL || maintenance.DESK_DB_MIGRATION_URL;
+const admin = new pg.Pool({ connectionString: adminUrl, max: 1 });
 try {
   const role = await admin.query("SELECT rolname FROM pg_roles WHERE rolname='desk_oos'");
   if (!role.rowCount) await admin.query(`CREATE ROLE desk_oos LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '${password}'`);
@@ -26,7 +30,7 @@ try {
   if (!db.rowCount) await admin.query("CREATE DATABASE desk_oos OWNER desk_oos");
   await admin.query("REVOKE ALL ON DATABASE desk_oos FROM PUBLIC");
 } finally { await admin.end(); }
-const databaseUrl = `postgresql://desk_oos:${password}@127.0.0.1:5432/desk_oos`;
+const databaseUrl = `postgresql://desk_oos:${password}@127.0.0.1:${new URL(adminUrl).port || "5432"}/desk_oos`;
 const pool = new pg.Pool({ connectionString: databaseUrl });
 try {
   for (const migration of ["070_oos_batch_mcp_v1.sql", "071_oos_batch_remote_mcp.sql"]) {
