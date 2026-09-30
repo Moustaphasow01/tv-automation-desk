@@ -44,7 +44,7 @@ $marker = '# DESK_OOS_ISOLATED_ROUTE'
 if (!$caddyOriginal.Contains($marker)) {
   $route = @"
     # DESK_OOS_ISOLATED_ROUTE
-    @oos path /oos /oos/* /.well-known/oauth-protected-resource/oos /.well-known/oauth-authorization-server/oos
+    @oos path /oos /oos/* /.well-known/oauth-protected-resource/oos /.well-known/oauth-protected-resource/oos/mcp /.well-known/oauth-authorization-server/oos
     handle @oos {
         reverse_proxy 127.0.0.1:8795 {
             flush_interval -1

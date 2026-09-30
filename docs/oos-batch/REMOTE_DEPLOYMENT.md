@@ -99,8 +99,15 @@ MCP: `https://vps-6d6969db.vps.ovh.net/oos/mcp`
 
 OAuth issuer: `https://vps-6d6969db.vps.ovh.net/oos`
 
-Discovery: `/oos/.well-known/oauth-authorization-server` and
-`/oos/.well-known/oauth-protected-resource`. Scopes: `desk.read desk.write`.
+Protected resource and token audience: `https://vps-6d6969db.vps.ovh.net/oos/mcp`.
+Canonical discovery: `/.well-known/oauth-authorization-server/oos` and
+`/.well-known/oauth-protected-resource/oos/mcp`. The old `/oos/.well-known/*`
+and `/.well-known/oauth-protected-resource/oos` URLs remain aliases.
+Scopes: `desk.read desk.write`. Issuer is exactly the value above, without a
+trailing slash; successful and denied authorization redirects include `iss`.
+The authorization code, access token, refresh flow and token response preserve
+the MCP `resource`; mismatched audiences are rejected, never normalized silently.
+Previously issued tokens with audience `/oos` require reconnecting with OAuth.
 Authorize with the existing desk operator PIN on the OOS consent screen;
 the OOS signing secret and token audience are distinct from the stable desk.
 Never put PINs or bearer tokens in URLs, screenshots, commits or reports.
@@ -111,6 +118,30 @@ The probe uses a dedicated table, no day/plan/runtime foreign keys, and repeated
 values preserve the original timestamp. A successful SDK test does NOT prove
 that a particular ChatGPT subscription permits write actions. Record any
 ChatGPT-side refusal verbatim; do not weaken backend validation to bypass it.
+
+### OAuth-only compatibility update
+
+Use `deploy/windows/Update-OosOAuth.ps1 -PatchRoot <extracted-patch> -Revision <git-sha>`.
+It copies the existing release, replaces only OAuth/HTTP source files, shares
+unchanged dependencies, updates the one OOS Caddy matcher, and restarts only
+`DeskOos`. It does not run `Install-Oos.ps1`, migrations, PostgreSQL configuration,
+TradingView commands, capture, plan or replay actions. The release setting is
+the only OOS JSON configuration value changed. Rollback XML/config/Caddy bytes
+are retained in `config/oauth-rollback-<git-sha>`; automatic rollback runs on failure.
+
+From a machine outside the VPS, set `OOS_PUBLIC_URL` and provide the operator PIN
+securely in `DESK_OAUTH_ADMIN_PIN`, then run:
+
+```sh
+node mcp_gpt_desk/scripts/verify_oos_oauth.mjs --inspector
+```
+
+The acceptance script checks SDK discovery, DCR, PKCE, issuer/audience binding,
+single-use codes, refresh and tools/list. Inspector 2.8.0 scans the same endpoint
+using the actual OAuth access token, with a temporary mode-0600 configuration
+removed afterwards. No MCP tool is invoked and no plan/probe/replay is written.
+The script never prints credentials. A passing external Inspector scan still
+does not substitute for a real reconnect in the user's ChatGPT account.
 
 ## Remaining certification boundary
 

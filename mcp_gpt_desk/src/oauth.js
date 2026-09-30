@@ -8,10 +8,12 @@ const AUTH_CODE_TTL_SECONDS = 5 * 60;
 const consumedAuthorizationCodes = new Map();
 
 export function oauthConfig(baseUrl) {
-  const issuer = canonicalBaseUrl(baseUrl);
+  // A trusted host profile may separate the issuer from the protected resource.
+  // String callers retain the existing desk OAuth identity and discovery URLs.
+  const issuer = canonicalBaseUrl(typeof baseUrl === "object" ? baseUrl.issuer : baseUrl);
   return {
     issuer,
-    resource: issuer,
+    resource: typeof baseUrl === "object" ? baseUrl.resource : issuer,
     protectedResourcePath: "/.well-known/oauth-protected-resource",
     authorizationServerPath: "/.well-known/oauth-authorization-server",
     authorizationEndpoint: `${issuer}/oauth/authorize`,
@@ -138,6 +140,10 @@ export function createAuthorizationRedirect(baseUrl, params) {
   return redirect.toString();
 }
 
+export function validateOAuthAuthorizationRequest(baseUrl, params) {
+  validateAuthorizeParams(params, oauthConfig(baseUrl));
+}
+
 export function exchangeAuthorizationCode(baseUrl, form) {
   const cfg = oauthConfig(baseUrl);
   if (form.grant_type !== "authorization_code") {
@@ -168,6 +174,9 @@ export function exchangeRefreshToken(baseUrl, form) {
     throw new OAuthError("unsupported_grant_type", "Only refresh_token is supported here.");
   }
   const payload = verifySignedToken(form.refresh_token, { typ: "refresh_token", aud: "oauth-token", issuer: cfg.issuer });
+  if (form.resource && form.resource !== payload.resource) {
+    throw new OAuthError("invalid_target", "resource does not match refresh token.");
+  }
   if (form.client_id && form.client_id !== payload.client_id) {
     throw new OAuthError("invalid_grant", "client_id does not match refresh token.");
   }
@@ -189,7 +198,7 @@ export function verifyOAuthAccessToken(baseUrl, token) {
   const cfg = oauthConfig(baseUrl);
   const payload = verifySignedToken(token, { typ: "access_token", issuer: cfg.issuer });
   const resource = payload.resource || payload.aud;
-  if (resource !== cfg.resource) {
+  if (resource !== cfg.resource || payload.aud !== cfg.resource) {
     throw new OAuthError("invalid_token", "Token audience/resource does not match this MCP server.");
   }
   return {

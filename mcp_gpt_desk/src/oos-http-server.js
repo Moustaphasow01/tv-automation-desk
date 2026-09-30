@@ -18,7 +18,7 @@ export function createOosHttpServer({ runtime, pool, config, log = console.log }
     res.on("finish", () => log(JSON.stringify({ event: "oos.http", method: req.method, status: res.statusCode, duration_ms: Date.now() - start })));
     try { await route({ req, res, runtime, pool, config, auth, portal }); }
     catch (error) {
-      if (!res.headersSent) sendJson(res, error.status || error.statusCode || 400, { ok: false, code: error.code || "OOS_REQUEST_FAILED" });
+      if (!res.headersSent) sendRequestError({ req, res, error, auth });
       else res.end();
     }
   });
@@ -36,7 +36,9 @@ async function route(context) {
       syntax_validator_configured: !!config.syntax_validator, tradingview_configured: !!config.tradingview,
       replay_enabled: config.replay_enabled === true }); return;
   }
-  const metadataPath = pathname.replace(/^(\/\.well-known\/oauth-(?:protected-resource|authorization-server))\/oos$/, "$1");
+  const metadataPath = pathname
+    .replace(/^(\/\.well-known\/oauth-protected-resource)(?:\/oos(?:\/mcp)?|\/mcp)$/, "$1")
+    .replace(/^(\/\.well-known\/oauth-authorization-server)\/oos$/, "$1");
   if (await auth.route(req, res, metadataPath, Object.fromEntries(url.searchParams))) return;
   const identity = auth.authenticate(req);
   if (pathname === "/mcp") {
@@ -52,6 +54,18 @@ async function route(context) {
   }
   if (isOosPath(pathname)) { await front({ ...context, pathname, identity, url }); return; }
   await serveUi(req, res, config.front_root, pathname);
+}
+
+function sendRequestError({ req, res, error, auth }) {
+  const pathname = new URL(req.url, auth.baseUrl).pathname;
+  if (pathname === "/oos/mcp" && error.code === "invalid_token") {
+    sendJson(res, 401, { error: "invalid_token" }, { "www-authenticate": auth.challenge(error) }); return;
+  }
+  if (pathname.startsWith("/oos/oauth/")) {
+    sendJson(res, error.status || 400, { error: error.code || "server_error",
+      ...(pathname === "/oos/oauth/authorize" ? { iss: auth.baseUrl } : {}) }); return;
+  }
+  sendJson(res, error.status || error.statusCode || 400, { ok: false, code: error.code || "OOS_REQUEST_FAILED" });
 }
 
 async function mcp({ req, res, portal, runtime, identity, config }) {

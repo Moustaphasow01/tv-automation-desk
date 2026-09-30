@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { protectedResourceMetadata, authorizationServerMetadata, createOAuthClientRegistration,
   renderAuthorizePage, createAuthorizationRedirect, exchangeAuthorizationCode, exchangeRefreshToken,
-  verifyOAuthAccessToken, validateDeskPin, buildWwwAuthenticate } from "./oauth.js";
+  verifyOAuthAccessToken, validateDeskPin, validateOAuthAuthorizationRequest } from "./oauth.js";
 import { readBody, readJsonBody, sendJson, sendHtml } from "./oos-http-io.js";
 
 const SCOPES = ["desk.read", "desk.write"];
@@ -10,28 +10,36 @@ const fail = code => Object.assign(new Error(code), { code, status: 400 });
 /** Reuses authentication primitives only, with a separate audience/secret and no legacy tool profiles. */
 export class OosOAuth {
   constructor({ baseUrl, pool, operatorToken }) {
+    baseUrl = baseUrl.replace(/\/+$/, "");
     Object.assign(this, { baseUrl, pool, operatorToken });
+    this.profile = { issuer: baseUrl, resource: `${baseUrl}/mcp` };
+    const resource = new URL(this.profile.resource);
+    this.metadataUrl = `${resource.origin}/.well-known/oauth-protected-resource${resource.pathname}`;
     this.sessions = new Map(); this.attempts = new Map();
   }
   authenticate(req) {
     const token = /^Bearer (.+)$/.exec(req.headers.authorization || "")?.[1];
     if (token && equal(token, this.operatorToken)) return { ok: true, kind: "oos_operator", scopes: SCOPES };
     if (token) {
-      const auth = verifyOAuthAccessToken(this.baseUrl, token);
+      const auth = verifyOAuthAccessToken(this.profile, token);
       return { ...auth, ok: true, scopes: auth.scopes.filter(scope => SCOPES.includes(scope)) };
     }
     const session = /(?:^|;\s*)oos_session=([^;]+)/.exec(req.headers.cookie || "")?.[1];
     if (session && this.sessions.get(session) > Date.now()) return { ok: true, kind: "oos_session", scopes: SCOPES };
     return null;
   }
-  challenge() { return buildWwwAuthenticate(this.baseUrl, SCOPES); }
+  challenge(error) {
+    const challenge = `Bearer resource_metadata="${this.metadataUrl}", scope="${SCOPES.join(" ")}"`;
+    return error ? `${challenge}, error="invalid_token", error_description="Invalid or expired OAuth token"` : challenge;
+  }
   async route(req, res, pathname, query) {
     const resource = "/.well-known/oauth-protected-resource";
     if (req.method === "GET" && pathname === resource) {
-      sendJson(res, 200, { ...protectedResourceMetadata(this.baseUrl), scopes_supported: SCOPES }); return true;
+      sendJson(res, 200, { ...protectedResourceMetadata(this.profile), scopes_supported: SCOPES }); return true;
     }
     if (req.method === "GET" && pathname === "/.well-known/oauth-authorization-server") {
-      sendJson(res, 200, { ...authorizationServerMetadata(this.baseUrl), scopes_supported: SCOPES }); return true;
+      sendJson(res, 200, { ...authorizationServerMetadata(this.profile), scopes_supported: SCOPES,
+        authorization_response_iss_parameter_supported: true }); return true;
     }
     if (req.method === "POST" && pathname === "/oauth/register") {
       this.rateLimit(req);
@@ -53,29 +61,45 @@ export class OosOAuth {
   async authorize(req, res, query) {
     const params = req.method === "POST" ? Object.fromEntries(new URLSearchParams(await readBody(req, 16000))) : query;
     params.scope ||= SCOPES.join(" "); checkScopes(params.scope);
+    params.resource ||= this.profile.resource;
+    validateOAuthAuthorizationRequest(this.profile, params);
     if (req.method === "GET") {
-      const html = renderAuthorizePage(this.baseUrl, params).replaceAll("Desk Futures Data", "Desk OOS")
+      const html = renderAuthorizePage(this.profile, params).replaceAll("Desk Futures Data", "Desk OOS")
         .replace('action="/oauth/authorize"', `action="${new URL(this.baseUrl).pathname}/oauth/authorize"`);
       sendHtml(res, html); return;
     }
-    this.rateLimit(req); validateDeskPin(params.pin);
-    res.writeHead(303, { location: createAuthorizationRedirect(this.baseUrl, params), "cache-control": "no-store" }); res.end();
+    this.rateLimit(req);
+    let redirect;
+    try {
+      validateDeskPin(params.pin);
+      redirect = new URL(createAuthorizationRedirect(this.profile, params));
+    } catch (error) {
+      if (error.code !== "access_denied") throw error;
+      // Only a previously validated callback can receive an OAuth error redirect.
+      redirect = new URL(params.redirect_uri);
+      redirect.searchParams.set("error", "access_denied");
+      if (params.state) redirect.searchParams.set("state", params.state);
+    }
+    redirect.searchParams.set("iss", this.baseUrl);
+    res.writeHead(303, { location: redirect.toString(), "cache-control": "no-store" }); res.end();
   }
   async token(req, res) {
     this.rateLimit(req);
     const form = Object.fromEntries(new URLSearchParams(await readBody(req, 16000)));
-    if (form.resource && form.resource !== this.baseUrl) throw fail("invalid_target");
+    if (form.resource && form.resource !== this.profile.resource) throw fail("invalid_target");
     if (form.scope) checkScopes(form.scope);
     let tokens;
     if (form.grant_type === "authorization_code") {
       if (!form.client_id || !form.redirect_uri || !form.code_verifier) throw fail("invalid_request");
-      tokens = exchangeAuthorizationCode(this.baseUrl, form);
+      tokens = exchangeAuthorizationCode(this.profile, form);
       const consumed = await this.pool.query(`INSERT INTO oos_batch_oauth_codes (code_hash) VALUES ($1)
         ON CONFLICT DO NOTHING RETURNING code_hash`, [createHash("sha256").update(form.code).digest("hex")]);
       if (!consumed.rowCount) throw fail("invalid_grant");
-    } else if (form.grant_type === "refresh_token") tokens = exchangeRefreshToken(this.baseUrl, form);
+    } else if (form.grant_type === "refresh_token") tokens = exchangeRefreshToken(this.profile, form);
     else throw fail("unsupported_grant_type");
-    checkScopes(tokens.scope); sendJson(res, 200, tokens);
+    checkScopes(tokens.scope);
+    verifyOAuthAccessToken(this.profile, tokens.access_token);
+    sendJson(res, 200, { ...tokens, resource: this.profile.resource, iss: this.baseUrl });
   }
   async login(req, res) {
     if (req.method === "GET") { sendHtml(res, loginPage()); return; }
