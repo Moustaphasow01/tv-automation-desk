@@ -1,4 +1,5 @@
 import http from "node:http";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -11,13 +12,22 @@ import { sendJson, readJsonBody } from "./oos-http-io.js";
 export function createOosHttpServer({ runtime, pool, config, log = console.log }) {
   runtime.allowedActions = config.replay_enabled === true ? ["capture", "retry-capture", "replay", "retry"] : ["capture", "retry-capture"];
   runtime.technicalSmokeDates = config.technical_smoke_dates || [];
-  const auth = new OosOAuth({ baseUrl: config.public_url, pool, operatorToken: process.env.OOS_OPERATOR_TOKEN });
+  const auth = new OosOAuth({ baseUrl: config.public_url, pool, operatorToken: process.env.OOS_OPERATOR_TOKEN,
+    clientsDirectory: config.archive_root ? path.join(config.archive_root, "auth", "oauth-clients") : undefined });
   const portal = new OosPortal({ runtime, batchId: config.batch_id, symbol: config.symbol, cutoffTime: config.cutoff_time });
   const server = http.createServer(async (req, res) => {
     const start = Date.now();
-    res.on("finish", () => log(JSON.stringify({ event: "oos.http", method: req.method, status: res.statusCode, duration_ms: Date.now() - start })));
+    const correlationId = randomUUID(); res.setHeader("x-request-id", correlationId);
+    const endpoint = new URL(req.url, config.public_url).pathname;
+    const stage = /^\/oos\/oauth\/(authorize|token|register)$/.exec(endpoint)?.[1] || (endpoint === "/oos/mcp" ? "resource" : "http");
+    let errorCode, errorField;
+    res.on("finish", () => log(JSON.stringify({ event: "oos.http", correlation_id: correlationId, stage,
+      method: req.method, status: res.statusCode, error: errorCode, error_field: errorField, duration_ms: Date.now() - start })));
     try { await route({ req, res, runtime, pool, config, auth, portal }); }
     catch (error) {
+      errorCode = /^[A-Za-z0-9_]{1,80}$/.test(error.code || "") ? error.code : "server_error";
+      errorField = ["redirect_uri", "code_challenge", "code_verifier"].includes(error.field) ? error.field
+        : ({ invalid_scope: "scope", invalid_target: "resource", invalid_client: "client_id", invalid_redirect_uri: "redirect_uri" })[errorCode];
       if (!res.headersSent) sendRequestError({ req, res, error, auth });
       else res.end();
     }

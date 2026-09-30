@@ -21,7 +21,8 @@ async function fixture(t) {
     assert.match(sql, /INSERT INTO oos_batch_oauth_codes/);
     const rowCount = codes.has(args[0]) ? 0 : 1; codes.add(args[0]); return { rowCount };
   } };
-  const server = createOosHttpServer({ runtime: {}, pool, config: { public_url: issuer, replay_enabled: false }, log: () => {} });
+  const logs = [];
+  const server = createOosHttpServer({ runtime: {}, pool, config: { public_url: issuer, replay_enabled: false }, log: value => logs.push(JSON.parse(value)) });
   server.listen(0, "127.0.0.1"); await once(server, "listening");
   t.after(async () => {
     server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
@@ -35,6 +36,9 @@ async function fixture(t) {
   const params = { response_type: "code", client_id: "TEST_ONLY-client", redirect_uri: callback,
     code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256",
     resource, scope: "desk.read desk.write", state: "TEST_ONLY-state" };
+  const registration = await request("/oos/oauth/register", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ redirect_uris: [callback], scope: params.scope }) });
+  params.client_id = (await registration.json()).client_id;
   const authorize = async (extra = {}) => post("authorize", { ...params, pin, ...extra });
   const grant = async () => {
     const res = await authorize(); assert.equal(res.status, 303);
@@ -43,7 +47,7 @@ async function fixture(t) {
     return { grant_type: "authorization_code", client_id: params.client_id, redirect_uri: callback, resource,
       code: location.searchParams.get("code"), code_verifier: verifier };
   };
-  return { request, post, params, authorize, grant, origin };
+  return { request, post, params, authorize, grant, origin, logs };
 }
 
 test("OOS standard path-aware metadata and all legacy aliases expose the same identity", async t => {
@@ -164,4 +168,24 @@ test("legacy string OAuth profile retains original issuer/resource/metadata; OOS
     redirect_uri: callback, code_verifier: verifier, resource: issuer });
   const res = await f.request("/oos/mcp", { headers: { authorization: `Bearer ${pair.access_token}` } });
   assert.equal(res.status, 401);
+});
+
+test("OOS binds registered callback/scope and records only sanitized OAuth errors", async t => {
+  const f = await fixture(t);
+  const invalid = await f.authorize({ redirect_uri: "https://chatgpt.com/connector/oauth/unregistered" });
+  assert.equal(invalid.status, 400); assert.equal(invalid.headers.has("location"), false);
+  assert.ok(invalid.headers.get("x-request-id"));
+  const registration = await f.request("/oos/oauth/register", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ redirect_uris: ["http://127.0.0.1:40643/callback"], scope: "desk.read" }) });
+  const client = await registration.json();
+  const denied = await f.authorize({ client_id: client.client_id, redirect_uri: client.redirect_uris[0] });
+  assert.equal(denied.status, 400); assert.equal((await denied.json()).error, "invalid_scope");
+  const allowed = await f.authorize({ client_id: client.client_id, redirect_uri: client.redirect_uris[0], scope: "desk.read" });
+  assert.equal(allowed.status, 303);
+  const badPkce = await f.authorize({ code_challenge: "short" }); assert.equal(badPkce.status, 400);
+  const unknown = await f.authorize({ client_id: "unknown" }); assert.equal(unknown.status, 400);
+  assert.equal((await unknown.json()).error, "invalid_client");
+  assert.ok(f.logs.some(x => x.stage === "authorize" && x.error === "invalid_scope"));
+  const serialized = JSON.stringify(f.logs);
+  for (const sensitive of [pin, verifier, f.params.state, f.params.code_challenge, client.client_id]) assert.ok(!serialized.includes(sensitive));
 });

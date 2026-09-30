@@ -14,6 +14,7 @@ export function oauthConfig(baseUrl) {
   return {
     issuer,
     resource: typeof baseUrl === "object" ? baseUrl.resource : issuer,
+    allowedRedirectUris: typeof baseUrl === "object" ? baseUrl.allowedRedirectUris : undefined,
     protectedResourcePath: "/.well-known/oauth-protected-resource",
     authorizationServerPath: "/.well-known/oauth-authorization-server",
     authorizationEndpoint: `${issuer}/oauth/authorize`,
@@ -281,7 +282,7 @@ function validateAuthorizeParams(params, cfg) {
   if (!params.client_id) {
     throw new OAuthError("invalid_request", "client_id is required.");
   }
-  if (!params.redirect_uri || !isAllowedRedirectUri(params.redirect_uri)) {
+  if (!params.redirect_uri || !(cfg.allowedRedirectUris ? cfg.allowedRedirectUris.includes(params.redirect_uri) : isAllowedRedirectUri(params.redirect_uri))) {
     throw new OAuthError("invalid_request", "redirect_uri is not allowed.");
   }
   if (!params.code_challenge || params.code_challenge_method !== "S256") {

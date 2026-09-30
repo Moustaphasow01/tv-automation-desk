@@ -1,18 +1,20 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { protectedResourceMetadata, authorizationServerMetadata, createOAuthClientRegistration,
+import { protectedResourceMetadata, authorizationServerMetadata,
   renderAuthorizePage, createAuthorizationRedirect, exchangeAuthorizationCode, exchangeRefreshToken,
   verifyOAuthAccessToken, validateDeskPin, validateOAuthAuthorizationRequest } from "./oauth.js";
 import { readBody, readJsonBody, sendJson, sendHtml } from "./oos-http-io.js";
+import { OosOAuthClients } from "./oos-oauth-clients.js";
 
 const SCOPES = ["desk.read", "desk.write"];
-const fail = code => Object.assign(new Error(code), { code, status: 400 });
+const fail = (code, field) => Object.assign(new Error(code), { code, field, status: 400 });
 
 /** Reuses authentication primitives only, with a separate audience/secret and no legacy tool profiles. */
 export class OosOAuth {
-  constructor({ baseUrl, pool, operatorToken }) {
+  constructor({ baseUrl, pool, operatorToken, clientsDirectory }) {
     baseUrl = baseUrl.replace(/\/+$/, "");
     Object.assign(this, { baseUrl, pool, operatorToken });
     this.profile = { issuer: baseUrl, resource: `${baseUrl}/mcp` };
+    this.clients = new OosOAuthClients({ issuer: baseUrl, directory: clientsDirectory });
     const resource = new URL(this.profile.resource);
     this.metadataUrl = `${resource.origin}/.well-known/oauth-protected-resource${resource.pathname}`;
     this.sessions = new Map(); this.attempts = new Map();
@@ -45,7 +47,7 @@ export class OosOAuth {
       this.rateLimit(req);
       const metadata = await readJsonBody(req, 16000);
       checkScopes(metadata.scope || SCOPES.join(" "));
-      sendJson(res, 201, createOAuthClientRegistration(this.baseUrl, { ...metadata, scope: SCOPES.join(" ") })); return true;
+      sendJson(res, 201, await this.clients.register(metadata)); return true;
     }
     if (pathname === "/oauth/authorize" && ["GET", "POST"].includes(req.method)) {
       await this.authorize(req, res, query); return true;
@@ -60,9 +62,14 @@ export class OosOAuth {
   }
   async authorize(req, res, query) {
     const params = req.method === "POST" ? Object.fromEntries(new URLSearchParams(await readBody(req, 16000))) : query;
-    params.scope ||= SCOPES.join(" "); checkScopes(params.scope);
     params.resource ||= this.profile.resource;
-    validateOAuthAuthorizationRequest(this.profile, params);
+    const client = await this.clients.get(params.client_id);
+    params.scope ||= client.scope; checkScopes(params.scope);
+    const profile = { ...this.profile, allowedRedirectUris: client.redirect_uris };
+    if (!client.redirect_uris.includes(params.redirect_uri)) throw fail("invalid_request", "redirect_uri");
+    if (!String(params.scope).split(/\s+/).every(scope => client.scope.split(/\s+/).includes(scope))) throw fail("invalid_scope");
+    if (!/^[A-Za-z0-9_-]{43}$/.test(params.code_challenge || "")) throw fail("invalid_request", "code_challenge");
+    validateOAuthAuthorizationRequest(profile, params);
     if (req.method === "GET") {
       const html = renderAuthorizePage(this.profile, params).replaceAll("Desk Futures Data", "Desk OOS")
         .replace('action="/oauth/authorize"', `action="${new URL(this.baseUrl).pathname}/oauth/authorize"`);
@@ -72,7 +79,7 @@ export class OosOAuth {
     let redirect;
     try {
       validateDeskPin(params.pin);
-      redirect = new URL(createAuthorizationRedirect(this.profile, params));
+      redirect = new URL(createAuthorizationRedirect(profile, params));
     } catch (error) {
       if (error.code !== "access_denied") throw error;
       // Only a previously validated callback can receive an OAuth error redirect.
@@ -88,9 +95,13 @@ export class OosOAuth {
     const form = Object.fromEntries(new URLSearchParams(await readBody(req, 16000)));
     if (form.resource && form.resource !== this.profile.resource) throw fail("invalid_target");
     if (form.scope) checkScopes(form.scope);
+    const client = await this.clients.get(form.client_id);
+    if (form.client_secret) throw fail("invalid_client");
     let tokens;
     if (form.grant_type === "authorization_code") {
       if (!form.client_id || !form.redirect_uri || !form.code_verifier) throw fail("invalid_request");
+      if (!client.redirect_uris.includes(form.redirect_uri)) throw fail("invalid_grant", "redirect_uri");
+      if (!/^[A-Za-z0-9._~-]{43,128}$/.test(form.code_verifier)) throw fail("invalid_grant", "code_verifier");
       tokens = exchangeAuthorizationCode(this.profile, form);
       const consumed = await this.pool.query(`INSERT INTO oos_batch_oauth_codes (code_hash) VALUES ($1)
         ON CONFLICT DO NOTHING RETURNING code_hash`, [createHash("sha256").update(form.code).digest("hex")]);
@@ -98,6 +109,7 @@ export class OosOAuth {
     } else if (form.grant_type === "refresh_token") tokens = exchangeRefreshToken(this.profile, form);
     else throw fail("unsupported_grant_type");
     checkScopes(tokens.scope);
+    if (form.scope && !form.scope.split(/\s+/).every(scope => tokens.scope.split(/\s+/).includes(scope))) throw fail("invalid_scope");
     verifyOAuthAccessToken(this.profile, tokens.access_token);
     sendJson(res, 200, { ...tokens, resource: this.profile.resource, iss: this.baseUrl });
   }

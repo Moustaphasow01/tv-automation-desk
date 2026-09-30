@@ -49,12 +49,15 @@ try {
   await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
     requestInit: { headers: { authorization: `Bearer ${tokens.access_token}` } } }));
   assert.equal((await client.listTools()).tools.length, 10);
+  await verifyProbeAndPremarket(client);
+  await verifyReadOnlyGrant();
   const refresh = await fetch(`${base}/oauth/token`, { method: "POST", body: new URLSearchParams({
     grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id, resource }) });
   assert.equal(refresh.status, 200);
   assert.equal(JSON.parse(Buffer.from((await refresh.json()).access_token.split(".")[1], "base64url")).aud, resource);
   console.log(JSON.stringify({ discovery: "PASS", oauth_pkce: "PASS", issuer_exact: "PASS", resource_audience: "PASS",
-    code_reuse_denied: "PASS", tools_list: "10/10", refresh: "PASS", tool_calls: 0, chatgpt_account_test: "NOT_RUN" }));
+    code_reuse_denied: "PASS", tools_list: "10/10", refresh: "PASS", desk_read: "PASS", desk_write: "PASS",
+    write_probe: "PASS", premarket_bundle: "PASS", readonly_write_denied: "PASS", chatgpt_account_test: "NOT_RUN" }));
   if (process.argv.includes("--inspector")) await inspectTools(tokens.access_token);
 } finally { await client.close(); }
 
@@ -64,9 +67,11 @@ async function inspectTools(token) {
   try {
     await writeFile(file, JSON.stringify({ mcpServers: { "Desk OOS": { type: "http", url: resource,
       headers: { Authorization: `Bearer ${token}` } } } }), { mode: 0o600 });
+    const env = { ...process.env, MCP_INSPECTOR_SECRET_STORE: "memory" };
+    for (const name of ["DESK_OAUTH_ADMIN_PIN", "OOS_OPERATOR_TOKEN", "DESK_OAUTH_TOKEN_SECRET"]) delete env[name];
     const { stdout, stderr } = await promisify(execFile)("npx", ["--yes", "@modelcontextprotocol/inspector@2.8.0", "--cli",
       "--config", file, "--server", "Desk OOS", "--method", "tools/list", "--format", "json", "--stored-auth-only"],
-    { timeout: 60000, maxBuffer: 1024 * 1024, env: { ...process.env, MCP_INSPECTOR_SECRET_STORE: "memory" } });
+    { timeout: 60000, maxBuffer: 1024 * 1024, env });
     assert.equal(stdout.includes(token) || stderr.includes(token), false, "Inspector output must not contain credentials");
     const result = JSON.parse(stdout); assert.equal(result.result.tools.length, 10);
     console.log("MCP_INSPECTOR_VERSION=2.8.0\nMCP_INSPECTOR_EXIT_CODE=0\nMCP_INSPECTOR_STDOUT=");
@@ -76,4 +81,45 @@ async function inspectTools(token) {
     // Child errors may contain request details; never dump the raw error object.
     throw new Error(`OOS_INSPECTOR_FAILED (${error.code || error.name})`);
   } finally { await unlink(file).catch(() => {}); await rmdir(directory); }
+}
+
+async function verifyProbeAndPremarket(client) {
+  const value = "chatgpt-write-test-001";
+  const before = await client.callTool({ name: "get_write_probe", arguments: {} }); assert.ok(!before.isError);
+  const write = await client.callTool({ name: "write_probe", arguments: { value } }); assert.ok(!write.isError);
+  const after = await client.callTool({ name: "get_write_probe", arguments: {} }); assert.ok(!after.isError);
+  assert.equal(after.structuredContent.value, value);
+  const repeat = await client.callTool({ name: "write_probe", arguments: { value } }); assert.ok(!repeat.isError);
+  assert.equal(repeat.structuredContent.written_at, after.structuredContent.written_at);
+  const bundle = await client.callTool({ name: "get_premarket_bundle", arguments: { date: "2026-07-30" } });
+  assert.ok(!bundle.isError); assert.equal(bundle.content.filter(x => x.type === "image").length, 8);
+  for (let i = 0; i < bundle.content.length; i++) {
+    if (bundle.content[i].type !== "image") continue;
+    const metadata = JSON.parse(bundle.content[i - 1].text);
+    assert.equal(createHash("sha256").update(Buffer.from(bundle.content[i].data, "base64")).digest("hex"), metadata.sha256);
+  }
+  console.log(JSON.stringify({ probe_sequence: "PASS", probe_idempotence: "PASS", date: "2026-07-30",
+    captures: "8/8", capture_hashes: "PASS", replay_requested: false }));
+}
+
+async function verifyReadOnlyGrant() {
+  const redirect_uri = "http://127.0.0.1:40643/callback";
+  const registration = await fetch(metadata.registration_endpoint, { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ redirect_uris: [redirect_uri], scope: "desk.read", token_endpoint_auth_method: "none" }) });
+  assert.equal(registration.status, 201); const registered = await registration.json(); assert.equal(registered.scope, "desk.read");
+  const authorization = await fetch(metadata.authorization_endpoint, { method: "POST", redirect: "manual",
+    body: new URLSearchParams({ ...params, client_id: registered.client_id, redirect_uri, scope: "desk.read", pin: process.env.DESK_OAUTH_ADMIN_PIN }) });
+  assert.equal(authorization.status, 303); const callback = new URL(authorization.headers.get("location"));
+  assert.equal(callback.searchParams.get("iss"), base); assert.equal(callback.searchParams.get("state"), state);
+  const exchanged = await fetch(metadata.token_endpoint, { method: "POST", body: new URLSearchParams({ ...form,
+    client_id: registered.client_id, redirect_uri, code: callback.searchParams.get("code") }) });
+  assert.equal(exchanged.status, 200); const readTokens = await exchanged.json(); assert.equal(readTokens.scope, "desk.read");
+  const reader = new Client({ name: "OOS external read-only client", version: "1" });
+  try {
+    await reader.connect(new StreamableHTTPClientTransport(new URL(resource), {
+      requestInit: { headers: { authorization: `Bearer ${readTokens.access_token}` } } }));
+    assert.ok(!(await reader.callTool({ name: "get_write_probe", arguments: {} })).isError);
+    const denied = await reader.callTool({ name: "write_probe", arguments: { value: "MUST_NOT_BE_WRITTEN" } });
+    assert.equal(denied.isError, true); assert.match(denied.content[0].text, /OOS_SCOPE_REQUIRED/);
+  } finally { await reader.close(); }
 }

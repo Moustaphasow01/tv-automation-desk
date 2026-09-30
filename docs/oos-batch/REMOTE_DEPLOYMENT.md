@@ -155,3 +155,17 @@ mock evidence. A later external plan and explicit replay acceptance are needed.
 Rollback: stop only `DeskOos`; restore the previous OOS release XML or remove
 the marked Caddy route using `Caddyfile.before-oos`. Validate and reload Caddy.
 Retain the database and immutable archive; do not delete captured evidence.
+# OAuth public-client persistence
+
+Desk OOS stores DCR registrations under `archive_root/auth/oauth-clients`, outside all
+premarket/plan/replay archives. Registered callback URLs and requested scopes are bound
+exactly and survive service restarts. Only ChatGPT HTTPS callbacks and explicit IP
+loopback HTTP callbacks for external OAuth clients are allowed. Unregistered clients
+from releases preceding this registry must register again by reconnecting the app.
+The existing PostgreSQL schema, plans, replay and trading services are unchanged.
+
+OAuth HTTP logs include a generated `correlation_id`, stage, HTTP status and stable
+error code, never query strings, PINs, codes, scopes payloads, cookies or tokens.
+`x-request-id` exposes the correlation identifier for support. The external acceptance
+script verifies read/write probe idempotence, read-only denial and eight PNG hashes;
+these checks do not constitute verification of the user's ChatGPT account consent.

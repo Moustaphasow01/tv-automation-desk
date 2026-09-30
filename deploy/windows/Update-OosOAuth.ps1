@@ -15,7 +15,7 @@ $oldRoot = Split-Path ([xml]$xmlOriginal).service.workingdirectory -Parent
 $newRoot = "C:\DeskOos\releases\$Revision"
 if ($oldRoot -notmatch '^C:\\DeskOos\\releases\\[A-Za-z0-9_.-]+$') { throw 'OOS_CURRENT_RELEASE_INVALID' }
 if (Test-Path $newRoot) { throw 'OOS_RELEASE_ALREADY_EXISTS' }
-$files = @('oauth.js', 'oos-oauth.js', 'oos-http-server.js')
+$files = @('oauth.js', 'oos-oauth.js', 'oos-oauth-clients.js', 'oos-http-server.js')
 foreach ($file in $files) {
   if (!(Test-Path (Join-Path $PatchRoot "mcp_gpt_desk\src\$file"))) { throw 'OOS_AUTH_PATCH_MISSING' }
 }
