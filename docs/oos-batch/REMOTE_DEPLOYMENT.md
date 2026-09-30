@@ -143,14 +143,86 @@ removed afterwards. No MCP tool is invoked and no plan/probe/replay is written.
 The script never prints credentials. A passing external Inspector scan still
 does not substitute for a real reconnect in the user's ChatGPT account.
 
-## Remaining certification boundary
+## POST-REPLAY bridge
 
-The real TradingView bridge currently exposes capture positioning only.
-Replay protocol / freeze / fingerprint / result archive are tested through the
-existing ports, but the concrete V3.9.8 replay/audit adapter must be certified
-before enabling `replay_enabled`. Unsupported operations fail explicitly with
-`OOS_REPLAY_BRIDGE_NOT_CERTIFIED`. Never report a real replay as verified from
-mock evidence. A later external plan and explicit replay acceptance are needed.
+`oos-tradingview-replay.js` drives the installed V3.9.8 ENGINE on the reserved
+chart through the existing MCP provider. A frozen plan is read and loaded
+byte-for-byte; its SHA-256 is read back before stepping. Execution uses M15;
+the ENGINE alone decides trades, fills, stops, targets and any position carry
+after 20:00 Paris. Carry is advanced through real replay bars until ENGINE
+publishes `AUDIT FIN SESSION`, never by a forced close or changed plan window.
+The bridge allowlist contains no broker or replay-trading order tool.
+
+`oos-tradingview-panels.js` unmerges and maximizes the lower ENGINE pane, selects
+AUTO (the installed script's actual final-session audit mode), and uses its
+native table renderer rather than the external Pine Tiles widget. Native
+cell data remain readable when TradingView's external-table stream is empty.
+The renderer's pixel geometry must prove all rows/columns fit, with no truncated
+text. Only bounded numbers are copied from the layout cache: never serialize
+that cache, whose cell links are cyclic. Capture clips the actual table at
+the verified Electron browser zoom/pixel density; it does not render an HTML
+substitute or accept a small table in the price chart. POSITIONS is captured
+separately, then the real final M5 and M15 price views.
+
+`oos-tradingview-audit.js` decodes only published ENGINE values and preserves
+the original table cells and Pine log records. No metric is reconstructed from
+prices, fills or counted log events. Unpublished metrics remain null and appear
+in `missing_metrics`; raw positions/refusals/rearm/fallback rows are retained.
+Pine info-log receipt is enabled through TradingView's technical log mask,
+without changing an ENGINE trading input or editing Pine source.
+
+Required files are `replay/{5m_final,15m_final,dashboard_final}.png`, `audit.json`
+and `run_meta.json`, plus `positions_final.png` when distinct and `logs.txt`
+when accessible. COMPLETED requires every required file and its SHA-256.
+`evidence/result-integrity.json` separately pins the SHA-256 of `run_meta.json`
+(a file cannot contain its own hash). Public result reads reverify all bytes.
+After a technical collection failure, `request_replay(date)` queues a retry
+for that checkpoint without requesting a replacement plan or changing freeze.
+Completed runs remain read-only.
+
+Deploy only this bridge with
+`deploy/windows/Update-OosReplay.ps1 -PatchRoot <patch> -Revision <git-sha>`.
+It clones the current release, replaces its explicit POST-REPLAY file allowlist,
+forks only the OOS package dependency link, enables replay and restarts only
+DeskOos. No OAuth/Caddy/PREMARKET/SQL/stable-trading-service changes are made.
+Rollback XML/config are retained under `config/replay-rollback-<git-sha>`.
+The archive and frozen plans are never deleted or replaced by rollout.
+
+### Real technical smoke acceptance, 2026-09-30
+
+Release `79f1c18` was deployed to the VPS and the real connected Desk OOS MCP
+called `request_replay("2026-07-30")`. The durable worker reached COMPLETED
+(revision 22) at `2026-09-30T21:52:30.322Z`. ENGINE completed its carry at
+21:00 Paris after the 20:00 entry-session endpoint; no forced close was sent.
+The canonical ENGINE calculation is M15. This remains TECHNICAL_SMOKE, excluded
+from OOS aggregate statistics, not a new statistical sample.
+
+The original plan SHA-256 remains
+`4aa381f4dd1fadd174f01ab72cabc2ea5cdb8fb10dcaaf85654db013bd284b7b`;
+the accepted premarket manifest remains
+`703c0fb4fd122beef3c824d0d653b426c6a271fbb842ad2e8cf334213b3c9d71`.
+All seven required/conditional artifacts exist under
+`C:\ProgramData\DeskOos\OOS\2026-07\2026-07-30\replay`.
+The dedicated dashboard has 28 rows, 7 columns, zero clipped cells and the
+actual `AUDIT FIN SESSION` title; the separate POSITIONS and final M5/M15
+images were also visually inspected. Authenticated `get_run_result` reverified
+their hashes, including `run_meta.json`:
+`68de297a86223e5e9ab385bc843903c4773c8b67e7bb6f97c83427c1a1e312ab`.
+
+ENGINE publishes fills 2, W/L 2/0, net 7.3971R / 343.5 USD, MFEp/n
+4.4489/3.6985, MAEp 0.6183, duration/TTM 184.5/184m, giveback 0,
+BE.5/1/1.5 1.748/1.748/1.748, P1@1R 2.3493, 1m/15m 46/0, events/drop 65/0.
+These are copied values, not recomputed performance. The ENGINE does not publish
+an aggregate rearm count or aggregate MFE-to-exit in this dashboard: those
+fields remain null. Original episode histories, logs and per-position MX
+values are preserved rather than converted into invented aggregates.
+
+Native Windows Node acceptance: 70 tests, 69 PASS, 1 explicit PostgreSQL test
+SKIP without `OOS_TEST_DATABASE_URL`, 0 failures. The real OOS database health
+and durable run were verified separately; no new migration was applied.
+Architecture, Windows deployment and browser-secret guards passed. The scoped
+POST-REPLAY static scan reports no oversized/high-complexity functions or
+duplicated blocks; the pre-existing global legacy quality budget is not reset.
 
 Rollback: stop only `DeskOos`; restore the previous OOS release XML or remove
 the marked Caddy route using `Caddyfile.before-oos`. Validate and reload Caddy.
