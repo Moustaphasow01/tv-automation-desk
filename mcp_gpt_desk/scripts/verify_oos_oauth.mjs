@@ -68,10 +68,17 @@ async function inspectTools(token) {
     await writeFile(file, JSON.stringify({ mcpServers: { "Desk OOS": { type: "http", url: resource,
       headers: { Authorization: `Bearer ${token}` } } } }), { mode: 0o600 });
     const env = { ...process.env, MCP_INSPECTOR_SECRET_STORE: "memory" };
+    if (process.env.OOS_INSPECTOR_NPM_CACHE) env.npm_config_cache = process.env.OOS_INSPECTOR_NPM_CACHE;
     for (const name of ["DESK_OAUTH_ADMIN_PIN", "OOS_OPERATOR_TOKEN", "DESK_OAUTH_TOKEN_SECRET"]) delete env[name];
-    const { stdout, stderr } = await promisify(execFile)("npx", ["--yes", "@modelcontextprotocol/inspector@2.8.0", "--cli",
-      "--config", file, "--server", "Desk OOS", "--method", "tools/list", "--format", "json", "--stored-auth-only"],
-    { timeout: 60000, maxBuffer: 1024 * 1024, env });
+    const args = ["--yes", "@modelcontextprotocol/inspector@2.8.0", "--cli",
+      "--config", file, "--server", "Desk OOS", "--method", "tools/list", "--format", "json", "--stored-auth-only"];
+    const entry = process.env.OOS_INSPECTOR_ENTRYPOINT;
+    if (entry) assert.equal(JSON.parse(await readFile(path.resolve(path.dirname(entry), "../../../package.json"), "utf8")).version, "2.8.0");
+    const executable = entry || process.platform === "win32" ? process.execPath : "npx";
+    const command = entry ? [entry, ...args.slice(2)] : process.platform === "win32"
+      ? [path.join(path.dirname(process.execPath), "node_modules/npm/bin/npx-cli.js"), ...args] : args;
+    const { stdout, stderr } = await promisify(execFile)(executable, command,
+    { timeout: 120000, maxBuffer: 1024 * 1024, env });
     assert.equal(stdout.includes(token) || stderr.includes(token), false, "Inspector output must not contain credentials");
     const result = JSON.parse(stdout); assert.equal(result.result.tools.length, 10);
     console.log("MCP_INSPECTOR_VERSION=2.8.0\nMCP_INSPECTOR_EXIT_CODE=0\nMCP_INSPECTOR_STDOUT=");
@@ -79,6 +86,10 @@ async function inspectTools(token) {
     if (stderr.trim()) console.log(`MCP_INSPECTOR_STDERR=\n${stderr.trim()}`);
   } catch (error) {
     // Child errors may contain request details; never dump the raw error object.
+    const diagnostic = String(error.stderr || error.stdout || "").replaceAll(token, "[REDACTED]")
+      .replace(/Bearer\s+[^\s"']+/gi, "Bearer [REDACTED]");
+    console.error(JSON.stringify({ inspector_error: error.code || error.name, killed: error.killed || false,
+      signal: error.signal || null, diagnostic: diagnostic.slice(0, 4000) }));
     throw new Error(`OOS_INSPECTOR_FAILED (${error.code || error.name})`);
   } finally { await unlink(file).catch(() => {}); await rmdir(directory); }
 }

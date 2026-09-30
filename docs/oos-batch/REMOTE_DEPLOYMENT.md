@@ -169,3 +169,10 @@ error code, never query strings, PINs, codes, scopes payloads, cookies or tokens
 `x-request-id` exposes the correlation identifier for support. The external acceptance
 script verifies read/write probe idempotence, read-only denial and eight PNG hashes;
 these checks do not constitute verification of the user's ChatGPT account consent.
+
+The acceptance script supports native Windows Node as well as Unix `npx`. When an
+npm cache is incomplete, `OOS_INSPECTOR_ENTRYPOINT` can point to an already installed
+Inspector `clients/launcher/build/index.js`; its package version must be exactly
+2.8.0. `OOS_INSPECTOR_NPM_CACHE` optionally selects a separate test cache. Neither
+option changes the MCP server. Child processes never inherit the OOS PIN/signing
+secret, and failure diagnostics redact bearer credentials.
