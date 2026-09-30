@@ -40,6 +40,11 @@ test("PostgreSQL migration, CAS, immutable identity, locks, durable queue and id
     assert.equal(done.status, "COMPLETED"); assert.equal(done.completed_days, 1);
     assert.equal(await commands.processOne(workflow), null); assert.equal(executions, 1);
     assert.equal((await commands.get("synthetic-1")).status, "COMPLETED");
+    await assert.rejects(repository.retireUnfrozenCapture(DAY, "a".repeat(64)), { code: "CAPTURE_RETIRE_FORBIDDEN" });
+    const captured = await repository.save(await repository.get(DAY), { manifest_sha256: "a".repeat(64) }, new Date().toISOString());
+    await repository.save(captured, { state: "FAILED_TECHNICAL", error: { code: "CAPTURE_PARTIAL_BAR_UNPROVEN" } }, new Date().toISOString());
+    await repository.retireUnfrozenCapture(DAY, "a".repeat(64));
+    await assert.rejects(repository.get(DAY), { code: "OOS_DAY_NOT_FOUND" });
   } finally {
     await pool.end();
     // Only the generated, test-owned schema is removed; never a supplied database or public schema.

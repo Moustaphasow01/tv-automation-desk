@@ -37,6 +37,8 @@ export class PremarketWorkflow {
     const artifact = await this.archive.put(day, `premarket/${view.name}`, bytes);
     return { timeframe: view.timeframe, view: view.view, path: view.name, sha256: artifact.sha256,
       captured_at: proof.captured_at, visible_as_of: proof.visible_as_of, source: proof.source,
+      bar_policy: proof.bar_policy ?? null, capture_cutoff: proof.capture_cutoff ?? null,
+      last_bar_open: proof.last_bar_open ?? null, last_bar_close: proof.last_bar_close ?? null,
       indicator_fingerprint: proof.indicator_fingerprint ?? null };
   }
 

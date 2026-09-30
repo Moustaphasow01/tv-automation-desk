@@ -16,6 +16,10 @@ export function isProvenCutoff(obs, cutoff) {
   return obs.replay === true && obs.autoplay === false && [expected, expected - 1000].includes(at)
     && Number.isFinite(obs.last_bar_time) && obs.last_bar_time * 1000 <= at;
 }
+export function isClosedBar(obs, timeframe, cutoff) {
+  const close = obs.last_bar_time * 1000 + Number(TF[timeframe]) * 60000;
+  return Number.isFinite(close) && close <= Date.parse(cutoff);
+}
 
 export const OOS_TV_TOOLS = Object.freeze({ chart_set_symbol: "chart_set_symbol", chart_set_timeframe: "chart_set_timeframe",
   chart_set_visible_range: "chart_set_visible_range", replay_start: "replay_start", ui_evaluate: "ui_evaluate",
@@ -66,6 +70,10 @@ export class OosTradingViewCapture {
     if (!/^2026-(07|08)-\d{2}T\d{2}:\d{2}:\d{2}\+02:00$/.test(cutoff)) throw fail("TV_CUTOFF_INVALID");
     this.cutoff = cutoff;
     await this.assertChart();
+    return this.seek(cutoff);
+  }
+  async seek(cutoff) {
+    this.effectiveCutoff = cutoff;
     // replay_start selects a historical cutoff; it does not advance the ENGINE or autoplay.
     await this.raw("replay_start", { date: new Date(cutoff).toISOString() });
     return this.awaitCutoff();
@@ -74,13 +82,19 @@ export class OosTradingViewCapture {
     if (!TF[timeframe] || !this.cutoff) throw fail("TV_TIMEFRAME_INVALID");
     this.timeframe = timeframe;
     await this.raw("chart_set_timeframe", { timeframe: TF[timeframe] });
-    await this.position(this.cutoff);
+    let observation = await this.seek(this.cutoff);
+    if (!isClosedBar(observation, timeframe, this.cutoff)) {
+      // A cursor inside an H4 candle does not certify the candle's final OHLC.
+      // Exclude that entire unclosed candle, without advancing beyond the user's cutoff.
+      observation = await this.seek(new Date(observation.last_bar_time * 1000).toISOString());
+    }
+    if (!isClosedBar(observation, timeframe, this.effectiveCutoff)) throw fail("TV_UNCLOSED_BAR_REJECTED");
     return { timeframe };
   }
   async preset(view) {
     if (!["global", "zoom"].includes(view)) throw fail("TV_VIEW_INVALID");
     this.view = view;
-    const seconds = Number(TF[this.timeframe]) * 60, cutoff = Date.parse(this.cutoff) / 1000;
+    const seconds = Number(TF[this.timeframe]) * 60, cutoff = Date.parse(this.effectiveCutoff) / 1000;
     const bars = view === "global" ? 240 : 65;
     await this.raw("chart_set_visible_range", { from: cutoff - bars * seconds, to: cutoff + Math.ceil(bars * 0.22) * seconds });
     await wait(1000);
@@ -96,7 +110,7 @@ export class OosTradingViewCapture {
     for (let attempt = 0; attempt < 20; attempt++) {
       const obs = await this.observation();
       const at = typeof obs.at === "number" ? obs.at * (obs.at < 1e12 ? 1000 : 1) : Date.parse(obs.at);
-      if (isProvenCutoff(obs, this.cutoff)) return { ...obs, visible_as_of: new Date(at).toISOString() };
+      if (isProvenCutoff(obs, this.effectiveCutoff || this.cutoff)) return { ...obs, visible_as_of: new Date(at).toISOString() };
       await wait(500);
     }
     throw fail("TV_CUTOFF_NOT_PROVEN");
@@ -104,6 +118,7 @@ export class OosTradingViewCapture {
   async capture(input) {
     if (input.cutoff !== this.cutoff || input.timeframe !== this.timeframe || input.view !== this.view) throw fail("TV_CAPTURE_SCOPE_MISMATCH");
     await this.assertChart(); const before = await this.awaitCutoff();
+    if (!isClosedBar(before, input.timeframe, this.effectiveCutoff)) throw fail("TV_UNCLOSED_BAR_REJECTED");
     if (!["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(before.symbol)
       || before.resolution !== TF[input.timeframe] || before.timezone !== "Europe/Paris") throw fail("TV_CAPTURE_IDENTITY_MISMATCH");
     const shot = await this.raw("capture_screenshot", { region: "chart", method: "cdp", filename: `oos_${input.date}_${input.timeframe}_${input.view}` });
@@ -112,6 +127,9 @@ export class OosTradingViewCapture {
     if (path.dirname(file) !== path.resolve(this.screenshotRoot)) throw fail("TV_CAPTURE_PATH_REJECTED");
     const bytes = await readFile(file);
     return { ...input, replay: true, visible_as_of: before.visible_as_of, captured_at: new Date().toISOString(),
+      bar_policy: "CLOSED_ONLY", capture_cutoff: new Date(this.effectiveCutoff).toISOString(),
+      last_bar_open: new Date(before.last_bar_time * 1000).toISOString(),
+      last_bar_close: new Date(before.last_bar_time * 1000 + Number(TF[input.timeframe]) * 60000).toISOString(),
       source: `TradingView MCP / ${before.symbol}`, indicator_fingerprint: this.indicatorFingerprint,
       image_base64: bytes.toString("base64") };
   }

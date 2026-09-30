@@ -61,12 +61,20 @@ TradingView uses an exclusive cutoff: selecting 09:00 yields `currentDate`
 08:59:59 Paris. The bridge accepts exactly that one-second difference, not a
 generic stale-data tolerance, and rejects autoplay or any bar beyond the bound.
 
-Acceptance on 2026-09-30: the July 30 day reached `PREMARKET_READY`, 8/8 PNGs,
-no plan and no replay execution. Manifest digest:
-`c63804ccf650220c7bf749451b27192860ca8609002c33470ede84851e7997cc`.
-The real remote SDK received eight ImageContent blocks whose PNG SHA-256 values
-matched the persisted manifest. Authenticated mobile UI at 390×844 rendered
-all eight images, with no broken images or document-width overflow.
+An additional M1 consistency check found that a cursor alone cannot certify
+an unfinished H4 candle. The bridge now captures CLOSED_ONLY bars and records
+`last_bar_open`, `last_bar_close` and `capture_cutoff` for every screenshot.
+For the requested 09:00 Paris observation, H4 uses the last complete candle
+ending at 08:00 Paris; M5/M15/H1 end at 09:00. This is data-provenance protection,
+not a trading filter or a change to the ENGINE.
+
+The initial, never-frozen smoke capture (manifest starting `c63804ccf650`)
+was withdrawn and preserved under `quarantine/2026-07-30-c63804ccf650`, together
+with a hashed registry/events snapshot. No PNG or plan was deleted or overwritten.
+The test-owned active registry entry was reset only after backup; the database
+immutability trigger remains unchanged. The operator-only recovery script is
+bounded to that exact date/hash and refuses any existing plan. It is not a tool
+exposed to ChatGPT and is not a general automatic replacement mechanism.
 
 ## Syntax provenance
 

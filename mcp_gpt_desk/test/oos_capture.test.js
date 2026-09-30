@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { OosTradingViewCapture, OOS_TV_TOOLS, isProvenCutoff } from "../src/oos-tradingview-capture.js";
+import { OosTradingViewCapture, OOS_TV_TOOLS, isProvenCutoff, isClosedBar } from "../src/oos-tradingview-capture.js";
 
 test("capture bridge cannot invoke broker, replay steps or engine input mutation", async () => {
   assert.ok(Object.keys(OOS_TV_TOOLS).every(name => !/trade|order|input|step|buy|sell/.test(name)));
@@ -30,4 +30,16 @@ test("cutoff proof requires stopped replay and no bar from the future", async ()
   assert.equal(isProvenCutoff({ ...obs, at: obs.at - 60000 }, cutoff), false);
   assert.equal(isProvenCutoff({ ...obs, autoplay: true }, cutoff), false);
   assert.equal(isProvenCutoff({ ...obs, last_bar_time: obs.at / 1000 + 60 }, cutoff), false);
+});
+
+test("H4 opening before 09:00 but closing afterwards is excluded, not certified by cursor alone", async () => {
+  const cutoff = "2026-07-30T09:00:00+02:00", eight = Date.parse("2026-07-30T08:00:00+02:00") / 1000;
+  assert.equal(isClosedBar({ last_bar_time: eight }, "4h", cutoff), false);
+  assert.equal(isClosedBar({ last_bar_time: eight - 14400 }, "4h", cutoff), true);
+  const bridge = new OosTradingViewCapture({}); bridge.cutoff = cutoff;
+  const sought = []; bridge.raw = async () => ({});
+  bridge.seek = async at => { sought.push(at); bridge.effectiveCutoff = at; return { last_bar_time: sought.length === 1 ? eight : eight - 14400 }; };
+  await bridge.setTimeframe("4h");
+  assert.deepEqual(sought, [cutoff, "2026-07-30T06:00:00.000Z"]);
+  assert.equal(bridge.cutoff, cutoff);
 });

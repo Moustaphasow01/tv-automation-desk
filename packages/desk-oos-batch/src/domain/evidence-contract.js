@@ -9,6 +9,7 @@ export function validateCapture(capture, expected) {
   requireFact(Number.isFinite(Date.parse(capture.captured_at)), "CAPTURE_TIMESTAMP_INVALID");
   requireFact(typeof capture.source === "string" && capture.source.length > 0, "CAPTURE_SOURCE_REQUIRED");
   requireFact(typeof capture.image_base64 === "string", "CAPTURE_PIXELS_REQUIRED");
+  if (capture.bar_policy === "CLOSED_ONLY") validateClosedBar(capture, expected.cutoff);
 }
 
 export function validateManifest(manifest, day) {
@@ -30,7 +31,15 @@ export function validateManifest(manifest, day) {
     requireFact(Number.isFinite(Date.parse(capture.visible_as_of))
       && Date.parse(capture.visible_as_of) <= Date.parse(day.cutoff), "MANIFEST_LOOKAHEAD");
     names.add(capture.path);
+    if (capture.bar_policy === "CLOSED_ONLY") validateClosedBar(capture, day.cutoff);
   }
+}
+
+function validateClosedBar(capture, cutoff) {
+  const open = Date.parse(capture.last_bar_open), close = Date.parse(capture.last_bar_close);
+  const bound = Date.parse(capture.capture_cutoff);
+  requireFact(Number.isFinite(open) && close > open && close <= bound && bound <= Date.parse(cutoff)
+    && close <= Date.parse(capture.visible_as_of) + 1000, "CAPTURE_UNCLOSED_BAR");
 }
 
 export function validateSyntaxReceipt(receipt, expected) {

@@ -72,4 +72,20 @@ export class PostgresOosRegistry {
       return saved;
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
   }
+
+  /** Operator-only repair after an external, durable quarantine of a never-frozen capture. */
+  async retireUnfrozenCapture(day, expectedHash) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(`SELECT ${COLUMNS} FROM oos_batch_days
+        WHERE batch_id=$1 AND day=$2 FOR UPDATE`, [day.batch_id, day.date]);
+      const row = result.rows[0];
+      requireFact(row && row.plan_sha256 === null && row.manifest_sha256 === expectedHash
+        && row.state === "FAILED_TECHNICAL" && row.error?.code === "CAPTURE_PARTIAL_BAR_UNPROVEN", "CAPTURE_RETIRE_FORBIDDEN");
+      await client.query("DELETE FROM oos_batch_events WHERE batch_id=$1 AND day=$2", [day.batch_id, day.date]);
+      await client.query("DELETE FROM oos_batch_days WHERE batch_id=$1 AND day=$2", [day.batch_id, day.date]);
+      await client.query("COMMIT");
+    } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+  }
 }

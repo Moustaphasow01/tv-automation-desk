@@ -26,12 +26,15 @@ describe("OOS technical monitoring", () => {
     const stats = { days: 1, completed: 0, metrics: { net_r: { observed_days: 0, total_days: 0, sum: null, mean: null, median: null } } };
     expect(renderToStaticMarkup(<BatchStats stats={stats} />)).toContain("Non fourni");
   });
-  it("requires an explicit cutoff and switches period fields without inventing defaults", async () => {
+  it("shows the mission's MES 09:00 preset, leaves the date explicit and switches period fields", async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const host = document.createElement("div"), root = createRoot(host); document.body.append(host);
     try {
       await act(async () => root.render(<BatchForm disabled={false} submit={vi.fn()} />));
-      expect(host.querySelector<HTMLInputElement>('[name="cutoff_time"]')?.value).toBe("");
+      expect(host.querySelector<HTMLInputElement>('[name="cutoff_time"]')?.value).toBe("09:00");
+      expect(host.querySelector<HTMLInputElement>('[name="symbol"]')?.value).toBe("CME_MINI:MES1!");
+      expect(host.querySelector<HTMLInputElement>('[name="date"]')?.value).toBe("");
+      expect(host.querySelector('button[type="submit"]')?.textContent).toBe("Capturer le pré-market uniquement");
       const select = host.querySelector("select")!;
       await act(async () => { select.value = "range"; select.dispatchEvent(new Event("change", { bubbles: true })); });
       expect(host.querySelector('[name="from"]')).not.toBeNull(); expect(host.querySelector('[name="date"]')).toBeNull();
