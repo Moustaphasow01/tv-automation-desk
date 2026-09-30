@@ -38,6 +38,10 @@ export class OosTradingViewEngine {
     this.ruleInputs = structuredClone(descriptor.values.filter(x => x.id !== this.ids.plan
       && !DISPLAY_NAMES.has(descriptor.inputs.find(i => i.id === x.id)?.name)));
     this.configHash = oosHash(JSON.stringify({ version, digest: descriptor.digest, inputs: this.ruleInputs }));
+    // TradingView disables receipt of Pine log.info by default, independently of ENGINE's log input.
+    this.logMask = await this.evaluate(`if(typeof s._study.setLogLevelMask==='function')
+      s._study.setLogLevelMask({error:true,warning:true,info:true});
+      return typeof s._study.logLevelMask==='function'?s._study.logLevelMask():null;`);
     return { engine_version: version, config_hash: this.configHash };
   }
 
@@ -93,6 +97,7 @@ export class OosTradingViewEngine {
       cells:t.cells.map(x=>({row:x.row,column:x.column,rowSpan:x.rowSpan,colSpan:x.colSpan,
         text:x.text,tooltip:x.tooltip,fontSize:x.fontSize}))}));var l=s._study.logs();return {tables,logs_accessible:l!==null,
       logs:l?Array.from(l).map(x=>Object.fromEntries(Object.entries(x).filter(([k,v])=>v===null||
-        ['string','number','boolean'].includes(typeof v)))):[],pine_version:s._study.metaInfo().pine?.version};`);
+        ['string','number','boolean'].includes(typeof v)))):[],pine_version:s._study.metaInfo().pine?.version,
+      log_mask:typeof s._study.logLevelMask==='function'?s._study.logLevelMask():null};`);
   }
 }

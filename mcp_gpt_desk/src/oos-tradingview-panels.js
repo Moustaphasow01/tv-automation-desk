@@ -10,7 +10,7 @@ export class OosTradingViewPanels {
     await this.engine.setInput("text", "Normal");
     await this.engine.setInput("width", 98);
     await this.engine.evaluate(`s.setVisible(true);if(s.paneIndex()===0)s.unmergeDown();
-      var p=c.getPanes()[s.paneIndex()];p.restore();p.setMaximized(true);return s.paneIndex();`);
+      var p=c.getPanes()[s.paneIndex()];if(p.isCollapsed())p.restore();p.setMaximized(true);return s.paneIndex();`);
     const client = await this.client();
     await client.Emulation.setDeviceMetricsOverride({ width: 1920, height: 1600, deviceScaleFactor: 1, mobile: false });
     await oosWait(1000);

@@ -57,6 +57,20 @@ test("end proof rejects live, autoplay, overshoot, early cursor and future bar",
     assert.equal(proveReplayEnd({ ...obs, ...change }, end), false);
   }
 });
+test("an ENGINE carry is managed by further replay bars, not a forced close or plan change", async () => {
+  const at = Date.parse("2026-07-30T20:00:00+02:00") / 1000, calls = [];
+  const bridge = new OosTradingViewReplay({ capture: {
+    assertChart: async () => {}, raw: async operation => { calls.push(operation); }
+  }, provider: {} });
+  let reads = 0;
+  bridge.engine.readPublished = async () => ({ tables: [{ cells: [{ row: 1, column: 1,
+    text: reads++ ? "AUDIT FIN SESSION" : "AUDIT PROVISOIRE + CARRY" }] }] });
+  bridge.awaitStep = async () => ({ replay: true, autoplay: false, at: at + 899, last_bar_time: at });
+  const result = await bridge.drainCarry({ replay: true, autoplay: false, at: at - 1 }, "2026-07-30T20:00:00+02:00");
+  assert.equal(result.at, "2026-07-30T20:15:00+02:00");
+  assert.deepEqual(calls, ["replay_step"]);
+  assert.equal(bridge.trace[0].carry, true);
+});
 test("published metrics are decoded verbatim, never recalculated from prices or logs", () => {
   const texts = ["Fills 3", "W/L 1/2", "Net -17.5$ | -0.42R", "MFEp/n 1.2/0.9", "MAEp 0.6", "GBn 0.7",
     "Dur/TTM 15/8m", "BE.5 0.32", "BE1 -0.15", "BE1.5 N/D", "P1@1R 0.25", "1m/15 11/2 FB partial",
