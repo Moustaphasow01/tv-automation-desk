@@ -40,6 +40,7 @@ try {
 const providerRoot = "C:/ProgramData/DeskOos/providers/tradingview-mcp";
 const config = { archive_root: root, public_url: "https://vps-6d6969db.vps.ovh.net/oos", port: 8795,
   batch_id: "OOS", symbol: "CME_MINI:MES1!", cutoff_time: "09:00", release: path.basename(releaseRoot),
+  technical_smoke_dates: ["2026-07-30"],
   replay_enabled: false, front_root: path.join(releaseRoot, "front"), syntax_validator: "builtin-v3.9.8",
   tradingview: { adapter: "tradingview-jackson", transport: "stdio", command: process.execPath,
     args: [path.join(providerRoot, "src/server.js")], chart_id: "fp5gIsIz",

@@ -1,5 +1,6 @@
 export type OosAction = "capture" | "retry-capture" | "scenario" | "replay" | "retry" | "new-plan" | "run";
 export type OosDay = {
+  sample_purpose?: "OOS" | "TECHNICAL_SMOKE";
   batch_id: string; day: string; state: string; checkpoint: string; capture_count: number;
   definition: { symbol: string; cutoff: string; date: string }; updated_at: string;
   plan_sha256: string | null; manifest_sha256: string | null; candidate_attempt: number;
@@ -7,7 +8,7 @@ export type OosDay = {
   error: { code: string } | null; audit: Record<string, unknown> | null;
 };
 export type OosMetric = { observed_days: number; total_days: number; sum: number | null; mean: number | null; median: number | null };
-export type OosOverview = { days: OosDay[]; can_write: boolean; observed_at: string; stats: { days: number; completed: number; metrics: Record<string, OosMetric> } };
+export type OosOverview = { days: OosDay[]; can_write: boolean; observed_at: string; stats: { days: number; completed: number; technical_smoke_days?: number; metrics: Record<string, OosMetric> } };
 export type OosDetail = { day: OosDay; artifacts: string[]; plan_text: string | null; timeline: { revision: number; state: string; occurred_at: string; error: { code: string } | null }[] };
 export type OosReceipt = { command_id: string; status: "QUEUED" | "RUNNING" | "COMPLETED"; completed_days: number; total_days: number; receipts: { date: string; state: string; error: { code: string } | null }[] };
 export type OosRequest = { batch_id: string; symbol: string; cutoff_time: string; date?: string; month?: string; from?: string; to?: string; action: OosAction };

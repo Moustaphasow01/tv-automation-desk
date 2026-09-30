@@ -10,6 +10,7 @@ import { sendJson, readJsonBody } from "./oos-http-io.js";
 
 export function createOosHttpServer({ runtime, pool, config, log = console.log }) {
   runtime.allowedActions = config.replay_enabled === true ? ["capture", "retry-capture", "replay", "retry"] : ["capture", "retry-capture"];
+  runtime.technicalSmokeDates = config.technical_smoke_dates || [];
   const auth = new OosOAuth({ baseUrl: config.public_url, pool, operatorToken: process.env.OOS_OPERATOR_TOKEN });
   const portal = new OosPortal({ runtime, batchId: config.batch_id, symbol: config.symbol, cutoffTime: config.cutoff_time });
   const server = http.createServer(async (req, res) => {

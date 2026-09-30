@@ -45,7 +45,7 @@ async function readView(runtime, view, query) {
   if (view === "days") {
     const rows = await runtime.repository.list(query.batch_id);
     return { days: rows.map(row => projectVisibleDay(runtime, row)),
-      stats: aggregateBatch(rows.map(row => row.plan_sha256 ? row : { ...row, audit: null })), observed_at: new Date().toISOString() };
+      stats: aggregateBatch(rows.map(row => projectVisibleDay(runtime, row))), observed_at: new Date().toISOString() };
   }
   const row = await runtime.repository.get({ batch_id: query.batch_id, date: query.date });
   const artifacts = await artifactIndex(runtime, row);
@@ -55,6 +55,7 @@ async function readView(runtime, view, query) {
 
 function projectVisibleDay(runtime, row) {
   const projected = projectDay(row.plan_sha256 ? row : { ...row, audit: null, run_meta: null });
+  projected.sample_purpose = runtime.technicalSmokeDates?.includes(row.day) ? "TECHNICAL_SMOKE" : "OOS";
   if (runtime.allowedActions?.includes("retry-capture") && row.state === "FAILED_TECHNICAL"
     && ["NEW", "CAPTURING", "PREMARKET_READY"].includes(row.checkpoint)) projected.allowed_actions.unshift("retry-capture");
   if (runtime.allowedActions) projected.allowed_actions = projected.allowed_actions.filter(action => runtime.allowedActions.includes(action));

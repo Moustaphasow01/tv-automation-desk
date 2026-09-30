@@ -11,6 +11,12 @@ test("missing metrics remain null, reported zero remains zero, statistics only u
   assert.equal(stats.metrics.mae.sum, null);
   assert.equal(projectDay({ state: "NEW" }).metrics.fills, null);
 });
+test("technical smoke results remain visible but never count as OOS performance", () => {
+  const smoke = { state: "COMPLETED", sample_purpose: "TECHNICAL_SMOKE", audit: { net_r: 100 } };
+  const stats = aggregateBatch([smoke, { state: "COMPLETED", sample_purpose: "OOS", audit: { net_r: 2 } }]);
+  assert.equal(stats.completed, 2); assert.equal(stats.technical_smoke_days, 1); assert.equal(stats.statistical_days, 1);
+  assert.equal(stats.metrics.net_r.sum, 2); assert.equal(projectDay(smoke).metrics.net_r, 100);
+});
 test("actions distinguish rejected plans, technical retry, frozen replay and completed read-only", () => {
   for (const [state, action] of [["NEW", "capture"], ["WAITING_SCENARIO", "scenario"], ["FROZEN", "replay"], ["FAILED_TECHNICAL", "retry"], ["FAILED_PLAN_VALIDATION", "new-plan"]]) {
     assert.deepEqual(projectDay({ state }).allowed_actions, [action]);

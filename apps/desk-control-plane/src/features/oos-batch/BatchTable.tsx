@@ -6,7 +6,7 @@ export function BatchTable({ rows, select, submit, disabled, canWrite }: { rows:
     <caption>Journées demandées · aucun résultat simulé dans cette interface</caption>
     <thead><tr><th>Journée / batch</th><th>Progression</th><th>Captures</th><th>Plan</th><th>Net R</th><th>Net USD</th><th>Fills / gains / pertes</th><th>Action</th></tr></thead>
     <tbody>{rows.map(row => <tr key={`${row.batch_id}:${row.day}`}>
-      <td><button className="oos-link" onClick={() => select(row)}>{dateLabel(row.day)} · {row.definition.symbol}</button><small>{row.batch_id}</small></td>
+      <td><button className="oos-link" onClick={() => select(row)}>{dateLabel(row.day)} · {row.definition.symbol}</button><small>{row.batch_id}</small>{row.sample_purpose === "TECHNICAL_SMOKE" && <small>Test technique · hors statistiques OOS</small>}</td>
       <td><span data-failed={row.state.startsWith("FAILED")}>{states[row.state]}</span>{row.error && <small>{row.error.code}</small>}</td>
       <td>{row.capture_count} / 8</td><td>{row.plan_sha256 ? <code title={row.plan_sha256}>{row.plan_sha256.slice(0, 12)}…</code> : "Non reçu"}</td>
       <td>{valueLabel(row.metrics.net_r)}</td><td>{valueLabel(row.metrics.net_usd)}</td>
@@ -16,6 +16,7 @@ export function BatchTable({ rows, select, submit, disabled, canWrite }: { rows:
 }
 export function BatchStats({ stats }: { stats: OosOverview["stats"] }) {
   return <section className="oos-panel"><h2>Statistiques descriptives</h2><p>{stats.completed} journées terminées sur {stats.days}. Les valeurs absentes ne sont ni estimées ni remplacées par zéro.</p>
+    {!!stats.technical_smoke_days && <p>{stats.technical_smoke_days} journée(s) de test technique exclue(s) des métriques OOS.</p>}
     <div className="oos-table-scroll" role="region" aria-label="Statistiques disponibles" tabIndex={0}><table className="oos-table"><thead><tr><th>Métrique publiée</th><th>Jours renseignés</th><th>Somme</th><th>Moyenne</th><th>Médiane</th></tr></thead>
       <tbody>{Object.entries(stats.metrics).map(([key, metric]) => <tr key={key}><th>{key}</th><td>{metric.observed_days} / {metric.total_days}</td><td>{valueLabel(metric.sum)}</td><td>{valueLabel(metric.mean)}</td><td>{valueLabel(metric.median)}</td></tr>)}</tbody></table></div>
   </section>;

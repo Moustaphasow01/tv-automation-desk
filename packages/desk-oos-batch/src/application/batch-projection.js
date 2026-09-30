@@ -9,7 +9,7 @@ export function projectDay(row) {
 }
 
 export function aggregateBatch(rows) {
-  const completed = rows.filter(row => row.state === "COMPLETED").map(projectDay);
+  const completed = rows.filter(row => row.state === "COMPLETED" && row.sample_purpose !== "TECHNICAL_SMOKE").map(projectDay);
   const metrics = Object.fromEntries(METRICS.map(key => {
     const values = completed.map(row => row.metrics[key]).filter(value => value !== null).sort((a, b) => a - b);
     const sum = values.reduce((total, value) => total + value, 0), middle = Math.floor(values.length / 2);
@@ -17,5 +17,6 @@ export function aggregateBatch(rows) {
       sum: values.length ? sum : null, mean: values.length ? sum / values.length : null,
       median: values.length ? (values[middle] + values[Math.floor((values.length - 1) / 2)]) / 2 : null }];
   }));
-  return { days: rows.length, completed: completed.length, metrics };
+  return { days: rows.length, completed: rows.filter(row => row.state === "COMPLETED").length,
+    statistical_days: completed.length, technical_smoke_days: rows.filter(row => row.sample_purpose === "TECHNICAL_SMOKE").length, metrics };
 }

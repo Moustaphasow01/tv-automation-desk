@@ -76,6 +76,13 @@ immutability trigger remains unchanged. The operator-only recovery script is
 bounded to that exact date/hash and refuses any existing plan. It is not a tool
 exposed to ChatGPT and is not a general automatic replacement mechanism.
 
+The accepted CLOSED_ONLY bundle has manifest SHA-256
+`703c0fb4fd122beef3c824d0d653b426c6a271fbb842ad2e8cf334213b3c9d71`.
+The remote MCP delivered eight real PNG image blocks with matching hashes.
+`technical_smoke_dates=["2026-07-30"]` marks this day as `TECHNICAL_SMOKE`
+in remote responses and UI, excluding it from OOS performance aggregates
+without changing, filtering or inventing any ENGINE trade/result.
+
 ## Syntax provenance
 
 The builtin validator was compared with the technical parser of the user's
