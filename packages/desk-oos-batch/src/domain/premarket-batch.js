@@ -19,8 +19,12 @@ export function projectPreparationDay(row, queue = {}) {
     : ["REPLAYING", "CAPTURING_RESULTS", "COMPLETED"].includes(row.state) ? row.state : "NOT_REQUESTED";
   return { date: row.day, state: row.state, checkpoint: row.checkpoint, capture_count: row.capture_count,
     manifest_sha256: row.manifest_sha256, plan_sha256: row.plan_sha256, replay_status: replay,
-    queue_status: queue.capture?.has(row.day) ? "QUEUED_OR_RUNNING" : "NOT_QUEUED",
+    queue_status: !hasPremarket(row) && queue.capture?.has(row.day) ? "QUEUED_OR_RUNNING" : "NOT_QUEUED",
     error: row.error ? { code: row.error.code } : null, updated_at: row.updated_at };
+}
+
+export function queuedPreparationDates(rows, queue) {
+  return rows.filter(row => !hasPremarket(row) && queue.capture.has(row.day)).map(row => row.day).sort();
 }
 
 export function preparationCounts(rows) {

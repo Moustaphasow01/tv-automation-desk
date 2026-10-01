@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createPremarketOrchestration } from "../index.js";
-import { premarketPeriod, hasPremarket, projectPreparationDay, preparationCounts, preparationStatus } from "../src/domain/premarket-batch.js";
+import { premarketPeriod, hasPremarket, projectPreparationDay, preparationCounts, preparationStatus, queuedPreparationDates } from "../src/domain/premarket-batch.js";
 import { PostgresOosCommands } from "../src/adapter/postgres-commands.js";
 import { fixture, DAY } from "./support.js";
 
@@ -109,6 +109,9 @@ test("technical projection excludes prices/results; statuses/counts preserve fai
   const projected = projectPreparationDay(failed);
   assert.deepEqual(projected.error, { code: "TV_TIMEOUT" }); assert.equal(JSON.stringify(projected).includes("EXCLUDE"), false);
   assert.equal(projectPreparationDay({ ...ready, state: "FROZEN" }, { replay: new Set([ready.day]) }).replay_status, "REPLAY_QUEUED");
+  const queue = { capture: new Set([ready.day, failed.day, "2026-07-29"]) };
+  assert.equal(projectPreparationDay(ready, queue).queue_status, "NOT_QUEUED");
+  assert.deepEqual(queuedPreparationDates([ready, failed], queue), [failed.day]);
   assert.equal(preparationStatus({ rows: [ready, failed], commandStatus: "COMPLETED" }), "PARTIAL");
   assert.equal(preparationStatus({ rows: [failed], commandStatus: "COMPLETED" }), "FAILED");
   assert.equal(preparationStatus({ rows: [failed], commandStatus: "RUNNING" }), "RUNNING");

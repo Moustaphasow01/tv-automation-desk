@@ -1,5 +1,5 @@
 import { requireFact } from "../domain/batch-contract.js";
-import { premarketPeriod, hasPremarket, projectPreparationDay, preparationCounts, preparationFilters } from "../domain/premarket-batch.js";
+import { premarketPeriod, hasPremarket, projectPreparationDay, preparationCounts, preparationFilters, queuedPreparationDates } from "../domain/premarket-batch.js";
 
 /** Capture-only use cases; no scenario builder, freeze, replay or result port is reachable. */
 export class PremarketOrchestration {
@@ -47,6 +47,6 @@ export class PremarketOrchestration {
       concurrency: 1, concurrency_reason: "SINGLE_TRADINGVIEW_SESSION", batches: data.batches,
       days: data.rows.map(row => projectPreparationDay(row, data.queue)),
       skipped_dates: this.period(batch.start_date, batch.end_date).skipped_dates,
-      current_queue: [...data.queue.capture].sort() };
+      current_queue: queuedPreparationDates(data.rows, data.queue) };
   }
 }

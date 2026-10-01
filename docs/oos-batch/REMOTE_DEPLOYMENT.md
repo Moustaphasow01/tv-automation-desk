@@ -115,6 +115,25 @@ These official MCP SDK checks prepare July 29 and July 27–29 respectively,
 verify eight actual image blocks/hashes/cutoffs, check repeat-call idempotence,
 and require absent plan/replay directories. They never request replay.
 
+Real public MCP acceptance on 2026-10-01: July 29 reached PREMARKET_READY with
+eight verified PNG blocks; repeating prepare preserved both the manifest hash
+and day update timestamp. Range July 27–29 completed 3 ready / 0 failed with
+effective concurrency 1. No plan/replay directory exists for these three days.
+The July 30 completed day remains revision 22 with its original freeze hashes.
+
+| Date | PREMARKET manifest SHA-256 |
+|---|---|
+| 2026-07-27 | `59549b29eb00fa733d0a2b7d69e09b60ef196de8f31be67c4ce740b933fde06e` |
+| 2026-07-28 | `d12b3493c6fa2ec25724bebb76554d1f0ff7eb8c630a13af85efb15303b64bd4` |
+| 2026-07-29 | `ba02206fee439f2f7ad65b557fd552f47aa1e5ae49456783f4acffe3b486e4ff` |
+
+Persistent range ID:
+`premarket-e5d3b0deb0d4420017fdd383aec718e8664cd901`.
+Local OOS suite: 80 PASS plus 2 explicitly skipped PostgreSQL cases; those
+two cases also passed against generated isolated schemas on the VPS OOS
+database. UI suite: 8 PASS. TypeScript and standalone OOS build pass. The
+pre-existing global static-quality legacy failures remain; no baseline waiver.
+
 ## Syntax provenance
 
 The builtin validator was compared with the technical parser of the user's
