@@ -3,8 +3,8 @@ import { isDeepStrictEqual } from "node:util";
 import { REPLAY_IMAGES, validatePublishedResult, validateArtifactList, validateAuditPresentation } from "../domain/replay-artifacts.js";
 
 export class ReplayWorkflow {
-  constructor({ archive, tradingView, freeze, fingerprint, decodeImage, clock }) {
-    Object.assign(this, { archive, tradingView, freeze, fingerprint, decodeImage, clock });
+  constructor({ archive, tradingView, freeze, fingerprint, decodeImage, clock, progress }) {
+    Object.assign(this, { archive, tradingView, freeze, fingerprint, decodeImage, clock, progress });
   }
 
   async replay(day) {
@@ -14,7 +14,9 @@ export class ReplayWorkflow {
       requireFact(prior.plan_sha256 === frozen.meta.plan_sha256, "REPLAY_HASH_MISMATCH");
       return prior;
     }
-    await this.tradingView.prepareFrozenReplay({ ...day, ...frozen });
+    const progress = await this.progress?.read(day, frozen.meta.plan_sha256);
+    const onProgress = value => this.progress?.save(day, frozen.meta.plan_sha256, value);
+    await this.tradingView.prepareFrozenReplay({ ...day, ...frozen, progress, onProgress });
     const fingerprint = await this.tradingView.readPlanFingerprint(day);
     requireFact(fingerprint.plan_sha256 === frozen.meta.plan_sha256 && fingerprint.engine_version === day.engine_version
       && fingerprint.book_mode === day.book_mode && fingerprint.symbol === day.symbol

@@ -19,6 +19,10 @@ export class TradingViewMcpAdapter {
 
   async prepareFrozenReplay(input) {
     requireFact(input.meta.status === "FROZEN", "PLAN_NOT_FROZEN");
+    const resumed = await this.call("resumeFrozenReplay", { ...input, replay_only: true,
+      plan_sha256: input.meta.plan_sha256 });
+    if (resumed?.resumed === true) return resumed;
+    requireFact(!input.progress?.steps_completed, "REPLAY_RESUME_REQUIRED");
     await this.preparePremarket(input);
     await this.call("setEngineVersion", { engine_version: input.engine_version, replay_only: true });
     await this.call("setBookMode", { book_mode: input.book_mode, replay_only: true });

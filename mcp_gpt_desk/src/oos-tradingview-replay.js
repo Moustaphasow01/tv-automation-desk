@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { OosTradingViewEngine, OOS_CHART, OOS_REPLAY, oosTvError, oosWait } from "./oos-tradingview-engine.js";
+import { OosTradingViewEngine, OOS_CHART, OOS_REPLAY, oosTvError, oosWait, oosHash } from "./oos-tradingview-engine.js";
 import { OosTradingViewPanels } from "./oos-tradingview-panels.js";
 import { extractOosPublishedAudit } from "./oos-tradingview-audit.js";
+import { OosReplayProgress, replayObservation, REPLAY_TIMEOUTS } from "./oos-replay-progress.js";
 
 const TF = { "5m": "5", "15m": "15" };
 const seconds = at => typeof at === "number" ? at / (at > 1e12 ? 1000 : 1) : Date.parse(at) / 1000;
@@ -16,19 +17,24 @@ export function proveReplayEnd(obs, at) {
 
 /** Replay of a frozen external plan through the installed Pine ENGINE. No desk simulation or broker. */
 export class OosTradingViewReplay {
-  constructor({ capture, provider }) {
+  constructor({ capture, provider, timeouts = {} }) {
     this.capture = capture; this.active = false; this.trace = [];
+    this.provider = provider; this.timeouts = { ...REPLAY_TIMEOUTS, ...timeouts };
     this.engine = new OosTradingViewEngine(capture);
     this.panels = new OosTradingViewPanels({ engine: this.engine, provider });
   }
 
   async call(operation, input) {
-    if (operation === "openSymbol") { this.active = false; return this.capture.call(operation, input); }
+    if (operation === "resumeFrozenReplay") return this.resume(input);
+    if (operation === "openSymbol") {
+      this.active = false; this.resumed = false; this.progress = null; this.end = null;
+      return this.capture.call(operation, input);
+    }
     if (operation === "setEngineVersion") {
       if (!input.replay_only || !this.capture.cutoff) throw oosTvError("TV_REPLAY_SCOPE_REQUIRED");
       this.active = true;
-      await this.capture.raw("ui_open_panel", { panel: "pine-editor", action: "close" });
-      await this.capture.raw("chart_set_timeframe", { timeframe: "15" });
+      await this.capture.raw("ui_open_panel", { panel: "pine-editor", action: "close" }, { timeoutMs: this.timeouts.ui_transition_ms });
+      await this.capture.raw("chart_set_timeframe", { timeframe: "15" }, { timeoutMs: this.timeouts.ui_transition_ms });
       this.timeframe = "15m";
       return this.engine.initialize(input.engine_version);
     }
@@ -38,10 +44,70 @@ export class OosTradingViewReplay {
       readPlanFingerprint: () => this.fingerprint(input), startReplay: () => this.start(input),
       advanceTo: () => this.advance(input), openDashboard: () => this.openPanel("AUDIT", input),
       openPositions: () => this.openPanel("POSITIONS", input), setTimeframe: () => this.setTimeframe(input.timeframe),
-      capture: () => this.resultCapture(input), collectVisibleAudit: () => this.audit(input),
+      capture: () => this.captureResult(input), collectVisibleAudit: () => this.audit(input),
       closeResultViews: () => this.closeViews() };
     if (!Object.hasOwn(handlers, operation)) throw oosTvError("OOS_REPLAY_OPERATION_REJECTED");
     return handlers[operation]();
+  }
+
+  observation() { return this.capture.observation().then(replayObservation); }
+
+  async uiState() {
+    try {
+      return await this.engine.evaluate(`function u(x){return x&&typeof x.value==='function'?x.value():x;}
+        return {loading:s.isLoading(),error:s.hasError(),tables:oosTables().length,
+        modal:!!document.querySelector('[role="dialog"]'),
+        spinner:!!document.querySelector('[role="progressbar"],[aria-busy="true"]'),
+        replay_toolbar_visible:typeof ${OOS_REPLAY}.isReplayToolbarVisible==='function'
+          ? !!u(${OOS_REPLAY}.isReplayToolbarVisible()):null};`);
+    } catch (error) { return { read_error: error.code || "TV_UI_READ_FAILED" }; }
+  }
+
+  async ready(timeoutMs = this.timeouts.final_render_ms) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const state = await this.uiState();
+      if (state.error) throw Object.assign(oosTvError("TV_ENGINE_CALCULATION_ERROR"), { details: state });
+      if (!state.loading && !state.read_error && state.tables) return;
+      await oosWait(this.timeouts.poll_ms);
+    }
+    throw Object.assign(oosTvError("TV_ENGINE_NOT_READY"), { details: { stage: "FINAL_RENDER", timeout_ms: timeoutMs, ui: await this.uiState() } });
+  }
+
+  async configureProgress(input, observation) {
+    const session = await this.provider?.getTargetInfo?.();
+    this.progress = new OosReplayProgress({ observe: () => this.observation(),
+      command: timeoutMs => this.capture.raw("replay_step", {}, { timeoutMs }),
+      ui: () => this.uiState(), ready: timeoutMs => this.ready(timeoutMs),
+      persist: input.onProgress, settings: this.timeouts });
+    await this.progress.initialize({ observation, target: `${input.date}T20:00:00+02:00`,
+      prior: input.progress, browserSessionId: session?.id, configHash: this.engine.configHash, cutoff: input.cutoff });
+  }
+
+  async resume(input) {
+    if (!input.replay_only || input.meta.status !== "FROZEN") throw oosTvError("TV_REPLAY_SCOPE_REQUIRED");
+    await this.capture.assertChart();
+    this.progressInput = input;
+    const descriptor = await this.capture.evaluate(`(function(){var c=${OOS_CHART};
+      var e=c.getAllStudies().find(x=>x.name==='SMC PRO 3.9.8 — Audit');if(!e)return null;
+      var s=c.getStudyById(e.id),i=s.getInputsInfo().find(x=>x.name==='COLLER LE PLAN COMPACT ICI');
+      return {engine:e,plan:s.getInputValues().find(x=>x.id===i?.id)?.value};})()`);
+    if (!descriptor || oosHash(descriptor.plan || "") !== input.plan_sha256) {
+      if (input.progress?.steps_completed) throw oosTvError("TV_REPLAY_RESUME_PLAN_MISMATCH");
+      return { resumed: false };
+    }
+    this.capture.engine = descriptor.engine; this.capture.date = input.date;
+    this.capture.cutoff = input.cutoff; this.capture.effectiveCutoff = input.cutoff;
+    await this.engine.initialize(input.engine_version); this.engine.loadedHash = input.plan_sha256;
+    await this.engine.verifyInputs();
+    const mode = this.engine.descriptor.values.find(x => x.id === this.engine.ids.mode)?.value;
+    const book = this.engine.descriptor.values.find(x => x.id === this.engine.ids.book)?.value;
+    const obs = await this.observation(), anchor = seconds(obs.selection_anchor), cutoff = seconds(input.cutoff);
+    if (!obs.replay || obs.autoplay || obs.resolution !== "15" || ![cutoff, cutoff - 1].includes(anchor)
+      || mode !== "REPLAY" || book !== "PORTEFEUILLE_REALISTE") throw oosTvError("TV_REPLAY_RESUME_SCOPE_MISMATCH");
+    await this.configureProgress(input, obs); await this.ready();
+    this.active = true; this.resumed = true; this.timeframe = "15m";
+    return { resumed: true, replay: true, plan_sha256: input.plan_sha256, progress: this.progress.state };
   }
 
   async position(input) {
@@ -68,10 +134,12 @@ export class OosTradingViewReplay {
   async start(input) {
     if (!input.replay_only || input.plan_sha256 !== this.engine.loadedHash) throw oosTvError("TV_REPLAY_HASH_MISMATCH");
     await this.engine.verifyInputs();
+    if (this.resumed) return { replay: true, resumed: true, plan_sha256: this.engine.loadedHash };
     const obs = await this.capture.awaitCutoff();
     if (obs.resolution !== "15") throw oosTvError("TV_EXECUTION_TIMEFRAME_MISMATCH");
     await this.capture.evaluate(`${OOS_REPLAY}.changeReplayResolution('15');true`);
     this.trace = [{ visible_as_of: new Date(seconds(obs.at) * 1000).toISOString() }];
+    await this.configureProgress(this.progressInput, replayObservation(obs));
     return { replay: true, execution_timeframe: "15m", plan_sha256: this.engine.loadedHash };
   }
 
@@ -79,22 +147,21 @@ export class OosTradingViewReplay {
     if (!input.replay_only || input.plan_sha256 !== this.engine.loadedHash
       || input.at !== `${this.capture.date}T20:00:00+02:00`) throw oosTvError("TV_REPLAY_END_SCOPE_MISMATCH");
     const end = Date.parse(input.at) / 1000;
-    let obs = await this.capture.observation();
+    let obs = await this.observation();
     for (let step = 0; step < 100 && seconds(obs.at) < end - 1; step++) {
       await this.capture.assertChart();
       if (!obs.replay || obs.autoplay) throw oosTvError("TV_REPLAY_CONTROL_LOST");
-      const previous = seconds(obs.at);
-      await this.capture.raw("replay_step", {});
-      obs = await this.awaitStep(previous, end);
+      obs = await this.progress.step({ observation: obs, bound: end });
       this.trace.push({ visible_as_of: new Date(seconds(obs.at) * 1000).toISOString(), last_bar_time: obs.last_bar_time });
     }
     if (!proveReplayEnd(obs, input.at)) throw oosTvError("TV_REPLAY_END_UNPROVEN");
     const final = await this.drainCarry(obs, input.at);
     obs = final.observation; this.end = final.at;
-    await this.engine.ready(); await this.engine.verifyInputs();
+    await this.ready(); await this.engine.verifyInputs();
     return { replay: true, at: this.end, session_end: input.at, visible_as_of: new Date(seconds(obs.at) * 1000).toISOString(),
       symbol: "CME_MINI:MES1!", plan_sha256: this.engine.loadedHash,
-      config_hash: this.engine.configHash, execution_timeframe: "15m", steps: this.trace };
+      config_hash: this.engine.configHash, execution_timeframe: "15m", steps: this.trace,
+      replay_progress: this.progress.state };
   }
 
   async drainCarry(observation, sessionEnd) {
@@ -110,29 +177,17 @@ export class OosTradingViewReplay {
       // Only the ENGINE manages its already-open positions. Never force-close or change a plan window.
       await this.capture.assertChart();
       if (!observation.replay || observation.autoplay) throw oosTvError("TV_REPLAY_CONTROL_LOST");
-      const previous = seconds(observation.at);
-      await this.capture.raw("replay_step", {});
-      observation = await this.awaitStep(previous, bound);
+      observation = await this.progress.step({ observation, bound, stage: "CARRY" });
       this.trace.push({ visible_as_of: new Date(seconds(observation.at) * 1000).toISOString(), engine_state: state, carry: true });
     }
     // Technical watchdog only; no expiry/cancel/fill or trading-rule mutation.
     throw oosTvError("TV_ENGINE_CARRY_STILL_OPEN");
   }
 
-  async awaitStep(previous, end) {
-    for (let attempt = 0; attempt < 80; attempt++) {
-      const obs = await this.capture.observation();
-      if (seconds(obs.at) > end) throw oosTvError("TV_REPLAY_OVERSHOOT");
-      if (seconds(obs.at) > previous) { await this.engine.ready(); return obs; }
-      await oosWait(250);
-    }
-    throw oosTvError("TV_REPLAY_STEP_TIMEOUT");
-  }
-
   async assertEnd(input) {
     await this.capture.assertChart();
     if (input.at !== this.end || input.plan_sha256 !== this.engine.loadedHash
-      || !proveReplayEnd(await this.capture.observation(), this.end)) throw oosTvError("TV_RESULT_SCOPE_MISMATCH");
+      || !proveReplayEnd(await this.observation(), this.end)) throw oosTvError("TV_RESULT_SCOPE_MISMATCH");
     await this.engine.verifyInputs(); await this.engine.ready();
   }
 
@@ -169,11 +224,22 @@ export class OosTradingViewReplay {
       throw oosTvError("TV_RESULT_CAPTURE_VIEW_MISMATCH");
     }
     const shot = await this.capture.raw("capture_screenshot", { region: "chart", method: "cdp",
-      filename: `oos_${this.capture.date}_${input.timeframe}_final` });
+      filename: `oos_${this.capture.date}_${input.timeframe}_final` }, { timeoutMs: this.timeouts.capture_ms });
     const file = path.resolve(shot.file_path || "");
     if (path.dirname(file) !== path.resolve(this.capture.screenshotRoot)) throw oosTvError("TV_CAPTURE_PATH_REJECTED");
     await this.assertEnd(input);
     return { ...at, image_base64: (await readFile(file)).toString("base64") };
+  }
+
+  async captureResult(input) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(oosTvError("TV_RESULT_CAPTURE_TIMEOUT"), { details: {
+        stage: "CAPTURING_RESULTS", artifact: input.name, timeout_ms: this.timeouts.capture_ms,
+        plan_sha256: this.engine.loadedHash } })), this.timeouts.capture_ms);
+    });
+    try { return await Promise.race([this.resultCapture(input), timeout]); }
+    finally { clearTimeout(timer); }
   }
 
   async audit(input) {

@@ -23,7 +23,7 @@ export async function assemble(pool) {
     chartId: config.tradingview.chart_id, screenshotRoot: config.tradingview.screenshot_root }) : tv;
   const provider = config.tradingview?.adapter === "tradingview-jackson"
     ? await import(new URL("./connection.js", pathToFileURL(config.tradingview.args[0]))) : null;
-  const bridge = provider ? new OosTradingViewReplay({ capture, provider }) : capture;
+  const bridge = provider ? new OosTradingViewReplay({ capture, provider, timeouts: config.replay_timeouts }) : capture;
   const builder = new OosMcpConnection(config.scenario_builder);
   const validator = new OosMcpConnection(config.syntax_validator);
   const runtime = createOosRuntime({ pool, root: config.archive_root, tradingViewCall: bridge.call.bind(bridge),

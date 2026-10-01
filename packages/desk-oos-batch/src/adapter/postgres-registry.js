@@ -60,12 +60,15 @@ export class PostgresOosRegistry {
 
   async save(previous, change, at) {
     const next = { ...previous, ...change };
+    // Post-freeze orchestration must not even rewrite the pinned hash columns.
+    const identityUpdate = previous.plan_sha256 ? "" : "manifest_sha256=$5,plan_sha256=$6,";
+    const identityGuard = previous.plan_sha256 ? " AND manifest_sha256=$5::text AND plan_sha256=$6::text" : "";
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
       const result = await client.query(`UPDATE oos_batch_days SET state=$1,checkpoint=$2,revision=revision+1,
-        candidate_attempt=$3,capture_count=$4,manifest_sha256=$5,plan_sha256=$6,audit=$7::jsonb,run_meta=$8::jsonb,
-        error=$9::jsonb,updated_at=$10 WHERE batch_id=$11 AND day=$12 AND revision=$13 RETURNING ${COLUMNS}`,
+        candidate_attempt=$3,capture_count=$4,${identityUpdate}audit=$7::jsonb,run_meta=$8::jsonb,
+        error=$9::jsonb,updated_at=$10 WHERE batch_id=$11 AND day=$12 AND revision=$13${identityGuard} RETURNING ${COLUMNS}`,
       [next.state, next.checkpoint, next.candidate_attempt, next.capture_count, next.manifest_sha256, next.plan_sha256,
         JSON.stringify(next.audit), JSON.stringify(next.run_meta), JSON.stringify(next.error), at,
         previous.batch_id, previous.day, previous.revision]);

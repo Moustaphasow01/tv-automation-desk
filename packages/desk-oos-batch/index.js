@@ -1,6 +1,7 @@
 import { ArtifactArchive, decodePng, jsonBytes, sha256 } from "./src/adapter/artifact-archive.js";
 import { PostgresOosRegistry } from "./src/adapter/postgres-registry.js";
 import { PostgresOosCommands } from "./src/adapter/postgres-commands.js";
+import { PostgresReplayProgress } from "./src/adapter/postgres-replay-progress.js";
 import { TradingViewMcpAdapter } from "./src/adapter/tradingview-mcp.js";
 import { PremarketWorkflow } from "./src/application/premarket-workflow.js";
 import { PlanFreeze } from "./src/application/plan-freeze.js";
@@ -48,7 +49,7 @@ export function createOosRuntime({ pool, root, tradingViewCall, builderCall, val
   const common = { archive, tradingView, fingerprint: sha256, encodeJson: jsonBytes, decodeImage: decodePng, clock };
   const premarket = new PremarketWorkflow(common);
   const freeze = new PlanFreeze({ ...common, premarket, scenarioBuilder: { request: builderCall }, syntaxValidator: { validate: validatorCall } });
-  const replay = new ReplayWorkflow({ ...common, freeze });
+  const replay = new ReplayWorkflow({ ...common, freeze, progress: new PostgresReplayProgress(pool) });
   return { archive, repository, premarket, freeze, replay, probe: new PostgresOosProbe(pool),
     batches: new PostgresPremarketBatches(repository),
     submittedPlan: new SubmittedPlan({ ...common, repository, premarket, freeze }),

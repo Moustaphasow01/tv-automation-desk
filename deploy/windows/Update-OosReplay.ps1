@@ -4,7 +4,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-# POST-REPLAY only. No installer, migration, OAuth/Caddy update, plan edit or stable-service restart.
+# Replay transport only. One additive progress table; no OAuth/Caddy, plans or stable services.
 $xmlPath = 'C:\ProgramData\DeskOos\services\DeskOos.xml'
 $configPath = 'C:\ProgramData\DeskOos\config\oos.json'
 $xmlOriginal = [IO.File]::ReadAllText($xmlPath)
@@ -15,6 +15,9 @@ if ($oldRoot -notmatch '^C:\\DeskOos\\releases\\[A-Za-z0-9_.-]+$') { throw 'OOS_
 if (Test-Path $newRoot) { throw 'OOS_RELEASE_ALREADY_EXISTS' }
 $files = @(
   'mcp_gpt_desk/src/oos-runtime.js',
+  'mcp_gpt_desk/src/oos-mcp-connection.js',
+  'mcp_gpt_desk/src/oos-tradingview-capture.js',
+  'mcp_gpt_desk/src/oos-replay-progress.js',
   'mcp_gpt_desk/src/oos-tradingview-engine.js',
   'mcp_gpt_desk/src/oos-tradingview-replay.js',
   'mcp_gpt_desk/src/oos-tradingview-panels.js',
@@ -22,7 +25,12 @@ $files = @(
   'packages/desk-oos-batch/src/adapter/tradingview-mcp.js',
   'packages/desk-oos-batch/src/application/replay-workflow.js',
   'packages/desk-oos-batch/src/application/oos-portal.js',
-  'packages/desk-oos-batch/src/domain/replay-artifacts.js'
+  'packages/desk-oos-batch/src/domain/replay-artifacts.js',
+  'packages/desk-oos-batch/index.js',
+  'packages/desk-oos-batch/src/adapter/postgres-replay-progress.js',
+  'packages/desk-oos-batch/src/adapter/postgres-registry.js',
+  'mcp_gpt_desk/scripts/migrate_oos_replay_progress.mjs',
+  'infra/postgres/init/073_oos_replay_progress.sql'
 )
 foreach ($file in $files) { if (!(Test-Path (Join-Path $PatchRoot $file))) { throw 'OOS_REPLAY_PATCH_MISSING' } }
 & robocopy $oldRoot $newRoot /E /XJ /XD node_modules /NFL /NDL /NJH /NJS /NP | Out-Null
@@ -47,9 +55,13 @@ foreach ($file in $files) {
   New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
   Copy-Item (Join-Path $PatchRoot $file) $target
   if ((Get-FileHash (Join-Path $PatchRoot $file)).Hash -ne (Get-FileHash $target).Hash) { throw 'OOS_REPLAY_COPY_HASH_MISMATCH' }
-  & node --check $target
-  if ($LASTEXITCODE -ne 0) { throw 'OOS_REPLAY_SYNTAX_FAILED' }
+  if ($file -notlike '*.sql') {
+    & node --check $target
+    if ($LASTEXITCODE -ne 0) { throw 'OOS_REPLAY_SYNTAX_FAILED' }
+  }
 }
+& node --env-file='C:\ProgramData\DeskOos\config\oos.env' (Join-Path $newRoot 'mcp_gpt_desk/scripts/migrate_oos_replay_progress.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'OOS_REPLAY_PROGRESS_MIGRATION_FAILED' }
 $backup = "C:\ProgramData\DeskOos\config\replay-rollback-$Revision"
 New-Item -ItemType Directory $backup | Out-Null
 Copy-Item $xmlPath "$backup\DeskOos.xml"

@@ -26,13 +26,17 @@ export class OosMcpConnection {
     } catch (error) { await transport.close().catch(() => {}); throw failed("OOS_MCP_CONNECT_FAILED"); }
   }
 
-  async call(operation, args) {
+  async call(operation, args, options = {}) {
     const name = this.config?.tools?.[operation];
     if (typeof name !== "string" || !name) throw failed("OOS_MCP_TOOL_UNCONFIGURED");
     const client = await this.connect();
     let result;
-    try { result = await client.callTool({ name, arguments: args }, undefined, { timeout: 120000 }); }
-    catch { throw failed("OOS_MCP_CALL_FAILED"); }
+    const timeout = options.timeoutMs || this.config.command_timeout_ms || 120000;
+    const started = Date.now();
+    try { result = await client.callTool({ name, arguments: args }, undefined, { timeout }); }
+    catch (error) { throw Object.assign(failed("OOS_MCP_CALL_FAILED"), { details: {
+      operation, tool: name, timeout_ms: timeout, elapsed_ms: Date.now() - started,
+      upstream_code: typeof error.code === "number" ? error.code : null } }); }
     if (result.isError) throw failed("OOS_MCP_TOOL_FAILED");
     return parseOosMcpResult(result, operation);
   }

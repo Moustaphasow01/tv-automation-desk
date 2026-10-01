@@ -40,8 +40,8 @@ export class OosTradingViewCapture {
     if (operation === "capture" && input.phase === "PREMARKET") return this.capture(input);
     throw fail("OOS_REPLAY_BRIDGE_NOT_CERTIFIED");
   }
-  async raw(name, input = {}) {
-    const response = await this.connection.call(name, input);
+  async raw(name, input = {}, options = {}) {
+    const response = await this.connection.call(name, input, options);
     if (response.success === false) throw fail(`TV_${name.toUpperCase()}_FAILED`);
     return response;
   }

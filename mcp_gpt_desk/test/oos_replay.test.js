@@ -65,7 +65,8 @@ test("an ENGINE carry is managed by further replay bars, not a forced close or p
   let reads = 0;
   bridge.engine.readPublished = async () => ({ tables: [{ cells: [{ row: 1, column: 1,
     text: reads++ ? "AUDIT FIN SESSION" : "AUDIT PROVISOIRE + CARRY" }] }] });
-  bridge.awaitStep = async () => ({ replay: true, autoplay: false, at: at + 899, last_bar_time: at });
+  bridge.progress = { step: async () => { calls.push("replay_step");
+    return { replay: true, autoplay: false, at: at + 899, last_bar_time: at }; } };
   const result = await bridge.drainCarry({ replay: true, autoplay: false, at: at - 1 }, "2026-07-30T20:00:00+02:00");
   assert.equal(result.at, "2026-07-30T20:15:00+02:00");
   assert.deepEqual(calls, ["replay_step"]);
