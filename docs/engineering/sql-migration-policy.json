@@ -55,7 +55,8 @@
       "owner": "simulation",
       "patterns": [
         "^simulation_",
-        "^oos_batch_"
+        "^oos_batch_",
+        "^oos_premarket_"
       ]
     },
     {

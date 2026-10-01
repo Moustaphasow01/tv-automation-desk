@@ -1,6 +1,7 @@
 import { requireFact } from "../domain/batch-contract.js";
 
 const COLUMNS = "batch_id,day,definition,state,checkpoint,revision,candidate_attempt,capture_count,manifest_sha256,plan_sha256,audit,run_meta,error,updated_at";
+export const PREPARATION_COLUMNS = "batch_id,day,definition,state,checkpoint,revision,capture_count,manifest_sha256,plan_sha256,error,updated_at";
 function decode(row) {
   return { ...row, day: String(row.day).slice(0, 10), definition: row.definition,
     revision: Number(row.revision), updated_at: new Date(row.updated_at).toISOString() };
@@ -38,6 +39,11 @@ export class PostgresOosRegistry {
     const result = await this.pool.query(`SELECT ${COLUMNS} FROM oos_batch_days WHERE batch_id=$1 AND day=$2`, [day.batch_id, day.date]);
     requireFact(result.rows.length === 1, "OOS_DAY_NOT_FOUND");
     return decode(result.rows[0]);
+  }
+
+  async getPreparation(day, client = this.pool) {
+    const result = await client.query(`SELECT ${PREPARATION_COLUMNS} FROM oos_batch_days WHERE batch_id=$1 AND day=$2`, [day.batch_id, day.date]);
+    return result.rows[0] ? decode(result.rows[0]) : null;
   }
 
   async list(batchId) {

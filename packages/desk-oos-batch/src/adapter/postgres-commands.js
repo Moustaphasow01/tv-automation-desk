@@ -1,5 +1,6 @@
 import { batchDays, requireFact } from "../domain/batch-contract.js";
 import { sha256, jsonBytes } from "./artifact-archive.js";
+import { hasPremarket } from "../domain/premarket-batch.js";
 
 const COLUMNS = "command_id,request_hash,payload,status,next_day,receipts,created_at,updated_at";
 export class PostgresOosCommands {
@@ -42,24 +43,28 @@ export class PostgresOosCommands {
   async processOne(workflow) {
     return this.repository.withLock("oos:command-worker", async () => {
       const result = await this.pool.query(`SELECT ${COLUMNS} FROM oos_batch_commands
-        WHERE status IN ('QUEUED','RUNNING') ORDER BY created_at,command_id LIMIT 1`);
+        WHERE status IN ('QUEUED','RUNNING') ORDER BY updated_at,created_at,command_id LIMIT 1`);
       if (!result.rowCount) return null;
       const command = result.rows[0];
       await this.pool.query("UPDATE oos_batch_commands SET status='RUNNING',updated_at=clock_timestamp() WHERE command_id=$1", [command.command_id]);
-      for (let index = command.next_day; index < command.payload.days.length; index++) {
+      if (command.next_day < command.payload.days.length) {
+        const index = command.next_day;
         const receipt = await this.executeDay(workflow, command, index);
         command.receipts.push(receipt);
+        command.next_day = index + 1;
         await this.pool.query(`UPDATE oos_batch_commands SET next_day=$2,receipts=$3::jsonb,updated_at=clock_timestamp()
           WHERE command_id=$1`, [command.command_id, index + 1, JSON.stringify(command.receipts)]);
       }
-      await this.pool.query("UPDATE oos_batch_commands SET status='COMPLETED',updated_at=clock_timestamp() WHERE command_id=$1", [command.command_id]);
-      return this.receipt({ ...command, status: "COMPLETED", next_day: command.payload.days.length });
+      const status = command.next_day === command.payload.days.length ? "COMPLETED" : "RUNNING";
+      await this.pool.query("UPDATE oos_batch_commands SET status=$2,updated_at=clock_timestamp() WHERE command_id=$1", [command.command_id, status]);
+      return this.receipt({ ...command, status });
     });
   }
 
   async executeDay(workflow, command, index) {
     const day = command.payload.days[index];
     try {
+      if (command.payload.premarket_only) return await this.executePremarketDay(workflow, day);
       let action = command.payload.action;
       if (action === "new-plan") {
         const row = await this.repository.get(day);
@@ -72,5 +77,13 @@ export class PostgresOosCommands {
       const row = await workflow.execute(day, action);
       return { date: day.date, state: row.state, error: row.error };
     } catch (error) { return { date: day.date, state: "COMMAND_FAILED", error: { code: error.code || "OOS_COMMAND_FAILED" } }; }
+  }
+
+  async executePremarketDay(workflow, day) {
+    const prior = await this.repository.getPreparation(day);
+    if (hasPremarket(prior)) return { date: day.date, state: prior.state, error: null };
+    const action = prior?.state === "FAILED_TECHNICAL" ? "retry-capture" : "capture";
+    const row = await workflow.execute(day, action);
+    return { date: day.date, state: row.state, error: row.error };
   }
 }
