@@ -83,6 +83,38 @@ The remote MCP delivered eight real PNG image blocks with matching hashes.
 in remote responses and UI, excluding it from OOS performance aggregates
 without changing, filtering or inventing any ENGINE trade/result.
 
+## Capture-only autonomous orchestration
+
+`prepare_premarket(date)` and `prepare_range(start_date,end_date)` enqueue only
+PREMARKET captures. `get_batch_status` reads technical metadata, never audit,
+results or plan text. V1 fixes MES, 09:00 Paris and CLOSED_ONLY; weekday ranges
+skip weekends, while unavailable provider data are explicit technical failures.
+Neither preparation tool calls a Scenario Builder, freeze or replay.
+
+Migration 072 adds `oos_premarket_batches` and `oos_premarket_batch_days` to the
+isolated OOS database. Batch IDs are deterministic for scope/date/selector;
+membership and existing durable commands are committed together. After a crash,
+the worker skips already hashed 8/8 bundles. Frozen/completed days remain intact.
+A failed preparation can be retried by the same prepare call; only unfinished
+capture checkpoints resume. No automatic replacement plan is requested.
+
+Requested capture concurrency is configurable through `OOS_CAPTURE_CONCURRENCY`
+(1–3); the single TradingView session enforces effective concurrency 1 through
+the existing global worker/chart locks. One day is processed per queue turn so
+a long preparation range cannot monopolize a pending replay command.
+
+Deploy with `Update-OosPremarket.ps1 -PatchRoot <patch> -Revision <git-sha>`.
+It applies only the additive OOS migration, changes the explicit source-file
+allowlist and built UI, and restarts DeskOos only. MCP URL, OAuth/scopes, Pine,
+frozen files and stable trading services are unchanged. Rollback XML/config
+are retained under `config/premarket-rollback-<git-sha>`.
+
+With the private OOS environment loaded, run
+`node mcp_gpt_desk/scripts/verify_oos_preparations.mjs single`, then `range`.
+These official MCP SDK checks prepare July 29 and July 27–29 respectively,
+verify eight actual image blocks/hashes/cutoffs, check repeat-call idempotence,
+and require absent plan/replay directories. They never request replay.
+
 ## Syntax provenance
 
 The builtin validator was compared with the technical parser of the user's

@@ -34,4 +34,6 @@
 .oos-hash { overflow-wrap: anywhere; }
 .oos-timeline { display: grid; gap: 12px; padding-left: 22px; font-size: 13px; }
 .oos-timeline time { color: #a6bdcf; margin-right: 8px; }
+.oos-preparation-progress { margin-top: 16px; border-top: 1px solid #244056; padding-top: 12px; }
+.oos-preparation-progress progress { width: 100%; accent-color: #159dc4; height: 12px; }
 @media (max-width: 640px) { .oos-workspace { padding: 12px; } .oos-heading, .oos-detail header { flex-direction: column; } .oos-captures { grid-template-columns: 1fr; } .oos-filter { align-items: stretch; flex-direction: column; } .oos-form { grid-template-columns: 1fr; } }

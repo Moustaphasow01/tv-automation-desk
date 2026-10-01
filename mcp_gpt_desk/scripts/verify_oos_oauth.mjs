@@ -48,7 +48,7 @@ const client = new Client({ name: "OOS OAuth acceptance", version: "1" });
 try {
   await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
     requestInit: { headers: { authorization: `Bearer ${tokens.access_token}` } } }));
-  assert.equal((await client.listTools()).tools.length, 10);
+  assert.equal((await client.listTools()).tools.length, 13);
   await verifyProbeAndPremarket(client);
   await verifyReadOnlyGrant();
   const refresh = await fetch(`${base}/oauth/token`, { method: "POST", body: new URLSearchParams({
@@ -56,7 +56,7 @@ try {
   assert.equal(refresh.status, 200);
   assert.equal(JSON.parse(Buffer.from((await refresh.json()).access_token.split(".")[1], "base64url")).aud, resource);
   console.log(JSON.stringify({ discovery: "PASS", oauth_pkce: "PASS", issuer_exact: "PASS", resource_audience: "PASS",
-    code_reuse_denied: "PASS", tools_list: "10/10", refresh: "PASS", desk_read: "PASS", desk_write: "PASS",
+    code_reuse_denied: "PASS", tools_list: "13/13", refresh: "PASS", desk_read: "PASS", desk_write: "PASS",
     write_probe: "PASS", premarket_bundle: "PASS", readonly_write_denied: "PASS", chatgpt_account_test: "NOT_RUN" }));
   if (process.argv.includes("--inspector")) await inspectTools(tokens.access_token);
 } finally { await client.close(); }
@@ -80,7 +80,7 @@ async function inspectTools(token) {
     const { stdout, stderr } = await promisify(execFile)(executable, command,
     { timeout: 120000, maxBuffer: 1024 * 1024, env });
     assert.equal(stdout.includes(token) || stderr.includes(token), false, "Inspector output must not contain credentials");
-    const result = JSON.parse(stdout); assert.equal(result.result.tools.length, 10);
+    const result = JSON.parse(stdout); assert.equal(result.result.tools.length, 13);
     console.log("MCP_INSPECTOR_VERSION=2.8.0\nMCP_INSPECTOR_EXIT_CODE=0\nMCP_INSPECTOR_STDOUT=");
     console.log(stdout.trim());
     if (stderr.trim()) console.log(`MCP_INSPECTOR_STDERR=\n${stderr.trim()}`);

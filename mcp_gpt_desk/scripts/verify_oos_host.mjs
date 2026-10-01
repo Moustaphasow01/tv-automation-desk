@@ -11,7 +11,7 @@ const base = config.public_url, mode = process.argv[2] || "check", date = "2026-
 assert.ok(["check", "capture", "retry-capture", "status", "bundle"].includes(mode));
 const headers = { authorization: `Bearer ${process.env.OOS_OPERATOR_TOKEN}` };
 const health = await fetch(`${base}/health`); assert.equal(health.status, 200);
-assert.equal((await health.json()).replay_enabled, false);
+assert.equal((await health.json()).replay_enabled, config.replay_enabled === true);
 if (["capture", "retry-capture"].includes(mode)) {
   const response = await fetch(`${base}/front-api/v1/oos-batch/commands`, { method: "POST",
     headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({
@@ -24,7 +24,7 @@ if (["capture", "retry-capture"].includes(mode)) {
   await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers } }));
   try {
     if (mode === "check") {
-      const tools = (await client.listTools()).tools; assert.equal(tools.length, 10);
+      const tools = (await client.listTools()).tools; assert.equal(tools.length, 13);
       assert.equal((await fetch(`${base}/mcp`, { method: "POST", body: "{}" })).status, 401);
       const first = await client.callTool({ name: "write_probe", arguments: { value: "deployment-sdk-probe-001" } });
       assert.deepEqual(await client.callTool({ name: "write_probe", arguments: { value: "deployment-sdk-probe-001" } }), first);

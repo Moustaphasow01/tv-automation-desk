@@ -27,7 +27,12 @@ test("real HTTP MCP handshake exposes exactly OOS tools and isolated idempotent 
       requestInit: { headers: { authorization: "Bearer synthetic-http-token" } } });
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 10);
+    assert.equal(tools.length, 13);
+    for (const name of ["prepare_premarket", "prepare_range"]) {
+      assert.equal(tools.find(tool => tool.name === name).annotations.readOnlyHint, false);
+      assert.equal(tools.find(tool => tool.name === name).annotations.idempotentHint, true);
+    }
+    assert.equal(tools.find(tool => tool.name === "get_batch_status").annotations.readOnlyHint, true);
     assert.equal(tools.find(tool => tool.name === "write_probe").annotations.readOnlyHint, false);
     assert.ok(!tools.some(tool => /broker|risk|master|monitor|av4/.test(tool.name)));
     const read = () => client.callTool({ name: "get_write_probe", arguments: {} });
@@ -53,4 +58,25 @@ test("MCP pixels are ImageContent, not just metadata; read scope cannot write", 
     assert.equal((await client.callTool({ name: "write_probe", arguments: { value: "forbidden" } })).isError, true);
     assert.equal(wrote, false);
   } finally { await client.close(); await server.close(); }
+});
+
+test("new preparation tools use scoped minimal arguments and neutral status; read-only cannot queue captures", async () => {
+  const calls = [];
+  const portal = { prepare: async date => { calls.push(date); return { date, state: "CAPTURING" }; },
+    prepareRange: async (start, end) => { calls.push([start, end]); return { batch_id: "synthetic", status: "RUNNING" }; },
+    batchStatus: async filters => ({ filters, days: [], ready: 0 }) };
+  for (const scopes of [["desk.read"], ["desk.read", "desk.write"]]) {
+    const server = createOosMcpServer({ auth: { scopes }, portal, probe: {} });
+    const client = new Client({ name: "SYNTHETIC", version: "1" });
+    const [left, right] = InMemoryTransport.createLinkedPair(); await server.connect(left); await client.connect(right);
+    try {
+      const prepared = await client.callTool({ name: "prepare_premarket", arguments: { date: "2026-07-29" } });
+      assert.equal(!!prepared.isError, !scopes.includes("desk.write"));
+      const status = await client.callTool({ name: "get_batch_status", arguments: { month: "2026-07" } });
+      assert.deepEqual(status.structuredContent.filters, { month: "2026-07" });
+      const rejected = await client.callTool({ name: "prepare_range", arguments: { start_date: "2026-07-27", end_date: "2026-07-29", action: "replay" } });
+      assert.equal(rejected.isError, true);
+    } finally { await client.close(); await server.close(); }
+  }
+  assert.deepEqual(calls, ["2026-07-29"]);
 });

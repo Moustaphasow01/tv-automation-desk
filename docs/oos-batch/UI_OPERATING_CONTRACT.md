@@ -28,3 +28,17 @@ Les actions nécessitent l'autorisation serveur desk.write. L'identifiant de com
 Sélection UI/UX : UXR0960,0349,0481,0060,0181,0183,0482,0633,0453,0499,0182,0184. Labels persistants, erreurs actionnables, focus visible, retour de soumission, absence de données distincte de zéro, dates lisibles, navigation clavier, lecture mobile, contexte conservé dans l'URL. Aucun résultat fictif, aucune mutation optimiste du statut.
 
 Tester : chargement, vide, erreur, lecture ancienne, reçu en attente, plan refusé, accès refusé, hash long, plan multiline exact, artefact manquant, données partiellement disponibles.
+
+## Préparation autonome PREMARKET
+
+Le panneau « Préparer les bundles » expose « Préparer journée » et « Préparer
+plage ». Dates V1 juillet/août 2026, MES/09:00 Paris/CLOSED_ONLY fixes et visibles.
+Les commandes serveur persistent immédiatement ; l'UI ne lance pas TradingView
+et n'annonce pas une capture terminée avant le reçu backend.
+
+La lecture de la file affiche Ready / Failed / Completed, prochaine journée en
+attente de scénario, dates en file et heure d'observation serveur. Le batch
+sélectionné (`prepare_batch`) et le filtre de journée (`state`) restent dans
+l'URL. Le filtre PREMARKET_READY permet de repérer les bundles à consommer.
+Après une erreur réseau, la même intention conserve son identifiant de transport.
+Sans desk.write, aucun formulaire de préparation n'est affiché.

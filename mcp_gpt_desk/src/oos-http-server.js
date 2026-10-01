@@ -99,7 +99,8 @@ async function front(context) {
   }
   const readCommand = async (request, limit) => {
     const body = await readJsonBody(request, limit);
-    if (config.replay_enabled !== true && !["capture", "retry-capture"].includes(body.action)) {
+    const preparation = ["/front-api/v1/oos-batch/prepare-premarket", "/front-api/v1/oos-batch/prepare-range"].includes(pathname);
+    if (!preparation && config.replay_enabled !== true && !["capture", "retry-capture"].includes(body.action)) {
       throw Object.assign(new Error("OOS_CAPTURE_ONLY"), { code: "OOS_CAPTURE_ONLY", statusCode: 403 });
     }
     return body;

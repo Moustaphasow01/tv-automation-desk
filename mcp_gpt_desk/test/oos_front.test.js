@@ -40,3 +40,19 @@ test("POST only enqueues a command; provider and replay are not called in HTTP r
   assert.equal(enqueued, 1); assert.equal(ctx.output.status, 202);
   assert.equal(ctx.output.value.status, "QUEUED");
 });
+
+test("BFF preparation endpoints invoke capture-only use cases, reject extra fields and scope writes", async () => {
+  const calls = [], runtime = { preparations: { prepare: async date => { calls.push(date); return { date, state: "CAPTURING" }; },
+    prepareRange: async (start, end) => { calls.push([start, end]); return { batch_id: "TEST", status: "RUNNING" }; },
+    status: async filters => ({ filters, days: [] }) } };
+  const ctx = context("prepare-premarket"); ctx.req.method = "POST"; ctx.readJsonBody = async () => ({ date: "2026-07-29" });
+  await handleOosHttp(ctx, async () => runtime); assert.equal(ctx.output.status, 202);
+  const bad = context("prepare-range"); bad.req.method = "POST";
+  bad.readJsonBody = async () => ({ start_date: "2026-07-27", end_date: "2026-07-29", plan_text: "FORBIDDEN" });
+  await handleOosHttp(bad, async () => runtime); assert.equal(bad.output.value.code, "PREPARATION_FIELDS_INVALID");
+  const read = context("batch-status", { month: "2026-07" });
+  await handleOosHttp(read, async () => runtime); assert.deepEqual(read.output.value.filters, { month: "2026-07" });
+  const denied = context("prepare-premarket"); denied.req.method = "POST"; denied.auth = { ...auth, scopes: ["desk.read"] };
+  await assert.rejects(handleOosHttp(denied, async () => runtime), { code: "OOS_SCOPE_REQUIRED" });
+  assert.deepEqual(calls, ["2026-07-29"]);
+});

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { createOosRuntime, batchDays, validateSmc3Syntax } from "@tv-automation/desk-oos-batch";
+import { createOosRuntime, batchDays, validateSmc3Syntax, createPremarketOrchestration } from "@tv-automation/desk-oos-batch";
 import { OosMcpConnection } from "./oos-mcp-connection.js";
 import { OosTradingViewCapture, OOS_TV_TOOLS } from "./oos-tradingview-capture.js";
 import { OosTradingViewReplay, OOS_REPLAY_TOOLS } from "./oos-tradingview-replay.js";
@@ -32,7 +32,10 @@ export async function assemble(pool) {
       if (!config.syntax_validator) throw Object.assign(new Error("PLAN_VALIDATOR_UNCONFIGURED"), { code: "PLAN_VALIDATOR_UNCONFIGURED" });
       return validator.call("validatePlanSyntax", args);
     } });
-  return { ...runtime, async close() { await Promise.all([tv.close(), builder.close(), validator.close(), provider?.disconnect()]); } };
+  const preparations = createPremarketOrchestration({ batches: runtime.batches,
+    batchId: config.batch_id, symbol: config.symbol, cutoffTime: config.cutoff_time,
+    requestedConcurrency: Number(process.env.OOS_CAPTURE_CONCURRENCY || config.capture_concurrency || 1) });
+  return { ...runtime, preparations, async close() { await Promise.all([tv.close(), builder.close(), validator.close(), provider?.disconnect()]); } };
 }
 
 export async function runOosBatch(runtime, input) {

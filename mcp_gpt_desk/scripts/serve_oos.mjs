@@ -10,6 +10,7 @@ const pool = new pg.Pool({ connectionString: process.env.OOS_DATABASE_URL, max: 
 const runtime = await assemble(pool);
 const server = createOosHttpServer({ runtime, pool, config });
 await pool.query("SELECT 1 FROM oos_batch_days LIMIT 1");
+await pool.query("SELECT 1 FROM oos_premarket_batches LIMIT 1");
 server.listen(config.port || 8795, "127.0.0.1", () => console.log(JSON.stringify({ event: "oos.ready", service: "Desk OOS", port: config.port || 8795 })));
 let stopping = false;
 for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => { stopping = true; server.close(); });
@@ -21,6 +22,7 @@ try {
         return runtime.workflow.execute(day, action);
       } });
       if (receipt) console.log(JSON.stringify({ event: "oos.command", ...receipt }));
+      await runtime.batches.refresh();
     } catch (error) { console.error(JSON.stringify({ event: "oos.worker_error", code: error.code || "OOS_WORKER_FAILED" })); }
     if (!stopping) await new Promise(resolve => setTimeout(resolve, 2000));
   }

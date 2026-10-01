@@ -11,6 +11,13 @@ export function createOosMcpServer({ portal, probe, auth }) {
   const server = new McpServer({ name: "Desk OOS", version: "1.0.0" });
   const read = (name, description, input, run) => register(server, auth, { name, description, input, mode: "read", run });
   const write = (name, description, input, run) => register(server, auth, { name, description, input, mode: "write", run });
+  write("prepare_premarket", "Queue a real MES 09:00 Paris CLOSED_ONLY premarket bundle. Exactly 8 captures; idempotent; never generates a plan or runs replay.", day,
+    args => portal.prepare(args.date));
+  write("prepare_range", "Durably queue PREMARKET only for weekdays in July/August 2026. One exclusive TradingView session; resumes after crashes. Existing bundles are never recaptured.",
+    z.object({ start_date: date, end_date: date }).strict(), args => portal.prepareRange(args.start_date, args.end_date));
+  read("get_batch_status", "Read only technical preparation/day checkpoints, counts, hashes and queue. No audit, dashboard, plan text or post-cutoff market data.",
+    z.object({ batch_id: z.string().regex(/^premarket-[a-f0-9]{40}$/).optional(), month: month.optional(),
+      start_date: date.optional(), end_date: date.optional() }).strict(), args => portal.batchStatus(args));
   read("list_pending_days", "List unfinished OOS days. No post-cutoff results are returned before freeze.", empty,
     () => portal.list("pending"));
   read("list_completed_days", "List completed, frozen OOS days, optionally in a month.", z.object({ month: month.optional() }).strict(),
@@ -34,7 +41,7 @@ function register(server, auth, tool) {
   server.registerTool(tool.name, {
     description: tool.description, inputSchema: tool.input,
     annotations: { readOnlyHint: tool.mode === "read", destructiveHint: false,
-      idempotentHint: true, openWorldHint: tool.name === "request_replay" },
+      idempotentHint: true, openWorldHint: ["request_replay", "prepare_premarket", "prepare_range"].includes(tool.name) },
     _meta: { securitySchemes: [{ type: "oauth2", scopes: [scope] }] },
   }, async args => {
     if (!auth?.scopes?.includes(scope)) return failed("OOS_SCOPE_REQUIRED");

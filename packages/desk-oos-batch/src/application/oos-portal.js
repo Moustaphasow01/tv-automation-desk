@@ -49,6 +49,9 @@ export class OosPortal {
     return { month, results, stats: aggregateBatch(rows.map(row => this.sample(row))) };
   }
   submit(date, text) { return this.runtime.submittedPlan.submit(this.day(date), text); }
+  prepare(date) { return this.runtime.preparations.prepare(date); }
+  prepareRange(start, end) { return this.runtime.preparations.prepareRange(start, end); }
+  batchStatus(filters) { return this.runtime.preparations.status(filters); }
   async requestReplay(date) {
     const day = this.day(date), row = await this.runtime.repository.get(day);
     const postFreeze = STAGES.indexOf(row.checkpoint) >= STAGES.indexOf("FROZEN");

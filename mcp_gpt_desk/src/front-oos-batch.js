@@ -2,10 +2,11 @@ import { projectDay, aggregateBatch } from "@tv-automation/desk-oos-batch";
 import { getOosRuntime } from "./oos-runtime.js";
 
 const PREFIX = "/front-api/v1/oos-batch/";
-const READS = new Set(["days", "day", "artifact", "command"]);
+const READS = new Set(["days", "day", "artifact", "command", "batch-status"]);
+const WRITES = new Set(["commands", "prepare-premarket", "prepare-range"]);
 const fail = (code, statusCode = 400) => Object.assign(new Error(code), { code, statusCode });
 export const isOosPath = pathname => pathname.startsWith(PREFIX);
-export const isOosWrite = (pathname, method) => pathname === `${PREFIX}commands` && method === "POST";
+export const isOosWrite = (pathname, method) => pathname.startsWith(PREFIX) && WRITES.has(pathname.slice(PREFIX.length)) && method === "POST";
 export const isOosMethod = (pathname, method) => isOosWrite(pathname, method) || (method === "GET" && READS.has(pathname.slice(PREFIX.length)));
 
 export function requireOosAuth(auth, write) {
@@ -23,6 +24,14 @@ export async function handleOosHttp(context, runtimeProvider = getOosRuntime) {
   try {
     if (write) {
       const body = await readJsonBody(req, 16000);
+      if (pathname.endsWith("/prepare-premarket")) {
+        if (Object.keys(body).some(key => key !== "date")) throw fail("PREPARATION_FIELDS_INVALID");
+        return sendJson(res, 202, await runtime.preparations.prepare(body.date), headers);
+      }
+      if (pathname.endsWith("/prepare-range")) {
+        if (Object.keys(body).some(key => !["start_date", "end_date"].includes(key))) throw fail("PREPARATION_FIELDS_INVALID");
+        return sendJson(res, 202, await runtime.preparations.prepareRange(body.start_date, body.end_date), headers);
+      }
       return sendJson(res, 202, await runtime.commands.enqueue(body, body.command_id), headers);
     }
     if (pathname.endsWith("/artifact")) {
@@ -39,6 +48,7 @@ export async function handleOosHttp(context, runtimeProvider = getOosRuntime) {
 }
 
 async function readView(runtime, view, query) {
+  if (view === "batch-status") return runtime.preparations.status(query);
   if (view === "command") {
     return runtime.commands.get(query.command_id);
   }
