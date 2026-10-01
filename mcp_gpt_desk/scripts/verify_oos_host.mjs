@@ -24,7 +24,7 @@ if (["capture", "retry-capture"].includes(mode)) {
   await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers } }));
   try {
     if (mode === "check") {
-      const tools = (await client.listTools()).tools; assert.equal(tools.length, 13);
+      const tools = (await client.listTools()).tools; assert.equal(tools.length, 16);
       assert.equal((await fetch(`${base}/mcp`, { method: "POST", body: "{}" })).status, 401);
       const first = await client.callTool({ name: "write_probe", arguments: { value: "deployment-sdk-probe-001" } });
       assert.deepEqual(await client.callTool({ name: "write_probe", arguments: { value: "deployment-sdk-probe-001" } }), first);
