@@ -103,7 +103,14 @@ export class OosTradingViewReplay {
     const mode = this.engine.descriptor.values.find(x => x.id === this.engine.ids.mode)?.value;
     const book = this.engine.descriptor.values.find(x => x.id === this.engine.ids.book)?.value;
     const obs = await this.observation(), anchor = seconds(obs.selection_anchor), cutoff = seconds(input.cutoff);
-    if (!obs.replay || obs.autoplay || obs.resolution !== "15" || ![cutoff, cutoff - 1].includes(anchor)
+    // currentDate can stay at the initial anchor on the first step, then track subsequent steps.
+    // A persisted, hash-bound cursor authorizes resuming that progressed session, never rewinding it.
+    const anchored = [cutoff, cutoff - 1].includes(anchor);
+    const progressed = input.progress?.steps_completed > 0 && Number.isFinite(anchor)
+      && anchor >= cutoff - 1 && anchor <= seconds(obs.at)
+      && seconds(obs.at) <= seconds(`${input.date}T20:00:00+02:00`) + 86400;
+    if (!obs.replay || obs.autoplay || obs.resolution !== "15" || !(anchored || progressed)
+      || !["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(obs.symbol) || obs.timezone !== "Europe/Paris"
       || mode !== "REPLAY" || book !== "PORTEFEUILLE_REALISTE") throw oosTvError("TV_REPLAY_RESUME_SCOPE_MISMATCH");
     await this.configureProgress(input, obs); await this.ready();
     this.active = true; this.resumed = true; this.timeframe = "15m";

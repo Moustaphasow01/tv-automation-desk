@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { OosReplayProgress, replayObservation } from "../src/oos-replay-progress.js";
 import { TradingViewMcpAdapter } from "../../packages/desk-oos-batch/src/adapter/tradingview-mcp.js";
+import { OosTradingViewReplay } from "../src/oos-tradingview-replay.js";
+import { oosHash } from "../src/oos-tradingview-engine.js";
 
 const cutoff = "2026-07-27T09:00:00+02:00", start = Date.parse(cutoff) / 1000;
 function fixture(overrides = {}) {
@@ -83,4 +85,27 @@ test("a lost progressed session cannot silently restart at the cutoff", async ()
   await assert.rejects(adapter.prepareFrozenReplay({ meta: { status: "FROZEN", plan_sha256: "a".repeat(64) },
     progress: { steps_completed: 1 } }), { code: "REPLAY_RESUME_REQUIRED" });
   assert.deepEqual(calls, ["resumeFrozenReplay"]);
+});
+test("resume accepts a moving mid-session anchor only with a persisted, scoped progress record", async () => {
+  const plan = "SYNTHETIC_RESUME_PLAN", hash = oosHash(plan), calls = [];
+  const capture = { assertChart: async () => calls.push("assert"),
+    evaluate: async () => ({ engine: { id: "SYNTHETIC_ENGINE" }, plan }) };
+  const replay = new OosTradingViewReplay({ capture });
+  replay.engine = { ids: { mode: "mode", book: "book" }, initialize: async () => {},
+    verifyInputs: async () => {}, descriptor: { values: [
+      { id: "mode", value: "REPLAY" }, { id: "book", value: "PORTEFEUILLE_REALISTE" }] } };
+  let obs = replayObservation({ at: start + 7199, last_bar_time: start + 6300,
+    replay: true, autoplay: false, resolution: "15", symbol: "CME_MINI_DL:MES1!", timezone: "Europe/Paris" });
+  replay.observation = async () => obs;
+  replay.configureProgress = async () => { calls.push("reconcile"); replay.progress = { state: {} }; };
+  replay.ready = async () => {};
+  const input = { date: "2026-07-27", cutoff, replay_only: true, engine_version: "V3.9.8",
+    plan_sha256: hash, meta: { status: "FROZEN" }, progress: { steps_completed: 8 } };
+  assert.equal((await replay.resume(input)).resumed, true);
+  assert.deepEqual(calls, ["assert", "reconcile"]);
+  await assert.rejects(replay.resume({ ...input, progress: null }), { code: "TV_REPLAY_RESUME_SCOPE_MISMATCH" });
+  obs = { ...obs, symbol: "OTHER_SYMBOL" };
+  await assert.rejects(replay.resume(input), { code: "TV_REPLAY_RESUME_SCOPE_MISMATCH" });
+  obs = { ...obs, symbol: "CME_MINI_DL:MES1!", selection_anchor: start - 86400 };
+  await assert.rejects(replay.resume(input), { code: "TV_REPLAY_RESUME_SCOPE_MISMATCH" });
 });
