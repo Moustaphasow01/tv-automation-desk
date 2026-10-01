@@ -27,7 +27,7 @@ test("real HTTP MCP handshake exposes exactly OOS tools and isolated idempotent 
       requestInit: { headers: { authorization: "Bearer synthetic-http-token" } } });
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 13);
+    assert.equal(tools.length, 16);
     for (const name of ["prepare_premarket", "prepare_range"]) {
       assert.equal(tools.find(tool => tool.name === name).annotations.readOnlyHint, false);
       assert.equal(tools.find(tool => tool.name === name).annotations.idempotentHint, true);

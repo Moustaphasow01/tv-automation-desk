@@ -92,7 +92,7 @@ test("OOS DCR public client, consent, PKCE, exact iss/resource/aud, tools/list a
   try {
     await client.connect(new StreamableHTTPClientTransport(new URL(`${f.origin}/oos/mcp`), {
       requestInit: { headers: { authorization: `Bearer ${pair.access_token}` } } }));
-    assert.equal((await client.listTools()).tools.length, 13);
+    assert.equal((await client.listTools()).tools.length, 16);
   } finally { await client.close(); }
   assert.equal((await f.post("token", form)).status, 400);
   const refresh = await f.post("token", { grant_type: "refresh_token", refresh_token: pair.refresh_token,

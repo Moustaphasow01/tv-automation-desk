@@ -7,10 +7,16 @@ const empty = z.object({}).strict();
 const day = z.object({ date }).strict();
 
 /** No legacy MCP registry is imported. Only these explicit OOS capabilities exist. */
-export function createOosMcpServer({ portal, probe, auth }) {
+export function createOosMcpServer({ portal, probe, auth, contracts }) {
   const server = new McpServer({ name: "Desk OOS", version: "1.0.0" });
   const read = (name, description, input, run) => register(server, auth, { name, description, input, mode: "read", run });
   const write = (name, description, input, run) => register(server, auth, { name, description, input, mode: "write", run });
+  read("get_engine_constraints", "Read authoritative V3.9.8 active ENGINE constraints and SHA-256. No market data, plan mutation or replay. Fails on CONTRACT_DRIFT.", empty,
+    () => contracts.engineConstraints());
+  read("get_smc3_contract", "Read complete deployed SMC3 syntax contract, validator-tested synthetic examples and SHA-256. Never creates or repairs a trading plan.", empty,
+    () => contracts.smc3Contract());
+  read("get_runtime_contract", "Read both authoritative ENGINE/SMC3 contracts and hashes to pin before a batch. Strictly read-only; changed runtime requires HALT.", empty,
+    () => contracts.runtimeContract());
   write("prepare_premarket", "Queue a real MES 09:00 Paris CLOSED_ONLY premarket bundle. Exactly 8 captures; idempotent; never generates a plan or runs replay.", day,
     args => portal.prepare(args.date));
   write("prepare_range", "Durably queue PREMARKET only for weekdays in July/August 2026. One exclusive TradingView session; resumes after crashes. Existing bundles are never recaptured.",
