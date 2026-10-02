@@ -39,7 +39,10 @@ export class OosDayWorkflow {
     if (row.state === "FAILED_TECHNICAL") {
       requireFact(["retry", "retry-capture"].includes(action), "TECHNICAL_RETRY_REQUIRED");
       if (action === "retry-capture") requireFact(STAGES.indexOf(row.checkpoint) <= STAGES.indexOf("PREMARKET_READY"), "CAPTURE_RETRY_SCOPE_REJECTED");
-      return this.repository.save(row, { state: row.checkpoint, error: null }, this.clock());
+      // Repair the old combined replay/capture checkpoint from its immutable completion proof.
+      const checkpoint = row.checkpoint === "REPLAYING" && await this.replay.completedReplay(row.definition)
+        ? "CAPTURING_RESULTS" : row.checkpoint;
+      return this.repository.save(row, { state: checkpoint, checkpoint, error: null }, this.clock());
     }
     requireFact(action !== "new-plan", "PLAN_REPLACEMENT_FORBIDDEN");
     return row;
@@ -66,11 +69,23 @@ export class OosDayWorkflow {
       // Chart lock spans both replay and result capture, preventing another day moving the UI between them.
       result = await this.repository.withChartLock(async () => {
         await this.replay.replay(day);
-        return this.replay.results(day);
+        const capturing = await this.repository.save(row, {
+          state: "CAPTURING_RESULTS", checkpoint: "CAPTURING_RESULTS" }, this.clock());
+        return this.captureResults(capturing);
       });
+      return result;
     }
-    if (state === "CAPTURING_RESULTS") await this.replay.verifyResults(day, row.run_meta);
+    if (state === "CAPTURING_RESULTS") return this.repository.withChartLock(() => this.captureResults(row));
     const next = STAGES[STAGES.indexOf(state) + 1];
     return this.repository.save(row, { state: next, checkpoint: next, ...result }, this.clock());
+  }
+
+  async captureResults(row) {
+    const frozen = await this.freeze.verify(row.definition);
+    requireFact(frozen.meta.plan_sha256 === row.plan_sha256
+      && frozen.meta.premarket_manifest_sha256 === row.manifest_sha256, "FROZEN_REGISTRY_MISMATCH");
+    const result = await this.replay.results(row.definition);
+    await this.replay.verifyResults(row.definition, result.run_meta);
+    return this.repository.save(row, { state: "COMPLETED", checkpoint: "COMPLETED", ...result }, this.clock());
   }
 }

@@ -44,6 +44,7 @@ export async function fixture() {
       return { ...input, replay: true, visible_as_of: input.cutoff, captured_at: clock(), source: "TEST_ONLY", image_base64: PNG };
     },
     async prepareFrozenReplay(input) { calls.push("load"); this.loaded = input; },
+    async resumeResultCapture() { calls.push("resume-capture"); },
     async readPlanFingerprint() { return { ...DAY, plan_sha256: sha256(PLAN) }; },
     async replayTo(input) { calls.push("replay"); return { replay: true, at: input.end, symbol: input.symbol, plan_sha256: input.plan_sha256 }; },
     async collectResults(input) {

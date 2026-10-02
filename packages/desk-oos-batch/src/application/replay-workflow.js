@@ -1,6 +1,6 @@
 import { requireFact } from "../domain/batch-contract.js";
 import { isDeepStrictEqual } from "node:util";
-import { REPLAY_IMAGES, validatePublishedResult, validateArtifactList, validateAuditPresentation } from "../domain/replay-artifacts.js";
+import { REPLAY_IMAGES, validatePublishedResult, validateArtifactList, validateAuditPresentation, validatePanelPresentation } from "../domain/replay-artifacts.js";
 
 export class ReplayWorkflow {
   constructor({ archive, tradingView, freeze, fingerprint, decodeImage, clock, progress }) {
@@ -9,11 +9,8 @@ export class ReplayWorkflow {
 
   async replay(day) {
     const frozen = await this.freeze.verify(day);
-    const prior = await this.archive.optionalJson(day, "evidence/replay-completed.json");
-    if (prior && await this.archive.optionalJson(day, "evidence/results.json")) {
-      requireFact(prior.plan_sha256 === frozen.meta.plan_sha256, "REPLAY_HASH_MISMATCH");
-      return prior;
-    }
+    const prior = await this.completedReplay(day);
+    if (prior) return prior;
     const progress = await this.progress?.read(day, frozen.meta.plan_sha256);
     const onProgress = value => this.progress?.save(day, frozen.meta.plan_sha256, value);
     await this.tradingView.prepareFrozenReplay({ ...day, ...frozen, progress, onProgress });
@@ -26,17 +23,27 @@ export class ReplayWorkflow {
     const ended = result.at === end || result.session_end === end && Date.parse(result.at) > Date.parse(end);
     requireFact(result.replay === true && ended && result.symbol === day.symbol
       && result.plan_sha256 === frozen.meta.plan_sha256, "REPLAY_COMPLETION_UNPROVEN");
-    if (prior) return prior;
     const record = { ...result, completed_at: this.clock() };
     await this.archive.putJson(day, "evidence/replay-completed.json", record);
     return record;
   }
 
+  async completedReplay(day) {
+    const prior = await this.archive.optionalJson(day, "evidence/replay-completed.json");
+    if (!prior) return null;
+    const frozen = await this.freeze.verify(day), end = `${day.date}T20:00:00+02:00`;
+    requireFact(prior.plan_sha256 === frozen.meta.plan_sha256, "REPLAY_HASH_MISMATCH");
+    requireFact(prior.replay === true && prior.symbol === day.symbol
+      && (prior.at === end || prior.session_end === end && Date.parse(prior.at) > Date.parse(end)), "REPLAY_COMPLETION_UNPROVEN");
+    return prior;
+  }
+
   async results(day) {
-    const { meta } = await this.freeze.verify(day);
-    const end = await this.archive.readJson(day, "evidence/replay-completed.json");
+    const frozen = await this.freeze.verify(day), { meta } = frozen;
+    const end = await this.completedReplay(day);
+    requireFact(end, "REPLAY_COMPLETION_UNPROVEN");
     const existing = await this.archive.optionalJson(day, "evidence/results.json");
-    const result = existing || await this.tradingView.collectResults({ ...day, end: end.at, plan_sha256: meta.plan_sha256 });
+    const result = existing || await this.collectResults({ day, frozen, end });
     validatePublishedResult(result, { ...day, plan_sha256: meta.plan_sha256, at: end.at });
     const names = [...REPLAY_IMAGES, ...(result.positions_distinct ? ["positions_final.png"] : [])];
     for (const name of names) this.decodeImage(result.images?.[name]);
@@ -54,12 +61,29 @@ export class ReplayWorkflow {
     return { run_meta: runMeta, audit: result.audit };
   }
 
+  async collectResults({ day, frozen, end }) {
+    const progress = await this.progress?.read(day, frozen.meta.plan_sha256);
+    await this.tradingView.resumeResultCapture({ ...day, ...frozen, completed_replay: end, progress });
+    try {
+      return await this.tradingView.collectResults({ ...day, end: end.at, plan_sha256: frozen.meta.plan_sha256 });
+    } catch (error) {
+      if (error.diagnostic_image_base64) {
+        const bytes = this.decodeImage(error.diagnostic_image_base64);
+        const artifact = await this.archive.put(day, `evidence/panel-failure-${this.fingerprint(bytes).slice(0, 20)}.png`, bytes);
+        delete error.diagnostic_image_base64;
+        error.details = { ...error.details, debug_artifact: artifact };
+      }
+      throw error;
+    }
+  }
+
   async verifyResults(day, pinned) {
     const frozen = await this.freeze.verify(day);
     const meta = await this.archive.readJson(day, "replay/run_meta.json");
     requireFact(isDeepStrictEqual(meta, pinned)
       && meta.plan_sha256 === frozen.meta.plan_sha256, "RESULT_REGISTRY_MISMATCH");
     validateAuditPresentation(meta.capture_provenance?.["dashboard_final.png"]?.presentation);
+    if (meta.positions_distinct) validatePanelPresentation(meta.capture_provenance?.["positions_final.png"]?.presentation, "POSITIONS");
     const integrity = await this.archive.readJson(day, "evidence/result-integrity.json");
     requireFact(integrity.plan_sha256 === meta.plan_sha256, "RESULT_INTEGRITY_SCOPE_MISMATCH");
     validateArtifactList(integrity.artifacts, meta);

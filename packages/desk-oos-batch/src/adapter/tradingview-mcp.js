@@ -34,6 +34,13 @@ export class TradingViewMcpAdapter {
 
   readPlanFingerprint(day) { return this.call("readPlanFingerprint", { symbol: day.symbol, cutoff: day.cutoff }); }
 
+  async resumeResultCapture(input) {
+    requireFact(input.meta.status === "FROZEN" && input.completed_replay?.replay === true, "CAPTURE_RESUME_REQUIRED");
+    const result = await this.call("resumeResultCapture", { ...input, replay_only: true, plan_sha256: input.meta.plan_sha256 });
+    requireFact(result?.resumed === true, "CAPTURE_RESUME_REQUIRED");
+    return result;
+  }
+
   async replayTo(input) {
     await this.call("startReplay", { replay_only: true, plan_sha256: input.plan_sha256 });
     return this.call("advanceTo", { at: input.end, replay_only: true, plan_sha256: input.plan_sha256 });

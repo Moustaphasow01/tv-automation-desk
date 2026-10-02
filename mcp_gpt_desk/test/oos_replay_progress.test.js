@@ -109,3 +109,21 @@ test("resume accepts a moving mid-session anchor only with a persisted, scoped p
   obs = { ...obs, symbol: "CME_MINI_DL:MES1!", selection_anchor: start - 86400 };
   await assert.rejects(replay.resume(input), { code: "TV_REPLAY_RESUME_SCOPE_MISMATCH" });
 });
+
+test("capture resume after restart never loads/seeks/steps a completed replay", async () => {
+  const calls = [], end = "2026-07-28T20:00:00+02:00", at = Date.parse(end) / 1000;
+  let resolution = "5";
+  const replay = new OosTradingViewReplay({ capture: { assertChart: async () => {}, raw: async (tool, args) => {
+    calls.push(tool); assert.equal(tool, "chart_set_timeframe"); assert.equal(args.timeframe, "15"); resolution = "15";
+  } } });
+  replay.observation = async () => ({ at: at - 1, last_bar_time: at - 900, replay: true, autoplay: false, resolution });
+  replay.resume = async () => { calls.push("verify-resume"); replay.engine.configHash = "SYNTHETIC_CONFIG"; };
+  replay.assertEnd = async () => {};
+  const input = { replay_only: true, meta: { status: "FROZEN" }, plan_sha256: "a".repeat(64), symbol: "MES1!",
+    completed_replay: { replay: true, at: end, plan_sha256: "a".repeat(64), symbol: "MES1!", config_hash: "SYNTHETIC_CONFIG" } };
+  const result = await replay.resumeResultCapture(input);
+  assert.equal(result.capture_only, true); assert.equal(replay.end, end);
+  assert.deepEqual(calls, ["chart_set_timeframe", "verify-resume"]);
+  replay.observation = async () => ({ replay: true, autoplay: false, at: at - 900, last_bar_time: at - 1800 });
+  await assert.rejects(replay.resumeResultCapture(input), { code: "TV_CAPTURE_RESUME_END_UNPROVEN" });
+});

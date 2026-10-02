@@ -21,11 +21,12 @@ export class OosTradingViewReplay {
     this.capture = capture; this.active = false; this.trace = [];
     this.provider = provider; this.timeouts = { ...REPLAY_TIMEOUTS, ...timeouts };
     this.engine = new OosTradingViewEngine(capture);
-    this.panels = new OosTradingViewPanels({ engine: this.engine, provider });
+    this.panels = new OosTradingViewPanels({ engine: this.engine, provider, settings: { layout_ms: this.timeouts.ui_transition_ms } });
   }
 
   async call(operation, input) {
     if (operation === "resumeFrozenReplay") return this.resume(input);
+    if (operation === "resumeResultCapture") return this.resumeResultCapture(input);
     if (operation === "openSymbol") {
       this.active = false; this.resumed = false; this.progress = null; this.end = null;
       return this.capture.call(operation, input);
@@ -122,6 +123,24 @@ export class OosTradingViewReplay {
     await this.engine.ready(); return positioned;
   }
 
+  async resumeResultCapture(input) {
+    const end = input.completed_replay;
+    if (!input.replay_only || input.meta.status !== "FROZEN" || !end?.replay
+      || end.plan_sha256 !== input.plan_sha256 || end.symbol !== input.symbol) throw oosTvError("TV_CAPTURE_RESUME_SCOPE_MISMATCH");
+    // A display-timeframe change during a partial capture must not reset or advance replay.
+    await this.capture.assertChart();
+    const observed = await this.observation();
+    if (!proveReplayEnd(observed, end.at)) throw oosTvError("TV_CAPTURE_RESUME_END_UNPROVEN");
+    if (observed.resolution !== "15") {
+      await this.capture.raw("chart_set_timeframe", { timeframe: "15" }, { timeoutMs: this.timeouts.ui_transition_ms });
+    }
+    await this.resume(input);
+    if (this.engine.configHash !== end.config_hash && end.config_hash) throw oosTvError("TV_CAPTURE_RESUME_CONFIG_MISMATCH");
+    this.end = end.at;
+    await this.assertEnd({ at: this.end, plan_sha256: input.plan_sha256 });
+    return { resumed: true, capture_only: true, at: this.end, plan_sha256: input.plan_sha256 };
+  }
+
   async closeViews() {
     await this.capture.assertChart(); return this.panels.restoreViewport();
   }
@@ -201,7 +220,7 @@ export class OosTradingViewReplay {
   async openPanel(view, input) {
     if (!input.replay_only || !this.end) throw oosTvError("TV_RESULT_BEFORE_REPLAY_END");
     await this.assertEnd({ at: this.end, plan_sha256: this.engine.loadedHash });
-    const result = await this.panels.open(view);
+    const result = await this.panels.open(view, { replay_end: this.end });
     this.view = view;
     if (view === "AUDIT") this.published = await this.engine.readPublished();
     if (view === "POSITIONS") this.publishedPositions = await this.engine.readPublished();

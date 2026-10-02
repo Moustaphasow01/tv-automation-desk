@@ -25,13 +25,31 @@ function validateResultCaptures(result, expected) {
     requireFact(capture?.at === expected.at && capture.symbol === expected.symbol && capture.plan_sha256 === expected.plan_sha256
       && Number.isFinite(Date.parse(capture.captured_at)) && typeof capture.source === "string", "RESULT_PROVENANCE_REQUIRED");
     if (name === "5m_final.png" || name === "15m_final.png") requireFact(capture.timeframe === name.split("_")[0], "RESULT_TIMEFRAME_MISMATCH");
+    if (name === "positions_final.png") validatePanelPresentation(capture.presentation, "POSITIONS");
   }
 }
 
 export function validateAuditPresentation(panel) {
+  validatePanelPresentation(panel, "AUTO");
+  requireFact(panel.title === "AUDIT FIN SESSION", "DEDICATED_AUDIT_REQUIRED");
+}
+
+export function validatePanelPresentation(panel, view) {
+  const code = view === "AUTO" ? "DEDICATED_AUDIT_REQUIRED" : "DEDICATED_POSITIONS_REQUIRED";
   requireFact(panel?.dedicated_panel === true && panel.maximized === true && panel.complete_table === true && panel.native_table === true
-    && panel.view === "AUTO" && panel.title === "AUDIT FIN SESSION" && panel.pane_index > 0
-    && panel.bounds?.height >= 900 && panel.minimum_font_size >= 12, "DEDICATED_AUDIT_REQUIRED");
+    && panel.view === view && panel.pane_index > 0 && panel.bounds?.height > 0 && panel.minimum_font_size >= 12, code);
+  if (panel.schema_version === "oos-native-panel/2") requireFact(hasCompleteNativeGeometry(panel), code);
+}
+
+function hasCompleteNativeGeometry(panel) {
+  return panel.table_contained_in_pane === true && panel.clipped_cells === 0 && panel.layout_stable === true
+    && panel.expected_tables?.length > 0 && panel.expected_tables.every(expected =>
+      panel.rendered_tables?.some(table => matchesNativeTable(expected, table)));
+}
+
+function matchesNativeTable(expected, table) {
+  return ["id", "rows", "columns"].every(key => table[key] === expected[key])
+    && table.complete === true && table.contained_in_pane === true && table.clipped_cells === 0;
 }
 
 export function validateArtifactList(artifacts, meta) {

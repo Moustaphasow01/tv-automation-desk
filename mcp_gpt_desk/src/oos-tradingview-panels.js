@@ -1,82 +1,124 @@
-import { OOS_CHART, oosTvError, oosWait } from "./oos-tradingview-engine.js";
+import { oosTvError, oosWait } from "./oos-tradingview-engine.js";
+import { replayObservation } from "./oos-replay-progress.js";
+import { panelProofScript, panelFailureReasons, panelCaptureGeometry } from "./oos-tradingview-panel-proof.js";
 
-/** CDP screenshot specialization only: use the existing provider, but clip the actual audit pane. */
+/** Display-only recovery of the installed native pane. Never changes ENGINE trading inputs. */
 export class OosTradingViewPanels {
-  constructor({ engine, provider }) { Object.assign(this, { engine, provider }); }
+  constructor({ engine, provider, settings = {}, now = Date.now, wait = oosWait }) {
+    Object.assign(this, { engine, provider, now, wait });
+    this.settings = { layout_ms: 30000, poll_ms: 200, max_attempts: 3, max_width: 10000, max_height: 8000, ...settings };
+    this.history = []; this.dimensions = { width: 3600, height: 1200 };
+  }
 
-  async open(view) {
+  async open(view, context = {}) {
     if (!["AUDIT", "POSITIONS"].includes(view)) throw oosTvError("TV_PANEL_VIEW_REJECTED");
+    this.context = context; this.history = [];
     await this.engine.setInput("view", view === "AUDIT" ? "AUTO" : view);
     await this.engine.setInput("text", "Normal");
     await this.engine.setInput("width", 98);
-    const priorLegend = await this.engine.evaluate(`var l=c._chartWidget.model().model().properties().childs()
+    const prior = await this.engine.evaluate(`var l=c._chartWidget.model().model().properties().childs()
       .paneProperties.childs().legendProperties.childs().showLegend;var prior=l.value();l.setValue(false);
       s._study.setHasExternalViews(false);return prior;`);
-    this.legend ??= priorLegend;
-    await this.engine.evaluate(`s.setVisible(true);if(s.paneIndex()===0)s.unmergeDown();
-      var p=c.getPanes()[s.paneIndex()];if(p.isCollapsed())p.restore();p.setMaximized(true);return s.paneIndex();`);
-    const client = await this.client();
-    await client.Emulation.setDeviceMetricsOverride({ width: 3600, height: 1200, deviceScaleFactor: 1, mobile: false });
-    await oosWait(1000);
-    await this.engine.ready();
+    this.legend ??= prior;
+    await this.recover(view);
     return { positions_distinct: true };
   }
 
-  async proof() {
-    return this.engine.evaluate(`var i=s.paneIndex(),p=c.getPanes()[i],w=c._chartWidget._paneWidgets.value()[i];
-      var rect=w.getElement().getBoundingClientRect(),t=oosTables();
-      var text=t.flatMap(x=>x.cells.map(v=>v.text)).join(' | ');
-      var canvas=w.getElement().querySelector('canvas'),cr=canvas.getBoundingClientRect(),sx=canvas.width/cr.width,
-        sy=canvas.height/cr.height,views=s._study._paneViews.filter(v=>Array.isArray(v._renderers));
-      var rendered=views.flatMap(v=>v._renderers).map(r=>{var d=r._data,q=r._precalculated;
-        if(!q&&d&&typeof r._precalculateData==='function')q=r._precalculateData({
-          mediaSize:{width:cr.width,height:cr.height},bitmapSize:{width:canvas.width,height:canvas.height},
-          horizontalPixelRatio:sx,verticalPixelRatio:sy});
-        if(!q||!d)return {complete:false};
-        var clipped=d.cells.filter(v=>!v.merged&&v.cell.text&&
-          r._cellWidth({mediaSize:{width:cr.width}},{...v,cell:{...v.cell,widthInPercentsOfPaneWidth:null}},d)
-            >q.cells[v.cell.row][v.cell.column].width/sx+1).length;
-        return {id:d.table.id,rows:q.cells.length,columns:q.cells[0]?.length,clipped_cells:clipped,
-          width:q.totalWidth/sx,height:q.totalHeight/sy,
-          content_bounds:{x:cr.x+(q.position.x-2)/sx,y:cr.y+(q.position.y-2)/sy,
-            width:(q.totalWidth+4)/sx,height:(q.totalHeight+4)/sy},
-          complete:q.position.x>=0&&q.position.y>=0&&q.position.x+q.totalWidth<=canvas.width
-            &&q.position.y+q.totalHeight<=canvas.height&&clipped===0};});
-      var native=!s._study.tables().hasExternalViews().value()&&t.length>0&&t.every(table=>
-        rendered.some(r=>r.id===table.id&&r.rows===table.rows&&r.columns===table.columns&&r.complete));
-      return {dedicated_panel:i>0&&!p.hasMainSeries(),pane_index:i,maximized:p.isMaximized(),
-        view:s.getInputValues().find(x=>x.id===${JSON.stringify(this.engine.ids.view)})?.value,
-        title:text.includes('AUDIT FIN SESSION')?'AUDIT FIN SESSION':null,
-        rows:t.map(x=>x.rows),columns:t.map(x=>x.columns),text,native_table:native,
-        rendered_tables:rendered,complete_table:native,
-        bounds:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},
-        minimum_font_size:Math.min(...t.flatMap(x=>x.cells.filter(c=>c.text).map(c=>c.fontSize)))};`);
+  proof() { return this.engine.evaluate(panelProofScript(this.engine.ids.view)); }
+
+  async recover(view) {
+    const client = await this.client();
+    let panel;
+    for (let attempt = 0; attempt < this.settings.max_attempts; attempt++) {
+      await this.recoverUi(client);
+      panel = await this.awaitLayout();
+      const reasons = panelFailureReasons(panel, view);
+      this.history.push({ attempt: attempt + 1, reasons, dimensions: { ...this.dimensions }, panel });
+      if (reasons.length === 0) return panel;
+      this.grow(panel);
+    }
+    throw await this.failure(panel, view, client);
+  }
+
+  async recoverUi(client) {
+    await this.engine.capture.assertChart();
+    await client.Page.bringToFront();
+    for (const type of ["keyDown", "keyUp"]) await client.Input.dispatchKeyEvent({ type, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    // Reset Chromium/Electron zoom; clipping still uses the measured zoom, never an assumed value.
+    for (const type of ["keyDown", "keyUp"]) await client.Input.dispatchKeyEvent({ type, key: "0", code: "Digit0", modifiers: 2, windowsVirtualKeyCode: 48 });
+    await this.engine.evaluate(`s.setVisible(true);if(s.paneIndex()===0)s.unmergeDown();
+      var p=c.getPanes()[s.paneIndex()];if(p.isCollapsed())p.restore();p.setMaximized(true);return true;`);
+    await client.Emulation.setDeviceMetricsOverride({ ...this.dimensions, deviceScaleFactor: 1, mobile: false });
+  }
+
+  async awaitLayout() {
+    const deadline = this.now() + this.settings.layout_ms;
+    let previous, panel;
+    while (this.now() < deadline) {
+      panel = await this.proof();
+      const signature = JSON.stringify(panel);
+      if (!panel.loading && !panel.engine_error && signature === previous) return panel;
+      previous = signature;
+      await this.wait(this.settings.poll_ms);
+    }
+    throw await this.failure(panel, "LAYOUT", await this.client(), ["LAYOUT_NOT_STABLE"]);
+  }
+
+  grow(panel) {
+    const tables = panel.rendered_tables || [];
+    const ratios = tables.flatMap(t => t.clipped_cell_details || []).map(c => c.required_width / c.allocated_width).filter(Number.isFinite);
+    const ratio = Math.max(1.15, ...ratios);
+    this.dimensions.width = Math.min(this.settings.max_width, Math.ceil(this.dimensions.width * ratio * 1.05));
+    const needed = Math.max(0, ...tables.map(t => t.height || 0)) + 250;
+    this.dimensions.height = Math.min(this.settings.max_height, Math.max(this.dimensions.height, Math.ceil(needed)));
+  }
+
+  async failure(panel, view, client, reasons = panelFailureReasons(panel, view)) {
+    const clock = await this.replayDiagnostic(), debug = await this.captureDiagnostic(panel, client);
+    const error = oosTvError("TV_DEDICATED_PANEL_UNPROVEN");
+    error.details = { stage: "CAPTURING_RESULTS", reason: reasons.join(","), reasons, requested_view: view,
+      ...clock,
+      ...(panel || { smc398_found: false, pane_index: null, pane_count: null }),
+      browser_zoom: debug.browser_zoom, capture_scale: debug.capture_scale, diagnostic_errors: debug.errors,
+      recovery_history: this.history, debug_artifact: null };
+    if (debug.image) error.diagnostic_image_base64 = debug.image;
+    return error;
+  }
+
+  async replayDiagnostic() {
+    try {
+      const observation = replayObservation(await this.engine.capture.observation());
+      const end = Date.parse(this.context?.replay_end) / 1000;
+      return { replay_complete: observation.replay && !observation.autoplay && [end, end - 1].includes(observation.at),
+        tradingview_current_time: new Date(observation.at * 1000).toISOString(),
+        replay_state: { replay: observation.replay, autoplay: observation.autoplay, timeframe: observation.resolution } };
+    } catch (error) { return { replay_complete: false, tradingview_current_time: null, replay_state: null,
+      clock_read_error: error.code || "TV_REPLAY_CLOCK_READ_FAILED" }; }
+  }
+
+  async captureDiagnostic(panel, client) {
+    const result = { image: null, browser_zoom: null, capture_scale: null, errors: [] };
+    try {
+      const layout = await client.Page.getLayoutMetrics();
+      result.browser_zoom = layout.cssVisualViewport.zoom;
+      result.capture_scale = panelCaptureGeometry(panel, layout).scale;
+    } catch (error) { result.errors.push(error.code || "TV_LAYOUT_READ_FAILED"); }
+    try { result.image = (await client.Page.captureScreenshot({ format: "png" })).data; }
+    catch (error) { result.errors.push(error.code || "TV_DEBUG_CAPTURE_FAILED"); }
+    return result;
   }
 
   async screenshot(name) {
+    if (!["dashboard_final.png", "positions_final.png"].includes(name)) throw oosTvError("TV_PANEL_CAPTURE_NAME_REJECTED");
     await this.engine.capture.assertChart();
-    const panel = await this.proof();
-    if (!panel.dedicated_panel || !panel.maximized || panel.bounds.height < 900 || panel.minimum_font_size < 12
-      || !panel.native_table || !panel.complete_table) {
-      throw oosTvError("TV_DEDICATED_PANEL_UNPROVEN");
-    }
-    if (name === "dashboard_final.png" && (panel.view !== "AUTO" || panel.title !== "AUDIT FIN SESSION")) {
-      throw oosTvError("TV_FINAL_AUDIT_VIEW_UNPROVEN");
-    }
-    const client = await this.client();
-    const layout = await client.Page.getLayoutMetrics();
-    // Electron's browser zoom reports DOM CSS coordinates but screenshot clips use device-independent pixels.
-    const factor = layout.cssVisualViewport.zoom;
-    const scale = layout.layoutViewport.clientWidth / layout.cssLayoutViewport.clientWidth / factor;
-    if (!Number.isFinite(scale) || factor <= 0 || panel.minimum_font_size * factor * scale < 12) throw oosTvError("TV_CAPTURE_SCALE_UNPROVEN");
-    const tables = panel.rendered_tables.map(t => t.content_bounds);
-    const x = Math.min(...tables.map(t => t.x)), y = Math.min(...tables.map(t => t.y));
-    const bounds = { x, y, width: Math.max(...tables.map(t => t.x + t.width)) - x,
-      height: Math.max(...tables.map(t => t.y + t.height)) - y };
-    const clip = Object.fromEntries(Object.entries(bounds).map(([key, value]) => [key, value * factor]));
+    const view = name === "dashboard_final.png" ? "AUDIT" : "POSITIONS";
+    let panel = await this.awaitLayout();
+    if (panelFailureReasons(panel, view).length) panel = await this.recover(view);
+    const client = await this.client(), layout = await client.Page.getLayoutMetrics();
+    const { factor, scale, clip } = panelCaptureGeometry(panel, layout);
     const { data } = await client.Page.captureScreenshot({ format: "png", clip: { ...clip, scale } });
-    const { text, ...presentation } = panel;
-    return { image_base64: data, presentation: { ...presentation, browser_zoom: factor, capture_scale: scale, image_bounds: clip } };
+    return { image_base64: data, presentation: { ...panel, schema_version: "oos-native-panel/2", browser_zoom: factor, capture_scale: scale,
+      image_bounds: clip, layout_stable: true, recovery_history: this.history } };
   }
 
   async restorePrice() {
@@ -84,7 +126,6 @@ export class OosTradingViewPanels {
     await this.engine.evaluate(`for(var p of c.getPanes())if(p.isMaximized())p.setMaximized(false);
       c.getPanes()[0].setMaximized(true);return true;`);
     await this.client().then(client => client.Emulation.clearDeviceMetricsOverride());
-    await oosWait(500);
   }
 
   async restoreViewport() {

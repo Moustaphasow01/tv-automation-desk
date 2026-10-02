@@ -5,6 +5,7 @@ import { OosTradingViewEngine, oosHash } from "../src/oos-tradingview-engine.js"
 import { OosTradingViewReplay, OOS_REPLAY_TOOLS, proveReplayEnd } from "../src/oos-tradingview-replay.js";
 import { OosTradingViewPanels } from "../src/oos-tradingview-panels.js";
 import { extractOosPublishedAudit } from "../src/oos-tradingview-audit.js";
+import { panelFailureReasons } from "../src/oos-tradingview-panel-proof.js";
 
 function engineFixture() {
   const definitions = [["plan", "COLLER LE PLAN COMPACT ICI"], ["mode", "Mode donnees", ["REPLAY", "SUIVI LIVE"]],
@@ -83,17 +84,15 @@ test("published metrics are decoded verbatim, never recalculated from prices or 
   assert.deepEqual(result.shadow, { created: 4, resolved: 3, open: 1, win: 1, loss: 1, nofill: 1, unknown: 0 });
   assert.ok(result.missing_metrics.includes("mfe_to_exit"));
 });
-test("a dedicated audit capture fails if panel, final title or readability is unproven", async () => {
-  const panel = new OosTradingViewPanels({ engine: { capture: { assertChart: async () => {} } }, provider: {
-    getClient() { throw new Error("CAPTURE_SHOULD_NOT_HAPPEN"); }
-  } });
+test("a dedicated audit proof fails if pane, final title, containment or readability is unproven", () => {
   const good = { dedicated_panel: true, maximized: true, view: "AUTO", title: "AUDIT FIN SESSION", minimum_font_size: 14,
-    native_table: true, complete_table: true, bounds: { x: 0, y: 0, width: 3600, height: 1500 } };
-  for (const changed of [{ dedicated_panel: false }, { bounds: { height: 300 } }, { minimum_font_size: 8 },
+    native_table: true, complete_table: true, clipped_cells: 0, table_contained_in_pane: true };
+  for (const changed of [{ dedicated_panel: false }, { table_contained_in_pane: false }, { minimum_font_size: 8 },
     { title: null }, { native_table: false }, { complete_table: false }]) {
-    panel.proof = async () => ({ ...good, ...changed });
-    await assert.rejects(panel.screenshot("dashboard_final.png"), /TV_(DEDICATED_PANEL|FINAL_AUDIT_VIEW)_UNPROVEN/);
+    assert.ok(panelFailureReasons({ ...good, ...changed }, "AUDIT").length);
   }
+  assert.deepEqual(panelFailureReasons(good, "AUDIT"), []);
+  assert.ok(panelFailureReasons(good, "POSITIONS").includes("POSITIONS_VIEW_UNPROVEN"));
 });
 
 test("table proof requires a native renderer, complete geometry and untruncated text, not just table metadata", async () => {
@@ -102,10 +101,11 @@ test("table proof requires a native renderer, complete geometry and untruncated 
   const renderer = { _data: { table: { id: 1 }, cells: cells.map(cell => ({ cell })) },
     _precalculated: { position: { x: 10, y: 10 }, totalWidth: 1900, totalHeight: 600,
       cells: [[{ width: 100 }]] }, _cellWidth: () => measured };
-  const canvas = { width: 2000, height: 2000, getBoundingClientRect: () => ({ width: 1000, height: 1000 }) };
+  const canvas = { width: 2000, height: 2000, getBoundingClientRect: () => ({ x: 0, y: 0, width: 1000, height: 1000 }) };
   const element = { querySelector: () => canvas, getBoundingClientRect: () => ({ x: 0, y: 0, width: 1000, height: 1000 }) };
   const table = { id: 1, rows: 1, columns: 1, cells };
-  const study = { paneIndex: () => 1, getInputValues: () => [{ id: "view", value: "AUTO" }],
+  const study = { paneIndex: () => 1, isLoading: () => false, hasError: () => false,
+    getInputValues: () => [{ id: "view", value: "AUTO" }],
     _study: { _paneViews: [{ _renderers: [renderer] }], tables: () => ({
       data: () => ({ value: () => [table] }), hasExternalViews: () => ({ value: () => external }) }) } };
   const chart = { getPanes: () => [{}, { hasMainSeries: () => false, isMaximized: () => true }],
@@ -115,7 +115,10 @@ test("table proof requires a native renderer, complete geometry and untruncated 
   const panel = new OosTradingViewPanels({ engine, provider: {} });
   assert.equal((await panel.proof()).complete_table, true);
   external = true; assert.equal((await panel.proof()).complete_table, false);
-  external = false; measured = 60; assert.equal((await panel.proof()).complete_table, false);
+  external = false; measured = 60;
+  const clipped = await panel.proof();
+  assert.equal(clipped.complete_table, false); assert.equal(clipped.native_table, true);
+  assert.equal(clipped.clipped_cells, 1); assert.equal(clipped.rendered_tables[0].clipped_cell_details[0].row, 0);
   measured = 5; renderer._precalculated.totalHeight = 2200;
   assert.equal((await panel.proof()).complete_table, false);
 });
@@ -142,9 +145,10 @@ test("Electron zoom clips only the native audit table at native pixel density", 
       cssLayoutViewport: { clientWidth: 4000 }, cssVisualViewport: { zoom: 0.9 } }),
     captureScreenshot: async request => { clip = request.clip; return { data: "SYNTHETIC_TRANSPORT_ONLY" }; } } };
   const panels = new OosTradingViewPanels({ engine: { capture: { chartId: "TEST_ONLY", assertChart: async () => {} } },
-    provider: { getClient: async () => client } });
+    provider: { getClient: async () => client }, wait: async () => {} });
   panels.proof = async () => ({ dedicated_panel: true, maximized: true, view: "AUTO", title: "AUDIT FIN SESSION",
-    native_table: true, complete_table: true, minimum_font_size: 14, bounds: { height: 1200 },
+    native_table: true, complete_table: true, table_contained_in_pane: true, clipped_cells: 0,
+    minimum_font_size: 14, bounds: { height: 1200 },
     rendered_tables: [{ content_bounds: { x: 10, y: 10, width: 900, height: 600 } }] });
   const capture = await panels.screenshot("dashboard_final.png");
   assert.deepEqual(clip, { x: 9, y: 9, width: 810, height: 540, scale: 1.5 });

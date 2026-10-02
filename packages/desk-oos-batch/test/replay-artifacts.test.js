@@ -56,7 +56,40 @@ test("partial final capture retries without asking a new external plan or alteri
   };
   const failed = await f.workflow.execute(DAY);
   assert.equal(failed.state, "FAILED_TECHNICAL");
+  assert.equal(failed.checkpoint, "CAPTURING_RESULTS");
+  const replayCount = f.calls.filter(x => x === "replay").length;
   const row = await f.workflow.execute(DAY, "retry");
   assert.equal(row.state, "COMPLETED"); assert.equal(row.plan_sha256, failed.plan_sha256);
   assert.equal(f.submissions.length, 1);
+  assert.equal(f.calls.filter(x => x === "replay").length, replayCount);
+});
+
+test("legacy capture failure at REPLAYING recovers directly from its immutable replay completion", async () => {
+  const f = await fixture(), collect = f.tradingView.collectResults.bind(f.tradingView);
+  f.tradingView.collectResults = async () => { throw Object.assign(new Error("PANEL"), { code: "TV_DEDICATED_PANEL_UNPROVEN" }); };
+  const failed = await f.workflow.execute(DAY);
+  const endBefore = await f.archive.read(DAY, "evidence/replay-completed.json");
+  // Model a historical row written before replay/capture checkpoints were split.
+  f.repository.row = { ...failed, checkpoint: "REPLAYING" };
+  f.tradingView.collectResults = collect;
+  f.tradingView.prepareFrozenReplay = async () => { throw new Error("RELOAD_FORBIDDEN"); };
+  f.tradingView.replayTo = async () => { throw new Error("REPLAY_FORBIDDEN"); };
+  const row = await f.workflow.execute(DAY, "retry");
+  assert.equal(row.state, "COMPLETED"); assert.equal(row.plan_sha256, failed.plan_sha256);
+  assert.deepEqual(await f.archive.read(DAY, "evidence/replay-completed.json"), endBefore);
+  assert.equal(f.submissions.length, 1);
+});
+
+test("capture checkpoint is durable before provider failure and debug pixels are separately archived", async () => {
+  const f = await fixture();
+  f.tradingView.collectResults = async () => {
+    assert.equal(f.repository.row.checkpoint, "CAPTURING_RESULTS");
+    throw Object.assign(new Error("PANEL"), { code: "TV_DEDICATED_PANEL_UNPROVEN",
+      details: { clipped_cells: 1, replay_complete: true }, diagnostic_image_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6dAAAAABJRU5ErkJggg==" });
+  };
+  const failed = await f.workflow.execute(DAY);
+  assert.equal(failed.state, "FAILED_TECHNICAL"); assert.equal(failed.checkpoint, "CAPTURING_RESULTS");
+  assert.ok(failed.error.details.debug_artifact.path.startsWith("evidence/panel-failure-"));
+  assert.ok((await f.archive.read(DAY, failed.error.details.debug_artifact.path)).length);
+  assert.equal(await f.archive.optionalJson(DAY, "replay/run_meta.json"), null);
 });
