@@ -29,7 +29,7 @@ export class PremarketCaptureRepair {
         ...replacement, bytes: Buffer.from(replacement.bytes_base64, "base64"), repair_id: expected_manifest_sha256 });
       const bundle = await this.premarket.verify(day);
       if (row.manifest_sha256 !== bundle.manifest_sha256) row = await this.repository.commitCaptureRepair({ day, previous: row,
-        manifest_sha256: bundle.manifest_sha256 }, this.clock());
+        manifest_sha256: bundle.manifest_sha256, receipt: { capture, journal_sha256: this.fingerprint(this.encodeJson(journal)) } }, this.clock());
       return { date: day.date, state: row.state, capture_count: 8, manifest_sha256: bundle.manifest_sha256,
         repaired_capture: capture, original_manifest_sha256: expected_manifest_sha256, plan_modified: false, replay_triggered: false };
     });

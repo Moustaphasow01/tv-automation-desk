@@ -47,9 +47,15 @@ export class PostgresOosRegistry {
   }
 
   async commitCaptureRepair(command, at) {
-    const { day, previous, manifest_sha256 } = command, client = await this.pool.connect();
+    const { day, previous, manifest_sha256, receipt } = command, client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await client.query(`INSERT INTO oos_premarket_capture_repairs
+        (batch_id,day,from_revision,from_manifest_sha256,to_manifest_sha256,capture_path,journal_sha256,reason,approved_by,occurred_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'CLOSED_ONLY_CAPTURE_REPAIR','OPERATOR_CAPTURE_REPAIR',$8)
+        ON CONFLICT (batch_id,day,from_revision) DO NOTHING`, [day.batch_id, day.date, previous.revision,
+        previous.manifest_sha256, manifest_sha256, receipt.capture, receipt.journal_sha256, at]);
+      await client.query("SELECT set_config('desk_oos.capture_repair','OPERATOR_CAPTURE_REPAIR',true)");
       const result = await client.query(`UPDATE oos_batch_days SET manifest_sha256=$1,revision=revision+1,updated_at=$2
         WHERE batch_id=$3 AND day=$4 AND revision=$5 AND manifest_sha256=$6 AND plan_sha256 IS NULL
         AND state='PREMARKET_READY' AND checkpoint='PREMARKET_READY' RETURNING ${PREPARATION_COLUMNS}`,

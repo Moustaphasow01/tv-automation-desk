@@ -39,6 +39,8 @@ if ($Scope -eq 'Premarket') {
   $files = @(
     'mcp_gpt_desk/src/oos-tradingview-capture.js',
     'mcp_gpt_desk/scripts/repair_oos_aug20_h4_zoom.mjs',
+    'mcp_gpt_desk/scripts/migrate_oos_capture_repairs.mjs',
+    'infra/postgres/init/074_oos_premarket_capture_repairs.sql',
     'mcp_gpt_desk/test/oos_premarket_postgres.test.js',
     'packages/desk-oos-batch/index.js',
     'packages/desk-oos-batch/src/domain/evidence-contract.js',
@@ -79,6 +81,9 @@ foreach ($file in $files) {
 if ($Scope -eq 'Replay') {
   & node --env-file='C:\ProgramData\DeskOos\config\oos.env' (Join-Path $newRoot 'mcp_gpt_desk/scripts/migrate_oos_replay_progress.mjs')
   if ($LASTEXITCODE -ne 0) { throw 'OOS_REPLAY_PROGRESS_MIGRATION_FAILED' }
+} else {
+  & node --env-file='C:\ProgramData\DeskOos\config\oos.env' (Join-Path $newRoot 'mcp_gpt_desk/scripts/migrate_oos_capture_repairs.mjs')
+  if ($LASTEXITCODE -ne 0) { throw 'OOS_CAPTURE_REPAIR_MIGRATION_FAILED' }
 }
 $backup = "C:\ProgramData\DeskOos\config\replay-rollback-$Revision"
 New-Item -ItemType Directory $backup | Out-Null

@@ -31,7 +31,12 @@ directory. A durable replacement journal allows recovery after any interrupted f
 PostgreSQL revision/hash guards commit only the unfrozen manifest identity, without reading
 or writing result columns. A repeat consumes the journal and makes no new capture.
 
-Do not delete quarantined evidence or reset a day. No SQL migration or new MCP tool is needed.
+Migration 074 adds immutable technical repair receipts and a transaction-local authorization
+for a revision-checked, unfrozen PREMARKET_READY manifest replacement. The real PostgreSQL
+test showed that the original trigger also protected non-null unfrozen hashes. Its protection
+remains unconditional for frozen plans, definitions and every non-authorized update. Only the
+manifest hash, revision and update timestamp may change in an approved capture repair.
+Do not delete quarantined evidence or reset a day. No new MCP tool is needed.
 Rollback code using the deployment receipt; data rollback must use the retained original bytes
 and a separately authorized operation, never a frozen plan rewrite.
 

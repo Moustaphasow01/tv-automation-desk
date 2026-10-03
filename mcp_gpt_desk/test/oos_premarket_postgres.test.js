@@ -13,7 +13,7 @@ test("real PostgreSQL: atomic batches, restart, dedup, fairness, exclusive captu
   await admin.query(`CREATE SCHEMA ${schema}`);
   const pool = new pg.Pool({ connectionString: process.env.OOS_TEST_DATABASE_URL, options: `-c search_path=${schema}`, max: 12 });
   try {
-    for (const name of ["070_oos_batch_mcp_v1.sql", "071_oos_batch_remote_mcp.sql", "072_oos_premarket_orchestration.sql"]) {
+    for (const name of ["070_oos_batch_mcp_v1.sql", "071_oos_batch_remote_mcp.sql", "072_oos_premarket_orchestration.sql", "074_oos_premarket_capture_repairs.sql"]) {
       const sql = await readFile(new URL(`../../infra/postgres/init/${name}`, import.meta.url), "utf8");
       await pool.query(sql); await pool.query(sql);
     }
@@ -84,13 +84,20 @@ test("real PostgreSQL: atomic batches, restart, dedup, fairness, exclusive captu
     const seeded = await repository.save(await repository.ensureDay(repairDay), { state: "PREMARKET_READY", checkpoint: "PREMARKET_READY",
       capture_count: 8, manifest_sha256: "d".repeat(64) }, "2026-10-03T08:00:00Z");
     const previous = await repository.getPreparation(repairDay);
-    const repaired = await repository.commitCaptureRepair({ day: repairDay, previous, manifest_sha256: "e".repeat(64) }, "2026-10-03T09:00:00Z");
+    const receipt = { capture: "4h_zoom.png", journal_sha256: "a".repeat(64) };
+    await assert.rejects(pool.query("UPDATE oos_batch_days SET manifest_sha256=$1 WHERE batch_id=$2 AND day=$3",
+      ["e".repeat(64), repairDay.batch_id, repairDay.date]), /OOS_IMMUTABLE_IDENTITY/);
+    const repaired = await repository.commitCaptureRepair({ day: repairDay, previous, receipt, manifest_sha256: "e".repeat(64) }, "2026-10-03T09:00:00Z");
     assert.equal(repaired.state, "PREMARKET_READY"); assert.equal(repaired.revision, seeded.revision + 1);
     assert.equal(repaired.manifest_sha256, "e".repeat(64)); assert.equal(repaired.plan_sha256, null);
     assert.equal("audit" in repaired, false); assert.equal("run_meta" in repaired, false);
-    await assert.rejects(repository.commitCaptureRepair({ day: repairDay, previous, manifest_sha256: "f".repeat(64) }, "2026-10-03T10:00:00Z"), /CAPTURE_REPAIR_VERSION_CONFLICT/);
+    assert.equal((await pool.query("SELECT count(*) FROM oos_premarket_capture_repairs")).rows[0].count, "1");
+    await assert.rejects(pool.query("UPDATE oos_premarket_capture_repairs SET journal_sha256=$1", ["b".repeat(64)]), /OOS_CAPTURE_REPAIR_RECEIPT_IMMUTABLE/);
+    await assert.rejects(repository.commitCaptureRepair({ day: repairDay, previous, receipt, manifest_sha256: "f".repeat(64) }, "2026-10-03T10:00:00Z"), /CAPTURE_REPAIR_VERSION_CONFLICT/);
     const frozen = await repository.save(await repository.get(repairDay), { state: "FROZEN", checkpoint: "FROZEN", plan_sha256: "1".repeat(64) }, "2026-10-03T10:00:00Z");
-    await assert.rejects(repository.commitCaptureRepair({ day: repairDay, previous: frozen, manifest_sha256: "f".repeat(64) }, "2026-10-03T11:00:00Z"), /CAPTURE_REPAIR_VERSION_CONFLICT/);
+    await assert.rejects(repository.commitCaptureRepair({ day: repairDay, previous: frozen, receipt, manifest_sha256: "f".repeat(64) }, "2026-10-03T11:00:00Z"), /CAPTURE_REPAIR_VERSION_CONFLICT/);
+    await assert.rejects(pool.query("UPDATE oos_batch_days SET manifest_sha256=$1 WHERE batch_id=$2 AND day=$3",
+      ["f".repeat(64), repairDay.batch_id, repairDay.date]), /OOS_IMMUTABLE_IDENTITY/);
     assert.deepEqual(await repository.get(repairDay), frozen);
   } finally {
     await pool.end();

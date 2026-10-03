@@ -94,7 +94,8 @@ export class OosTradingViewCapture {
     await this.raw("chart_set_timeframe", { timeframe: TF[timeframe] });
     let bound = this.closedCutoffs.get(timeframe);
     if (!bound) {
-      const observation = await this.seek(this.cutoff);
+      await this.seek(this.cutoff);
+      const observation = await this.awaitScopedCutoff();
       bound = completeBarCutoff(observation, timeframe, this.cutoff);
     }
     await this.seek(bound);
@@ -102,14 +103,26 @@ export class OosTradingViewCapture {
     this.closedCutoffs.set(timeframe, bound);
     return { timeframe };
   }
+  isScopedTimeframe(obs) {
+    return obs.resolution === TF[this.timeframe] && obs.timezone === "Europe/Paris"
+      && ["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(obs.symbol);
+  }
+  async awaitScopedCutoff() {
+    let previous;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const obs = await this.awaitCutoff(), signature = JSON.stringify([obs.at, obs.last_bar_time, obs.resolution]);
+      if (this.isScopedTimeframe(obs) && previous === signature) return obs;
+      previous = signature;
+      await this.wait(100);
+    }
+    throw fail("TV_TIMEFRAME_NOT_STABLE");
+  }
   async awaitClosedCutoff() {
     let previous;
     for (let attempt = 0; attempt < 20; attempt++) {
       const obs = await this.awaitCutoff(), close = obs.last_bar_time * 1000 + Number(TF[this.timeframe]) * 60000;
-      const identity = obs.resolution === TF[this.timeframe] && obs.timezone === "Europe/Paris"
-        && ["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(obs.symbol);
       const signature = JSON.stringify([obs.at, obs.last_bar_time, obs.resolution]);
-      if (identity && close === Date.parse(this.effectiveCutoff)
+      if (this.isScopedTimeframe(obs) && close === Date.parse(this.effectiveCutoff)
         && Date.parse(obs.visible_as_of) < close && previous === signature) return obs;
       previous = signature;
       await this.wait(100);
