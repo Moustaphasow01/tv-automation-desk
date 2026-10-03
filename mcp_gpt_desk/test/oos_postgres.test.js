@@ -52,6 +52,15 @@ test("PostgreSQL migration, CAS, immutable identity, locks, durable queue and id
       browser_session_id: "SYNTHETIC_SESSION", tv_replay_state: { phase: "READY" }, config_hash: "TEST_ONLY" };
     await progress.save(DAY, frozen.plan_sha256, state); await progress.save(DAY, frozen.plan_sha256, state);
     assert.equal((await progress.read(DAY, frozen.plan_sha256)).steps_completed, 1);
+    const scoped = { ...state, immutable_scope_hash: "d".repeat(64), replay_scope_hash: "d".repeat(64),
+      ephemeral_scope: { browser_session_id: "REPLACED_BROWSER", tv_replay_session_id: "REPLACED_TV" },
+      last_confirmed_bar_open: at, last_confirmed_bar_close: at, expected_next_bar_open: at,
+      observed_bar_open: at, overshoot_count: 1, resume_count: 1 };
+    await progress.save(DAY, frozen.plan_sha256, scoped);
+    const restored = await progress.read(DAY, frozen.plan_sha256);
+    assert.equal(restored.immutable_scope_hash, scoped.immutable_scope_hash);
+    assert.deepEqual(restored.ephemeral_scope, scoped.ephemeral_scope);
+    assert.equal(restored.resume_count, 1); assert.equal(restored.overshoot_count, 1);
     await assert.rejects(progress.save(DAY, frozen.plan_sha256, { ...state, steps_completed: 0 }), { code: "REPLAY_PROGRESS_CONFLICT" });
     await assert.rejects(progress.read(DAY, "c".repeat(64)), { code: "REPLAY_PROGRESS_HASH_MISMATCH" });
     assert.equal((await repository.get(DAY)).plan_sha256, frozen.plan_sha256);

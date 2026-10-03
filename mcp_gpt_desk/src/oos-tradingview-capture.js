@@ -145,12 +145,14 @@ export class OosTradingViewCapture {
     return this.evaluate(`(function(){var c=${CHART},r=${REPLAY};function u(x){return x&&typeof x.value==='function'?x.value():x;}
       var series=c._chartWidget.model().mainSeries(),b=series.bars(),i=b.lastIndex(),v=b.valueAt(i),previous=b.valueAt(i-1);
       var session,api;try{session=r._replayUIController._replayManager._replaySession;api=session._chartApi;}catch{}
+      var times=[];for(var j=Math.max(b.firstIndex(),i-255);j<=i;j++){var row=b.valueAt(j);if(row&&Number.isFinite(row[0]))times.push(row[0]);}
       return {symbol:c.symbol(),resolution:c.resolution(),timezone:c.getTimezone(),replay:u(r.isReplayStarted()),
       autoplay:u(r.isAutoplayStarted()),at:u(r.currentDate()),last_bar_time:v&&Number.isFinite(v[0])?v[0]:null,
       previous_bar_time:previous&&Number.isFinite(previous[0])?previous[0]:null,loading:typeof series.isLoading==='function'?series.isLoading():null,
       selected_at:typeof r.getReplaySelectedDate==='function'?u(r.getReplaySelectedDate()):null,
       data_connected:typeof api?.connected==='function'?u(api.connected()):null,
-      replay_session_connected:session?u(session._isConnected):null};})()`);
+      replay_session_connected:session?u(session._isConnected):null,
+      tv_replay_session_id:session?u(session._sessionId):null,bar_times:times};})()`);
   }
   async awaitCutoff() {
     for (let attempt = 0; attempt < 20; attempt++) {

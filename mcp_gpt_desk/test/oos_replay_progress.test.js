@@ -100,14 +100,17 @@ test("resume accepts a moving mid-session anchor only with a persisted, scoped p
   replay.configureProgress = async () => { calls.push("reconcile"); replay.progress = { state: {} }; };
   replay.ready = async () => {};
   const input = { date: "2026-07-27", cutoff, replay_only: true, engine_version: "V3.9.8",
-    plan_sha256: hash, meta: { status: "FROZEN" }, progress: { steps_completed: 8 } };
+    symbol: "CME_MINI:MES1!", book_mode: "PORTEFEUILLE_REALISTE", plan_sha256: hash,
+    meta: { status: "FROZEN", premarket_manifest_sha256: "b".repeat(64) },
+    progress: { steps_completed: 8, plan_sha256: hash, replay_target_time: "2026-07-27T20:00:00+02:00",
+      last_confirmed_bar_time: new Date((start + 6300) * 1000).toISOString() } };
   assert.equal((await replay.resume(input)).resumed, true);
   assert.deepEqual(calls, ["assert", "reconcile"]);
-  await assert.rejects(replay.resume({ ...input, progress: null }), { code: "TV_REPLAY_RESUME_SCOPE_MISMATCH" });
+  await assert.rejects(replay.resume({ ...input, progress: null }), { code: "TV_REPLAY_UI_REVALIDATION_FAILED" });
   obs = { ...obs, symbol: "OTHER_SYMBOL" };
-  await assert.rejects(replay.resume(input), { code: "TV_REPLAY_RESUME_SCOPE_MISMATCH" });
+  await assert.rejects(replay.resume(input), { code: "TV_REPLAY_UI_REVALIDATION_FAILED" });
   obs = { ...obs, symbol: "CME_MINI_DL:MES1!", selection_anchor: start - 86400 };
-  await assert.rejects(replay.resume(input), { code: "TV_REPLAY_RESUME_SCOPE_MISMATCH" });
+  assert.equal((await replay.resume(input)).resumed, true); // UI anchor cannot override scoped native bars.
 });
 
 test("capture resume after restart never loads/seeks/steps a completed replay", async () => {

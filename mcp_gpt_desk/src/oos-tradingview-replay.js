@@ -5,6 +5,8 @@ import { OosTradingViewPanels } from "./oos-tradingview-panels.js";
 import { extractOosPublishedAudit } from "./oos-tradingview-audit.js";
 import { OosReplayProgress, replayObservation, REPLAY_TIMEOUTS } from "./oos-replay-progress.js";
 import { OosReplayCutoff, replayCutoffProof } from "./oos-replay-cutoff.js";
+import { OosReplayRecovery } from "./oos-replay-recovery.js";
+import { replayScope, replayAttachment } from "./oos-replay-scope.js";
 
 const TF = { "5m": "5", "15m": "15" };
 const seconds = at => typeof at === "number" ? at / (at > 1e12 ? 1000 : 1) : Date.parse(at) / 1000;
@@ -22,6 +24,7 @@ export class OosTradingViewReplay {
     this.capture = capture; this.active = false; this.trace = [];
     this.provider = provider; this.timeouts = { ...REPLAY_TIMEOUTS, ...timeouts };
     this.cutoff = new OosReplayCutoff({ capture, provider, settings: this.timeouts });
+    this.recovery = new OosReplayRecovery({ replay: this });
     this.engine = new OosTradingViewEngine(capture);
     this.panels = new OosTradingViewPanels({ engine: this.engine, provider, settings: { layout_ms: this.timeouts.ui_transition_ms } });
   }
@@ -86,7 +89,8 @@ export class OosTradingViewReplay {
       persist: input.onProgress, settings: this.timeouts });
     await this.progress.initialize({ observation, target: `${input.date}T20:00:00+02:00`,
       prior: input.progress, browserSessionId: session?.id, configHash: this.engine.configHash, cutoff: input.cutoff,
-      cutoffProof: this.cutoffProof || input.progress?.tv_replay_state?.cutoff_proof });
+      cutoffProof: this.cutoffProof || input.progress?.tv_replay_state?.cutoff_proof,
+      scope: replayScope(input), ephemeralScope: replayAttachment(observation, session?.id) });
   }
 
   async resume(input) {
@@ -98,30 +102,39 @@ export class OosTradingViewReplay {
       var s=c.getStudyById(e.id),i=s.getInputsInfo().find(x=>x.name==='COLLER LE PLAN COMPACT ICI');
       return {engine:e,plan:s.getInputValues().find(x=>x.id===i?.id)?.value};})()`);
     if (!descriptor || oosHash(descriptor.plan || "") !== input.plan_sha256) {
-      if (input.progress?.steps_completed) throw oosTvError("TV_REPLAY_RESUME_PLAN_MISMATCH");
+      if (input.progress?.steps_completed) throw Object.assign(oosTvError("TV_REPLAY_RESUME_SCOPE_MISMATCH"), {
+        details: { reason: "INSTALLED_PLAN_DIFFERS", expected_plan_sha256: input.plan_sha256,
+          observed_plan_sha256: descriptor ? oosHash(descriptor.plan || "") : null, date: input.date } });
       return { resumed: false };
     }
     this.capture.engine = descriptor.engine; this.capture.date = input.date;
     this.capture.cutoff = input.cutoff; this.capture.effectiveCutoff = input.cutoff;
     await this.engine.initialize(input.engine_version); this.engine.loadedHash = input.plan_sha256;
     await this.engine.verifyInputs();
-    const mode = this.engine.descriptor.values.find(x => x.id === this.engine.ids.mode)?.value;
-    const book = this.engine.descriptor.values.find(x => x.id === this.engine.ids.book)?.value;
-    const obs = await this.observation(), anchor = seconds(obs.selection_anchor), cutoff = seconds(input.cutoff);
-    // currentDate can stay at the initial anchor on the first step, then track subsequent steps.
-    // A persisted, hash-bound cursor authorizes resuming that progressed session, never rewinding it.
-    const initialProof = replayCutoffProof({ ...obs, at: obs.selection_anchor }, input.cutoff);
-    const anchored = [cutoff, cutoff - 1].includes(anchor) || initialProof.proof_condition_result;
-    const progressed = input.progress?.steps_completed > 0 && seconds(obs.at) >= cutoff - 1
-      && (!Number.isFinite(anchor) || anchor >= cutoff - 1 && anchor <= seconds(obs.at))
-      && seconds(obs.at) <= seconds(`${input.date}T20:00:00+02:00`) + 86400;
-    if (!obs.replay || obs.autoplay || obs.resolution !== "15" || !(anchored || progressed)
-      || !["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(obs.symbol) || obs.timezone !== "Europe/Paris"
-      || mode !== "REPLAY" || book !== "PORTEFEUILLE_REALISTE") throw oosTvError("TV_REPLAY_RESUME_SCOPE_MISMATCH");
+    const reconciled = await this.recovery.reconcile(input, await this.observation());
+    const initialProof = this.verifyResumeCursor(input, reconciled);
     if (initialProof.proof_condition_result) this.cutoffProof = initialProof;
-    await this.configureProgress(input, obs); await this.ready();
+    await this.configureProgress({ ...input, progress: reconciled.progress }, reconciled.observation); await this.ready();
     this.active = true; this.resumed = true; this.timeframe = "15m";
     return { resumed: true, replay: true, plan_sha256: input.plan_sha256, progress: this.progress.state };
+  }
+
+  verifyResumeCursor(input, reconciled) {
+    const mode = this.engine.descriptor.values.find(x => x.id === this.engine.ids.mode)?.value;
+    const book = this.engine.descriptor.values.find(x => x.id === this.engine.ids.book)?.value;
+    const obs = reconciled.observation, cutoff = seconds(input.cutoff);
+    const initialProof = replayCutoffProof({ ...obs, at: obs.selection_anchor }, input.cutoff);
+    const progressed = input.progress?.steps_completed > 0 && seconds(obs.at) >= cutoff - 1
+      && seconds(obs.at) <= seconds(`${input.date}T20:00:00+02:00`) + 86400;
+    const checks = { replay_paused: obs.replay && !obs.autoplay, timeframe: obs.resolution === "15",
+      native_cursor: initialProof.proof_condition_result || progressed,
+      symbol: ["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(obs.symbol),
+      timezone: obs.timezone === "Europe/Paris", mode: mode === "REPLAY", book: book === "PORTEFEUILLE_REALISTE" };
+    if (!Object.values(checks).every(Boolean)) throw Object.assign(oosTvError("TV_REPLAY_UI_REVALIDATION_FAILED"), {
+      details: { checks, expected_scope: reconciled.scope.immutable_scope,
+        observed_bar_open: obs.last_bar_time, observed_cursor: obs.at,
+        ephemeral_scope: reconciled.ephemeral_scope, reason: "NATIVE_REPLAY_STATE_NOT_REATTACHED" } });
+    return initialProof;
   }
 
   async position(input) {
@@ -187,7 +200,7 @@ export class OosTradingViewReplay {
     for (let step = 0; step < 100 && seconds(obs.at) < end - 1; step++) {
       await this.capture.assertChart();
       if (!obs.replay || obs.autoplay) throw oosTvError("TV_REPLAY_CONTROL_LOST");
-      obs = await this.progress.step({ observation: obs, bound: end });
+      obs = await this.stepWithRecovery(obs, end);
       this.trace.push({ visible_as_of: new Date(seconds(obs.at) * 1000).toISOString(), last_bar_time: obs.last_bar_time });
     }
     if (!proveReplayEnd(obs, input.at)) throw oosTvError("TV_REPLAY_END_UNPROVEN");
@@ -198,6 +211,20 @@ export class OosTradingViewReplay {
       symbol: "CME_MINI:MES1!", plan_sha256: this.engine.loadedHash,
       config_hash: this.engine.configHash, execution_timeframe: "15m", steps: this.trace,
       replay_progress: this.progress.state };
+  }
+
+  async stepWithRecovery(observation, bound) {
+    for (let retry = 0; retry <= this.timeouts.max_retries; retry++) {
+      try { return await this.progress.step({ observation, bound }); }
+      catch (error) {
+        if (error.code !== "TV_REPLAY_OVERSHOOT" || error.details.steps_requested === 0
+          || retry === this.timeouts.max_retries) throw error;
+        const input = { ...this.progressInput, progress: this.progress.state };
+        const reconciled = await this.recovery.reconcile(input, await this.observation());
+        observation = reconciled.observation;
+        await this.configureProgress({ ...input, progress: reconciled.progress }, observation);
+      }
+    }
   }
 
   async drainCarry(observation, sessionEnd) {
