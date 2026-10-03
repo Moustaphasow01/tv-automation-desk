@@ -7,11 +7,19 @@ function cutoffConditions(obs, { end, open, close }) {
   return { replay_paused: obs.replay === true && obs.autoplay === false,
     execution_timeframe: obs.resolution === "15", timezone: obs.timezone === "Europe/Paris",
     instrument: ["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(obs.symbol),
+    ...closedBarConditions(obs, { end, open, close }), ...connectionConditions(obs, end) };
+}
+
+function closedBarConditions(obs, { end, open, close }) {
+  return {
     native_bar_clock: Number.isFinite(open) && Number.isFinite(end),
     aligned_15m: Number.isFinite(open) && open % 900 === 0 && end % 900 === 0,
     last_complete_close_at_cutoff: close === end, no_post_cutoff_bar: close <= end,
-    previous_bar_ordered: !Number.isFinite(obs.previous_bar_time) || obs.previous_bar_time < open,
-    chart_not_loading: obs.loading !== true, data_connection: obs.data_connected !== false,
+    previous_bar_ordered: !Number.isFinite(obs.previous_bar_time) || obs.previous_bar_time < open };
+}
+
+function connectionConditions(obs, end) {
+  return { chart_not_loading: obs.loading !== true, data_connection: obs.data_connected !== false,
     replay_connection: obs.replay_session_connected !== false,
     selection_boundary: !Number.isFinite(obs.selected_at) || [end, end - 1].includes(obs.selected_at) };
 }

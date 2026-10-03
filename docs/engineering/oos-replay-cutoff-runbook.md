@@ -26,3 +26,13 @@ FAILED_TECHNICAL for failures at replay/capture checkpoints. It never regresses 
 Deploy with the existing health-gated Windows release switch and retained rollback. Verify the frozen
 hash, PREMARKET bytes and 27/28/29 metadata before/after the single authorized July 1 retry. Read results
 only after COMPLETED; verify all seven ENGINE-published artifact hashes and dedicated panel geometry.
+
+Validation 2026-10-03: July 1 advanced through 44 M15 steps to CAPTURING_RESULTS then COMPLETED.
+The frozen plan `bbe78c01c6cdee44264ae3ca063eee7cc6743273b750a50a95a9aeafcdaddcba`,
+all PREMARKET bytes and July 27/28/29 identities/revisions stayed unchanged. Seven published artifacts
+passed SHA-256 verification; both native 28x7 dedicated panes were complete with zero clipped cells.
+Audit source was ENGINE_PUBLISHED_ONLY, recalculated=false. Repeated retry returned one command ID.
+125 local OOS tests passed; two real PostgreSQL tests passed after the active chart lock was released.
+Architecture, MCP slices and Windows deployment guards passed. The static-quality guard still fails
+on pre-existing debt (271 oversized, 728 high-complexity, 97 duplicate blocks and the legacy front file);
+this patch adds none of those violations. No runtime/SMC3 contract drift or new migration.
