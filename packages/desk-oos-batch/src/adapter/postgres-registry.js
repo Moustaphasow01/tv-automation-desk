@@ -1,7 +1,7 @@
 import { requireFact } from "../domain/batch-contract.js";
 
 const COLUMNS = "batch_id,day,definition,state,checkpoint,revision,candidate_attempt,capture_count,manifest_sha256,plan_sha256,audit,run_meta,error,updated_at";
-export const PREPARATION_COLUMNS = "batch_id,day,definition,state,checkpoint,revision,capture_count,manifest_sha256,plan_sha256,error,updated_at";
+export const PREPARATION_COLUMNS = "batch_id,day,definition,state,checkpoint,revision,capture_count,manifest_sha256,plan_sha256,error,updated_at,run_meta->>'result_classification' AS result_classification,run_meta->>'reason' AS reason,run_meta->>'last_native_bar_close' AS last_native_bar_close,run_meta->>'next_native_bar_open' AS next_native_bar_open,run_meta->>'market_gap_start' AS market_gap_start,run_meta->>'market_gap_end' AS market_gap_end";
 function decode(row) {
   return { ...row, day: String(row.day).slice(0, 10), definition: row.definition,
     revision: Number(row.revision), updated_at: new Date(row.updated_at).toISOString() };

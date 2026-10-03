@@ -1,6 +1,7 @@
 import { requireFact } from "../domain/batch-contract.js";
 import { isDeepStrictEqual } from "node:util";
 import { REPLAY_IMAGES, validatePublishedResult, validateArtifactList, validateAuditPresentation, validatePanelPresentation } from "../domain/replay-artifacts.js";
+import { SESSION_COVERAGE_PATH, proveMarketSessionExhaustion, frozenPlanHasMatchingGap, unscorableSessionReceipt } from "../domain/market-session-exhaustion.js";
 
 export class ReplayWorkflow {
   constructor({ archive, tradingView, freeze, fingerprint, decodeImage, clock, progress }) {
@@ -9,23 +10,61 @@ export class ReplayWorkflow {
 
   async replay(day) {
     const frozen = await this.freeze.verify(day);
+    const coverage = await this.archive.optionalJson(day, SESSION_COVERAGE_PATH);
+    if (coverage) return { run_meta: await this.verifySessionCoverage(day), audit: null };
     const prior = await this.completedReplay(day);
     if (prior) return prior;
     const progress = await this.progress?.read(day, frozen.meta.plan_sha256);
     const onProgress = value => this.progress?.save(day, frozen.meta.plan_sha256, value);
+    return this.runFrozenReplay({ day, frozen, progress, onProgress });
+  }
+
+  async runFrozenReplay({ day, frozen, progress, onProgress }) {
     await this.tradingView.prepareFrozenReplay({ ...day, ...frozen, progress, onProgress });
     const fingerprint = await this.tradingView.readPlanFingerprint(day);
     requireFact(fingerprint.plan_sha256 === frozen.meta.plan_sha256 && fingerprint.engine_version === day.engine_version
       && fingerprint.book_mode === day.book_mode && fingerprint.symbol === day.symbol
       && fingerprint.cutoff === day.cutoff, "LOADED_PLAN_MISMATCH");
     const end = `${day.date}T20:00:00+02:00`;
-    const result = await this.tradingView.replayTo({ ...day, end, plan_sha256: frozen.meta.plan_sha256 });
+    let result;
+    try { result = await this.tradingView.replayTo({ ...day, end, plan_sha256: frozen.meta.plan_sha256 }); }
+    catch (error) {
+      if (error.code !== "TV_REPLAY_SESSION_BAR_UNAVAILABLE") throw error;
+      return this.completeUnscorableSession({ day, frozen, details: error.details });
+    }
     const ended = result.at === end || result.session_end === end && Date.parse(result.at) > Date.parse(end);
     requireFact(result.replay === true && ended && result.symbol === day.symbol
       && result.plan_sha256 === frozen.meta.plan_sha256, "REPLAY_COMPLETION_UNPROVEN");
     const record = { ...result, completed_at: this.clock() };
     await this.archive.putJson(day, "evidence/replay-completed.json", record);
     return record;
+  }
+
+  async completeUnscorableSession({ day, frozen, details }) {
+    const coverage = proveMarketSessionExhaustion({ day, meta: frozen.meta, details });
+    requireFact(!frozenPlanHasMatchingGap(frozen.plan_text, coverage), "DECLARED_MARKET_GAP_ENGINE_AUDIT_REQUIRED", coverage);
+    const receipt = unscorableSessionReceipt({ day, meta: frozen.meta, coverage, completedAt: this.clock() });
+    await this.archive.putJson(day, SESSION_COVERAGE_PATH, receipt);
+    return { run_meta: await this.verifySessionCoverage(day), audit: null };
+  }
+
+  async verifySessionCoverage(day, pinned) {
+    const frozen = await this.freeze.verify(day);
+    const bytes = await this.archive.read(day, SESSION_COVERAGE_PATH), receipt = JSON.parse(bytes.toString("utf8"));
+    requireFact(receipt.plan_sha256 === frozen.meta.plan_sha256
+      && receipt.premarket_manifest_sha256 === frozen.meta.premarket_manifest_sha256
+      && receipt.source === "NATIVE_MARKET_SESSION_COVERAGE" && receipt.scorable === false
+      && receipt.reason === "UNDECLARED_MARKET_SESSION_GAP" && receipt.recalculated === false, "SESSION_COVERAGE_RECEIPT_INVALID");
+    const coverage = proveMarketSessionExhaustion({ day, meta: frozen.meta, details: {
+      stage: "REPLAYING", timeframe: "15", native_gap: receipt.native_gap,
+      observed_bar_open: receipt.native_gap.previous_confirmed_bar,
+      observed_bar_close: receipt.last_native_bar_close, last_confirmed_bar_time: receipt.native_gap.previous_confirmed_bar,
+      tv_replay_state: { immutable_scope: receipt.immutable_scope } } });
+    requireFact(!frozenPlanHasMatchingGap(frozen.plan_text, coverage)
+      && isDeepStrictEqual(receipt, unscorableSessionReceipt({ day, meta: frozen.meta, coverage, completedAt: receipt.completed_at })), "SESSION_COVERAGE_RECEIPT_INVALID");
+    const meta = { ...receipt, coverage_receipt: { path: SESSION_COVERAGE_PATH, sha256: this.fingerprint(bytes) } };
+    requireFact(!pinned || isDeepStrictEqual(meta, pinned), "SESSION_COVERAGE_REGISTRY_MISMATCH");
+    return meta;
   }
 
   async completedReplay(day) {

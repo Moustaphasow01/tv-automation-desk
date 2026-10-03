@@ -1,4 +1,5 @@
 import { batchDays, requireFact, STAGES } from "./batch-contract.js";
+import { projectSessionCoverage, isUnscorableMarketGap } from "./market-session-exhaustion.js";
 
 export function premarketPeriod({ scope, startDate, endDate, requestedConcurrency = 1 }) {
   requireFact(Number.isInteger(requestedConcurrency) && requestedConcurrency >= 1 && requestedConcurrency <= 3, "CAPTURE_CONCURRENCY_INVALID");
@@ -17,6 +18,7 @@ export function hasPremarket(row) {
 export function projectPreparationDay(row, queue = {}) {
   const replay = projectReplayStatus(row, queue);
   return { date: row.day, state: row.state, checkpoint: row.checkpoint, capture_count: row.capture_count,
+    ...projectSessionCoverage(row),
     manifest_sha256: row.manifest_sha256, plan_sha256: row.plan_sha256, replay_status: replay,
     queue_status: !hasPremarket(row) && queue.capture?.has(row.day) ? "QUEUED_OR_RUNNING" : "NOT_QUEUED",
     error: row.error ? { code: row.error.code } : null, updated_at: row.updated_at };
@@ -38,6 +40,7 @@ export function preparationCounts(rows) {
   const failed = rows.filter(row => !hasPremarket(row) && row.state.startsWith("FAILED")).length;
   return { total_days: rows.length, ready, failed, queued: rows.length - ready - failed,
     completed: rows.filter(row => row.state === "COMPLETED").length,
+    UNSCORABLE_MARKET_GAP_DAYS: rows.filter(row => row.state === "COMPLETED" && isUnscorableMarketGap(row)).length,
     premarket_ready: rows.filter(row => row.state === "PREMARKET_READY").length,
     next_waiting_scenario: rows.find(row => hasPremarket(row) && !row.plan_sha256)?.day ?? null };
 }

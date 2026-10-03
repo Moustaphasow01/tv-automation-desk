@@ -7,6 +7,8 @@ import { PostgresOosRegistry } from "../../packages/desk-oos-batch/src/adapter/p
 import { PostgresOosCommands } from "../../packages/desk-oos-batch/src/adapter/postgres-commands.js";
 import { PostgresOosProbe } from "../../packages/desk-oos-batch/src/adapter/postgres-probe.js";
 import { PostgresReplayProgress } from "../../packages/desk-oos-batch/src/adapter/postgres-replay-progress.js";
+import { PostgresPremarketBatches } from "../../packages/desk-oos-batch/src/adapter/postgres-premarket-batches.js";
+import { projectPreparationDay } from "../../packages/desk-oos-batch/src/domain/premarket-batch.js";
 import { DAY } from "../../packages/desk-oos-batch/test/support.js";
 
 test("PostgreSQL migration, CAS, immutable identity, locks, durable queue and idempotence", { skip: !process.env.OOS_TEST_DATABASE_URL }, async () => {
@@ -64,6 +66,21 @@ test("PostgreSQL migration, CAS, immutable identity, locks, durable queue and id
     await assert.rejects(progress.save(DAY, frozen.plan_sha256, { ...state, steps_completed: 0 }), { code: "REPLAY_PROGRESS_CONFLICT" });
     await assert.rejects(progress.read(DAY, "c".repeat(64)), { code: "REPLAY_PROGRESS_HASH_MISMATCH" });
     assert.equal((await repository.get(DAY)).plan_sha256, frozen.plan_sha256);
+    const terminal = await repository.save(await repository.get(DAY), { state: "COMPLETED", checkpoint: "COMPLETED",
+      audit: null, run_meta: { result_classification: "UNSCORABLE_MARKET_GAP", reason: "UNDECLARED_MARKET_SESSION_GAP",
+        last_native_bar_close: "2026-07-01T17:00:00Z", next_native_bar_open: "2026-07-05T22:00:00Z",
+        market_gap_start: "2026-07-01T17:00:00Z", market_gap_end: "2026-07-01T18:00:00Z",
+        PRIVATE_NOT_A_TECHNICAL_FIELD: "EXCLUDE" } }, new Date().toISOString());
+    assert.equal(terminal.plan_sha256, frozen.plan_sha256); assert.equal(terminal.manifest_sha256, captured.manifest_sha256);
+    const technical = await repository.getPreparation(DAY);
+    assert.equal(projectPreparationDay(technical).scorable, false);
+    assert.equal(projectPreparationDay(technical).last_native_bar_close, "2026-07-01T17:00:00Z");
+    assert.ok(!JSON.stringify(technical).includes("EXCLUDE"));
+    const batchesMigration = await readFile(new URL("../../infra/postgres/init/072_oos_premarket_orchestration.sql", import.meta.url), "utf8");
+    await pool.query(batchesMigration);
+    const batches = new PostgresPremarketBatches(repository);
+    const data = await batches.read({ archiveBatchId: DAY.batch_id, startDate: DAY.date, endDate: DAY.date });
+    assert.equal(projectPreparationDay(data.rows[0]).scorable, false);
     // Clean only the generated test row before testing retirement of a never-frozen capture.
     await pool.query("DELETE FROM oos_replay_progress WHERE batch_id=$1 AND day=$2", [DAY.batch_id, DAY.date]);
     await pool.query("DELETE FROM oos_batch_events WHERE batch_id=$1 AND day=$2", [DAY.batch_id, DAY.date]);

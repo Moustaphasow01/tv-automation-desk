@@ -1,19 +1,22 @@
 import { VIEWS, requireFact } from "../domain/batch-contract.js";
 import { validateCapture, validateManifest } from "../domain/evidence-contract.js";
+import { sessionCalendarEvidence } from "../domain/session-calendar-evidence.js";
 
 export class PremarketWorkflow {
-  constructor({ archive, tradingView, fingerprint, encodeJson, decodeImage }) {
-    Object.assign(this, { archive, tradingView, fingerprint, encodeJson, decodeImage });
+  constructor({ archive, tradingView, fingerprint, encodeJson, decodeImage, sessionCalendar }) {
+    Object.assign(this, { archive, tradingView, fingerprint, encodeJson, decodeImage, sessionCalendar });
   }
 
   async capture(day, onCapture = async () => {}) {
+    if (await this.archive.optionalJson(day, "premarket/manifest.json")) return this.verify(day);
+    const calendar = sessionCalendarEvidence(this.sessionCalendar?.[day.date], day, this.fingerprint);
     await this.tradingView.preparePremarket(day);
     const captures = [];
     for (const view of VIEWS) {
       captures.push(await this.captureView(day, view));
       await onCapture(captures.length);
     }
-    const manifest = premarketManifest(day, captures, this.fingerprint);
+    const manifest = premarketManifest(day, captures, this.fingerprint, calendar);
     validateManifest(manifest, day);
     await this.archive.putJson(day, "premarket/manifest.json", manifest);
     return this.verify(day);
@@ -62,10 +65,10 @@ export function premarketCaptureRecord(proof, view, sha256) {
     indicator_fingerprint: proof.indicator_fingerprint ?? null };
 }
 
-export function premarketManifest(day, captures, fingerprint) {
+export function premarketManifest(day, captures, fingerprint, calendar = {}) {
   const content = { schema_version: "oos-premarket/2", date: day.date, symbol: day.symbol,
     timezone: day.timezone, cutoff: day.cutoff, engine_version: day.engine_version,
     book_mode: day.book_mode, hash_format: "sha256-json-utf8-lf-excluding-manifest_sha256",
-    captures, status: "PREMARKET_READY" };
+    captures, status: "PREMARKET_READY", ...calendar };
   return { ...content, manifest_sha256: fingerprint(JSON.stringify(content, null, 2) + "\n") };
 }

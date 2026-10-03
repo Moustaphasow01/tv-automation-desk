@@ -1,4 +1,5 @@
 import { requireFact, STAGES, validateDay } from "../domain/batch-contract.js";
+import { isUnscorableMarketGap } from "../domain/market-session-exhaustion.js";
 
 export class OosDayWorkflow {
   constructor({ repository, premarket, freeze, replay, clock }) {
@@ -68,7 +69,9 @@ export class OosDayWorkflow {
         && frozen.meta.premarket_manifest_sha256 === row.manifest_sha256, "FROZEN_REGISTRY_MISMATCH");
       // Chart lock spans both replay and result capture, preventing another day moving the UI between them.
       result = await this.repository.withChartLock(async () => {
-        await this.replay.replay(day);
+        const replay = await this.replay.replay(day);
+        if (isUnscorableMarketGap(replay)) return this.repository.save(row, {
+          state: "COMPLETED", checkpoint: "COMPLETED", ...replay, error: null }, this.clock());
         const capturing = await this.repository.save(row, {
           state: "CAPTURING_RESULTS", checkpoint: "CAPTURING_RESULTS" }, this.clock());
         return this.captureResults(capturing);

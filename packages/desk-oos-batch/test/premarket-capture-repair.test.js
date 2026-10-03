@@ -68,3 +68,16 @@ test("repair archive rejects every plan and replay replacement path", async () =
     await assert.rejects(f.archive.replaceUnfrozenCapture(DAY, { name, repair_id: "a".repeat(64), bytes: Buffer.from("TEST_ONLY") }), /CAPTURE_REPAIR_PATH_REJECTED/);
   }
 });
+
+test("technical recapture preserves explicitly supplied future-cycle calendar evidence", async () => {
+  const f = await brokenFixture();
+  const calendar = { source: "SYNTHETIC_TEST_ONLY", version: "fixture/1", early_close: true };
+  f.broken.session_calendar = calendar;
+  const { manifest_sha256, ...content } = f.broken;
+  f.broken.manifest_sha256 = sha256(jsonBytes(content));
+  await writeFile(await f.archive.target(DAY, "premarket/manifest.json"), jsonBytes(f.broken));
+  await f.repository.save(await f.repository.get(), { manifest_sha256: f.broken.manifest_sha256 }, "2026-10-03T09:00:00Z");
+  const receipt = await f.repair.execute({ ...f.command, expected_manifest_sha256: f.broken.manifest_sha256 });
+  assert.equal(receipt.state, "PREMARKET_READY");
+  assert.deepEqual((await f.archive.readJson(DAY, "premarket/manifest.json")).session_calendar, calendar);
+});

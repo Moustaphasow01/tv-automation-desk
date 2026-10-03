@@ -48,7 +48,8 @@ export class PremarketCaptureRepair {
     });
     validateCapture(proof, { ...day, ...view });
     const png = this.decodeImage(proof.image_base64), record = premarketCaptureRecord(proof, view, this.fingerprint(png));
-    const next = premarketManifest(day, manifest.captures.map(c => c.path === view.name ? record : c), this.fingerprint);
+    const calendar = manifest.session_calendar ? { session_calendar: manifest.session_calendar } : {};
+    const next = premarketManifest(day, manifest.captures.map(c => c.path === view.name ? record : c), this.fingerprint, calendar);
     validateManifest(next, day);
     const replacements = [];
     for (const [name, bytes] of [[`premarket/${view.name}`, png], [`evidence/${view.name}.json`, this.encodeJson(proof)],

@@ -95,9 +95,12 @@ export class OosReplayProgress {
   assertAvailableBar({ observation, bound }) {
     const baseline = observation.last_bar_time;
     const gap = this.state.tv_replay_state?.native_gap;
-    if (gap?.expected_next_bar_open === iso(baseline + 900)) {
+    if (this.stage === "REPLAYING" && gap?.expected_next_bar_open === iso(baseline + 900)
+      && Date.parse(gap.next_native_bar_open) / 1000 >= bound && baseline + 900 < bound) {
+      this.state.tv_replay_state = { ...this.state.tv_replay_state, market_session_exhausted: true };
       throw this.error("TV_REPLAY_SESSION_BAR_UNAVAILABLE", observation, {
         ...replayBarSequence({ previous: baseline, observation, bound }), native_gap: gap,
+        market_session_exhausted: true,
         reason: "NO_NATIVE_M15_BAR_BEFORE_SESSION_END; ENGINE_FINAL_AUDIT_UNPROVEN", steps_requested: 0 });
     }
   }

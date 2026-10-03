@@ -44,11 +44,11 @@ export function createPremarketOrchestration(options) {
   return new PremarketOrchestration({ clock: () => new Date().toISOString(), ...options, fingerprint: sha256, encodeJson: jsonBytes });
 }
 
-export function createOosRuntime({ pool, root, tradingViewCall, builderCall, validatorCall, clock = () => new Date().toISOString() }) {
+export function createOosRuntime({ pool, root, tradingViewCall, builderCall, validatorCall, sessionCalendar, clock = () => new Date().toISOString() }) {
   const archive = new ArtifactArchive(root), repository = new PostgresOosRegistry(pool);
   const tradingView = new TradingViewMcpAdapter(tradingViewCall);
   const common = { archive, tradingView, fingerprint: sha256, encodeJson: jsonBytes, decodeImage: decodePng, clock };
-  const premarket = new PremarketWorkflow(common);
+  const premarket = new PremarketWorkflow({ ...common, sessionCalendar });
   const freeze = new PlanFreeze({ ...common, premarket, scenarioBuilder: { request: builderCall }, syntaxValidator: { validate: validatorCall } });
   const replay = new ReplayWorkflow({ ...common, freeze, progress: new PostgresReplayProgress(pool) });
   return { archive, repository, premarket, freeze, replay, probe: new PostgresOosProbe(pool),

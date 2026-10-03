@@ -27,6 +27,7 @@ export async function assemble(pool) {
   const builder = new OosMcpConnection(config.scenario_builder);
   const validator = new OosMcpConnection(config.syntax_validator);
   const runtime = createOosRuntime({ pool, root: config.archive_root, tradingViewCall: bridge.call.bind(bridge),
+    sessionCalendar: config.premarket_session_calendar,
     builderCall: args => config.scenario_builder ? builder.call("requestPlan", args) : Promise.resolve({ status: "PENDING" }),
     validatorCall: args => {
       if (config.syntax_validator === "builtin-v3.9.8") return validateSmc3Syntax(args);

@@ -1,5 +1,6 @@
 import { batchDays, requireFact, STAGES } from "../domain/batch-contract.js";
 import { projectDay, aggregateBatch } from "./batch-projection.js";
+import { isUnscorableMarketGap, projectSessionCoverage } from "../domain/market-session-exhaustion.js";
 
 /** Date-scoped boundary shared by remote MCP and the dedicated OOS host. */
 export class OosPortal {
@@ -36,6 +37,12 @@ export class OosPortal {
     requireFact(row.plan_sha256, "PLAN_NOT_FROZEN");
     await this.runtime.freeze.verify(day);
     requireFact(row.state === "COMPLETED", "RESULT_NOT_READY");
+    if (isUnscorableMarketGap(row)) {
+      const run_meta = await this.runtime.replay.verifySessionCoverage(day, row.run_meta);
+      return { date, sample_purpose: this.sample(row).sample_purpose, ...projectSessionCoverage(row),
+        audit: null, run_meta, metrics: projectDay(row).metrics, artifact_hashes: [],
+        technical_receipt: run_meta.coverage_receipt };
+    }
     const integrity = await this.runtime.replay.verifyResults(day, row.run_meta);
     return { date, sample_purpose: this.sample(row).sample_purpose, audit: row.audit, run_meta: row.run_meta,
       artifact_hashes: integrity.artifacts };
@@ -57,6 +64,8 @@ export class OosPortal {
     const postFreeze = STAGES.indexOf(row.checkpoint) >= STAGES.indexOf("FROZEN");
     requireFact(postFreeze && row.plan_sha256, "PLAN_NOT_FROZEN");
     await this.runtime.freeze.verify(day);
+    if (row.state === "COMPLETED") return { status: "COMPLETED", date, plan_sha256: row.plan_sha256,
+      ...projectSessionCoverage(row), idempotent: true };
     const retry = row.state === "FAILED_TECHNICAL";
     return this.runtime.commands.enqueue({ batch_id: this.batchId, symbol: this.symbol,
       cutoff_time: this.cutoffTime, date, action: retry ? "retry" : "replay" },

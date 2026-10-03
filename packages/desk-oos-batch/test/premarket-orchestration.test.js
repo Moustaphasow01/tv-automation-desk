@@ -116,7 +116,8 @@ test("technical projection excludes prices/results; statuses/counts preserve fai
   assert.equal(preparationStatus({ rows: [failed], commandStatus: "COMPLETED" }), "FAILED");
   assert.equal(preparationStatus({ rows: [failed], commandStatus: "RUNNING" }), "RUNNING");
   assert.equal(preparationStatus({ rows: [], commandStatus: "COMPLETED" }), "COMPLETED");
-  assert.deepEqual(preparationCounts([ready, failed]), { total_days: 2, ready: 1, failed: 1, queued: 0, completed: 0, premarket_ready: 1, next_waiting_scenario: ready.day });
+  assert.deepEqual(preparationCounts([ready, failed]), { total_days: 2, ready: 1, failed: 1, queued: 0, completed: 0,
+    UNSCORABLE_MARKET_GAP_DAYS: 0, premarket_ready: 1, next_waiting_scenario: ready.day });
 });
 
 test("replay status preserves actual lifecycle and failure checkpoints, even while a command is running", () => {

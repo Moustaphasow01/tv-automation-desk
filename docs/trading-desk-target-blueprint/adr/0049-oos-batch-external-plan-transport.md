@@ -26,3 +26,11 @@ Rejected: Master/AV4 adapters, canonical desk simulation, prompts and heuristics
 change the user's external plan workflow. No new infrastructure technology is required.
 Tests enforce immutable bytes, anti-hindsight allowlists, freeze barriers, resumption,
 exclusive chart access, no legacy imports and no invented audit metrics.
+
+Operator-authorized session exhaustion uses existing COMPLETED with an explicit
+UNSCORABLE_MARKET_GAP classification, not a fabricated ENGINE result. Native scoped
+bar timestamps prove missing session coverage; a separately hashed technical receipt
+retains it without seven performance artifacts. Such days remain in coverage but are
+excluded from every performance aggregate. See oos-market-session-gap-runbook.md.
+New bundles may carry explicitly supplied pre-cutoff calendar evidence. Existing
+bundles and frozen plans are never retrofitted or repaired by this mechanism.
