@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, open, link, unlink, lstat } from "node:fs/promises";
+import { mkdir, readFile, open, link, unlink, lstat, rename } from "node:fs/promises";
 import path from "node:path";
 import { requireFact } from "../domain/batch-contract.js";
 
 export const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 export const jsonBytes = value => Buffer.from(JSON.stringify(value, null, 2) + "\n", "utf8");
+const CAPTURE_REPAIR_PATH = /^(premarket\/(?:manifest\.json|(?:5m|15m|1h|4h)_(?:global|zoom)\.png)|evidence\/(?:5m|15m|1h|4h)_(?:global|zoom)\.png\.json)$/;
 
 /** Write-once files: publish a fully fsynced file with an atomic, no-clobber link. */
 export class ArtifactArchive {
@@ -53,6 +54,22 @@ export class ArtifactArchive {
   }
 
   async putJson(day, name, value) { return this.put(day, name, jsonBytes(value)); }
+
+  /** Operator repair only: no frozen metadata, no plan/replay path, exact old hash, durable backup. */
+  async replaceUnfrozenCapture(day, repair) {
+    const { name, expected_sha256, bytes, repair_id } = repair;
+    requireFact(/^[a-f0-9]{64}$/.test(repair_id) && CAPTURE_REPAIR_PATH.test(name), "CAPTURE_REPAIR_PATH_REJECTED");
+    requireFact(!await this.optionalJson(day, "plan/plan_meta.json"), "FROZEN_BUNDLE_INTEGRITY_VIOLATION");
+    const target = await this.target(day, name), current = await readFile(target);
+    if (current.equals(bytes)) return { path: name, sha256: sha256(bytes) };
+    requireFact(sha256(current) === expected_sha256, "CAPTURE_REPAIR_HASH_CONFLICT");
+    await this.put(day, `evidence/premarket-repair-${repair_id}/original-${name.replaceAll("/", "_")}`, current);
+    const temporary = `${target}.${randomUUID()}.pending`, handle = await open(temporary, "wx", 0o600);
+    try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
+    try { await rename(temporary, target); }
+    catch (error) { await unlink(temporary); throw error; }
+    return { path: name, sha256: sha256(bytes) };
+  }
 }
 
 export function decodePng(base64) {

@@ -46,6 +46,22 @@ export class PostgresOosRegistry {
     return result.rows[0] ? decode(result.rows[0]) : null;
   }
 
+  async commitCaptureRepair(command, at) {
+    const { day, previous, manifest_sha256 } = command, client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(`UPDATE oos_batch_days SET manifest_sha256=$1,revision=revision+1,updated_at=$2
+        WHERE batch_id=$3 AND day=$4 AND revision=$5 AND manifest_sha256=$6 AND plan_sha256 IS NULL
+        AND state='PREMARKET_READY' AND checkpoint='PREMARKET_READY' RETURNING ${PREPARATION_COLUMNS}`,
+      [manifest_sha256, at, day.batch_id, day.date, previous.revision, previous.manifest_sha256]);
+      requireFact(result.rowCount === 1, "CAPTURE_REPAIR_VERSION_CONFLICT");
+      const row = decode(result.rows[0]);
+      await client.query(`INSERT INTO oos_batch_events (batch_id,day,revision,state,checkpoint,occurred_at,error)
+        VALUES ($1,$2,$3,$4,$5,$6,NULL)`, [row.batch_id, row.day, row.revision, row.state, row.checkpoint, at]);
+      await client.query("COMMIT"); return row;
+    } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+  }
+
   async list(batchId) {
     const result = await this.pool.query(`SELECT ${COLUMNS} FROM oos_batch_days
       WHERE ($1::text IS NULL OR batch_id=$1) ORDER BY batch_id DESC,day LIMIT 500`, [batchId || null]);

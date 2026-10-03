@@ -13,11 +13,7 @@ export class PremarketWorkflow {
       captures.push(await this.captureView(day, view));
       await onCapture(captures.length);
     }
-    const content = { schema_version: "oos-premarket/2", date: day.date, symbol: day.symbol,
-      timezone: day.timezone, cutoff: day.cutoff, engine_version: day.engine_version,
-      book_mode: day.book_mode, hash_format: "sha256-json-utf8-lf-excluding-manifest_sha256",
-      captures, status: "PREMARKET_READY" };
-    const manifest = { ...content, manifest_sha256: this.fingerprint(JSON.stringify(content, null, 2) + "\n") };
+    const manifest = premarketManifest(day, captures, this.fingerprint);
     validateManifest(manifest, day);
     await this.archive.putJson(day, "premarket/manifest.json", manifest);
     return this.verify(day);
@@ -35,11 +31,7 @@ export class PremarketWorkflow {
     validateCapture(proof, { ...day, ...view });
     const bytes = this.decodeImage(proof.image_base64);
     const artifact = await this.archive.put(day, `premarket/${view.name}`, bytes);
-    return { timeframe: view.timeframe, view: view.view, path: view.name, sha256: artifact.sha256,
-      captured_at: proof.captured_at, visible_as_of: proof.visible_as_of, source: proof.source,
-      bar_policy: proof.bar_policy ?? null, capture_cutoff: proof.capture_cutoff ?? null,
-      last_bar_open: proof.last_bar_open ?? null, last_bar_close: proof.last_bar_close ?? null,
-      indicator_fingerprint: proof.indicator_fingerprint ?? null };
+    return premarketCaptureRecord(proof, view, artifact.sha256);
   }
 
   async verify(day) {
@@ -60,4 +52,20 @@ export class PremarketWorkflow {
     return { manifest, manifest_sha256: manifest.manifest_sha256 || this.fingerprint(bytes),
       manifest_file_sha256: this.fingerprint(bytes), images };
   }
+}
+
+export function premarketCaptureRecord(proof, view, sha256) {
+  return { timeframe: view.timeframe, view: view.view, path: view.name, sha256,
+    captured_at: proof.captured_at, visible_as_of: proof.visible_as_of, source: proof.source,
+    bar_policy: proof.bar_policy ?? null, capture_cutoff: proof.capture_cutoff ?? null,
+    last_bar_open: proof.last_bar_open ?? null, last_bar_close: proof.last_bar_close ?? null,
+    indicator_fingerprint: proof.indicator_fingerprint ?? null };
+}
+
+export function premarketManifest(day, captures, fingerprint) {
+  const content = { schema_version: "oos-premarket/2", date: day.date, symbol: day.symbol,
+    timezone: day.timezone, cutoff: day.cutoff, engine_version: day.engine_version,
+    book_mode: day.book_mode, hash_format: "sha256-json-utf8-lf-excluding-manifest_sha256",
+    captures, status: "PREMARKET_READY" };
+  return { ...content, manifest_sha256: fingerprint(JSON.stringify(content, null, 2) + "\n") };
 }

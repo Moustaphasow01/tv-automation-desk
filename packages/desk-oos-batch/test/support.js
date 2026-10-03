@@ -19,6 +19,11 @@ export class MemoryRegistry {
   }
   async withChartLock(fn) { return fn(); }
   async get() { return structuredClone(this.row); }
+  async getPreparation() { return this.get(); }
+  async commitCaptureRepair({ previous, manifest_sha256 }, at) {
+    requireFact(!this.row.plan_sha256 && this.row.state === "PREMARKET_READY", "CAPTURE_REPAIR_VERSION_CONFLICT");
+    return this.save(previous, { manifest_sha256 }, at);
+  }
   async ensureDay(day) {
     this.row ||= { definition: day, batch_id: day.batch_id, day: day.date, state: "NEW", checkpoint: "NEW",
       revision: 0, candidate_attempt: 1, capture_count: 0, error: null };
@@ -41,7 +46,12 @@ export async function fixture() {
     async preparePremarket() { calls.push("prepare"); },
     async capturePremarket(input) {
       calls.push(input.name);
-      return { ...input, replay: true, visible_as_of: input.cutoff, captured_at: clock(), source: "TEST_ONLY", image_base64: PNG };
+      const close = Date.parse(input.cutoff) - (input.timeframe === "4h" ? 3600000 : 0);
+      const duration = { "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000 }[input.timeframe];
+      return { ...input, replay: true, visible_as_of: new Date(close - 1000).toISOString(),
+        bar_policy: "CLOSED_ONLY", capture_cutoff: new Date(close).toISOString(),
+        last_bar_open: new Date(close - duration).toISOString(), last_bar_close: new Date(close).toISOString(),
+        captured_at: clock(), source: "TEST_ONLY", image_base64: PNG };
     },
     async prepareFrozenReplay(input) { calls.push("load"); this.loaded = input; },
     async resumeResultCapture() { calls.push("resume-capture"); },

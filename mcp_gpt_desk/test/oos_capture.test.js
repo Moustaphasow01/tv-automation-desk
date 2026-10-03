@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { OosTradingViewCapture, OOS_TV_TOOLS, isProvenCutoff, isClosedBar } from "../src/oos-tradingview-capture.js";
+import { OosTradingViewCapture, OOS_TV_TOOLS, isProvenCutoff, isClosedBar, completeBarCutoff } from "../src/oos-tradingview-capture.js";
 
 test("capture bridge cannot invoke broker, replay steps or engine input mutation", async () => {
   assert.ok(Object.keys(OOS_TV_TOOLS).every(name => !/trade|order|input|step|buy|sell/.test(name)));
@@ -39,7 +39,42 @@ test("H4 opening before 09:00 but closing afterwards is excluded, not certified 
   const bridge = new OosTradingViewCapture({}); bridge.cutoff = cutoff;
   const sought = []; bridge.raw = async () => ({});
   bridge.seek = async at => { sought.push(at); bridge.effectiveCutoff = at; return { last_bar_time: sought.length === 1 ? eight : eight - 14400 }; };
+  bridge.awaitClosedCutoff = async () => ({});
   await bridge.setTimeframe("4h");
   assert.deepEqual(sought, [cutoff, "2026-07-30T06:00:00.000Z"]);
   assert.equal(bridge.cutoff, cutoff);
+});
+
+for (const firstBar of ["2026-08-20T02:00:00Z", "2026-08-20T06:00:00Z"]) {
+  test(`global/zoom share H4 closed bound when the first snapshot is ${firstBar}`, async () => {
+    const cutoff = "2026-08-20T09:00:00+02:00", bridge = new OosTradingViewCapture({ wait: async () => {} });
+    bridge.cutoff = cutoff; const seeks = []; bridge.raw = async () => ({});
+    bridge.seek = async at => { seeks.push(at); bridge.effectiveCutoff = at;
+      return { last_bar_time: Date.parse(seeks.length === 1 ? firstBar : "2026-08-20T02:00:00Z") / 1000 }; };
+    bridge.observation = async () => ({ replay: true, autoplay: false, symbol: "CME_MINI:MES1!",
+      timezone: "Europe/Paris", resolution: "240", at: Date.parse(bridge.effectiveCutoff) / 1000 - 1,
+      last_bar_time: Date.parse("2026-08-20T02:00:00Z") / 1000 });
+    await bridge.setTimeframe("4h"); await bridge.preset("global");
+    const global = bridge.effectiveCutoff;
+    await bridge.setTimeframe("4h"); await bridge.preset("zoom");
+    assert.equal(global, "2026-08-20T06:00:00.000Z"); assert.equal(bridge.effectiveCutoff, global);
+    assert.deepEqual(seeks, [cutoff, global, global]);
+  });
+}
+
+test("closed-bound calculation uses the native bar clock, not a fixed Paris/UTC offset", () => {
+  for (const [cutoff, open, expected] of [
+    ["2026-08-20T09:00:00+02:00", "2026-08-20T02:00:00Z", "2026-08-20T06:00:00.000Z"],
+    ["2026-01-20T09:00:00+01:00", "2026-01-20T03:00:00Z", "2026-01-20T07:00:00.000Z"]]) {
+    assert.equal(completeBarCutoff({ last_bar_time: Date.parse(open) / 1000 }, "4h", cutoff), expected);
+  }
+  assert.throws(() => completeBarCutoff({ last_bar_time: null }, "4h", "2026-08-20T07:00:00Z"), /TV_BAR_CLOCK_UNPROVEN/);
+});
+
+test("a provisional H4 candle never satisfies stable closed capture proof", async () => {
+  const bridge = new OosTradingViewCapture({ wait: async () => {} });
+  bridge.timeframe = "4h"; bridge.effectiveCutoff = "2026-08-20T06:00:00Z";
+  bridge.awaitCutoff = async () => ({ symbol: "CME_MINI:MES1!", resolution: "240", timezone: "Europe/Paris",
+    at: Date.parse("2026-08-20T05:59:59Z") / 1000, visible_as_of: "2026-08-20T05:59:59Z", last_bar_time: Date.parse("2026-08-20T06:00:00Z") / 1000 });
+  await assert.rejects(bridge.awaitClosedCutoff(), /TV_CLOSED_CUTOFF_NOT_STABLE/);
 });

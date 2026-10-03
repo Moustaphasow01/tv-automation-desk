@@ -79,6 +79,19 @@ test("real PostgreSQL: atomic batches, restart, dedup, fairness, exclusive captu
     const ready = await api.prepare("2026-07-29"); assert.equal(ready.manifest_sha256, "c".repeat(64));
     assert.equal((await pool.query("SELECT count(*) FROM oos_batch_days WHERE plan_sha256 IS NOT NULL")).rows[0].count, "1");
     const empty = await api.prepareRange("2026-07-25", "2026-07-26"); assert.equal(empty.total_days, 0); assert.equal(empty.status, "COMPLETED");
+    // Synthetic isolated schema only: narrow repair CAS must not touch a plan/result column.
+    const repairDay = batchDays({ ...scope, date: "2026-08-20" })[0];
+    const seeded = await repository.save(await repository.ensureDay(repairDay), { state: "PREMARKET_READY", checkpoint: "PREMARKET_READY",
+      capture_count: 8, manifest_sha256: "d".repeat(64) }, "2026-10-03T08:00:00Z");
+    const previous = await repository.getPreparation(repairDay);
+    const repaired = await repository.commitCaptureRepair({ day: repairDay, previous, manifest_sha256: "e".repeat(64) }, "2026-10-03T09:00:00Z");
+    assert.equal(repaired.state, "PREMARKET_READY"); assert.equal(repaired.revision, seeded.revision + 1);
+    assert.equal(repaired.manifest_sha256, "e".repeat(64)); assert.equal(repaired.plan_sha256, null);
+    assert.equal("audit" in repaired, false); assert.equal("run_meta" in repaired, false);
+    await assert.rejects(repository.commitCaptureRepair({ day: repairDay, previous, manifest_sha256: "f".repeat(64) }, "2026-10-03T10:00:00Z"), /CAPTURE_REPAIR_VERSION_CONFLICT/);
+    const frozen = await repository.save(await repository.get(repairDay), { state: "FROZEN", checkpoint: "FROZEN", plan_sha256: "1".repeat(64) }, "2026-10-03T10:00:00Z");
+    await assert.rejects(repository.commitCaptureRepair({ day: repairDay, previous: frozen, manifest_sha256: "f".repeat(64) }, "2026-10-03T11:00:00Z"), /CAPTURE_REPAIR_VERSION_CONFLICT/);
+    assert.deepEqual(await repository.get(repairDay), frozen);
   } finally {
     await pool.end();
     assert.match(schema, /^oos_preparation_test_[a-f0-9]{32}$/);

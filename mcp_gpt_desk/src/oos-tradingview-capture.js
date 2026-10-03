@@ -21,15 +21,24 @@ export function isClosedBar(obs, timeframe, cutoff) {
   return Number.isFinite(close) && close <= Date.parse(cutoff);
 }
 
+export function completeBarCutoff(obs, timeframe, cutoff) {
+  const open = obs.last_bar_time * 1000, close = open + Number(TF[timeframe]) * 60000;
+  if (!Number.isFinite(obs.last_bar_time) || !Number.isFinite(close)
+    || !Number.isFinite(Date.parse(cutoff)) || open > Date.parse(cutoff)) throw fail("TV_BAR_CLOCK_UNPROVEN");
+  return new Date(close <= Date.parse(cutoff) ? close : open).toISOString();
+}
+
 export const OOS_TV_TOOLS = Object.freeze({ chart_set_symbol: "chart_set_symbol", chart_set_timeframe: "chart_set_timeframe",
   chart_set_visible_range: "chart_set_visible_range", replay_start: "replay_start", ui_evaluate: "ui_evaluate",
   capture_screenshot: "capture_screenshot", tv_health_check: "tv_health_check" });
 
 /** Only an operator-configured chart can be controlled. No broker or trading MCP tool is reachable. */
 export class OosTradingViewCapture {
-  constructor({ connection, chartId, screenshotRoot }) {
+  constructor({ connection, chartId, screenshotRoot, wait: waitFor = wait }) {
     Object.assign(this, { connection, chartId, screenshotRoot });
+    this.wait = waitFor;
     this.cutoff = null; this.timeframe = null; this.view = null;
+    this.closedCutoffs = new Map();
   }
   async call(operation, input) {
     if (operation === "openSymbol") return this.open(input);
@@ -69,6 +78,7 @@ export class OosTradingViewCapture {
   async position(cutoff) {
     if (!/^2026-(07|08)-\d{2}T\d{2}:\d{2}:\d{2}\+02:00$/.test(cutoff)) throw fail("TV_CUTOFF_INVALID");
     this.cutoff = cutoff;
+    this.closedCutoffs.clear();
     await this.assertChart();
     return this.seek(cutoff);
   }
@@ -82,14 +92,29 @@ export class OosTradingViewCapture {
     if (!TF[timeframe] || !this.cutoff) throw fail("TV_TIMEFRAME_INVALID");
     this.timeframe = timeframe;
     await this.raw("chart_set_timeframe", { timeframe: TF[timeframe] });
-    let observation = await this.seek(this.cutoff);
-    if (!isClosedBar(observation, timeframe, this.cutoff)) {
-      // A cursor inside an H4 candle does not certify the candle's final OHLC.
-      // Exclude that entire unclosed candle, without advancing beyond the user's cutoff.
-      observation = await this.seek(new Date(observation.last_bar_time * 1000).toISOString());
+    let bound = this.closedCutoffs.get(timeframe);
+    if (!bound) {
+      const observation = await this.seek(this.cutoff);
+      bound = completeBarCutoff(observation, timeframe, this.cutoff);
     }
-    if (!isClosedBar(observation, timeframe, this.effectiveCutoff)) throw fail("TV_UNCLOSED_BAR_REJECTED");
+    await this.seek(bound);
+    await this.awaitClosedCutoff();
+    this.closedCutoffs.set(timeframe, bound);
     return { timeframe };
+  }
+  async awaitClosedCutoff() {
+    let previous;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const obs = await this.awaitCutoff(), close = obs.last_bar_time * 1000 + Number(TF[this.timeframe]) * 60000;
+      const identity = obs.resolution === TF[this.timeframe] && obs.timezone === "Europe/Paris"
+        && ["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(obs.symbol);
+      const signature = JSON.stringify([obs.at, obs.last_bar_time, obs.resolution]);
+      if (identity && close === Date.parse(this.effectiveCutoff)
+        && Date.parse(obs.visible_as_of) < close && previous === signature) return obs;
+      previous = signature;
+      await this.wait(100);
+    }
+    throw fail("TV_CLOSED_CUTOFF_NOT_STABLE");
   }
   async preset(view) {
     if (!["global", "zoom"].includes(view)) throw fail("TV_VIEW_INVALID");
@@ -97,8 +122,8 @@ export class OosTradingViewCapture {
     const seconds = Number(TF[this.timeframe]) * 60, cutoff = Date.parse(this.effectiveCutoff) / 1000;
     const bars = view === "global" ? 240 : 65;
     await this.raw("chart_set_visible_range", { from: cutoff - bars * seconds, to: cutoff + Math.ceil(bars * 0.22) * seconds });
-    await wait(1000);
-    return this.awaitCutoff();
+    await this.wait(1000);
+    return this.awaitClosedCutoff();
   }
   async observation() {
     return this.evaluate(`(function(){var c=${CHART},r=${REPLAY};function u(x){return x&&typeof x.value==='function'?x.value():x;}
@@ -111,18 +136,19 @@ export class OosTradingViewCapture {
       const obs = await this.observation();
       const at = typeof obs.at === "number" ? obs.at * (obs.at < 1e12 ? 1000 : 1) : Date.parse(obs.at);
       if (isProvenCutoff(obs, this.effectiveCutoff || this.cutoff)) return { ...obs, visible_as_of: new Date(at).toISOString() };
-      await wait(500);
+      await this.wait(500);
     }
     throw fail("TV_CUTOFF_NOT_PROVEN");
   }
   async capture(input) {
     if (input.cutoff !== this.cutoff || input.timeframe !== this.timeframe || input.view !== this.view) throw fail("TV_CAPTURE_SCOPE_MISMATCH");
-    await this.assertChart(); const before = await this.awaitCutoff();
+    await this.assertChart(); const before = await this.awaitClosedCutoff();
     if (!isClosedBar(before, input.timeframe, this.effectiveCutoff)) throw fail("TV_UNCLOSED_BAR_REJECTED");
     if (!["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(before.symbol)
       || before.resolution !== TF[input.timeframe] || before.timezone !== "Europe/Paris") throw fail("TV_CAPTURE_IDENTITY_MISMATCH");
     const shot = await this.raw("capture_screenshot", { region: "chart", method: "cdp", filename: `oos_${input.date}_${input.timeframe}_${input.view}` });
-    await this.awaitCutoff();
+    const after = await this.awaitClosedCutoff();
+    if (before.last_bar_time !== after.last_bar_time || before.visible_as_of !== after.visible_as_of) throw fail("TV_CAPTURE_STATE_CHANGED");
     const file = path.resolve(shot.file_path || "");
     if (path.dirname(file) !== path.resolve(this.screenshotRoot)) throw fail("TV_CAPTURE_PATH_REJECTED");
     const bytes = await readFile(file);

@@ -4,6 +4,7 @@ import { PostgresOosCommands } from "./src/adapter/postgres-commands.js";
 import { PostgresReplayProgress } from "./src/adapter/postgres-replay-progress.js";
 import { TradingViewMcpAdapter } from "./src/adapter/tradingview-mcp.js";
 import { PremarketWorkflow } from "./src/application/premarket-workflow.js";
+import { PremarketCaptureRepair } from "./src/application/premarket-capture-repair.js";
 import { PlanFreeze } from "./src/application/plan-freeze.js";
 import { ReplayWorkflow } from "./src/application/replay-workflow.js";
 import { OosDayWorkflow } from "./src/application/day-workflow.js";
@@ -51,6 +52,7 @@ export function createOosRuntime({ pool, root, tradingViewCall, builderCall, val
   const freeze = new PlanFreeze({ ...common, premarket, scenarioBuilder: { request: builderCall }, syntaxValidator: { validate: validatorCall } });
   const replay = new ReplayWorkflow({ ...common, freeze, progress: new PostgresReplayProgress(pool) });
   return { archive, repository, premarket, freeze, replay, probe: new PostgresOosProbe(pool),
+    captureRepair: new PremarketCaptureRepair({ ...common, repository, premarket }),
     batches: new PostgresPremarketBatches(repository),
     submittedPlan: new SubmittedPlan({ ...common, repository, premarket, freeze }),
     commands: new PostgresOosCommands(repository),
