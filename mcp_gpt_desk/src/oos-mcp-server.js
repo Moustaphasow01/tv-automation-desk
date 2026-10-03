@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { registerOosTool as register } from "./oos-mcp-tool.js";
+import { registerForensicTools } from "./oos-forensic-tools.js";
 
 const date = z.string().regex(/^2026-(07|08)-\d{2}$/);
 const month = z.string().regex(/^2026-(07|08)$/);
@@ -7,7 +9,7 @@ const empty = z.object({}).strict();
 const day = z.object({ date }).strict();
 
 /** No legacy MCP registry is imported. Only these explicit OOS capabilities exist. */
-export function createOosMcpServer({ portal, probe, auth, contracts }) {
+export function createOosMcpServer({ portal, probe, auth, contracts, forensic }) {
   const server = new McpServer({ name: "Desk OOS", version: "1.0.0" });
   const read = (name, description, input, run) => register(server, auth, { name, description, input, mode: "read", run });
   const write = (name, description, input, run) => register(server, auth, { name, description, input, mode: "write", run });
@@ -39,30 +41,6 @@ export function createOosMcpServer({ portal, probe, auth, contracts }) {
   write("write_probe", "Idempotent connection test. Writes only a technical probe record, entirely separate from trading data.",
     z.object({ value: z.string().min(1).max(500) }).strict(), args => probe.write(args.value));
   read("get_write_probe", "Read the latest technical write probe; no trading data.", empty, () => probe.read());
+  if (forensic) registerForensicTools({ server, auth, forensic });
   return server;
-}
-
-function register(server, auth, tool) {
-  const scope = `desk.${tool.mode}`;
-  server.registerTool(tool.name, {
-    description: tool.description, inputSchema: tool.input,
-    annotations: { readOnlyHint: tool.mode === "read", destructiveHint: false,
-      idempotentHint: true, openWorldHint: ["request_replay", "prepare_premarket", "prepare_range"].includes(tool.name) },
-    _meta: { securitySchemes: [{ type: "oauth2", scopes: [scope] }] },
-  }, async args => {
-    if (!auth?.scopes?.includes(scope)) return failed("OOS_SCOPE_REQUIRED");
-    try { return result(await tool.run(args)); }
-    catch (error) { return failed(error.code || "OOS_TOOL_FAILED"); }
-  });
-}
-
-function failed(code) { return { isError: true, content: [{ type: "text", text: JSON.stringify({ ok: false, code }) }] }; }
-function result(value) {
-  const { images = [], ...metadata } = Array.isArray(value) ? { items: value } : value;
-  const content = [{ type: "text", text: JSON.stringify(metadata) }];
-  for (const item of images) {
-    content.push({ type: "text", text: JSON.stringify({ capture: item.name, sha256: item.sha256 }) });
-    content.push({ type: "image", mimeType: item.mime_type, data: item.data });
-  }
-  return { structuredContent: metadata, content };
 }

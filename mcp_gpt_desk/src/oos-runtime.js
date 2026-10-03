@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { createOosRuntime, batchDays, validateSmc3Syntax, createPremarketOrchestration, createOosRuntimeContracts } from "@tv-automation/desk-oos-batch";
+import { createOosRuntime, batchDays, validateSmc3Syntax, createPremarketOrchestration, createOosRuntimeContracts, createOosForensics } from "@tv-automation/desk-oos-batch";
 import { readOosInstalledEngine } from "./oos-tradingview-contract-source.js";
 import { OosMcpConnection } from "./oos-mcp-connection.js";
 import { OosTradingViewCapture, OOS_TV_TOOLS } from "./oos-tradingview-capture.js";
@@ -38,7 +38,9 @@ export async function assemble(pool) {
     batchId: config.batch_id, symbol: config.symbol, cutoffTime: config.cutoff_time,
     requestedConcurrency: Number(process.env.OOS_CAPTURE_CONCURRENCY || config.capture_concurrency || 1) });
   const contracts = await createOosRuntimeContracts({ readInstalled: () => readOosInstalledEngine(capture) });
-  return { ...runtime, preparations, contracts, async close() { await Promise.all([tv.close(), builder.close(), validator.close(), provider?.disconnect()]); } };
+  const forensic = createOosForensics({ repository: runtime.repository, root: config.archive_root,
+    indexRoot: path.join(config.archive_root, "forensic-index-v2") });
+  return { ...runtime, preparations, contracts, forensic, async close() { await Promise.all([tv.close(), builder.close(), validator.close(), provider?.disconnect()]); } };
 }
 
 export async function runOosBatch(runtime, input) {

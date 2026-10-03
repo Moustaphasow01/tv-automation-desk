@@ -20,6 +20,7 @@ export { validateSmc3Syntax } from "./src/domain/smc3-syntax.js";
 export { batchDays } from "./src/domain/batch-contract.js";
 export { projectDay, aggregateBatch } from "./src/application/batch-projection.js";
 export { PostgresOosRegistry, ArtifactArchive };
+export { createOosForensics, buildOosForensicIndex } from "./forensics.js";
 
 export async function createOosRuntimeContracts({ readInstalled }) {
   const basis = await readRuntimeContractSource(), facts = pineSourceFacts(basis);

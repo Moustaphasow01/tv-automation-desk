@@ -85,7 +85,7 @@ async function mcp({ req, res, portal, runtime, identity, config }) {
     sendJson(res, 200, { jsonrpc: "2.0", id: body.id, result: { isError: true,
       content: [{ type: "text", text: '{"code":"OOS_REPLAY_DISABLED"}' }] } }); return;
   }
-  const server = createOosMcpServer({ portal, probe: runtime.probe, contracts: runtime.contracts, auth: identity });
+  const server = createOosMcpServer({ portal, probe: runtime.probe, contracts: runtime.contracts, forensic: runtime.forensic, auth: identity });
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on("close", () => { void transport.close(); void server.close(); });
   await server.connect(transport);
