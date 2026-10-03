@@ -4,6 +4,7 @@ import { OosTradingViewEngine, OOS_CHART, OOS_REPLAY, oosTvError, oosWait, oosHa
 import { OosTradingViewPanels } from "./oos-tradingview-panels.js";
 import { extractOosPublishedAudit } from "./oos-tradingview-audit.js";
 import { OosReplayProgress, replayObservation, REPLAY_TIMEOUTS } from "./oos-replay-progress.js";
+import { OosReplayCutoff, replayCutoffProof } from "./oos-replay-cutoff.js";
 
 const TF = { "5m": "5", "15m": "15" };
 const seconds = at => typeof at === "number" ? at / (at > 1e12 ? 1000 : 1) : Date.parse(at) / 1000;
@@ -20,6 +21,7 @@ export class OosTradingViewReplay {
   constructor({ capture, provider, timeouts = {} }) {
     this.capture = capture; this.active = false; this.trace = [];
     this.provider = provider; this.timeouts = { ...REPLAY_TIMEOUTS, ...timeouts };
+    this.cutoff = new OosReplayCutoff({ capture, provider, settings: this.timeouts });
     this.engine = new OosTradingViewEngine(capture);
     this.panels = new OosTradingViewPanels({ engine: this.engine, provider, settings: { layout_ms: this.timeouts.ui_transition_ms } });
   }
@@ -27,6 +29,7 @@ export class OosTradingViewReplay {
   async call(operation, input) {
     if (operation === "resumeFrozenReplay") return this.resume(input);
     if (operation === "resumeResultCapture") return this.resumeResultCapture(input);
+    if (operation === "setReplayCutoff") return this.position(input);
     if (operation === "openSymbol") {
       this.active = false; this.resumed = false; this.progress = null; this.end = null;
       return this.capture.call(operation, input);
@@ -41,7 +44,7 @@ export class OosTradingViewReplay {
     }
     if (!this.active) return this.capture.call(operation, input);
     const handlers = { setBookMode: () => this.engine.setInput("book", input.book_mode),
-      loadPlan: () => this.engine.load(input), setReplayCutoff: () => this.position(input),
+      loadPlan: () => this.engine.load(input),
       readPlanFingerprint: () => this.fingerprint(input), startReplay: () => this.start(input),
       advanceTo: () => this.advance(input), openDashboard: () => this.openPanel("AUDIT", input),
       openPositions: () => this.openPanel("POSITIONS", input), setTimeframe: () => this.setTimeframe(input.timeframe),
@@ -82,7 +85,8 @@ export class OosTradingViewReplay {
       ui: () => this.uiState(), ready: timeoutMs => this.ready(timeoutMs),
       persist: input.onProgress, settings: this.timeouts });
     await this.progress.initialize({ observation, target: `${input.date}T20:00:00+02:00`,
-      prior: input.progress, browserSessionId: session?.id, configHash: this.engine.configHash, cutoff: input.cutoff });
+      prior: input.progress, browserSessionId: session?.id, configHash: this.engine.configHash, cutoff: input.cutoff,
+      cutoffProof: this.cutoffProof || input.progress?.tv_replay_state?.cutoff_proof });
   }
 
   async resume(input) {
@@ -106,21 +110,26 @@ export class OosTradingViewReplay {
     const obs = await this.observation(), anchor = seconds(obs.selection_anchor), cutoff = seconds(input.cutoff);
     // currentDate can stay at the initial anchor on the first step, then track subsequent steps.
     // A persisted, hash-bound cursor authorizes resuming that progressed session, never rewinding it.
-    const anchored = [cutoff, cutoff - 1].includes(anchor);
-    const progressed = input.progress?.steps_completed > 0 && Number.isFinite(anchor)
-      && anchor >= cutoff - 1 && anchor <= seconds(obs.at)
+    const initialProof = replayCutoffProof({ ...obs, at: obs.selection_anchor }, input.cutoff);
+    const anchored = [cutoff, cutoff - 1].includes(anchor) || initialProof.proof_condition_result;
+    const progressed = input.progress?.steps_completed > 0 && seconds(obs.at) >= cutoff - 1
+      && (!Number.isFinite(anchor) || anchor >= cutoff - 1 && anchor <= seconds(obs.at))
       && seconds(obs.at) <= seconds(`${input.date}T20:00:00+02:00`) + 86400;
     if (!obs.replay || obs.autoplay || obs.resolution !== "15" || !(anchored || progressed)
       || !["CME_MINI:MES1!", "CME_MINI_DL:MES1!"].includes(obs.symbol) || obs.timezone !== "Europe/Paris"
       || mode !== "REPLAY" || book !== "PORTEFEUILLE_REALISTE") throw oosTvError("TV_REPLAY_RESUME_SCOPE_MISMATCH");
+    if (initialProof.proof_condition_result) this.cutoffProof = initialProof;
     await this.configureProgress(input, obs); await this.ready();
     this.active = true; this.resumed = true; this.timeframe = "15m";
     return { resumed: true, replay: true, plan_sha256: input.plan_sha256, progress: this.progress.state };
   }
 
   async position(input) {
-    const positioned = await this.capture.position(input.cutoff);
-    await this.engine.ready(); return positioned;
+    if (!input.replay_only) throw oosTvError("TV_REPLAY_SCOPE_REQUIRED");
+    const positioned = await this.cutoff.position({ ...this.progressInput, ...input });
+    this.cutoffProof = positioned.cutoff_proof;
+    if (this.active) await this.engine.ready();
+    return positioned;
   }
 
   async resumeResultCapture(input) {
@@ -161,10 +170,11 @@ export class OosTradingViewReplay {
     if (!input.replay_only || input.plan_sha256 !== this.engine.loadedHash) throw oosTvError("TV_REPLAY_HASH_MISMATCH");
     await this.engine.verifyInputs();
     if (this.resumed) return { replay: true, resumed: true, plan_sha256: this.engine.loadedHash };
-    const obs = await this.capture.awaitCutoff();
+    const obs = await this.cutoff.prove({ ...this.progressInput, cutoff: this.capture.cutoff });
+    this.cutoffProof = obs.cutoff_proof;
     if (obs.resolution !== "15") throw oosTvError("TV_EXECUTION_TIMEFRAME_MISMATCH");
     await this.capture.evaluate(`${OOS_REPLAY}.changeReplayResolution('15');true`);
-    this.trace = [{ visible_as_of: new Date(seconds(obs.at) * 1000).toISOString() }];
+    this.trace = [{ visible_as_of: this.cutoffProof.current_replay_cursor }];
     await this.configureProgress(this.progressInput, replayObservation(obs));
     return { replay: true, execution_timeframe: "15m", plan_sha256: this.engine.loadedHash };
   }

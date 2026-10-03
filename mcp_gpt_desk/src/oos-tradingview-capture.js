@@ -76,11 +76,14 @@ export class OosTradingViewCapture {
     return { engine_version: "V3.9.8", pine_version: engine.version };
   }
   async position(cutoff) {
+    await this.setCutoffIdentity(cutoff);
+    return this.seek(cutoff);
+  }
+  async setCutoffIdentity(cutoff) {
     if (!/^2026-(07|08)-\d{2}T\d{2}:\d{2}:\d{2}\+02:00$/.test(cutoff)) throw fail("TV_CUTOFF_INVALID");
     this.cutoff = cutoff;
     this.closedCutoffs.clear();
     await this.assertChart();
-    return this.seek(cutoff);
   }
   async seek(cutoff) {
     this.effectiveCutoff = cutoff;
@@ -140,9 +143,14 @@ export class OosTradingViewCapture {
   }
   async observation() {
     return this.evaluate(`(function(){var c=${CHART},r=${REPLAY};function u(x){return x&&typeof x.value==='function'?x.value():x;}
-      var b=c._chartWidget.model().mainSeries().bars(),i=b.lastIndex(),v=b.valueAt(i);
+      var series=c._chartWidget.model().mainSeries(),b=series.bars(),i=b.lastIndex(),v=b.valueAt(i),previous=b.valueAt(i-1);
+      var session=r._replayUIController?._replayManager?._replaySession,api=session?._chartApi;
       return {symbol:c.symbol(),resolution:c.resolution(),timezone:c.getTimezone(),replay:u(r.isReplayStarted()),
-      autoplay:u(r.isAutoplayStarted()),at:u(r.currentDate()),last_bar_time:v?.[0]??null};})()`);
+      autoplay:u(r.isAutoplayStarted()),at:u(r.currentDate()),last_bar_time:v?.[0]??null,
+      previous_bar_time:previous?.[0]??null,loading:typeof series.isLoading==='function'?series.isLoading():null,
+      selected_at:typeof r.getReplaySelectedDate==='function'?u(r.getReplaySelectedDate()):null,
+      data_connected:typeof api?.connected==='function'?u(api.connected()):null,
+      replay_session_connected:session?u(session._isConnected):null};})()`);
   }
   async awaitCutoff() {
     for (let attempt = 0; attempt < 20; attempt++) {

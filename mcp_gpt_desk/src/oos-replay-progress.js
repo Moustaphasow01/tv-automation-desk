@@ -31,13 +31,14 @@ export class OosReplayProgress {
     this.state = {}; this.errors = [];
   }
 
-  async initialize({ observation, target, prior, browserSessionId, configHash, cutoff }) {
+  async initialize({ observation, target, prior, browserSessionId, configHash, cutoff, cutoffProof }) {
     const time = replaySeconds(observation.at);
     const previous = prior?.last_confirmed_bar_time ? Date.parse(prior.last_confirmed_bar_time) / 1000 : null;
     if (previous !== null && observation.last_bar_time < previous) throw this.error("TV_REPLAY_RESUME_REGRESSION", observation);
     if (prior?.config_hash && prior.config_hash !== configHash) throw this.error("TV_REPLAY_RESUME_CONFIG_MISMATCH", observation);
     this.state = { ...prior, replay_target_time: target, browser_session_id: browserSessionId || null,
       config_hash: configHash, steps_completed: prior?.steps_completed || 0, retry_count: prior?.retry_count || 0 };
+    if (cutoffProof) this.state.tv_replay_state = { ...this.state.tv_replay_state, cutoff_proof: cutoffProof };
     if (!prior) this.state.steps_completed = Math.max(0, Math.round((time + 1 - Date.parse(cutoff) / 1000) / 900));
     if (previous !== null && observation.last_bar_time > previous) this.state.steps_completed++;
     await this.confirm(observation, "RECONCILED");
@@ -51,7 +52,7 @@ export class OosReplayProgress {
   async confirm(obs, phase) {
     this.state = { ...this.state, replay_current_time: iso(replaySeconds(obs.at)),
       last_confirmed_bar_time: iso(obs.last_bar_time), last_success_at: new Date(this.now()).toISOString(),
-      last_error: null, tv_replay_state: { phase, replay: obs.replay, autoplay: obs.autoplay,
+      last_error: null, tv_replay_state: { ...this.state.tv_replay_state, phase, replay: obs.replay, autoplay: obs.autoplay,
         timeframe: obs.resolution, selection_anchor: iso(replaySeconds(obs.selection_anchor)) } };
     await this.persist(this.state);
   }

@@ -15,12 +15,18 @@ export function hasPremarket(row) {
 }
 
 export function projectPreparationDay(row, queue = {}) {
-  const replay = queue.replay?.has(row.day) ? "REPLAY_QUEUED"
-    : ["REPLAYING", "CAPTURING_RESULTS", "COMPLETED"].includes(row.state) ? row.state : "NOT_REQUESTED";
+  const replay = projectReplayStatus(row, queue);
   return { date: row.day, state: row.state, checkpoint: row.checkpoint, capture_count: row.capture_count,
     manifest_sha256: row.manifest_sha256, plan_sha256: row.plan_sha256, replay_status: replay,
     queue_status: !hasPremarket(row) && queue.capture?.has(row.day) ? "QUEUED_OR_RUNNING" : "NOT_QUEUED",
     error: row.error ? { code: row.error.code } : null, updated_at: row.updated_at };
+}
+
+export function projectReplayStatus(row, queue = {}) {
+  if (["REPLAYING", "CAPTURING_RESULTS", "COMPLETED"].includes(row.state)) return row.state;
+  if (queue.replay?.has(row.day)) return "QUEUED";
+  if (row.state === "FAILED_TECHNICAL" && ["REPLAYING", "CAPTURING_RESULTS"].includes(row.checkpoint)) return "FAILED_TECHNICAL";
+  return "NOT_REQUESTED";
 }
 
 export function queuedPreparationDates(rows, queue) {

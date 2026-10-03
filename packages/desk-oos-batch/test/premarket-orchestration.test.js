@@ -108,7 +108,7 @@ test("technical projection excludes prices/results; statuses/counts preserve fai
   const failed = { ...row("2026-07-28", "FAILED_TECHNICAL"), error: { code: "TV_TIMEOUT", details: { secret: "EXCLUDE" } } };
   const projected = projectPreparationDay(failed);
   assert.deepEqual(projected.error, { code: "TV_TIMEOUT" }); assert.equal(JSON.stringify(projected).includes("EXCLUDE"), false);
-  assert.equal(projectPreparationDay({ ...ready, state: "FROZEN" }, { replay: new Set([ready.day]) }).replay_status, "REPLAY_QUEUED");
+  assert.equal(projectPreparationDay({ ...ready, state: "FROZEN" }, { replay: new Set([ready.day]) }).replay_status, "QUEUED");
   const queue = { capture: new Set([ready.day, failed.day, "2026-07-29"]) };
   assert.equal(projectPreparationDay(ready, queue).queue_status, "NOT_QUEUED");
   assert.deepEqual(queuedPreparationDates([ready, failed], queue), [failed.day]);
@@ -117,6 +117,19 @@ test("technical projection excludes prices/results; statuses/counts preserve fai
   assert.equal(preparationStatus({ rows: [failed], commandStatus: "RUNNING" }), "RUNNING");
   assert.equal(preparationStatus({ rows: [], commandStatus: "COMPLETED" }), "COMPLETED");
   assert.deepEqual(preparationCounts([ready, failed]), { total_days: 2, ready: 1, failed: 1, queued: 0, completed: 0, premarket_ready: 1, next_waiting_scenario: ready.day });
+});
+
+test("replay status preserves actual lifecycle and failure checkpoints, even while a command is running", () => {
+  const base = row("2026-07-01", "FROZEN"), queue = { replay: new Set([base.day]) };
+  assert.equal(projectPreparationDay(base).replay_status, "NOT_REQUESTED");
+  assert.equal(projectPreparationDay(base, queue).replay_status, "QUEUED");
+  for (const state of ["REPLAYING", "CAPTURING_RESULTS", "COMPLETED"]) {
+    assert.equal(projectPreparationDay({ ...base, state, checkpoint: state }, queue).replay_status, state);
+    const failed = { ...base, state: "FAILED_TECHNICAL", checkpoint: state };
+    if (state !== "COMPLETED") assert.equal(projectPreparationDay(failed).replay_status, "FAILED_TECHNICAL");
+  }
+  assert.equal(projectPreparationDay({ ...base, state: "FAILED_TECHNICAL", checkpoint: "CAPTURING" }).replay_status, "NOT_REQUESTED");
+  assert.equal(projectPreparationDay({ ...base, state: "FAILED_TECHNICAL", checkpoint: "REPLAYING" }, queue).replay_status, "QUEUED");
 });
 
 test("batch read selectors reject ambiguity and remain read-only", async () => {
