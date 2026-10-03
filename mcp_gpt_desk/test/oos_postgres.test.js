@@ -46,7 +46,7 @@ test("PostgreSQL migration, CAS, immutable identity, locks, durable queue and id
     assert.equal(await commands.processOne(workflow), null); assert.equal(executions, 1);
     assert.equal((await commands.get("synthetic-1")).status, "COMPLETED");
     await assert.rejects(repository.retireUnfrozenCapture(DAY, "a".repeat(64)), { code: "CAPTURE_RETIRE_FORBIDDEN" });
-    const captured = await repository.save(await repository.get(DAY), { manifest_sha256: "a".repeat(64) }, new Date().toISOString());
+    const captured = await repository.save(await repository.get(DAY), { manifest_sha256: "a".repeat(64), capture_count: 8 }, new Date().toISOString());
     const frozen = await repository.save(captured, { plan_sha256: "b".repeat(64) }, new Date().toISOString());
     const progress = new PostgresReplayProgress(pool), at = new Date().toISOString();
     const state = { replay_current_time: at, replay_target_time: at, last_confirmed_bar_time: at,
