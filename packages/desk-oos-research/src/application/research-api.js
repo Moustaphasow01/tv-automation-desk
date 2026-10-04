@@ -11,9 +11,9 @@ export class ResearchApi {
       const steps = { OBSERVING: () => this.cycle.observe({ cycle_id }),
         DIAGNOSING: () => this.cycle.diagnose({ cycle_id, limit: maximum_cases }),
         CLUSTERING: () => this.cycle.cluster({ cycle_id }),
-        HYPOTHESIZING: () => this.discovery.discover({ cycle_id }),
-        COUNTEREXAMPLES: () => this.discovery.critiqueAll({ cycle_id }),
-        CRITIQUING: () => this.discovery.critiqueAll({ cycle_id }) };
+        HYPOTHESIZING: () => this.discovery.discover({ cycle_id,maximum_chunks:1 }),
+        COUNTEREXAMPLES: () => this.discovery.critiqueAll({ cycle_id,maximum_hypotheses:1 }),
+        CRITIQUING: () => this.discovery.critiqueAll({ cycle_id,maximum_hypotheses:1 }) };
       if (!steps[cycle.status]) return { ...cycle, action: "NO_AUTOMATIC_EXPERIMENT_OR_PROMOTION" };
       try { return await steps[cycle.status](); }
       catch (error) {

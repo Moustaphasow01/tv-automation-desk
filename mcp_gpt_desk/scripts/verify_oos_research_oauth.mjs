@@ -7,7 +7,7 @@ const config=JSON.parse(await readFile(process.env.OOS_BATCH_CONFIG,'utf8')),bas
 const assert=(ok,code)=>{if(!ok)throw Object.assign(new Error(code),{code});};
 const decode=token=>JSON.parse(Buffer.from(token.split('.')[1],'base64url'));
 async function access(scope) {
-  const metadata={client_name:'Desk OOS research scope acceptance',redirect_uris:['https://example.invalid/oos-research-test'],
+  const metadata={client_name:'Desk OOS research scope acceptance',redirect_uris:['http://127.0.0.1:39876/oos-research-test'],
     grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none',scope};
   const registration=await fetch(`${base}/oauth/register`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(metadata)});
   assert(registration.status===201,'RESEARCH_DCR_FAILED');const client=await registration.json();

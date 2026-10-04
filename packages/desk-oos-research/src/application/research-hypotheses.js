@@ -25,20 +25,35 @@ export class ResearchHypotheses {
       feature_rule: hypothesis.feature_rule, outcome_rule: hypothesis.outcome_rule, testable_change: hypothesis.testable_change };
     const hypothesis_id = this.fingerprint(researchCanonicalJson(mechanism));
     const existing = await this.memory.findArtifact({ kind: "hypothesis", id: hypothesis_id });
-    if (existing) return { hypothesis_id, already_tested_or_registered: true, previous: existing.payload };
+    if (existing?.cycle_id === cycle_id) return { ...existing.payload, already_tested_or_registered: true };
+    const projection_id = this.fingerprint(`${cycle_id}|${hypothesis_id}|HYPOTHESIS_EVIDENCE`);
+    const projection = await this.memory.findArtifact({ kind: "finding", id: projection_id });
+    if (projection) return projection.payload;
     const winnerRegression = winnerRegressionSet({ cases, feature_rule: proposal.feature_rule });
     const payload = { hypothesis_id, ...hypothesis, counterexample_search: evidence, winner_regression_set: winnerRegression,
       sample_size: { known_cases: evidence.supporting_cases.length + evidence.counterexamples.length, independent_days: evidence.independent_days },
-      created_at: this.clock(), source_cycle_id: cycle_id, hypotheses_tested_in_cycle: (await this.cycle.all(cycle_id, "hypothesis")).length + 1,
+      created_at: this.clock(), source_cycle_id: cycle_id, hypotheses_registered_in_cycle: (await this.all(cycle_id)).length + 1,
+      experiments_executed: 0,
       no_statistical_significance_claim: true };
-    await this.cycle.save(cycle_id, "hypothesis", hypothesis_id, payload);
+    if (existing) {
+      Object.assign(payload, { already_tested_or_registered: true, classification: "RESEARCH_HYPOTHESIS_EVIDENCE",
+        parent_hypothesis_ref: { id: hypothesis_id, source_cycle_id: existing.cycle_id, payload_hash: existing.payload_hash } });
+      await this.cycle.save(cycle_id, "finding", projection_id, payload);
+    } else await this.cycle.save(cycle_id, "hypothesis", hypothesis_id, payload);
     return payload;
+  }
+  async all(cycle_id) {
+    const definitions = await this.cycle.all(cycle_id, "hypothesis");
+    const projections = (await this.cycle.all(cycle_id, "finding"))
+      .filter(row => row.payload.classification === "RESEARCH_HYPOTHESIS_EVIDENCE")
+      .map(row => ({ ...row, id: row.payload.hypothesis_id }));
+    return [...definitions, ...projections];
   }
   async critique({ cycle_id, hypothesis_id }) {
     const prior = await this.memory.findArtifact({ kind: "critique", id: this.fingerprint(`${cycle_id}|${hypothesis_id}|CRITIQUE`) });
     if (prior) return prior.payload;
     const cycle = await this.memory.getCycle(cycle_id);
-    const hypothesis = (await this.cycle.all(cycle_id, "hypothesis")).find(r => r.id === hypothesis_id)?.payload;
+    const hypothesis = (await this.all(cycle_id)).find(r => r.id === hypothesis_id)?.payload;
     requireResearch(hypothesis && this.model, "RESEARCH_HYPOTHESIS_OR_MODEL_MISSING");
     const cases = (await this.cycle.all(cycle_id, "scenario_audit")).map(r => r.payload);
     const selected = cases.filter(c => [...hypothesis.supporting_cases, ...hypothesis.counterexamples,
@@ -64,7 +79,7 @@ export class ResearchHypotheses {
     const experiment_id = this.fingerprint(researchCanonicalJson({ hypothesis_id, protocol }));
     const prior = await this.memory.findArtifact({ kind: "experiment", id: experiment_id });
     if (prior) return prior.payload;
-    const hypothesis = (await this.cycle.all(cycle_id, "hypothesis")).find(r => r.id === hypothesis_id)?.payload;
+    const hypothesis = (await this.all(cycle_id)).find(r => r.id === hypothesis_id)?.payload;
     requireResearch(hypothesis, "RESEARCH_HYPOTHESIS_NOT_FOUND");
     const corpus = await this.cycle.observer.pages("get_forensic_index", {});
     const split = validateResearchSplit({ ...protocol.split, exposedDates: corpus.map(d => d.date) });

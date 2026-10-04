@@ -19,21 +19,23 @@ export const DISCOVERY_SCHEMA = { type: "object", additionalProperties: false, r
 /** Exploration only. A technical per-call budget is not a limit on frozen trading scenarios. */
 export class ResearchDiscovery {
   constructor({ cycle, hypotheses, memory, model, fingerprint }) { Object.assign(this, { cycle, hypotheses, memory, model, fingerprint }); }
-  async discover({ cycle_id }) {
+  async discover({ cycle_id, maximum_chunks = Infinity }) {
     const cycle = await this.memory.getCycle(cycle_id);
     requireResearch(cycle?.status === "HYPOTHESIZING" && this.model, "RESEARCH_DISCOVERY_NOT_READY");
     const cases = (await this.cycle.all(cycle_id, "scenario_audit")).map(r => r.payload), chunks = [];
     for (let offset = 0; offset < cases.length; offset += 100) chunks.push(cases.slice(offset, offset + 100));
-    let proposals = 0;
+    let proposals = 0, processed = 0, completed = 0;
     for (const [chunk, batch] of chunks.entries()) {
       let stored = await this.memory.findArtifact({ kind: "finding", id: this.fingerprint(`${cycle_id}|DISCOVERY|${chunk}`) });
-      if (!stored) stored = await this.propose(cycle, batch, chunk);
+      if (!stored && processed >= maximum_chunks) continue;
+      if (!stored) {stored = await this.propose(cycle, batch, chunk); processed++;}
       validateResearchOutput({ proposals: stored.payload.proposals }, DISCOVERY_SCHEMA);
       for (const [i, proposal] of stored.payload.proposals.entries()) await this.registerProposal(cycle_id, proposal, `${chunk}|${i}`);
       proposals += stored.payload.proposals.length;
+      completed++;
     }
-    return this.memory.transition({ cycle_id, expected_revision: cycle.revision, status: "COUNTEREXAMPLES",
-      checkpoint: { proposals, discovery_chunks: chunks.length, cases_compared: cases.length, hypotheses_are_exploratory: true } });
+    return this.memory.transition({ cycle_id, expected_revision: cycle.revision, status: completed===chunks.length?"COUNTEREXAMPLES":"HYPOTHESIZING",
+      checkpoint: { proposals, discovery_chunks: chunks.length, chunks_completed:completed,cases_compared: cases.length, hypotheses_are_exploratory: true } });
   }
   async registerProposal(cycle_id, proposal, index) {
     try { return await this.hypotheses.register({ cycle_id, proposal }); }
@@ -55,7 +57,8 @@ export class ResearchDiscovery {
       sample_purpose: c.identity.sample_purpose, features: c.features, observations: {
         reason_codes: c.observations.reason_codes, filled: c.observations.filled,
         trades: c.observations.trades.map(t => ({ trade_id: t.trade_id, real_R: t.real_R, real_USD: t.real_USD })) }, evidence_refs: c.evidence_refs })),
-      diagnoses: findings.map(r => r.payload), hypotheses_tested: (await this.cycle.all(cycle.cycle_id, "hypothesis")).length };
+      diagnoses: findings.map(r => r.payload), hypotheses_registered: (await this.hypotheses.all(cycle.cycle_id)).length,
+      experiments_executed: 0 };
     requireResearch(JSON.stringify(input).length <= 1_000_000, "RESEARCH_CONTEXT_BUDGET_EXCEEDED");
     const selection = selectResearchModel(await this.model.capabilities());
     const response = await callResearchModel({ memory: this.memory, model: this.model, fingerprint: this.fingerprint, cycle,
@@ -69,13 +72,15 @@ export class ResearchDiscovery {
     await this.cycle.save(cycle.cycle_id, "finding", id, payload);
     return { id, payload };
   }
-  async critiqueAll({ cycle_id }) {
+  async critiqueAll({ cycle_id, maximum_hypotheses = Infinity }) {
     const cycle = await this.memory.getCycle(cycle_id);
     requireResearch(["COUNTEREXAMPLES", "CRITIQUING"].includes(cycle?.status), "RESEARCH_CYCLE_STAGE_INVALID");
-    const hypotheses = await this.cycle.all(cycle_id, "hypothesis");
-    for (const hypothesis of hypotheses) await this.hypotheses.critique({ cycle_id, hypothesis_id: hypothesis.id });
-    return this.memory.transition({ cycle_id, expected_revision: cycle.revision, status: "COMPLETED", checkpoint: {
-      hypotheses_reviewed: hypotheses.length, next_action: "PREREGISTER_UNCONTAMINATED_EXPERIMENT",
+    const hypotheses = await this.hypotheses.all(cycle_id);
+    const prior=new Set((await this.cycle.all(cycle_id,'critique')).map(c=>c.payload.hypothesis_id));
+    for (const hypothesis of hypotheses.filter(h=>!prior.has(h.id)).slice(0,maximum_hypotheses)) await this.hypotheses.critique({ cycle_id, hypothesis_id: hypothesis.id });
+    const reviewed=(await this.cycle.all(cycle_id,'critique')).length;
+    return this.memory.transition({ cycle_id, expected_revision: cycle.revision, status: reviewed===hypotheses.length?"COMPLETED":"CRITIQUING", checkpoint: {
+      hypotheses_reviewed: reviewed, next_action: "PREREGISTER_UNCONTAMINATED_EXPERIMENT",
       edge_validated: false, champion_changes: 0, experiments_executed: 0,
       readiness_semantics: "Research dossiers reviewed, not experiment admission or champion promotion" } });
   }

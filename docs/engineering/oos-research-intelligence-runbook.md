@@ -1,10 +1,12 @@
-# Desk Intelligence — premier lot exécutable
+# Desk Intelligence — activation isolée et orchestration
 
 ## État réel de livraison
 
 Le lot implémente observation → diagnostic → familles → hypothèses → recherche de contre-exemples → critique indépendante → dossier de recherche/protocole. Un runner autonome borné peut avancer ce cycle et reprendre les checkpoints. Il n'exécute aucune expérience, ne promeut aucun challenger et ne modifie aucun champion.
 
-**Non déployé et non activé sur le VPS dans ce lot.** Aucune migration de production appliquée. Aucun audit LLM exhaustif du corpus de juillet–août annoncé comme achevé. Le catalogue public existant reste inchangé ; le test local MCP prouve 47 outils sans activation, 53 avec les six outils de recherche explicitement injectés.
+**VPS activé et vérifié sur la release 5829bace36e0e24cb511f36c0c5db348b236459a.** Migrations additives 075/076 : 14 tables et 35 indexes research. Catalogue HTTPS public : 53 outils, dont six research. DCR, PKCE S256, scopes read/write et refus des droits insuffisants ont été testés réellement. L'audit LLM exhaustif juillet–août n'est pas encore achevé.
+
+Acceptance réelle : 02/07 comporte 33 scénarios et 38 attempts, énumérés depuis le forensic index. Les 38 audits factuels et l'audit de plan sont persistés ; une première review Astra/xhigh est persistée. Le test E2E a injecté une panne après réception de la réponse modèle, rouvert le host, repris automatiquement et persisté la review sans seconde inférence. Un audit factuel n'est pas une review LLM : ne pas annoncer 38 reviews achevées.
 
 ## Intégration et fichiers
 
@@ -14,16 +16,19 @@ Le lot implémente observation → diagnostic → familles → hypothèses → r
 | research/application | `packages/desk-oos-research/src/application/*.js` | observation paginée, cycle/reprises, appels modèle comptabilisés, hypothèses/critique/protocoles, API et runner borné |
 | research/adapter | `packages/desk-oos-research/src/adapter/postgres-research-memory.js` | transactions, révisions, snapshots immuables, pagination, verrou exclusif de cycle |
 | research/storage | `infra/postgres/init/075_oos_research_memory.sql` | 11 tables additives ; triggers d'immutabilité ; aucun changement OOS |
+| research/storage | `infra/postgres/init/076_oos_research_task_queue.sql` | tasks durables, leases fencing, workers et incidents ; permissions UPDATE limitées aux checkpoints techniques |
 | host | `mcp_gpt_desk/src/oos-research-{host,runtime,model,capabilities,tools}.js` | composition, deux credentials DB, découverte réelle des modèles, transport subprocess sans outils métier, OAuth scopes existants |
 | host | `mcp_gpt_desk/src/oos-mcp-server.js`, `oos-http-server.js`, `scripts/serve_oos.mjs` | enregistrement et activation optionnels, aucune mutation des contrats OOS |
 | operations | `mcp_gpt_desk/scripts/run_oos_research.mjs` | start/advance/run/status/artifacts/scorecard/experiment, sans TradingView |
+| operations | `run_oos_research_scheduler.mjs`, `Install-OosResearchScheduler.ps1` | service Windows distinct, redémarrage automatique, heartbeat et queue PostgreSQL ; concurrence physique 1 |
+| operations | `Update-OosResearch.ps1`, `configure_oos_research.mjs` | backup PostgreSQL, hashes métier avant/après, migration additive et credentials isolés |
 | quality | nouveaux tests du package et `mcp_gpt_desk/test/oos_research_*.test.js` | preuves, contre-revue, transport MCP, permissions et sélection de modèles |
 
 Les manifests, plans, captures, ENGINE, parser SMC3, résultats et anciens prompts analytiques ne sont pas édités. Les sorties de tests sont synthétiques et ne deviennent jamais données de marché.
 
 ## Configuration avant activation
 
-1. Appliquer 075 par le mécanisme de migration existant dans un environnement de recherche. La migration est additive et rejouable.
+1. Appliquer 075/076 par l'activation dédiée, après sauvegarde. Les migrations sont additives et rejouables.
 2. Provisionner les rôles selon les permissions commentées dans 075. Le lecteur a SELECT sur le corpus OOS, aucun INSERT/UPDATE/DELETE. Le writer n'a que SELECT/INSERT recherche et UPDATE limité aux colonnes de checkpoint des cycles. Aucun superuser, CREATEROLE, ownership de tables métier ou rôle hérité permettant de modifier OOS.
 3. Injecter les secrets uniquement par environnement : `OOS_RESEARCH_DATABASE_URL`, `OOS_FORENSIC_DATABASE_URL`. Ne pas réutiliser l'identité DB d'exécution.
 4. Indiquer `archive_root`, `index_root` (défaut : `archive_root/forensic-index-v2`) et `model.codex_bin`. La découverte utilise initialize → initialized → model/list ; elle ne lance aucune inférence. Astra est préféré s'il est réellement disponible avec xhigh ; sinon une préférence explicitement configurée doit être disponible.
@@ -69,6 +74,10 @@ Tools ajoutés si activation explicite :
 
 Le READ corpus est limité à huit fonctions forensic publiques. Aucun objet de commandes OOS n'est transmis au domaine/application. Les événements portent le namespace T3_RESEARCH et restent dans ces tables, pas dans le bus métier.
 
+Le service `DeskOosResearch` utilise `C:\ProgramData\DeskOos\config\oos.research.env`, séparé de l'environnement opérateur : aucun secret OOS operator/admin. Les rôles research/forensic ont subi une tentative contrôlée d'UPDATE OOS dans une transaction annulée : refus PostgreSQL 42501. L'environnement, les backups et les sorties provider sont privés (SYSTEM/Administrators).
+
+Le scheduler sélectionne automatiquement le pilote puis les dates COMPLETED juillet–août. Il suit les tâches persistantes ; chaque étape de diagnostic, discovery ou critique est bornée. Après tous les dossiers journaliers COMPLETED, la comparaison globale réutilise les reviews hashées au lieu de payer une seconde analyse de chaque scénario. Un dossier BLOCKED n'est jamais silencieusement omis. Les hypothèses récurrentes conservent leur définition originale et reçoivent une projection de preuves par cycle.
+
 ## Sémantique scientifique
 
 - Chaque scénario et chaque attempt est audité, même sans confirmation ; absence d'événement n'est pas preuve de condition fausse.
@@ -93,28 +102,32 @@ Le READ corpus est limité à huit fonctions forensic publiques. Aucun objet de 
 | RESEARCH_HOLDOUT_CONTAMINATED | protocole refusé, aucune adaptation pour transformer discovery en OOS |
 | RESEARCH_DATABASE_ROLE_NOT_ISOLATED | activation refusée avant toute recherche |
 
-Un crash entre réponse modèle et commit nécessite une procédure explicite de récupération du résultat, non fournie dans ce lot. Ce refus est volontaire ; recréer automatiquement la requête ferait disparaître la trace d'incertitude.
+Une réponse effectivement reçue est désormais journalisée avant validation/persistence de la review ; après crash elle est réutilisée sans seconde inférence. Une requête envoyée mais sans réponse persistée demeure INDETERMINATE : jamais de retry payé aveugle. Deux tentatives bornées sont possibles seulement pour une réponse reçue mais non conforme, avec conservation des deux traces.
+
+Le VISUAL_EVIDENCE_ROUTER charge sélectivement des PNG existants, vérifie SHA-256 et transmet les pixels au provider via des fichiers privés. Le finding conserve refs, claims et confiance. Aucune capture TradingView nouvelle. Les budgets de contexte et profondeurs sont actuellement des métadonnées de routage, pas encore des limites de tokens garanties par le provider. Le modèle réel utilisé est Astra/xhigh ; l'identifiant demandé est vérifié dans le transport, sans attestation du modèle interne du fournisseur.
 
 ## Validation exécutée
 
 Tests dédiés : audit >5 scénarios/toutes tentatives, données inconnues, exclusion smoke/gap, absence de futurs prix, hash/idempotence (y compris ordre de clés JSON), budget/requêtes incertaines, modèle réellement exposé, critique séparée, protocoles sans exécuteur, cycle autonome borné complet. Tests MCP locaux : 47→53 uniquement si activation, scopes et champs inconnus rejetés. Tests PostgreSQL 16 réel en instance temporaire : migration rejouable, concurrence, rollback, immutabilité, rôles physiques (63 tests passés). Aucun serveur de marché ni replay n'est utilisé par ces tests.
 
-Dernière suite dédiée : **108/108 PASS**, zéro skip, PostgreSQL réel inclus. Suite de non-régression OOS/contrats : **81/81 PASS**. Le transport de découverte réel a annoncé Astra avec xhigh ; la contre-revue Astra a été effectuée dans le harness. L'inférence du rôle de recherche déployé sur VPS n'a pas été testée.
+Suite dédiée exécutée après ajout du coordinateur et projections de cohortes : **113/113 PASS**, zéro skip, PostgreSQL 16 réel inclus. Non-régression : **78 tests OOS + 15 tests MCP/forensic/OAuth PASS**. L'inférence de recherche Astra/xhigh et sa reprise ont été testées réellement sur VPS.
 
 Guards architecture et migrations PASS. Contrôle ciblé des nouveaux modules : aucun fichier >600 lignes, aucune fonction >60 lignes ou complexité >15. Guard statique global FAIL sur `front-session-projection.js` et budgets globaux du dépôt ; aucune baseline affaiblie, aucun fichier de trading modifié pour le contourner.
+
+Baseline exacte comparée à ddd60841110bcf24cb20fe88b3282af77f88792b : 271 fonctions trop longues, 727 complexes, 97 duplications, 6 modules potentiellement morts ; valeurs identiques après 5829bac. `front-session-projection.js` : 1726 lignes pour allowance 1659, dette préexistante.
 
 ## Reste à livrer pour l'objectif 49–80 complet
 
 | Lot | État |
 |---|---|
-| mémoire/audits/features accessibles/familles/cohortes/contre-exemples/critique/runner | implémenté, tests locaux ; production OFF |
-| ingestion de la justification du Scenario Builder lors de prochains cycles | à définir, jamais rétro-inventée sur les plans historiques |
-| analyse visuelle profonde des PREMARKET et panels par modèle | non raccordée à ce premier port de recherche textuel |
+| mémoire/audits/features accessibles/familles/cohortes/contre-exemples/critique/runner | implémenté et production activée ; full T3 non achevé |
+| ingestion de la justification du Scenario Builder lors de prochains cycles | contrat de freeze/hash implémenté ; générateur challenger à raccorder ; aucune justification historique inventée |
+| analyse visuelle des PREMARKET et panels par modèle | pixels existants raccordés sélectivement avec hashes et claims |
 | temporalité détaillée, rearm, portfolio et qualité des données | partiellement accessible dans les snapshots, rubriques causales à étendre |
 | régimes point-in-time / path score / graphe causal | bloqué sans définitions préenregistrées et données suffisantes ; pas d'estimation |
 | lifecycle complet hypothèses VALIDATED/FAILED et findings résolus | versions/reviews à ajouter, pas de mutation historique |
 | challenger scorecard / exécution SHADOW / walk-forward roulant | futur module expérimental, jeux non contaminés requis |
 | contrôle statistique des découvertes multiples | déclaration/comptage implémentés ; test statistique non implémenté |
-| worker permanent supervisé / UI recherche / déploiement VPS | non réalisés dans ce lot |
+| worker permanent supervisé / UI recherche / déploiement VPS | installer/scheduler codés, VPS activé ; service permanent à vérifier après installation ; UI recherche non réalisée |
 
 Rollback : mettre `research_enabled=false`, arrêter le runner, conserver la mémoire. Ne jamais effacer les tables pour revenir au champion : celui-ci n'a pas changé. Rentabilité future non garantie.
