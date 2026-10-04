@@ -78,7 +78,7 @@ export class ResearchDiscovery {
     const hypotheses = await this.hypotheses.all(cycle_id);
     const prior=new Set((await this.cycle.all(cycle_id,'critique')).map(c=>c.payload.hypothesis_id));
     for (const hypothesis of hypotheses.filter(h=>!prior.has(h.id)).slice(0,maximum_hypotheses)) await this.hypotheses.critique({ cycle_id, hypothesis_id: hypothesis.id });
-    const reviewed=(await this.cycle.all(cycle_id,'critique')).length;
+    const reviewed=(await this.cycle.all(cycle_id,'critique')).filter(c=>c.payload.hypothesis_id).length;
     return this.memory.transition({ cycle_id, expected_revision: cycle.revision, status: reviewed===hypotheses.length?"COMPLETED":"CRITIQUING", checkpoint: {
       hypotheses_reviewed: reviewed, next_action: "PREREGISTER_UNCONTAMINATED_EXPERIMENT",
       edge_validated: false, champion_changes: 0, experiments_executed: 0,

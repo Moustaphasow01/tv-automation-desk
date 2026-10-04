@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { ForensicResearchObserver, ResearchCycle, ResearchHypotheses, ResearchDiscovery, ResearchApi, PostgresResearchMemory } from "@tv-automation/desk-oos-research";
+import { ForensicResearchObserver, ResearchCycle, ResearchHypotheses, ResearchDiscovery, ResearchApi, PostgresResearchMemory,ResearchCaseAuditor } from "@tv-automation/desk-oos-research";
 import { OosResearchModel } from "./oos-research-model.js";
 import { discoverResearchModels } from "./oos-research-capabilities.js";
 
@@ -13,7 +13,8 @@ export function createOosResearch({ pool, readForensic, model, readVisual, clock
   const cycle = new ResearchCycle({ observer, memory, model, readVisual, fingerprint, clock });
   const hypotheses = new ResearchHypotheses({ cycle, memory, model, fingerprint, clock });
   const discovery = new ResearchDiscovery({ cycle, hypotheses, memory, model, fingerprint });
-  return new ResearchApi({ cycle, hypotheses, discovery, memory });
+  const caseAuditor=new ResearchCaseAuditor({cycle,memory,model,fingerprint,clock});
+  return new ResearchApi({ cycle, hypotheses, discovery, memory,caseAuditor });
 }
 
 export function configuredResearchModel(config) {

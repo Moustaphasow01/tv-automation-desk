@@ -1,7 +1,7 @@
 import { requireResearch } from "../domain/research-evidence.js";
 
 export class ResearchApi {
-  constructor({ cycle, memory, hypotheses, discovery }) { Object.assign(this, { cycle, memory, hypotheses, discovery }); }
+  constructor({ cycle, memory, hypotheses, discovery,caseAuditor }) { Object.assign(this, { cycle, memory, hypotheses, discovery,caseAuditor }); }
   async start(args) { return this.cycle.start(args); }
   async advance({ cycle_id, maximum_cases = 1 }) {
     return this.memory.executeExclusive(cycle_id, async () => {
@@ -10,7 +10,7 @@ export class ResearchApi {
       if (this.cycle.observer) await this.cycle.observer.assertCorpus(cycle.corpus_hash);
       const steps = { OBSERVING: () => this.cycle.observe({ cycle_id }),
         DIAGNOSING: () => this.cycle.diagnose({ cycle_id, limit: maximum_cases }),
-        CLUSTERING: () => this.cycle.cluster({ cycle_id }),
+        CLUSTERING: () => this.caseAuditor?this.caseAuditor.advance({cycle_id}):this.cycle.cluster({ cycle_id }),
         HYPOTHESIZING: () => this.discovery.discover({ cycle_id,maximum_chunks:1 }),
         COUNTEREXAMPLES: () => this.discovery.critiqueAll({ cycle_id,maximum_hypotheses:1 }),
         CRITIQUING: () => this.discovery.critiqueAll({ cycle_id,maximum_hypotheses:1 }) };

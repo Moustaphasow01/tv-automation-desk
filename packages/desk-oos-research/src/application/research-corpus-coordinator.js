@@ -36,5 +36,10 @@ export class ResearchCorpusCoordinator {
         parent_research_ref:{cycle_id:source.cycle_id,artifact_id:parent.id,payload_hash:parent.payload_hash},
         aggregation_classification:'DERIVED_LOCAL',fresh_model_call:false});
     }
+    for(const critique of (await this.api.cycle.all(source.cycle_id,'critique')).filter(c=>c.payload.audit_scope==='SCENARIO_REVIEW')) {
+      await this.api.cycle.save(target.cycle_id,'critique',this.api.cycle.fingerprint(`${target.cycle_id}|${critique.payload.case_id}|CASE_CRITIQUE`),
+        {...critique.payload,parent_research_ref:{cycle_id:source.cycle_id,artifact_id:critique.id,payload_hash:critique.payload_hash},
+          aggregation_classification:'DERIVED_LOCAL',fresh_model_call:false});
+    }
   }
 }

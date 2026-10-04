@@ -79,6 +79,8 @@ Le service `DeskOosResearch` utilise `C:\ProgramData\DeskOos\config\oos.research
 
 Le scheduler sélectionne automatiquement le pilote puis les dates COMPLETED juillet–août. Il suit les tâches persistantes ; chaque étape de diagnostic, discovery ou critique est bornée. Après tous les dossiers journaliers COMPLETED, la comparaison globale réutilise les reviews hashées au lieu de payer une seconde analyse de chaque scénario. Un dossier BLOCKED n'est jamais silencieusement omis. Les hypothèses récurrentes conservent leur définition originale et reçoivent une projection de preuves par cycle.
 
+Avant le clustering, chaque review reçoit une audit séparée et immuable, référencée par le hash du finding original. Les interprétations substantielles passent par une nouvelle session du rôle critique. Si les sept réponses sont UNKNOWN et aucune hypothèse n'est formulée, le contrôle technique conserve UNKNOWN sans prétendre à une inférence indépendante. NEEDS_CORRECTION n'écrase jamais la review initiale. Les critiques de scénarios sont comptées séparément des critiques d'hypothèses.
+
 ## Sémantique scientifique
 
 - Chaque scénario et chaque attempt est audité, même sans confirmation ; absence d'événement n'est pas preuve de condition fausse.
@@ -113,7 +115,7 @@ La gestion des ressources lit `account/rateLimits/read` du compte de service ava
 
 Tests dédiés : audit >5 scénarios/toutes tentatives, données inconnues, exclusion smoke/gap, absence de futurs prix, hash/idempotence (y compris ordre de clés JSON), budget/requêtes incertaines, modèle réellement exposé, critique séparée, protocoles sans exécuteur, cycle autonome borné complet. Tests MCP locaux : 47→53 uniquement si activation, scopes et champs inconnus rejetés. Tests PostgreSQL 16 réel en instance temporaire : migration rejouable, concurrence, rollback, immutabilité, rôles physiques (63 tests passés). Aucun serveur de marché ni replay n'est utilisé par ces tests.
 
-Suite dédiée exécutée après ajout du coordinateur, projections de cohortes et admission quota : **117/117 PASS**, zéro skip, PostgreSQL 16 réel inclus. Non-régression : **78 tests OOS + 15 tests MCP/forensic/OAuth PASS**. L'inférence de recherche Astra/xhigh et sa reprise ont été testées réellement sur VPS.
+Suite dédiée exécutée après ajout du coordinateur, projections de cohortes, admission quota et audits de reviews : **119/119 PASS**, zéro skip, PostgreSQL 16 réel inclus. Non-régression : **78 tests OOS + 15 tests MCP/forensic/OAuth PASS**. L'inférence de recherche Astra/xhigh et sa reprise ont été testées réellement sur VPS.
 
 Guards architecture et migrations PASS. Contrôle ciblé des nouveaux modules : aucun fichier >600 lignes, aucune fonction >60 lignes ou complexité >15. Guard statique global FAIL sur `front-session-projection.js` et budgets globaux du dépôt ; aucune baseline affaiblie, aucun fichier de trading modifié pour le contourner.
 
