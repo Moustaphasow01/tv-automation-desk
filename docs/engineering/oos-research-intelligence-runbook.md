@@ -115,7 +115,9 @@ La gestion des ressources lit `account/rateLimits/read` du compte de service ava
 
 Tests dédiés : audit >5 scénarios/toutes tentatives, données inconnues, exclusion smoke/gap, absence de futurs prix, hash/idempotence (y compris ordre de clés JSON), budget/requêtes incertaines, modèle réellement exposé, critique séparée, protocoles sans exécuteur, cycle autonome borné complet. Tests MCP locaux : 47→53 uniquement si activation, scopes et champs inconnus rejetés. Tests PostgreSQL 16 réel en instance temporaire : migration rejouable, concurrence, rollback, immutabilité, rôles physiques (63 tests passés). Aucun serveur de marché ni replay n'est utilisé par ces tests.
 
-Suite dédiée exécutée après ajout du coordinateur, projections de cohortes, admission quota et audits de reviews : **119/119 PASS**, zéro skip, PostgreSQL 16 réel inclus. Non-régression : **78 tests OOS + 15 tests MCP/forensic/OAuth PASS**. L'inférence de recherche Astra/xhigh et sa reprise ont été testées réellement sur VPS.
+Suite dédiée exécutée après ajout du coordinateur, projections de cohortes, admission quota, audits de reviews et profil provider explicite : **120/120 PASS**, zéro skip, PostgreSQL 16 réel inclus. Non-régression : **78 tests OOS + 15 tests MCP/forensic/OAuth PASS**. L'inférence de recherche Astra/xhigh et sa reprise ont été testées réellement sur VPS.
+
+Diagnostic quota réel : le helper de sanitisation excluait CODEX_HOME si le caller ne lui passait pas explicitement le profil autorisé. Le transport CLI d'inférence le passait déjà ; la requête metadata ne le faisait pas. Le lecteur metadata doit utiliser le même profil service explicitement, sans hériter des credentials OOS. Test de non-régression dédié : home service conservé, token opérateur exclu.
 
 Guards architecture et migrations PASS. Contrôle ciblé des nouveaux modules : aucun fichier >600 lignes, aucune fonction >60 lignes ou complexité >15. Guard statique global FAIL sur `front-session-projection.js` et budgets globaux du dépôt ; aucune baseline affaiblie, aucun fichier de trading modifié pour le contourner.
 

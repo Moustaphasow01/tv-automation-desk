@@ -5,8 +5,8 @@ const PREFERENCE = ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol"];
 const failure = code => Object.assign(new Error(code), { code });
 
 /** model/list is a read-only capability query, not inference, and never launches a conversation. */
-export function discoverResearchModels({ codex_bin, timeout_ms = 60000, priority = PREFERENCE, spawnProcess = spawn }) {
-  return queryResearchMetadata({codex_bin,timeout_ms,spawnProcess,method:"model/list",
+export function discoverResearchModels({ codex_bin, timeout_ms = 60000, priority = PREFERENCE, spawnProcess = spawn,environment=process.env }) {
+  return queryResearchMetadata({codex_bin,timeout_ms,spawnProcess,environment,method:"model/list",
     params:{limit:100,includeHidden:false}}).then(result=>{
     if(!Array.isArray(result?.data) || result.nextCursor)throw failure("RESEARCH_MODEL_CATALOGUE_INCOMPLETE");
     return mapModels(result.data,priority);
@@ -25,10 +25,10 @@ export async function discoverResearchQuota(options) {
     }))};
 }
 
-function queryResearchMetadata({codex_bin,timeout_ms=60000,spawnProcess=spawn,method,params}) {
+function queryResearchMetadata({codex_bin,timeout_ms=60000,spawnProcess=spawn,method,params,environment=process.env}) {
   const invocation = resolveCodexInvocation(codex_bin, ["app-server"]);
   const child = spawnProcess(invocation.executable, invocation.args, { stdio: ["pipe", "pipe", "pipe"],
-    env: sanitizedCodexEnv(process.env), windowsHide: true,
+    env: sanitizedCodexEnv(environment,environment.CODEX_HOME??""), windowsHide: true,
     ...(invocation.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
   return queryModels(child, timeout_ms,method,params);
 }
