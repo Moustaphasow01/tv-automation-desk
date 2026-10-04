@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { PassThrough, Writable } from "node:stream";
-import { discoverResearchModels } from "../src/oos-research-capabilities.js";
+import { discoverResearchModels,discoverResearchQuota } from "../src/oos-research-capabilities.js";
 import { selectResearchModel } from "../../packages/desk-oos-research/src/domain/research-governance.js";
 
 function transport(result, { silent = false } = {}) {
@@ -34,4 +34,14 @@ test("capability discovery timeout is bounded and shuts down the read-only clien
   const t = transport({}, { silent: true });
   await assert.rejects(discoverResearchModels({ codex_bin: "codex", timeout_ms: 5, spawnProcess: t.spawnProcess }), /DISCOVERY_TIMEOUT/);
   assert.equal(t.child.killed, true);
+});
+test("provider quota is read without inference, reset, email or account identifiers",async()=>{
+  const t=transport({rateLimitsByLimitId:{codex:{primary:{usedPercent:100,resetsAt:1800000000},
+    secondary:null}},account:{email:'never-expose'},rateLimitResetCredits:{availableCount:2}});
+  const snapshot=await discoverResearchQuota({codex_bin:'codex',spawnProcess:t.spawnProcess});
+  assert.deepEqual(t.messages.map(r=>r.method),['initialize','initialized','account/rateLimits/read']);
+  assert.equal(snapshot.windows[0].used_percent,100);
+  assert.equal(snapshot.windows[0].resets_at,new Date(1800000000000).toISOString());
+  assert.ok(!JSON.stringify(snapshot).includes('never-expose'));
+  assert.ok(!JSON.stringify(snapshot).includes('credits'));
 });

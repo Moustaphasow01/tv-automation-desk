@@ -43,6 +43,7 @@ export class PostgresResearchTaskQueue {
     const result=await this.pool.query(`UPDATE research_state.t3_tasks SET heartbeat_at=$3,lease_until=$4,updated_at=$3
       WHERE task_id=$1 AND status='RUNNING' AND lease_token=$2 AND lease_until>$3`,[task.task_id,task.lease_token,now,until]);
     if(!result.rowCount) throw error('RESEARCH_LEASE_LOST');
+    await this.worker({worker_id:task.worker_id,state:'WORKING',task_id:task.task_id});
   }
   async settle(task,{status,code=null,delay_ms=0}) {
     if(!['READY','COMPLETED','BLOCKED','FAILED'].includes(status) || !Number.isFinite(delay_ms) || delay_ms<0) throw error('RESEARCH_SETTLEMENT_INVALID');

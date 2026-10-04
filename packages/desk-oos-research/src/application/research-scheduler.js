@@ -35,6 +35,11 @@ export class ResearchScheduler {
   async handleFailure(task,e) {
     const code=e.code || 'RESEARCH_WORKER_FAILED';
     if(code==='RESEARCH_LEASE_LOST')return {state:'LEASE_LOST',task_id:task.task_id};
+    if(code==='RESEARCH_QUOTA_EXHAUSTED') {
+      const delay=Math.max(1000,Date.parse(e.details?.resume_at)-Date.now());
+      await this.queue.settle(task,{status:'READY',delay_ms:Number.isFinite(delay)?delay:300000});
+      return {state:'WAITING_RESOURCE',task_id:task.task_id,code,resume_at:e.details?.resume_at??null};
+    }
     const retry=TRANSIENT.has(code) && task.attempts+1<task.maximum_attempts;
     await this.queue.settle(task,{status:retry?'READY':'BLOCKED',code,delay_ms:retry?Math.min(60000,1000*2**task.attempts):0});
     if(!retry)await this.queue.incident(task,{code});

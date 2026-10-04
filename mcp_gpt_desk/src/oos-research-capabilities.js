@@ -6,14 +6,34 @@ const failure = code => Object.assign(new Error(code), { code });
 
 /** model/list is a read-only capability query, not inference, and never launches a conversation. */
 export function discoverResearchModels({ codex_bin, timeout_ms = 60000, priority = PREFERENCE, spawnProcess = spawn }) {
+  return queryResearchMetadata({codex_bin,timeout_ms,spawnProcess,method:"model/list",
+    params:{limit:100,includeHidden:false}}).then(result=>{
+    if(!Array.isArray(result?.data) || result.nextCursor)throw failure("RESEARCH_MODEL_CATALOGUE_INCOMPLETE");
+    return mapModels(result.data,priority);
+  });
+}
+
+/** Read the service account's quota, never the desktop user's inferred quota or a credit reset. */
+export async function discoverResearchQuota(options) {
+  const result=await queryResearchMetadata({...options,method:"account/rateLimits/read",params:{}});
+  const buckets=result.rateLimitsByLimitId ?? (result.rateLimits?{[result.rateLimits.limitId??"codex"]:result.rateLimits}:{});
+  return {source:"CODEX_APP_SERVER_ACCOUNT_RATE_LIMITS",observed_at:new Date().toISOString(),
+    windows:Object.entries(buckets).flatMap(([bucket,value])=>["primary","secondary"].flatMap(window=>{
+      const row=value?.[window];
+      return row && Number.isFinite(row.usedPercent)?[{bucket,window,used_percent:row.usedPercent,
+        resets_at:Number.isFinite(row.resetsAt)?new Date(row.resetsAt*1000).toISOString():null}]:[];
+    }))};
+}
+
+function queryResearchMetadata({codex_bin,timeout_ms=60000,spawnProcess=spawn,method,params}) {
   const invocation = resolveCodexInvocation(codex_bin, ["app-server"]);
   const child = spawnProcess(invocation.executable, invocation.args, { stdio: ["pipe", "pipe", "pipe"],
     env: sanitizedCodexEnv(process.env), windowsHide: true,
     ...(invocation.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
-  return queryModels(child, timeout_ms).then(rows => mapModels(rows, priority));
+  return queryModels(child, timeout_ms,method,params);
 }
 
-function queryModels(child, timeout) {
+function queryModels(child, timeout,method,params) {
   return new Promise((resolve, reject) => {
     let buffer = "", size = 0, finished = false;
     const finish = (error, rows) => {
@@ -37,11 +57,10 @@ function queryModels(child, timeout) {
         if (response.error) return finish(failure("RESEARCH_MODEL_DISCOVERY_REJECTED"));
         if (response.id === 1) {
           send({ method: "initialized", params: {} });
-          send({ method: "model/list", id: 2, params: { limit: 100, includeHidden: false } });
+          send({ method, id: 2, params });
         }
         if (response.id === 2) {
-          if (!Array.isArray(response.result?.data) || response.result.nextCursor) return finish(failure("RESEARCH_MODEL_CATALOGUE_INCOMPLETE"));
-          finish(null, response.result.data);
+          finish(null, response.result);
         }
       }
     });

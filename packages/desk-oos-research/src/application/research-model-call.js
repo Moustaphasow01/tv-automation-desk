@@ -17,6 +17,12 @@ export async function callResearchModel({ memory, model, fingerprint, cycle, req
   requireResearch(!pinned || (pinned.identifier === request.selection.identifier
     && pinned.reasoning_effort === request.selection.reasoning_effort), "RESEARCH_MODEL_DRIFT");
   requireResearch(count < cycle.definition.budget.maximum_model_calls, "RESEARCH_BUDGET_EXHAUSTED", { count });
+  if(model.admission) {
+    const admission=await model.admission();
+    await memory.addEvent({cycle_id:cycle.cycle_id,event_id:fingerprint(`${requestId}|RESOURCE|${JSON.stringify(admission)}`),
+      type:'MODEL_RESOURCE_ADMISSION',payload:{request_id:requestId,...admission}});
+    requireResearch(admission.allowed,'RESEARCH_QUOTA_EXHAUSTED',{resume_at:admission.resume_at});
+  }
   await memory.addEvent({ cycle_id: cycle.cycle_id, event_id: requestId, type: "MODEL_REQUESTED", payload: {
     role: request.role, model: request.selection, prompt_sha256: fingerprint(request.instructions),
     context_sha256: fingerprint(JSON.stringify(request.input)), request_id: requestId } });

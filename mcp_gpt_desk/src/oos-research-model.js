@@ -1,5 +1,7 @@
 import { CodexExecAdapter } from "./codex-exec-adapter.js";
 import { attachResearchImages } from './oos-research-visual-input.js';
+import { discoverResearchQuota } from './oos-research-capabilities.js';
+import { researchResourceAdmission } from '@tv-automation/desk-oos-research';
 
 /** Reuse the isolated subprocess transport only, with no legacy output schema, prompt or context MCP. */
 export class OosResearchModel {
@@ -7,6 +9,12 @@ export class OosResearchModel {
   async capabilities() {
     if (!this.capabilityReader) throw Object.assign(new Error("RESEARCH_MODEL_CAPABILITIES_NOT_CONFIGURED"), { code: "RESEARCH_MODEL_CAPABILITIES_NOT_CONFIGURED" });
     return this.capabilityReader();
+  }
+  async admission() {
+    let snapshot;
+    try { snapshot=await discoverResearchQuota({codex_bin:this.codexOptions.codexBin,timeout_ms:30000}); }
+    catch { snapshot={source:'CODEX_APP_SERVER_ACCOUNT_RATE_LIMITS',windows:[],available:false,reason:'QUOTA_READ_UNAVAILABLE'}; }
+    return researchResourceAdmission(snapshot,new Date().toISOString());
   }
   async analyze({ selection, instructions, input, images, output_schema, session_reuse }) {
     if (session_reuse !== "FORBIDDEN") throw Object.assign(new Error("RESEARCH_SESSION_REUSE_FORBIDDEN"), { code: "RESEARCH_SESSION_REUSE_FORBIDDEN" });

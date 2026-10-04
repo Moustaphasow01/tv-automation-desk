@@ -9,3 +9,4 @@ export { ResearchScheduler } from "./src/application/research-scheduler.js";
 export { PostgresResearchTaskQueue } from "./src/adapter/postgres-research-task-queue.js";
 export { freezeChallengerRationale } from './src/domain/research-challenger-rationale.js';
 export { ResearchCorpusCoordinator } from './src/application/research-corpus-coordinator.js';
+export { researchResourceAdmission } from './src/domain/research-resource-admission.js';

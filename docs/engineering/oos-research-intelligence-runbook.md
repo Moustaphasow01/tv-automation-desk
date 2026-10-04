@@ -4,9 +4,9 @@
 
 Le lot implémente observation → diagnostic → familles → hypothèses → recherche de contre-exemples → critique indépendante → dossier de recherche/protocole. Un runner autonome borné peut avancer ce cycle et reprendre les checkpoints. Il n'exécute aucune expérience, ne promeut aucun challenger et ne modifie aucun champion.
 
-**VPS activé et vérifié sur la release 5829bace36e0e24cb511f36c0c5db348b236459a.** Migrations additives 075/076 : 14 tables et 35 indexes research. Catalogue HTTPS public : 53 outils, dont six research. DCR, PKCE S256, scopes read/write et refus des droits insuffisants ont été testés réellement. L'audit LLM exhaustif juillet–août n'est pas encore achevé.
+**VPS activé et vérifié sur la release c034d635f482df68bbc6ae5a2682a441aaf3194c.** Migrations additives 075/076 : 14 tables et 35 indexes research. Catalogue HTTPS public : 53 outils, dont six research. DCR, PKCE S256, scopes read/write et refus des droits insuffisants ont été testés réellement. L'audit LLM exhaustif juillet–août n'est pas encore achevé.
 
-Acceptance réelle : 02/07 comporte 33 scénarios et 38 attempts, énumérés depuis le forensic index. Les 38 audits factuels et l'audit de plan sont persistés ; une première review Astra/xhigh est persistée. Le test E2E a injecté une panne après réception de la réponse modèle, rouvert le host, repris automatiquement et persisté la review sans seconde inférence. Un audit factuel n'est pas une review LLM : ne pas annoncer 38 reviews achevées.
+Acceptance réelle : 02/07 comporte 33 scénarios et 38 attempts, énumérés depuis le forensic index. Les 38 audits factuels et l'audit de plan sont persistés ; les premières reviews Astra/xhigh sont persistées. Le test E2E a injecté une panne après réception de la réponse modèle, rouvert le host, repris automatiquement et persisté la review sans seconde inférence. Un audit factuel n'est pas une review LLM : ne pas annoncer 38 reviews achevées. Le service automatique DeskOosResearch a été installé et lancé réellement ; sa file durable contient les 44 journées existantes de juillet–août.
 
 ## Intégration et fichiers
 
@@ -22,6 +22,7 @@ Acceptance réelle : 02/07 comporte 33 scénarios et 38 attempts, énumérés de
 | operations | `mcp_gpt_desk/scripts/run_oos_research.mjs` | start/advance/run/status/artifacts/scorecard/experiment, sans TradingView |
 | operations | `run_oos_research_scheduler.mjs`, `Install-OosResearchScheduler.ps1` | service Windows distinct, redémarrage automatique, heartbeat et queue PostgreSQL ; concurrence physique 1 |
 | operations | `Update-OosResearch.ps1`, `configure_oos_research.mjs` | backup PostgreSQL, hashes métier avant/après, migration additive et credentials isolés |
+| operations | `restart_oos_research_scheduler.mjs` | maintenance par drain d'admission PostgreSQL ; fin de l'inférence active attendue avant restart/stop ; persistance des cycles comparée |
 | quality | nouveaux tests du package et `mcp_gpt_desk/test/oos_research_*.test.js` | preuves, contre-revue, transport MCP, permissions et sélection de modèles |
 
 Les manifests, plans, captures, ENGINE, parser SMC3, résultats et anciens prompts analytiques ne sont pas édités. Les sorties de tests sont synthétiques et ne deviennent jamais données de marché.
@@ -106,11 +107,13 @@ Une réponse effectivement reçue est désormais journalisée avant validation/p
 
 Le VISUAL_EVIDENCE_ROUTER charge sélectivement des PNG existants, vérifie SHA-256 et transmet les pixels au provider via des fichiers privés. Le finding conserve refs, claims et confiance. Aucune capture TradingView nouvelle. Les budgets de contexte et profondeurs sont actuellement des métadonnées de routage, pas encore des limites de tokens garanties par le provider. Le modèle réel utilisé est Astra/xhigh ; l'identifiant demandé est vérifié dans le transport, sans attestation du modèle interne du fournisseur.
 
+La gestion des ressources lit `account/rateLimits/read` du compte de service avant l'envoi, conserve la décision dans le journal et diffère jusqu'au reset autoritatif lorsque la limite est atteinte. Le report est effectué avant MODEL_REQUESTED, donc ne crée pas d'inférence incertaine ni de consommation du budget de retry technique. Quota inaccessible = UNKNOWN, pas zéro. Aucun achat, reset de crédit ni notification email fournisseur automatique. La concurrence reste 1 et le budget d'appels par cycle reste autoritatif.
+
 ## Validation exécutée
 
 Tests dédiés : audit >5 scénarios/toutes tentatives, données inconnues, exclusion smoke/gap, absence de futurs prix, hash/idempotence (y compris ordre de clés JSON), budget/requêtes incertaines, modèle réellement exposé, critique séparée, protocoles sans exécuteur, cycle autonome borné complet. Tests MCP locaux : 47→53 uniquement si activation, scopes et champs inconnus rejetés. Tests PostgreSQL 16 réel en instance temporaire : migration rejouable, concurrence, rollback, immutabilité, rôles physiques (63 tests passés). Aucun serveur de marché ni replay n'est utilisé par ces tests.
 
-Suite dédiée exécutée après ajout du coordinateur et projections de cohortes : **113/113 PASS**, zéro skip, PostgreSQL 16 réel inclus. Non-régression : **78 tests OOS + 15 tests MCP/forensic/OAuth PASS**. L'inférence de recherche Astra/xhigh et sa reprise ont été testées réellement sur VPS.
+Suite dédiée exécutée après ajout du coordinateur, projections de cohortes et admission quota : **117/117 PASS**, zéro skip, PostgreSQL 16 réel inclus. Non-régression : **78 tests OOS + 15 tests MCP/forensic/OAuth PASS**. L'inférence de recherche Astra/xhigh et sa reprise ont été testées réellement sur VPS.
 
 Guards architecture et migrations PASS. Contrôle ciblé des nouveaux modules : aucun fichier >600 lignes, aucune fonction >60 lignes ou complexité >15. Guard statique global FAIL sur `front-session-projection.js` et budgets globaux du dépôt ; aucune baseline affaiblie, aucun fichier de trading modifié pour le contourner.
 
@@ -128,6 +131,6 @@ Baseline exacte comparée à ddd60841110bcf24cb20fe88b3282af77f88792b : 271 fonc
 | lifecycle complet hypothèses VALIDATED/FAILED et findings résolus | versions/reviews à ajouter, pas de mutation historique |
 | challenger scorecard / exécution SHADOW / walk-forward roulant | futur module expérimental, jeux non contaminés requis |
 | contrôle statistique des découvertes multiples | déclaration/comptage implémentés ; test statistique non implémenté |
-| worker permanent supervisé / UI recherche / déploiement VPS | installer/scheduler codés, VPS activé ; service permanent à vérifier après installation ; UI recherche non réalisée |
+| worker permanent supervisé / UI recherche / déploiement VPS | service automatique actif sur VPS, 44 tâches persistantes, progression pilote réelle ; supervision Codex heartbeat active ; UI recherche non réalisée |
 
 Rollback : mettre `research_enabled=false`, arrêter le runner, conserver la mémoire. Ne jamais effacer les tables pour revenir au champion : celui-ci n'a pas changé. Rentabilité future non garantie.
