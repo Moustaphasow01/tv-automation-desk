@@ -43,6 +43,8 @@ async function grantResearchPrivileges(admin) {
   await admin.query('GRANT USAGE ON SCHEMA research_state TO desk_oos_research');
   await admin.query('GRANT SELECT,INSERT ON ALL TABLES IN SCHEMA research_state TO desk_oos_research');
   await admin.query('GRANT UPDATE(status,checkpoint,revision,updated_at) ON research_state.t3_cycles TO desk_oos_research');
+  await admin.query('GRANT UPDATE(priority,status,worker_id,lease_token,lease_until,attempts,available_at,last_error,heartbeat_at,updated_at) ON research_state.t3_tasks TO desk_oos_research');
+  await admin.query('GRANT UPDATE(state,task_id,heartbeat_at,capabilities) ON research_state.t3_workers TO desk_oos_research');
   await admin.query('GRANT USAGE ON SCHEMA public TO desk_oos_forensic');
   const tables = await admin.query("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'oos_%'");
   for (const { tablename } of tables.rows) {
@@ -67,6 +69,7 @@ async function deniedMutation(connection) {
 
 async function installResearch({ admin, adminUrl, env, release }) {
   const migration = await readFile(path.join(release, 'infra/postgres/init/075_oos_research_memory.sql'), 'utf8');
+  const queueMigration = await readFile(path.join(release, 'infra/postgres/init/076_oos_research_task_queue.sql'), 'utf8');
   const values = {};
   for (const [key, role] of [['OOS_RESEARCH_DATABASE_URL', 'desk_oos_research'], ['OOS_FORENSIC_DATABASE_URL', 'desk_oos_forensic']]) {
     const password = env[key] ? decodeURIComponent(new URL(env[key]).password) : randomBytes(32).toString('hex');
@@ -75,11 +78,16 @@ async function installResearch({ admin, adminUrl, env, release }) {
     values[key] = uri.toString();
   }
   await admin.query(migration);
+  await admin.query(queueMigration);
   await grantResearchPrivileges(admin);
   for (const connection of Object.values(values)) await deniedMutation(connection);
   const next = { ...env, ...values };
   await writeFile(path.join(root, 'config/oos.env'), Object.entries(next).map(([k,v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
-  return { migration_sha256: sha(migration), isolation: 'PASS' };
+  // The unattended research process never inherits OOS operator/admin credentials.
+  const isolated = { ...values, OOS_BATCH_CONFIG: env.OOS_BATCH_CONFIG ?? path.join(root,'config/oos.json'),
+    CODEX_HOME: 'C:/ProgramData/DeskFutures/codex' };
+  await writeFile(path.join(root,'config/oos.research.env'),Object.entries(isolated).map(([k,v])=>`${k}=${v}`).join('\n')+'\n',{mode:0o600});
+  return { migration_sha256: sha(migration), queue_migration_sha256: sha(queueMigration), isolation: 'PASS' };
 }
 
 async function main() {

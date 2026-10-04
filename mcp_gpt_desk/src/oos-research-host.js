@@ -2,6 +2,8 @@ import pg from "pg";
 import path from "node:path";
 import { createOosForensics, PostgresOosRegistry } from "@tv-automation/desk-oos-batch";
 import { createOosResearch, configuredResearchModel } from "./oos-research-runtime.js";
+import { PostgresResearchTaskQueue } from "@tv-automation/desk-oos-research";
+import { researchVisualReader } from './oos-research-visual-reader.js';
 
 /** Separate DB credentials are mandatory; the research application never receives the OOS command runtime. */
 export async function openResearchHost({ config, environment = process.env, poolFactory = options => new pg.Pool(options) }) {
@@ -16,8 +18,9 @@ export async function openResearchHost({ config, environment = process.env, pool
     await researchPool.query("SELECT cycle_id FROM research_state.t3_cycles LIMIT 0");
     const forensic = createOosForensics({ repository: new PostgresOosRegistry(forensicPool), root: config.archive_root,
       indexRoot: config.index_root ?? path.join(config.archive_root, "forensic-index-v2") });
-    const api = createOosResearch({ pool: researchPool, readForensic: forensic.call.bind(forensic), model: configuredResearchModel(config.model) });
-    return { api, close };
+    const api = createOosResearch({ pool: researchPool, readForensic: forensic.call.bind(forensic),
+      readVisual: researchVisualReader(config), model: configuredResearchModel(config.model) });
+    return { api, close, queue: new PostgresResearchTaskQueue({pool:researchPool}), readForensic:forensic.call.bind(forensic) };
   } catch (error) { await close(); throw error; }
 }
 

@@ -5,3 +5,5 @@ export { ResearchHypotheses } from "./src/application/research-hypotheses.js";
 export { ResearchDiscovery } from "./src/application/research-discovery.js";
 export { ResearchApi } from "./src/application/research-api.js";
 export { ResearchRunner } from "./src/application/research-runner.js";
+export { ResearchScheduler } from "./src/application/research-scheduler.js";
+export { PostgresResearchTaskQueue } from "./src/adapter/postgres-research-task-queue.js";

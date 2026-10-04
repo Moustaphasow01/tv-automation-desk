@@ -7,10 +7,10 @@ import { discoverResearchModels } from "./oos-research-capabilities.js";
 const fingerprint = value => createHash("sha256").update(String(value)).digest("hex");
 
 /** Composition receives a READ-ONLY forensic function, not the full OOS runtime. */
-export function createOosResearch({ pool, readForensic, model, clock = () => new Date().toISOString() }) {
+export function createOosResearch({ pool, readForensic, model, readVisual, clock = () => new Date().toISOString() }) {
   const memory = new PostgresResearchMemory({ pool, clock });
   const observer = new ForensicResearchObserver({ readForensic, fingerprint });
-  const cycle = new ResearchCycle({ observer, memory, model, fingerprint, clock });
+  const cycle = new ResearchCycle({ observer, memory, model, readVisual, fingerprint, clock });
   const hypotheses = new ResearchHypotheses({ cycle, memory, model, fingerprint, clock });
   const discovery = new ResearchDiscovery({ cycle, hypotheses, memory, model, fingerprint });
   return new ResearchApi({ cycle, hypotheses, discovery, memory });

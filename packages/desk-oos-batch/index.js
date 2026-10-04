@@ -21,6 +21,7 @@ export { batchDays } from "./src/domain/batch-contract.js";
 export { projectDay, aggregateBatch } from "./src/application/batch-projection.js";
 export { PostgresOosRegistry, ArtifactArchive };
 export { createOosForensics, buildOosForensicIndex } from "./forensics.js";
+export { ForensicIndexReader } from './src/adapter/forensic-index.js';
 
 export async function createOosRuntimeContracts({ readInstalled }) {
   const basis = await readRuntimeContractSource(), facts = pineSourceFacts(basis);

@@ -18,13 +18,16 @@ $manifest=Get-Content (Join-Path $PatchRoot 'research-patch.json') -Raw|ConvertF
 if ($manifest.revision -ne $Revision -or $manifest.branch -ne 'feature/oos-batch-mcp-v1') { throw 'RESEARCH_PATCH_IDENTITY_INVALID' }
 foreach($file in $manifest.files) {
   $allowed=$file.path -match '^packages/desk-oos-research/[a-zA-Z0-9_./-]+$'
-  $allowed=$allowed -or $file.path -match '^infra/postgres/init/075_oos_research_memory.sql$'
-  $allowed=$allowed -or $file.path -match '^mcp_gpt_desk/(package(-lock)?.json|src/oos-(research-[a-z-]+|mcp-server|http-server).js|scripts/(serve_oos|run_oos_research|configure_oos_research).mjs|test/oos_research_[a-z_]+.test.js)$'
-  $allowed=$allowed -or $file.path -eq 'deploy/windows/Update-OosResearch.ps1'
+  $allowed=$allowed -or $file.path -eq 'packages/desk-oos-batch/index.js'
+  $allowed=$allowed -or $file.path -match '^infra/postgres/init/07[56]_oos_research_[a-z_]+.sql$'
+  $allowed=$allowed -or $file.path -match '^mcp_gpt_desk/(package(-lock)?.json|src/oos-(research-[a-z-]+|mcp-server|http-server).js|scripts/(serve_oos|[a-z_]+oos_research[a-z_]*).mjs|test/oos_research_[a-z_]+.test.js)$'
+  $allowed=$allowed -or $file.path -match '^deploy/windows/(Update|Install)-OosResearch[a-zA-Z]*.ps1$'
   if (!$allowed -or $file.path -match '\.\.') { throw "RESEARCH_PATCH_SCOPE_FORBIDDEN: $($file.path)" }
   if ((Get-FileHash (Join-Path $PatchRoot $file.path)).Hash.ToLower() -ne $file.sha256) { throw 'RESEARCH_PATCH_HASH_INVALID' }
 }
-$codex=Get-ChildItem 'C:\ProgramData\DeskFutures\bin\codex' -Filter codex.exe -Recurse|Select-Object -First 1 -ExpandProperty FullName
+$provider='C:\ProgramData\DeskOos\providers\codex-research'
+if (!(Test-Path $provider)) { throw 'RESEARCH_DEDICATED_CODEX_RUNTIME_MISSING' }
+$codex=Get-ChildItem $provider -Filter codex.exe -Recurse|Select-Object -First 1 -ExpandProperty FullName
 if (!$codex -or !(Test-Path 'C:\ProgramData\DeskFutures\codex\auth.json')) { throw 'RESEARCH_CODEX_RUNTIME_MISSING' }
 & robocopy $oldRoot $newRoot /E /XJ /XD node_modules /NFL /NDL /NJH /NJS /NP|Out-Null
 if ($LASTEXITCODE -ge 8) { throw 'RESEARCH_RELEASE_COPY_FAILED' }
@@ -35,7 +38,7 @@ foreach($item in Get-ChildItem (Join-Path $oldRoot 'mcp_gpt_desk/node_modules') 
   if($item.Name -eq '@tv-automation') {
     New-Item -ItemType Directory $target|Out-Null
     foreach($package in Get-ChildItem $item.FullName) {
-      $source=if($package.Name -eq 'desk-oos-batch'){Join-Path $newRoot 'packages/desk-oos-batch'}else{$package.FullName}
+      $source=if($package.Name -in @('desk-oos-batch','desk-oos-research')){Join-Path $newRoot ('packages/'+$package.Name)}else{$package.FullName}
       New-Item -ItemType Junction -Path (Join-Path $target $package.Name) -Target $source|Out-Null
     }
   } elseif($item.PSIsContainer) { New-Item -ItemType Junction -Path $target -Target $item.FullName|Out-Null }
@@ -47,7 +50,8 @@ foreach($file in $manifest.files) {
   Copy-Item (Join-Path $PatchRoot $file.path) $target
   if($file.path -match '\.(mjs|js)$') { & node --check $target; if($LASTEXITCODE -ne 0){throw 'RESEARCH_SYNTAX_FAILED'} }
 }
-New-Item -ItemType Junction -Path (Join-Path $deps '@tv-automation/desk-oos-research') -Target (Join-Path $newRoot 'packages/desk-oos-research')|Out-Null
+$researchLink=Join-Path $deps '@tv-automation/desk-oos-research'
+if (!(Test-Path $researchLink)) {New-Item -ItemType Junction -Path $researchLink -Target (Join-Path $newRoot 'packages/desk-oos-research')|Out-Null}
 $backup=Join-Path $root "backups/research/$Revision"
 New-Item -ItemType Directory -Force $backup|Out-Null
 & icacls $backup /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F'|Out-Null
@@ -63,8 +67,9 @@ if($LASTEXITCODE -ne 0){throw 'RESEARCH_MIGRATION_FAILED'}
 $utf8=[Text.UTF8Encoding]::new($false)
 try {
   $envNow=[IO.File]::ReadAllText($envPath)
-  if($envNow -match '(?m)^CODEX_HOME='){throw 'RESEARCH_EXISTING_CODEX_HOME_REQUIRES_REVIEW'}
-  [IO.File]::WriteAllText($envPath,$envNow+"CODEX_HOME=C:/ProgramData/DeskFutures/codex`n",$utf8)
+  if($envNow -match '(?m)^CODEX_HOME=([^\r\n]+)') {
+    if($Matches[1] -ne 'C:/ProgramData/DeskFutures/codex'){throw 'RESEARCH_EXISTING_CODEX_HOME_REQUIRES_REVIEW'}
+  } else {[IO.File]::WriteAllText($envPath,$envNow+"CODEX_HOME=C:/ProgramData/DeskFutures/codex`n",$utf8)}
   $config=$configOriginal|ConvertFrom-Json
   $config.release=$Revision
   $config|Add-Member -NotePropertyName research_enabled -NotePropertyValue $true -Force

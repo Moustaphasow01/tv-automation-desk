@@ -2,13 +2,13 @@ import { planQualityAudit, researchScorecard, researchCohorts } from "../domain/
 import { scenarioFamilyKey } from "../domain/scenario-self-audit.js";
 import { RESEARCH_VERSION, requireResearch } from "../domain/research-evidence.js";
 import { selectResearchModel } from "../domain/research-governance.js";
-import { RESEARCHER_PROMPT, RESEARCH_PROMPT_VERSION, RESEARCH_ROLE_OUTPUT_SCHEMA, validateResearcherAnswer } from "../domain/research-role-contract.js";
-import { callResearchModel } from "./research-model-call.js";
+import { RESEARCHER_PROMPT, RESEARCH_PROMPT_VERSION } from "../domain/research-role-contract.js";
+import { reviewResearchCase } from './research-case-review.js';
 import { researchCanonicalJson } from "../domain/research-canonical-json.js";
 
 /** No trading command port, no experiment executor and no promotion port are accepted. */
 export class ResearchCycle {
-  constructor({ observer, memory, fingerprint, model, clock }) { Object.assign(this, { observer, memory, fingerprint, model, clock }); }
+  constructor({ observer, memory, fingerprint, model, clock, readVisual }) { Object.assign(this, { observer, memory, fingerprint, model, clock, readVisual }); }
   async start({ dates, budget = { maximum_model_calls: 50 } }) {
     requireResearch(Array.isArray(dates) && dates.length > 0 && dates.length <= 1000, "RESEARCH_DATES_REQUIRED");
     requireResearch(new Set(dates).size === dates.length && dates.every(d => /^2026-(07|08)-\d{2}$/.test(d)
@@ -40,6 +40,8 @@ export class ResearchCycle {
   async diagnose({ cycle_id, limit = 1 }) {
     const cycle = await this.memory.getCycle(cycle_id);
     requireResearch(cycle?.status === "DIAGNOSING", "RESEARCH_CYCLE_STAGE_INVALID");
+    requireResearch(!cycle.definition.prompt_version || cycle.definition.prompt_sha256 === this.fingerprint(RESEARCHER_PROMPT),
+      'RESEARCH_PROMPT_VERSION_INCOMPATIBLE');
     requireResearch(Number.isInteger(limit) && limit >= 1 && limit <= 20, "RESEARCH_CHUNK_INVALID");
     requireResearch(this.model, "RESEARCH_MODEL_NOT_CONFIGURED");
     const selection = selectResearchModel(await this.model.capabilities());
@@ -53,15 +55,9 @@ export class ResearchCycle {
       checkpoint: { model: selection, diagnoses_completed: (await this.all(cycle_id, "finding")).length, total_cases: audits.length } });
   }
   async analyzeOne({ cycle, selection, audit }) {
-    const response = await callResearchModel({ memory: this.memory, model: this.model, fingerprint: this.fingerprint, cycle,
-      requestId: this.fingerprint(`${cycle.cycle_id}|${audit.case_id}|MODEL`),
-      request: { role: "DESK_AI_RESEARCHER", selection, instructions: RESEARCHER_PROMPT,
-        input: audit, output_schema: RESEARCH_ROLE_OUTPUT_SCHEMA } });
-    const result = validateResearcherAnswer({ output: response.output, audit });
-    await this.save(cycle.cycle_id, "finding", this.fingerprint(`${cycle.cycle_id}|${audit.case_id}|DIAGNOSIS`), {
-      case_id: audit.case_id, result, source_identity: audit.identity, model: selection,
-      prompt_sha256: cycle.definition.prompt_sha256, context_sha256: this.fingerprint(JSON.stringify(audit)),
-      generated_at: this.clock(), actual_telemetry: response.telemetry ?? null, status: "UNREVIEWED" });
+    const finding = await reviewResearchCase({ memory: this.memory, model: this.model, fingerprint: this.fingerprint,
+      clock: this.clock, readVisual: this.readVisual, cycle, selection, audit });
+    await this.save(cycle.cycle_id, 'finding', this.fingerprint(`${cycle.cycle_id}|${audit.case_id}|DIAGNOSIS`), finding);
   }
   async cluster({ cycle_id }) {
     const cycle = await this.memory.getCycle(cycle_id);
