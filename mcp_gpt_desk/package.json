@@ -68,6 +68,7 @@
   },
   "dependencies": {
     "@tv-automation/desk-oos-batch": "file:../packages/desk-oos-batch",
+    "@tv-automation/desk-oos-research": "file:../packages/desk-oos-research",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@tv-automation/desk-audit": "file:../packages/desk-audit",
     "@tv-automation/desk-contracts": "file:../packages/desk-contracts",

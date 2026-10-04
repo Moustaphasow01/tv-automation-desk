@@ -9,7 +9,7 @@ import { OosOAuth } from "./oos-oauth.js";
 import { handleOosHttp, isOosPath } from "./front-oos-batch.js";
 import { sendJson, readJsonBody } from "./oos-http-io.js";
 
-export function createOosHttpServer({ runtime, pool, config, log = console.log }) {
+export function createOosHttpServer({ runtime, pool, config, research, log = console.log }) {
   runtime.allowedActions = config.replay_enabled === true ? ["capture", "retry-capture", "replay", "retry"] : ["capture", "retry-capture"];
   runtime.technicalSmokeDates = config.technical_smoke_dates || [];
   const auth = new OosOAuth({ baseUrl: config.public_url, pool, operatorToken: process.env.OOS_OPERATOR_TOKEN,
@@ -23,7 +23,8 @@ export function createOosHttpServer({ runtime, pool, config, log = console.log }
     let errorCode, errorField;
     res.on("finish", () => log(JSON.stringify({ event: "oos.http", correlation_id: correlationId, stage,
       method: req.method, status: res.statusCode, error: errorCode, error_field: errorField, duration_ms: Date.now() - start })));
-    try { await route({ req, res, runtime, pool, config, auth, portal }); }
+    try { await route({ req, res, runtime, pool, config, auth, portal,
+      research: config.research_enabled === true ? research : undefined }); }
     catch (error) {
       errorCode = /^[A-Za-z0-9_]{1,80}$/.test(error.code || "") ? error.code : "server_error";
       errorField = ["redirect_uri", "code_challenge", "code_verifier"].includes(error.field) ? error.field
@@ -78,14 +79,14 @@ function sendRequestError({ req, res, error, auth }) {
   sendJson(res, error.status || error.statusCode || 400, { ok: false, code: error.code || "OOS_REQUEST_FAILED" });
 }
 
-async function mcp({ req, res, portal, runtime, identity, config }) {
+async function mcp({ req, res, portal, runtime, identity, config, research }) {
   if (req.method !== "POST") { res.writeHead(405, { allow: "POST" }); res.end(); return; }
   const body = await readJsonBody(req);
   if (body?.method === "tools/call" && body.params?.name === "request_replay" && config.replay_enabled !== true) {
     sendJson(res, 200, { jsonrpc: "2.0", id: body.id, result: { isError: true,
       content: [{ type: "text", text: '{"code":"OOS_REPLAY_DISABLED"}' }] } }); return;
   }
-  const server = createOosMcpServer({ portal, probe: runtime.probe, contracts: runtime.contracts, forensic: runtime.forensic, auth: identity });
+  const server = createOosMcpServer({ portal, probe: runtime.probe, contracts: runtime.contracts, forensic: runtime.forensic, research, auth: identity });
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on("close", () => { void transport.close(); void server.close(); });
   await server.connect(transport);

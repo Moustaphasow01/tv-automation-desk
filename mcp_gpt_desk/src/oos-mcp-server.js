@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { registerOosTool as register } from "./oos-mcp-tool.js";
 import { registerForensicTools } from "./oos-forensic-tools.js";
+import { registerResearchTools } from "./oos-research-tools.js";
 
 const date = z.string().regex(/^2026-(07|08)-\d{2}$/);
 const month = z.string().regex(/^2026-(07|08)$/);
@@ -9,7 +10,7 @@ const empty = z.object({}).strict();
 const day = z.object({ date }).strict();
 
 /** No legacy MCP registry is imported. Only these explicit OOS capabilities exist. */
-export function createOosMcpServer({ portal, probe, auth, contracts, forensic }) {
+export function createOosMcpServer({ portal, probe, auth, contracts, forensic, research }) {
   const server = new McpServer({ name: "Desk OOS", version: forensic ? "2.0.0" : "1.0.0" });
   const read = (name, description, input, run) => register(server, auth, { name, description, input, mode: "read", run });
   const write = (name, description, input, run) => register(server, auth, { name, description, input, mode: "write", run });
@@ -42,5 +43,6 @@ export function createOosMcpServer({ portal, probe, auth, contracts, forensic })
     z.object({ value: z.string().min(1).max(500) }).strict(), args => probe.write(args.value));
   read("get_write_probe", "Read the latest technical write probe; no trading data.", empty, () => probe.read());
   if (forensic) registerForensicTools({ server, auth, forensic });
+  if (research) registerResearchTools({ server, auth, research });
   return server;
 }
