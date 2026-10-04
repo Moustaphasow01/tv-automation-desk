@@ -43,7 +43,8 @@ export class ForensicArtifacts {
   }
   async verify({ date, repository }) {
     const day = await this.index.get(date), violations = [];
-    for (const source of day.sources) {
+    const sources = day.inventory?.length ? day.inventory : day.sources;
+    for (const source of sources) {
       try { requireFact(this.fingerprint(await this.archive.read(day.definition, source.path)) === source.sha256, "HASH_MISMATCH"); }
       catch (error) { violations.push({ path: source.path, reason: error.code || "READ_FAILED" }); }
     }
@@ -51,6 +52,6 @@ export class ForensicArtifacts {
     if (current.plan_sha256 !== day.identity.plan_sha256 || current.manifest_sha256 !== day.identity.manifest_sha256
       || current.revision !== day.summary.revision || current.state !== day.summary.state) violations.push({ reason: "BUSINESS_IDENTITY_CHANGED" });
     return { date, status: violations.length ? "FORENSIC_INTEGRITY_VIOLATION" : "PASS", violations,
-      checked_sources: day.sources.length, plan_sha256: day.identity.plan_sha256, manifest_sha256: day.identity.manifest_sha256 };
+      checked_sources: sources.length, plan_sha256: day.identity.plan_sha256, manifest_sha256: day.identity.manifest_sha256 };
   }
 }

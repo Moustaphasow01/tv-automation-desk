@@ -35,14 +35,19 @@ function pngChunks(bytes) {
   return { data, chunks };
 }
 
-export function cropForensicPng({ bytes, x, y, width, height }) {
-  const { data, chunks } = pngChunks(bytes);
-  const header = chunks.get("IHDR"), parentWidth = header.readUInt32BE(0), parentHeight = header.readUInt32BE(4);
+function cropShape({ header, x, y, width, height }) {
+  const parentWidth = header.readUInt32BE(0), parentHeight = header.readUInt32BE(4);
   const channels = header[9] === 6 ? 4 : header[9] === 2 ? 3 : header[9] === 0 ? 1 : 0;
   requireFact(header[8] === 8 && channels && header[12] === 0, "FORENSIC_PNG_FORMAT_UNSUPPORTED");
   requireFact([x, y, width, height].every(Number.isInteger) && x >= 0 && y >= 0 && width > 0 && height > 0
     && x + width <= parentWidth && y + height <= parentHeight && parentWidth * parentHeight <= 32_000_000,
   "FORENSIC_CROP_BOUNDS_INVALID");
+  return { parentWidth, parentHeight, channels };
+}
+
+export function cropForensicPng({ bytes, x, y, width, height }) {
+  const { data, chunks } = pngChunks(bytes), header = chunks.get("IHDR");
+  const { parentWidth, parentHeight, channels } = cropShape({ header, x, y, width, height });
   const stride = parentWidth * channels, raw = inflateSync(Buffer.concat(data), { maxOutputLength: (stride + 1) * parentHeight });
   requireFact(raw.length === (stride + 1) * parentHeight, "FORENSIC_PNG_INVALID");
   const cropped = Buffer.alloc((width * channels + 1) * height);

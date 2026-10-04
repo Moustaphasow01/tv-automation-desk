@@ -10,7 +10,7 @@ const day = z.object({ date }).strict();
 
 /** No legacy MCP registry is imported. Only these explicit OOS capabilities exist. */
 export function createOosMcpServer({ portal, probe, auth, contracts, forensic }) {
-  const server = new McpServer({ name: "Desk OOS", version: "1.0.0" });
+  const server = new McpServer({ name: "Desk OOS", version: forensic ? "2.0.0" : "1.0.0" });
   const read = (name, description, input, run) => register(server, auth, { name, description, input, mode: "read", run });
   const write = (name, description, input, run) => register(server, auth, { name, description, input, mode: "write", run });
   read("get_engine_constraints", "Read authoritative V3.9.8 active ENGINE constraints and SHA-256. No market data, plan mutation or replay. Fails on CONTRACT_DRIFT.", empty,

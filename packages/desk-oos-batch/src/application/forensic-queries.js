@@ -37,7 +37,9 @@ export class ForensicQueries {
       classification: "DERIVED_LOCAL", extractor_version: "2.0.0", read_only: true,
       episode_ledger_basis: "Indexed published ENGINE events, not a pre-existing EPISODE_LEDGER file",
       event_ledger_basis: "Indexed SMC_AUDIT/SMC_SHADOW JSONL; exact duplicate publications retained as source offsets",
-      other_persisted_artifacts: ["premarket/manifest.json", "plan/plan_meta.json", "evidence/result-integrity.json", "evidence/market-session-exhausted.json"],
+      other_persisted_artifacts: [...new Set(days.flatMap(d => (d.inventory ?? d.sources).map(s => s.path)))],
+      persisted_files_indexed: days.reduce((n, d) => n + (d.inventory?.length ?? d.sources.length), 0),
+      file_inventory_classification: "DERIVED_LOCAL",
       limitations: ["No continuous OHLC history was found in the OOS corpus. Sparse event OHLC is not a market series.",
         "Unpublished condition evaluations, portfolio risk and ticket fields remain NOT_PERSISTED."] };
   }
@@ -72,10 +74,12 @@ export class ForensicQueries {
   }
   async packet(args) {
     const { day, scenario, episode, events } = await this.context(args);
+    const confirmation = events.find(e => e.event === "CONFIRMED");
+    const terminal = events.filter(e => e.timestamp === episode?.terminal_time && e.stage_after === episode?.terminal_state).at(-1);
     return { available: true, date: args.date, scenario_id: args.scenario_id, attempt: episode?.attempt ?? null,
       PLAN_DEFINITION: { ...scenario, global_records: undefined }, EPISODE_METADATA: episode ?? absentEvidence("episode"),
-      TIMELINE_SUMMARY: events.map(reference), CONFIRMATION_SNAPSHOT: reference(events.find(e => e.event === "CONFIRMED") ?? {}),
-      TICKET_SNAPSHOT: this.lightTicket(ticketSnapshot(events)), TERMINAL_SNAPSHOT: reference(events.at(-1) ?? {}),
+      TIMELINE_SUMMARY: events.map(reference), CONFIRMATION_SNAPSHOT: confirmation ? reference(confirmation) : absentEvidence("confirmation"),
+      TICKET_SNAPSHOT: this.lightTicket(ticketSnapshot(events)), TERMINAL_SNAPSHOT: terminal ? reference(terminal) : absentEvidence("terminal_event"),
       TRADE_REF: day.trades.filter(t => t.episode_id === episode?.episode_id).map(briefTrade),
       MARKET_WINDOW_REF: { date: args.date, start_time: episode?.start_time, end_time: episode?.terminal_time,
         available: false, reason: "NOT_PERSISTED" },
@@ -95,9 +99,10 @@ export class ForensicQueries {
   async conditions(args) {
     const context = await this.context(args);
     if (!context.episode) return absentEvidence("episode");
-    return { available: true, items: conditionTimeline(context), classification: "DERIVED_LOCAL" };
+    return { ...await this.page(conditionTimeline(context), args), classification: "DERIVED_LOCAL" };
   }
   async decision(args) {
+    requireFact(Boolean(args.event_id) !== Boolean(args.timestamp), "FORENSIC_DECISION_REFERENCE_REQUIRED");
     const { events } = await this.context(args);
     const matches = events.filter(e => args.event_id ? e.event_id === args.event_id : e.timestamp === new Date(args.timestamp).toISOString());
     if (!matches.length) return absentEvidence("exact_decision_snapshot");
@@ -120,26 +125,33 @@ export class ForensicQueries {
   }
   async rearm(args) {
     const { day, scenario, attempts } = await this.context(args);
-    return { available: true, definition: scenario.rearm, attempts, events: day.events.filter(e => e.scenario_id === args.scenario_id
-      && ["DETACHED", "REARMED", "CONFIRMED"].includes(e.event)),
+    const timeline = await this.page(day.events.filter(e => e.scenario_id === args.scenario_id
+      && ["DETACHED", "REARMED", "CONFIRMED"].includes(e.event)), args);
+    return { ...timeline, definition: scenario.rearm, attempts,
       outside_count: absentEvidence("outside_count"), outside_side: absentEvidence("outside_side"),
       reset_gate: absentEvidence("reset_gate"), fresh_proof_start: absentEvidence("fresh_proof_start") };
   }
   async group(args) {
     const day = await this.index.get(args.date), definition = day.records.find(r => r.record_type === "GROUP" && r.decoded.group_id === args.group_id);
-    requireFact(definition, "FORENSIC_GROUP_NOT_FOUND");
+    if (!definition) return absentEvidence("group_definition");
     const members = day.records.filter(r => r.record_type === "MEMBER" && r.decoded.group_id === args.group_id).map(r => r.decoded.scenario_id);
-    return { available: true, definition, policy: definition.decoded.policy, member_scenarios: members,
-      events: day.events.filter(e => members.includes(e.scenario_id) && ["PAUSED_GROUP", "OCO_CANCEL", "UNKNOWN_ORDER", "FILLED", "CLOSED", "CANCELLED_LINK"].includes(e.event)),
+    const timeline = await this.page(day.events.filter(e => members.includes(e.scenario_id)
+      && ["PAUSED_GROUP", "OCO_CANCEL", "UNKNOWN_ORDER", "FILLED", "CLOSED", "CANCELLED_LINK"].includes(e.event)), args);
+    return { ...timeline, definition, policy: definition.decoded.policy, member_scenarios: members,
       occupancy_timeline: absentEvidence("published_group_occupancy"), family_state: absentEvidence("published_family_state") };
   }
   async portfolio(args) {
     const day = await this.index.get(args.date), events = day.events.filter(e => ["PAUSED_DIRECTION", "FILLED", "CLOSED", "ARMED", "UNKNOWN_ORDER"].includes(e.event));
-    return { available: events.length > 0, ...(events.length ? {} : { reason: "NOT_PERSISTED" }), events,
+    if (!events.length) return absentEvidence("published_portfolio_events");
+    return { ...await this.page(events, args),
       flat_long_short: absentEvidence("published_portfolio_snapshot"), reserved_risk: absentEvidence("reserved_risk"),
       open_risk: absentEvidence("open_risk"), no_reconstructed_portfolio: true };
   }
-  async trades(args) { const day = await this.index.get(args.date); return this.page(day.trades.map(briefTrade), args); }
+  async trades(args) {
+    const day = await this.index.get(args.date);
+    if (!day.scorable) return absentEvidence("published_trades");
+    return this.page(day.trades.map(briefTrade), args);
+  }
   async trade(args) {
     const day = await this.index.get(args.date), trade = day.trades.find(t => t.trade_id === args.trade_id);
     return trade ? { available: true, ...trade } : absentEvidence("trade");

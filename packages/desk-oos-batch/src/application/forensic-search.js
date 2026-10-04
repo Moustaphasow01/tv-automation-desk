@@ -48,7 +48,7 @@ export class ForensicSearch {
   async provenance({ ref }) {
     const days = await this.queries.selectedDays({});
     for (const day of days) {
-      const direct = [...day.sources.map(s => s.provenance), ...day.records, ...day.events].find(p =>
+      const direct = [...day.sources.map(s => s.provenance), ...(day.inventory ?? []).map(s => s.provenance), ...day.records, ...day.events].find(p =>
         p.provenance_ref === ref || p.event_id === ref || p.source_event_hash === ref);
       if (direct) return { available: true, ...direct };
       const episode = day.episodes.find(e => e.episode_id === ref);
@@ -56,8 +56,12 @@ export class ForensicSearch {
         sources: day.events.filter(e => e.episode_id === ref).map(reference) };
       const trade = day.trades.find(t => t.trade_id === ref);
       if (trade) return { available: true, ...trade.provenance, trade_id: ref };
-      const log = day.logs.find(l => l.source_event_hash === ref);
-      if (log) return { available: true, ...day.sources.find(s => s.path === "replay/logs.txt").provenance, ...log };
+      const cell = day.trades.flatMap(t => t.position_snapshot?.cells ?? []).find(c => c.provenance.provenance_ref === ref);
+      if (cell) return { available: true, ...cell.provenance, cell };
+      const logSource = day.sources.find(s => s.path === "replay/logs.txt");
+      const log = day.logs.find(l => l.source_event_hash === ref || this.queries.fingerprint(
+        `${logSource.provenance.source_path}|${logSource.sha256}|${l.record_offset}`) === ref);
+      if (log) return { available: true, ...logSource.provenance, ...log };
     }
     return absentEvidence("provenance_ref");
   }

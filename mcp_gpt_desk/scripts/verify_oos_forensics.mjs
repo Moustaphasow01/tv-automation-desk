@@ -5,6 +5,9 @@ import pg from "pg";
 import { createHash } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createOosForensics, PostgresOosRegistry } from "@tv-automation/desk-oos-batch";
+import { createOosMcpServer } from "../src/oos-mcp-server.js";
 import { FORENSIC_TOOL_INPUTS } from "../src/oos-forensic-tools.js";
 import { forensicBusinessBaseline } from "./oos_forensic_baseline.mjs";
 
@@ -14,6 +17,8 @@ const root = path.join(config.archive_root, "forensic-index-v2"), sha = bytes =>
 const pool = new pg.Pool({ connectionString: process.env.OOS_DATABASE_URL });
 const client = new Client({ name: "Desk OOS forensic public acceptance", version: "2" });
 const report = { dates: {}, tools: {}, t0_t4: {}, new_replays: 0, plan_writes: 0, recalculations: 0 };
+const local = process.argv[2] === "local";
+let server;
 async function call(name, args = {}) {
   assert.ok(Object.hasOwn(FORENSIC_TOOL_INPUTS, name), "FORBIDDEN_NON_FORENSIC_TOOL");
   const result = await client.callTool({ name, arguments: args });
@@ -23,8 +28,13 @@ async function call(name, args = {}) {
 const metadata = result => result.structuredContent;
 const pictureArgs = { x: 0, y: 0, width: 320, height: 200 };
 try {
-  await client.connect(new StreamableHTTPClientTransport(new URL(`${config.public_url}/mcp`), {
+  if (local) {
+    const forensic = createOosForensics({ repository: new PostgresOosRegistry(pool), root: config.archive_root, indexRoot: root });
+    server = createOosMcpServer({ auth: { scopes: ["desk.read"] }, forensic });
+    const [left, right] = InMemoryTransport.createLinkedPair(); await server.connect(left); await client.connect(right);
+  } else await client.connect(new StreamableHTTPClientTransport(new URL(`${config.public_url}/mcp`), {
     requestInit: { headers: { authorization: `Bearer ${process.env.OOS_OPERATOR_TOKEN}` } } }));
+  report.transport = local ? "LOCAL_MCP_WITH_REAL_ARCHIVE" : "PUBLIC_AUTHENTICATED_HTTPS";
   const tools = (await client.listTools()).tools; assert.equal(tools.length, 47);
   for (const name of Object.keys(FORENSIC_TOOL_INPUTS)) {
     const tool = tools.find(t => t.name === name); assert.ok(tool); assert.equal(tool.annotations.readOnlyHint, true);
@@ -48,9 +58,9 @@ try {
   assert.equal(after.archive_sha256, before.archive_sha256, "ARCHIVE_MUTATED");
   report.read_only = "PASS"; report.artifacts_unchanged = after.file_count;
   assert.equal(Object.keys(report.tools).length, 31);
-  await writeFile(path.join(root, "public-acceptance.json"), JSON.stringify(report, null, 2));
+  await writeFile(path.join(root, local ? "local-acceptance.json" : "public-acceptance.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report));
-} finally { await client.close(); await pool.end(); }
+} finally { await client.close(); await server?.close(); await pool.end(); }
 
 async function verifyDay(date) {
   const frozen = metadata(await call("get_frozen_plan", { date })); assert.equal(sha(frozen.plan_text), frozen.plan_sha256);
@@ -85,7 +95,7 @@ async function verifyDay(date) {
   await call("get_decision_snapshot", { ...args, event_id: exactEvent.event_id });
   await call("get_forensic_provenance", { ref: exactEvent.event_id });
   const grouped = scenarios.find(s => s.group);
-  if (grouped) await call("get_group_history", { date, group_id: grouped.group.group_id });
+  await call("get_group_history", { date, group_id: grouped ? grouped.group.group_id : "NOT_PERSISTED_GROUP" });
   await call("get_logs_slice", { date, scenario_id: args.scenario_id, attempt: args.attempt, limit: 10 });
   for (const view of ["AUDIT", "POSITIONS"]) assert.equal(metadata(await call("get_structured_panel", { date, view })).native_table, true);
   const audit = metadata(await call("get_audit_json", { date })); assert.equal(sha(audit.text), audit.source_sha256);
@@ -101,7 +111,9 @@ async function verifyDay(date) {
   for (const trade of trades) {
     const forensic = metadata(await call("get_trade_forensics", { date, trade_id: trade.trade_id }));
     assert.equal(forensic.source, "ENGINE_PUBLISHED_ONLY"); assert.equal(forensic.recalculated, false);
-    assert.notEqual(forensic.real_R, null); assert.notEqual(forensic.real_USD, null);
+    assert.equal(typeof forensic.real_R, "number"); assert.equal(typeof forensic.real_USD, "number");
+    assert.equal(typeof forensic.mfe_rp, "number"); assert.equal(typeof forensic.mae_rp, "number");
+    assert.equal(typeof forensic.cf_BE_1, "number"); assert.equal(typeof forensic.cf_P1_at_1R, "number");
   }
   if (["2026-07-01", "2026-07-02", "2026-07-29"].includes(date)) await t0t4({ date, packet, audit: audit.document });
   return { frozen: true, scenarios: scenarios.length, events: events.total, fills: trades.length, integrity: "PASS", pixels: "PASS" };

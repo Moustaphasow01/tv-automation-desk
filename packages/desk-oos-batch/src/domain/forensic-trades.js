@@ -1,6 +1,8 @@
 import { absentEvidence, publishedNumber, publishedTime } from "./forensic-evidence.js";
 
-const number = (text, key) => publishedNumber(new RegExp(`(?:^|\\s)${key}=(-?[\\d.]+)`).exec(text)?.[1]);
+// Existing f_clean publication may blank lower-case 'r'. Recognise its labels; never repair source text.
+const LABELS = { prix: "(?:prix|p ix)", risqueUSD: "(?:risqueUSD|isqueUSD)", q: "q" };
+const number = (text, key) => publishedNumber(new RegExp(`(?:^|\\s)${LABELS[key]}=(-?[\\d.]+)`).exec(text)?.[1]);
 function auditSegment(text, key, next) {
   const start = text.indexOf(`${key}=`);
   if (start < 0) return null;
@@ -32,7 +34,7 @@ export function publishedTradeAudit(detail) {
 
 export function forensicTrades({ events, scenarios, identity, fingerprint }) {
   return events.filter(e => e.event === "FILLED").map(fill => {
-    const nativeId = /trade=([^\s]+)/.exec(fill.detail)?.[1] ?? null;
+    const nativeId = /(?:trade|t ade)=(.*?)\s+(?:prix|p ix)=/.exec(fill.detail)?.[1] ?? null;
     const related = events.filter(e => e.episode_id === fill.episode_id);
     const exit = related.find(e => e.event === "TRADE_EXIT" && publishedTradeAudit(e.detail)?.native_trade_id === nativeId);
     const audit = exit ? publishedTradeAudit(exit.detail) : null;

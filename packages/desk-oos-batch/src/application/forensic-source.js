@@ -3,6 +3,7 @@ import { forensicPlanRecords, forensicScenarioDefinitions } from "../domain/fore
 import { normalizeForensicEvents } from "../domain/forensic-events.js";
 import { forensicEpisodes } from "../domain/forensic-episodes.js";
 import { forensicTrades } from "../domain/forensic-trades.js";
+import { attachPublishedPositionFacts } from "../domain/forensic-panel-facts.js";
 import { evidenceProvenance } from "../domain/forensic-evidence.js";
 import { requireFact } from "../domain/batch-contract.js";
 
@@ -40,7 +41,8 @@ export class ForensicSource {
     const scenarios = forensicScenarioDefinitions(records);
     const published = await this.results(row, identity, sources);
     const episodes = forensicEpisodes({ events: published.events, scenarios });
-    const trades = forensicTrades({ events: published.events, scenarios, identity, fingerprint: this.fingerprint });
+    const trades = this.positionFacts({ published, sources,
+      trades: forensicTrades({ events: published.events, scenarios, identity, fingerprint: this.fingerprint }) });
     const violations = published.events.filter(e => e.scenario_id !== "PLAN" && !scenarios.some(s => s.scenario_id === e.scenario_id));
     requireFact(violations.length === 0, "FORENSIC_SCENARIO_REFERENCE_INVALID");
     const summary = this.summary({ row, scenarios, episodes, trades, published, sources });
@@ -48,6 +50,10 @@ export class ForensicSource {
       definition: row.definition, business_fingerprint: this.fingerprint(this.encodeJson(row)), plan_text: plan.bytes.toString("utf8"),
       plan_meta: planMeta, records, scenarios, episodes, trades, ...published,
       sources: sources.map(({ bytes, ...source }) => source) };
+  }
+  positionFacts({ trades, published, sources }) {
+    return attachPublishedPositionFacts({ trades, tables: published.audit?.published_position_tables ?? [],
+      source: sources.find(s => s.path === "replay/audit.json")?.provenance, fingerprint: this.fingerprint });
   }
   async results(row, identity, sources) {
     if (row.run_meta?.result_classification === "UNSCORABLE_MARKET_GAP") {

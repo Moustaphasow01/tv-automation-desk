@@ -6,6 +6,7 @@ import { forensicPlanRecords, forensicScenarioDefinitions } from "../src/domain/
 import { forensicEpisodes, conditionTimeline, ticketSnapshot } from "../src/domain/forensic-episodes.js";
 import { publishedTradeAudit, forensicTrades } from "../src/domain/forensic-trades.js";
 import { forensicPage } from "../src/domain/forensic-evidence.js";
+import { attachPublishedPositionFacts } from "../src/domain/forensic-panel-facts.js";
 
 const identity = { date: "2026-07-02", plan_sha256: "a".repeat(64) };
 const audit = "A395/T1/Rn/Rp=1.5/2/USD=75/C/O/F/M/X=1782982800000/1782983700000/1782984600000/1782985500000/1782986400000/E/S/T1/T2=7500/7495/7510/7515/MFEp/n=2.5/2.1/MAEp/n=0.3/0.4/TTM/MX=15/15/GBp/n=0.5/0.6/BE=0.4/0.6/0.8/P1=1.2";
@@ -44,6 +45,20 @@ test("frozen record order/text preserved and no default/analytical rule added", 
   assert.equal(forensicScenarioDefinitions(records).length, 8); assert.equal(records[0].raw + ";", raw);
   assert.equal(records[1].decoded.entry, 7500); assert.equal(records.at(-1).decoded.scenario_id, "S8");
 });
+test("native trade IDs contain plan names, spaces and slash separators; N/D does not shift CF values", () => {
+  const native = "Plan avec espaces/S1/1";
+  const detail = audit.replace("A395/T1/", `A395/${native}/`).replace("BE=0.4/0.6/0.8", "BE=N/D/0.6/0.8")
+    + " O/H/L/C=7500/7515/7495/7510";
+  const events = normalized([line("FILLED", `trade=${native} prix=7500 q=1 risqueUSD=25`), line("TRADE_EXIT", detail)]);
+  const trade = forensicTrades({ events, identity, scenarios: [], fingerprint: sha256 })[0];
+  assert.equal(trade.native_trade_id, native); assert.equal(trade.real_R, 1.5);
+  assert.equal(trade.cf_BE_0_5, null); assert.equal(trade.cf_BE_1, 0.6); assert.equal(trade.cf_BE_1_5, 0.8);
+  assert.equal(trade.cf_P1_at_1R, 1.2); assert.ok(trade.exit_event_id);
+  const damaged = normalized([line("FILLED", `t ade=${native} p ix=7500 q=1  isqueUSD=25`), line("TRADE_EXIT", detail)]);
+  const observed = forensicTrades({ events: damaged, identity, scenarios: [], fingerprint: sha256 })[0];
+  assert.equal(observed.real_R, 1.5); assert.equal(observed.risk_usd, 25); assert.equal(observed.native_trade_id, native);
+  assert.match(damaged[0].detail, /t ade=/); // No repair of the ENGINE publication.
+});
 test("condition timeline distinguishes published hits from unknown evaluations", () => {
   const events = normalized([line("STEP_1", "15m TOUCH_ZONE"), line("CONFIRMED", "confirmed")]);
   const episodes = forensicEpisodes({ events, scenarios: [{ scenario_id: "S1" }] });
@@ -58,4 +73,12 @@ test("bounded cursors bind immutable generation and exact filter; no oversized p
   assert.deepEqual(forensicPage({ ...args, query: { limit: 1, cursor: first.next_cursor } }).items, [2]);
   assert.throws(() => forensicPage({ ...args, indexHash: "B", query: { cursor: first.next_cursor } }), /FORENSIC_CURSOR_CONFLICT/);
   assert.throws(() => forensicPage({ ...args, query: { limit: 100000 } }), /FORENSIC_PAGE_LIMIT_INVALID/);
+});
+test("duration comes from its native POSITION cell, never sum/difference of time markers", () => {
+  const trades = [{ scenario_id: "S1", attempt: 1, missing_fields: [{ field: "duration" }] }];
+  const tables = [{ id: 7, cells: [{ row: 3, column: 0, text: "S1#1" },
+    { row: 3, column: 5, text: "D 69m MFEp/n 3/2" }] }];
+  const result = attachPublishedPositionFacts({ trades, tables, source: { source_path: "replay/audit.json", source_sha256: "a" }, fingerprint: sha256 });
+  assert.equal(result[0].duration, 69); assert.equal(result[0].missing_fields.length, 0);
+  assert.equal(result[0].duration_provenance.source_json_pointer, "/published_position_tables/0/cells/1");
 });

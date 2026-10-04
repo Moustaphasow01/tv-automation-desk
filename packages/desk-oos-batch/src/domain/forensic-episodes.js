@@ -36,6 +36,7 @@ export function conditionTimeline({ scenario, episode, events }) {
       record_type: record.record_type, step_index: index,
       first_evaluated_at: absentEvidence("first_evaluated_at"),
       hits: hits.map(e => ({ timestamp: e.timestamp, event_id: e.event_id, source_event_hash: e.source_event_hash })),
+      hits_complete: false, hit_semantics: "PUBLISHED_STEP_COMPLETION_ONLY",
       completed_at: hits.at(-1)?.timestamp ?? null, failed_at: absentEvidence("failed_at"),
       reset_at: absentEvidence("reset_at"), available_before_cutoff: absentEvidence("pre_cutoff_condition_evaluation"),
       episode_id: episode.episode_id, provenance: record, classification: "DERIVED_LOCAL",

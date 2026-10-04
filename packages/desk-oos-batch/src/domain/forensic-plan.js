@@ -28,6 +28,6 @@ export function forensicScenarioDefinitions(records) {
       steps_count: many("STEP").length, invalidations_count: many("INV").length, guards_count: many("GUARD").length,
       dependencies: many("DEP"), cancels: many("CANCEL"), levels: many("LEVEL"), filters: many("FILTER"),
       exit_policy: one("EXIT"), records: related, global_records: records.filter(r => ["PLAN", "NOTICE", "GAP"].includes(r.record_type)
-        || r.record_type === "GROUP" && r.decoded.group_id === group?.group_id), provenance: scn };
+        || ["GROUP", "MEMBER"].includes(r.record_type) && r.decoded.group_id === group?.group_id), provenance: scn };
   });
 }

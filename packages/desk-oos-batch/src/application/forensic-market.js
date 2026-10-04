@@ -12,8 +12,9 @@ export class ForensicMarket {
   async window(args) {
     const series = {};
     for (const timeframe of args.timeframes) series[timeframe] = await this.bars({ ...args, timeframe });
+    const available = Object.values(series).some(s => s.available);
     return { date: args.date, start_time: args.start_time, end_time: args.end_time, series,
-      available: Object.values(series).some(s => s.available) };
+      available, ...(available ? {} : { reason: "NOT_PERSISTED" }) };
   }
   async interactions(args) {
     // This extractor version found no continuous native bar series in the deployed OOS corpus.

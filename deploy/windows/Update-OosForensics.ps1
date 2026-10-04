@@ -15,9 +15,10 @@ $newRoot = "C:\DeskOos\releases\$Revision"
 if ($oldRoot -notmatch '^C:\\DeskOos\\releases\\[A-Za-z0-9_.-]+$') { throw 'OOS_RELEASE_INVALID' }
 $manifest = Get-Content (Join-Path $PatchRoot 'forensic-patch.json') -Raw | ConvertFrom-Json
 if ($manifest.revision -ne $Revision -or $manifest.branch -ne 'feature/oos-batch-mcp-v1') { throw 'OOS_PATCH_IDENTITY_INVALID' }
+if ($manifest.files.Count -lt 20) { throw 'OOS_FORENSIC_PATCH_INCOMPLETE' }
 foreach ($file in $manifest.files) {
   $allowed = $file.path -match '^packages/desk-oos-batch/(forensics\.js|index\.js|src/(domain|adapter|application)/forensic-[a-z-]+\.js|test/forensic-[a-z-]+\.test\.js)$'
-  $allowed = $allowed -or $file.path -match '^mcp_gpt_desk/(src/oos-(forensic-tools|mcp-tool|mcp-server|runtime|http-server)\.js|scripts/(build_oos_forensic_index|verify_oos_forensics|oos_forensic_baseline)\.mjs|test/oos_forensic_tools\.test\.js)$'
+  $allowed = $allowed -or $file.path -match '^mcp_gpt_desk/(src/oos-(forensic-tools|mcp-tool|mcp-server|runtime|http-server)\.js|scripts/(build_oos_forensic_index|verify_oos_forensics|verify_oos_forensics_external|oos_forensic_baseline)\.mjs|test/oos_forensic_tools\.test\.js)$'
   if (!$allowed) { throw "OOS_NON_FORENSIC_PATCH_FORBIDDEN: $($file.path)" }
   if ((Get-FileHash (Join-Path $PatchRoot $file.path) -Algorithm SHA256).Hash.ToLower() -ne $file.sha256) { throw 'OOS_PATCH_HASH_INVALID' }
 }
