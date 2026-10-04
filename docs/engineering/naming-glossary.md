@@ -36,6 +36,9 @@
 
 - `OosDayWorkflow` : transport technique pré-market → plan externe figé → replay TradingView. Ne désigne pas un analyste ou un moteur de scénario.
 - `OosBatchCommand` : commande persistante de cette orchestration, jamais un ordre broker.
+- `ResearchCycle` : observation/diagnostic/hypothèses/critique sur preuves persistées ; COMPLETED signifie dossier de recherche, pas edge validé.
+- `ScenarioSelfAudit` : audit d'un scénario/tentative, avec inconnus explicites et séparation des cinq couches de qualité.
+- `ResearchProtocol` : challenger préenregistré non exécutable ; distinct d'un résultat d'expérience.
 
 - commands : verbe d'intention, ex. `PublishStrategyVersion` ;
 - queries : résultat demandé, ex. `GetPortfolioExposure` ;

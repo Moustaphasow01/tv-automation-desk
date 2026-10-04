@@ -63,6 +63,7 @@
     {
       "owner": "research",
       "patterns": [
+        "^research_state\\.t3_",
         "^research_"
       ]
     },
