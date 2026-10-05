@@ -26,7 +26,9 @@ export function validateCitedClaims({ claims, allowedRefs }) {
     requireResearch(typeof claim.statement === "string" && claim.statement.length > 0, "RESEARCH_CLAIM_REQUIRED");
     requireResearch(["INTERPRETATION", "HYPOTHESIS", "UNKNOWN"].includes(claim.kind), "RESEARCH_CLAIM_KIND_INVALID");
     requireResearch(claim.kind === "UNKNOWN" || claim.evidence_refs?.length > 0, "RESEARCH_CITATION_REQUIRED");
-    requireResearch((claim.evidence_refs ?? []).every(ref => known.has(ref)), "RESEARCH_CITATION_UNKNOWN");
+    const unknown_refs=(claim.evidence_refs ?? []).filter(ref => !known.has(ref));
+    requireResearch(unknown_refs.length===0, "RESEARCH_CITATION_UNKNOWN", {unknown_refs,
+      scope:'RESEARCHER_CLAIM',automatic_paid_retry:false});
     requireResearch(claim.kind !== "UNKNOWN" || Boolean(claim.missing_reason), "RESEARCH_UNKNOWN_REASON_REQUIRED");
   }
 }
