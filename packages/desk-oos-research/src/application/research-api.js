@@ -1,7 +1,7 @@
 import { requireResearch } from "../domain/research-evidence.js";
 
 export class ResearchApi {
-  constructor({ cycle, memory, hypotheses, discovery,caseAuditor }) { Object.assign(this, { cycle, memory, hypotheses, discovery,caseAuditor }); }
+  constructor({ cycle, memory, hypotheses, discovery,caseAuditor,science }) { Object.assign(this, { cycle, memory, hypotheses, discovery,caseAuditor,science }); }
   async start(args) { return this.cycle.start(args); }
   async advance({ cycle_id, maximum_cases = 1 }) {
     return this.memory.executeExclusive(cycle_id, async () => {
@@ -29,9 +29,17 @@ export class ResearchApi {
     requireResearch(cycle, "RESEARCH_CYCLE_NOT_FOUND");
     const events = await this.memory.listEvents(cycle_id);
     const findings = await this.cycle.all(cycle_id, "finding");
+    const experimentsExecuted = findings.filter(row => row.payload.scientific_stage === 'EXPERIMENT_DECISION'
+      && row.payload.experiment_executed === true).length;
+    const caseCritiques=(await this.cycle.all(cycle_id,'critique')).filter(row=>row.payload.audit_scope==='SCENARIO_REVIEW');
     return { ...cycle, model_requests: events.filter(e => e.type === "MODEL_REQUESTED").length,
       last_blocking_error: events.filter(e => e.type === "RESEARCH_STEP_BLOCKED").at(-1)?.payload ?? null,
-      hypotheses_tested: (await this.cycle.all(cycle_id, "hypothesis")).length,
+      hypotheses_tested: experimentsExecuted, hypotheses_tested_definition: 'Completed registered experiments, not observational proposals.',
+      hypotheses_registered: this.hypotheses ? (await this.hypotheses.all(cycle_id)).length : (await this.cycle.all(cycle_id,'hypothesis')).length,
+      scenario_reviews_persisted: findings.filter(row=>row.payload.case_id).length,
+      scenario_reviews_audited: caseCritiques.length,
+      scenario_reviews_independently_audited: caseCritiques.filter(row=>row.payload.independent===true).length,
+      experiments_executed: experimentsExecuted,
       number_of_hypotheses_proposed: findings.reduce((sum, f) => sum + (f.payload.proposals?.length ?? 0), 0),
       hypotheses_without_persisted_support: findings.filter(f => f.payload.reason === "NO_PERSISTED_SUPPORT").length,
       significance_claim_allowed: false,

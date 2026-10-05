@@ -276,11 +276,11 @@ test('invalid injected clock rolls back without writing a cycle', async () => {
 for (const [index, kind] of KINDS.entries()) {
   test(`findArtifact reads ${kind} by global id without cycle scope`, async () => {
     const { mock, memory } = setup([
-      { match: new RegExp(`FROM research_state.${TABLES[index]}`), rows: [ARTIFACT], check: (p, sql) => {
+      { match: new RegExp(`FROM research_state.${TABLES[index]}`), rows: [{...ARTIFACT,cycle_id:'cycle-1'}], check: (p, sql) => {
         assert.deepEqual(p, [ARTIFACT.id]); assert.match(sql, /WHERE id=\$1 ORDER BY created_at,cycle_id COLLATE "C" LIMIT 1/);
-      } }, { match: /SELECT id,payload,payload_hash/, rows: [] },
+      } }, { match: /SELECT cycle_id,id,payload,payload_hash/, rows: [] },
     ]);
-    assert.deepEqual(await memory.findArtifact({ kind, id: ARTIFACT.id }), ARTIFACT);
+    assert.deepEqual(await memory.findArtifact({ kind, id: ARTIFACT.id }), {...ARTIFACT,cycle_id:'cycle-1'});
     assert.equal(await memory.findArtifact({ kind, id: 'absent' }), null);
     mock.done();
   });
@@ -456,7 +456,7 @@ test('real PostgreSQL: idempotent migration, atomic events, immutable evidence a
       });
       await t.test('findArtifact sees prior ideas without cycle scope', async () => {
         for (const kind of ['hypothesis', 'experiment']) {
-          assert.deepEqual(await memory.findArtifact({ kind, id: kind }), { ...ARTIFACT, id: kind });
+          assert.deepEqual(await memory.findArtifact({ kind, id: kind }), { ...ARTIFACT, id: kind, cycle_id:'cycle-1' });
         }
         assert.equal(await memory.findArtifact({ kind: 'hypothesis', id: 'absent' }), null);
       });

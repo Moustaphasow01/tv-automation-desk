@@ -36,3 +36,10 @@ test('a failed or incomplete day cannot be silently omitted from corpus coverage
   const f=await fixture();f.queue.list=async()=>f.sources.map(s=>({...s,status:'BLOCKED'}));
   assert.equal((await new ResearchCorpusCoordinator(f).tick()).state,'WAITING_DAY_AUDITS');
 });
+test('global audit completion automatically routes into scientific tasks, not an owner checkpoint',async()=>{
+  const f=await fixture(),coordinator=new ResearchCorpusCoordinator(f),first=await coordinator.tick();
+  const cycle=await f.memory.getCycle(first.cycle_id);
+  await f.memory.transition({cycle_id:cycle.cycle_id,expected_revision:cycle.revision,status:'COMPLETED'});
+  f.api.science={tick:async args=>({state:'TEST_SCIENTIFIC_TASK_STARTED',...args})};
+  assert.equal((await coordinator.tick()).state,'TEST_SCIENTIFIC_TASK_STARTED');
+});

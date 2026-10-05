@@ -11,3 +11,5 @@ export { freezeChallengerRationale } from './src/domain/research-challenger-rati
 export { ResearchCorpusCoordinator } from './src/application/research-corpus-coordinator.js';
 export { researchResourceAdmission } from './src/domain/research-resource-admission.js';
 export {ResearchCaseAuditor} from './src/application/research-case-auditor.js';
+export { ResearchScientificLoop } from './src/application/research-scientific-loop.js';
+export { freezePublishedAudit, executePublishedAudit } from './src/domain/published-counterfactual-experiment.js';

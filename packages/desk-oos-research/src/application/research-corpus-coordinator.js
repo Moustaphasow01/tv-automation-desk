@@ -8,8 +8,9 @@ export class ResearchCorpusCoordinator {
     const tasks=await this.queue.list(),states=new Map(tasks.map(t=>[t.cycle_id,t.status]));
     if(this.sources.some(s=>states.get(s.cycle_id)!=='COMPLETED'))return {state:'WAITING_DAY_AUDITS'};
     const count=this.sources.reduce((n,s)=>n+s.maximum_cases,0);
-    const cycle=await this.api.start({dates:this.sources.map(s=>s.date),budget:{maximum_model_calls:Math.ceil(count/100)*11+50}});
-    if(cycle.status==='COMPLETED')return {state:'GLOBAL_DISCOVERY_COMPLETED',cycle_id:cycle.cycle_id};
+    const cycle=await this.api.start({dates:this.sources.map(s=>s.date),budget:{maximum_model_calls:Math.ceil(count/100)*21+100}});
+    if(cycle.status==='COMPLETED')return this.api.science
+      ?this.api.science.tick({cycle_id:cycle.cycle_id}):{state:'GLOBAL_DISCOVERY_COMPLETED',cycle_id:cycle.cycle_id};
     if(cycle.status==='OBSERVING')await this.api.advance({cycle_id:cycle.cycle_id});
     if((await this.api.status({cycle_id:cycle.cycle_id})).status==='DIAGNOSING')await this.seed(cycle.cycle_id);
     await this.queue.schedule({cycle_id:cycle.cycle_id,priority:-100});

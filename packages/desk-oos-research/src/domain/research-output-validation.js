@@ -5,8 +5,9 @@ export function validateResearchOutput(value, schema, path = "$", depth = 0) {
   requireResearch(depth < 30, "RESEARCH_OUTPUT_DEPTH_INVALID", { path });
   const types = Array.isArray(schema.type) ? schema.type : [schema.type];
   const actual = value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
-  requireResearch(types.includes(actual), "RESEARCH_OUTPUT_TYPE_INVALID", { path });
-  if (actual === "number") requireResearch(Number.isFinite(value), "RESEARCH_OUTPUT_NUMBER_INVALID", { path });
+  requireResearch(compatibleType(types, actual, value),
+    "RESEARCH_OUTPUT_TYPE_INVALID", { path });
+  if (actual === "number") validateNumber(value, schema, path);
   if (schema.enum) requireResearch(schema.enum.includes(value), "RESEARCH_OUTPUT_ENUM_INVALID", { path });
   if (actual === "object") validateObject(value, schema, path, depth);
   if (actual === "array") {
@@ -16,6 +17,16 @@ export function validateResearchOutput(value, schema, path = "$", depth = 0) {
   }
   if (actual === "string") requireResearch(value.length <= 50000, "RESEARCH_OUTPUT_TEXT_TOO_LARGE", { path });
   return value;
+}
+
+function compatibleType(types, actual, value) {
+  return types.includes(actual) || (types.includes('integer') && Number.isSafeInteger(value));
+}
+
+function validateNumber(value, schema, path) {
+  requireResearch(Number.isFinite(value), 'RESEARCH_OUTPUT_NUMBER_INVALID', { path });
+  if (schema.minimum !== undefined) requireResearch(value >= schema.minimum, 'RESEARCH_OUTPUT_NUMBER_RANGE_INVALID', { path });
+  if (schema.maximum !== undefined) requireResearch(value <= schema.maximum, 'RESEARCH_OUTPUT_NUMBER_RANGE_INVALID', { path });
 }
 
 function validateObject(value, schema, path, depth) {

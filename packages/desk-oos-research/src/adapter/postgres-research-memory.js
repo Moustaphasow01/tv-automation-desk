@@ -225,7 +225,7 @@ async function listArtifacts(pool, { cycle_id, kind, limit = 50, cursor }) {
 async function findArtifact(pool, { kind, id }) {
   const table = artifactTable(kind);
   textValue(id, 'ARTIFACT_ID_REQUIRED');
-  const result = await pool.query(`SELECT ${ARTIFACT_COLUMNS} FROM ${table}
+  const result = await pool.query(`SELECT cycle_id,${ARTIFACT_COLUMNS} FROM ${table}
     WHERE id=$1 ORDER BY created_at,cycle_id COLLATE "C" LIMIT 1`, [id]);
   return result.rows[0] || null;
 }

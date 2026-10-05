@@ -2,9 +2,9 @@
 
 ## État réel de livraison
 
-Le lot implémente observation → diagnostic → familles → hypothèses → recherche de contre-exemples → critique indépendante → dossier de recherche/protocole. Un runner autonome borné peut avancer ce cycle et reprendre les checkpoints. Il n'exécute aucune expérience, ne promeut aucun challenger et ne modifie aucun champion.
+Le lot implémente observation → diagnostic → familles → hypothèses → recherche de contre-exemples → critique indépendante → dossier de recherche/protocole. Le service poursuit ensuite la recherche globale et sélectionne automatiquement des expériences audit-only depuis les publications ENGINE existantes. Il n'exécute pas encore de nouveau moteur challenger/replay, ne promeut aucun challenger et ne modifie aucun champion.
 
-**VPS activé et vérifié sur la release c034d635f482df68bbc6ae5a2682a441aaf3194c.** Migrations additives 075/076 : 14 tables et 35 indexes research. Catalogue HTTPS public : 53 outils, dont six research. DCR, PKCE S256, scopes read/write et refus des droits insuffisants ont été testés réellement. L'audit LLM exhaustif juillet–août n'est pas encore achevé.
+**VPS activé et vérifié sur la release 274659ca0071ae045cee0398f5b721d666d2afae avant le lot scientifique suivant.** Migrations additives 075/076 : 14 tables et 35 indexes research. Catalogue HTTPS public : 53 outils, dont six research. DCR, PKCE S256, scopes read/write et refus des droits insuffisants ont été testés réellement. Le quota est réellement lisible avec le profil Codex autorisé (16 % utilisés lors du contrôle du 05/10). L'audit LLM exhaustif juillet–août n'est pas encore achevé.
 
 Acceptance réelle : 02/07 comporte 33 scénarios et 38 attempts, énumérés depuis le forensic index. Les 38 audits factuels et l'audit de plan sont persistés ; les premières reviews Astra/xhigh sont persistées. Le test E2E a injecté une panne après réception de la réponse modèle, rouvert le host, repris automatiquement et persisté la review sans seconde inférence. Un audit factuel n'est pas une review LLM : ne pas annoncer 38 reviews achevées. Le service automatique DeskOosResearch a été installé et lancé réellement ; sa file durable contient les 44 journées existantes de juillet–août.
 
@@ -79,6 +79,14 @@ Le service `DeskOosResearch` utilise `C:\ProgramData\DeskOos\config\oos.research
 
 Le scheduler sélectionne automatiquement le pilote puis les dates COMPLETED juillet–août. Il suit les tâches persistantes ; chaque étape de diagnostic, discovery ou critique est bornée. Après tous les dossiers journaliers COMPLETED, la comparaison globale réutilise les reviews hashées au lieu de payer une seconde analyse de chaque scénario. Un dossier BLOCKED n'est jamais silencieusement omis. Les hypothèses récurrentes conservent leur définition originale et reçoivent une projection de preuves par cycle.
 
+Le lot scientifique possède un domaine pur `published-counterfactual-experiment.js` et une application `research-scientific-loop.js`, dans le même namespace isolé. Le coordinateur global appelle cette application après le dossier inter-journées, sans attendre une confirmation owner. Les consommateurs sont le scheduler et les six outils research existants (lecture de protocoles/résultats). Le registre d'expériences legacy n'est pas réutilisé : il ne possède pas cette frontière de publications immuables et de promotion interdite. Aucun nouveau service ni nouvelle migration.
+
+Pour une hypothèse avec critique indépendante favorable, le designer choisit le plus petit test disponible ou signale explicitement `NEEDS_ISOLATED_RUNTIME`. Seul un audit de management utilisant BE0.5/BE1/BE1.5/P1@1R déjà publiés est exécutable dans cet adapter. Il ne transforme pas une hypothèse de confirmation/entrée en une règle BE. Le designer ne reçoit pas les profits des variantes ; le protocole fixe échantillon complet éligible, hashes des publications, mécanisme, seuils, risques et limites avant la comparaison. Une reprise relit le protocole gelé et ne paie pas un second design.
+
+REAL et contre-factuel sont comparés sur les mêmes trades publiés. Une publication absente reste NOT_PERSISTED, jamais zéro. Les runners dégradés sont listés, avec provenance. Les timestamps de sorties, USD, fills et DD portfolio d'une nouvelle stratégie ne sont jamais copiés des résultats REAL ni inférés. Les conclusions sont REJECTED_DEVELOPMENT_AUDIT, INCOMPLETE_EVIDENCE ou DEVELOPMENT_AUDIT_SUPPORTED ; aucune ne signifie validation/holdout ni promotion. Les hypothèses rejetées, non testables et résultats incomplets sont mémorisés, puis la suivante est choisie. Un compteur de tests exécutés est distingué du nombre de propositions/associations.
+
+`verify_oos_research_science.mjs` teste ce transport sur les publications réelles 02/07 et 08/07, dans un cycle TECHNICAL_ACCEPTANCE_ONLY séparé. Ce n'est pas une sélection de stratégie ni un nouvel OOS. Il vérifie freeze/read-back, redémarrage du host, idempotence, provenance et invariance du corpus, sans appeler de modèle ou rejouer le marché.
+
 Avant le clustering, chaque review reçoit une audit séparée et immuable, référencée par le hash du finding original. Les interprétations substantielles passent par une nouvelle session du rôle critique. Si les sept réponses sont UNKNOWN et aucune hypothèse n'est formulée, le contrôle technique conserve UNKNOWN sans prétendre à une inférence indépendante. NEEDS_CORRECTION n'écrase jamais la review initiale. Les critiques de scénarios sont comptées séparément des critiques d'hypothèses.
 
 ## Sémantique scientifique
@@ -115,7 +123,7 @@ La gestion des ressources lit `account/rateLimits/read` du compte de service ava
 
 Tests dédiés : audit >5 scénarios/toutes tentatives, données inconnues, exclusion smoke/gap, absence de futurs prix, hash/idempotence (y compris ordre de clés JSON), budget/requêtes incertaines, modèle réellement exposé, critique séparée, protocoles sans exécuteur, cycle autonome borné complet. Tests MCP locaux : 47→53 uniquement si activation, scopes et champs inconnus rejetés. Tests PostgreSQL 16 réel en instance temporaire : migration rejouable, concurrence, rollback, immutabilité, rôles physiques (63 tests passés). Aucun serveur de marché ni replay n'est utilisé par ces tests.
 
-Suite dédiée exécutée après ajout du coordinateur, projections de cohortes, admission quota, audits de reviews et profil provider explicite : **120/120 PASS**, zéro skip, PostgreSQL 16 réel inclus. Non-régression : **78 tests OOS + 15 tests MCP/forensic/OAuth PASS**. L'inférence de recherche Astra/xhigh et sa reprise ont été testées réellement sur VPS.
+Suite dédiée exécutée après ajout de la boucle scientifique : **132/132 PASS**, zéro skip, PostgreSQL 16 réel inclus. Dernier retest OOS + forensic/OAuth clients : **82/82 PASS** ; les lots antérieurs avaient aussi vérifié les autres tests MCP/OAuth. L'inférence de recherche Astra/xhigh et sa reprise ont été testées réellement sur VPS. Après refactor des nouvelles fonctions, le contrôle statique conserve exactement les comptes de dette historiques 271/727/97/6 ; aucune hausse introduite.
 
 Diagnostic quota réel : le helper de sanitisation excluait CODEX_HOME si le caller ne lui passait pas explicitement le profil autorisé. Le transport CLI d'inférence le passait déjà ; la requête metadata ne le faisait pas. Le lecteur metadata doit utiliser le même profil service explicitement, sans hériter des credentials OOS. Test de non-régression dédié : home service conservé, token opérateur exclu.
 
@@ -133,7 +141,7 @@ Baseline exacte comparée à ddd60841110bcf24cb20fe88b3282af77f88792b : 271 fonc
 | temporalité détaillée, rearm, portfolio et qualité des données | partiellement accessible dans les snapshots, rubriques causales à étendre |
 | régimes point-in-time / path score / graphe causal | bloqué sans définitions préenregistrées et données suffisantes ; pas d'estimation |
 | lifecycle complet hypothèses VALIDATED/FAILED et findings résolus | versions/reviews à ajouter, pas de mutation historique |
-| challenger scorecard / exécution SHADOW / walk-forward roulant | futur module expérimental, jeux non contaminés requis |
+| challenger scorecard / exécution SHADOW / walk-forward roulant | comparaison audit-only publiée implémentée ; véritable executor de copies research et jeux non contaminés encore requis |
 | contrôle statistique des découvertes multiples | déclaration/comptage implémentés ; test statistique non implémenté |
 | worker permanent supervisé / UI recherche / déploiement VPS | service automatique actif sur VPS, 44 tâches persistantes, progression pilote réelle ; supervision Codex heartbeat active ; UI recherche non réalisée |
 
