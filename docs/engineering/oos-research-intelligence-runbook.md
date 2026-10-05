@@ -111,6 +111,19 @@ Validation avant déploiement du correctif : **151 tests research/host PASS**, z
 
 ## Sémantique scientifique
 
+### Reprise des citations d'hypothèses — 06/10/2026
+
+Le critique d'hypothèses peut citer les champs réellement fournis dans `hypothesis` et `cases[n]`.
+Le catalogue lie ces références exactes à un hash canonique vérifié et un pointeur de document,
+classés RESEARCH_HYPOTHESIS ou DERIVED_LOCAL, jamais FACT_ENGINE. Les références de sources
+restent strictement celles des cas sélectionnés ; aucune correction de hash tronqué n'est autorisée.
+Le prompt et l'entrée historiques restent identiques pour relire une réponse déjà persistée.
+La supervision couvre désormais COUNTEREXAMPLES/CRITIQUING, après vérification du request,
+du contexte, du prompt, du modèle, du verdict et des bindings. Elle n'appelle aucun modèle.
+Les erreurs DIAGNOSING et les requêtes Codex sans réponse restent fail-closed.
+Validation du lot : 161 tests research/host et 95 tests OOS/MCP/OAuth PASS ; architecture et
+migrations PASS. Dette statique préexistante inchangée : 271/727/97, front 1726/1659.
+
 - Chaque scénario et chaque attempt est audité, même sans confirmation ; absence d'événement n'est pas preuve de condition fausse.
 - Les questions A–G sont obligatoires. HTF/biais/rationale historiques non persistés restent NOT_PERSISTED, pas reconstruits a posteriori.
 - Features dérivées uniquement de records/événements publiés. Une hypothèse ne peut injecter ses propres cas ni remplacer les trades.

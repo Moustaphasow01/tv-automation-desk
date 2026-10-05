@@ -28,12 +28,26 @@ function appendDocument(catalog, name, document, hash, classification) {
   }
 }
 
-export function resolveCritiqueCitations({ output, catalog }) {
+/** Only fields actually supplied to the hypothesis critic may be cited. */
+export function hypothesisCitationCatalog({ hypothesis, cases, fingerprint }) {
+  const documents = [{ name: 'hypothesis', row: hypothesis, classification: 'RESEARCH_HYPOTHESIS' },
+    ...cases.map((row, index) => ({ name: `cases[${index}]`, row, classification: 'DERIVED_LOCAL' }))];
+  const catalog = [...new Set(cases.flatMap(row => row.payload.evidence_refs))]
+    .map(ref => ({ ref, source_ref: ref, classification: 'CITED_SOURCE' }));
+  for (const { name, row, classification } of documents) {
+    requireResearch(fingerprint(researchCanonicalJson(row.payload)) === row.payload_hash,
+      'RESEARCH_DOCUMENT_HASH_MISMATCH', { document: name });
+    appendDocument(catalog, name, row.payload, row.payload_hash, classification);
+  }
+  return catalog;
+}
+
+export function resolveCritiqueCitations({ output, catalog, scope = 'SCENARIO_REVIEW_CRITIC' }) {
   const indexed = new Map(catalog.map(binding => [binding.ref, binding]));
   const unknown = output.evidence_refs.filter(ref => !indexed.has(ref));
   requireResearch(unknown.length === 0, 'RESEARCH_CITATION_UNKNOWN', {
     validation_version: CRITIQUE_CITATION_VERSION, unknown_refs: unknown,
-    scope: 'SCENARIO_REVIEW_CRITIC', automatic_paid_retry: false,
+    scope, automatic_paid_retry: false,
   });
   return [...new Set(output.evidence_refs)].map(ref => ({ ...indexed.get(ref) }));
 }

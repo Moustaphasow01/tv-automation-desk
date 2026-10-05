@@ -5,6 +5,7 @@ import { CRITIC_PROMPT } from "../domain/research-role-contract.js";
 import { callResearchModel } from "./research-model-call.js";
 import { validateResearchOutput } from "../domain/research-output-validation.js";
 import { researchCanonicalJson } from "../domain/research-canonical-json.js";
+import { hypothesisCitationCatalog, resolveCritiqueCitations, CRITIQUE_CITATION_VERSION } from '../domain/research-critique-citations.js';
 
 const CRITIQUE_SCHEMA = { type: "object", additionalProperties: false,
   required: ["verdict", "objections", "evidence_refs"], properties: {
@@ -53,27 +54,57 @@ export class ResearchHypotheses {
     const prior = await this.memory.findArtifact({ kind: "critique", id: this.fingerprint(`${cycle_id}|${hypothesis_id}|CRITIQUE`) });
     if (prior) return prior.payload;
     const cycle = await this.memory.getCycle(cycle_id);
-    const hypothesis = (await this.all(cycle_id)).find(r => r.id === hypothesis_id)?.payload;
-    requireResearch(hypothesis && this.model, "RESEARCH_HYPOTHESIS_OR_MODEL_MISSING");
-    const cases = (await this.cycle.all(cycle_id, "scenario_audit")).map(r => r.payload);
-    const selected = cases.filter(c => [...hypothesis.supporting_cases, ...hypothesis.counterexamples,
-      ...hypothesis.winner_regression_set.all_published_winners].includes(c.case_id));
+    const evidence = await this.critiqueEvidence({ cycle_id, hypothesis_id });
+    requireResearch(this.model, 'RESEARCH_HYPOTHESIS_OR_MODEL_MISSING');
     const selection = selectResearchModel(await this.model.capabilities());
     const response = await callResearchModel({ memory: this.memory, model: this.model, fingerprint: this.fingerprint, cycle,
       requestId: this.fingerprint(`${cycle_id}|${hypothesis_id}|CRITIC_MODEL`),
       request: { role: "DESK_AI_RESEARCH_CRITIC", selection, instructions: CRITIC_PROMPT,
-        input: { hypothesis, cases: selected }, output_schema: CRITIQUE_SCHEMA } });
+        input: evidence.input, output_schema: CRITIQUE_SCHEMA } });
     validateResearchOutput(response.output, CRITIQUE_SCHEMA);
     requireResearch(CRITIQUE_SCHEMA.properties.verdict.enum.includes(response.output?.verdict)
       && Array.isArray(response.output.objections) && response.output.objections.length > 0, "RESEARCH_CRITIQUE_REQUIRED");
-    const known = new Set(selected.flatMap(c => c.evidence_refs));
-    requireResearch(Array.isArray(response.output.evidence_refs)
-      && response.output.evidence_refs.every(ref => known.has(ref)), "RESEARCH_CITATION_UNKNOWN");
+    const citation_bindings = resolveCritiqueCitations({ output: response.output, catalog: evidence.catalog,
+      scope: 'HYPOTHESIS_CRITIC' });
     const critique = { ...response.output, hypothesis_id, independent: true, isolated_session: true,
+      citation_validation_version: CRITIQUE_CITATION_VERSION, citation_bindings,
       model: selection, prompt_sha256: this.fingerprint(CRITIC_PROMPT), actual_telemetry: response.telemetry ?? null,
       generated_at: this.clock(), classification: "RESEARCH_CRITIQUE" };
     await this.cycle.save(cycle_id, "critique", this.fingerprint(`${cycle_id}|${hypothesis_id}|CRITIQUE`), critique);
     return critique;
+  }
+  async critiqueEvidence({ cycle_id, hypothesis_id }) {
+    const hypothesis = (await this.all(cycle_id)).find(row => row.id === hypothesis_id);
+    requireResearch(hypothesis, 'RESEARCH_HYPOTHESIS_OR_MODEL_MISSING');
+    const ids = [...hypothesis.payload.supporting_cases, ...hypothesis.payload.counterexamples,
+      ...hypothesis.payload.winner_regression_set.all_published_winners];
+    const cases = (await this.cycle.all(cycle_id, 'scenario_audit')).filter(row => ids.includes(row.payload.case_id));
+    return { input: { hypothesis: hypothesis.payload, cases: cases.map(row => row.payload) },
+      catalog: hypothesisCitationCatalog({ hypothesis, cases, fingerprint: this.fingerprint }) };
+  }
+  async assessRecovery({ cycle_id }) {
+    const completed = new Set((await this.cycle.all(cycle_id, 'critique')).map(row => row.payload.hypothesis_id));
+    const pending = (await this.all(cycle_id)).find(row => !completed.has(row.id));
+    requireResearch(pending, 'RESEARCH_RECOVERY_NOT_APPLICABLE');
+    const request_id = this.fingerprint(`${cycle_id}|${pending.id}|CRITIC_MODEL`);
+    const events = await this.memory.listEvents(cycle_id);
+    const delivered = events.find(e => e.type === 'MODEL_RESPONSE_RECEIVED' && e.payload.request_id === request_id);
+    requireResearch(delivered, 'RESEARCH_RECOVERY_RESPONSE_NOT_PERSISTED');
+    const evidence = await this.critiqueEvidence({ cycle_id, hypothesis_id: pending.id });
+    requireResearch(delivered.payload.context_sha256 === this.fingerprint(JSON.stringify(evidence.input)),
+      'RESEARCH_MODEL_RESPONSE_CONTEXT_CONFLICT');
+    const requested = events.find(e => e.type === 'MODEL_REQUESTED' && e.payload.request_id === request_id);
+    requireResearch(requested?.payload.role === 'DESK_AI_RESEARCH_CRITIC'
+      && requested.payload.context_sha256 === delivered.payload.context_sha256
+      && requested.payload.prompt_sha256 === delivered.payload.prompt_sha256
+      && delivered.payload.prompt_sha256 === this.fingerprint(CRITIC_PROMPT), 'RESEARCH_RECOVERY_REQUEST_LINKAGE_FAILED');
+    requireResearch(requested.payload.model.identifier === delivered.payload.response.model_identifier
+      && requested.payload.model.reasoning_effort === delivered.payload.response.reasoning_effort, 'RESEARCH_MODEL_DRIFT');
+    validateResearchOutput(delivered.payload.response.output, CRITIQUE_SCHEMA);
+    const bindings = resolveCritiqueCitations({ output: delivered.payload.response.output,
+      catalog: evidence.catalog, scope: 'HYPOTHESIS_CRITIC' });
+    return { validation_version: CRITIQUE_CITATION_VERSION, hypothesis_id: pending.id, request_id,
+      citation_bindings_hash: this.fingerprint(researchCanonicalJson(bindings)), new_model_calls: 0 };
   }
   async experiment({ cycle_id, hypothesis_id, protocol }) {
     const experiment_id = this.fingerprint(researchCanonicalJson({ hypothesis_id, protocol }));

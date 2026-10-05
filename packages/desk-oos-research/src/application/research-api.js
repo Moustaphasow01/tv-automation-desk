@@ -52,9 +52,10 @@ export class ResearchApi {
   }
   async assessRecovery({cycle_id}) {
     const cycle=await this.memory.getCycle(cycle_id);
-    requireResearch(cycle?.status==='CLUSTERING','RESEARCH_RECOVERY_NOT_APPLICABLE');
+    const recovery = { CLUSTERING: this.caseAuditor, COUNTEREXAMPLES: this.hypotheses, CRITIQUING: this.hypotheses };
+    requireResearch(recovery[cycle?.status], 'RESEARCH_RECOVERY_NOT_APPLICABLE');
     if(this.cycle.observer)await this.cycle.observer.assertCorpus(cycle.corpus_hash);
-    return {...await this.caseAuditor.assessRecovery({cycle_id}),expected_revision:cycle.revision};
+    return {...await recovery[cycle.status].assessRecovery({cycle_id}),expected_revision:cycle.revision};
   }
   async supervisionStatus() {
     const event=await this.memory.latestEvent?.('RESEARCH_SUPERVISION_PASS');
