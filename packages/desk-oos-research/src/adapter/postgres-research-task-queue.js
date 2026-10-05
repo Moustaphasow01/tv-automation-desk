@@ -61,6 +61,17 @@ export class PostgresResearchTaskQueue {
       ON CONFLICT(worker_id) DO UPDATE SET state=EXCLUDED.state,task_id=EXCLUDED.task_id,heartbeat_at=EXCLUDED.heartbeat_at`,
       [worker_id,state,task_id,this.clock()]);
   }
+  async resumeBlocked({task,proof}) {
+    if(task.status!=='BLOCKED' || task.last_error!=='RESEARCH_CITATION_UNKNOWN'
+      || proof.validation_version!=='RESEARCH_CRITIQUE_CITATIONS_V2' || proof.new_model_calls!==0
+      || !/^[a-f0-9]{64}$/.test(proof.request_id) || !Number.isSafeInteger(proof.expected_revision))
+      throw error('RESEARCH_RECOVERY_PROOF_INVALID');
+    const result=await this.pool.query(`UPDATE research_state.t3_tasks SET status='READY',last_error=NULL,
+      available_at=$5,updated_at=$5 WHERE task_id=$1 AND status='BLOCKED' AND last_error=$2 AND updated_at=$3
+      AND EXISTS(SELECT 1 FROM research_state.t3_cycles c WHERE c.cycle_id=$1 AND c.revision=$4)
+      RETURNING task_id`,[task.task_id,task.last_error,task.updated_at,proof.expected_revision,this.clock()]);
+    return result.rowCount===1;
+  }
   async incident(task,{code,severity='CRITICAL'}) {
     const id=createHash('sha256').update(`${task.task_id}|${code}|${task.attempts}`).digest('hex');
     await this.pool.query(`INSERT INTO research_state.t3_incidents(incident_id,task_id,severity,code,payload,created_at)

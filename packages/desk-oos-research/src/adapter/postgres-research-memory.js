@@ -27,8 +27,16 @@ export function PostgresResearchMemory({ pool, clock }) {
     listArtifacts: query => listArtifacts(pool, query),
     addEvent: command => addEvent(context, command),
     listEvents: cycleId => listEvents(pool, cycleId),
+    latestEvent: type => latestEvent(pool, type),
     executeExclusive: (cycleId, operation) => executeExclusive(pool, cycleId, operation),
   });
+}
+
+async function latestEvent(pool,type) {
+  textValue(type,'EVENT_TYPE_REQUIRED');
+  const result=await pool.query(`SELECT ${EVENT_COLUMNS} FROM research_state.t3_events
+    WHERE type=$1 ORDER BY created_at DESC,event_id COLLATE "C" DESC LIMIT 1`,[type]);
+  return result.rows[0]??null;
 }
 
 function requireValue(condition, code) {

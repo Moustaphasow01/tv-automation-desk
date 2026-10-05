@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { ResearchScheduler,ResearchCorpusCoordinator } from '@tv-automation/desk-oos-research';
+import { ResearchScheduler,ResearchCorpusCoordinator,ResearchSupervision } from '@tv-automation/desk-oos-research';
 import { openResearchHost } from '../src/oos-research-host.js';
 
 const config=JSON.parse(await readFile(process.env.OOS_BATCH_CONFIG,'utf8'));
@@ -10,7 +10,7 @@ const data=result=>result.structuredContent ?? result;
 let stopping=false;
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{stopping=true;});
 const scheduler=new ResearchScheduler({api:host.api,queue:host.queue,worker_id:`vps-research-${randomUUID()}`});
-let coordinator;
+let coordinator,supervision;
 async function enqueueCorpus() {
   const days=[];
   for(const month of ['2026-07','2026-08']) {
@@ -30,12 +30,19 @@ async function enqueueCorpus() {
     sources.push({date:day.date,cycle_id:cycle.cycle_id,maximum_cases});
   }
   coordinator=new ResearchCorpusCoordinator({api:host.api,queue:host.queue,sources});
+  const anchor=sources.find(s=>s.date==='2026-07-02')??sources[0];
+  if(anchor)supervision=new ResearchSupervision({api:host.api,queue:host.queue,cycle_id:anchor.cycle_id,
+    worker_id:scheduler.worker_id,interval_ms:config.research.supervision_interval_ms??1800000});
   console.log(JSON.stringify({event:'research.corpus_scheduled',enumerated:days.length,scheduled:eligible.length}));
 }
 try {
   if(process.argv.includes('--enqueue-corpus'))await enqueueCorpus();
   while(!stopping) {
     try {
+      if(supervision) {
+        const pass=await supervision.tick();
+        if(pass.state==='SUPERVISED')console.log(JSON.stringify({event:'research.supervision_pass',...pass}));
+      }
       const step=await scheduler.tick();
       console.log(JSON.stringify({event:'research.scheduler_tick',state:step.state,task_id:step.task_id,checkpoint:step.checkpoint,code:step.code}));
       if(step.state==='IDLE' && coordinator) {

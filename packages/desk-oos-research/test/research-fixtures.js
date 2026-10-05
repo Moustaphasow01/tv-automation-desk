@@ -41,6 +41,7 @@ export class MemoryFixture {
   }
   async addEvent(row) { if (!this.events.some(e => e.event_id === row.event_id)) this.events.push(row); }
   async listEvents(cycle_id) { return this.events.filter(e => e.cycle_id === cycle_id); }
+  async latestEvent(type) { return this.events.filter(e=>e.type===type).at(-1)??null; }
   async executeExclusive(id, operation) {
     if (this.locked.has(id)) throw new Error("RESEARCH_CYCLE_BUSY");
     this.locked.add(id); try { return await operation(); } finally { this.locked.delete(id); }

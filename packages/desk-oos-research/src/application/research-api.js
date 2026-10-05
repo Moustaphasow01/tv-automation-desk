@@ -47,7 +47,20 @@ export class ResearchApi {
       significance_claim_allowed: false,
       reports: Object.fromEntries(await Promise.all(["scenario_audit", "plan_audit", "finding", "family", "hypothesis", "critique", "experiment"]
         .map(async kind => [kind, (await this.cycle.all(cycle_id, kind)).length]))),
+      supervision:await this.supervisionStatus(),
       champion_write_capability: false, broker_capability: false, replay_capability: false };
+  }
+  async assessRecovery({cycle_id}) {
+    const cycle=await this.memory.getCycle(cycle_id);
+    requireResearch(cycle?.status==='CLUSTERING','RESEARCH_RECOVERY_NOT_APPLICABLE');
+    if(this.cycle.observer)await this.cycle.observer.assertCorpus(cycle.corpus_hash);
+    return {...await this.caseAuditor.assessRecovery({cycle_id}),expected_revision:cycle.revision};
+  }
+  async supervisionStatus() {
+    const event=await this.memory.latestEvent?.('RESEARCH_SUPERVISION_PASS');
+    if(!event)return {available:false,reason:'NO_EXECUTION_RECORDED'};
+    return {available:true,event_id:event.event_id,event_hash:event.payload_hash,...event.payload,
+      overdue:Date.parse(this.cycle.clock())>Date.parse(event.payload.next_run_at)+120000};
   }
   async artifacts(args) { return this.memory.listArtifacts(args); }
   async scorecard(args) {

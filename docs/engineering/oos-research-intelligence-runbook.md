@@ -93,6 +93,22 @@ Acceptance VPS réellement PASS : trois publications pairées disponibles, aucun
 
 Avant le clustering, chaque review reçoit une audit séparée et immuable, référencée par le hash du finding original. Les interprétations substantielles passent par une nouvelle session du rôle critique. Si les sept réponses sont UNKNOWN et aucune hypothèse n'est formulée, le contrôle technique conserve UNKNOWN sans prétendre à une inférence indépendante. NEEDS_CORRECTION n'écrase jamais la review initiale. Les critiques de scénarios sont comptées séparément des critiques d'hypothèses.
 
+## Plan de fiabilisation — 05/10/2026
+
+1. Identifier le cas réellement bloqué dans l'ordre déterministe des audits, puis relier sa réponse critique au request journal. Ne pas confondre la prochaine ligne SQL sans ORDER BY avec le cas fautif.
+2. Ajouter un catalogue de citations de contre-revue versionné `RESEARCH_CRITIQUE_CITATIONS_V2`. Les sources de marché restent les références du cas et des images vérifiées. Les champs réellement présents de `audit`/`review.result` et le hash de la review sont des références de documents de recherche, jamais FACT_ENGINE.
+3. Préserver sans mutation la review et la réponse brute. Réutiliser le request ID, prompt et contexte historiques pour toute réponse déjà livrée. Les nouveaux requests reçoivent explicitement le catalogue ; ils ont un nouvel ID versionné. Une réponse inconnue/étrangère, un hash modifié ou une requête payée indéterminée restent bloquants.
+4. Intégrer une supervision au service VPS existant, indépendante du desktop. Chaque passage vérifie les tâches bloquées, valide la réponse persistée, journalise la preuve, puis applique un compare-and-swap de BLOCKED vers READY. Aucun changement de révision concurrent, aucun reset des retries, aucune reprise d'une tâche RUNNING/COMPLETED, aucune nouvelle inférence pendant cette validation.
+5. Tester PostgreSQL réel, concurrence/restart, provenance et non-régression. Drainer les appels actifs, sauvegarder, déployer sans migration nouvelle, vérifier le MCP HTTPS puis constater une progression réelle.
+
+`research.supervision_interval_ms` vaut 1 800 000 par défaut. La supervision s'exécute au premier passage puis lorsqu'elle est due, entre deux étapes bornées du worker : elle n'interrompt pas une inférence en cours. Les événements `RESEARCH_SUPERVISION_PASS` contiennent début/fin, prochaines échéances, tâches examinées/récupérées et blocages restant à diagnostiquer. `RESEARCH_RECOVERY_VALIDATED` conserve request ID, hash de review, hash des bindings et révision attendue avant admission. Les codes hors allowlist ne sont jamais débloqués arbitrairement.
+
+`get_research_status.supervision` expose une dernière exécution réelle avec son event hash, ainsi que `overdue`. Sans événement, `NO_EXECUTION_RECORDED` est retourné. Le journal WinSW contient également `research.supervision_pass`. La persistance du passage empêche un redémarrage de payer/rejouer une reprise déjà effectuée.
+
+L'automation Codex est une supervision complémentaire : ACTIVE indique une configuration, pas une exécution. Le 05/10, sa base locale n'enregistrait aucun run malgré la première échéance passée ; ses paramètres ont été réappliqués via l'interface officielle. Ne jamais annoncer son fonctionnement périodique sans `last_run_at`/run observé. La continuité du worker et de la supervision VPS ne dépend pas de cette automation locale.
+
+Validation avant déploiement du correctif : **151 tests research/host PASS**, zéro skip, PostgreSQL réel inclus ; **78 tests OOS PASS** et **17 tests forensic/MCP/OAuth PASS**. Architecture : 646 fichiers vérifiés, PASS. Guard statique global : mêmes erreurs préexistantes (271/727/97/6 et front-session-projection 1726/1659), aucune hausse ni baseline affaiblie. Ces tests ne constituent pas des conclusions scientifiques.
+
 ## Sémantique scientifique
 
 - Chaque scénario et chaque attempt est audité, même sans confirmation ; absence d'événement n'est pas preuve de condition fausse.
@@ -147,6 +163,6 @@ Baseline exacte comparée à ddd60841110bcf24cb20fe88b3282af77f88792b : 271 fonc
 | lifecycle complet hypothèses VALIDATED/FAILED et findings résolus | versions/reviews à ajouter, pas de mutation historique |
 | challenger scorecard / exécution SHADOW / walk-forward roulant | comparaison audit-only publiée implémentée ; véritable executor de copies research et jeux non contaminés encore requis |
 | contrôle statistique des découvertes multiples | déclaration/comptage implémentés ; test statistique non implémenté |
-| worker permanent supervisé / UI recherche / déploiement VPS | service automatique actif sur VPS, 44 tâches persistantes, progression pilote réelle ; supervision Codex heartbeat active ; UI recherche non réalisée |
+| worker permanent supervisé / UI recherche / déploiement VPS | service automatique actif sur VPS, 44 tâches persistantes ; supervision VPS journalisée ajoutée ; heartbeat Codex reconfiguré, exécution locale à prouver ; UI recherche non réalisée |
 
 Rollback : mettre `research_enabled=false`, arrêter le runner, conserver la mémoire. Ne jamais effacer les tables pour revenir au champion : celui-ci n'a pas changé. Rentabilité future non garantie.

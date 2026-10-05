@@ -43,5 +43,26 @@ test('AUTONOMY E2E: actual PG leases, restart, bounded retry, next task and fenc
     assert.equal(new Set(sessions).size,4);assert.equal((await memory.getCycle(ids[0])).revision,2);
     assert.equal((await scoped.query('SELECT count(*)::int AS n FROM research_state.t3_workers')).rows[0].n,2);
     const query=await scoped.query('SELECT count(*)::int AS n FROM research_state.t3_events');assert.equal(query.rows[0].n,6);
+    const third=createHash('sha256').update('recoverable').digest('hex');
+    await memory.beginCycle({cycle_id:third,input_hash:third,corpus_hash:third,definition:{test_only:true}});
+    await queue.schedule({cycle_id:third});const failed=await queue.claim({worker_id:'citation-failure'});
+    const blocked=await queue.settle(failed,{status:'BLOCKED',code:'RESEARCH_CITATION_UNKNOWN'});
+    const proof={validation_version:'RESEARCH_CRITIQUE_CITATIONS_V2',request_id:'a'.repeat(64),new_model_calls:0,expected_revision:0};
+    await assert.rejects(queue.resumeBlocked({task:blocked,proof:{...proof,new_model_calls:1}}),{code:'RESEARCH_RECOVERY_PROOF_INVALID'});
+    await memory.transition({cycle_id:third,expected_revision:0,status:'CLUSTERING',checkpoint:{test_only:true}});
+    assert.equal(await queue.resumeBlocked({task:blocked,proof}),false);
+    const results=await Promise.all([queue.resumeBlocked({task:blocked,proof:{...proof,expected_revision:1}}),
+      queue.resumeBlocked({task:blocked,proof:{...proof,expected_revision:1}})]);
+    assert.equal(results.filter(Boolean).length,1);
+    const restored=(await queue.list()).find(t=>t.task_id===third);
+    assert.equal(restored.attempts,blocked.attempts);assert.equal(restored.status,'READY');
+    assert.equal(await queue.resumeBlocked({task:blocked,proof:{...proof,expected_revision:1}}),false);
+    const running=await queue.claim({worker_id:'recovered'});
+    assert.equal(await queue.resumeBlocked({task:blocked,proof:{...proof,expected_revision:1}}),false);
+    await queue.settle(running,{status:'COMPLETED'});
+    assert.equal(await queue.resumeBlocked({task:blocked,proof:{...proof,expected_revision:1}}),false);
+    await memory.addEvent({cycle_id:third,event_id:'supervision-test',type:'RESEARCH_SUPERVISION_PASS',payload:{new_model_calls:0}});
+    const restarted=PostgresResearchMemory({pool:scoped,clock});
+    assert.equal((await restarted.latestEvent('RESEARCH_SUPERVISION_PASS')).event_id,'supervision-test');
   }finally{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await pool.end();}
 });
