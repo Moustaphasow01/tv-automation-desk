@@ -1,4 +1,5 @@
 import { requireResearch } from "../domain/research-evidence.js";
+import { assessRejectedRequestRecovery } from './research-rejection-recovery.js';
 
 export class ResearchApi {
   constructor({ cycle, memory, hypotheses, discovery,caseAuditor,science }) { Object.assign(this, { cycle, memory, hypotheses, discovery,caseAuditor,science }); }
@@ -52,6 +53,14 @@ export class ResearchApi {
   }
   async assessRecovery({cycle_id}) {
     const cycle=await this.memory.getCycle(cycle_id);
+    requireResearch(cycle, 'RESEARCH_CYCLE_NOT_FOUND');
+    const events=await this.memory.listEvents(cycle_id);
+    const requested=events.filter(e=>e.type==='MODEL_REQUESTED').at(-1);
+    if(events.some(e=>e.type==='MODEL_REJECTION_VERIFIED' && e.payload.request_id===requested?.payload.request_id)) {
+      if(this.cycle.observer)await this.cycle.observer.assertCorpus(cycle.corpus_hash);
+      return {...await assessRejectedRequestRecovery({memory:this.memory,fingerprint:this.cycle.fingerprint,cycle_id}),
+        expected_revision:cycle.revision};
+    }
     const recovery = { CLUSTERING: this.caseAuditor, COUNTEREXAMPLES: this.hypotheses, CRITIQUING: this.hypotheses };
     requireResearch(recovery[cycle?.status], 'RESEARCH_RECOVERY_NOT_APPLICABLE');
     if(this.cycle.observer)await this.cycle.observer.assertCorpus(cycle.corpus_hash);

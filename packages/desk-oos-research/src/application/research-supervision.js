@@ -29,7 +29,7 @@ export class ResearchSupervision {
   }
   async recover(task) {
     const identity={task_id:task.task_id,cycle_id:task.cycle_id,previous_error:task.last_error};
-    if(task.last_error!=='RESEARCH_CITATION_UNKNOWN')return {...identity,resumed:false,code:'NOT_ALLOWLISTED'};
+    if(!['RESEARCH_CITATION_UNKNOWN','CODEX_EXEC_FAILED'].includes(task.last_error))return {...identity,resumed:false,code:'NOT_ALLOWLISTED'};
     try {
       return await this.api.memory.executeExclusive(task.cycle_id,async()=>{
         const proof=await this.api.assessRecovery({cycle_id:task.cycle_id});
@@ -38,7 +38,9 @@ export class ResearchSupervision {
           event_id:this.api.cycle.fingerprint(`${task.task_id}|${new Date(task.updated_at).toISOString()}|${researchCanonicalJson(proof)}`),
           type:'RESEARCH_RECOVERY_VALIDATED',payload});
         const resumed=await this.queue.resumeBlocked({task,proof});
-        return {...identity,resumed,code:resumed?'VERIFIED_RESPONSE_RECOVERY':'TASK_CHANGED',...proof};
+        const recoveredCode=proof.validation_version==='RESEARCH_MODEL_REJECTION_V1'
+          ?'VERIFIED_REQUEST_REJECTION_RECOVERY':'VERIFIED_RESPONSE_RECOVERY';
+        return {...identity,resumed,code:resumed?recoveredCode:'TASK_CHANGED',...proof};
       });
     }catch(error){return {...identity,resumed:false,code:error.code??'RESEARCH_RECOVERY_FAILED',
       details:error.details??{},automatic_paid_retry:false};}

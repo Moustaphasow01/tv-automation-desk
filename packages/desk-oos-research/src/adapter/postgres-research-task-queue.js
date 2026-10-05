@@ -62,8 +62,9 @@ export class PostgresResearchTaskQueue {
       [worker_id,state,task_id,this.clock()]);
   }
   async resumeBlocked({task,proof}) {
-    if(task.status!=='BLOCKED' || task.last_error!=='RESEARCH_CITATION_UNKNOWN'
-      || proof.validation_version!=='RESEARCH_CRITIQUE_CITATIONS_V2' || proof.new_model_calls!==0
+    const allowed={RESEARCH_CITATION_UNKNOWN:'RESEARCH_CRITIQUE_CITATIONS_V2',CODEX_EXEC_FAILED:'RESEARCH_MODEL_REJECTION_V1'};
+    if(task.status!=='BLOCKED' || !allowed[task.last_error]
+      || proof.validation_version!==allowed[task.last_error] || proof.new_model_calls!==0
       || !/^[a-f0-9]{64}$/.test(proof.request_id) || !Number.isSafeInteger(proof.expected_revision))
       throw error('RESEARCH_RECOVERY_PROOF_INVALID');
     const result=await this.pool.query(`UPDATE research_state.t3_tasks SET status='READY',last_error=NULL,

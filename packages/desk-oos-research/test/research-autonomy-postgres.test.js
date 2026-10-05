@@ -64,5 +64,13 @@ test('AUTONOMY E2E: actual PG leases, restart, bounded retry, next task and fenc
     await memory.addEvent({cycle_id:third,event_id:'supervision-test',type:'RESEARCH_SUPERVISION_PASS',payload:{new_model_calls:0}});
     const restarted=PostgresResearchMemory({pool:scoped,clock});
     assert.equal((await restarted.latestEvent('RESEARCH_SUPERVISION_PASS')).event_id,'supervision-test');
+    const rejected=createHash('sha256').update('provider-rejected').digest('hex');
+    await memory.beginCycle({cycle_id:rejected,input_hash:rejected,corpus_hash:rejected,definition:{test_only:true}});
+    await queue.schedule({cycle_id:rejected});const requestTask=await queue.claim({worker_id:'capacity-failure'});
+    const capacity=await queue.settle(requestTask,{status:'BLOCKED',code:'CODEX_EXEC_FAILED'});
+    await assert.rejects(queue.resumeBlocked({task:capacity,proof}),{code:'RESEARCH_RECOVERY_PROOF_INVALID'});
+    const rejectionProof={...proof,validation_version:'RESEARCH_MODEL_REJECTION_V1'};
+    assert.equal(await queue.resumeBlocked({task:capacity,proof:rejectionProof}),true);
+    assert.equal(await queue.resumeBlocked({task:capacity,proof:rejectionProof}),false);
   }finally{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await pool.end();}
 });

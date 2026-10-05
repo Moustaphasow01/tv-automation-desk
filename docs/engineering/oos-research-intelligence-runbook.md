@@ -136,6 +136,19 @@ migrations PASS. Dette statique préexistante inchangée : 271/727/97, front 172
 
 ## Blocages et traitement
 
+### Rejet explicite du fournisseur — 06/10/2026
+
+`CODEX_EXEC_FAILED` seul n'autorise aucun retry. Une trace Codex existante peut établir
+un rejet terminal `server_overloaded` : même prompt/contexte/modèle/effort, même turn,
+timestamps raccordés à MODEL_REQUESTED, aucune réponse assistant ni information de tokens.
+L'adapter ne lit que des fichiers rollout sous le répertoire sessions autorisé, jamais auth/config.
+`recover_oos_research_rejection.mjs` enregistre une preuve hashée MODEL_REJECTION_VERIFIED
+dans la mémoire research, sans modèle ni mutation de la file. La supervision valide cette preuve
+avant admission CAS. Un nouvel ID lié à la requête originale autorise au maximum un retry,
+toujours avec budget/quota et même modèle. Un retry devenu incertain reste bloqué.
+Timeout, interruption réseau, sortie partielle ou preuve absente ne sont jamais assimilés
+à un rejet explicite. Aucun request/response original n'est modifié ou supprimé.
+
 | Code | Comportement |
 |---|---|
 | RESEARCH_CORPUS_DRIFT / RESEARCH_MODEL_DRIFT | arrêt ; nouvelle version/cycle requis, aucun mélange |

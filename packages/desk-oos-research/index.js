@@ -14,3 +14,5 @@ export { researchResourceAdmission } from './src/domain/research-resource-admiss
 export {ResearchCaseAuditor} from './src/application/research-case-auditor.js';
 export { ResearchScientificLoop } from './src/application/research-scientific-loop.js';
 export { freezePublishedAudit, executePublishedAudit } from './src/domain/published-counterfactual-experiment.js';
+export { recordResearchRejection } from './src/application/research-rejection-recovery.js';
+export { codexResearchRejectionEvidence } from './src/adapter/codex-research-rejection-evidence.js';
