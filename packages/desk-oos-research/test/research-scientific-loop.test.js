@@ -7,6 +7,8 @@ import { MemoryFixture, fingerprint, clock, identity, packet } from './research-
 import { createScenarioSelfAudit } from '../src/domain/scenario-self-audit.js';
 import { validateResearchOutput } from '../src/domain/research-output-validation.js';
 import { EXPERIMENT_DESIGN_SCHEMA } from '../src/application/research-scientific-loop.js';
+import { ResearchApi } from '../src/application/research-api.js';
+import { ResearchScheduler } from '../src/application/research-scheduler.js';
 
 const design = { action: 'ENGINE_PUBLISHED_AUDIT', variant: 'BE1', mechanism: 'TEST_ONLY_MECHANISM',
   thresholds: { minimum_trades: 2, minimum_days: 2, minimum_expectancy_delta: 0.1, minimum_winner_preservation: 1 },
@@ -24,7 +26,8 @@ function frozen(items = cases()) {
 async function fixture(output = design) {
   const memory = new MemoryFixture(), cycle = new ResearchCycle({ memory, fingerprint, clock,
     observer: { assertCorpus: async () => {} } });
-  await memory.beginCycle({ cycle_id: 'C', corpus_hash: 'CORPUS', definition: { budget: { maximum_model_calls: 10 } } });
+  await memory.beginCycle({ cycle_id: 'C', input_hash: 'SOURCE_INPUT', corpus_hash: 'CORPUS',
+    definition: { dates: ['2026-07-02', '2026-08-03'], budget: { maximum_model_calls: 10 } } });
   await memory.transition({ cycle_id: 'C', expected_revision: 0, status: 'COMPLETED' });
   for (const item of cases()) await cycle.save('C', 'scenario_audit', item.case_id, item);
   const hypothesis = { id: 'H', payload: { hypothesis_id: 'H', target_component: 'MANAGEMENT',
@@ -124,4 +127,44 @@ test('next task remains explicit when an isolated engine is necessary, without a
   assert.equal((await new ResearchScientificLoop(f).tick({ cycle_id: 'C' })).state, 'SCIENTIFIC_SWEEP_RECORDED');
   const memory = (await f.cycle.all('C', 'finding')).find(row => row.payload.scientific_stage === 'SCIENTIFIC_SWEEP');
   assert.deepEqual(memory.payload.required_capabilities, ['ISOLATED_RESEARCH_ENGINE_EXECUTOR']);
+});
+test('scientific work uses the persistent queue, model/resource journal and checkpoint across scheduler restarts', async () => {
+  const f = await fixture(), scheduled = new Map(), settled = [];
+  const queue = { schedule: async ({ cycle_id }) => {
+    if (!scheduled.has(cycle_id)) scheduled.set(cycle_id, { cycle_id, task_id: cycle_id, status: 'READY', attempts: 0, maximum_attempts: 5 });
+    return scheduled.get(cycle_id);
+  }, claim: async () => { const task = [...scheduled.values()].find(row => row.status === 'READY');
+    if (task) task.status = 'RUNNING'; return task; }, worker: async () => {}, heartbeat: async () => {},
+  settle: async (task, result) => { task.status = result.status; settled.push(result); }, incident: () => assert.fail('no incident expected') };
+  const science = new ResearchScientificLoop(f), api = new ResearchApi({ ...f, science });
+  const first = await science.schedule({ source_cycle_id: 'C', queue });
+  assert.equal((await science.schedule({ source_cycle_id: 'C', queue })).cycle_id, first.cycle_id);
+  assert.equal(scheduled.size, 1);
+  const timers = { setInterval: () => 1, clearInterval: () => {} };
+  let scheduler = new ResearchScheduler({ api, queue, worker_id: 'test-before-restart', timers });
+  assert.equal((await scheduler.tick()).result.state, 'RESEARCH_EXPERIMENT_PREREGISTERED');
+  scheduler = new ResearchScheduler({ api, queue, worker_id: 'test-after-restart', timers });
+  assert.equal((await scheduler.tick()).result.status, 'DEVELOPMENT_AUDIT_SUPPORTED');
+  assert.equal((await scheduler.tick()).state, 'COMPLETED');
+  assert.equal((await f.memory.getCycle(first.cycle_id)).status, 'COMPLETED');
+  assert.equal((await f.memory.getCycle('C')).revision, 1);
+  assert.equal(f.requests.length, 1); assert.deepEqual(settled.map(row => row.status), ['READY', 'READY', 'COMPLETED']);
+  const scorecard=await api.scorecard({cycle_id:first.cycle_id});
+  assert.equal(scorecard.source_cycle_id,'C');assert.equal(scorecard.trades,2);
+  assert.equal(scorecard.metrics_basis,'CHAMPION_REAL_NOT_EXPERIMENTAL_REPLAY');
+});
+test('quota exhaustion during experiment design becomes a durable wait, not an uncertain paid call or busy loop', async () => {
+  const f = await fixture(), science = new ResearchScientificLoop(f), rows = [];
+  await science.schedule({ source_cycle_id: 'C', queue: { schedule: async row => rows.push(row) } });
+  const cycle_id = rows[0].cycle_id;
+  f.model.admission = async () => ({ allowed: false, source: 'TEST_ONLY', resume_at: '2030-01-01T00:00:00Z' });
+  let settlement;
+  const queue = { claim: async () => ({ task_id: cycle_id, cycle_id, attempts: 0, maximum_attempts: 5 }),
+    worker: async () => {}, heartbeat: async () => {}, settle: async (task, result) => { settlement = result; },
+    incident: () => assert.fail('quota is not a technical incident') };
+  const api = new ResearchApi({ ...f, science }), timers = { setInterval: () => 1, clearInterval: () => {} };
+  const result = await new ResearchScheduler({ api, queue, worker_id: 'quota-test', timers }).tick();
+  assert.equal(result.state, 'WAITING_RESOURCE'); assert.equal(settlement.status, 'READY');
+  assert.ok(settlement.delay_ms > 0); assert.equal(f.requests.length, 0);
+  assert.equal((await f.memory.listEvents(cycle_id)).some(row => row.type === 'MODEL_REQUESTED'), false);
 });

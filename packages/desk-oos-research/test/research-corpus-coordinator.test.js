@@ -40,6 +40,6 @@ test('global audit completion automatically routes into scientific tasks, not an
   const f=await fixture(),coordinator=new ResearchCorpusCoordinator(f),first=await coordinator.tick();
   const cycle=await f.memory.getCycle(first.cycle_id);
   await f.memory.transition({cycle_id:cycle.cycle_id,expected_revision:cycle.revision,status:'COMPLETED'});
-  f.api.science={tick:async args=>({state:'TEST_SCIENTIFIC_TASK_STARTED',...args})};
+  f.api.science={schedule:async args=>({state:'TEST_SCIENTIFIC_TASK_STARTED',...args})};
   assert.equal((await coordinator.tick()).state,'TEST_SCIENTIFIC_TASK_STARTED');
 });

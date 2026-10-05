@@ -31,27 +31,50 @@ export class ResearchScientificLoop {
   constructor({ cycle, hypotheses, memory, model, fingerprint, clock }) {
     Object.assign(this, { cycle, hypotheses, memory, model, fingerprint, clock });
   }
-  async tick({ cycle_id }) {
-    return this.memory.executeExclusive(cycle_id, async () => {
-      const cycle = await this.memory.getCycle(cycle_id);
-      requireResearch(cycle?.status === 'COMPLETED', 'RESEARCH_SCIENCE_REQUIRES_GLOBAL_AUDIT');
-      await this.cycle.observer.assertCorpus(cycle.corpus_hash);
-      const hypotheses = await this.hypotheses.all(cycle_id);
-      const results = await this.cycle.all(cycle_id, 'finding');
-      const completed = new Set(results.filter(row => row.payload.scientific_stage === 'EXPERIMENT_DECISION')
-        .map(row => row.payload.hypothesis_id));
-      const next = hypotheses.filter(row => !completed.has(row.id)).sort(prioritize).at(0);
-      if (!next) return this.finish(cycle, hypotheses.length);
-      return this.advanceCandidate(cycle, next);
-    });
+  async schedule({ source_cycle_id, queue }) {
+    const source = await this.memory.getCycle(source_cycle_id);
+    requireResearch(source?.status === 'COMPLETED', 'RESEARCH_SCIENCE_REQUIRES_GLOBAL_AUDIT');
+    requireResearch(typeof source.input_hash === 'string' && Array.isArray(source.definition.dates),
+      'RESEARCH_SCIENCE_SOURCE_METADATA_REQUIRED');
+    const count = (await this.hypotheses.all(source_cycle_id)).length;
+    const definition = { kind: 'SCIENTIFIC_EXPERIMENTS', source_cycle_id, source_input_hash: source.input_hash,
+      dates: source.definition.dates, dataset_role: 'DISCOVERY', prompt_version: 'DESK_AI_EXPERIMENT_DESIGNER_V1',
+      prompt_sha256: this.fingerprint(DESIGN_PROMPT), budget: { maximum_model_calls: count + 10 },
+      champion_mutable: false, promotion_allowed: false };
+    const input_hash = this.fingerprint(researchCanonicalJson(definition));
+    const cycle_id = this.fingerprint(`${source.corpus_hash}|${input_hash}`);
+    const cycle = await this.memory.beginCycle({ cycle_id, input_hash, corpus_hash: source.corpus_hash, definition });
+    if (cycle.status === 'COMPLETED') return { state: 'SCIENTIFIC_SWEEP_RECORDED', cycle_id };
+    await queue.schedule({ cycle_id, priority: -200 });
+    return { state: 'SCIENTIFIC_TASK_SCHEDULED', cycle_id, source_cycle_id };
   }
-  async advanceCandidate(cycle, row) {
-    const critique = (await this.cycle.all(cycle.cycle_id, 'critique')).find(item => item.payload.hypothesis_id === row.id)?.payload;
+  async tick({ cycle_id }) {
+    return this.memory.executeExclusive(cycle_id, () => this.advance({ cycle_id }));
+  }
+  async advance({ cycle_id }) {
+    const cycle = await this.memory.getCycle(cycle_id);
+    requireResearch(cycle, 'RESEARCH_CYCLE_NOT_FOUND');
+    const source = await this.memory.getCycle(cycle.definition.source_cycle_id ?? cycle_id);
+    requireResearch(source?.status === 'COMPLETED', 'RESEARCH_SCIENCE_REQUIRES_GLOBAL_AUDIT');
+    requireResearch(source.corpus_hash === cycle.corpus_hash, 'RESEARCH_SCIENCE_SOURCE_DRIFT');
+    if (cycle.definition.kind === 'SCIENTIFIC_EXPERIMENTS') requireResearch(source.input_hash === cycle.definition.source_input_hash,
+      'RESEARCH_SCIENCE_SOURCE_DRIFT');
+    await this.cycle.observer.assertCorpus(cycle.corpus_hash);
+    const hypotheses = await this.hypotheses.all(source.cycle_id);
+    const results = await this.cycle.all(cycle_id, 'finding');
+    const completed = new Set(results.filter(row => row.payload.scientific_stage === 'EXPERIMENT_DECISION')
+      .map(row => row.payload.hypothesis_id));
+    const next = hypotheses.filter(row => !completed.has(row.id)).sort(prioritize).at(0);
+    if (!next) return this.finish(cycle, hypotheses.length);
+    return this.advanceCandidate(cycle, next, source.cycle_id);
+  }
+  async advanceCandidate(cycle, row, source_cycle_id) {
+    const critique = (await this.cycle.all(source_cycle_id, 'critique')).find(item => item.payload.hypothesis_id === row.id)?.payload;
     if (!critique?.independent || critique.verdict !== 'READY_FOR_EXPERIMENT') {
       return this.recordDecision(cycle, row.id, { status: critique?.verdict ?? 'INDEPENDENT_CRITIQUE_MISSING',
         next_action: 'SELECT_NEXT_HYPOTHESIS', experiment_executed: false, critique });
     }
-    const cases = (await this.cycle.all(cycle.cycle_id, 'scenario_audit')).map(item => item.payload);
+    const cases = (await this.cycle.all(source_cycle_id, 'scenario_audit')).map(item => item.payload);
     const id = this.fingerprint(`${cycle.cycle_id}|${row.id}|PUBLISHED_AUDIT_PROTOCOL_V1`);
     let stored = await this.memory.findArtifact({ kind: 'experiment', id });
     if (!stored) {
@@ -114,6 +137,10 @@ export class ResearchScientificLoop {
         required_capabilities: [...new Set(decisions.map(item => item.payload.required_capability).filter(Boolean))],
         discovery_only: true, validated_edge: false, promotion_allowed: false, generated_at: this.clock(),
         next_action: 'ISOLATED_EXECUTOR_OR_UNTOUCHED_VALIDATION_REQUIRED' });
+    }
+    if (cycle.definition.kind === 'SCIENTIFIC_EXPERIMENTS' && cycle.status !== 'COMPLETED') {
+      await this.memory.transition({ cycle_id: cycle.cycle_id, expected_revision: cycle.revision, status: 'COMPLETED',
+        checkpoint: { scientific_sweep: id, hypotheses_considered: hypotheses, validated_edge: false } });
     }
     return { state: 'SCIENTIFIC_SWEEP_RECORDED', cycle_id: cycle.cycle_id, hypotheses_considered: hypotheses,
       validated_edge: false, champion_modified: false };

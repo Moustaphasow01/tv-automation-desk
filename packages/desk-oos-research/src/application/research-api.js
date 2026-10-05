@@ -8,6 +8,7 @@ export class ResearchApi {
       const cycle = await this.memory.getCycle(cycle_id);
       requireResearch(cycle, "RESEARCH_CYCLE_NOT_FOUND");
       if (this.cycle.observer) await this.cycle.observer.assertCorpus(cycle.corpus_hash);
+      if(cycle.definition.kind==='SCIENTIFIC_EXPERIMENTS')return this.science.advance({cycle_id});
       const steps = { OBSERVING: () => this.cycle.observe({ cycle_id }),
         DIAGNOSING: () => this.cycle.diagnose({ cycle_id, limit: maximum_cases }),
         CLUSTERING: () => this.caseAuditor?this.caseAuditor.advance({cycle_id}):this.cycle.cluster({ cycle_id }),
@@ -40,6 +41,7 @@ export class ResearchApi {
       scenario_reviews_audited: caseCritiques.length,
       scenario_reviews_independently_audited: caseCritiques.filter(row=>row.payload.independent===true).length,
       experiments_executed: experimentsExecuted,
+      scientific_source_cycle_id: cycle.definition.source_cycle_id ?? null,
       number_of_hypotheses_proposed: findings.reduce((sum, f) => sum + (f.payload.proposals?.length ?? 0), 0),
       hypotheses_without_persisted_support: findings.filter(f => f.payload.reason === "NO_PERSISTED_SUPPORT").length,
       significance_claim_allowed: false,
@@ -48,7 +50,13 @@ export class ResearchApi {
       champion_write_capability: false, broker_capability: false, replay_capability: false };
   }
   async artifacts(args) { return this.memory.listArtifacts(args); }
-  async scorecard(args) { return this.cycle.scorecard(args); }
+  async scorecard(args) {
+    const cycle=await this.memory.getCycle(args.cycle_id);
+    requireResearch(cycle,'RESEARCH_CYCLE_NOT_FOUND');
+    if(!cycle.definition.source_cycle_id)return this.cycle.scorecard(args);
+    return {...await this.cycle.scorecard({...args,cycle_id:cycle.definition.source_cycle_id}),
+      source_cycle_id:cycle.definition.source_cycle_id,metrics_basis:'CHAMPION_REAL_NOT_EXPERIMENTAL_REPLAY'};
+  }
   async experiment(args) {
     return this.memory.executeExclusive(args.cycle_id, () => this.hypotheses.experiment(args));
   }

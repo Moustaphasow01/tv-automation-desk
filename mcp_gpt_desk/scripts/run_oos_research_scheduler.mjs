@@ -40,7 +40,7 @@ try {
       console.log(JSON.stringify({event:'research.scheduler_tick',state:step.state,task_id:step.task_id,checkpoint:step.checkpoint,code:step.code}));
       if(step.state==='IDLE' && coordinator) {
         const next=await coordinator.tick();
-        if(['GLOBAL_DISCOVERY_SCHEDULED','RESEARCH_EXPERIMENT_PREREGISTERED','RESEARCH_EXPERIMENT_DECISION'].includes(next.state))
+        if(['GLOBAL_DISCOVERY_SCHEDULED','SCIENTIFIC_TASK_SCHEDULED'].includes(next.state))
           console.log(JSON.stringify({event:'research.scientific_next_task',...next}));
       }
     }catch(error){console.error(JSON.stringify({event:'research.scheduler_error',code:error.code??'RESEARCH_SCHEDULER_FAILED'}));}
