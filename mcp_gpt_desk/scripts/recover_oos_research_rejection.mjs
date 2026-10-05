@@ -12,7 +12,9 @@ if (!process.env.OOS_RESEARCH_DATABASE_URL || !process.env.CODEX_HOME
 const config = JSON.parse(await readFile(process.env.OOS_BATCH_CONFIG, 'utf8'));
 if (config.research_enabled !== true) throw new Error('RESEARCH_NOT_ENABLED');
 const fingerprint = value => createHash('sha256').update(value).digest('hex');
-const pool = new pg.Pool({ connectionString: process.env.OOS_RESEARCH_DATABASE_URL, max: 1 });
+// The cycle lock holds one connection while immutable evidence writes use another.
+const pool = new pg.Pool({ connectionString: process.env.OOS_RESEARCH_DATABASE_URL,
+  max: 3, connectionTimeoutMillis: 10000, query_timeout: 10000 });
 try {
   const memory = PostgresResearchMemory({ pool, clock: () => new Date().toISOString() });
   const readEvidence = codexResearchRejectionEvidence({ sessions_root: path.join(process.env.CODEX_HOME, 'sessions'), fingerprint });
